@@ -15,7 +15,7 @@ fn main() -> std::io::Result<()> {
 
 
     // carry out tuning
-    gd_tune(&data, &mut params, 65, 0.05, NET_NAME);
+    gd_tune(&data, &mut params, 100, 0.05, NET_NAME);
 
     params.write_to_bin(&format!("{NET_NAME}-final.bin"))?;
 
