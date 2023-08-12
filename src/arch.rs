@@ -1,5 +1,5 @@
 use crate::position::Position;
-use std::ops::{Add, Index, IndexMut};
+use std::ops::{AddAssign, Index, IndexMut};
 
 const INPUT: usize = 768;
 const HIDDEN: usize = 16;
@@ -35,9 +35,8 @@ impl Default for NNUEParams {
     }
 }
 
-impl Add<NNUEParams> for NNUEParams {
-    type Output = NNUEParams;
-    fn add(mut self, rhs: NNUEParams) -> Self::Output {
+impl AddAssign<NNUEParams> for NNUEParams {
+    fn add_assign(&mut self, rhs: NNUEParams) {
         for (i, &j) in self.feature_weights.iter_mut().zip(rhs.feature_weights.iter()) {
             *i += j
         }
@@ -51,8 +50,6 @@ impl Add<NNUEParams> for NNUEParams {
         }
 
         self.output_bias += rhs.output_bias;
-
-        self
     }
 }
 

@@ -30,10 +30,11 @@ impl Data {
         println!("wins {wins} losses {losses} draws {draws}");
     }
 
-    pub fn gradients(&self, nnue: &NNUEParams, error: &mut f64) -> NNUEParams {
+    pub fn gradients(&self, nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
         let size = self.0.len() / self.1;
         let mut errors = vec![0.0; self.1];
-        let grad = thread::scope(|s| {
+        let mut grad = Box::default();
+        thread::scope(|s| {
             self.0
                 .chunks(size)
                 .zip(errors.iter_mut())
@@ -41,15 +42,15 @@ impl Data {
                 .collect::<Vec<_>>()
                 .into_iter()
                 .map(|p| p.join().unwrap_or_default())
-                .fold(NNUEParams::default(), |a, b| a + b)
+                .for_each(|part| *grad += *part)
         });
-        *error = errors.iter().sum();
+        *error = errors.iter().sum::<f64>() / self.num();
         grad
     }
 }
 
-fn gradients_batch(positions: &[Position], nnue: &NNUEParams, error: &mut f64) -> NNUEParams {
-    let mut grad = NNUEParams::default();
+fn gradients_batch(positions: &[Position], nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
+    let mut grad = Box::default();
     for pos in positions {
         update_single_grad(pos, nnue, &mut grad, error)
     }

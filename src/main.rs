@@ -17,11 +17,11 @@ fn main() -> std::io::Result<()> {
 
     // initialise data
     let mut data = Data::default();
-    data.1 = 6;
+    data.1 = 4;
     data.add_contents(&file_name);
 
     // provide random starting parameters
-    let mut params = NNUEParams::default();
+    let mut params = Box::<NNUEParams>::default();
     let mut gen = Rand(173645501);
     for param in params.feature_weights.iter_mut() {
         *param = gen.rand();

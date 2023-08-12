@@ -18,8 +18,8 @@ fn adam(p: &mut f64, m: &mut f64, v: &mut f64, grad: f64, rate: f64) {
 }
 
 pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64, net_name: &str) {
-    let mut velocity = NNUEParams::default();
-    let mut momentum = NNUEParams::default();
+    let mut velocity = Box::<NNUEParams>::default();
+    let mut momentum = Box::<NNUEParams>::default();
 
     let timer = Instant::now();
 
