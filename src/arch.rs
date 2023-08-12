@@ -1,7 +1,8 @@
 use crate::position::Position;
+use std::ops::{Add, Index, IndexMut};
 
 const INPUT: usize = 768;
-const HIDDEN: usize = 32;
+const HIDDEN: usize = 16;
 
 const CR_MIN: f64 = 0.0;
 const CR_MAX: f64 = 255.0;
@@ -14,12 +15,13 @@ fn activate_prime(x: f64) -> f64 {
     if x <= CR_MIN || x >= CR_MAX {0.0} else {1.0}
 }
 
+#[derive(Clone)]
 #[repr(C)]
 pub struct NNUEParams {
-    feature_weights: [f64; INPUT * HIDDEN],
-    feature_bias: [f64; HIDDEN],
-    output_weights: [f64; HIDDEN],
-    output_bias: f64,
+    pub feature_weights: [f64; INPUT * HIDDEN],
+    pub feature_bias: [f64; HIDDEN],
+    pub output_weights: [f64; HIDDEN],
+    pub output_bias: f64,
 }
 
 impl Default for NNUEParams {
@@ -33,17 +35,52 @@ impl Default for NNUEParams {
     }
 }
 
+impl Add<NNUEParams> for NNUEParams {
+    type Output = NNUEParams;
+    fn add(mut self, rhs: NNUEParams) -> Self::Output {
+        for (i, &j) in self.feature_weights.iter_mut().zip(rhs.feature_weights.iter()) {
+            *i += j
+        }
+
+        for (i, &j) in self.output_weights.iter_mut().zip(rhs.output_weights.iter()) {
+            *i += j
+        }
+
+        for (i, &j) in self.feature_bias.iter_mut().zip(rhs.feature_bias.iter()) {
+            *i += j
+        }
+
+        self.output_bias += rhs.output_bias;
+
+        self
+    }
+}
+
+impl NNUEParams {
+    pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = std::fs::File::create(output_path)?;
+        const SIZEOF: usize = std::mem::size_of::<NNUEParams>();
+        unsafe {
+            file.write_all(
+                &std::mem::transmute::<NNUEParams, [u8; SIZEOF]>(self.clone())
+            )?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Accumulator<const SIZE: usize>([f64; SIZE]);
 
-impl<const SIZE: usize> std::ops::Index<usize> for Accumulator<SIZE> {
+impl<const SIZE: usize> Index<usize> for Accumulator<SIZE> {
     type Output = f64;
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
-impl<const SIZE: usize> std::ops::IndexMut<usize> for Accumulator<SIZE> {
+impl<const SIZE: usize> IndexMut<usize> for Accumulator<SIZE> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
     }
@@ -77,7 +114,7 @@ pub fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
     sum + nnue.output_bias
 }
 
-pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEParams) {
+pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEParams, error: &mut f64) {
     // eval and helper calculations
 
     let mut acc = Accumulator::new(nnue.feature_bias);
@@ -104,6 +141,7 @@ pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEPara
     // gradient calculation
 
     let err = eval - pos.result;
+    *error += err.powi(2);
     for i in 0..HIDDEN {
         let component = err * nnue.output_weights[i] * act_prime[i];
 
