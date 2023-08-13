@@ -100,12 +100,6 @@ pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEPara
         sum += act[idx] * w;
     }
 
-    // we might be using these a lot
-    let mut act_prime = Accumulator::new([0.0; HIDDEN]);
-    for (idx, &val) in acc.0.iter().enumerate() {
-        act_prime[idx] = activate_prime(val);
-    }
-
     let eval = sum + nnue.output_bias;
 
     // gradient calculation
@@ -113,7 +107,7 @@ pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEPara
     let err = eval - pos.result;
     *error += err.powi(2);
     for i in 0..HIDDEN {
-        let component = err * nnue.output_weights[i] * act_prime[i];
+        let component = err * nnue.output_weights[i] * activate_prime(act[i]);
 
         // update feature weight gradients
         for &j in pos.active.iter().take(pos.num) {

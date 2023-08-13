@@ -8,7 +8,7 @@ impl Rand {
         self.0 ^= self.0 << 13;
 	    self.0 ^= self.0 >> 17;
 	    self.0 ^= self.0 << 5;
-        2. * f64::from(self.0) / f64::from(u32::MAX) - 1.
+        f64::from(self.0) / f64::from(u32::MAX) - 1.
     }
 }
 
@@ -35,7 +35,7 @@ fn main() -> std::io::Result<()> {
     params.output_bias = gen.rand();
 
     // carry out tuning
-    gd_tune(&data, &mut params, 1000, 0.001, NET_NAME);
+    gd_tune(&data, &mut params, 2000, 0.01, NET_NAME);
 
     QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}-final.bin"))?;
 

@@ -18,6 +18,7 @@ fn adam(p: &mut f64, m: &mut f64, v: &mut f64, grad: f64, rate: f64) {
     *m = B1 * *m + (1. - B1) * grad;
     *v = B2 * *v + (1. - B2) * grad * grad;
     *p -= rate * *m / (v.sqrt() + 0.00000001);
+    *p = p.clamp(-1.98, 1.98);
 }
 
 pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64, net_name: &str) {

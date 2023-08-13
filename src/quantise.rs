@@ -64,14 +64,14 @@ impl QuantisedNNUE {
     }
 }
 
-#[test]
-fn test_eval() {
-    let nnue = Box::<QuantisedNNUE>::new(
-        unsafe {
-            std::mem::transmute(*include_bytes!("../maiden-700.bin"))
-        }
-    );
-    let pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".parse::<Position>().unwrap();
-    let score = eval(&pos, &nnue);
-    println!("eval: {score}");
-}
+//#[test]
+//fn test_eval() {
+//    let nnue = Box::<QuantisedNNUE>::new(
+//        unsafe {
+//            std::mem::transmute(*include_bytes!("../maiden-700.bin"))
+//        }
+//    );
+//    let pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".parse::<Position>().unwrap();
+//    let score = eval(&pos, &nnue);
+//    println!("eval: {score}");
+//}

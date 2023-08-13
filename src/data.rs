@@ -15,11 +15,10 @@ impl Data {
         let file = File::open(file_name).unwrap();
         for line in BufReader::new(file).lines().map(|ln| ln.unwrap()) {
             let res: Position = line.parse().unwrap();
-            let int = (res.result * 2.0) as u64;
-            match int {
-                2 => wins += 1,
-                0 => losses += 1,
-                1 => draws += 1,
+            match res.result as i64 {
+                1 => wins += 1,
+                -1 => losses += 1,
+                0 => draws += 1,
                 _ => unreachable!(),
             }
             self.0.push(res);
