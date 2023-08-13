@@ -8,7 +8,7 @@ impl Rand {
         self.0 ^= self.0 << 13;
 	    self.0 ^= self.0 >> 17;
 	    self.0 ^= self.0 << 5;
-        (1. - f64::from(self.0) / f64::from(u32::MAX)) / 1000.
+        (1. - f64::from(self.0) / f64::from(u32::MAX)) / 100.
     }
 }
 
@@ -17,7 +17,7 @@ fn main() -> std::io::Result<()> {
 
     // initialise data
     let mut data = Data::default();
-    data.1 = 4;
+    data.1 = 6;
     data.add_contents(&file_name);
 
     // provide random starting parameters
@@ -36,7 +36,7 @@ fn main() -> std::io::Result<()> {
     params.output_bias = gen.rand();
 
     // carry out tuning
-    gd_tune(&data, &mut params, 2000, 0.01, NET_NAME);
+    gd_tune(&data, &mut params, 2000, 0.001, NET_NAME);
 
     QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}-final.bin"))?;
 

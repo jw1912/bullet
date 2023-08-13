@@ -18,7 +18,6 @@ fn adam(p: &mut f64, m: &mut f64, v: &mut f64, grad: f64, rate: f64) {
     *m = B1 * *m + (1. - B1) * grad;
     *v = B2 * *v + (1. - B2) * grad * grad;
     *p -= rate * *m / (v.sqrt() + 0.00000001);
-    *p = p.clamp(-1.98, 1.98);
 }
 
 pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64, net_name: &str) {
@@ -55,7 +54,7 @@ pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64,
         let eps = epoch as f64 / timer.elapsed().as_secs_f64();
         println!("epoch {epoch} rate {rate:.3} eps {eps:.2}/sec");
         if epoch % 100 == 0 {
-            QuantisedNNUE::from_unquantised(nnue).write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap()
+            QuantisedNNUE::from_unquantised(nnue).write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap();
         }
     }
 }

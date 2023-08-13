@@ -68,7 +68,7 @@ impl QuantisedNNUE {
 fn test_eval() {
     let nnue = Box::<QuantisedNNUE>::new(
         unsafe {
-            std::mem::transmute(*include_bytes!("../maiden-200.bin"))
+            std::mem::transmute(*include_bytes!("../maiden-100.bin"))
         }
     );
     const FENS: [&str; 3] = [
