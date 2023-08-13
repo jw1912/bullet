@@ -40,14 +40,12 @@ pub fn eval(pos: &Position, nnue: &QuantisedNNUE) -> i32 {
         acc.add_feature(usize::from(feature), nnue);
     }
 
-    let mut sum = 0;
+    let mut sum = i32::from(nnue.output_bias);
     for (&i, &w) in acc.0.iter().zip(&nnue.output_weights) {
         sum += activate(i) * i32::from(w);
     }
 
-    let flatten = sum / QA;
-
-    (flatten + i32::from(nnue.output_bias)) * SCALE / QAB
+    sum * SCALE / QAB
 }
 
 impl QuantisedNNUE {
@@ -62,23 +60,30 @@ impl QuantisedNNUE {
         }
         Ok(())
     }
+
+    pub fn test_eval(&self) {
+        println!("{:?}", self.output_weights);
+        println!("{:?}", self.output_bias);
+        println!("{:?}", self.feature_bias);
+        const FENS: [&str; 3] = [
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ",
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
+        ];
+        for fen in FENS {
+            let pos = fen.parse::<Position>().unwrap();
+            let score = eval(&pos, self);
+            println!("eval: {score}");
+        }
+    }
 }
 
 #[test]
 fn test_eval() {
     let nnue = Box::<QuantisedNNUE>::new(
         unsafe {
-            std::mem::transmute(*include_bytes!("../maiden-500.bin"))
+            std::mem::transmute(*include_bytes!("../maiden-100.bin"))
         }
     );
-    const FENS: [&str; 3] = [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ",
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
-    ];
-    for fen in FENS {
-        let pos = fen.parse::<Position>().unwrap();
-        let score = eval(&pos, &nnue);
-        println!("eval: {score}");
-    }
+    nnue.test_eval();
 }

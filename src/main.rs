@@ -32,7 +32,7 @@ fn main() -> std::io::Result<()> {
     }
 
     // carry out tuning
-    gd_tune(&data, &mut params, 2000, 0.001, NET_NAME);
+    gd_tune(&data, &mut params, 1000, 0.001, NET_NAME);
 
     QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}-final.bin"))?;
 

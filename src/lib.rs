@@ -4,7 +4,7 @@ pub mod data;
 pub mod quantise;
 
 use data::Data;
-use arch::NNUEParams;
+use arch::{NNUEParams, K};
 
 
 use std::time::Instant;
@@ -26,12 +26,11 @@ pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64,
 
     let timer = Instant::now();
 
-    let adj = 2. / data.num();
+    let adj = 2. * K / data.num();
     let mut error = 0.0;
 
     for epoch in 1..=max_epochs {
         let gradients = data.gradients(nnue, &mut error);
-        println!("error {error:.6}");
 
         for (i, param) in nnue.feature_weights.iter_mut().enumerate() {
             let grad = adj * gradients.feature_weights[i];
@@ -51,10 +50,16 @@ pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64,
         let grad = adj * gradients.output_bias;
         adam(&mut nnue.output_bias, &mut momentum.output_bias, &mut velocity.output_bias, grad, rate);
 
-        let eps = epoch as f64 / timer.elapsed().as_secs_f64();
-        println!("epoch {epoch} rate {rate:.3} eps {eps:.2}/sec");
+        if epoch % 5 == 0 {
+            let eps = epoch as f64 / timer.elapsed().as_secs_f64();
+            println!("epoch {epoch} error {error:.6} rate {rate:.3} eps {eps:.2}/sec");
+            nnue.test_eval();
+        }
         if epoch % 100 == 0 {
-            QuantisedNNUE::from_unquantised(nnue).write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap();
+            let qnnue =  QuantisedNNUE::from_unquantised(nnue);
+            println!("output bias {}", qnnue.output_bias);
+            qnnue.test_eval();
+            qnnue.write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap();
         }
     }
 }
