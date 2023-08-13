@@ -90,19 +90,18 @@ pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEPara
         acc.add_feature(usize::from(feature), nnue);
     }
 
-    let mut sum = 0.0;
+    let mut eval = nnue.output_bias;
     let mut act = Accumulator::new([0.0; HIDDEN]);
     for (idx, (&i, &w)) in acc.0.iter().zip(&nnue.output_weights).enumerate() {
         act[idx] = activate(i);
-        sum += act[idx] * w;
+        eval += act[idx] * w;
     }
 
-    let eval = sum + nnue.output_bias;
+    let sigmoid = 1. / (1. + (-eval).exp());
+    let err = (sigmoid - pos.result) * sigmoid * (1. - sigmoid);
+    *error += (sigmoid - pos.result).powi(2);
 
     // gradient calculation
-
-    let err = eval - pos.result;
-    *error += err.powi(2);
     for i in 0..HIDDEN {
         let component = err * nnue.output_weights[i] * activate_prime(acc[i]);
 
