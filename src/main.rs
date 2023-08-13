@@ -1,4 +1,4 @@
-use bullet::{data::Data, arch::NNUEParams, gd_tune, quantise::QuantisedNNUE};
+use bullet::{trainer::Trainer, arch::{NNUEParams, QuantisedNNUE}};
 
 pub const NET_NAME: &str = "net1";
 
@@ -12,13 +12,12 @@ impl Rand {
     }
 }
 
-fn main() -> std::io::Result<()> {
-    let file_name = String::from("wha.epd");
+fn main() {
+    let file_name = std::env::args().nth(1).expect("Expected a file name!");
 
     // initialise data
-    let mut data = Data::default();
-    data.1 = 6;
-    data.add_contents(&file_name);
+    let mut trainer = Trainer::new(6);
+    trainer.add_data(&file_name);
 
     // provide random starting parameters
     let mut params = Box::<NNUEParams>::default();
@@ -32,10 +31,8 @@ fn main() -> std::io::Result<()> {
     }
 
     // carry out tuning
-    gd_tune(&data, &mut params, 1000, 0.001, NET_NAME, 1, 10);
+    trainer.run(&mut params, 1000, 0.001, NET_NAME, 1, 10);
 
-    QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}.bin"))?;
-
-    // exit
-    Ok(())
+    // safe to bin file
+    QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}.bin")).expect("Should never fail!");
 }

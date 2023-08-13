@@ -1,4 +1,4 @@
-use crate::arch::{NNUE, NNUEParams};
+use super::nnue::{NNUE, NNUEParams};
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -26,9 +26,7 @@ impl QuantisedNNUE {
 
         res
     }
-}
 
-impl QuantisedNNUE {
     pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         use std::io::Write;
         let mut file = std::fs::File::create(output_path)?;
