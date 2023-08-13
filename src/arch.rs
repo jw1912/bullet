@@ -1,11 +1,11 @@
 use crate::position::Position;
 use std::ops::{AddAssign, Index, IndexMut};
 
-const INPUT: usize = 768;
-const HIDDEN: usize = 16;
+pub const INPUT: usize = 768;
+pub const HIDDEN: usize = 16;
 
 const CR_MIN: f64 = 0.0;
-const CR_MAX: f64 = 255.0;
+const CR_MAX: f64 = 1.0;
 
 fn activate(x: f64) -> f64 {
     x.clamp(CR_MIN, CR_MAX)
@@ -15,28 +15,30 @@ fn activate_prime(x: f64) -> f64 {
     if x <= CR_MIN || x >= CR_MAX {0.0} else {1.0}
 }
 
+pub type NNUEParams = NNUE<f64>;
+
 #[derive(Clone)]
 #[repr(C)]
-pub struct NNUEParams {
-    pub feature_weights: [f64; INPUT * HIDDEN],
-    pub feature_bias: [f64; HIDDEN],
-    pub output_weights: [f64; HIDDEN],
-    pub output_bias: f64,
+pub struct NNUE<T> {
+    pub feature_weights: [T; INPUT * HIDDEN],
+    pub feature_bias: [T; HIDDEN],
+    pub output_weights: [T; HIDDEN],
+    pub output_bias: T,
 }
 
-impl Default for NNUEParams {
+impl<T: Copy + Default> Default for NNUE<T> {
     fn default() -> Self {
         Self {
-            feature_weights: [0.0; INPUT * HIDDEN],
-            feature_bias: [0.0; HIDDEN],
-            output_weights: [0.0; HIDDEN],
-            output_bias: 0.0,
+            feature_weights: [T::default(); INPUT * HIDDEN],
+            feature_bias: [T::default(); HIDDEN],
+            output_weights: [T::default(); HIDDEN],
+            output_bias: T::default(),
         }
     }
 }
 
-impl AddAssign<NNUEParams> for NNUEParams {
-    fn add_assign(&mut self, rhs: NNUEParams) {
+impl<T: AddAssign<T> + Copy> AddAssign<NNUE<T>> for NNUE<T> {
+    fn add_assign(&mut self, rhs: NNUE<T>) {
         for (i, &j) in self.feature_weights.iter_mut().zip(rhs.feature_weights.iter()) {
             *i += j
         }
@@ -53,62 +55,33 @@ impl AddAssign<NNUEParams> for NNUEParams {
     }
 }
 
-impl NNUEParams {
-    pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
-        use std::io::Write;
-        let mut file = std::fs::File::create(output_path)?;
-        const SIZEOF: usize = std::mem::size_of::<NNUEParams>();
-        unsafe {
-            file.write_all(
-                &std::mem::transmute::<NNUEParams, [u8; SIZEOF]>(self.clone())
-            )?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Clone, Copy)]
-struct Accumulator<const SIZE: usize>([f64; SIZE]);
+pub struct Accumulator<T, const SIZE: usize>(pub [T; SIZE]);
 
-impl<const SIZE: usize> Index<usize> for Accumulator<SIZE> {
-    type Output = f64;
+impl<T, const SIZE: usize> Index<usize> for Accumulator<T, SIZE> {
+    type Output = T;
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
-impl<const SIZE: usize> IndexMut<usize> for Accumulator<SIZE> {
+impl<T, const SIZE: usize> IndexMut<usize> for Accumulator<T, SIZE> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
     }
 }
 
-impl<const SIZE: usize> Accumulator<SIZE> {
-    fn new(vals: [f64; SIZE]) -> Self {
+impl<T: Copy + AddAssign<T>, const SIZE: usize> Accumulator<T, SIZE> {
+    pub fn new(vals: [T; SIZE]) -> Self {
         Self(vals)
     }
 
-    fn add_feature(&mut self, feature_idx: usize, nnue: &NNUEParams) {
+    pub fn add_feature(&mut self, feature_idx: usize, nnue: &NNUE<T>) {
         let start = feature_idx * SIZE;
         for (i, d) in self.0.iter_mut().zip(&nnue.feature_weights[start..start + SIZE]) {
             *i += *d;
         }
     }
-}
-
-pub fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
-    let mut acc = Accumulator::new(nnue.feature_bias);
-
-    for &feature in pos.active.iter().take(pos.num) {
-        acc.add_feature(usize::from(feature), nnue);
-    }
-
-    let mut sum = 0.0;
-    for (&i, &w) in acc.0.iter().zip(&nnue.output_weights) {
-        sum += activate(i) * w;
-    }
-
-    sum + nnue.output_bias
 }
 
 pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEParams, error: &mut f64) {

@@ -1,12 +1,15 @@
 pub mod position;
 pub mod arch;
 pub mod data;
+pub mod quantise;
 
 use data::Data;
 use arch::NNUEParams;
 
 
 use std::time::Instant;
+
+use crate::quantise::QuantisedNNUE;
 
 const B1: f64 = 0.9;
 const B2: f64 = 0.999;
@@ -51,7 +54,7 @@ pub fn gd_tune(data: &Data, nnue: &mut NNUEParams, max_epochs: usize, rate: f64,
         let eps = epoch as f64 / timer.elapsed().as_secs_f64();
         println!("epoch {epoch} rate {rate:.3} eps {eps:.2}/sec");
         if epoch % 100 == 0 {
-            nnue.write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap()
+            QuantisedNNUE::from_unquantised(nnue).write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap()
         }
     }
 }

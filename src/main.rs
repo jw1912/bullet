@@ -1,4 +1,4 @@
-use bullet::{data::Data, arch::NNUEParams, gd_tune};
+use bullet::{data::Data, arch::NNUEParams, gd_tune, quantise::QuantisedNNUE};
 
 pub const NET_NAME: &str = "maiden";
 
@@ -35,9 +35,9 @@ fn main() -> std::io::Result<()> {
     params.output_bias = gen.rand();
 
     // carry out tuning
-    gd_tune(&data, &mut params, 1000, 0.05, NET_NAME);
+    gd_tune(&data, &mut params, 1000, 0.001, NET_NAME);
 
-    params.write_to_bin(&format!("{NET_NAME}-final.bin"))?;
+    QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}-final.bin"))?;
 
     // exit
     Ok(())
