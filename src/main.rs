@@ -26,14 +26,10 @@ fn main() -> std::io::Result<()> {
     for param in params.feature_weights.iter_mut() {
         *param = gen.rand();
     }
-    for param in params.feature_bias.iter_mut() {
-        *param = gen.rand();
-    }
 
     for param in params.output_weights.iter_mut() {
         *param = gen.rand();
     }
-    params.output_bias = gen.rand();
 
     // carry out tuning
     gd_tune(&data, &mut params, 2000, 0.001, NET_NAME);
