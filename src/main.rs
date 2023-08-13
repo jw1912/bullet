@@ -8,12 +8,12 @@ impl Rand {
         self.0 ^= self.0 << 13;
 	    self.0 ^= self.0 >> 17;
 	    self.0 ^= self.0 << 5;
-        f64::from(self.0) / f64::from(u32::MAX) - 1.
+        (1. - f64::from(self.0) / f64::from(u32::MAX)) / 1000.
     }
 }
 
 fn main() -> std::io::Result<()> {
-    let file_name = String::from("wha.epd");
+    let file_name = String::from("test.epd");
 
     // initialise data
     let mut data = Data::default();
@@ -29,6 +29,7 @@ fn main() -> std::io::Result<()> {
     for param in params.feature_bias.iter_mut() {
         *param = gen.rand();
     }
+
     for param in params.output_weights.iter_mut() {
         *param = gen.rand();
     }

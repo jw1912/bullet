@@ -4,15 +4,12 @@ use std::ops::{AddAssign, Index, IndexMut};
 pub const INPUT: usize = 768;
 pub const HIDDEN: usize = 16;
 
-const CR_MIN: f64 = 0.0;
-const CR_MAX: f64 = 1.0;
-
 fn activate(x: f64) -> f64 {
-    x.clamp(CR_MIN, CR_MAX)
+    x.max(0.0)
 }
 
 fn activate_prime(x: f64) -> f64 {
-    if x <= CR_MIN || x >= CR_MAX {0.0} else {1.0}
+    if x < 0.0 {0.0} else {1.0}
 }
 
 pub type NNUEParams = NNUE<f64>;

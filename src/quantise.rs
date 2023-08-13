@@ -30,7 +30,7 @@ impl QuantisedNNUE {
 }
 
 fn activate(x: i16) -> i32 {
-    i32::from(x.clamp(0, 255))
+    i32::from(x.max(0))
 }
 
 pub fn eval(pos: &Position, nnue: &QuantisedNNUE) -> i32 {
@@ -64,14 +64,21 @@ impl QuantisedNNUE {
     }
 }
 
-//#[test]
-//fn test_eval() {
-//    let nnue = Box::<QuantisedNNUE>::new(
-//        unsafe {
-//            std::mem::transmute(*include_bytes!("../maiden-700.bin"))
-//        }
-//    );
-//    let pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".parse::<Position>().unwrap();
-//    let score = eval(&pos, &nnue);
-//    println!("eval: {score}");
-//}
+#[test]
+fn test_eval() {
+    let nnue = Box::<QuantisedNNUE>::new(
+        unsafe {
+            std::mem::transmute(*include_bytes!("../maiden-200.bin"))
+        }
+    );
+    const FENS: [&str; 3] = [
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
+    ];
+    for fen in FENS {
+        let pos = fen.parse::<Position>().unwrap();
+        let score = eval(&pos, &nnue);
+        println!("eval: {score}");
+    }
+}
