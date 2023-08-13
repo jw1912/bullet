@@ -34,7 +34,7 @@ impl<T: AddAssign<T> + Copy> AddAssign<NNUE<T>> for NNUE<T> {
             .iter_mut()
             .zip(rhs.feature_weights.iter())
         {
-            *i += j
+            *i += j;
         }
 
         for (i, &j) in self
@@ -42,11 +42,11 @@ impl<T: AddAssign<T> + Copy> AddAssign<NNUE<T>> for NNUE<T> {
             .iter_mut()
             .zip(rhs.output_weights.iter())
         {
-            *i += j
+            *i += j;
         }
 
         for (i, &j) in self.feature_bias.iter_mut().zip(rhs.feature_bias.iter()) {
-            *i += j
+            *i += j;
         }
 
         self.output_bias += rhs.output_bias;

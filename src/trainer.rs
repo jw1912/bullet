@@ -16,6 +16,7 @@ pub struct Trainer {
 }
 
 impl Trainer {
+    #[must_use]
     pub fn new(threads: usize) -> Self {
         Self {
             data: Vec::new(),
@@ -23,6 +24,7 @@ impl Trainer {
         }
     }
 
+    #[must_use]
     fn num(&self) -> f64 {
         self.data.len() as f64
     }
@@ -31,7 +33,7 @@ impl Trainer {
         let timer = Instant::now();
         let (mut wins, mut losses, mut draws) = (0, 0, 0);
         let file = File::open(file_name).unwrap();
-        for line in BufReader::new(file).lines().map(|ln| ln.unwrap()) {
+        for line in BufReader::new(file).lines().map(Result::unwrap) {
             let res: Position = line.parse().unwrap();
             match (2. * res.result) as i64 {
                 2 => wins += 1,
@@ -62,7 +64,7 @@ impl Trainer {
                 .collect::<Vec<_>>()
                 .into_iter()
                 .map(|p| p.join().unwrap_or_default())
-                .for_each(|part| *grad += *part)
+                .for_each(|part| *grad += *part);
         });
         *error = errors.iter().sum::<f64>() / self.num();
         grad
@@ -96,7 +98,7 @@ impl Trainer {
                     &mut velocity.feature_weights[i],
                     grad,
                     rate,
-                )
+                );
             }
 
             for (i, param) in nnue.output_weights.iter_mut().enumerate() {
@@ -107,7 +109,7 @@ impl Trainer {
                     &mut velocity.output_weights[i],
                     grad,
                     rate,
-                )
+                );
             }
 
             for (i, param) in nnue.feature_bias.iter_mut().enumerate() {
@@ -118,7 +120,7 @@ impl Trainer {
                     &mut velocity.feature_bias[i],
                     grad,
                     rate,
-                )
+                );
             }
 
             let grad = adj * gradients.output_bias;
@@ -148,7 +150,7 @@ impl Trainer {
 fn gradients_batch(positions: &[Position], nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
     let mut grad = Box::default();
     for pos in positions {
-        update_single_grad(pos, nnue, &mut grad, error)
+        update_single_grad(pos, nnue, &mut grad, error);
     }
     grad
 }
@@ -159,5 +161,5 @@ const B2: f64 = 0.999;
 fn adam(p: &mut f64, m: &mut f64, v: &mut f64, grad: f64, rate: f64) {
     *m = B1 * *m + (1. - B1) * grad;
     *v = B2 * *v + (1. - B2) * grad * grad;
-    *p -= rate * *m / (v.sqrt() + 0.00000001);
+    *p -= rate * *m / (v.sqrt() + 0.000_000_01);
 }
