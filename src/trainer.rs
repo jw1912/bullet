@@ -16,6 +16,39 @@ pub struct Trainer {
 }
 
 impl Trainer {
+    pub fn run(
+        &self,
+        nnue: &mut NNUEParams,
+        max_epochs: usize,
+        rate: f64,
+        net_name: &str,
+        report_rate: usize,
+        save_rate: usize,
+    ) {
+        let mut velocity = Box::<NNUEParams>::default();
+        let mut momentum = Box::<NNUEParams>::default();
+
+        let timer = Instant::now();
+
+        let mut error = 0.0;
+
+        for epoch in 1..=max_epochs {
+            self.update_weights(nnue, &mut velocity, &mut momentum, rate, &mut error);
+
+            if epoch % report_rate == 0 {
+                let eps = epoch as f64 / timer.elapsed().as_secs_f64();
+                println!("epoch {epoch} error {error:.6} rate {rate:.3} eps {eps:.2}/sec");
+            }
+
+            if epoch % save_rate == 0 {
+                let qnnue = QuantisedNNUE::from_unquantised(nnue);
+                qnnue
+                    .write_to_bin(&format!("{net_name}-{epoch}.bin"))
+                    .unwrap();
+            }
+        }
+    }
+
     #[must_use]
     pub fn new(threads: usize) -> Self {
         Self {
@@ -31,25 +64,19 @@ impl Trainer {
 
     pub fn add_data(&mut self, file_name: &str) {
         let timer = Instant::now();
-        let (mut wins, mut losses, mut draws) = (0, 0, 0);
         let file = File::open(file_name).unwrap();
+
         for line in BufReader::new(file).lines().map(Result::unwrap) {
             let res: Position = line.parse().unwrap();
-            match (2. * res.result) as i64 {
-                2 => wins += 1,
-                0 => losses += 1,
-                1 => draws += 1,
-                _ => unreachable!(),
-            }
             self.data.push(res);
         }
+
         let elapsed = timer.elapsed().as_secs_f64();
         let pps = self.num() / elapsed;
         println!(
             "{} positions in {elapsed:.2} seconds, {pps:.2} pos/sec",
             self.num()
         );
-        println!("wins {wins} losses {losses} draws {draws}");
     }
 
     fn gradients(&self, nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
@@ -70,80 +97,58 @@ impl Trainer {
         grad
     }
 
-    pub fn run(
+    fn update_weights(
         &self,
         nnue: &mut NNUEParams,
-        max_epochs: usize,
+        velocity: &mut NNUEParams,
+        momentum: &mut NNUEParams,
         rate: f64,
-        net_name: &str,
-        report_rate: usize,
-        save_rate: usize,
+        error: &mut f64,
     ) {
-        let mut velocity = Box::<NNUEParams>::default();
-        let mut momentum = Box::<NNUEParams>::default();
-
-        let timer = Instant::now();
-
         let adj = 2. * K / self.num();
-        let mut error = 0.0;
+        let gradients = self.gradients(nnue, error);
 
-        for epoch in 1..=max_epochs {
-            let gradients = self.gradients(nnue, &mut error);
-
-            for (i, param) in nnue.feature_weights.iter_mut().enumerate() {
-                let grad = adj * gradients.feature_weights[i];
-                adam(
-                    param,
-                    &mut momentum.feature_weights[i],
-                    &mut velocity.feature_weights[i],
-                    grad,
-                    rate,
-                );
-            }
-
-            for (i, param) in nnue.output_weights.iter_mut().enumerate() {
-                let grad = adj * gradients.output_weights[i];
-                adam(
-                    param,
-                    &mut momentum.output_weights[i],
-                    &mut velocity.output_weights[i],
-                    grad,
-                    rate,
-                );
-            }
-
-            for (i, param) in nnue.feature_bias.iter_mut().enumerate() {
-                let grad = adj * gradients.feature_bias[i];
-                adam(
-                    param,
-                    &mut momentum.feature_bias[i],
-                    &mut velocity.feature_bias[i],
-                    grad,
-                    rate,
-                );
-            }
-
-            let grad = adj * gradients.output_bias;
+        for (i, param) in nnue.feature_weights.iter_mut().enumerate() {
+            let grad = adj * gradients.feature_weights[i];
             adam(
-                &mut nnue.output_bias,
-                &mut momentum.output_bias,
-                &mut velocity.output_bias,
+                param,
+                &mut momentum.feature_weights[i],
+                &mut velocity.feature_weights[i],
                 grad,
                 rate,
             );
-
-            if epoch % report_rate == 0 {
-                let eps = epoch as f64 / timer.elapsed().as_secs_f64();
-                println!("epoch {epoch} error {error:.6} rate {rate:.3} eps {eps:.2}/sec");
-            }
-
-            if epoch % save_rate == 0 {
-                let qnnue = QuantisedNNUE::from_unquantised(nnue);
-                qnnue
-                    .write_to_bin(&format!("{net_name}-{epoch}.bin"))
-                    .unwrap();
-            }
         }
+
+        for (i, param) in nnue.output_weights.iter_mut().enumerate() {
+            let grad = adj * gradients.output_weights[i];
+            adam(
+                param,
+                &mut momentum.output_weights[i],
+                &mut velocity.output_weights[i],
+                grad,
+                rate,
+            );
+        }
+
+        for (i, param) in nnue.feature_bias.iter_mut().enumerate() {
+            let grad = adj * gradients.feature_bias[i];
+            adam(
+                param,
+                &mut momentum.feature_bias[i],
+                &mut velocity.feature_bias[i],
+                grad,
+                rate,
+            );
+        }
+
+        let grad = adj * gradients.output_bias;
+        adam(
+            &mut nnue.output_bias,
+            &mut momentum.output_bias,
+            &mut velocity.output_bias,
+            grad,
+            rate,
+        );
     }
 }
 

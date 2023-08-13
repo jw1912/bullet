@@ -3,7 +3,7 @@ use std::ops::{AddAssign, Deref, Index, IndexMut};
 
 #[derive(Clone, Copy)]
 pub struct Accumulator<T, const SIZE: usize> {
-    vals: [T; SIZE]
+    vals: [T; SIZE],
 }
 
 impl<T, const SIZE: usize> Deref for Accumulator<T, SIZE> {
