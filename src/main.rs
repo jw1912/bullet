@@ -3,7 +3,13 @@ use bullet::{
     trainer::Trainer,
 };
 
-pub const NET_NAME: &str = "net1";
+pub const NET_NAME: &str = "net";
+const THREADS: usize = 6;
+const LR: f64 = 0.001;
+const REPORT_RATE: usize = 1;
+const SAVE_RATE: usize = 101;
+const MAX_EPOCHS: usize = 100;
+const BATCH_SIZE: usize = 16384;
 
 struct Rand(u32);
 impl Rand {
@@ -16,11 +22,10 @@ impl Rand {
 }
 
 fn main() {
-    let file_name = std::env::args().nth(1).expect("Expected a file name!");
+    let file_path = std::env::args().nth(1).expect("Expected a file name!");
 
     // initialise data
-    let mut trainer = Trainer::new(6);
-    trainer.add_data(&file_name);
+    let mut trainer = Trainer::new(file_path, THREADS, LR);
 
     // provide random starting parameters
     let mut params = Box::<NNUEParams>::default();
@@ -34,7 +39,14 @@ fn main() {
     }
 
     // carry out tuning
-    trainer.run(&mut params, 1000, 0.001, NET_NAME, 1, 10);
+    trainer.run(
+        &mut params,
+        MAX_EPOCHS,
+        NET_NAME,
+        REPORT_RATE,
+        SAVE_RATE,
+        BATCH_SIZE,
+    );
 
     // safe to bin file
     QuantisedNNUE::from_unquantised(&params)
