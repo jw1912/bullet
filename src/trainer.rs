@@ -28,26 +28,23 @@ impl Trainer {
         save_rate: usize,
         batch_size: usize,
     ) {
+        self.load_data();
+
         let mut velocity = Box::<NNUEParams>::default();
         let mut momentum = Box::<NNUEParams>::default();
 
         let timer = Instant::now();
 
-        let mut error = 0.0;
+        let mut error;
 
         for epoch in 1..=max_epochs {
-            for batch in BufReader::new(&self.file)
-                .lines()
-                .collect::<Vec<_>>()
-                .chunks(batch_size)
-            {
-                self.data.clear();
-                for line in batch.iter().map(Result::as_ref).map(Result::unwrap) {
-                    self.data.push(line.parse().unwrap())
-                }
+            error = 0.0;
 
-                self.update_weights(nnue, &mut velocity, &mut momentum, &mut error);
+            for batch in self.data.chunks(batch_size) {
+                self.update_weights(nnue, batch, &mut velocity, &mut momentum, &mut error);
             }
+
+            error /= self.data.len() as f64;
 
             if epoch % report_rate == 0 {
                 let eps = epoch as f64 / timer.elapsed().as_secs_f64();
@@ -73,34 +70,28 @@ impl Trainer {
         }
     }
 
-    #[must_use]
-    fn num(&self) -> f64 {
-        self.data.len() as f64
-    }
-
-    pub fn add_data(&mut self, file_name: &str) {
+    pub fn load_data(&mut self) {
         let timer = Instant::now();
-        let file = File::open(file_name).unwrap();
 
-        for line in BufReader::new(file).lines().map(Result::unwrap) {
+        for line in BufReader::new(&self.file).lines().map(Result::unwrap) {
             let res: Position = line.parse().unwrap();
             self.data.push(res);
         }
 
         let elapsed = timer.elapsed().as_secs_f64();
-        let pps = self.num() / elapsed;
+        let pps = self.data.len() as f64 / elapsed;
         println!(
             "{} positions in {elapsed:.2} seconds, {pps:.2} pos/sec",
-            self.num()
+            self.data.len()
         );
     }
 
-    fn gradients(&self, nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
-        let size = self.data.len() / self.threads;
+    fn gradients(&self, nnue: &NNUEParams, batch: &[Position], error: &mut f64) -> Box<NNUEParams> {
+        let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
         let mut grad = Box::default();
         thread::scope(|s| {
-            self.data
+            batch
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| s.spawn(|| gradients_batch(chunk, nnue, error)))
@@ -109,19 +100,20 @@ impl Trainer {
                 .map(|p| p.join().unwrap_or_default())
                 .for_each(|part| *grad += *part);
         });
-        *error = errors.iter().sum::<f64>() / self.num();
+        *error += errors.iter().sum::<f64>();
         grad
     }
 
     fn update_weights(
         &self,
         nnue: &mut NNUEParams,
+        batch: &[Position],
         velocity: &mut NNUEParams,
         momentum: &mut NNUEParams,
         error: &mut f64,
     ) {
-        let adj = 2. * K / self.num();
-        let gradients = self.gradients(nnue, error);
+        let adj = 2. * K / batch.len() as f64;
+        let gradients = self.gradients(nnue, batch, error);
 
         for (i, param) in nnue.feature_weights.iter_mut().enumerate() {
             let grad = adj * gradients.feature_weights[i];
