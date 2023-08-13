@@ -2,28 +2,31 @@ use crate::{
     arch::{update_single_grad, NNUEParams, QuantisedNNUE, K},
     position::Position,
 };
+
 use std::{
     fs::File,
     io::{BufRead, BufReader},
+    path::Path,
     thread,
     time::Instant,
 };
 
-#[derive(Default)]
 pub struct Trainer {
+    file: File,
     data: Vec<Position>,
     threads: usize,
+    rate: f64,
 }
 
 impl Trainer {
     pub fn run(
-        &self,
+        &mut self,
         nnue: &mut NNUEParams,
         max_epochs: usize,
-        rate: f64,
         net_name: &str,
         report_rate: usize,
         save_rate: usize,
+        batch_size: usize,
     ) {
         let mut velocity = Box::<NNUEParams>::default();
         let mut momentum = Box::<NNUEParams>::default();
@@ -33,11 +36,22 @@ impl Trainer {
         let mut error = 0.0;
 
         for epoch in 1..=max_epochs {
-            self.update_weights(nnue, &mut velocity, &mut momentum, rate, &mut error);
+            for batch in BufReader::new(&self.file)
+                .lines()
+                .collect::<Vec<_>>()
+                .chunks(batch_size)
+            {
+                self.data.clear();
+                for line in batch.iter().map(Result::as_ref).map(Result::unwrap) {
+                    self.data.push(line.parse().unwrap())
+                }
+
+                self.update_weights(nnue, &mut velocity, &mut momentum, &mut error);
+            }
 
             if epoch % report_rate == 0 {
                 let eps = epoch as f64 / timer.elapsed().as_secs_f64();
-                println!("epoch {epoch} error {error:.6} rate {rate:.3} eps {eps:.2}/sec");
+                println!("epoch {epoch} error {error:.6} eps {eps:.2}/sec");
             }
 
             if epoch % save_rate == 0 {
@@ -50,10 +64,12 @@ impl Trainer {
     }
 
     #[must_use]
-    pub fn new(threads: usize) -> Self {
+    pub fn new(path: impl AsRef<Path>, threads: usize, rate: f64) -> Self {
         Self {
+            file: File::open(path).unwrap(),
             data: Vec::new(),
             threads,
+            rate,
         }
     }
 
@@ -102,7 +118,6 @@ impl Trainer {
         nnue: &mut NNUEParams,
         velocity: &mut NNUEParams,
         momentum: &mut NNUEParams,
-        rate: f64,
         error: &mut f64,
     ) {
         let adj = 2. * K / self.num();
@@ -115,7 +130,7 @@ impl Trainer {
                 &mut momentum.feature_weights[i],
                 &mut velocity.feature_weights[i],
                 grad,
-                rate,
+                self.rate,
             );
         }
 
@@ -126,7 +141,7 @@ impl Trainer {
                 &mut momentum.output_weights[i],
                 &mut velocity.output_weights[i],
                 grad,
-                rate,
+                self.rate,
             );
         }
 
@@ -137,7 +152,7 @@ impl Trainer {
                 &mut momentum.feature_bias[i],
                 &mut velocity.feature_bias[i],
                 grad,
-                rate,
+                self.rate,
             );
         }
 
@@ -147,7 +162,7 @@ impl Trainer {
             &mut momentum.output_bias,
             &mut velocity.output_bias,
             grad,
-            rate,
+            self.rate,
         );
     }
 }
