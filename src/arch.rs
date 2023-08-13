@@ -104,7 +104,7 @@ pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEPara
     let err = eval - pos.result;
     *error += err.powi(2);
     for i in 0..HIDDEN {
-        let component = err * nnue.output_weights[i] * activate_prime(act[i]);
+        let component = err * nnue.output_weights[i] * activate_prime(acc[i]);
 
         // update feature weight gradients
         for &j in pos.active.iter().take(pos.num) {
