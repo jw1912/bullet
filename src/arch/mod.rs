@@ -1,9 +1,9 @@
-mod nnue;
 mod accumulator;
+mod nnue;
 mod quantise;
 
-pub use nnue::{NNUEParams, HIDDEN, K};
 pub use accumulator::Accumulator;
+pub use nnue::{NNUEParams, HIDDEN, K};
 pub use quantise::QuantisedNNUE;
 
 use crate::position::Position;
@@ -13,10 +13,19 @@ fn activate(x: f64) -> f64 {
 }
 
 fn activate_prime(x: f64) -> f64 {
-    if x < 0.0 {0.0} else {1.0}
+    if x < 0.0 {
+        0.0
+    } else {
+        1.0
+    }
 }
 
-pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEParams, error: &mut f64) {
+pub fn update_single_grad(
+    pos: &Position,
+    nnue: &NNUEParams,
+    grad: &mut NNUEParams,
+    error: &mut f64,
+) {
     let mut acc = Accumulator::new(nnue.feature_bias);
 
     for &feature in pos.active.iter().take(pos.num) {
@@ -25,7 +34,7 @@ pub fn update_single_grad(pos: &Position, nnue: &NNUEParams, grad: &mut NNUEPara
 
     let mut eval = nnue.output_bias;
     let mut act = Accumulator::new([0.0; HIDDEN]);
-    for (idx, (&i, &w)) in acc.0.iter().zip(&nnue.output_weights).enumerate() {
+    for (idx, (&i, &w)) in acc.iter().zip(&nnue.output_weights).enumerate() {
         act[idx] = activate(i);
         eval += act[idx] * w;
     }

@@ -1,4 +1,4 @@
-use super::nnue::{NNUE, NNUEParams};
+use super::nnue::{NNUEParams, NNUE};
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -32,9 +32,9 @@ impl QuantisedNNUE {
         let mut file = std::fs::File::create(output_path)?;
         const SIZEOF: usize = std::mem::size_of::<QuantisedNNUE>();
         unsafe {
-            file.write_all(
-                &std::mem::transmute::<QuantisedNNUE, [u8; SIZEOF]>(self.clone())
-            )?;
+            file.write_all(&std::mem::transmute::<QuantisedNNUE, [u8; SIZEOF]>(
+                self.clone(),
+            ))?;
         }
         Ok(())
     }

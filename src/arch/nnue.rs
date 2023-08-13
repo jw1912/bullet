@@ -29,11 +29,19 @@ impl<T: Copy + Default> Default for NNUE<T> {
 
 impl<T: AddAssign<T> + Copy> AddAssign<NNUE<T>> for NNUE<T> {
     fn add_assign(&mut self, rhs: NNUE<T>) {
-        for (i, &j) in self.feature_weights.iter_mut().zip(rhs.feature_weights.iter()) {
+        for (i, &j) in self
+            .feature_weights
+            .iter_mut()
+            .zip(rhs.feature_weights.iter())
+        {
             *i += j
         }
 
-        for (i, &j) in self.output_weights.iter_mut().zip(rhs.output_weights.iter()) {
+        for (i, &j) in self
+            .output_weights
+            .iter_mut()
+            .zip(rhs.output_weights.iter())
+        {
             *i += j
         }
 

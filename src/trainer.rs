@@ -1,5 +1,13 @@
-use std::{fs::File, io::{BufRead, BufReader}, thread, time::Instant};
-use crate::{arch::{NNUEParams, update_single_grad, QuantisedNNUE, K}, position::Position};
+use crate::{
+    arch::{update_single_grad, NNUEParams, QuantisedNNUE, K},
+    position::Position,
+};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+    thread,
+    time::Instant,
+};
 
 #[derive(Default)]
 pub struct Trainer {
@@ -9,7 +17,10 @@ pub struct Trainer {
 
 impl Trainer {
     pub fn new(threads: usize) -> Self {
-        Self { data: Vec::new(), threads }
+        Self {
+            data: Vec::new(),
+            threads,
+        }
     }
 
     fn num(&self) -> f64 {
@@ -32,7 +43,10 @@ impl Trainer {
         }
         let elapsed = timer.elapsed().as_secs_f64();
         let pps = self.num() / elapsed;
-        println!("{} positions in {elapsed:.2} seconds, {pps:.2} pos/sec", self.num());
+        println!(
+            "{} positions in {elapsed:.2} seconds, {pps:.2} pos/sec",
+            self.num()
+        );
         println!("wins {wins} losses {losses} draws {draws}");
     }
 
@@ -54,7 +68,15 @@ impl Trainer {
         grad
     }
 
-    pub fn run(&self, nnue: &mut NNUEParams, max_epochs: usize, rate: f64, net_name: &str, report_rate: usize, save_rate: usize) {
+    pub fn run(
+        &self,
+        nnue: &mut NNUEParams,
+        max_epochs: usize,
+        rate: f64,
+        net_name: &str,
+        report_rate: usize,
+        save_rate: usize,
+    ) {
         let mut velocity = Box::<NNUEParams>::default();
         let mut momentum = Box::<NNUEParams>::default();
 
@@ -68,29 +90,56 @@ impl Trainer {
 
             for (i, param) in nnue.feature_weights.iter_mut().enumerate() {
                 let grad = adj * gradients.feature_weights[i];
-                adam(param, &mut momentum.feature_weights[i], &mut velocity.feature_weights[i], grad, rate)
+                adam(
+                    param,
+                    &mut momentum.feature_weights[i],
+                    &mut velocity.feature_weights[i],
+                    grad,
+                    rate,
+                )
             }
 
             for (i, param) in nnue.output_weights.iter_mut().enumerate() {
                 let grad = adj * gradients.output_weights[i];
-                adam(param, &mut momentum.output_weights[i], &mut velocity.output_weights[i], grad, rate)
+                adam(
+                    param,
+                    &mut momentum.output_weights[i],
+                    &mut velocity.output_weights[i],
+                    grad,
+                    rate,
+                )
             }
 
             for (i, param) in nnue.feature_bias.iter_mut().enumerate() {
                 let grad = adj * gradients.feature_bias[i];
-                adam(param, &mut momentum.feature_bias[i], &mut velocity.feature_bias[i], grad, rate)
+                adam(
+                    param,
+                    &mut momentum.feature_bias[i],
+                    &mut velocity.feature_bias[i],
+                    grad,
+                    rate,
+                )
             }
 
             let grad = adj * gradients.output_bias;
-            adam(&mut nnue.output_bias, &mut momentum.output_bias, &mut velocity.output_bias, grad, rate);
+            adam(
+                &mut nnue.output_bias,
+                &mut momentum.output_bias,
+                &mut velocity.output_bias,
+                grad,
+                rate,
+            );
 
             if epoch % report_rate == 0 {
                 let eps = epoch as f64 / timer.elapsed().as_secs_f64();
                 println!("epoch {epoch} error {error:.6} rate {rate:.3} eps {eps:.2}/sec");
             }
+
             if epoch % save_rate == 0 {
-                let qnnue =  QuantisedNNUE::from_unquantised(nnue);
-                qnnue.write_to_bin(&format!("{net_name}-{epoch}.bin")).unwrap();
+                let qnnue = QuantisedNNUE::from_unquantised(nnue);
+                qnnue
+                    .write_to_bin(&format!("{net_name}-{epoch}.bin"))
+                    .unwrap();
             }
         }
     }
@@ -112,4 +161,3 @@ fn adam(p: &mut f64, m: &mut f64, v: &mut f64, grad: f64, rate: f64) {
     *v = B2 * *v + (1. - B2) * grad * grad;
     *p -= rate * *m / (v.sqrt() + 0.00000001);
 }
-
