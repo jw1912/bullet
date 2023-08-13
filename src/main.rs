@@ -9,7 +9,7 @@ const LR: f64 = 0.001;
 const REPORT_RATE: usize = 1;
 const SAVE_RATE: usize = 101;
 const MAX_EPOCHS: usize = 100;
-const BATCH_SIZE: usize = 16384 * THREADS;
+const BATCH_SIZE: usize = 16384;
 
 struct Rand(u32);
 impl Rand {
