@@ -1,6 +1,5 @@
-use crate::{arch::{Accumulator, NNUE, NNUEParams, HIDDEN}, position::Position};
+use crate::arch::{NNUE, NNUEParams};
 
-const SCALE: i32 = 400;
 const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
@@ -29,25 +28,6 @@ impl QuantisedNNUE {
     }
 }
 
-fn activate(x: i16) -> i32 {
-    i32::from(x.max(0))
-}
-
-pub fn eval(pos: &Position, nnue: &QuantisedNNUE) -> i32 {
-    let mut acc = Accumulator::<i16, HIDDEN>::new(nnue.feature_bias);
-
-    for &feature in pos.active.iter().take(pos.num) {
-        acc.add_feature(usize::from(feature), nnue);
-    }
-
-    let mut sum = i32::from(nnue.output_bias);
-    for (&i, &w) in acc.0.iter().zip(&nnue.output_weights) {
-        sum += activate(i) * i32::from(w);
-    }
-
-    sum * SCALE / QAB
-}
-
 impl QuantisedNNUE {
     pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         use std::io::Write;
@@ -60,30 +40,4 @@ impl QuantisedNNUE {
         }
         Ok(())
     }
-
-    pub fn test_eval(&self) {
-        println!("{:?}", self.output_weights);
-        println!("{:?}", self.output_bias);
-        println!("{:?}", self.feature_bias);
-        const FENS: [&str; 3] = [
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ",
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
-        ];
-        for fen in FENS {
-            let pos = fen.parse::<Position>().unwrap();
-            let score = eval(&pos, self);
-            println!("eval: {score}");
-        }
-    }
-}
-
-#[test]
-fn test_eval() {
-    let nnue = Box::<QuantisedNNUE>::new(
-        unsafe {
-            std::mem::transmute(*include_bytes!("../maiden-100.bin"))
-        }
-    );
-    nnue.test_eval();
 }

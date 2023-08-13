@@ -1,6 +1,6 @@
 use bullet::{data::Data, arch::NNUEParams, gd_tune, quantise::QuantisedNNUE};
 
-pub const NET_NAME: &str = "maiden";
+pub const NET_NAME: &str = "net1";
 
 struct Rand(u32);
 impl Rand {
@@ -13,7 +13,7 @@ impl Rand {
 }
 
 fn main() -> std::io::Result<()> {
-    let file_name = String::from("test.epd");
+    let file_name = String::from("wha.epd");
 
     // initialise data
     let mut data = Data::default();
@@ -32,9 +32,9 @@ fn main() -> std::io::Result<()> {
     }
 
     // carry out tuning
-    gd_tune(&data, &mut params, 1000, 0.001, NET_NAME);
+    gd_tune(&data, &mut params, 1000, 0.001, NET_NAME, 1, 10);
 
-    QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}-final.bin"))?;
+    QuantisedNNUE::from_unquantised(&params).write_to_bin(&format!("{NET_NAME}.bin"))?;
 
     // exit
     Ok(())
