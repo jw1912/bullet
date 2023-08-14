@@ -5,18 +5,26 @@ use crate::arch::{update_single_grad, NNUEParams, QuantisedNNUE, K};
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    path::Path,
     thread,
     time::Instant,
 };
 
 pub struct Trainer {
-    file: File,
+    file: String,
     threads: usize,
     rate: f64,
 }
 
 impl Trainer {
+    #[must_use]
+    pub fn new(file: String, threads: usize, rate: f64) -> Self {
+        Self {
+            file,
+            threads,
+            rate,
+        }
+    }
+
     pub fn run(
         &mut self,
         nnue: &mut NNUEParams,
@@ -32,13 +40,13 @@ impl Trainer {
         let timer = Instant::now();
 
         let mut error;
-        let mut num = 0;
 
         for epoch in 1..=max_epochs {
             error = 0.0;
+            let mut num = 0;
 
             let cap = 1024 * batch_size * std::mem::size_of::<Position>();
-            let mut file = BufReader::with_capacity(cap, &self.file);
+            let mut file = BufReader::with_capacity(cap, File::open(&self.file).unwrap());
 
             while let Ok(buf) = file.fill_buf() {
                 // finished reading file
@@ -70,15 +78,6 @@ impl Trainer {
                     .write_to_bin(&format!("{net_name}-{epoch}.bin"))
                     .unwrap();
             }
-        }
-    }
-
-    #[must_use]
-    pub fn new(path: impl AsRef<Path>, threads: usize, rate: f64) -> Self {
-        Self {
-            file: File::open(path).unwrap(),
-            threads,
-            rate,
         }
     }
 
