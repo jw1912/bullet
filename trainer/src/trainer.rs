@@ -83,9 +83,7 @@ impl Trainer {
                 break;
             }
 
-            let buf_ref: &[PackedPosition] = unsafe {
-                util::to_slice_with_lifetime(buf)
-            };
+            let buf_ref: &[PackedPosition] = unsafe { util::to_slice_with_lifetime(buf) };
 
             for &packed in buf_ref {
                 let pos = Position::from(packed);

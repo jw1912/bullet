@@ -1,4 +1,8 @@
-use std::{env::args, io::{BufRead, BufReader, BufWriter, Write}, fs::File};
+use std::{
+    env::args,
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Write},
+};
 
 use data::PackedPosition;
 
@@ -22,7 +26,9 @@ fn main() {
 
     let data_slice = unsafe { util::to_slice_with_lifetime(&data) };
 
-    output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
+    output
+        .write_all(data_slice)
+        .expect("Nothing can go wrong in unsafe code!");
 
     println!("Written to [{out_path}]");
 }

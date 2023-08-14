@@ -38,7 +38,7 @@ impl PackedPosition {
             "[1.0]" => 1,
             "[0.0]" => -1,
             "[0.5]" => 0,
-            _ => panic!("Bad game result!")
+            _ => panic!("Bad game result!"),
         };
 
         if let Some(score) = parts.get(7) {

@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use data::PackedPosition;
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Position {
