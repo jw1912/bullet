@@ -1,10 +1,26 @@
 use std::str::FromStr;
+use data::PackedPosition;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Position {
     pub active: [u16; 32],
     pub num: usize,
     pub result: f64,
+}
+
+impl From<PackedPosition> for Position {
+    fn from(value: PackedPosition) -> Self {
+        let mut pos = Self::default();
+
+        for (piece, square) in value {
+            pos.active[pos.num] = 64 * piece as u16 + square as u16;
+            pos.num += 1;
+        }
+
+        pos.result = f64::from(value.res + 1) / 2.;
+
+        pos
+    }
 }
 
 impl FromStr for Position {
@@ -37,4 +53,21 @@ impl FromStr for Position {
 
         Ok(pos)
     }
+}
+
+#[test]
+fn t() {
+    let fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 [1.0] -80";
+
+    let packed = PackedPosition::from_fen(fen);
+
+    let mut position = Position::from(packed);
+    position.active.sort();
+
+    println!("{position:?}");
+
+    position = fen.parse().unwrap();
+    position.active.sort();
+
+    println!("{position:?}");
 }

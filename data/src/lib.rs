@@ -1,6 +1,8 @@
-#[derive(Clone, Copy, Default)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct PackedPosition {
-    pub board: Board,
+    occ: u64,
+    pcs: [u8; 16],
     pub stm: bool,
     pub res: i8,
     pub score: i16,
@@ -13,26 +15,22 @@ impl PackedPosition {
         let stm_str = parts[1];
 
         let mut pos = Self::default();
-        let mut builder = BoardBuilder::default();
 
-        let mut row = 7i16;
-        let mut col = 0i16;
-        for ch in board_str.chars() {
-            if ch == '/' {
-                row -= 1;
-                col = 0;
-            } else if ch == ' ' {
-                break;
-            } else if ('1'..='8').contains(&ch) {
-                col += ch.to_digit(10).expect("hard coded") as i16;
-            } else if let Some(piece) = "PNBRQKpnbrqk".chars().position(|el| el == ch) {
-                let square = 8 * row + col;
-                builder.add(piece as u8, square as u8);
-                col += 1;
+        let mut idx = 0;
+        for (i, row) in board_str.split('/').rev().enumerate() {
+            let mut col = 0;
+            for ch in row.chars() {
+                if ('1'..='8').contains(&ch) {
+                    col += ch.to_digit(10).expect("hard coded") as usize;
+                } else if let Some(piece) = "PNBRQKpnbrqk".chars().position(|el| el == ch) {
+                    let square = 8 * i + col;
+                    pos.occ |= 1 << square;
+                    pos.pcs[idx / 2] |= (piece as u8) << (4 * (idx & 1));
+                    idx += 1;
+                    col += 1;
+                }
             }
         }
-
-        pos.board = builder.get_board();
 
         pos.stm = stm_str == "b";
 
@@ -50,13 +48,7 @@ impl PackedPosition {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct Board {
-    occ: u64,
-    pcs: [u8; 16],
-}
-
-impl IntoIterator for Board {
+impl IntoIterator for PackedPosition {
     type IntoIter = BoardIter;
     type Item = (u8, u8);
     fn into_iter(self) -> Self::IntoIter {
@@ -68,7 +60,7 @@ impl IntoIterator for Board {
 }
 
 pub struct BoardIter {
-    board: Board,
+    board: PackedPosition,
     idx: usize,
 }
 
@@ -80,46 +72,11 @@ impl Iterator for BoardIter {
         }
 
         let square = self.board.occ.trailing_zeros() as u8;
-        let piece = self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1));
+        let piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
 
         self.board.occ &= self.board.occ - 1;
         self.idx += 1;
 
         Some((piece, square))
-    }
-}
-
-#[derive(Default)]
-struct BoardBuilder {
-    internal: [(u8, u8); 32],
-    len: usize,
-}
-
-impl BoardBuilder {
-    fn add(&mut self, piece: u8, square: u8) {
-        self.internal[self.len] = (piece, square);
-        self.len += 1;
-    }
-
-    fn pop(&mut self) -> Option<(u8, u8)> {
-        if self.len == 0 {
-            return None;
-        }
-
-        self.len -= 1;
-        Some(self.internal[self.len])
-    }
-
-    fn get_board(&mut self) -> Board {
-        let mut board = Board::default();
-        let mut idx = 0;
-
-        while let Some((piece, square)) = self.pop() {
-            board.occ |= 1 << square;
-            board.pcs[idx / 2] |= piece << (4 * (idx & 1));
-            idx += 1;
-        }
-
-        board
     }
 }
