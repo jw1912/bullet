@@ -12,8 +12,9 @@ const THREADS: usize = 6;
 const LR: f64 = 0.001;
 const REPORT_RATE: usize = 1;
 const SAVE_RATE: usize = 101;
-const MAX_EPOCHS: usize = 100;
+const MAX_EPOCHS: usize = 1;
 const BATCH_SIZE: usize = 16384;
+const TXT_FORMAT: bool = false;
 
 struct Rand(u32);
 impl Rand {
@@ -43,7 +44,7 @@ fn main() {
     }
 
     // carry out tuning
-    trainer.run(
+    trainer.run::<TXT_FORMAT>(
         &mut params,
         MAX_EPOCHS,
         NET_NAME,

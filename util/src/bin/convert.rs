@@ -20,16 +20,9 @@ fn main() {
 
     let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
 
-    let data_slice = unsafe { slice_with_lifetime(&data) };
+    let data_slice = unsafe { util::to_slice_with_lifetime(&data) };
 
     output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
 
     println!("Written to [{out_path}]");
-}
-
-/// # Safety
-/// They're just bytes, they can hold anything.
-unsafe fn slice_with_lifetime<T>(slice: &[T]) -> &[u8] {
-    let len = std::mem::size_of::<PackedPosition>() * slice.len();
-    std::slice::from_raw_parts(slice.as_ptr().cast(), len)
 }

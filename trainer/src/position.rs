@@ -57,17 +57,22 @@ impl FromStr for Position {
 
 #[test]
 fn t() {
-    let fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 [1.0] -80";
+    let fens = [
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 [1.0]",
+        "r2qkbnr/1pp1pppp/p1n5/3Pp3/6bP/5P2/PPP1P1P1/RNBQKB1R b - - 0 1 [0.0]",
+    ];
 
-    let packed = PackedPosition::from_fen(fen);
+    for fen in fens {
+        let packed = PackedPosition::from_fen(fen);
 
-    let mut position = Position::from(packed);
-    position.active.sort();
+        let mut position = Position::from(packed);
+        position.active.sort();
 
-    println!("{position:?}");
+        println!("{position:?}");
 
-    position = fen.parse().unwrap();
-    position.active.sort();
+        position = fen.parse().unwrap();
+        position.active.sort();
 
-    println!("{position:?}");
+        println!("{position:?}");
+    }
 }

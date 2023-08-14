@@ -35,9 +35,10 @@ impl PackedPosition {
         pos.stm = stm_str == "b";
 
         pos.res = match parts[6] {
-            "\"1-0\";" | " [1.0]" => 1,
-            "\"0-1\";" | " [0.0]" => -1,
-            _ => 0,
+            "[1.0]" => 1,
+            "[0.0]" => -1,
+            "[0.5]" => 0,
+            _ => panic!("Bad game result!")
         };
 
         if let Some(score) = parts.get(7) {
