@@ -2,7 +2,6 @@
 members = [
     "data",
     "trainer",
-    "util",
 ]
 
 [profile.release]

@@ -24,7 +24,7 @@ fn main() {
 
     let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
 
-    let data_slice = unsafe { util::to_slice_with_lifetime(&data) };
+    let data_slice = unsafe { data::util::to_slice_with_lifetime(&data) };
 
     output
         .write_all(data_slice)

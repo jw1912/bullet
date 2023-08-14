@@ -6,4 +6,3 @@ authors = ["Jamie Whiting"]
 
 [dependencies]
 data = { path = "../data" }
-util = { path = "../util" }
