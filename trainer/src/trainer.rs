@@ -21,7 +21,7 @@ pub struct Trainer {
 }
 
 impl Trainer {
-    pub fn run<const TXT: bool>(
+    pub fn run(
         &mut self,
         nnue: &mut NNUEParams,
         max_epochs: usize,
@@ -30,7 +30,7 @@ impl Trainer {
         save_rate: usize,
         batch_size: usize,
     ) {
-        self.load_data::<TXT>();
+        self.load_data();
 
         let mut velocity = Box::<NNUEParams>::default();
         let mut momentum = Box::<NNUEParams>::default();
@@ -72,35 +72,28 @@ impl Trainer {
         }
     }
 
-    pub fn load_data<const TXT: bool>(&mut self) {
+    pub fn load_data(&mut self) {
         let timer = Instant::now();
 
         let mut file = BufReader::with_capacity(16384, &self.file);
 
-        if TXT {
-            for line in file.lines().map(Result::unwrap) {
-                let pos: Position = line.parse().unwrap();
+        while let Ok(buf) = file.fill_buf() {
+            // finished reading file
+            if buf.is_empty() {
+                break;
+            }
+
+            let buf_ref: &[PackedPosition] = unsafe {
+                util::to_slice_with_lifetime(buf)
+            };
+
+            for &packed in buf_ref {
+                let pos = Position::from(packed);
                 self.data.push(pos);
             }
-        } else {
-            while let Ok(buf) = file.fill_buf() {
-                // finished reading file
-                if buf.is_empty() {
-                    break;
-                }
 
-                let buf_ref: &[PackedPosition] = unsafe {
-                    util::to_slice_with_lifetime(buf)
-                };
-
-                for &packed in buf_ref {
-                    let pos = Position::from(packed);
-                    self.data.push(pos);
-                }
-
-                let consumed = buf.len();
-                file.consume(consumed);
-            }
+            let consumed = buf.len();
+            file.consume(consumed);
         }
 
         let elapsed = timer.elapsed().as_secs_f64();
