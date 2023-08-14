@@ -4,7 +4,7 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
 };
 
-use data::PackedPosition;
+use data::Position;
 
 fn main() {
     let inp_path = args().nth(1).expect("Expected a file name!");
@@ -17,10 +17,10 @@ fn main() {
     let mut data = Vec::new();
 
     for line in file.lines().map(Result::unwrap) {
-        data.push(PackedPosition::from_fen(&line));
+        data.push(Position::from_fen(&line));
     }
 
-    println!("Parsed to PackedPosition");
+    println!("Parsed to Position");
 
     let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
 

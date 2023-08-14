@@ -1,6 +1,6 @@
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct PackedPosition {
+pub struct Position {
     occ: u64,
     pcs: [u8; 16],
     pub stm: bool,
@@ -8,7 +8,7 @@ pub struct PackedPosition {
     pub score: i16,
 }
 
-impl PackedPosition {
+impl Position {
     pub fn from_fen(fen: &str) -> Self {
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
@@ -49,7 +49,7 @@ impl PackedPosition {
     }
 }
 
-impl IntoIterator for PackedPosition {
+impl IntoIterator for Position {
     type IntoIter = BoardIter;
     type Item = (u8, u8);
     fn into_iter(self) -> Self::IntoIter {
@@ -61,7 +61,7 @@ impl IntoIterator for PackedPosition {
 }
 
 pub struct BoardIter {
-    board: PackedPosition,
+    board: Position,
     idx: usize,
 }
 

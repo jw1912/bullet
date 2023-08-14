@@ -1,4 +1,4 @@
-use data::PackedPosition;
+use data::Position;
 
 use crate::arch::{update_single_grad, NNUEParams, QuantisedNNUE, K};
 
@@ -26,7 +26,6 @@ impl Trainer {
         save_rate: usize,
         batch_size: usize,
     ) {
-
         let mut velocity = Box::<NNUEParams>::default();
         let mut momentum = Box::<NNUEParams>::default();
 
@@ -38,7 +37,7 @@ impl Trainer {
         for epoch in 1..=max_epochs {
             error = 0.0;
 
-            let cap = 1024 * batch_size * std::mem::size_of::<PackedPosition>();
+            let cap = 1024 * batch_size * std::mem::size_of::<Position>();
             let mut file = BufReader::with_capacity(cap, &self.file);
 
             while let Ok(buf) = file.fill_buf() {
@@ -47,7 +46,7 @@ impl Trainer {
                     break;
                 }
 
-                let buf_ref: &[PackedPosition] = unsafe { data::util::to_slice_with_lifetime(buf) };
+                let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
                     self.update_weights(nnue, batch, &mut velocity, &mut momentum, &mut error);
@@ -83,7 +82,12 @@ impl Trainer {
         }
     }
 
-    fn gradients(&self, nnue: &NNUEParams, batch: &[PackedPosition], error: &mut f64) -> Box<NNUEParams> {
+    fn gradients(
+        &self,
+        nnue: &NNUEParams,
+        batch: &[Position],
+        error: &mut f64,
+    ) -> Box<NNUEParams> {
         let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
         let mut grad = Box::default();
@@ -104,7 +108,7 @@ impl Trainer {
     fn update_weights(
         &self,
         nnue: &mut NNUEParams,
-        batch: &[PackedPosition],
+        batch: &[Position],
         velocity: &mut NNUEParams,
         momentum: &mut NNUEParams,
         error: &mut f64,
@@ -156,7 +160,11 @@ impl Trainer {
     }
 }
 
-fn gradients_batch(positions: &[PackedPosition], nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
+fn gradients_batch(
+    positions: &[Position],
+    nnue: &NNUEParams,
+    error: &mut f64,
+) -> Box<NNUEParams> {
     let mut grad = Box::default();
     for pos in positions {
         update_single_grad(pos, nnue, &mut grad, error);

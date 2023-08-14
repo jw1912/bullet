@@ -3,9 +3,10 @@ mod nnue;
 mod quantise;
 
 pub use accumulator::Accumulator;
-use data::PackedPosition;
 pub use nnue::{NNUEParams, HIDDEN, K};
 pub use quantise::QuantisedNNUE;
+
+use data::Position;
 
 fn activate(x: f64) -> f64 {
     x.max(0.0)
@@ -20,7 +21,7 @@ fn activate_prime(x: f64) -> f64 {
 }
 
 pub fn update_single_grad(
-    pos: &PackedPosition,
+    pos: &Position,
     nnue: &NNUEParams,
     grad: &mut NNUEParams,
     error: &mut f64,
