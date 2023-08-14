@@ -1,4 +1,8 @@
-use bullet::{
+pub mod arch;
+pub mod position;
+pub mod trainer;
+
+use crate::{
     arch::{NNUEParams, QuantisedNNUE},
     trainer::Trainer,
 };

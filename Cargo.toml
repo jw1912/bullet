@@ -1,4 +1,12 @@
-[package]
-name = "bullet"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "data",
+    "trainer",
+    "util",
+]
+
+[profile.release]
+panic = 'abort'
+strip = true
+codegen-units = 1
+lto = true
