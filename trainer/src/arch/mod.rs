@@ -27,9 +27,13 @@ pub fn update_single_grad(
     error: &mut f64,
 ) {
     let mut accumulator = Accumulator::new(nnue.feature_bias);
+    let mut features = [0; 32];
+    let mut len = 0;
 
     for (piece, square) in pos.into_iter() {
         let feature = 64 * piece as usize + square as usize;
+        features[len] = feature;
+        len += 1;
         accumulator.add_feature(feature, nnue);
     }
 
@@ -55,8 +59,7 @@ pub fn update_single_grad(
         grad.output_weights[i] += err * activated[i];
     }
 
-    for (piece, square) in pos.into_iter() {
-        let feature = 64 * piece as usize + square as usize;
+    for feature in features.iter().take(len) {
         for i in 0..HIDDEN {
             grad.feature_weights[feature * HIDDEN + i] += components[i];
         }
