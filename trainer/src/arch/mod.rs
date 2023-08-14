@@ -6,7 +6,7 @@ pub use accumulator::Accumulator;
 pub use nnue::{NNUEParams, HIDDEN, K};
 pub use quantise::QuantisedNNUE;
 
-use crate::position::Position;
+use data::Position;
 
 fn activate(x: f64) -> f64 {
     x.max(0.0)
@@ -28,8 +28,9 @@ pub fn update_single_grad(
 ) {
     let mut accumulator = Accumulator::new(nnue.feature_bias);
 
-    for &feature in pos.active.iter().take(pos.num) {
-        accumulator.add_feature(usize::from(feature), nnue);
+    for (piece, square) in pos.into_iter() {
+        let feature = 64 * piece as usize + square as usize;
+        accumulator.add_feature(feature, nnue);
     }
 
     let mut eval = nnue.output_bias;
@@ -40,19 +41,25 @@ pub fn update_single_grad(
     }
 
     let sigmoid = 1. / (1. + (-eval * K).exp());
-    let err = (sigmoid - pos.result) * sigmoid * (1. - sigmoid);
-    *error += (sigmoid - pos.result).powi(2);
+    let result = f64::from(pos.result + 1) / 2.;
+    let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
+    *error += (sigmoid - result).powi(2);
+
+    let mut components = Accumulator::new([0.0; HIDDEN]);
 
     for i in 0..HIDDEN {
-        let component = err * nnue.output_weights[i] * activate_prime(accumulator[i]);
+        components[i] = err * nnue.output_weights[i] * activate_prime(accumulator[i]);
 
-        for &j in pos.active.iter().take(pos.num) {
-            grad.feature_weights[usize::from(j) * HIDDEN + i] += component;
-        }
-
-        grad.feature_bias[i] += component;
+        grad.feature_bias[i] += components[i];
 
         grad.output_weights[i] += err * activated[i];
+    }
+
+    for (piece, square) in pos.into_iter() {
+        let feature = 64 * piece as usize + square as usize;
+        for i in 0..HIDDEN {
+            grad.feature_weights[feature * HIDDEN + i] += components[i];
+        }
     }
 
     grad.output_bias += err;

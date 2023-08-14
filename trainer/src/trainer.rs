@@ -1,24 +1,30 @@
-use crate::{
-    arch::{update_single_grad, NNUEParams, QuantisedNNUE, K},
-    position::Position,
-};
+use data::Position;
+
+use crate::arch::{update_single_grad, NNUEParams, QuantisedNNUE, K};
 
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    path::Path,
     thread,
     time::Instant,
 };
 
 pub struct Trainer {
-    file: File,
-    data: Vec<Position>,
+    file: String,
     threads: usize,
     rate: f64,
 }
 
 impl Trainer {
+    #[must_use]
+    pub fn new(file: String, threads: usize, rate: f64) -> Self {
+        Self {
+            file,
+            threads,
+            rate,
+        }
+    }
+
     pub fn run(
         &mut self,
         nnue: &mut NNUEParams,
@@ -28,8 +34,6 @@ impl Trainer {
         save_rate: usize,
         batch_size: usize,
     ) {
-        self.load_data();
-
         let mut velocity = Box::<NNUEParams>::default();
         let mut momentum = Box::<NNUEParams>::default();
 
@@ -39,12 +43,29 @@ impl Trainer {
 
         for epoch in 1..=max_epochs {
             error = 0.0;
+            let mut num = 0;
 
-            for batch in self.data.chunks(batch_size) {
-                self.update_weights(nnue, batch, &mut velocity, &mut momentum, &mut error);
+            let cap = 1024 * batch_size * std::mem::size_of::<Position>();
+            let mut file = BufReader::with_capacity(cap, File::open(&self.file).unwrap());
+
+            while let Ok(buf) = file.fill_buf() {
+                // finished reading file
+                if buf.is_empty() {
+                    break;
+                }
+
+                let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(buf) };
+
+                for batch in buf_ref.chunks(batch_size) {
+                    self.update_weights(nnue, batch, &mut velocity, &mut momentum, &mut error);
+                }
+
+                num += buf_ref.len();
+                let consumed = buf.len();
+                file.consume(consumed);
             }
 
-            error /= self.data.len() as f64;
+            error /= num as f64;
 
             if epoch % report_rate == 0 {
                 let eps = epoch as f64 / timer.elapsed().as_secs_f64();
@@ -60,33 +81,12 @@ impl Trainer {
         }
     }
 
-    #[must_use]
-    pub fn new(path: impl AsRef<Path>, threads: usize, rate: f64) -> Self {
-        Self {
-            file: File::open(path).unwrap(),
-            data: Vec::new(),
-            threads,
-            rate,
-        }
-    }
-
-    pub fn load_data(&mut self) {
-        let timer = Instant::now();
-
-        for line in BufReader::new(&self.file).lines().map(Result::unwrap) {
-            let res: Position = line.parse().unwrap();
-            self.data.push(res);
-        }
-
-        let elapsed = timer.elapsed().as_secs_f64();
-        let pps = self.data.len() as f64 / elapsed;
-        println!(
-            "{} positions in {elapsed:.2} seconds, {pps:.2} pos/sec",
-            self.data.len()
-        );
-    }
-
-    fn gradients(&self, nnue: &NNUEParams, batch: &[Position], error: &mut f64) -> Box<NNUEParams> {
+    fn gradients(
+        &self,
+        nnue: &NNUEParams,
+        batch: &[Position],
+        error: &mut f64,
+    ) -> Box<NNUEParams> {
         let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
         let mut grad = Box::default();
@@ -159,7 +159,11 @@ impl Trainer {
     }
 }
 
-fn gradients_batch(positions: &[Position], nnue: &NNUEParams, error: &mut f64) -> Box<NNUEParams> {
+fn gradients_batch(
+    positions: &[Position],
+    nnue: &NNUEParams,
+    error: &mut f64,
+) -> Box<NNUEParams> {
     let mut grad = Box::default();
     for pos in positions {
         update_single_grad(pos, nnue, &mut grad, error);
