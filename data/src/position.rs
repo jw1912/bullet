@@ -20,6 +20,10 @@ impl Position {
         f64::from(self.result) / 2.
     }
 
+    pub fn result_idx(&self) -> usize {
+        usize::from(self.result)
+    }
+
     pub fn stm(&self) -> usize {
         usize::from(self.stm_enp >> 7)
     }
