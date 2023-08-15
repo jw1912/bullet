@@ -52,7 +52,7 @@ pub fn update_single_grad(
         eval += activated[1][idx] * w;
     }
 
-    let result = f64::from(pos.result + 1) / 2.;
+    let result = pos.result();
 
     let sigmoid = 1. / (1. + (-eval * K).exp());
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
@@ -96,7 +96,7 @@ fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
 
     let mut eval = nnue.output_bias;
 
-    let side = usize::from(pos.stm);
+    let side = pos.stm();
     let (boys, opps) = (&accs[side], &accs[side ^ 1]);
 
     for (&i, &w) in boys.iter().zip(&nnue.output_weights[..HIDDEN]) {

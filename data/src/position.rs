@@ -3,12 +3,27 @@
 pub struct Position {
     occ: u64,
     pcs: [u8; 16],
-    pub stm: bool,
-    pub result: i8,
-    pub score: i16,
+    stm_enp: u8,
+    hfm: u8,
+    fmc: u16,
+    score: i16,
+    result: u8,
+    extra: u8,
 }
 
 impl Position {
+    pub fn score(&self) -> i16 {
+        self.score
+    }
+
+    pub fn result(&self) -> f64 {
+        f64::from(self.result) / 2.
+    }
+
+    pub fn stm(&self) -> usize {
+        usize::from(self.stm_enp >> 7)
+    }
+
     pub fn from_fen(fen: &str) -> Self {
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
@@ -32,18 +47,20 @@ impl Position {
             }
         }
 
-        pos.stm = stm_str == "b";
+        pos.stm_enp = u8::from(stm_str == "b") << 7 | parts[3].parse().unwrap_or(0);
 
-        pos.result = match parts[6] {
-            "[1.0]" => 1,
-            "[0.0]" => -1,
-            "[0.5]" => 0,
+        pos.hfm = parts[4].parse().unwrap_or(0);
+
+        pos.fmc = parts[5].parse().unwrap_or(1);
+
+        pos.score = parts[6].parse::<i16>().unwrap_or(0);
+
+        pos.result = match parts[7] {
+            "[1.0]" => 2,
+            "[0.5]" => 1,
+            "[0.0]" => 0,
             _ => panic!("Bad game result!"),
         };
-
-        if let Some(score) = parts.get(7) {
-            pos.score = score.parse::<i16>().unwrap_or(0)
-        }
 
         pos
     }
