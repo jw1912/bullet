@@ -32,7 +32,7 @@ pub fn update_single_grad(
 
     for (piece, square) in pos.into_iter() {
         let wfeat = 64 * piece as usize + square as usize;
-        let bfeat = 64 * ((piece as usize + 6) % 12) + (56 ^ (square as usize));
+        let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
         features[len] = (wfeat, bfeat);
         len += 1;
         accs[0].add_feature(wfeat, nnue);
@@ -42,15 +42,12 @@ pub fn update_single_grad(
     let mut eval = nnue.output_bias;
     let mut activated = [Accumulator::new([0.0; HIDDEN]); 2];
 
-    let side = usize::from(pos.stm);
-    let (boys, opps) = (&accs[side], &accs[side ^ 1]);
-
-    for (idx, (&i, &w)) in boys.iter().zip(&nnue.output_weights[..HIDDEN]).enumerate() {
+    for (idx, (&i, &w)) in accs[0].iter().zip(&nnue.output_weights[..HIDDEN]).enumerate() {
         activated[0][idx] = activate(i);
         eval += activated[0][idx] * w;
     }
 
-    for (idx, (&i, &w)) in opps.iter().zip(&nnue.output_weights[HIDDEN..]).enumerate() {
+    for (idx, (&i, &w)) in accs[1].iter().zip(&nnue.output_weights[HIDDEN..]).enumerate() {
         activated[1][idx] = activate(i);
         eval += activated[1][idx] * w;
     }
@@ -65,8 +62,8 @@ pub fn update_single_grad(
 
     for i in 0..HIDDEN {
         components[i] = (
-            err * nnue.output_weights[i] * activate_prime(boys[i]),
-            err * nnue.output_weights[HIDDEN + i] * activate_prime(opps[i])
+            err * nnue.output_weights[i] * activate_prime(accs[0][i]),
+            err * nnue.output_weights[HIDDEN + i] * activate_prime(accs[1][i])
         );
 
         grad.feature_bias[i] += components[i].0 + components[i].1;
@@ -76,11 +73,56 @@ pub fn update_single_grad(
     }
 
     for (wfeat, bfeat) in features.iter().take(len) {
+        let (widx, bidx) = (wfeat * HIDDEN, bfeat * HIDDEN);
         for i in 0..HIDDEN {
-            grad.feature_weights[wfeat * HIDDEN + i] += components[i].0;
-            grad.feature_weights[bfeat * HIDDEN + i] += components[i].1;
+            grad.feature_weights[widx + i] += components[i].0;
+            grad.feature_weights[bidx + i] += components[i].1;
         }
     }
 
     grad.output_bias += err;
+}
+
+
+fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
+    let mut accs = [Accumulator::new(nnue.feature_bias); 2];
+
+    for (piece, square) in pos.into_iter() {
+        let wfeat = 64 * piece as usize + square as usize;
+        let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
+        accs[0].add_feature(wfeat, nnue);
+        accs[1].add_feature(bfeat, nnue);
+    }
+
+    let mut eval = nnue.output_bias;
+
+    let side = usize::from(pos.stm);
+    let (boys, opps) = (&accs[side], &accs[side ^ 1]);
+
+    for (&i, &w) in boys.iter().zip(&nnue.output_weights[..HIDDEN]) {
+        eval += activate(i) * w;
+    }
+
+    for (&i, &w) in opps.iter().zip(&nnue.output_weights[HIDDEN..]) {
+        eval += activate(i) * w;
+    }
+
+    eval * 400.
+}
+
+pub fn test_eval(nnue: &NNUEParams) {
+    let fens = [
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 [0.5]",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 [0.0]",
+        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1 [1.0]",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 [1.0]",
+    ];
+
+    for fen in fens {
+        let pos = Position::from_fen(fen);
+        println!("{pos:?}");
+        println!("FEN: {fen}");
+        println!("EVAL: {}", eval(&pos, nnue));
+        println!();
+    }
 }

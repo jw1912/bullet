@@ -1,6 +1,6 @@
 use data::Position;
 
-use crate::arch::{update_single_grad, NNUEParams, QuantisedNNUE, K};
+use crate::arch::{update_single_grad, NNUEParams, QuantisedNNUE, K, test_eval};
 
 use std::{
     fs::File,
@@ -79,6 +79,8 @@ impl Trainer {
                     .unwrap();
             }
         }
+
+        test_eval(nnue);
     }
 
     fn gradients(
