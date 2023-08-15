@@ -1,3 +1,5 @@
+use crate::util::sigmoid;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Position {
@@ -22,6 +24,10 @@ impl Position {
 
     pub fn result_idx(&self) -> usize {
         usize::from(self.result)
+    }
+
+    pub fn blended_result(&self, blend: f64) -> f64 {
+        blend * self.result() + (1. - blend) * sigmoid(f64::from(self.score), 0.009)
     }
 
     pub fn stm(&self) -> usize {

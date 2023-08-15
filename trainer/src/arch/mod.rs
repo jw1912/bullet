@@ -7,6 +7,7 @@ pub use nnue::{NNUEParams, HIDDEN, K};
 pub use quantise::QuantisedNNUE;
 
 use data::Position;
+use crate::BLEND;
 
 fn activate(x: f64) -> f64 {
     x.max(0.0)
@@ -52,9 +53,9 @@ pub fn update_single_grad(
         eval += activated[1][idx] * w;
     }
 
-    let result = pos.result();
+    let result = pos.blended_result(BLEND);
 
-    let sigmoid = 1. / (1. + (-eval * K).exp());
+    let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
