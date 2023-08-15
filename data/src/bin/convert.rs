@@ -17,7 +17,7 @@ fn main() {
     let mut data = Vec::new();
 
     for line in file.lines().map(Result::unwrap) {
-        data.push(Position::from_fen(&line));
+        data.push(Position::from_epd(&line));
     }
 
     println!("Parsed to Position");

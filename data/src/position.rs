@@ -24,7 +24,7 @@ impl Position {
         usize::from(self.stm_enp >> 7)
     }
 
-    pub fn from_fen(fen: &str) -> Self {
+    pub fn from_epd(fen: &str) -> Self {
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
         let stm_str = parts[1];
@@ -97,4 +97,40 @@ impl Iterator for BoardIter {
 
         Some((piece, square))
     }
+}
+
+#[test]
+fn test_parse() {
+    let pos = Position::from_epd(
+        "r1bq1bnr/pppp1kp1/2n1p3/5N1p/1PP5/8/P2PPPPP/RNBQKB1R w - - 0 1 55 [1.0]"
+    );
+
+    let pieces = [
+        "WHITE PAWN",
+        "WHITE KNIGHT",
+        "WHITE BISHOP",
+        "WHITE ROOK",
+        "WHITE QUEEN",
+        "WHITE KING",
+        "BLACK PAWN",
+        "BLACK KNIGHT",
+        "BLACK BISHOP",
+        "BLACK ROOK",
+        "BLACK QUEEN",
+        "BLACK KING",
+    ];
+
+    let files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+    for (piece, square) in pos {
+        let pc = pieces[piece as usize];
+        let sq = format!("{}{}", files[square as usize % 8], 1 + square / 8);
+        println!("{pc}: {sq}")
+    }
+
+    println!("{pos:#?}");
+
+    println!("res: {}", pos.result());
+    println!("stm: {}", pos.stm());
+    println!("score: {}", pos.score());
 }
