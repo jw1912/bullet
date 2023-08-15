@@ -1,15 +1,40 @@
+use crate::util::sigmoid;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Position {
     occ: u64,
     pcs: [u8; 16],
-    pub stm: bool,
-    pub result: i8,
-    pub score: i16,
+    stm_enp: u8,
+    hfm: u8,
+    fmc: u16,
+    score: i16,
+    result: u8,
+    extra: u8,
 }
 
 impl Position {
-    pub fn from_fen(fen: &str) -> Self {
+    pub fn score(&self) -> i16 {
+        self.score
+    }
+
+    pub fn result(&self) -> f64 {
+        f64::from(self.result) / 2.
+    }
+
+    pub fn result_idx(&self) -> usize {
+        usize::from(self.result)
+    }
+
+    pub fn blended_result(&self, blend: f64) -> f64 {
+        blend * self.result() + (1. - blend) * sigmoid(f64::from(self.score), 0.009)
+    }
+
+    pub fn stm(&self) -> usize {
+        usize::from(self.stm_enp >> 7)
+    }
+
+    pub fn from_epd(fen: &str) -> Self {
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
         let stm_str = parts[1];
@@ -32,18 +57,21 @@ impl Position {
             }
         }
 
-        pos.stm = stm_str == "b";
+        // don't currently worry about en passant square
+        pos.stm_enp = u8::from(stm_str == "b") << 7;
 
-        pos.result = match parts[6] {
-            "[1.0]" => 1,
-            "[0.0]" => -1,
-            "[0.5]" => 0,
+        pos.hfm = parts[4].parse().unwrap_or(0);
+
+        pos.fmc = parts[5].parse().unwrap_or(1);
+
+        pos.score = parts[6].parse::<i16>().unwrap_or(0);
+
+        pos.result = match parts[7] {
+            "[1.0]" => 2,
+            "[0.5]" => 1,
+            "[0.0]" => 0,
             _ => panic!("Bad game result!"),
         };
-
-        if let Some(score) = parts.get(7) {
-            pos.score = score.parse::<i16>().unwrap_or(0)
-        }
 
         pos
     }
@@ -80,4 +108,40 @@ impl Iterator for BoardIter {
 
         Some((piece, square))
     }
+}
+
+#[test]
+fn test_parse() {
+    let pos = Position::from_epd(
+        "r1bq1bnr/pppp1kp1/2n1p3/5N1p/1PP5/8/P2PPPPP/RNBQKB1R w - - 0 1 55 [1.0]"
+    );
+
+    let pieces = [
+        "WHITE PAWN",
+        "WHITE KNIGHT",
+        "WHITE BISHOP",
+        "WHITE ROOK",
+        "WHITE QUEEN",
+        "WHITE KING",
+        "BLACK PAWN",
+        "BLACK KNIGHT",
+        "BLACK BISHOP",
+        "BLACK ROOK",
+        "BLACK QUEEN",
+        "BLACK KING",
+    ];
+
+    let files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+    for (piece, square) in pos {
+        let pc = pieces[piece as usize];
+        let sq = format!("{}{}", files[square as usize % 8], 1 + square / 8);
+        println!("{pc}: {sq}")
+    }
+
+    println!("{pos:#?}");
+
+    println!("res: {}", pos.result());
+    println!("stm: {}", pos.stm());
+    println!("score: {}", pos.score());
 }

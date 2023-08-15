@@ -1,12 +1,14 @@
 use std::{
     env::args,
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Write}, time::Instant,
 };
 
 use data::Position;
 
 fn main() {
+    let timer = Instant::now();
+
     let inp_path = args().nth(1).expect("Expected a file name!");
     let out_path = args().nth(2).expect("Expected a file name!");
 
@@ -16,11 +18,17 @@ fn main() {
 
     let mut data = Vec::new();
 
+    let mut results = [0, 0, 0];
+
     for line in file.lines().map(Result::unwrap) {
-        data.push(Position::from_fen(&line));
+        let pos = Position::from_epd(&line);
+        results[pos.result_idx()] += 1;
+        data.push(pos);
     }
 
     println!("Parsed to Position");
+    println!("Summary: {} Positions in {:.2} seconds", results.iter().sum::<u64>(), timer.elapsed().as_secs_f32());
+    println!("Wins: {}, Draws: {}, Losses: {}", results[2], results[1], results[0]);
 
     let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
 

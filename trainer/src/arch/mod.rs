@@ -7,6 +7,7 @@ pub use nnue::{NNUEParams, HIDDEN, K};
 pub use quantise::QuantisedNNUE;
 
 use data::Position;
+use crate::BLEND;
 
 fn activate(x: f64) -> f64 {
     x.max(0.0)
@@ -52,9 +53,9 @@ pub fn update_single_grad(
         eval += activated[1][idx] * w;
     }
 
-    let result = f64::from(pos.result + 1) / 2.;
+    let result = pos.blended_result(BLEND);
 
-    let sigmoid = 1. / (1. + (-eval * K).exp());
+    let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
@@ -96,7 +97,7 @@ fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
 
     let mut eval = nnue.output_bias;
 
-    let side = usize::from(pos.stm);
+    let side = pos.stm();
     let (boys, opps) = (&accs[side], &accs[side ^ 1]);
 
     for (&i, &w) in boys.iter().zip(&nnue.output_weights[..HIDDEN]) {
@@ -112,14 +113,14 @@ fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
 
 pub fn test_eval(nnue: &NNUEParams) {
     let fens = [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 [0.5]",
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 [0.0]",
-        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1 [1.0]",
-        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 [1.0]",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 0 [0.5]",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 0 [0.0]",
+        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1 0 [1.0]",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 0 [1.0]",
     ];
 
     for fen in fens {
-        let pos = Position::from_fen(fen);
+        let pos = Position::from_epd(fen);
         println!("{pos:?}");
         println!("FEN: {fen}");
         println!("EVAL: {}", eval(&pos, nnue));
