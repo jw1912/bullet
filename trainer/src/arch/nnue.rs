@@ -12,7 +12,7 @@ pub type NNUEParams = NNUE<f64>;
 pub struct NNUE<T> {
     pub feature_weights: [T; INPUT * HIDDEN],
     pub feature_bias: [T; HIDDEN],
-    pub output_weights: [T; HIDDEN],
+    pub output_weights: [T; 2 * HIDDEN],
     pub output_bias: T,
 }
 
@@ -21,7 +21,7 @@ impl<T: Copy + Default> Default for NNUE<T> {
         Self {
             feature_weights: [T::default(); INPUT * HIDDEN],
             feature_bias: [T::default(); HIDDEN],
-            output_weights: [T::default(); HIDDEN],
+            output_weights: [T::default(); 2 * HIDDEN],
             output_bias: T::default(),
         }
     }
