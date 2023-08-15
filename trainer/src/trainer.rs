@@ -34,8 +34,8 @@ impl Trainer {
         save_rate: usize,
         batch_size: usize,
     ) {
-        let mut velocity = Box::<NNUEParams>::default();
-        let mut momentum = Box::<NNUEParams>::default();
+        let mut velocity = NNUEParams::new();
+        let mut momentum = NNUEParams::new();
 
         let timer = Instant::now();
 
@@ -68,8 +68,9 @@ impl Trainer {
             error /= num as f64;
 
             if epoch % report_rate == 0 {
-                let eps = epoch as f64 / timer.elapsed().as_secs_f64();
-                println!("epoch {epoch} error {error:.6} eps {eps:.2}/sec");
+                let elapsed = timer.elapsed().as_secs_f64();
+                let eps = epoch as f64 / elapsed;
+                println!("epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec");
             }
 
             if epoch % save_rate == 0 {
@@ -91,7 +92,7 @@ impl Trainer {
     ) -> Box<NNUEParams> {
         let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
-        let mut grad = Box::default();
+        let mut grad = NNUEParams::new();
         thread::scope(|s| {
             batch
                 .chunks(size)
@@ -99,8 +100,8 @@ impl Trainer {
                 .map(|(chunk, error)| s.spawn(|| gradients_batch(chunk, nnue, error)))
                 .collect::<Vec<_>>()
                 .into_iter()
-                .map(|p| p.join().unwrap_or_default())
-                .for_each(|part| *grad += *part);
+                .map(|p| p.join().unwrap())
+                .for_each(|part| *grad += &part);
         });
         *error += errors.iter().sum::<f64>();
         grad
@@ -166,7 +167,7 @@ fn gradients_batch(
     nnue: &NNUEParams,
     error: &mut f64,
 ) -> Box<NNUEParams> {
-    let mut grad = Box::default();
+    let mut grad = NNUEParams::new();
     for pos in positions {
         update_single_grad(pos, nnue, &mut grad, error);
     }

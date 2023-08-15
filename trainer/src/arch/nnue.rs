@@ -1,7 +1,7 @@
 use std::ops::AddAssign;
 
+pub const HIDDEN: usize = crate::HIDDEN_SIZE;
 pub const INPUT: usize = 768;
-pub const HIDDEN: usize = 32;
 pub const K: f64 = 3.6;
 
 pub type NNUEParams = NNUE<f64>;
@@ -16,19 +16,21 @@ pub struct NNUE<T> {
     pub output_bias: T,
 }
 
-impl<T: Copy + Default> Default for NNUE<T> {
-    fn default() -> Self {
-        Self {
-            feature_weights: [T::default(); INPUT * HIDDEN],
-            feature_bias: [T::default(); HIDDEN],
-            output_weights: [T::default(); 2 * HIDDEN],
-            output_bias: T::default(),
+impl<T> NNUE<T> {
+    pub fn new() -> Box<Self> {
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
         }
     }
 }
 
-impl<T: AddAssign<T> + Copy> AddAssign<NNUE<T>> for NNUE<T> {
-    fn add_assign(&mut self, rhs: NNUE<T>) {
+impl<T: AddAssign<T> + Copy> AddAssign<&NNUE<T>> for NNUE<T> {
+    fn add_assign(&mut self, rhs: &NNUE<T>) {
         for (i, &j) in self
             .feature_weights
             .iter_mut()
