@@ -29,8 +29,8 @@ impl<T> NNUE<T> {
     }
 }
 
-impl<T: AddAssign<T> + Copy> AddAssign<NNUE<T>> for NNUE<T> {
-    fn add_assign(&mut self, rhs: NNUE<T>) {
+impl<T: AddAssign<T> + Copy> AddAssign<&NNUE<T>> for NNUE<T> {
+    fn add_assign(&mut self, rhs: &NNUE<T>) {
         for (i, &j) in self
             .feature_weights
             .iter_mut()

@@ -101,7 +101,7 @@ impl Trainer {
                 .collect::<Vec<_>>()
                 .into_iter()
                 .map(|p| p.join().unwrap())
-                .for_each(|part| *grad += *part);
+                .for_each(|part| *grad += &part);
         });
         *error += errors.iter().sum::<f64>();
         grad
