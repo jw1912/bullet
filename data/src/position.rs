@@ -51,7 +51,8 @@ impl Position {
             }
         }
 
-        pos.stm_enp = u8::from(stm_str == "b") << 7 | parts[3].parse().unwrap_or(0);
+        // don't currently worry about en passant square
+        pos.stm_enp = u8::from(stm_str == "b") << 7;
 
         pos.hfm = parts[4].parse().unwrap_or(0);
 
