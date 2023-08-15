@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub const NET_NAME: &str = "net";
+pub const HIDDEN_SIZE: usize = 32;
 const THREADS: usize = 6;
 const LR: f64 = 0.001;
 const REPORT_RATE: usize = 1;
@@ -32,7 +33,7 @@ fn main() {
     let mut trainer = Trainer::new(file_path, THREADS, LR);
 
     // provide random starting parameters
-    let mut params = Box::<NNUEParams>::default();
+    let mut params = NNUEParams::new();
     let mut gen = Rand(173645501);
     for param in params.feature_weights.iter_mut() {
         *param = gen.rand();

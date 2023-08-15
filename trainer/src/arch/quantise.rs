@@ -8,7 +8,7 @@ pub type QuantisedNNUE = NNUE<i16>;
 
 impl QuantisedNNUE {
     pub fn from_unquantised(nnue: &NNUEParams) -> Box<Self> {
-        let mut res = Box::<QuantisedNNUE>::default();
+        let mut res = QuantisedNNUE::new();
 
         for (i, &param) in nnue.feature_weights.iter().enumerate() {
             res.feature_weights[i] = (param * f64::from(QA)) as i16;
