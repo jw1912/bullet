@@ -67,6 +67,10 @@ impl Trainer {
 
             error /= num as f64;
 
+            if epoch == 1 {
+                println!("Positions: {num}");
+            }
+
             if epoch % report_rate == 0 {
                 let elapsed = timer.elapsed().as_secs_f64();
                 let eps = epoch as f64 / elapsed;
