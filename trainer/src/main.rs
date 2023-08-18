@@ -7,13 +7,13 @@ use crate::{
 };
 
 pub const NET_NAME: &str = "net";
-pub const HIDDEN_SIZE: usize = 32;
+pub const HIDDEN_SIZE: usize = 256;
 pub const BLEND: f64 = 0.5;
 const THREADS: usize = 6;
 const LR: f64 = 0.001;
 const REPORT_RATE: usize = 1;
 const SAVE_RATE: usize = 101;
-const MAX_EPOCHS: usize = 100;
+const MAX_EPOCHS: usize = 65;
 const BATCH_SIZE: usize = 16384;
 
 struct Rand(u32);
