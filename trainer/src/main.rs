@@ -1,5 +1,6 @@
 use trainer::{
     ActivationUsed,
+    OptimiserUsed,
     arch::{NNUEParams, QuantisedNNUE},
     trainer::Trainer,
 };
@@ -30,8 +31,9 @@ impl Rand {
 fn main() {
     let file_path = std::env::args().nth(1).expect("Expected a file name!");
 
-    // initialise data
-    let mut trainer = Trainer::new(file_path, THREADS, LR, BLEND);
+    let optimiser = OptimiserUsed::default();
+
+    let mut trainer = Trainer::new(file_path, THREADS, LR, BLEND, optimiser);
 
     // provide random starting parameters
     let mut params = NNUEParams::new();
