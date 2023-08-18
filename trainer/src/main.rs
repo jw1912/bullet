@@ -1,18 +1,19 @@
-pub mod arch;
-pub mod trainer;
-
-use crate::{
+use trainer::{
+    ActivationUsed,
     arch::{NNUEParams, QuantisedNNUE},
     trainer::Trainer,
 };
 
-pub const NET_NAME: &str = "net";
-pub const HIDDEN_SIZE: usize = 256;
-pub const BLEND: f64 = 0.5;
-const THREADS: usize = 6;
-const LR: f64 = 0.001;
+// Saving Net
+const NET_NAME: &str = "net";
 const REPORT_RATE: usize = 1;
 const SAVE_RATE: usize = 101;
+
+const THREADS: usize = 6;
+
+// Training Hyperparams
+const BLEND: f64 = 0.5;
+const LR: f64 = 0.001;
 const MAX_EPOCHS: usize = 65;
 const BATCH_SIZE: usize = 16384;
 
@@ -30,7 +31,7 @@ fn main() {
     let file_path = std::env::args().nth(1).expect("Expected a file name!");
 
     // initialise data
-    let mut trainer = Trainer::new(file_path, THREADS, LR);
+    let mut trainer = Trainer::new(file_path, THREADS, LR, BLEND);
 
     // provide random starting parameters
     let mut params = NNUEParams::new();
@@ -44,7 +45,7 @@ fn main() {
     }
 
     // carry out tuning
-    trainer.run(
+    trainer.run::<ActivationUsed>(
         &mut params,
         MAX_EPOCHS,
         NET_NAME,
