@@ -1,6 +1,9 @@
 use data::Position;
 
-use crate::arch::{update_single_grad, NNUEParams, QuantisedNNUE, K, test_eval};
+use crate::{
+    arch::{update_single_grad, NNUEParams, QuantisedNNUE, K, test_eval},
+    activation::Activation,
+};
 
 use std::{
     fs::File,
@@ -13,19 +16,21 @@ pub struct Trainer {
     file: String,
     threads: usize,
     rate: f64,
+    blend: f64,
 }
 
 impl Trainer {
     #[must_use]
-    pub fn new(file: String, threads: usize, rate: f64) -> Self {
+    pub fn new(file: String, threads: usize, rate: f64, blend: f64) -> Self {
         Self {
             file,
             threads,
             rate,
+            blend,
         }
     }
 
-    pub fn run(
+    pub fn run<Act: Activation>(
         &mut self,
         nnue: &mut NNUEParams,
         max_epochs: usize,
@@ -57,7 +62,7 @@ impl Trainer {
                 let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
-                    self.update_weights(nnue, batch, &mut velocity, &mut momentum, &mut error);
+                    self.update_weights::<Act>(nnue, batch, &mut velocity, &mut momentum, &mut error);
                 }
 
                 num += buf_ref.len();
@@ -85,10 +90,10 @@ impl Trainer {
             }
         }
 
-        test_eval(nnue);
+        test_eval::<Act>(nnue);
     }
 
-    fn gradients(
+    fn gradients<Act: Activation>(
         &self,
         nnue: &NNUEParams,
         batch: &[Position],
@@ -101,7 +106,7 @@ impl Trainer {
             batch
                 .chunks(size)
                 .zip(errors.iter_mut())
-                .map(|(chunk, error)| s.spawn(|| gradients_batch(chunk, nnue, error)))
+                .map(|(chunk, error)| s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, self.blend)))
                 .collect::<Vec<_>>()
                 .into_iter()
                 .map(|p| p.join().unwrap())
@@ -111,7 +116,7 @@ impl Trainer {
         grad
     }
 
-    fn update_weights(
+    fn update_weights<Act: Activation>(
         &self,
         nnue: &mut NNUEParams,
         batch: &[Position],
@@ -120,7 +125,7 @@ impl Trainer {
         error: &mut f64,
     ) {
         let adj = 2. * K / batch.len() as f64;
-        let gradients = self.gradients(nnue, batch, error);
+        let gradients = self.gradients::<Act>(nnue, batch, error);
 
         for (i, param) in nnue.feature_weights.iter_mut().enumerate() {
             let grad = adj * gradients.feature_weights[i];
@@ -166,14 +171,15 @@ impl Trainer {
     }
 }
 
-fn gradients_batch(
+fn gradients_batch<Act: Activation>(
     positions: &[Position],
     nnue: &NNUEParams,
     error: &mut f64,
+    blend: f64,
 ) -> Box<NNUEParams> {
     let mut grad = NNUEParams::new();
     for pos in positions {
-        update_single_grad(pos, nnue, &mut grad, error);
+        update_single_grad::<Act>(pos, nnue, &mut grad, error, blend);
     }
     grad
 }

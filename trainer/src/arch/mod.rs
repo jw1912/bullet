@@ -7,25 +7,14 @@ pub use nnue::{NNUEParams, HIDDEN, K};
 pub use quantise::QuantisedNNUE;
 
 use data::Position;
-use crate::BLEND;
+use crate::activation::Activation;
 
-fn activate(x: f64) -> f64 {
-    x.max(0.0)
-}
-
-fn activate_prime(x: f64) -> f64 {
-    if x < 0.0 {
-        0.0
-    } else {
-        1.0
-    }
-}
-
-pub fn update_single_grad(
+pub fn update_single_grad<Act: Activation>(
     pos: &Position,
     nnue: &NNUEParams,
     grad: &mut NNUEParams,
     error: &mut f64,
+    blend: f64
 ) {
     let mut accs = [Accumulator::new(nnue.feature_bias); 2];
     let mut features = [(0, 0); 32];
@@ -44,16 +33,16 @@ pub fn update_single_grad(
     let mut activated = [Accumulator::new([0.0; HIDDEN]); 2];
 
     for (idx, (&i, &w)) in accs[0].iter().zip(&nnue.output_weights[..HIDDEN]).enumerate() {
-        activated[0][idx] = activate(i);
+        activated[0][idx] = Act::activate(i);
         eval += activated[0][idx] * w;
     }
 
     for (idx, (&i, &w)) in accs[1].iter().zip(&nnue.output_weights[HIDDEN..]).enumerate() {
-        activated[1][idx] = activate(i);
+        activated[1][idx] = Act::activate(i);
         eval += activated[1][idx] * w;
     }
 
-    let result = pos.blended_result(BLEND);
+    let result = pos.blended_result(blend);
 
     let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
@@ -63,8 +52,8 @@ pub fn update_single_grad(
 
     for i in 0..HIDDEN {
         components[i] = (
-            err * nnue.output_weights[i] * activate_prime(accs[0][i]),
-            err * nnue.output_weights[HIDDEN + i] * activate_prime(accs[1][i])
+            err * nnue.output_weights[i] * Act::activate_prime(accs[0][i]),
+            err * nnue.output_weights[HIDDEN + i] * Act::activate_prime(accs[1][i])
         );
 
         grad.feature_bias[i] += components[i].0 + components[i].1;
@@ -85,7 +74,7 @@ pub fn update_single_grad(
 }
 
 
-fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
+fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f64 {
     let mut accs = [Accumulator::new(nnue.feature_bias); 2];
 
     for (piece, square) in pos.into_iter() {
@@ -101,17 +90,17 @@ fn eval(pos: &Position, nnue: &NNUEParams) -> f64 {
     let (boys, opps) = (&accs[side], &accs[side ^ 1]);
 
     for (&i, &w) in boys.iter().zip(&nnue.output_weights[..HIDDEN]) {
-        eval += activate(i) * w;
+        eval += Act::activate(i) * w;
     }
 
     for (&i, &w) in opps.iter().zip(&nnue.output_weights[HIDDEN..]) {
-        eval += activate(i) * w;
+        eval += Act::activate(i) * w;
     }
 
     eval * 400.
 }
 
-pub fn test_eval(nnue: &NNUEParams) {
+pub fn test_eval<Act: Activation>(nnue: &NNUEParams) {
     let fens = [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 0 [0.5]",
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 0 [0.0]",
@@ -123,7 +112,7 @@ pub fn test_eval(nnue: &NNUEParams) {
         let pos = Position::from_epd(fen);
         println!("{pos:?}");
         println!("FEN: {fen}");
-        println!("EVAL: {}", eval(&pos, nnue));
+        println!("EVAL: {}", eval::<Act>(&pos, nnue));
         println!();
     }
 }
