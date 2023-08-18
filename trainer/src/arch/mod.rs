@@ -3,7 +3,7 @@ mod nnue;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use nnue::{NNUEParams, HIDDEN, K};
+pub use nnue::{NNUEParams, HIDDEN, INPUT, K};
 pub use quantise::QuantisedNNUE;
 
 use data::Position;
