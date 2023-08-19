@@ -64,6 +64,13 @@ def main():
         default="net"
     )
 
+    parser.add_argument(
+        '--skip-prop',
+        type=float,
+        help="Proportion of fens skipped each epoch.",
+        default=0.0
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -77,13 +84,14 @@ def main():
         "--bin",
         "trainer",
         args.data_path,
+        args.test_id,
         str(args.threads),
         str(args.lr),
         str(args.wdl),
         str(args.max_epochs),
         str(args.batch_size),
         str(args.save_rate),
-        args.test_id,
+        str(args.skip_prop),
     ]
 
     subprocess.run(commands)

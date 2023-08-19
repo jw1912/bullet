@@ -17,26 +17,29 @@ pub struct Trainer<Opt: Optimiser> {
     threads: usize,
     rate: f64,
     blend: f64,
+    skip_prop: f64,
     optimiser: Opt,
 }
 
 impl<Opt: Optimiser> Trainer<Opt> {
     #[must_use]
-    pub fn new(file: String, threads: usize, rate: f64, blend: f64, optimiser: Opt) -> Self {
+    pub fn new(file: String, threads: usize, rate: f64, blend: f64, skip_prop: f64, optimiser: Opt) -> Self {
         Self {
             file,
             threads,
             rate,
             blend,
+            skip_prop,
             optimiser,
         }
     }
 
     pub fn report_settings(&self) {
-        println!("File Path     : {:?}", self.file);
-        println!("Threads       : {}", self.threads);
-        println!("Learning Rate : {}", self.rate);
-        println!("WDL Proportion: {}", self.blend);
+        println!("File Path      : {:?}", self.file);
+        println!("Threads        : {}", self.threads);
+        println!("Learning Rate  : {}", self.rate);
+        println!("WDL Proportion : {}", self.blend);
+        println!("Skip Proportion: {}", self.skip_prop);
     }
 
     pub fn run<Act: Activation>(
@@ -49,10 +52,10 @@ impl<Opt: Optimiser> Trainer<Opt> {
     ) {
         // display settings to user so they can verify
         self.report_settings();
-        println!("Max Epochs    : {max_epochs}");
-        println!("Save Rate     : {save_rate}");
-        println!("Batch Size    : {batch_size}");
-        println!("Net Name      : {net_name:?}");
+        println!("Max Epochs     : {max_epochs}");
+        println!("Save Rate      : {save_rate}");
+        println!("Batch Size     : {batch_size}");
+        println!("Net Name       : {net_name:?}");
 
         let timer = Instant::now();
 
@@ -88,7 +91,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
             error /= num as f64;
 
             if epoch == 1 {
-                println!("Positions: {num}");
+                println!("Positions      : {num}");
             }
 
             let elapsed = timer.elapsed().as_secs_f64();
@@ -116,11 +119,12 @@ impl<Opt: Optimiser> Trainer<Opt> {
         let mut errors = vec![0.0; self.threads];
         let mut grad = NNUEParams::new();
         let blend = self.blend;
+        let skip_prop = self.skip_prop;
         thread::scope(|s| {
             batch
                 .chunks(size)
                 .zip(errors.iter_mut())
-                .map(|(chunk, error)| s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend)))
+                .map(|(chunk, error)| s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop)))
                 .collect::<Vec<_>>()
                 .into_iter()
                 .map(|p| p.join().unwrap())
@@ -136,11 +140,12 @@ fn gradients_batch<Act: Activation>(
     nnue: &NNUEParams,
     error: &mut f64,
     blend: f64,
+    skip_prop: f64,
 ) -> Box<NNUEParams> {
     let mut grad = NNUEParams::new();
     let mut rand = crate::rng::Rand::default();
     for pos in positions {
-        if rand.rand(1.0) < 0.9 {
+        if rand.rand(1.0) < skip_prop {
             continue;
         }
 
