@@ -2,18 +2,9 @@ use trainer::{
     ActivationUsed,
     OptimiserUsed,
     arch::{NNUEParams, QuantisedNNUE},
+    rng::Rand,
     trainer::Trainer,
 };
-
-struct Rand(u32);
-impl Rand {
-    fn rand(&mut self) -> f64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 17;
-        self.0 ^= self.0 << 5;
-        (1. - f64::from(self.0) / f64::from(u32::MAX)) / 100.
-    }
-}
 
 fn main() {
     let mut args = std::env::args();
@@ -22,27 +13,28 @@ fn main() {
 
     // all of these will be provided and validated by the `run.py` script
     let file_path = args.next().unwrap();
+    let net_name = &args.next().unwrap();
     let threads = args.next().unwrap().parse().unwrap();
     let lr = args.next().unwrap().parse().unwrap();
     let blend = args.next().unwrap().parse().unwrap();
     let max_epochs = args.next().unwrap().parse().unwrap();
     let batch_size = args.next().unwrap().parse().unwrap();
     let save_rate = args.next().unwrap().parse().unwrap();
-    let net_name = &args.next().unwrap();
+    let skip_prop = args.next().unwrap().parse().unwrap();
 
     let optimiser = OptimiserUsed::default();
 
-    let mut trainer = Trainer::new(file_path, threads, lr, blend, optimiser);
+    let mut trainer = Trainer::new(file_path, threads, lr, blend, skip_prop, optimiser);
 
     // provide random starting parameters
     let mut params = NNUEParams::new();
-    let mut gen = Rand(173645501);
+    let mut gen = Rand::new(173645501);
     for param in params.feature_weights.iter_mut() {
-        *param = gen.rand();
+        *param = gen.rand(0.01);
     }
 
     for param in params.output_weights.iter_mut() {
-        *param = gen.rand();
+        *param = gen.rand(0.01);
     }
 
     // carry out tuning
