@@ -5,19 +5,6 @@ use trainer::{
     trainer::Trainer,
 };
 
-// Saving Net
-const NET_NAME: &str = "net";
-const REPORT_RATE: usize = 1;
-const SAVE_RATE: usize = 101;
-
-const THREADS: usize = 6;
-
-// Training Hyperparams
-const BLEND: f64 = 0.5;
-const LR: f64 = 0.001;
-const MAX_EPOCHS: usize = 65;
-const BATCH_SIZE: usize = 16384;
-
 struct Rand(u32);
 impl Rand {
     fn rand(&mut self) -> f64 {
@@ -29,11 +16,23 @@ impl Rand {
 }
 
 fn main() {
-    let file_path = std::env::args().nth(1).expect("Expected a file name!");
+    let mut args = std::env::args();
+    println!("Beginning Training");
+    args.next();
+
+    // all of these will be provided and validated by the `run.py` script
+    let file_path = args.next().unwrap();
+    let threads = args.next().unwrap().parse().unwrap();
+    let lr = args.next().unwrap().parse().unwrap();
+    let blend = args.next().unwrap().parse().unwrap();
+    let max_epochs = args.next().unwrap().parse().unwrap();
+    let batch_size = args.next().unwrap().parse().unwrap();
+    let save_rate = args.next().unwrap().parse().unwrap();
+    let net_name = &args.next().unwrap();
 
     let optimiser = OptimiserUsed::default();
 
-    let mut trainer = Trainer::new(file_path, THREADS, LR, BLEND, optimiser);
+    let mut trainer = Trainer::new(file_path, threads, lr, blend, optimiser);
 
     // provide random starting parameters
     let mut params = NNUEParams::new();
@@ -49,15 +48,14 @@ fn main() {
     // carry out tuning
     trainer.run::<ActivationUsed>(
         &mut params,
-        MAX_EPOCHS,
-        NET_NAME,
-        REPORT_RATE,
-        SAVE_RATE,
-        BATCH_SIZE,
+        max_epochs,
+        net_name,
+        save_rate,
+        batch_size,
     );
 
     // safe to bin file
     QuantisedNNUE::from_unquantised(&params)
-        .write_to_bin(&format!("{NET_NAME}.bin"))
+        .write_to_bin(&format!("{net_name}.bin"))
         .expect("Should never fail!");
 }
