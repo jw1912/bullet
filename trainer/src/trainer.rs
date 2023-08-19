@@ -32,15 +32,28 @@ impl<Opt: Optimiser> Trainer<Opt> {
         }
     }
 
+    pub fn report_settings(&self) {
+        println!("File Path     : {:?}", self.file);
+        println!("Threads       : {}", self.threads);
+        println!("Learning Rate : {}", self.rate);
+        println!("WDL Proportion: {}", self.blend);
+    }
+
     pub fn run<Act: Activation>(
         &mut self,
         nnue: &mut NNUEParams,
         max_epochs: usize,
         net_name: &str,
-        report_rate: usize,
         save_rate: usize,
         batch_size: usize,
     ) {
+        // display settings to user so they can verify
+        self.report_settings();
+        println!("Max Epochs    : {max_epochs}");
+        println!("Save Rate     : {save_rate}");
+        println!("Batch Size    : {batch_size}");
+        println!("Net Name      : {net_name:?}");
+
         let timer = Instant::now();
 
         let mut error;
@@ -78,11 +91,9 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 println!("Positions: {num}");
             }
 
-            if epoch % report_rate == 0 {
-                let elapsed = timer.elapsed().as_secs_f64();
-                let eps = epoch as f64 / elapsed;
-                println!("epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec");
-            }
+            let elapsed = timer.elapsed().as_secs_f64();
+            let eps = epoch as f64 / elapsed;
+            println!("epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec");
 
             if epoch % save_rate == 0 {
                 let qnnue = QuantisedNNUE::from_unquantised(nnue);
