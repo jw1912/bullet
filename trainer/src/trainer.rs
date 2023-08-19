@@ -138,7 +138,12 @@ fn gradients_batch<Act: Activation>(
     blend: f64,
 ) -> Box<NNUEParams> {
     let mut grad = NNUEParams::new();
+    let mut rand = crate::rng::Rand::default();
     for pos in positions {
+        if rand.rand(1.0) < 0.9 {
+            continue;
+        }
+
         update_single_grad::<Act>(pos, nnue, &mut grad, error, blend);
     }
     grad

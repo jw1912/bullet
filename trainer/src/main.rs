@@ -2,18 +2,9 @@ use trainer::{
     ActivationUsed,
     OptimiserUsed,
     arch::{NNUEParams, QuantisedNNUE},
+    rng::Rand,
     trainer::Trainer,
 };
-
-struct Rand(u32);
-impl Rand {
-    fn rand(&mut self) -> f64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 17;
-        self.0 ^= self.0 << 5;
-        (1. - f64::from(self.0) / f64::from(u32::MAX)) / 100.
-    }
-}
 
 fn main() {
     let mut args = std::env::args();
@@ -36,13 +27,13 @@ fn main() {
 
     // provide random starting parameters
     let mut params = NNUEParams::new();
-    let mut gen = Rand(173645501);
+    let mut gen = Rand::new(173645501);
     for param in params.feature_weights.iter_mut() {
-        *param = gen.rand();
+        *param = gen.rand(0.01);
     }
 
     for param in params.output_weights.iter_mut() {
-        *param = gen.rand();
+        *param = gen.rand(0.01);
     }
 
     // carry out tuning
