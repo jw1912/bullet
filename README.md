@@ -23,9 +23,24 @@ Note that FENs *must* be full, including halfmove and fullmove counters (though 
 
 ### Training
 
-At present all trainer settings are constants at the top of `trainer/src/main.rs`, although this will change soon.
+General architecture settings, that must be known at compile time, are found in [`trainer/src/lib.rs`](trainer/src/lib.rs).
 
-To run the trainer, change to your preferred settings and run
+After settings those as you please, you can run the trainer using the `run.py` script, and use
 ```
-cargo r -r --bin trainer <data file path>
+python3 run.py --help
+```
+to get a full description of all options.
+
+A sample usage is
+```
+python3 run.py         \
+  --data-path data.bin \
+  --test-id net001     \
+  --threads 1          \
+  --lr 0.001           \
+  --wdl 0.5            \
+  --max-epochs 65      \
+  --batch-size 16384   \
+  --save-rate 10       \
+  --skip-prop 0.0
 ```
