@@ -109,7 +109,7 @@ pub fn test_eval<Act: Activation>(nnue: &NNUEParams) {
     ];
 
     for fen in fens {
-        let pos = Position::from_epd(fen);
+        let pos = Position::from_epd(fen).unwrap();
         println!("{pos:?}");
         println!("FEN: {fen}");
         println!("EVAL: {}", eval::<Act>(&pos, nnue));

@@ -21,9 +21,13 @@ fn main() {
     let mut results = [0, 0, 0];
 
     for line in file.lines().map(Result::unwrap) {
-        let pos = Position::from_epd(&line);
-        results[pos.result_idx()] += 1;
-        data.push(pos);
+        match Position::from_epd(&line) {
+            Ok(pos) => {
+                results[pos.result_idx()] += 1;
+                data.push(pos);
+            },
+            Err(message) => println!("{message}"),
+        }
     }
 
     println!("Parsed to Position");

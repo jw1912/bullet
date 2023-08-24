@@ -34,7 +34,7 @@ impl Position {
         usize::from(self.stm_enp >> 7)
     }
 
-    pub fn from_epd(fen: &str) -> Self {
+    pub fn from_epd(fen: &str) -> Result<Self, String> {
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
         let stm_str = parts[1];
@@ -70,10 +70,13 @@ impl Position {
             "[1.0]" => 2,
             "[0.5]" => 1,
             "[0.0]" => 0,
-            _ => panic!("Bad game result!"),
+            _ => {
+                println!("{fen}");
+                return Err(String::from("Bad game result!"));
+            },
         };
 
-        pos
+        Ok(pos)
     }
 }
 
@@ -114,7 +117,7 @@ impl Iterator for BoardIter {
 fn test_parse() {
     let pos = Position::from_epd(
         "r1bq1bnr/pppp1kp1/2n1p3/5N1p/1PP5/8/P2PPPPP/RNBQKB1R w - - 0 1 55 [1.0]"
-    );
+    ).unwrap();
 
     let pieces = [
         "WHITE PAWN",
