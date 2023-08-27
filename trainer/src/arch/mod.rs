@@ -108,9 +108,10 @@ pub fn test_eval<Act: Activation>(nnue: &NNUEParams) {
         "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 0 [1.0]",
     ];
 
+    println!("\n===Test Positions===");
+
     for fen in fens {
         let pos = Position::from_epd(fen).unwrap();
-        println!("{pos:?}");
         println!("FEN: {fen}");
         println!("EVAL: {}", eval::<Act>(&pos, nnue));
         println!();

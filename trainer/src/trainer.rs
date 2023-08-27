@@ -2,7 +2,9 @@ use data::Position;
 
 use crate::{
     arch::{update_single_grad, NNUEParams, QuantisedNNUE, K, test_eval},
-    activation::Activation, optimiser::Optimiser,
+    activation::Activation,
+    optimiser::Optimiser,
+    scheduler::LrScheduler,
 };
 
 use std::{
@@ -15,7 +17,7 @@ use std::{
 pub struct Trainer<Opt: Optimiser> {
     file: String,
     threads: usize,
-    rate: f64,
+    scheduler: LrScheduler,
     blend: f64,
     skip_prop: f64,
     optimiser: Opt,
@@ -23,11 +25,11 @@ pub struct Trainer<Opt: Optimiser> {
 
 impl<Opt: Optimiser> Trainer<Opt> {
     #[must_use]
-    pub fn new(file: String, threads: usize, rate: f64, blend: f64, skip_prop: f64, optimiser: Opt) -> Self {
+    pub fn new(file: String, threads: usize, scheduler: LrScheduler, blend: f64, skip_prop: f64, optimiser: Opt) -> Self {
         Self {
             file,
             threads,
-            rate,
+            scheduler,
             blend,
             skip_prop,
             optimiser,
@@ -37,7 +39,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
     pub fn report_settings(&self) {
         println!("File Path      : {:?}", self.file);
         println!("Threads        : {}", self.threads);
-        println!("Learning Rate  : {}", self.rate);
+        println!("Learning Rate  : {}", self.scheduler.lr());
         println!("WDL Proportion : {}", self.blend);
         println!("Skip Proportion: {}", self.skip_prop);
     }
@@ -80,7 +82,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                     let adj = 2. * K / batch.len() as f64;
                     let gradients = self.gradients::<Act>(nnue, batch, &mut error);
 
-                    self.optimiser.update_weights(nnue, &gradients, adj, self.rate);
+                    self.optimiser.update_weights(nnue, &gradients, adj, self.scheduler.lr());
                 }
 
                 num += buf_ref.len();
@@ -96,7 +98,9 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
             let elapsed = timer.elapsed().as_secs_f64();
             let eps = epoch as f64 / elapsed;
-            println!("epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec");
+            println!("epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec lr {}", self.scheduler.lr());
+
+            self.scheduler.adjust(epoch);
 
             if epoch % save_rate == 0 {
                 let qnnue = QuantisedNNUE::from_unquantised(nnue);

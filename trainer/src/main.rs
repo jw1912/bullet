@@ -3,6 +3,7 @@ use trainer::{
     OptimiserUsed,
     arch::{NNUEParams, QuantisedNNUE},
     rng::Rand,
+    scheduler::{LrScheduler, SchedulerType},
     trainer::Trainer,
 };
 
@@ -15,16 +16,38 @@ fn main() {
     let file_path = args.next().unwrap();
     let net_name = &args.next().unwrap();
     let threads = args.next().unwrap().parse().unwrap();
-    let lr = args.next().unwrap().parse().unwrap();
+    let lr_start = args.next().unwrap().parse().unwrap();
     let blend = args.next().unwrap().parse().unwrap();
-    let max_epochs = args.next().unwrap().parse().unwrap();
+    let max_epochs: usize = args.next().unwrap().parse().unwrap();
     let batch_size = args.next().unwrap().parse().unwrap();
     let save_rate = args.next().unwrap().parse().unwrap();
     let skip_prop = args.next().unwrap().parse().unwrap();
+    let lr_end: f64 = args.next().unwrap().parse().unwrap();
+    let lr_step = args.next().unwrap().parse().unwrap();
+    let lr_drop = args.next().unwrap().parse().unwrap();
+    let lr_gamma = args.next().unwrap().parse().unwrap();
+
+    let mut scheduler = LrScheduler::new(lr_start, 1.0, SchedulerType::Drop { drop: 1000 });
+
+    if lr_end != 0.0 {
+        scheduler.set_type(SchedulerType::Step { step: 1 });
+        let gamma = (lr_start / lr_end).ln() / (max_epochs - 1).max(1) as f64;
+        scheduler.set_gamma((-gamma).exp());
+    }
+
+    if lr_step != 0 {
+        scheduler.set_type(SchedulerType::Step { step: lr_step });
+        scheduler.set_gamma(lr_gamma);
+    }
+
+    if lr_drop != 0 {
+        scheduler.set_type(SchedulerType::Drop { drop: lr_drop });
+        scheduler.set_gamma(lr_gamma);
+    }
 
     let optimiser = OptimiserUsed::default();
 
-    let mut trainer = Trainer::new(file_path, threads, lr, blend, skip_prop, optimiser);
+    let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
 
     // provide random starting parameters
     let mut params = NNUEParams::new();
