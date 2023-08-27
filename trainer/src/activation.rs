@@ -24,11 +24,27 @@ impl Activation for CReLU {
         x.clamp(0.0, 1.0)
     }
 
-    fn activate_prime(x: f64) -> f64{
+    fn activate_prime(x: f64) -> f64 {
         if !(0.0..1.0).contains(&x) {
             0.0
         } else {
             1.0
+        }
+    }
+}
+
+pub struct SCReLU;
+impl Activation for SCReLU {
+    fn activate(x: f64) -> f64 {
+        let clamped = x.clamp(0.0, 1.0);
+        clamped * clamped
+    }
+
+    fn activate_prime(x: f64) -> f64 {
+        if !(0.0..1.0).contains(&x) {
+            0.0
+        } else {
+            2.0 * x
         }
     }
 }
