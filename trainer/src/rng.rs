@@ -5,8 +5,9 @@ impl Default for Rand {
             (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("valid")
-                .as_nanos() & 0xFFFF_FFFF) as u32
-            )
+                .as_nanos()
+                & 0xFFFF_FFFF) as u32,
+        )
     }
 }
 

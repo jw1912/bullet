@@ -14,7 +14,11 @@ pub enum SchedulerType {
 
 impl LrScheduler {
     pub fn new(val: f64, gamma: f64, scheduler: SchedulerType) -> Self {
-        Self { val, gamma, scheduler }
+        Self {
+            val,
+            gamma,
+            scheduler,
+        }
     }
 
     pub fn lr(&self) -> f64 {

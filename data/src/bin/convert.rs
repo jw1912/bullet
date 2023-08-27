@@ -1,7 +1,8 @@
 use std::{
     env::args,
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write}, time::Instant,
+    io::{BufRead, BufReader, BufWriter, Write},
+    time::Instant,
 };
 
 use data::Position;
@@ -25,14 +26,21 @@ fn main() {
             Ok(pos) => {
                 results[pos.result_idx()] += 1;
                 data.push(pos);
-            },
+            }
             Err(message) => println!("{message}"),
         }
     }
 
     println!("Parsed to Position");
-    println!("Summary: {} Positions in {:.2} seconds", results.iter().sum::<u64>(), timer.elapsed().as_secs_f32());
-    println!("Wins: {}, Draws: {}, Losses: {}", results[2], results[1], results[0]);
+    println!(
+        "Summary: {} Positions in {:.2} seconds",
+        results.iter().sum::<u64>(),
+        timer.elapsed().as_secs_f32()
+    );
+    println!(
+        "Wins: {}, Draws: {}, Losses: {}",
+        results[2], results[1], results[0]
+    );
 
     let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
 

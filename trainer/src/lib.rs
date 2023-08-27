@@ -1,5 +1,5 @@
-pub mod arch;
 pub mod activation;
+pub mod arch;
 pub mod optimiser;
 pub mod rng;
 pub mod scheduler;
