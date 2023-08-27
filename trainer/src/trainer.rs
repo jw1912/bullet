@@ -1,8 +1,8 @@
 use data::Position;
 
 use crate::{
-    arch::{update_single_grad, NNUEParams, QuantisedNNUE, K, test_eval},
     activation::Activation,
+    arch::{test_eval, update_single_grad, NNUEParams, QuantisedNNUE, K},
     optimiser::Optimiser,
     scheduler::LrScheduler,
 };
@@ -25,7 +25,14 @@ pub struct Trainer<Opt: Optimiser> {
 
 impl<Opt: Optimiser> Trainer<Opt> {
     #[must_use]
-    pub fn new(file: String, threads: usize, scheduler: LrScheduler, blend: f64, skip_prop: f64, optimiser: Opt) -> Self {
+    pub fn new(
+        file: String,
+        threads: usize,
+        scheduler: LrScheduler,
+        blend: f64,
+        skip_prop: f64,
+        optimiser: Opt,
+    ) -> Self {
         Self {
             file,
             threads,
@@ -82,7 +89,8 @@ impl<Opt: Optimiser> Trainer<Opt> {
                     let adj = 2. * K / batch.len() as f64;
                     let gradients = self.gradients::<Act>(nnue, batch, &mut error);
 
-                    self.optimiser.update_weights(nnue, &gradients, adj, self.scheduler.lr());
+                    self.optimiser
+                        .update_weights(nnue, &gradients, adj, self.scheduler.lr());
                 }
 
                 num += buf_ref.len();
@@ -98,7 +106,10 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
             let elapsed = timer.elapsed().as_secs_f64();
             let eps = epoch as f64 / elapsed;
-            println!("epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec lr {}", self.scheduler.lr());
+            println!(
+                "epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec lr {}",
+                self.scheduler.lr()
+            );
 
             self.scheduler.adjust(epoch);
 
@@ -128,7 +139,9 @@ impl<Opt: Optimiser> Trainer<Opt> {
             batch
                 .chunks(size)
                 .zip(errors.iter_mut())
-                .map(|(chunk, error)| s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop)))
+                .map(|(chunk, error)| {
+                    s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop))
+                })
                 .collect::<Vec<_>>()
                 .into_iter()
                 .map(|p| p.join().unwrap())

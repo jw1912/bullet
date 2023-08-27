@@ -73,7 +73,7 @@ impl Position {
             _ => {
                 println!("{fen}");
                 return Err(String::from("Bad game result!"));
-            },
+            }
         };
 
         Ok(pos)
@@ -116,8 +116,9 @@ impl Iterator for BoardIter {
 #[test]
 fn test_parse() {
     let pos = Position::from_epd(
-        "r1bq1bnr/pppp1kp1/2n1p3/5N1p/1PP5/8/P2PPPPP/RNBQKB1R w - - 0 1 55 [1.0]"
-    ).unwrap();
+        "r1bq1bnr/pppp1kp1/2n1p3/5N1p/1PP5/8/P2PPPPP/RNBQKB1R w - - 0 1 55 [1.0]",
+    )
+    .unwrap();
 
     let pieces = [
         "WHITE PAWN",

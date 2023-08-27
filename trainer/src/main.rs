@@ -1,10 +1,9 @@
 use trainer::{
-    ActivationUsed,
-    OptimiserUsed,
     arch::{NNUEParams, QuantisedNNUE},
     rng::Rand,
     scheduler::{LrScheduler, SchedulerType},
     trainer::Trainer,
+    ActivationUsed, OptimiserUsed,
 };
 
 fn main() {
@@ -61,13 +60,7 @@ fn main() {
     }
 
     // carry out tuning
-    trainer.run::<ActivationUsed>(
-        &mut params,
-        max_epochs,
-        net_name,
-        save_rate,
-        batch_size,
-    );
+    trainer.run::<ActivationUsed>(&mut params, max_epochs, net_name, save_rate, batch_size);
 
     // safe to bin file
     QuantisedNNUE::from_unquantised(&params)

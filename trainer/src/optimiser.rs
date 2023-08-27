@@ -1,9 +1,27 @@
-use crate::arch::{HIDDEN, INPUT, NNUEParams};
+use crate::arch::{NNUEParams, HIDDEN, INPUT};
 
 pub trait Optimiser: Default {
-    fn update_feature_weights(&mut self, params: &mut [f64; INPUT * HIDDEN], grads: &[f64; INPUT * HIDDEN], adj: f64, rate: f64);
-    fn update_feature_bias(&mut self, params: &mut [f64; HIDDEN], grads: &[f64; HIDDEN], adj: f64, rate: f64);
-    fn update_output_weights(&mut self, params: &mut [f64; 2 * HIDDEN], grads: &[f64; 2 * HIDDEN], adj: f64, rate: f64);
+    fn update_feature_weights(
+        &mut self,
+        params: &mut [f64; INPUT * HIDDEN],
+        grads: &[f64; INPUT * HIDDEN],
+        adj: f64,
+        rate: f64,
+    );
+    fn update_feature_bias(
+        &mut self,
+        params: &mut [f64; HIDDEN],
+        grads: &[f64; HIDDEN],
+        adj: f64,
+        rate: f64,
+    );
+    fn update_output_weights(
+        &mut self,
+        params: &mut [f64; 2 * HIDDEN],
+        grads: &[f64; 2 * HIDDEN],
+        adj: f64,
+        rate: f64,
+    );
     fn update_output_bias(&mut self, param: &mut f64, grad: f64, adj: f64, rate: f64);
 
     fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f64, rate: f64) {
@@ -40,7 +58,13 @@ impl Default for Adam {
 }
 
 impl Optimiser for Adam {
-    fn update_feature_weights(&mut self, params: &mut [f64; INPUT * HIDDEN], grads: &[f64; INPUT * HIDDEN], adj: f64, rate: f64) {
+    fn update_feature_weights(
+        &mut self,
+        params: &mut [f64; INPUT * HIDDEN],
+        grads: &[f64; INPUT * HIDDEN],
+        adj: f64,
+        rate: f64,
+    ) {
         for (i, param) in params.iter_mut().enumerate() {
             let grad = adj * grads[i];
             Self::update(
@@ -53,7 +77,13 @@ impl Optimiser for Adam {
         }
     }
 
-    fn update_feature_bias(&mut self, params: &mut [f64; HIDDEN], grads: &[f64; HIDDEN], adj: f64, rate: f64) {
+    fn update_feature_bias(
+        &mut self,
+        params: &mut [f64; HIDDEN],
+        grads: &[f64; HIDDEN],
+        adj: f64,
+        rate: f64,
+    ) {
         for (i, param) in params.iter_mut().enumerate() {
             let grad = adj * grads[i];
             Self::update(
@@ -66,7 +96,13 @@ impl Optimiser for Adam {
         }
     }
 
-    fn update_output_weights(&mut self, params: &mut [f64; 2 * HIDDEN], grads: &[f64; 2 * HIDDEN], adj: f64, rate: f64) {
+    fn update_output_weights(
+        &mut self,
+        params: &mut [f64; 2 * HIDDEN],
+        grads: &[f64; 2 * HIDDEN],
+        adj: f64,
+        rate: f64,
+    ) {
         for (i, param) in params.iter_mut().enumerate() {
             let grad = adj * grads[i];
             Self::update(
