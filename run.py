@@ -25,7 +25,7 @@ def main():
     parser.add_argument(
         '--lr',
         type=float,
-        help="The starting learning rate.",
+        help="The starting learning rate (LR).",
         default=0.001
     )
 
@@ -71,6 +71,34 @@ def main():
         default=0.0
     )
 
+    parser.add_argument(
+        '--lr-end',
+        type=float,
+        help="Ending value of lR for exponential LR decay.",
+        default=0.0
+    )
+
+    parser.add_argument(
+        '--lr-step',
+        type=int,
+        help="Drop LR every given epochs.",
+        default=0
+    )
+
+    parser.add_argument(
+        '--lr-drop',
+        type=int,
+        help="Drop LR once, at given epoch.",
+        default=0
+    )
+
+    parser.add_argument(
+        '--lr-gamma',
+        type=float,
+        help="Factor to drop LR by for `drop` and `step` LR scheduling.",
+        default=1.0
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -92,6 +120,10 @@ def main():
         str(args.batch_size),
         str(args.save_rate),
         str(args.skip_prop),
+        str(args.lr_end),
+        str(args.lr_step),
+        str(args.lr_drop),
+        str(args.lr_gamma),
     ]
 
     subprocess.run(commands)

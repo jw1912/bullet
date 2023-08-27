@@ -2,6 +2,7 @@ pub mod arch;
 pub mod activation;
 pub mod optimiser;
 pub mod rng;
+pub mod scheduler;
 pub mod trainer;
 
 /// Size of hidden layer.
