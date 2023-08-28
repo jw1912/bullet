@@ -2,9 +2,9 @@ use std::ops::AddAssign;
 
 pub const HIDDEN: usize = crate::HIDDEN_SIZE;
 pub const INPUT: usize = 768;
-pub const K: f64 = 3.6;
+pub const K: f32 = 3.6;
 
-pub type NNUEParams = NNUE<f64>;
+pub type NNUEParams = NNUE<f32>;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]

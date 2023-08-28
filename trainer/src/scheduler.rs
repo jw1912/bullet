@@ -1,6 +1,6 @@
 pub struct LrScheduler {
-    val: f64,
-    gamma: f64,
+    val: f32,
+    gamma: f32,
     scheduler: SchedulerType,
 }
 
@@ -13,7 +13,7 @@ pub enum SchedulerType {
 }
 
 impl LrScheduler {
-    pub fn new(val: f64, gamma: f64, scheduler: SchedulerType) -> Self {
+    pub fn new(val: f32, gamma: f32, scheduler: SchedulerType) -> Self {
         Self {
             val,
             gamma,
@@ -21,7 +21,7 @@ impl LrScheduler {
         }
     }
 
-    pub fn lr(&self) -> f64 {
+    pub fn lr(&self) -> f32 {
         self.val
     }
 
@@ -29,7 +29,7 @@ impl LrScheduler {
         self.scheduler = scheduler;
     }
 
-    pub fn set_gamma(&mut self, gamma: f64) {
+    pub fn set_gamma(&mut self, gamma: f32) {
         self.gamma = gamma;
     }
 

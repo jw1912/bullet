@@ -14,6 +14,6 @@ pub unsafe fn to_slice_with_lifetime<T, U>(slice: &[T]) -> &[U] {
     std::slice::from_raw_parts(slice.as_ptr().cast(), len)
 }
 
-pub fn sigmoid(x: f64, k: f64) -> f64 {
+pub fn sigmoid(x: f32, k: f32) -> f32 {
     1. / (1. + (-x * k).exp())
 }
