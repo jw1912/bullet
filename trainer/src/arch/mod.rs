@@ -20,13 +20,15 @@ pub fn update_single_grad<Act: Activation>(
     let mut features = [(0, 0); 32];
     let mut len = 0;
 
+    let stm = pos.stm();
+
     for (piece, square) in pos.into_iter() {
         let wfeat = 64 * piece as usize + square as usize;
         let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
         features[len] = (wfeat, bfeat);
         len += 1;
-        accs[0].add_feature(wfeat, nnue);
-        accs[1].add_feature(bfeat, nnue);
+        accs[stm].add_feature(wfeat, nnue);
+        accs[stm ^ 1].add_feature(bfeat, nnue);
     }
 
     let mut eval = nnue.output_bias;
@@ -50,7 +52,11 @@ pub fn update_single_grad<Act: Activation>(
         eval += activated[1][idx] * w;
     }
 
-    let result = pos.blended_result(blend);
+    let mut result = pos.blended_result(blend);
+
+    if stm == 1 {
+        result = 1. - result;
+    }
 
     let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);

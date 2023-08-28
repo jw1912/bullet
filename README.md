@@ -42,5 +42,7 @@ python3 run.py         \
   --max-epochs 65      \
   --batch-size 16384   \
   --save-rate 10       \
-  --skip-prop 0.0
+  --skip-prop 0.0      \
+  --lr-drop 30         \
+  --lr-gamma 0.1
 ```
