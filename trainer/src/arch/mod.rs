@@ -52,11 +52,7 @@ pub fn update_single_grad<Act: Activation>(
         eval += activated[1][idx] * w;
     }
 
-    let mut result = pos.blended_result(blend);
-
-    if stm == 1 {
-        result = 1. - result;
-    }
+    let result = pos.blended_result(blend, stm);
 
     let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);

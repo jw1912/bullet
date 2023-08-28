@@ -35,8 +35,8 @@ A sample usage is
 ```
 python3 run.py         \
   --data-path data.bin \
-  --test-id net001     \
-  --threads 1          \
+  --test-id net        \
+  --threads 6          \
   --lr 0.001           \
   --wdl 0.5            \
   --max-epochs 65      \
