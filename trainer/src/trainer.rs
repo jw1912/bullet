@@ -18,8 +18,8 @@ pub struct Trainer<Opt: Optimiser> {
     file: String,
     threads: usize,
     scheduler: LrScheduler,
-    blend: f64,
-    skip_prop: f64,
+    blend: f32,
+    skip_prop: f32,
     optimiser: Opt,
 }
 
@@ -29,8 +29,8 @@ impl<Opt: Optimiser> Trainer<Opt> {
         file: String,
         threads: usize,
         scheduler: LrScheduler,
-        blend: f64,
-        skip_prop: f64,
+        blend: f32,
+        skip_prop: f32,
         optimiser: Opt,
     ) -> Self {
         Self {
@@ -86,7 +86,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
-                    let adj = 2. * K / batch.len() as f64;
+                    let adj = 2. * K / batch.len() as f32;
                     let gradients = self.gradients::<Act>(nnue, batch, &mut error);
 
                     self.optimiser
@@ -98,14 +98,14 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 file.consume(consumed);
             }
 
-            error /= num as f64;
+            error /= num as f32;
 
             if epoch == 1 {
                 println!("Positions      : {num}");
             }
 
-            let elapsed = timer.elapsed().as_secs_f64();
-            let eps = epoch as f64 / elapsed;
+            let elapsed = timer.elapsed().as_secs_f32();
+            let eps = epoch as f32 / elapsed;
             println!(
                 "epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec lr {}",
                 self.scheduler.lr()
@@ -128,7 +128,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         &self,
         nnue: &NNUEParams,
         batch: &[Position],
-        error: &mut f64,
+        error: &mut f32,
     ) -> Box<NNUEParams> {
         let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
@@ -147,7 +147,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 .map(|p| p.join().unwrap())
                 .for_each(|part| *grad += &part);
         });
-        *error += errors.iter().sum::<f64>();
+        *error += errors.iter().sum::<f32>();
         grad
     }
 }
@@ -155,9 +155,9 @@ impl<Opt: Optimiser> Trainer<Opt> {
 fn gradients_batch<Act: Activation>(
     positions: &[Position],
     nnue: &NNUEParams,
-    error: &mut f64,
-    blend: f64,
-    skip_prop: f64,
+    error: &mut f32,
+    blend: f32,
+    skip_prop: f32,
 ) -> Box<NNUEParams> {
     let mut grad = NNUEParams::new();
     let mut rand = crate::rng::Rand::default();

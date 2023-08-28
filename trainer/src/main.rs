@@ -21,7 +21,7 @@ fn main() {
     let batch_size = args.next().unwrap().parse().unwrap();
     let save_rate = args.next().unwrap().parse().unwrap();
     let skip_prop = args.next().unwrap().parse().unwrap();
-    let lr_end: f64 = args.next().unwrap().parse().unwrap();
+    let lr_end: f32 = args.next().unwrap().parse().unwrap();
     let lr_step = args.next().unwrap().parse().unwrap();
     let lr_drop = args.next().unwrap().parse().unwrap();
     let lr_gamma = args.next().unwrap().parse().unwrap();
@@ -30,7 +30,7 @@ fn main() {
 
     if lr_end != 0.0 {
         scheduler.set_type(SchedulerType::Step { step: 1 });
-        let gamma = (lr_start / lr_end).ln() / (max_epochs - 1).max(1) as f64;
+        let gamma = (lr_start / lr_end).ln() / (max_epochs - 1).max(1) as f32;
         scheduler.set_gamma((-gamma).exp());
     }
 

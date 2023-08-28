@@ -13,8 +13,8 @@ pub fn update_single_grad<Act: Activation>(
     pos: &Position,
     nnue: &NNUEParams,
     grad: &mut NNUEParams,
-    error: &mut f64,
-    blend: f64,
+    error: &mut f32,
+    blend: f32,
 ) {
     let mut accs = [Accumulator::new(nnue.feature_bias); 2];
     let mut features = [(0, 0); 32];
@@ -81,7 +81,7 @@ pub fn update_single_grad<Act: Activation>(
     grad.output_bias += err;
 }
 
-fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f64 {
+fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
     let mut accs = [Accumulator::new(nnue.feature_bias); 2];
 
     for (piece, square) in pos.into_iter() {

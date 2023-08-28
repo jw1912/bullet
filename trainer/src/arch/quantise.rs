@@ -11,18 +11,18 @@ impl QuantisedNNUE {
         let mut res = QuantisedNNUE::new();
 
         for (i, &param) in nnue.feature_weights.iter().enumerate() {
-            res.feature_weights[i] = (param * f64::from(QA)) as i16;
+            res.feature_weights[i] = (param * (QA as f32)) as i16;
         }
 
         for (i, &param) in nnue.feature_bias.iter().enumerate() {
-            res.feature_bias[i] = (param * f64::from(QA)) as i16;
+            res.feature_bias[i] = (param * (QA as f32)) as i16;
         }
 
         for (i, &param) in nnue.output_weights.iter().enumerate() {
-            res.output_weights[i] = (param * f64::from(QB)) as i16;
+            res.output_weights[i] = (param * (QB as f32)) as i16;
         }
 
-        res.output_bias = (nnue.output_bias * f64::from(QAB)) as i16;
+        res.output_bias = (nnue.output_bias * (QAB as f32)) as i16;
 
         res
     }

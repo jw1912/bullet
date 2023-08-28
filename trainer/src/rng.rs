@@ -16,10 +16,10 @@ impl Rand {
         Self(seed)
     }
 
-    pub fn rand(&mut self, max: f64) -> f64 {
+    pub fn rand(&mut self, max: f64) -> f32 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 17;
         self.0 ^= self.0 << 5;
-        (1. - f64::from(self.0) / f64::from(u32::MAX)) * max
+        ((1. - f64::from(self.0) / f64::from(u32::MAX)) * max) as f32
     }
 }
