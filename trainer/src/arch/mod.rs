@@ -77,7 +77,8 @@ pub fn update_single_grad<Act: Activation>(
     }
 
     for (wfeat, bfeat) in features.iter().take(len) {
-        let (widx, bidx) = (wfeat * HIDDEN, bfeat * HIDDEN);
+        let idxs = [wfeat * HIDDEN, bfeat * HIDDEN];
+        let (widx, bidx) = (idxs[stm], idxs[stm ^ 1]);
         for i in 0..HIDDEN {
             grad.feature_weights[widx + i] += components[i].0;
             grad.feature_weights[bidx + i] += components[i].1;
