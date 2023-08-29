@@ -117,7 +117,7 @@ impl Iterator for BoardIter {
             piece = 3;
         }
 
-        let colour = piece >> 3;
+        let colour = coloured_piece >> 3;
 
         self.board.occ &= self.board.occ - 1;
         self.idx += 1;
