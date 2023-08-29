@@ -55,7 +55,8 @@ impl Position {
                 } else if let Some(piece) = "PNBRQKpnbrqk".chars().position(|el| el == ch) {
                     let square = 8 * i + col;
                     pos.occ |= 1 << square;
-                    pos.pcs[idx / 2] |= (piece as u8) << (4 * (idx & 1));
+                    let pc = (piece % 6) | (piece / 6) << 3;
+                    pos.pcs[idx / 2] |= (pc as u8) << (4 * (idx & 1));
                     idx += 1;
                     col += 1;
                 }
