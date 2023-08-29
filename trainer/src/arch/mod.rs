@@ -22,7 +22,10 @@ pub fn update_single_grad<Act: Activation>(
 
     let stm = pos.stm();
 
-    for (piece, square) in pos.into_iter() {
+    for (mut piece, square) in pos.into_iter() {
+        if piece == 6 {
+            piece = 3;
+        }
         let wfeat = 64 * piece as usize + square as usize;
         let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
         features[len] = (wfeat, bfeat);
