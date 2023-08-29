@@ -20,13 +20,23 @@ pub fn update_single_grad<Act: Activation>(
     let mut features = [(0, 0); 32];
     let mut len = 0;
 
+    let stm = pos.stm();
+
     for (piece, square) in pos.into_iter() {
-        let wfeat = 64 * piece as usize + square as usize;
-        let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
+        let mut pc_type = piece & 0b111;
+        let pc_colour = piece >> 3;
+        if pc_type == 6 {
+            pc_type = 3;
+        }
+
+        let pc = pc_type + 6 * pc_colour;
+
+        let wfeat = 64 * pc as usize + square as usize;
+        let bfeat = 64 * ((pc as usize + 6) % 12) + ((square as usize) ^ 56);
         features[len] = (wfeat, bfeat);
         len += 1;
-        accs[0].add_feature(wfeat, nnue);
-        accs[1].add_feature(bfeat, nnue);
+        accs[stm].add_feature(wfeat, nnue);
+        accs[stm ^ 1].add_feature(bfeat, nnue);
     }
 
     let mut eval = nnue.output_bias;
@@ -50,7 +60,7 @@ pub fn update_single_grad<Act: Activation>(
         eval += activated[1][idx] * w;
     }
 
-    let result = pos.blended_result(blend);
+    let result = pos.blended_result(blend, stm);
 
     let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
@@ -71,7 +81,8 @@ pub fn update_single_grad<Act: Activation>(
     }
 
     for (wfeat, bfeat) in features.iter().take(len) {
-        let (widx, bidx) = (wfeat * HIDDEN, bfeat * HIDDEN);
+        let idxs = [wfeat * HIDDEN, bfeat * HIDDEN];
+        let (widx, bidx) = (idxs[stm], idxs[stm ^ 1]);
         for i in 0..HIDDEN {
             grad.feature_weights[widx + i] += components[i].0;
             grad.feature_weights[bidx + i] += components[i].1;
