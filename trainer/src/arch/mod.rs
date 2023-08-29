@@ -22,17 +22,13 @@ pub fn update_single_grad<Act: Activation>(
 
     let stm = pos.stm();
 
-    for (piece, square) in pos.into_iter() {
-        let mut pc_type = piece & 0b111;
-        let pc_colour = piece >> 3;
-        if pc_type == 6 {
-            pc_type = 3;
-        }
+    for (colour, piece, square) in pos.into_iter() {
+        let c = usize::from(colour);
+        let pc = usize::from(piece);
+        let sq = usize::from(square);
+        let wfeat = [0, 384][c] + 64 * pc + sq;
+        let bfeat = [384, 0][c] + 64 * pc + (sq ^ 56);
 
-        let pc = pc_type + 6 * pc_colour;
-
-        let wfeat = 64 * pc as usize + square as usize;
-        let bfeat = 64 * ((pc as usize + 6) % 12) + ((square as usize) ^ 56);
         features[len] = (wfeat, bfeat);
         len += 1;
         accs[stm].add_feature(wfeat, nnue);
@@ -95,9 +91,12 @@ pub fn update_single_grad<Act: Activation>(
 fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
     let mut accs = [Accumulator::new(nnue.feature_bias); 2];
 
-    for (piece, square) in pos.into_iter() {
-        let wfeat = 64 * piece as usize + square as usize;
-        let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
+    for (colour, piece, square) in pos.into_iter() {
+        let c = usize::from(colour);
+        let pc = usize::from(piece);
+        let sq = usize::from(square);
+        let wfeat = [0, 384][c] + 64 * pc + sq;
+        let bfeat = [384, 0][c] + 64 * pc + (sq ^ 56);
         accs[0].add_feature(wfeat, nnue);
         accs[1].add_feature(bfeat, nnue);
     }
