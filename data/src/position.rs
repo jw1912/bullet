@@ -55,7 +55,8 @@ impl Position {
                 } else if let Some(piece) = "PNBRQKpnbrqk".chars().position(|el| el == ch) {
                     let square = 8 * i + col;
                     pos.occ |= 1 << square;
-                    pos.pcs[idx / 2] |= (piece as u8) << (4 * (idx & 1));
+                    let pc = (piece % 6) | (piece / 6) << 3;
+                    pos.pcs[idx / 2] |= (pc as u8) << (4 * (idx & 1));
                     idx += 1;
                     col += 1;
                 }
@@ -87,7 +88,7 @@ impl Position {
 
 impl IntoIterator for Position {
     type IntoIter = BoardIter;
-    type Item = (u8, u8);
+    type Item = (u8, u8, u8);
     fn into_iter(self) -> Self::IntoIter {
         BoardIter {
             board: self,
@@ -102,19 +103,26 @@ pub struct BoardIter {
 }
 
 impl Iterator for BoardIter {
-    type Item = (u8, u8);
+    type Item = (u8, u8, u8);
     fn next(&mut self) -> Option<Self::Item> {
         if self.board.occ == 0 {
             return None;
         }
 
         let square = self.board.occ.trailing_zeros() as u8;
-        let piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
+        let coloured_piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
+
+        let mut piece = coloured_piece & 0b111;
+        if piece == 6 {
+            piece = 3;
+        }
+
+        let colour = coloured_piece >> 3;
 
         self.board.occ &= self.board.occ - 1;
         self.idx += 1;
 
-        Some((piece, square))
+        Some((colour, piece, square))
     }
 }
 
@@ -142,9 +150,9 @@ fn test_parse() {
 
     let files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
-    for (piece, square) in pos {
-        let pc = pieces[piece as usize];
-        let sq = format!("{}{}", files[square as usize % 8], 1 + square / 8);
+    for (colour, piece, square) in pos {
+        let pc = pieces[usize::from(colour * 6 + piece)];
+        let sq = format!("{}{}", files[usize::from(square) % 8], 1 + square / 8);
         println!("{pc}: {sq}")
     }
 
