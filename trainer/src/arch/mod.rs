@@ -22,12 +22,17 @@ pub fn update_single_grad<Act: Activation>(
 
     let stm = pos.stm();
 
-    for (mut piece, square) in pos.into_iter() {
-        if piece == 6 {
-            piece = 3;
+    for (piece, square) in pos.into_iter() {
+        let mut pc_type = piece & 0b111;
+        let pc_colour = piece >> 3;
+        if pc_type == 6 {
+            pc_type = 3;
         }
-        let wfeat = 64 * piece as usize + square as usize;
-        let bfeat = 64 * ((piece as usize + 6) % 12) + ((square as usize) ^ 56);
+
+        let pc = pc_type + 6 * pc_colour;
+
+        let wfeat = 64 * pc as usize + square as usize;
+        let bfeat = 64 * ((pc as usize + 6) % 12) + ((square as usize) ^ 56);
         features[len] = (wfeat, bfeat);
         len += 1;
         accs[stm].add_feature(wfeat, nnue);
