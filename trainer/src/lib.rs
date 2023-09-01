@@ -11,8 +11,10 @@ pub const HIDDEN_SIZE: usize = 32;
 /// Activation Function:
 ///   - ReLU
 ///   - CReLU
+///   - SCReLU
 pub type ActivationUsed = activation::ReLU;
 
 /// Optimiser:
 ///   - Adam
-pub type OptimiserUsed = optimiser::Adam;
+///   - AdamW
+pub type OptimiserUsed = optimiser::AdamW;
