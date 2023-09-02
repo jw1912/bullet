@@ -3,7 +3,7 @@ mod nnue;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use nnue::{NNUEParams, HIDDEN, INPUT, K};
+pub use nnue::{NNUEParams, HIDDEN, INPUT, K, K4};
 pub use quantise::QuantisedNNUE;
 
 use crate::activation::Activation;
@@ -56,7 +56,7 @@ pub fn update_single_grad<Act: Activation>(
         eval += activated[1][idx] * w;
     }
 
-    let result = pos.blended_result(blend, stm);
+    let result = pos.blended_result(blend, stm, K4);
 
     let sigmoid = data::util::sigmoid(eval, K);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
