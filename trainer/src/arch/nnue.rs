@@ -1,5 +1,3 @@
-use std::ops::{AddAssign, Deref, DerefMut};
-
 pub const HIDDEN: usize = crate::HIDDEN_SIZE;
 pub const INPUT: usize = 768;
 pub const K: f32 = 1.0;
@@ -32,7 +30,7 @@ impl<T> NNUE<T> {
     }
 }
 
-impl<T: AddAssign<T> + Copy> AddAssign<&NNUE<T>> for NNUE<T> {
+impl<T: std::ops::AddAssign<T> + Copy> std::ops::AddAssign<&NNUE<T>> for NNUE<T> {
     fn add_assign(&mut self, rhs: &NNUE<T>) {
         for (i, &j) in self.weights.iter_mut().zip(rhs.weights.iter()) {
             *i += j;
@@ -40,14 +38,14 @@ impl<T: AddAssign<T> + Copy> AddAssign<&NNUE<T>> for NNUE<T> {
     }
 }
 
-impl<T> Deref for NNUE<T> {
+impl<T> std::ops::Deref for NNUE<T> {
     type Target = [T; NNUE_SIZE];
     fn deref(&self) -> &Self::Target {
         &self.weights
     }
 }
 
-impl<T> DerefMut for NNUE<T> {
+impl<T> std::ops::DerefMut for NNUE<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.weights
     }
