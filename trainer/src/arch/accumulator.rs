@@ -1,45 +1,47 @@
-use super::nnue::NNUE;
-use std::ops::{AddAssign, Deref, Index, IndexMut};
+use super::nnue::{HIDDEN, NNUE, FEATURE_BIAS, OUTPUT_WEIGHTS};
 
 #[derive(Clone, Copy)]
-pub struct Accumulator<T, const SIZE: usize> {
-    vals: [T; SIZE],
+pub struct Accumulator<T> {
+    vals: [T; HIDDEN],
 }
 
-impl<T, const SIZE: usize> Deref for Accumulator<T, SIZE> {
-    type Target = [T; SIZE];
+impl<T> std::ops::Deref for Accumulator<T> {
+    type Target = [T; HIDDEN];
     fn deref(&self) -> &Self::Target {
         &self.vals
     }
 }
 
-impl<T, const SIZE: usize> Index<usize> for Accumulator<T, SIZE> {
+impl<T> std::ops::Index<usize> for Accumulator<T> {
     type Output = T;
     fn index(&self, index: usize) -> &Self::Output {
         &self.vals[index]
     }
 }
 
-impl<T, const SIZE: usize> IndexMut<usize> for Accumulator<T, SIZE> {
+impl<T> std::ops::IndexMut<usize> for Accumulator<T> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.vals[index]
     }
 }
 
-impl<T, const SIZE: usize> Accumulator<T, SIZE> {
-    pub fn new(vals: [T; SIZE]) -> Self {
+impl<T: Copy + Default> Accumulator<T> {
+    pub fn new(vals: [T; HIDDEN]) -> Self {
         Self { vals }
+    }
+
+    pub fn load_biases(nnue: &NNUE<T>) -> Self {
+        let bias = &nnue[FEATURE_BIAS..OUTPUT_WEIGHTS];
+        let mut hmm = [T::default(); HIDDEN];
+        hmm.copy_from_slice(bias);
+        Self::new(hmm)
     }
 }
 
-impl<T: Copy + AddAssign<T>, const SIZE: usize> Accumulator<T, SIZE> {
+impl<T: Copy + std::ops::AddAssign<T>> Accumulator<T> {
     pub fn add_feature(&mut self, feature_idx: usize, nnue: &NNUE<T>) {
-        let start = feature_idx * SIZE;
-        for (i, d) in self
-            .vals
-            .iter_mut()
-            .zip(&nnue.feature_weights[start..start + SIZE])
-        {
+        let start = feature_idx * HIDDEN;
+        for (i, d) in self.vals.iter_mut().zip(&nnue[start..start + HIDDEN]) {
             *i += *d;
         }
     }

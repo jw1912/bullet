@@ -1,5 +1,3 @@
-use std::ops::AddAssign;
-
 pub const HIDDEN: usize = crate::HIDDEN_SIZE;
 pub const INPUT: usize = 768;
 pub const K: f32 = 1.0;
@@ -7,14 +5,16 @@ pub const K4: f32 = K / 400.0;
 
 pub type NNUEParams = NNUE<f32>;
 
+const NNUE_SIZE: usize = (INPUT + 3) * HIDDEN + 1;
+pub const FEATURE_BIAS: usize = INPUT * HIDDEN;
+pub const OUTPUT_WEIGHTS: usize = (INPUT + 1) * HIDDEN;
+pub const OUTPUT_BIAS: usize = (INPUT + 3) * HIDDEN;
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 #[repr(C)]
 pub struct NNUE<T> {
-    pub feature_weights: [T; INPUT * HIDDEN],
-    pub feature_bias: [T; HIDDEN],
-    pub output_weights: [T; 2 * HIDDEN],
-    pub output_bias: T,
+    pub weights: [T; NNUE_SIZE],
 }
 
 impl<T> NNUE<T> {
@@ -30,28 +30,23 @@ impl<T> NNUE<T> {
     }
 }
 
-impl<T: AddAssign<T> + Copy> AddAssign<&NNUE<T>> for NNUE<T> {
+impl<T: std::ops::AddAssign<T> + Copy> std::ops::AddAssign<&NNUE<T>> for NNUE<T> {
     fn add_assign(&mut self, rhs: &NNUE<T>) {
-        for (i, &j) in self
-            .feature_weights
-            .iter_mut()
-            .zip(rhs.feature_weights.iter())
-        {
+        for (i, &j) in self.iter_mut().zip(rhs.iter()) {
             *i += j;
         }
+    }
+}
 
-        for (i, &j) in self
-            .output_weights
-            .iter_mut()
-            .zip(rhs.output_weights.iter())
-        {
-            *i += j;
-        }
+impl<T> std::ops::Deref for NNUE<T> {
+    type Target = [T; NNUE_SIZE];
+    fn deref(&self) -> &Self::Target {
+        &self.weights
+    }
+}
 
-        for (i, &j) in self.feature_bias.iter_mut().zip(rhs.feature_bias.iter()) {
-            *i += j;
-        }
-
-        self.output_bias += rhs.output_bias;
+impl<T> std::ops::DerefMut for NNUE<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.weights
     }
 }

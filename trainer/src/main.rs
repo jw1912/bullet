@@ -1,5 +1,5 @@
 use trainer::{
-    arch::{NNUEParams, QuantisedNNUE},
+    arch::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
     rng::Rand,
     scheduler::{LrScheduler, SchedulerType},
     trainer::Trainer,
@@ -26,21 +26,21 @@ fn main() {
     let lr_drop = args.next().unwrap().parse().unwrap();
     let lr_gamma = args.next().unwrap().parse().unwrap();
 
-    let mut scheduler = LrScheduler::new(lr_start, 1.0, SchedulerType::Drop { drop: 1000 });
+    let mut scheduler = LrScheduler::new(lr_start, 1.0, SchedulerType::Drop(1000));
 
     if lr_end != 0.0 {
-        scheduler.set_type(SchedulerType::Step { step: 1 });
+        scheduler.set_type(SchedulerType::Step(1));
         let gamma = (lr_start / lr_end).ln() / (max_epochs - 1).max(1) as f32;
         scheduler.set_gamma((-gamma).exp());
     }
 
     if lr_step != 0 {
-        scheduler.set_type(SchedulerType::Step { step: lr_step });
+        scheduler.set_type(SchedulerType::Step(lr_step));
         scheduler.set_gamma(lr_gamma);
     }
 
     if lr_drop != 0 {
-        scheduler.set_type(SchedulerType::Drop { drop: lr_drop });
+        scheduler.set_type(SchedulerType::Drop(lr_drop));
         scheduler.set_gamma(lr_gamma);
     }
 
@@ -51,11 +51,11 @@ fn main() {
     // provide random starting parameters
     let mut params = NNUEParams::new();
     let mut gen = Rand::new(173645501);
-    for param in params.feature_weights.iter_mut() {
+    for param in params[..FEATURE_BIAS].iter_mut() {
         *param = gen.rand(0.01);
     }
 
-    for param in params.output_weights.iter_mut() {
+    for param in params[OUTPUT_WEIGHTS..OUTPUT_BIAS].iter_mut() {
         *param = gen.rand(0.01);
     }
 
