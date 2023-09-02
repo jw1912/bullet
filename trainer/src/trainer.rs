@@ -2,7 +2,7 @@ use data::Position;
 
 use crate::{
     activation::Activation,
-    arch::{test_eval, update_single_grad, NNUEParams, QuantisedNNUE, K},
+    arch::{test_eval, update_single_grad, NNUEParams, QuantisedNNUE},
     optimiser::Optimiser,
     scheduler::LrScheduler,
 };
@@ -58,7 +58,10 @@ impl<Opt: Optimiser> Trainer<Opt> {
         net_name: &str,
         save_rate: usize,
         batch_size: usize,
+        scale: f32,
     ) {
+        let reciprocal_scale = 1.0 / scale;
+
         // display settings to user so they can verify
         self.report_settings();
         println!("Max Epochs     : {max_epochs}");
@@ -66,6 +69,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Batch Size     : {batch_size}");
         println!("Net Name       : {net_name:?}");
         println!("LR Scheduler   : {}", self.scheduler);
+        println!("Scale          : {scale:.6}");
 
         let timer = Instant::now();
 
@@ -87,8 +91,8 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
-                    let adj = 2. * K / batch.len() as f32;
-                    let gradients = self.gradients::<Act>(nnue, batch, &mut error);
+                    let adj = 2. / batch.len() as f32;
+                    let gradients = self.gradients::<Act>(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -130,6 +134,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         nnue: &NNUEParams,
         batch: &[Position],
         error: &mut f32,
+        scale: f32,
     ) -> Box<NNUEParams> {
         let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
@@ -141,7 +146,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| {
-                    s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop))
+                    s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop, scale))
                 })
                 .collect::<Vec<_>>()
                 .into_iter()
@@ -159,6 +164,7 @@ fn gradients_batch<Act: Activation>(
     error: &mut f32,
     blend: f32,
     skip_prop: f32,
+    scale: f32,
 ) -> Box<NNUEParams> {
     let mut grad = NNUEParams::new();
     let mut rand = crate::rng::Rand::default();
@@ -167,7 +173,7 @@ fn gradients_batch<Act: Activation>(
             continue;
         }
 
-        update_single_grad::<Act>(pos, nnue, &mut grad, error, blend);
+        update_single_grad::<Act>(pos, nnue, &mut grad, error, blend, scale);
     }
     grad
 }

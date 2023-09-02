@@ -3,11 +3,11 @@ mod nnue;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use nnue::{NNUEParams, FEATURE_BIAS, HIDDEN, INPUT, K, K4, OUTPUT_BIAS, OUTPUT_WEIGHTS};
+pub use nnue::{NNUEParams, FEATURE_BIAS, HIDDEN, INPUT, OUTPUT_BIAS, OUTPUT_WEIGHTS};
 pub use quantise::QuantisedNNUE;
 
 use crate::activation::Activation;
-use data::Position;
+use data::{Position, util::sigmoid};
 
 pub fn update_single_grad<Act: Activation>(
     pos: &Position,
@@ -15,6 +15,7 @@ pub fn update_single_grad<Act: Activation>(
     grad: &mut NNUEParams,
     error: &mut f32,
     blend: f32,
+    scale: f32,
 ) {
     let bias = Accumulator::load_biases(nnue);
     let mut accs = [bias; 2];
@@ -38,7 +39,7 @@ pub fn update_single_grad<Act: Activation>(
     }
 
     let mut eval = nnue[OUTPUT_BIAS];
-    let mut activated = [Accumulator::new([0.0; HIDDEN]); 2];
+    let mut activated = [[0.0; HIDDEN]; 2];
 
     for (idx, (&i, &w)) in accs[0]
         .iter()
@@ -58,9 +59,9 @@ pub fn update_single_grad<Act: Activation>(
         eval += activated[1][idx] * w;
     }
 
-    let result = pos.blended_result(blend, stm, K4);
+    let result = pos.blended_result(blend, stm, scale);
 
-    let sigmoid = data::util::sigmoid(eval, K);
+    let sigmoid = sigmoid(eval, 1.0);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
@@ -80,7 +81,7 @@ pub fn update_single_grad<Act: Activation>(
 
     for (wfeat, bfeat) in features.iter().take(len) {
         let idxs = [wfeat * HIDDEN, bfeat * HIDDEN];
-        let (widx, bidx) = (idxs[stm], idxs[stm ^ 1]);
+        let (widx, bidx) = (idxs[stm], idxs[opp]);
         for i in 0..HIDDEN {
             grad[widx + i] += components[i].0;
             grad[bidx + i] += components[i].1;
