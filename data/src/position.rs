@@ -26,13 +26,13 @@ impl Position {
         usize::from(self.result)
     }
 
-    pub fn blended_result(&self, blend: f32, stm: usize) -> f32 {
+    pub fn blended_result(&self, blend: f32, stm: usize, scale: f32) -> f32 {
         let (wdl, score) = if stm == 1 {
             (1.0 - self.result(), -self.score)
         } else {
             (self.result(), self.score)
         };
-        blend * wdl + (1. - blend) * sigmoid(f32::from(score), 0.009)
+        blend * wdl + (1. - blend) * sigmoid(f32::from(score), scale)
     }
 
     pub fn stm(&self) -> usize {
