@@ -34,6 +34,7 @@ impl Optimiser for Adam {
     fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
         for (i, param) in nnue.iter_mut().enumerate() {
             self.update_single(i, param, grads, adj, rate);
+            *param = param.clamp(-1.98, 1.98);
         }
     }
 }
@@ -59,6 +60,7 @@ impl Optimiser for AdamW {
         for (i, param) in nnue.iter_mut().enumerate() {
             *param *= decay;
             self.adam.update_single(i, param, grads, adj, rate);
+            *param = param.clamp(-1.98, 1.98);
         }
     }
 }
