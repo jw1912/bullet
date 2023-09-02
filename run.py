@@ -99,6 +99,13 @@ def main():
         default=1.0
     )
 
+    parser.add_argument(
+        '--scale',
+        type=int,
+        help="Eval scale.",
+        default=400
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -124,6 +131,7 @@ def main():
         str(args.lr_step),
         str(args.lr_drop),
         str(args.lr_gamma),
+        str(args.scale),
     ]
 
     subprocess.run(commands)

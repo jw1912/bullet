@@ -1,7 +1,5 @@
 pub const HIDDEN: usize = crate::HIDDEN_SIZE;
 pub const INPUT: usize = 768;
-pub const K: f32 = 1.0;
-pub const K4: f32 = K / 400.0;
 
 pub type NNUEParams = NNUE<f32>;
 
