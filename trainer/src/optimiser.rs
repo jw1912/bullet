@@ -14,7 +14,7 @@ impl Adam {
     const B2: f32 = 0.999;
 
     fn update_single(&mut self, i: usize, param: &mut f32, grads: &NNUEParams, adj: f32, rate: f32) {
-        let grad = adj * grads.weights[i];
+        let grad = adj * grads[i];
         self.momentum[i] = Self::B1 * self.momentum[i] + (1. - Self::B1) * grad;
         self.velocity[i] = Self::B2 * self.velocity[i] + (1. - Self::B2) * grad * grad;
         *param -= rate * self.momentum[i] / (self.velocity[i].sqrt() + 0.000_000_01);
@@ -32,7 +32,7 @@ impl Default for Adam {
 
 impl Optimiser for Adam {
     fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
-        for (i, param) in nnue.weights.iter_mut().enumerate() {
+        for (i, param) in nnue.iter_mut().enumerate() {
             self.update_single(i, param, grads, adj, rate);
         }
     }
@@ -47,7 +47,7 @@ pub struct AdamW {
 impl Optimiser for AdamW {
     fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
         let decay = 1.0 - self.decay * rate;
-        for (i, param) in nnue.weights.iter_mut().enumerate() {
+        for (i, param) in nnue.iter_mut().enumerate() {
             *param *= decay;
             self.adam.update_single(i, param, grads, adj, rate);
         }

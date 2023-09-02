@@ -32,7 +32,7 @@ impl<T> NNUE<T> {
 
 impl<T: std::ops::AddAssign<T> + Copy> std::ops::AddAssign<&NNUE<T>> for NNUE<T> {
     fn add_assign(&mut self, rhs: &NNUE<T>) {
-        for (i, &j) in self.weights.iter_mut().zip(rhs.weights.iter()) {
+        for (i, &j) in self.iter_mut().zip(rhs.iter()) {
             *i += j;
         }
     }
