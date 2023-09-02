@@ -34,9 +34,10 @@ impl QuantisedNNUE {
         let mut file = std::fs::File::create(output_path)?;
 
         unsafe {
-            file.write_all(&std::mem::transmute::<QuantisedNNUE, [u8; SIZEOF]>(
-                self.clone(),
-            ))?;
+            let ptr: *const QuantisedNNUE = self;
+            let slice_ptr: *const u8 = std::mem::transmute(ptr);
+            let slice = std::slice::from_raw_parts(slice_ptr, SIZEOF);
+            file.write_all(slice)?;
         }
         Ok(())
     }
