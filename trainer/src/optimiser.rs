@@ -38,10 +38,19 @@ impl Optimiser for Adam {
     }
 }
 
-#[derive(Default)]
+
 pub struct AdamW {
     adam: Adam,
     decay: f32,
+}
+
+impl Default for AdamW {
+    fn default() -> Self {
+        Self {
+            adam: Adam::default(),
+            decay: 0.01,
+        }
+    }
 }
 
 impl Optimiser for AdamW {
