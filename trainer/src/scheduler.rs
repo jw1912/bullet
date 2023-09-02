@@ -6,7 +6,11 @@ pub struct LrScheduler {
 
 impl std::fmt::Display for LrScheduler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "start {} gamma {} schedule {:?}", self.val, self.gamma, self.scheduler)
+        write!(
+            f,
+            "start {} gamma {} schedule {:?}",
+            self.val, self.gamma, self.scheduler
+        )
     }
 }
 

@@ -24,13 +24,7 @@ impl Default for Adam {
 }
 
 impl Optimiser for Adam {
-    fn update_weights(
-        &mut self,
-        nnue: &mut NNUEParams,
-        grads: &NNUEParams,
-        adj: f32,
-        rate: f32,
-    ) {
+    fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
         for (i, param) in nnue.weights.iter_mut().enumerate() {
             let grad = adj * grads.weights[i];
             self.momentum[i] = Self::B1 * self.momentum[i] + (1. - Self::B1) * grad;
@@ -62,13 +56,7 @@ impl Default for AdamW {
 }
 
 impl Optimiser for AdamW {
-    fn update_weights(
-        &mut self,
-        nnue: &mut NNUEParams,
-        grads: &NNUEParams,
-        adj: f32,
-        rate: f32,
-    ) {
+    fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
         let decay = 1.0 - self.decay * rate;
         for (i, param) in nnue.weights.iter_mut().enumerate() {
             let grad = adj * grads.weights[i];

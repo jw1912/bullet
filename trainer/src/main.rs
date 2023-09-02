@@ -1,5 +1,5 @@
 use trainer::{
-    arch::{NNUEParams, QuantisedNNUE, OUTPUT_WEIGHTS, OUTPUT_BIAS, FEATURE_BIAS},
+    arch::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
     rng::Rand,
     scheduler::{LrScheduler, SchedulerType},
     trainer::Trainer,

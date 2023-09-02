@@ -35,11 +35,7 @@ impl<T, const SIZE: usize> Accumulator<T, SIZE> {
 impl<T: Copy + AddAssign<T>, const SIZE: usize> Accumulator<T, SIZE> {
     pub fn add_feature(&mut self, feature_idx: usize, nnue: &NNUE<T>) {
         let start = feature_idx * SIZE;
-        for (i, d) in self
-            .vals
-            .iter_mut()
-            .zip(&nnue.weights[start..start + SIZE])
-        {
+        for (i, d) in self.vals.iter_mut().zip(&nnue.weights[start..start + SIZE]) {
             *i += *d;
         }
     }

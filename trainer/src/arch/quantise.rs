@@ -20,7 +20,8 @@ impl QuantisedNNUE {
 
         for (q, &param) in res
             .iter_mut()
-            .take(OUTPUT_BIAS).skip(OUTPUT_WEIGHTS)
+            .take(OUTPUT_BIAS)
+            .skip(OUTPUT_WEIGHTS)
             .zip(nnue.iter().take(OUTPUT_BIAS).skip(OUTPUT_WEIGHTS))
         {
             *q = (param * (QB as f32)) as i16;

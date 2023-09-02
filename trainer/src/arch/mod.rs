@@ -3,7 +3,7 @@ mod nnue;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use nnue::{FEATURE_BIAS, HIDDEN, INPUT, K, K4, OUTPUT_BIAS, OUTPUT_WEIGHTS, NNUEParams};
+pub use nnue::{NNUEParams, FEATURE_BIAS, HIDDEN, INPUT, K, K4, OUTPUT_BIAS, OUTPUT_WEIGHTS};
 pub use quantise::QuantisedNNUE;
 
 use crate::activation::Activation;
@@ -112,7 +112,10 @@ fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
     let side = pos.stm();
     let (boys, opps) = (&accs[side], &accs[side ^ 1]);
 
-    for (&i, &w) in boys.iter().zip(&nnue[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN]) {
+    for (&i, &w) in boys
+        .iter()
+        .zip(&nnue[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN])
+    {
         eval += Act::activate(i) * w;
     }
 
