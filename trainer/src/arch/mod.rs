@@ -16,10 +16,8 @@ pub fn update_single_grad<Act: Activation>(
     error: &mut f32,
     blend: f32,
 ) {
-    let bias = &nnue[FEATURE_BIAS..OUTPUT_WEIGHTS];
-    let mut hmm = [0.0; HIDDEN];
-    hmm.copy_from_slice(bias);
-    let mut accs = [Accumulator::new(hmm); 2];
+    let bias = Accumulator::load_biases(nnue);
+    let mut accs = [bias; 2];
     let mut features = [(0, 0); 32];
     let mut len = 0;
 
@@ -92,10 +90,8 @@ pub fn update_single_grad<Act: Activation>(
 }
 
 fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
-    let bias = &nnue[FEATURE_BIAS..OUTPUT_WEIGHTS];
-    let mut hmm = [0.0; HIDDEN];
-    hmm.copy_from_slice(bias);
-    let mut accs = [Accumulator::new(hmm); 2];
+    let bias = Accumulator::load_biases(nnue);
+    let mut accs = [bias; 2];
 
     for (colour, piece, square) in pos.into_iter() {
         let c = usize::from(colour);
