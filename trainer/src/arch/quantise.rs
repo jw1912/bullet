@@ -33,8 +33,8 @@ impl QuantisedNNUE {
     }
 
     pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
-        use std::{io::Write, mem::size_of};
-        const SIZEOF: usize = size_of::<QuantisedNNUE>();
+        use std::io::Write;
+        const SIZEOF: usize = std::mem::size_of::<QuantisedNNUE>();
 
         let mut file = std::fs::File::create(output_path)?;
 
