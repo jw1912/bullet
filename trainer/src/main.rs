@@ -1,5 +1,5 @@
 use trainer::{
-    arch::{NNUEParams, QuantisedNNUE},
+    arch::{NNUEParams, QuantisedNNUE, OUTPUT_WEIGHTS, OUTPUT_BIAS, FEATURE_BIAS},
     rng::Rand,
     scheduler::{LrScheduler, SchedulerType},
     trainer::Trainer,
@@ -51,11 +51,11 @@ fn main() {
     // provide random starting parameters
     let mut params = NNUEParams::new();
     let mut gen = Rand::new(173645501);
-    for param in params.feature_weights.iter_mut() {
+    for param in params[..FEATURE_BIAS].iter_mut() {
         *param = gen.rand(0.01);
     }
 
-    for param in params.output_weights.iter_mut() {
+    for param in params[OUTPUT_WEIGHTS..OUTPUT_BIAS].iter_mut() {
         *param = gen.rand(0.01);
     }
 

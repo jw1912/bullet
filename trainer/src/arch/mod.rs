@@ -3,7 +3,7 @@ mod nnue;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use nnue::{NNUEParams, HIDDEN, INPUT, K, K4};
+pub use nnue::{FEATURE_BIAS, HIDDEN, INPUT, K, K4, OUTPUT_BIAS, OUTPUT_WEIGHTS, NNUEParams};
 pub use quantise::QuantisedNNUE;
 
 use crate::activation::Activation;
@@ -16,7 +16,10 @@ pub fn update_single_grad<Act: Activation>(
     error: &mut f32,
     blend: f32,
 ) {
-    let mut accs = [Accumulator::new(nnue.feature_bias); 2];
+    let bias = &nnue[FEATURE_BIAS..OUTPUT_WEIGHTS];
+    let mut hmm = [0.0; HIDDEN];
+    hmm.copy_from_slice(bias);
+    let mut accs = [Accumulator::new(hmm); 2];
     let mut features = [(0, 0); 32];
     let mut len = 0;
 
@@ -35,12 +38,12 @@ pub fn update_single_grad<Act: Activation>(
         accs[stm ^ 1].add_feature(bfeat, nnue);
     }
 
-    let mut eval = nnue.output_bias;
+    let mut eval = nnue[OUTPUT_BIAS];
     let mut activated = [Accumulator::new([0.0; HIDDEN]); 2];
 
     for (idx, (&i, &w)) in accs[0]
         .iter()
-        .zip(&nnue.output_weights[..HIDDEN])
+        .zip(&nnue[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN])
         .enumerate()
     {
         activated[0][idx] = Act::activate(i);
@@ -49,7 +52,7 @@ pub fn update_single_grad<Act: Activation>(
 
     for (idx, (&i, &w)) in accs[1]
         .iter()
-        .zip(&nnue.output_weights[HIDDEN..])
+        .zip(&nnue[OUTPUT_WEIGHTS + HIDDEN..OUTPUT_BIAS])
         .enumerate()
     {
         activated[1][idx] = Act::activate(i);
@@ -66,30 +69,33 @@ pub fn update_single_grad<Act: Activation>(
 
     for i in 0..HIDDEN {
         components[i] = (
-            err * nnue.output_weights[i] * Act::activate_prime(accs[0][i]),
-            err * nnue.output_weights[HIDDEN + i] * Act::activate_prime(accs[1][i]),
+            err * nnue[OUTPUT_WEIGHTS + i] * Act::activate_prime(accs[0][i]),
+            err * nnue[OUTPUT_WEIGHTS + HIDDEN + i] * Act::activate_prime(accs[1][i]),
         );
 
-        grad.feature_bias[i] += components[i].0 + components[i].1;
+        grad[FEATURE_BIAS + i] += components[i].0 + components[i].1;
 
-        grad.output_weights[i] += err * activated[0][i];
-        grad.output_weights[HIDDEN + i] += err * activated[1][i];
+        grad[OUTPUT_WEIGHTS + i] += err * activated[0][i];
+        grad[OUTPUT_WEIGHTS + HIDDEN + i] += err * activated[1][i];
     }
 
     for (wfeat, bfeat) in features.iter().take(len) {
         let idxs = [wfeat * HIDDEN, bfeat * HIDDEN];
         let (widx, bidx) = (idxs[stm], idxs[stm ^ 1]);
         for i in 0..HIDDEN {
-            grad.feature_weights[widx + i] += components[i].0;
-            grad.feature_weights[bidx + i] += components[i].1;
+            grad[widx + i] += components[i].0;
+            grad[bidx + i] += components[i].1;
         }
     }
 
-    grad.output_bias += err;
+    grad[OUTPUT_BIAS] += err;
 }
 
 fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
-    let mut accs = [Accumulator::new(nnue.feature_bias); 2];
+    let bias = &nnue[FEATURE_BIAS..OUTPUT_WEIGHTS];
+    let mut hmm = [0.0; HIDDEN];
+    hmm.copy_from_slice(bias);
+    let mut accs = [Accumulator::new(hmm); 2];
 
     for (colour, piece, square) in pos.into_iter() {
         let c = usize::from(colour);
@@ -101,16 +107,16 @@ fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
         accs[1].add_feature(bfeat, nnue);
     }
 
-    let mut eval = nnue.output_bias;
+    let mut eval = nnue[OUTPUT_BIAS];
 
     let side = pos.stm();
     let (boys, opps) = (&accs[side], &accs[side ^ 1]);
 
-    for (&i, &w) in boys.iter().zip(&nnue.output_weights[..HIDDEN]) {
+    for (&i, &w) in boys.iter().zip(&nnue[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN]) {
         eval += Act::activate(i) * w;
     }
 
-    for (&i, &w) in opps.iter().zip(&nnue.output_weights[HIDDEN..]) {
+    for (&i, &w) in opps.iter().zip(&nnue[OUTPUT_WEIGHTS + HIDDEN..OUTPUT_BIAS]) {
         eval += Act::activate(i) * w;
     }
 

@@ -1,4 +1,4 @@
-use super::nnue::{NNUEParams, NNUE};
+use super::nnue::{NNUEParams, NNUE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -10,19 +10,23 @@ impl QuantisedNNUE {
     pub fn from_unquantised(nnue: &NNUEParams) -> Box<Self> {
         let mut res = QuantisedNNUE::new();
 
-        for (i, &param) in nnue.feature_weights.iter().enumerate() {
-            res.feature_weights[i] = (param * (QA as f32)) as i16;
+        for (q, &param) in res
+            .iter_mut()
+            .take(OUTPUT_WEIGHTS)
+            .zip(nnue.iter().take(OUTPUT_WEIGHTS))
+        {
+            *q = (param * (QA as f32)) as i16;
         }
 
-        for (i, &param) in nnue.feature_bias.iter().enumerate() {
-            res.feature_bias[i] = (param * (QA as f32)) as i16;
+        for (q, &param) in res
+            .iter_mut()
+            .take(OUTPUT_BIAS).skip(OUTPUT_WEIGHTS)
+            .zip(nnue.iter().take(OUTPUT_BIAS).skip(OUTPUT_WEIGHTS))
+        {
+            *q = (param * (QB as f32)) as i16;
         }
 
-        for (i, &param) in nnue.output_weights.iter().enumerate() {
-            res.output_weights[i] = (param * (QB as f32)) as i16;
-        }
-
-        res.output_bias = (nnue.output_bias * (QAB as f32)) as i16;
+        res[OUTPUT_BIAS] = (nnue[OUTPUT_BIAS] * (QAB as f32)) as i16;
 
         res
     }

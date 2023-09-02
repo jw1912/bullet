@@ -38,7 +38,7 @@ impl<T: Copy + AddAssign<T>, const SIZE: usize> Accumulator<T, SIZE> {
         for (i, d) in self
             .vals
             .iter_mut()
-            .zip(&nnue.feature_weights[start..start + SIZE])
+            .zip(&nnue.weights[start..start + SIZE])
         {
             *i += *d;
         }
