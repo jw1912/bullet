@@ -4,12 +4,19 @@ pub struct LrScheduler {
     scheduler: SchedulerType,
 }
 
+impl std::fmt::Display for LrScheduler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "start {} gamma {} schedule {:?}", self.val, self.gamma, self.scheduler)
+    }
+}
+
+#[derive(Debug)]
 pub enum SchedulerType {
     /// Drop once, by a factor of `gamma`.
-    Drop { drop: usize },
+    Drop(usize),
     /// Drop every N epochs by a factor of `gamma`.
     /// Exponential is here with `step = 1`.
-    Step { step: usize },
+    Step(usize),
 }
 
 impl LrScheduler {
@@ -35,8 +42,8 @@ impl LrScheduler {
 
     pub fn adjust(&mut self, epoch: usize) {
         if match self.scheduler {
-            SchedulerType::Drop { drop } => drop == epoch,
-            SchedulerType::Step { step } => epoch % step == 0,
+            SchedulerType::Drop(drop) => drop == epoch,
+            SchedulerType::Step(step) => epoch % step == 0,
         } {
             self.val *= self.gamma;
         }
