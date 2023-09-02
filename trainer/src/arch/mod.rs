@@ -63,7 +63,7 @@ pub fn update_single_grad<Act: Activation>(
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
-    let mut components = Accumulator::new([(0.0, 0.0); HIDDEN]);
+    let mut components = [(0.0, 0.0); HIDDEN];
 
     for i in 0..HIDDEN {
         components[i] = (
