@@ -22,18 +22,19 @@ pub fn update_single_grad<Act: Activation>(
     let mut len = 0;
 
     let stm = pos.stm();
+    let opp = stm ^ 1;
 
     for (colour, piece, square) in pos.into_iter() {
         let c = usize::from(colour);
-        let pc = usize::from(piece);
+        let pc = 64 * usize::from(piece);
         let sq = usize::from(square);
-        let wfeat = [0, 384][c] + 64 * pc + sq;
-        let bfeat = [384, 0][c] + 64 * pc + (sq ^ 56);
+        let wfeat = [0, 384][c] + pc + sq;
+        let bfeat = [384, 0][c] + pc + (sq ^ 56);
 
         features[len] = (wfeat, bfeat);
         len += 1;
         accs[stm].add_feature(wfeat, nnue);
-        accs[stm ^ 1].add_feature(bfeat, nnue);
+        accs[opp].add_feature(bfeat, nnue);
     }
 
     let mut eval = nnue[OUTPUT_BIAS];
