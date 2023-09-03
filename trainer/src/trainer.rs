@@ -100,7 +100,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
             error = 0.0;
             let mut finished_batches = 0;
 
-            let cap = 1024 * batch_size * std::mem::size_of::<Position>();
+            let cap = 128 * batch_size * std::mem::size_of::<Position>();
             let file_path = self.file.clone();
 
             use std::sync::mpsc::sync_channel;
