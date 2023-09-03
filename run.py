@@ -97,7 +97,7 @@ def main():
         '--lr-gamma',
         type=float,
         help="Factor to drop LR by for `drop` and `step` LR scheduling.",
-        default=1.0
+        default=0.1
     )
 
     parser.add_argument(
