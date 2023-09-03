@@ -1,3 +1,5 @@
+use crate::ansi;
+
 pub struct LrScheduler {
     val: f32,
     gamma: f32,
@@ -8,19 +10,27 @@ impl std::fmt::Display for LrScheduler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "start {} gamma {} schedule {:?}",
-            self.val, self.gamma, self.scheduler
+            "start {} gamma {} drop {} epochs",
+            ansi!(self.val, 31), ansi!(self.gamma, 31), self.scheduler,
         )
     }
 }
 
-#[derive(Debug)]
 pub enum SchedulerType {
     /// Drop once, by a factor of `gamma`.
     Drop(usize),
     /// Drop every N epochs by a factor of `gamma`.
     /// Exponential is here with `step = 1`.
     Step(usize),
+}
+
+impl std::fmt::Display for SchedulerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Drop(x) => write!(f, "at {}", ansi!(x, 31)),
+            Self::Step(x) => write!(f, "every {}", ansi!(x, 31))
+        }
+    }
 }
 
 impl LrScheduler {
@@ -50,6 +60,9 @@ impl LrScheduler {
             SchedulerType::Step(step) => epoch % step == 0,
         } {
             self.val *= self.gamma;
+            if self.gamma != 1.0 {
+                println!("LR Dropped to {}", ansi!(self.val));
+            }
         }
     }
 }
