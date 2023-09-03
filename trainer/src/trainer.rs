@@ -73,7 +73,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Batch Size     : {batch_size}");
         println!("Net Name       : {net_name:?}");
         println!("LR Scheduler   : {}", self.scheduler);
-        println!("Scale          : {scale:.6}");
+        println!("Scale          : {scale:.0}");
         println!("Positions      : {num}");
 
         let timer = Instant::now();
