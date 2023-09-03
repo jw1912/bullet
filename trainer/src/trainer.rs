@@ -101,15 +101,29 @@ impl<Opt: Optimiser> Trainer<Opt> {
             let mut finished_batches = 0;
 
             let cap = 1024 * batch_size * std::mem::size_of::<Position>();
-            let mut file = BufReader::with_capacity(cap, File::open(&self.file).unwrap());
+            let file_path = self.file.clone();
 
-            while let Ok(buf) = file.fill_buf() {
-                // finished reading file
-                if buf.is_empty() {
-                    break;
+            use std::sync::mpsc::sync_channel;
+
+            let (sender, reciever) = sync_channel::<Vec<u8>>(1);
+
+            let dataloader = std::thread::spawn(move || {
+                let mut file = BufReader::with_capacity(cap, File::open(&file_path).unwrap());
+                while let Ok(buf) = file.fill_buf() {
+
+                    if buf.is_empty() {
+                        break;
+                    }
+
+                    sender.send(buf.to_vec()).unwrap();
+
+                    let consumed = buf.len();
+                    file.consume(consumed);
                 }
+            });
 
-                let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(buf) };
+            while let Ok(buf) = reciever.recv() {
+                let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(&buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
@@ -135,10 +149,9 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
                     finished_batches += 1;
                 }
-
-                let consumed = buf.len();
-                file.consume(consumed);
             }
+
+            dataloader.join().unwrap();
 
             error /= num as f32;
 
