@@ -140,11 +140,10 @@ impl<Opt: Optimiser> Trainer<Opt> {
             let epoch_time = epoch_timer.elapsed().as_secs_f32();
 
             println!(
-                "epoch {} | time {} | running loss {} | lr {} | {} pos/sec | total time {}",
+                "epoch {} | time {} | running loss {} | {} pos/sec | total time {}",
                 ansi!(epoch),
                 ansi!(format!("{epoch_time:.2}")),
                 ansi!(format!("{error:.6}")),
-                ansi!(self.scheduler.lr()),
                 ansi!(format!("{:.0}", num.max(1) as f32 / epoch_time)),
                 ansi!(format!("{:.2}", timer.elapsed().as_secs_f32())),
             );
