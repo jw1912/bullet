@@ -54,7 +54,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
     }
 
     pub fn report_settings(&self) {
-        println!("File Path      : {}", ansi!(self.file, 32));
+        println!("File Path      : {}", ansi!(self.file, "32;1"));
         println!("Threads        : {}", ansi!(self.threads, 31));
         println!("Learning Rate  : {}", ansi!(self.scheduler.lr(), 31));
         println!("WDL Proportion : {}", ansi!(self.blend, 31));
@@ -70,7 +70,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         batch_size: usize,
         scale: f32,
     ) {
-
+        println!("{}", ansi!("Beginning Training", "34;1"));
         let reciprocal_scale = 1.0 / scale;
         let file_size = metadata(&self.file).unwrap().len();
         let num = file_size / std::mem::size_of::<Position>() as u64;
@@ -81,7 +81,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Max Epochs     : {}", ansi!(max_epochs, 31));
         println!("Save Rate      : {}", ansi!(save_rate, 31));
         println!("Batch Size     : {}", ansi!(batch_size, 31));
-        println!("Net Name       : {}", ansi!(net_name, 32));
+        println!("Net Name       : {}", ansi!(net_name, "32;1"));
         println!("LR Scheduler   : {}", self.scheduler);
         println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31));
         println!("Positions      : {}", ansi!(num, 31));
@@ -156,7 +156,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 let qnnue = QuantisedNNUE::from_unquantised(nnue);
                 qnnue.write_to_bin(&net_path).unwrap();
 
-                println!("Saved [{}]", ansi!(net_path, 32));
+                println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
         }
 

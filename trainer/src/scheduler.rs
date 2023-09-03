@@ -10,19 +10,27 @@ impl std::fmt::Display for LrScheduler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "start {} gamma {} schedule {:?}",
-            ansi!(self.val, 31), ansi!(self.gamma, 31), self.scheduler
+            "start {} gamma {} drop {} epochs",
+            ansi!(self.val, 31), ansi!(self.gamma, 31), self.scheduler,
         )
     }
 }
 
-#[derive(Debug)]
 pub enum SchedulerType {
     /// Drop once, by a factor of `gamma`.
     Drop(usize),
     /// Drop every N epochs by a factor of `gamma`.
     /// Exponential is here with `step = 1`.
     Step(usize),
+}
+
+impl std::fmt::Display for SchedulerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Drop(x) => write!(f, "at {}", ansi!(x, 31)),
+            Self::Step(x) => write!(f, "every {}", ansi!(x, 31))
+        }
+    }
 }
 
 impl LrScheduler {
