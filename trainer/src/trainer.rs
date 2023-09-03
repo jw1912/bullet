@@ -8,8 +8,8 @@ use crate::{
 };
 
 use std::{
-    fs::File,
-    io::{BufRead, BufReader},
+    fs::{File, metadata},
+    io::{BufRead, BufReader, stdout, Write},
     thread,
     time::Instant,
 };
@@ -60,7 +60,11 @@ impl<Opt: Optimiser> Trainer<Opt> {
         batch_size: usize,
         scale: f32,
     ) {
+
         let reciprocal_scale = 1.0 / scale;
+        let file_size = metadata(&self.file).unwrap().len();
+        let num = file_size / std::mem::size_of::<Position>() as u64;
+        let batches = num / batch_size as u64 + 1;
 
         // display settings to user so they can verify
         self.report_settings();
@@ -70,6 +74,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Net Name       : {net_name:?}");
         println!("LR Scheduler   : {}", self.scheduler);
         println!("Scale          : {scale:.6}");
+        println!("Positions      : {num}");
 
         let timer = Instant::now();
 
@@ -78,7 +83,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         for epoch in 1..=max_epochs {
             let epoch_timer = Instant::now();
             error = 0.0;
-            let mut num = 0;
+            let mut finished_batches = 0;
 
             let cap = 1024 * batch_size * std::mem::size_of::<Position>();
             let mut file = BufReader::with_capacity(cap, File::open(&self.file).unwrap());
@@ -97,23 +102,28 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
+
+                    if finished_batches % 500 == 0 {
+                        let pct = finished_batches as f32 / batches as f32 * 100.0;
+                        let positions = finished_batches * batch_size;
+                        let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
+                        print!("epoch {epoch} [{pct:.1}% ({finished_batches} / {batches} Batches, {pos_per_sec:.0} pos/sec)]\r");
+                        let _ = stdout().flush();
+                    }
+
+                    finished_batches += 1;
                 }
 
-                num += buf_ref.len();
                 let consumed = buf.len();
                 file.consume(consumed);
             }
 
             error /= num as f32;
 
-            if epoch == 1 {
-                println!("Positions      : {num}");
-            }
-
             let epoch_time = epoch_timer.elapsed().as_secs_f32();
 
             println!(
-                "epoch {epoch} | time {epoch_time:.2} | running loss {error:.6} | lr {} | pos/sec {:.0} | total time {:.2}",
+                "epoch {epoch} | time {epoch_time:.2} | running loss {error:.6} | lr {} | {:.0} pos/sec | total time {:.2}",
                 self.scheduler.lr(),
                 num.max(1) as f32 / epoch_time,
                 timer.elapsed().as_secs_f32(),
