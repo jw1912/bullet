@@ -107,6 +107,12 @@ def main():
         default=400
     )
 
+    parser.add_argument(
+        '--cbcs',
+        help="Alternate colour scheme.",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -141,6 +147,7 @@ def main():
         str(args.lr_drop),
         str(args.lr_gamma),
         str(args.scale),
+        str(args.cbcs).lower(),
     ]
 
     subprocess.run(commands)
