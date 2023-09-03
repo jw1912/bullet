@@ -1,4 +1,5 @@
 import argparse
+import os
 import subprocess
 
 
@@ -110,6 +111,14 @@ def main():
 
     if args.data_path is None:
         print("No path to data provided!")
+        return
+
+    try:
+        os.mkdir("nets")
+    except FileExistsError:
+        pass
+    except OSError as error:
+        print(error)
         return
 
     commands = [

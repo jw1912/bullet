@@ -65,6 +65,8 @@ fn main() {
 
     // safe to bin file
     QuantisedNNUE::from_unquantised(&params)
-        .write_to_bin(&format!("{net_name}.bin"))
+        .write_to_bin(&format!("nets/{net_name}.bin"))
         .expect("Should never fail!");
+
+        println!("Saved [nets/{net_name}.bin]");
 }

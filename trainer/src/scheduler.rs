@@ -50,6 +50,9 @@ impl LrScheduler {
             SchedulerType::Step(step) => epoch % step == 0,
         } {
             self.val *= self.gamma;
+            if self.gamma != 1.0 {
+                println!("LR Dropped to {}", self.val);
+            }
         }
     }
 }

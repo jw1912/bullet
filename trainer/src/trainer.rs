@@ -76,6 +76,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         let mut error;
 
         for epoch in 1..=max_epochs {
+            let epoch_timer = Instant::now();
             error = 0.0;
             let mut num = 0;
 
@@ -109,20 +110,24 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 println!("Positions      : {num}");
             }
 
-            let elapsed = timer.elapsed().as_secs_f32();
-            let eps = epoch as f32 / elapsed;
+            let epoch_time = epoch_timer.elapsed().as_secs_f32();
+
             println!(
-                "epoch {epoch} error {error:.6} time {elapsed:.6} eps {eps:.2}/sec lr {}",
-                self.scheduler.lr()
+                "epoch {epoch} | time {epoch_time:.2} | running loss {error:.6} | lr {} | pos/sec {:.0} | total time {:.2}",
+                self.scheduler.lr(),
+                num.max(1) as f32 / epoch_time,
+                timer.elapsed().as_secs_f32(),
             );
 
             self.scheduler.adjust(epoch);
 
-            if epoch % save_rate == 0 {
+            if epoch % save_rate == 0 && epoch != max_epochs {
                 let qnnue = QuantisedNNUE::from_unquantised(nnue);
                 qnnue
-                    .write_to_bin(&format!("{net_name}-{epoch}.bin"))
+                    .write_to_bin(&format!("nets/{net_name}-{epoch}.bin"))
                     .unwrap();
+
+                println!("Saved [nets/{net_name}-{epoch}.bin]");
             }
         }
 
