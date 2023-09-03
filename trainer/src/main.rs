@@ -8,7 +8,7 @@ use trainer::{
 
 fn main() {
     let mut args = std::env::args();
-    println!("Beginning Training");
+    println!("\x1b[34;1mBeginning Training\x1b[0m");
     args.next();
 
     // all of these will be provided and validated by the `run.py` script

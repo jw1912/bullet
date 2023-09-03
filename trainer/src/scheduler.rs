@@ -1,3 +1,5 @@
+use crate::ansi;
+
 pub struct LrScheduler {
     val: f32,
     gamma: f32,
@@ -9,7 +11,7 @@ impl std::fmt::Display for LrScheduler {
         write!(
             f,
             "start {} gamma {} schedule {:?}",
-            self.val, self.gamma, self.scheduler
+            ansi!(self.val, 31), ansi!(self.gamma, 31), self.scheduler
         )
     }
 }
@@ -51,7 +53,7 @@ impl LrScheduler {
         } {
             self.val *= self.gamma;
             if self.gamma != 1.0 {
-                println!("LR Dropped to {}", self.val);
+                println!("LR Dropped to {}", ansi!(self.val));
             }
         }
     }
