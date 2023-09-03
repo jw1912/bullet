@@ -105,7 +105,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
             use std::sync::mpsc::sync_channel;
 
-            let (sender, reciever) = sync_channel::<Vec<u8>>(1);
+            let (sender, reciever) = sync_channel::<Vec<u8>>(2);
 
             let dataloader = std::thread::spawn(move || {
                 let mut file = BufReader::with_capacity(cap, File::open(&file_path).unwrap());
