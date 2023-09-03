@@ -25,6 +25,7 @@ fn main() {
     let lr_drop = args.next().unwrap().parse().unwrap();
     let lr_gamma = args.next().unwrap().parse().unwrap();
     let scale = args.next().unwrap().parse().unwrap();
+    let cbcs = args.next().unwrap().parse().unwrap();
 
     let mut scheduler = LrScheduler::new(lr_start, 1.0, SchedulerType::Drop(1000));
 
@@ -60,7 +61,7 @@ fn main() {
     }
 
     // carry out tuning
-    trainer.run::<ActivationUsed>(&mut params, max_epochs, net_name, save_rate, batch_size, scale);
+    trainer.run::<ActivationUsed>(&mut params, max_epochs, net_name, save_rate, batch_size, scale, cbcs);
 
     // safe to bin file
     QuantisedNNUE::from_unquantised(&params)

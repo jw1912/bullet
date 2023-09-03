@@ -16,11 +16,11 @@ use std::{
 
 #[macro_export]
 macro_rules! ansi {
-    ($x:expr) => {
-        format!("\x1b[36m{}\x1b[0m", $x)
-    };
     ($x:expr, $y:expr) => {
         format!("\x1b[{}m{}\x1b[0m", $y, $x)
+    };
+    ($x:expr, $y:expr, $esc:expr) => {
+        format!("\x1b[{}m{}\x1b[0m{}", $y, $x, $esc)
     };
 }
 
@@ -53,14 +53,14 @@ impl<Opt: Optimiser> Trainer<Opt> {
         }
     }
 
-    pub fn report_settings(&self) {
-        println!("File Path      : {}", ansi!(self.file, "32;1"));
-        println!("Threads        : {}", ansi!(self.threads, 31));
-        println!("Learning Rate  : {}", ansi!(self.scheduler.lr(), 31));
-        println!("WDL Proportion : {}", ansi!(self.blend, 31));
-        println!("Skip Proportion: {}", ansi!(self.skip_prop, 31));
+    pub fn report_settings(&self, esc: &str) {
+        println!("File Path      : {}", ansi!(self.file, "32;1", esc));
+        println!("Threads        : {}", ansi!(self.threads, 31, esc));
+        println!("WDL Proportion : {}", ansi!(self.blend, 31, esc));
+        println!("Skip Proportion: {}", ansi!(self.skip_prop, 31, esc));
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run<Act: Activation>(
         &mut self,
         nnue: &mut NNUEParams,
@@ -69,22 +69,27 @@ impl<Opt: Optimiser> Trainer<Opt> {
         save_rate: usize,
         batch_size: usize,
         scale: f32,
+        cbcs: bool,
     ) {
-        println!("{}", ansi!("Beginning Training", "34;1"));
+        let esc = if cbcs { "\x1b[38;5;225m" } else { "" };
+        let num_cs = if cbcs { 35 } else { 36 };
+        print!("{esc}");
+
+        println!("{}", ansi!("Beginning Training", "34;1", esc));
         let reciprocal_scale = 1.0 / scale;
         let file_size = metadata(&self.file).unwrap().len();
         let num = file_size / std::mem::size_of::<Position>() as u64;
         let batches = num / batch_size as u64 + 1;
 
         // display settings to user so they can verify
-        self.report_settings();
-        println!("Max Epochs     : {}", ansi!(max_epochs, 31));
-        println!("Save Rate      : {}", ansi!(save_rate, 31));
-        println!("Batch Size     : {}", ansi!(batch_size, 31));
-        println!("Net Name       : {}", ansi!(net_name, "32;1"));
-        println!("LR Scheduler   : {}", self.scheduler);
-        println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31));
-        println!("Positions      : {}", ansi!(num, 31));
+        self.report_settings(esc);
+        println!("Max Epochs     : {}", ansi!(max_epochs, 31, esc));
+        println!("Save Rate      : {}", ansi!(save_rate, 31, esc));
+        println!("Batch Size     : {}", ansi!(batch_size, 31, esc));
+        println!("Net Name       : {}", ansi!(net_name, "32;1", esc));
+        println!("LR Scheduler   : {}", self.scheduler.colourful(esc));
+        println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31, esc));
+        println!("Positions      : {}", ansi!(num, 31, esc));
 
         let timer = Instant::now();
 
@@ -119,11 +124,11 @@ impl<Opt: Optimiser> Trainer<Opt> {
                         let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
                         print!(
                             "epoch {} [{}% ({}/{} batches, {} pos/sec)]\r",
-                            ansi!(epoch),
-                            ansi!(format!("{pct:.1}")),
-                            ansi!(finished_batches),
-                            ansi!(batches),
-                            ansi!(format!("{pos_per_sec:.0}")),
+                            ansi!(epoch, num_cs, esc),
+                            ansi!(format!("{pct:.1}"), 35, esc),
+                            ansi!(finished_batches, num_cs, esc),
+                            ansi!(batches, num_cs, esc),
+                            ansi!(format!("{pos_per_sec:.0}"), num_cs, esc),
                         );
                         let _ = stdout().flush();
                     }
@@ -141,14 +146,14 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
             println!(
                 "epoch {} | time {} | running loss {} | {} pos/sec | total time {}",
-                ansi!(epoch),
-                ansi!(format!("{epoch_time:.2}")),
-                ansi!(format!("{error:.6}")),
-                ansi!(format!("{:.0}", num.max(1) as f32 / epoch_time)),
-                ansi!(format!("{:.2}", timer.elapsed().as_secs_f32())),
+                ansi!(epoch, num_cs, esc),
+                ansi!(format!("{epoch_time:.2}"), num_cs, esc),
+                ansi!(format!("{error:.6}"), num_cs, esc),
+                ansi!(format!("{:.0}", num.max(1) as f32 / epoch_time), num_cs, esc),
+                ansi!(format!("{:.2}", timer.elapsed().as_secs_f32()), num_cs, esc),
             );
 
-            self.scheduler.adjust(epoch);
+            self.scheduler.adjust(epoch, num_cs, esc);
 
             if epoch % save_rate == 0 && epoch != max_epochs {
                 let net_path = format!("nets/{net_name}-epoch{epoch}.bin");

@@ -6,31 +6,12 @@ pub struct LrScheduler {
     scheduler: SchedulerType,
 }
 
-impl std::fmt::Display for LrScheduler {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "start {} gamma {} drop {} epochs",
-            ansi!(self.val, 31), ansi!(self.gamma, 31), self.scheduler,
-        )
-    }
-}
-
 pub enum SchedulerType {
     /// Drop once, by a factor of `gamma`.
     Drop(usize),
     /// Drop every N epochs by a factor of `gamma`.
     /// Exponential is here with `step = 1`.
     Step(usize),
-}
-
-impl std::fmt::Display for SchedulerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Drop(x) => write!(f, "at {}", ansi!(x, 31)),
-            Self::Step(x) => write!(f, "every {}", ansi!(x, 31))
-        }
-    }
 }
 
 impl LrScheduler {
@@ -54,15 +35,27 @@ impl LrScheduler {
         self.gamma = gamma;
     }
 
-    pub fn adjust(&mut self, epoch: usize) {
+    pub fn adjust(&mut self, epoch: usize, num_cs: i32, esc: &str) {
         if match self.scheduler {
             SchedulerType::Drop(drop) => drop == epoch,
             SchedulerType::Step(step) => epoch % step == 0,
         } {
             self.val *= self.gamma;
             if self.gamma != 1.0 {
-                println!("LR Dropped to {}", ansi!(self.val));
+                println!("LR Dropped to {}", ansi!(self.val, num_cs, esc));
             }
         }
+    }
+
+    pub fn colourful(&self, esc: &str) -> String {
+        let sched = match self.scheduler {
+            SchedulerType::Drop(x) => format!("at {}", ansi!(x, 31, esc)),
+            SchedulerType::Step(x) => format!("every {}", ansi!(x, 31, esc))
+        };
+
+        format!(
+            "start {} gamma {} drop {} epochs",
+            ansi!(self.val, 31, esc), ansi!(self.gamma, 31, esc), sched
+        )
     }
 }
