@@ -67,6 +67,7 @@ impl Position {
 pub struct Features {
     features: [(usize, usize); 32],
     len: usize,
+    consumed: usize
 }
 
 impl Features {
@@ -79,13 +80,15 @@ impl Features {
 impl Iterator for Features {
     type Item = (usize, usize);
     fn next(&mut self) -> Option<Self::Item> {
-        if self.len == 0 {
+        if self.consumed == self.len {
             return None;
         }
 
-        self.len -= 1;
+        let ret = self.features[self.consumed];
 
-        Some(self.features[self.len])
+        self.consumed += 1;
+
+        Some(ret)
     }
 }
 
