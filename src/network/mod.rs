@@ -78,22 +78,14 @@ impl NNUEParams {
 
         let mut eval = self[OUTPUT_BIAS];
 
-        for (idx, (&i, &w)) in accs[0]
-            .iter()
-            .zip(&self[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN])
-            .enumerate()
-        {
-            activated[0][idx] = Act::activate(i);
-            eval += activated[0][idx] * w;
+        for i in 0..HIDDEN {
+            activated[0][i] = Act::activate(accs[0][i]);
+            eval += activated[0][i] * self[OUTPUT_WEIGHTS + i];
         }
 
-        for (idx, (&i, &w)) in accs[1]
-            .iter()
-            .zip(&self[OUTPUT_WEIGHTS + HIDDEN..OUTPUT_BIAS])
-            .enumerate()
-        {
-            activated[1][idx] = Act::activate(i);
-            eval += activated[1][idx] * w;
+        for i in 0..HIDDEN {
+            activated[1][i] = Act::activate(accs[1][i]);
+            eval += activated[1][i] * self[OUTPUT_WEIGHTS + HIDDEN + i];
         }
 
         eval
