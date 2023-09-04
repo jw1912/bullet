@@ -98,4 +98,33 @@ impl NNUEParams {
 
         eval
     }
+
+    pub fn backprop<Act: Activation>(&self, err: f32, stm: usize, grad: &mut NNUEParams, accs: &[Accumulator<f32>; 2], activated: &[[f32; HIDDEN]; 2], features: &mut Features) {
+        let mut components = [(0.0, 0.0); HIDDEN];
+
+        for i in 0..HIDDEN {
+            components[i] = (
+                err * self[OUTPUT_WEIGHTS + i] * Act::activate_prime(accs[0][i]),
+                err * self[OUTPUT_WEIGHTS + HIDDEN + i] * Act::activate_prime(accs[1][i]),
+            );
+
+            grad[FEATURE_BIAS + i] += components[i].0 + components[i].1;
+
+            grad[OUTPUT_WEIGHTS + i] += err * activated[0][i];
+            grad[OUTPUT_WEIGHTS + HIDDEN + i] += err * activated[1][i];
+        }
+
+        let opp = stm ^ 1;
+
+        for (wfeat, bfeat) in features {
+            let idxs = [wfeat * HIDDEN, bfeat * HIDDEN];
+            let (widx, bidx) = (idxs[stm], idxs[opp]);
+            for i in 0..HIDDEN {
+                grad[widx + i] += components[i].0;
+                grad[bidx + i] += components[i].1;
+            }
+        }
+
+        grad[OUTPUT_BIAS] += err;
+    }
 }

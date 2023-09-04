@@ -12,7 +12,7 @@ use crate::{
     util::to_slice_with_lifetime,
 };
 
-use gradient::update_single_grad;
+use gradient::gradients;
 use optimiser::Optimiser;
 use scheduler::LrScheduler;
 
@@ -205,7 +205,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| {
-                    s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop, scale))
+                    s.spawn(|| gradients::<Act>(chunk, nnue, error, blend, skip_prop, scale))
                 })
                 .collect::<Vec<_>>()
                 .into_iter()
@@ -215,24 +215,4 @@ impl<Opt: Optimiser> Trainer<Opt> {
         *error += errors.iter().sum::<f32>();
         grad
     }
-}
-
-fn gradients_batch<Act: Activation>(
-    positions: &[Position],
-    nnue: &NNUEParams,
-    error: &mut f32,
-    blend: f32,
-    skip_prop: f32,
-    scale: f32,
-) -> Box<NNUEParams> {
-    let mut grad = NNUEParams::new();
-    let mut rand = crate::rng::Rand::default();
-    for pos in positions {
-        if rand.rand(1.0) < skip_prop {
-            continue;
-        }
-
-        update_single_grad::<Act>(pos, nnue, &mut grad, error, blend, scale);
-    }
-    grad
 }
