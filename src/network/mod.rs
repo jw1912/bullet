@@ -3,10 +3,10 @@ pub mod activation;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use quantise::QuantisedNNUE;
 pub use activation::Activation;
+pub use quantise::QuantisedNNUE;
 
-use crate::position::{Position, Features};
+use crate::position::{Features, Position};
 
 pub const HIDDEN: usize = crate::HIDDEN_SIZE;
 pub const INPUT: usize = 768;
@@ -60,7 +60,13 @@ impl<T> NNUE<T> {
 }
 
 impl NNUEParams {
-    pub fn forward<Act: Activation>(&self, pos: &Position, accs: &mut [Accumulator<f32>; 2], activated: &mut [[f32; HIDDEN]; 2], features: &mut Features) -> f32 {
+    pub fn forward<Act: Activation>(
+        &self,
+        pos: &Position,
+        accs: &mut [Accumulator<f32>; 2],
+        activated: &mut [[f32; HIDDEN]; 2],
+        features: &mut Features,
+    ) -> f32 {
         let stm = pos.stm();
         let opp = stm ^ 1;
 
@@ -91,7 +97,15 @@ impl NNUEParams {
         eval
     }
 
-    pub fn backprop<Act: Activation>(&self, err: f32, stm: usize, grad: &mut NNUEParams, accs: &[Accumulator<f32>; 2], activated: &[[f32; HIDDEN]; 2], features: &mut Features) {
+    pub fn backprop<Act: Activation>(
+        &self,
+        err: f32,
+        stm: usize,
+        grad: &mut NNUEParams,
+        accs: &[Accumulator<f32>; 2],
+        activated: &[[f32; HIDDEN]; 2],
+        features: &mut Features,
+    ) {
         let mut components = [(0.0, 0.0); HIDDEN];
 
         for i in 0..HIDDEN {

@@ -13,7 +13,14 @@ impl Adam {
     const B1: f32 = 0.9;
     const B2: f32 = 0.999;
 
-    fn update_single(&mut self, i: usize, param: &mut f32, grads: &NNUEParams, adj: f32, rate: f32) {
+    fn update_single(
+        &mut self,
+        i: usize,
+        param: &mut f32,
+        grads: &NNUEParams,
+        adj: f32,
+        rate: f32,
+    ) {
         let grad = adj * grads[i];
         self.momentum[i] = Self::B1 * self.momentum[i] + (1. - Self::B1) * grad;
         self.velocity[i] = Self::B2 * self.velocity[i] + (1. - Self::B2) * grad * grad;
@@ -38,7 +45,6 @@ impl Optimiser for Adam {
         }
     }
 }
-
 
 pub struct AdamW {
     adam: Adam,

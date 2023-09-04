@@ -15,8 +15,26 @@ pub struct Position {
 
 impl Position {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(occ: u64, pcs: [u8; 16], stm_enp: u8, hfm: u8, fmc: u16, score: i16, result: u8, extra: u8) -> Self {
-        Self { occ, pcs, stm_enp, hfm, fmc, score, result, extra }
+    pub fn new(
+        occ: u64,
+        pcs: [u8; 16],
+        stm_enp: u8,
+        hfm: u8,
+        fmc: u16,
+        score: i16,
+        result: u8,
+        extra: u8,
+    ) -> Self {
+        Self {
+            occ,
+            pcs,
+            stm_enp,
+            hfm,
+            fmc,
+            score,
+            result,
+            extra,
+        }
     }
 
     pub fn score(&self) -> i16 {
