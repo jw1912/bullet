@@ -50,12 +50,14 @@ impl LrScheduler {
     pub fn colourful(&self, esc: &str) -> String {
         let sched = match self.scheduler {
             SchedulerType::Drop(x) => format!("at {}", ansi!(x, 31, esc)),
-            SchedulerType::Step(x) => format!("every {}", ansi!(x, 31, esc))
+            SchedulerType::Step(x) => format!("every {}", ansi!(x, 31, esc)),
         };
 
         format!(
             "start {} gamma {} drop {} epochs",
-            ansi!(self.val, 31, esc), ansi!(self.gamma, 31, esc), sched
+            ansi!(self.val, 31, esc),
+            ansi!(self.gamma, 31, esc),
+            sched
         )
     }
 }

@@ -1,15 +1,20 @@
-use data::Position;
+mod gradient;
+pub mod optimiser;
+pub mod scheduler;
 
 use crate::{
-    activation::Activation,
-    arch::{test_eval, update_single_grad, NNUEParams, QuantisedNNUE},
-    optimiser::Optimiser,
-    scheduler::LrScheduler,
+    network::{activation::Activation, NNUEParams, QuantisedNNUE},
+    position::Position,
+    util::to_slice_with_lifetime,
 };
 
+use gradient::gradients;
+use optimiser::Optimiser;
+use scheduler::LrScheduler;
+
 use std::{
-    fs::{File, metadata},
-    io::{BufRead, BufReader, stdout, Write},
+    fs::{metadata, File},
+    io::{stdout, BufRead, BufReader, Write},
     thread,
     time::Instant,
 };
@@ -110,7 +115,6 @@ impl<Opt: Optimiser> Trainer<Opt> {
             let dataloader = std::thread::spawn(move || {
                 let mut file = BufReader::with_capacity(cap, File::open(&file_path).unwrap());
                 while let Ok(buf) = file.fill_buf() {
-
                     if buf.is_empty() {
                         break;
                     }
@@ -123,11 +127,12 @@ impl<Opt: Optimiser> Trainer<Opt> {
             });
 
             while let Ok(buf) = reciever.recv() {
-                let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(&buf) };
+                let buf_ref: &[Position] = unsafe { to_slice_with_lifetime(&buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
-                    let gradients = self.gradients::<Act>(nnue, batch, &mut error, reciprocal_scale);
+                    let gradients =
+                        self.gradients::<Act>(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -162,7 +167,11 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 ansi!(epoch, num_cs, esc),
                 ansi!(format!("{epoch_time:.2}"), num_cs, esc),
                 ansi!(format!("{error:.6}"), num_cs, esc),
-                ansi!(format!("{:.0}", num.max(1) as f32 / epoch_time), num_cs, esc),
+                ansi!(
+                    format!("{:.0}", num.max(1) as f32 / epoch_time),
+                    num_cs,
+                    esc
+                ),
                 ansi!(format!("{:.2}", timer.elapsed().as_secs_f32()), num_cs, esc),
             );
 
@@ -177,8 +186,6 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
         }
-
-        test_eval::<Act>(nnue);
     }
 
     fn gradients<Act: Activation>(
@@ -198,7 +205,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| {
-                    s.spawn(|| gradients_batch::<Act>(chunk, nnue, error, blend, skip_prop, scale))
+                    s.spawn(|| gradients::<Act>(chunk, nnue, error, blend, skip_prop, scale))
                 })
                 .collect::<Vec<_>>()
                 .into_iter()
@@ -208,24 +215,4 @@ impl<Opt: Optimiser> Trainer<Opt> {
         *error += errors.iter().sum::<f32>();
         grad
     }
-}
-
-fn gradients_batch<Act: Activation>(
-    positions: &[Position],
-    nnue: &NNUEParams,
-    error: &mut f32,
-    blend: f32,
-    skip_prop: f32,
-    scale: f32,
-) -> Box<NNUEParams> {
-    let mut grad = NNUEParams::new();
-    let mut rand = crate::rng::Rand::default();
-    for pos in positions {
-        if rand.rand(1.0) < skip_prop {
-            continue;
-        }
-
-        update_single_grad::<Act>(pos, nnue, &mut grad, error, blend, scale);
-    }
-    grad
 }

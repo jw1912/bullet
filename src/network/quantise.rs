@@ -1,4 +1,4 @@
-use super::nnue::{NNUEParams, NNUE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
+use super::{NNUEParams, NNUE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
 
 const QA: i32 = 255;
 const QB: i32 = 64;

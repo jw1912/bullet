@@ -129,10 +129,23 @@ def main():
 
     commands = [
         "cargo",
-        "run",
+        "rustc",
         "--release",
         "--bin",
         "trainer",
+        "--",
+        "-C",
+        "target-cpu=native",
+    ]
+
+    subprocess.run(commands)
+
+    exe_path = "target/release/trainer"
+    if os.name == 'nt':
+        exe_path += ".exe"
+
+    commands = [
+        exe_path,
         args.data_path,
         args.test_id,
         str(args.threads),

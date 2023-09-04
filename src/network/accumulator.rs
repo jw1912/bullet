@@ -1,4 +1,4 @@
-use super::nnue::{HIDDEN, NNUE, FEATURE_BIAS, OUTPUT_WEIGHTS};
+use super::{FEATURE_BIAS, HIDDEN, NNUE, OUTPUT_WEIGHTS};
 
 #[derive(Clone, Copy)]
 pub struct Accumulator<T> {

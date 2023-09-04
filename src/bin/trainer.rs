@@ -1,8 +1,10 @@
-use trainer::{
-    arch::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
+use bullet::{
+    network::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
     rng::Rand,
-    scheduler::{LrScheduler, SchedulerType},
-    trainer::Trainer,
+    trainer::{
+        scheduler::{LrScheduler, SchedulerType},
+        Trainer,
+    },
     ActivationUsed, OptimiserUsed,
 };
 
@@ -61,12 +63,20 @@ fn main() {
     }
 
     // carry out tuning
-    trainer.run::<ActivationUsed>(&mut params, max_epochs, net_name, save_rate, batch_size, scale, cbcs);
+    trainer.run::<ActivationUsed>(
+        &mut params,
+        max_epochs,
+        net_name,
+        save_rate,
+        batch_size,
+        scale,
+        cbcs,
+    );
 
     // safe to bin file
     QuantisedNNUE::from_unquantised(&params)
         .write_to_bin(&format!("nets/{net_name}.bin"))
         .expect("Should never fail!");
 
-        println!("Saved [nets/{net_name}.bin]");
+    println!("Saved [nets/{net_name}.bin]");
 }

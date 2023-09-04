@@ -1,9 +1,8 @@
-pub mod activation;
-pub mod arch;
-pub mod optimiser;
+pub mod network;
+pub mod position;
 pub mod rng;
-pub mod scheduler;
 pub mod trainer;
+pub mod util;
 
 /// Size of hidden layer.
 pub const HIDDEN_SIZE: usize = 32;
@@ -12,9 +11,9 @@ pub const HIDDEN_SIZE: usize = 32;
 ///   - ReLU
 ///   - CReLU
 ///   - SCReLU
-pub type ActivationUsed = activation::CReLU;
+pub type ActivationUsed = network::activation::CReLU;
 
 /// Optimiser:
 ///   - Adam
 ///   - AdamW
-pub type OptimiserUsed = optimiser::AdamW;
+pub type OptimiserUsed = trainer::optimiser::AdamW;
