@@ -8,7 +8,7 @@ use crate::{
         OUTPUT_BIAS,
         HIDDEN,
     },
-    position::Position,
+    position::{Position, Features},
     util::sigmoid,
 };
 
@@ -22,46 +22,12 @@ pub fn update_single_grad<Act: Activation>(
 ) {
     let bias = Accumulator::load_biases(nnue);
     let mut accs = [bias; 2];
-    let mut features = [(0, 0); 32];
-    let mut len = 0;
+    let mut activated = [[0.0; HIDDEN]; 2];
+    let mut features = Features::default();
+
+    let eval = nnue.forward::<Act>(pos, &mut accs, &mut activated, &mut features);
 
     let stm = pos.stm();
-    let opp = stm ^ 1;
-
-    for (colour, piece, square) in pos.into_iter() {
-        let c = usize::from(colour);
-        let pc = 64 * usize::from(piece);
-        let sq = usize::from(square);
-        let wfeat = [0, 384][c] + pc + sq;
-        let bfeat = [384, 0][c] + pc + (sq ^ 56);
-
-        features[len] = (wfeat, bfeat);
-        len += 1;
-        accs[stm].add_feature(wfeat, nnue);
-        accs[opp].add_feature(bfeat, nnue);
-    }
-
-    let mut eval = nnue[OUTPUT_BIAS];
-    let mut activated = [[0.0; HIDDEN]; 2];
-
-    for (idx, (&i, &w)) in accs[0]
-        .iter()
-        .zip(&nnue[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN])
-        .enumerate()
-    {
-        activated[0][idx] = Act::activate(i);
-        eval += activated[0][idx] * w;
-    }
-
-    for (idx, (&i, &w)) in accs[1]
-        .iter()
-        .zip(&nnue[OUTPUT_WEIGHTS + HIDDEN..OUTPUT_BIAS])
-        .enumerate()
-    {
-        activated[1][idx] = Act::activate(i);
-        eval += activated[1][idx] * w;
-    }
-
     let result = pos.blended_result(blend, stm, scale);
 
     let sigmoid = sigmoid(eval, 1.0);
@@ -82,7 +48,9 @@ pub fn update_single_grad<Act: Activation>(
         grad[OUTPUT_WEIGHTS + HIDDEN + i] += err * activated[1][i];
     }
 
-    for (wfeat, bfeat) in features.iter().take(len) {
+    let opp = stm ^ 1;
+
+    for (wfeat, bfeat) in features {
         let idxs = [wfeat * HIDDEN, bfeat * HIDDEN];
         let (widx, bidx) = (idxs[stm], idxs[opp]);
         for i in 0..HIDDEN {

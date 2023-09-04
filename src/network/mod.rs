@@ -60,10 +60,7 @@ impl<T> NNUE<T> {
 }
 
 impl NNUEParams {
-    pub fn forward<Act: Activation>(&self, pos: &Position, accs: &mut [Accumulator<f32>; 2], features: &mut Features) -> f32 {
-        let bias = Accumulator::load_biases(self);
-        *accs = [bias; 2];
-
+    pub fn forward<Act: Activation>(&self, pos: &Position, accs: &mut [Accumulator<f32>; 2], activated: &mut [[f32; HIDDEN]; 2], features: &mut Features) -> f32 {
         let stm = pos.stm();
         let opp = stm ^ 1;
 
@@ -71,8 +68,8 @@ impl NNUEParams {
             let c = usize::from(colour);
             let pc = 64 * usize::from(piece);
             let sq = usize::from(square);
-            let wfeat = [0, 384][c ^ stm] + pc + sq;
-            let bfeat = [384, 0][c ^ stm] + pc + (sq ^ 56);
+            let wfeat = [0, 384][c] + pc + sq;
+            let bfeat = [384, 0][c] + pc + (sq ^ 56);
 
             features.push(wfeat, bfeat);
             accs[stm].add_feature(wfeat, self);
@@ -80,7 +77,6 @@ impl NNUEParams {
         }
 
         let mut eval = self[OUTPUT_BIAS];
-        let mut activated = [[0.0; HIDDEN]; 2];
 
         for (idx, (&i, &w)) in accs[0]
             .iter()

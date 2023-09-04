@@ -58,11 +58,16 @@ impl Features {
     }
 }
 
-impl IntoIterator for Features {
+impl Iterator for Features {
     type Item = (usize, usize);
-    type IntoIter = std::iter::Take<std::array::IntoIter<(usize, usize), 32>>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.features.into_iter().take(self.len)
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len == 0 {
+            return None;
+        }
+
+        self.len -= 1;
+
+        Some(self.features[self.len])
     }
 }
 
