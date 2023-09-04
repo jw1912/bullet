@@ -1,11 +1,20 @@
-use data::Position;
+mod gradient;
+pub mod optimiser;
+pub mod scheduler;
 
 use crate::{
-    activation::Activation,
-    arch::{test_eval, update_single_grad, NNUEParams, QuantisedNNUE},
-    optimiser::Optimiser,
-    scheduler::LrScheduler,
+    position::Position,
+    network::{
+        activation::Activation,
+        NNUEParams,
+        QuantisedNNUE
+    },
+    util::to_slice_with_lifetime,
 };
+
+use gradient::update_single_grad;
+use optimiser::Optimiser;
+use scheduler::LrScheduler;
 
 use std::{
     fs::{File, metadata},
@@ -123,7 +132,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
             });
 
             while let Ok(buf) = reciever.recv() {
-                let buf_ref: &[Position] = unsafe { data::util::to_slice_with_lifetime(&buf) };
+                let buf_ref: &[Position] = unsafe { to_slice_with_lifetime(&buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
@@ -177,8 +186,6 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
         }
-
-        test_eval::<Act>(nnue);
     }
 
     fn gradients<Act: Activation>(

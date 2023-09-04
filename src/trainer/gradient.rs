@@ -1,13 +1,16 @@
-mod accumulator;
-mod nnue;
-mod quantise;
-
-pub use accumulator::Accumulator;
-pub use nnue::{NNUEParams, FEATURE_BIAS, HIDDEN, INPUT, OUTPUT_BIAS, OUTPUT_WEIGHTS};
-pub use quantise::QuantisedNNUE;
-
-use crate::activation::Activation;
-use data::{Position, util::sigmoid};
+use crate::{
+    network::{
+        Accumulator,
+        Activation,
+        NNUEParams,
+        FEATURE_BIAS,
+        OUTPUT_WEIGHTS,
+        OUTPUT_BIAS,
+        HIDDEN,
+    },
+    position::Position,
+    util::sigmoid,
+};
 
 pub fn update_single_grad<Act: Activation>(
     pos: &Position,
@@ -89,55 +92,4 @@ pub fn update_single_grad<Act: Activation>(
     }
 
     grad[OUTPUT_BIAS] += err;
-}
-
-fn eval<Act: Activation>(pos: &Position, nnue: &NNUEParams) -> f32 {
-    let bias = Accumulator::load_biases(nnue);
-    let mut accs = [bias; 2];
-
-    for (colour, piece, square) in pos.into_iter() {
-        let c = usize::from(colour);
-        let pc = usize::from(piece);
-        let sq = usize::from(square);
-        let wfeat = [0, 384][c] + 64 * pc + sq;
-        let bfeat = [384, 0][c] + 64 * pc + (sq ^ 56);
-        accs[0].add_feature(wfeat, nnue);
-        accs[1].add_feature(bfeat, nnue);
-    }
-
-    let mut eval = nnue[OUTPUT_BIAS];
-
-    let side = pos.stm();
-    let (boys, opps) = (&accs[side], &accs[side ^ 1]);
-
-    for (&i, &w) in boys
-        .iter()
-        .zip(&nnue[OUTPUT_WEIGHTS..OUTPUT_WEIGHTS + HIDDEN])
-    {
-        eval += Act::activate(i) * w;
-    }
-
-    for (&i, &w) in opps.iter().zip(&nnue[OUTPUT_WEIGHTS + HIDDEN..OUTPUT_BIAS]) {
-        eval += Act::activate(i) * w;
-    }
-
-    eval * 400.
-}
-
-pub fn test_eval<Act: Activation>(nnue: &NNUEParams) {
-    let fens = [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 0 [0.5]",
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 0 [0.0]",
-        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1 0 [1.0]",
-        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 0 [1.0]",
-    ];
-
-    println!("\n===Test Positions===");
-
-    for fen in fens {
-        let pos = Position::from_epd(fen).unwrap();
-        println!("FEN: {fen}");
-        println!("EVAL: {}", eval::<Act>(&pos, nnue));
-        println!();
-    }
 }

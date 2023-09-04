@@ -1,8 +1,7 @@
-use trainer::{
-    arch::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
+use bullet::{
+    network::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
     rng::Rand,
-    scheduler::{LrScheduler, SchedulerType},
-    trainer::Trainer,
+    trainer::{Trainer, scheduler::{LrScheduler, SchedulerType}},
     ActivationUsed, OptimiserUsed,
 };
 

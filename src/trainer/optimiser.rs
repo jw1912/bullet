@@ -1,4 +1,4 @@
-use crate::arch::NNUEParams;
+use crate::network::NNUEParams;
 
 pub trait Optimiser: Default {
     fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32);

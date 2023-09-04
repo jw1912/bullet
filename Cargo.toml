@@ -1,8 +1,8 @@
-[workspace]
-members = [
-    "data",
-    "trainer",
-]
+[package]
+name = "bullet"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
 
 [profile.release]
 panic = 'abort'
