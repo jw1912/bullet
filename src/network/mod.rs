@@ -63,11 +63,11 @@ impl NNUEParams {
     pub fn forward<Act: Activation>(
         &self,
         pos: &Position,
+        stm: usize,
         accs: &mut [Accumulator<f32>; 2],
         activated: &mut [[f32; HIDDEN]; 2],
         features: &mut Features,
     ) -> f32 {
-        let stm = pos.stm();
         let opp = stm ^ 1;
 
         for (colour, piece, square) in pos.into_iter() {

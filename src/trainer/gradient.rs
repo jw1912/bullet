@@ -37,9 +37,10 @@ fn update_single_grad<Act: Activation>(
     let mut activated = [[0.0; HIDDEN]; 2];
     let mut features = Features::default();
 
-    let eval = nnue.forward::<Act>(pos, &mut accs, &mut activated, &mut features);
-
     let stm = pos.stm();
+
+    let eval = nnue.forward::<Act>(pos, stm, &mut accs, &mut activated, &mut features);
+
     let result = pos.blended_result(blend, stm, scale);
 
     let sigmoid = sigmoid(eval, 1.0);
