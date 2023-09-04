@@ -14,13 +14,6 @@ It currently supports architectures of the form `768 -> Nx2 -> 1`, and can train
 
 The trainer uses [Marlinformat](https://github.com/jnlt3/marlinflow) as its primary binary data format.
 
-You can convert EPD files of the form `<FEN> <score> <win/draw/loss>` to this format by running
-```
-cargo r -r --bin convert <input file path> <output file path>
-```
-
-Note that FENs *must* be full, including halfmove and fullmove counters (though they can be set to any valid values).
-
 ### Training
 
 General architecture settings, that must be known at compile time, are found in [`trainer/src/lib.rs`](trainer/src/lib.rs).
