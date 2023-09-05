@@ -43,10 +43,51 @@ Then the output is defined as $y = O \mathbf{h} + c$, notice that the product of
 Writing out the full calculation, we have
 
 $$
-y = O \sigma( H \mathbf{x} + \mathbf{b} ) + c
+y(\mathbf{x}) = O \sigma( H \mathbf{x} + \mathbf{b} ) + c
 $$
 
 ## What is Gradient Descent?
+
+### Definition
+
+You have a (differentiable) function $f$ of a vector of parameters $\mathbf{p} = (p_1, p_2, ..., p_n)^T$, and you want to find its minimum.
+
+You pick some starting parameters $\mathbf{x_0}$ and a learning rate $\epsilon$, and then proceed by iterating
+
+$$
+\mathbf{p_{i + 1}} = \mathbf{p_i} - \epsilon \nabla f(\mathbf{p_i})
+$$
+
+until you (hopefully) converge on a minimum, where $\nabla f$ is the gradient of $f$, and is defined by
+
+$$
+\nabla f = (\frac{\partial f}{\partial p_1}, \frac{\partial f}{\partial p_2}, ..., \frac{\partial f}{\partial p_n})
+$$
+
+### How do we apply it to chess engines?
+
+We decide our function $f$ is going to be the loss over a dataset, but what do we mean by that?
+
+Our dataset consists of a large number of pairs $(\mathbf{x_i}, R_i)$, where $\mathbf{x_i}$ is a position represented as an input vector,
+and $R_i$ is the corresponding expected result for the position, what we want our network's output $y$ to be as close as possible to.
+
+Our parameters are $H, \mathbf{b}, O, c$ concatenated into a vector $\mathbf{p}$.
+
+We denote the output of our network with an input $\mathbf{x}$ and parameters $\mathbf{p}$ by $y(\mathbf{x}; \mathbf{p})$.
+
+Now we define our loss, $f$, by
+
+$$
+f(\mathbf{p}) = \frac{1}{N} \sum_{i=1}^{N} (sigmoid(y(\mathbf{x_i}; \mathbf{p})) - R_i)^2
+$$
+
+where 
+
+$$
+sigmoid(x) = \frac{1}{1 + e^{-x}}
+$$
+
+Now to calculate the gradient vector we just need 
 
 ## Derivatives w.r.t Weights
 
