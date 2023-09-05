@@ -110,22 +110,72 @@ and so we only need to calculate $\frac{\partial y_i}{\partial w}$ for each weig
 
 ### Derivatives w.r.t Weights
 
-TBD
+As above, when calculating the output of the network, you calculate an intermediary acummulator
 
 $$
-\frac{\partial y}{\partial c} = 1
+\mathbf{a} = H \mathbf{x} + \mathbf{b}
 $$
 
-$$
-\frac{\partial y}{\partial O_i} = \sigma (H_i \cdot \mathbf{x} + b_i)
-$$
+or in component form
 
 $$
-\frac{\partial y}{\partial b_i} = O_i \sigma ' (H_i \cdot \mathbf{x} + b_i)
+a_i = \sum_j H_{ij}x_j + b_i
 $$
 
+Note that $b_i$ and $H_{ij}$ only appear in $a_i$.
+
+We can then use this to calculate the derivatives with respect to each type of weight:
+
 $$
-\frac{\partial y}{\partial H_{ij}} = O_i \sigma ' (H_i \cdot \mathbf{x} + b_i) x_j
+\begin{align}
+\frac{\partial y}{\partial c}
+    &= \frac{\partial}{\partial c} (O \rho(\mathbf{a}) + c) \\
+    &= 1 \\
+\frac{\partial y}{\partial O_i}
+    &= \frac{\partial}{\partial O_i} (O \rho(\mathbf{a}) + c) \\
+    &= \frac{\partial}{\partial O_i} (\sum_j O_j \rho(\mathbf{a_j})) \\
+    &= \rho(a_i) \\
+\frac{\partial y}{\partial b_i}
+    &= \frac{\partial}{\partial b_i} (O \rho(\mathbf{a}) + c) \\
+    &= \frac{\partial}{\partial b_i} (\sum_j O_j \rho(\mathbf{a_j})) \\
+    &= \frac{\partial}{\partial b_i} (O_i \rho(\mathbf{a_i})) \\
+    &= O_i \rho'(a_i) \frac{\partial a_i}{\partial b_i} \\
+    &= O_i \rho'(a_i) \\
+\frac{\partial y}{\partial H_{ij}}
+    &= \frac{\partial}{\partial H_{ij}} (O \rho(\mathbf{a}) + c) \\
+    &= \frac{\partial}{\partial H_{ij}} (\sum_j O_j \rho(\mathbf{a_j})) \\
+    &= \frac{\partial}{\partial H_{ij}} (O_i \rho(\mathbf{a_i})) \\
+    &= O_i \rho'(a_i) \frac{\partial a_i}{\partial H_{ij}} \\
+    &= O_i \rho'(a_i) x_j \\
+\end{align}
 $$
+
+With that we are done! We can now apply gradient descent to train our neural network.
 
 ## A Perspective Network
+
+A perspective network architecture `768 -> Nx2 -> 1` is very similar, except there are two sets of inputs,
+$\mathbf{x}$ and $\mathbf{\hat{x}}$, and two sets of output weights $O$ and $\hat{O}$.
+
+Unlike in the previous network, $\mathbf{x}$ is not from from white perspective, instead the piece types are labelled
+`friendly_pawn = 0, ..., enemy_king = 11` from the perspective of the side to move, and then $\mathbf{\hat{x}}$ is the same
+but from the perspective of the opposite side.
+
+You have two accumulators now, $\mathbf{a} = H \mathbf{x} + \mathbf{b}$ and $\mathbf{\hat{a}} = H \mathbf{\hat{x}} + \mathbf{b}$,
+and the output is now given by
+
+$$
+y = O \rho(\mathbf{a})+  \hat{O} \rho(\mathbf{\hat{a}}) + c
+$$
+
+the exact same process can be used to calculate the derivative w.r.t the weights here, giving
+
+$$
+\begin{align}
+\frac{\partial y}{\partial c} &= 1 \\
+\frac{\partial y}{\partial O_i} &= \rho(a_i) \\
+\frac{\partial y}{\partial \hat{O_i}} &= \rho(\hat{a_i}) \\
+\frac{\partial y}{\partial b_i} &= O_i \rho'(a_i) + \hat{O_i} \rho'(\hat{a_i}) \\
+\frac{\partial y}{\partial H_{ij}} &= O_i \rho'(a_i) x_j + \hat{O_i} \rho'(\hat{a_i}) \hat{x_j} \\
+\end{align}
+$$
