@@ -24,9 +24,9 @@ we have to define some new things:
 
 - $H$, the hidden weights, an `Nx768` dimensional matrix
 - $\mathbf{b}$, the hidden bias, an N-dimensional vector
-- $\sigma$, the activation function, which acts element-wise on any vector
+- $\rho$, the activation function, which acts element-wise on any vector
 
-With these we define the accumulator, $a = H \mathbf{x} + b$, and then the hidden layer itself is $\mathbf{h} = \sigma (\mathbf{a})$.
+With these we define the accumulator, $a = H \mathbf{x} + b$, and then the hidden layer itself is $\mathbf{h} = \rho (\mathbf{a})$.
 
 ### Output Layer
 
@@ -43,7 +43,7 @@ Then the output is defined as $y = O \mathbf{h} + c$, notice that the product of
 Writing out the full calculation, we have
 
 $$
-y(\mathbf{x}) = O \sigma( H \mathbf{x} + \mathbf{b} ) + c
+y(\mathbf{x}) = O \rho( H \mathbf{x} + \mathbf{b} ) + c
 $$
 
 ## What is Gradient Descent?
@@ -78,19 +78,54 @@ We denote the output of our network with an input $\mathbf{x}$ and parameters $\
 Now we define our loss, $f$, by
 
 $$
-f(\mathbf{p}) = \frac{1}{N} \sum_{i=1}^{N} (sigmoid(y(\mathbf{x_i}; \mathbf{p})) - R_i)^2
+f(\mathbf{p}) = \frac{1}{N} \sum_{i=1}^{N} (\sigma(y(\mathbf{x_i}; \mathbf{p})) - R_i)^2
 $$
 
 where 
 
 $$
-sigmoid(x) = \frac{1}{1 + e^{-x}}
+\sigma(x) = \frac{1}{1 + e^{-x}}
 $$
 
-Now to calculate the gradient vector we just need 
+and we give its derivative for use below
 
-## Derivatives w.r.t Weights
+$$
+\sigma'(x) = \frac{d \sigma}{dx} = \sigma(x) * (1 - \sigma(x))
+$$
 
-## The Final Gradient
+Now to calculate the gradient vector we just need to take the derivative of $f$ with respect to each parameter $w$, obviously this will
+vary based on the type of weight, but we can do most of it generally, denoting $y_i = y(\mathbf{x_i}; \mathbf{p})$:
+
+$$
+\begin{align}
+\frac{\partial f}{\partial w}
+    &= \frac{\partial}{\partial w} \left (\frac{1}{N} \sum_{i=1}^{N} (\sigma(y_i) - R_i)^2 \right ) \\
+    &= \frac{1}{N} \sum_{i=1}^{N} \frac{\partial}{\partial w} \left ( (\sigma(y_i) - R_i)^2 \right ) \\
+    &= \frac{2}{N} \sum_{i=1}^{N}(\sigma(y_i) - R_i) \frac{\partial}{\partial w} \left ( (\sigma(y_i) - R_i) \right ) \\
+    &= \frac{2}{N} \sum_{i=1}^{N}(\sigma(y_i) - R_i) \sigma'(y_i) \frac{\partial y_i}{\partial w} \\
+\end{align}
+$$
+
+and so we only need to calculate $\frac{\partial y_i}{\partial w}$ for each weight type.
+
+### Derivatives w.r.t Weights
+
+TBD
+
+$$
+\frac{\partial y}{\partial c} = 1
+$$
+
+$$
+\frac{\partial y}{\partial O_i} = \sigma (H_i \cdot \mathbf{x} + b_i)
+$$
+
+$$
+\frac{\partial y}{\partial b_i} = O_i \sigma ' (H_i \cdot \mathbf{x} + b_i)
+$$
+
+$$
+\frac{\partial y}{\partial H_{ij}} = O_i \sigma ' (H_i \cdot \mathbf{x} + b_i) x_j
+$$
 
 ## A Perspective Network
