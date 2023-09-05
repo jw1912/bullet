@@ -8,6 +8,8 @@ A work-in-progress NNUE Trainer, used to train [akimbo](https://github.com/Jacqu
 
 It currently supports architectures of the form `768 -> Nx2 -> 1`, and can train on CPU with any number of threads.
 
+To learn how it works, read the [wiki](wiki.md).
+
 ## Usage
 
 ### Data
