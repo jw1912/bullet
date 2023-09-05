@@ -16,7 +16,7 @@ The trainer uses [Marlinformat](https://github.com/jnlt3/marlinflow) as its prim
 
 ### Training
 
-General architecture settings, that must be known at compile time, are found in [`trainer/src/lib.rs`](trainer/src/lib.rs).
+General architecture settings, that must be known at compile time, are found in [`src/lib.rs`](src/lib.rs).
 
 After settings those as you please, you can run the trainer using the `run.py` script, and use
 ```
