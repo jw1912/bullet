@@ -62,6 +62,7 @@ impl NNUEParams {
     pub fn random() -> Box<Self> {
         let mut params = NNUEParams::new();
         let mut gen = Rand::new(173645501);
+
         for param in params[..FEATURE_BIAS].iter_mut() {
             *param = gen.rand(0.01);
         }
