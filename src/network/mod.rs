@@ -8,14 +8,14 @@ pub use activation::Activation;
 pub use quantise::QuantisedNNUE;
 use inputs::InputType;
 
-use crate::{HIDDEN, Input, position::{Features, Position}};
+use crate::{HIDDEN, Input, position::{Features, Position}, rng::Rand};
 
 pub type NNUEParams = NNUE<f32>;
 
 const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
-pub const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
-pub const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
-pub const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
+const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
+const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
+const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
@@ -59,6 +59,20 @@ impl<T> NNUE<T> {
 }
 
 impl NNUEParams {
+    pub fn random() -> Box<Self> {
+        let mut params = NNUEParams::new();
+        let mut gen = Rand::new(173645501);
+        for param in params[..FEATURE_BIAS].iter_mut() {
+            *param = gen.rand(0.01);
+        }
+
+        for param in params[OUTPUT_WEIGHTS..OUTPUT_BIAS].iter_mut() {
+            *param = gen.rand(0.01);
+        }
+
+        params
+    }
+
     pub fn forward<Act: Activation>(
         &self,
         pos: &Position,
