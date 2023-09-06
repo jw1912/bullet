@@ -1,5 +1,6 @@
 use crate::{
-    network::{Accumulator, Activation, NNUEParams, HIDDEN},
+    HIDDEN,
+    network::{Accumulator, Activation, NNUEParams},
     position::{Features, Position},
     util::sigmoid,
 };

@@ -1,22 +1,21 @@
 mod accumulator;
 pub mod activation;
+pub mod inputs;
 mod quantise;
 
 pub use accumulator::Accumulator;
 pub use activation::Activation;
 pub use quantise::QuantisedNNUE;
+use inputs::InputType;
 
-use crate::position::{Features, Position};
-
-pub const HIDDEN: usize = crate::HIDDEN_SIZE;
-pub const INPUT: usize = 768;
+use crate::{HIDDEN, Input, position::{Features, Position}};
 
 pub type NNUEParams = NNUE<f32>;
 
-const NNUE_SIZE: usize = (INPUT + 3) * HIDDEN + 1;
-pub const FEATURE_BIAS: usize = INPUT * HIDDEN;
-pub const OUTPUT_WEIGHTS: usize = (INPUT + 1) * HIDDEN;
-pub const OUTPUT_BIAS: usize = (INPUT + 3) * HIDDEN;
+const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
+pub const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
+pub const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
+pub const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
@@ -64,22 +63,12 @@ impl NNUEParams {
         &self,
         pos: &Position,
         stm: usize,
-        accs: &mut [Accumulator<f32>; 2],
+        accs: &mut [Accumulator; 2],
         activated: &mut [[f32; HIDDEN]; 2],
         features: &mut Features,
     ) -> f32 {
-        let opp = stm ^ 1;
-
-        for (colour, piece, square) in pos.into_iter() {
-            let c = usize::from(colour);
-            let pc = 64 * usize::from(piece);
-            let sq = usize::from(square);
-            let wfeat = [0, 384][c] + pc + sq;
-            let bfeat = [384, 0][c] + pc + (sq ^ 56);
-
-            features.push(wfeat, bfeat);
-            accs[stm].add_feature(wfeat, self);
-            accs[opp].add_feature(bfeat, self);
+        for feature in pos.into_iter() {
+            Input::update_features_and_accumulator(feature, stm, features, accs, self);
         }
 
         let mut eval = self[OUTPUT_BIAS];
@@ -102,7 +91,7 @@ impl NNUEParams {
         err: f32,
         stm: usize,
         grad: &mut NNUEParams,
-        accs: &[Accumulator<f32>; 2],
+        accs: &[Accumulator; 2],
         activated: &[[f32; HIDDEN]; 2],
         features: &mut Features,
     ) {
