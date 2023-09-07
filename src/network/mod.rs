@@ -6,13 +6,13 @@ mod quantise;
 pub use accumulator::Accumulator;
 pub use activation::Activation;
 pub use inputs::InputType;
-pub use quantise::QuantisedNNUE;
+pub use quantise::quantise_and_write;
 
 use crate::{data::Features, rng::Rand, Data, Input, HIDDEN};
 
 pub type NNUEParams = NNUE<f32>;
 
-const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
+pub const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
 const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
 const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
 const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;

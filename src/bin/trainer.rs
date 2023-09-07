@@ -1,5 +1,5 @@
 use bullet::{
-    network::{NNUEParams, QuantisedNNUE},
+    network::{NNUEParams, quantise_and_write},
     trainer::{
         scheduler::{LrScheduler, SchedulerType},
         Trainer,
@@ -65,9 +65,7 @@ fn main() {
     );
 
     // safe to bin file
-    QuantisedNNUE::from_unquantised(&params)
-        .write_to_bin(&format!("nets/{net_name}.bin"))
-        .expect("Should never fail!");
+    quantise_and_write(&params,"nets/{net_name}.bin");
 
     println!("Saved [nets/{net_name}.bin]");
 }
