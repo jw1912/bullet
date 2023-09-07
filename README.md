@@ -4,7 +4,7 @@
 
 </div>
 
-A work-in-progress NNUE Trainer, used to train [akimbo](https://github.com/JacquesRW/akimbo)'s networks.
+A work-in-progress Network Trainer, used to train [akimbo](https://github.com/JacquesRW/akimbo)'s networks.
 
 It currently supports architectures of the form `Input -> Nx2 -> 1`, and can train on CPU with any number of threads.
 
@@ -27,7 +27,7 @@ cargo r -r --bin convertmf <input file path> <output file path>
 it is up to the user to provide a valid Marlinformat file, as well as shuffling the data beforehand.
 
 Additionally, you can convert legacy text format as in Marlinflow, where
-- each line is of the form `<FEN> | <score> | <wdl>`
+- each line is of the form `<FEN> | <score> | <result>`
 - `score` is white relative and in centipawns
 - `result` is white relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
 

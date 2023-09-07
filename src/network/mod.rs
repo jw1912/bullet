@@ -14,42 +14,41 @@ use crate::{
     Data, Input, HIDDEN,
 };
 
-pub type NNUEParams = NNUE<f32>;
+pub type NetworkParams = Network<f32>;
 
-pub const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
+pub const NETWORK_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
 const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
 const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
 const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
 
-#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 #[repr(C)]
-pub struct NNUE<T> {
-    weights: [T; NNUE_SIZE],
+pub struct Network<T> {
+    weights: [T; NETWORK_SIZE],
 }
 
-impl<T: std::ops::AddAssign<T> + Copy> std::ops::AddAssign<&NNUE<T>> for NNUE<T> {
-    fn add_assign(&mut self, rhs: &NNUE<T>) {
+impl<T: std::ops::AddAssign<T> + Copy> std::ops::AddAssign<&Network<T>> for Network<T> {
+    fn add_assign(&mut self, rhs: &Network<T>) {
         for (i, &j) in self.iter_mut().zip(rhs.iter()) {
             *i += j;
         }
     }
 }
 
-impl<T> std::ops::Deref for NNUE<T> {
-    type Target = [T; NNUE_SIZE];
+impl<T> std::ops::Deref for Network<T> {
+    type Target = [T; NETWORK_SIZE];
     fn deref(&self) -> &Self::Target {
         &self.weights
     }
 }
 
-impl<T> std::ops::DerefMut for NNUE<T> {
+impl<T> std::ops::DerefMut for Network<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.weights
     }
 }
 
-impl<T> NNUE<T> {
+impl<T> Network<T> {
     pub fn new() -> Box<Self> {
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -62,9 +61,9 @@ impl<T> NNUE<T> {
     }
 }
 
-impl NNUEParams {
+impl NetworkParams {
     pub fn random() -> Box<Self> {
-        let mut params = NNUEParams::new();
+        let mut params = NetworkParams::new();
         let mut gen = Rand::new(173645501);
 
         for param in params[..FEATURE_BIAS].iter_mut() {
@@ -115,7 +114,7 @@ impl NNUEParams {
     pub fn backprop<Act: Activation>(
         &self,
         err: f32,
-        grad: &mut NNUEParams,
+        grad: &mut NetworkParams,
         accs: &[Accumulator; 2],
         activated: &[[f32; HIDDEN]; 2],
         features: &mut Features,

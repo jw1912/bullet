@@ -1,4 +1,4 @@
-use super::{NNUEParams, FEATURE_BIAS, HIDDEN, OUTPUT_WEIGHTS};
+use super::{NetworkParams, FEATURE_BIAS, HIDDEN, OUTPUT_WEIGHTS};
 
 #[derive(Clone, Copy)]
 pub struct Accumulator {
@@ -30,7 +30,7 @@ impl Accumulator {
         Self { vals }
     }
 
-    pub fn load_biases(nnue: &NNUEParams) -> Self {
+    pub fn load_biases(nnue: &NetworkParams) -> Self {
         let bias = &nnue[FEATURE_BIAS..OUTPUT_WEIGHTS];
         let mut hmm = [0.0; HIDDEN];
         hmm.copy_from_slice(bias);
@@ -39,7 +39,7 @@ impl Accumulator {
 }
 
 impl Accumulator {
-    pub fn add_feature(&mut self, feature_idx: usize, nnue: &NNUEParams) {
+    pub fn add_feature(&mut self, feature_idx: usize, nnue: &NetworkParams) {
         let start = feature_idx * HIDDEN;
         for (i, d) in self.vals.iter_mut().zip(&nnue[start..start + HIDDEN]) {
             *i += *d;

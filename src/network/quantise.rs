@@ -1,4 +1,4 @@
-use super::{NNUEParams, NNUE, NNUE_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
+use super::{NetworkParams, Network, NETWORK_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
 use crate::{
     data::DataType,
     network::{InputType, FEATURE_BIAS},
@@ -9,21 +9,21 @@ const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
-pub fn quantise_and_write(nnue: &NNUEParams, net_path: &str) {
+pub fn quantise_and_write(nnue: &NetworkParams, net_path: &str) {
     if Input::FACTORISER {
-        let qfnnue = QuantisedFactorisedNNUE::from_unquantised(nnue);
+        let qfnnue = QuantisedFactorisedNetwork::from_unquantised(nnue);
         qfnnue.write_to_bin(net_path).unwrap();
     } else {
-        let qnnue = QuantisedNNUE::from_unquantised(nnue);
+        let qnnue = QuantisedNetwork::from_unquantised(nnue);
         qnnue.write_to_bin(net_path).unwrap();
     }
 }
 
-type QuantisedNNUE = NNUE<i16>;
+type QuantisedNetwork = Network<i16>;
 
-impl QuantisedNNUE {
-    fn from_unquantised(nnue: &NNUEParams) -> Box<Self> {
-        let mut res = QuantisedNNUE::new();
+impl QuantisedNetwork {
+    fn from_unquantised(nnue: &NetworkParams) -> Box<Self> {
+        let mut res = QuantisedNetwork::new();
 
         for i in 0..OUTPUT_WEIGHTS {
             res[i] = (nnue[i] * (QA as f32)) as i16;
@@ -40,7 +40,7 @@ impl QuantisedNNUE {
 
     fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         use std::io::Write;
-        const SIZEOF: usize = std::mem::size_of::<QuantisedNNUE>();
+        const SIZEOF: usize = std::mem::size_of::<QuantisedNetwork>();
 
         let mut file = std::fs::File::create(output_path)?;
 
@@ -54,11 +54,11 @@ impl QuantisedNNUE {
     }
 }
 
-pub struct QuantisedFactorisedNNUE {
-    weights: [i16; NNUE_SIZE - Data::INPUTS * HIDDEN],
+pub struct QuantisedFactorisedNetwork {
+    weights: [i16; NETWORK_SIZE - Data::INPUTS * HIDDEN],
 }
 
-impl QuantisedFactorisedNNUE {
+impl QuantisedFactorisedNetwork {
     pub fn new() -> Box<Self> {
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -70,7 +70,7 @@ impl QuantisedFactorisedNNUE {
         }
     }
 
-    fn from_unquantised(nnue: &NNUEParams) -> Box<Self> {
+    fn from_unquantised(nnue: &NetworkParams) -> Box<Self> {
         let mut res = Self::new();
 
         const OFFSET: usize = Data::INPUTS * HIDDEN * Input::FACTORISER as usize;
@@ -95,7 +95,7 @@ impl QuantisedFactorisedNNUE {
 
     fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         use std::io::Write;
-        const SIZEOF: usize = std::mem::size_of::<QuantisedFactorisedNNUE>();
+        const SIZEOF: usize = std::mem::size_of::<QuantisedFactorisedNetwork>();
 
         let mut file = std::fs::File::create(output_path)?;
 
