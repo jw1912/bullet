@@ -1,13 +1,21 @@
+pub mod data;
 pub mod network;
-pub mod position;
 pub mod rng;
 pub mod trainer;
 pub mod util;
 
-/// Size of hidden layer.
-pub const HIDDEN_SIZE: usize = 32;
+/// Binary data type used
+///  - ChessBoard
+pub type Data = data::ChessBoard;
 
-/// Activation Function:
+/// Input format
+///  - Chess768
+pub type Input = network::inputs::Chess768;
+
+/// Size of hidden layer.
+pub const HIDDEN: usize = 32;
+
+/// Activation function:
 ///   - ReLU
 ///   - CReLU
 ///   - SCReLU

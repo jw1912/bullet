@@ -1,6 +1,5 @@
 use bullet::{
-    network::{NNUEParams, QuantisedNNUE, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
-    rng::Rand,
+    network::{NNUEParams, QuantisedNNUE},
     trainer::{
         scheduler::{LrScheduler, SchedulerType},
         Trainer,
@@ -52,15 +51,7 @@ fn main() {
     let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
 
     // provide random starting parameters
-    let mut params = NNUEParams::new();
-    let mut gen = Rand::new(173645501);
-    for param in params[..FEATURE_BIAS].iter_mut() {
-        *param = gen.rand(0.01);
-    }
-
-    for param in params[OUTPUT_WEIGHTS..OUTPUT_BIAS].iter_mut() {
-        *param = gen.rand(0.01);
-    }
+    let mut params = NNUEParams::random();
 
     // carry out tuning
     trainer.run::<ActivationUsed>(

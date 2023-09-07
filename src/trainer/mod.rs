@@ -4,8 +4,8 @@ pub mod scheduler;
 
 use crate::{
     network::{activation::Activation, NNUEParams, QuantisedNNUE},
-    position::Position,
     util::to_slice_with_lifetime,
+    Data,
 };
 
 use gradient::gradients;
@@ -83,7 +83,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("{}", ansi!("Beginning Training", "34;1", esc));
         let reciprocal_scale = 1.0 / scale;
         let file_size = metadata(&self.file).unwrap().len();
-        let num = file_size / std::mem::size_of::<Position>() as u64;
+        let num = file_size / std::mem::size_of::<Data>() as u64;
         let batches = num / batch_size as u64 + 1;
 
         // display settings to user so they can verify
@@ -94,7 +94,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Net Name       : {}", ansi!(net_name, "32;1", esc));
         println!("LR Scheduler   : {}", self.scheduler.colourful(esc));
         println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31, esc));
-        println!("Positions      : {}", ansi!(num, 31, esc));
+        println!("Datas      : {}", ansi!(num, 31, esc));
 
         let timer = Instant::now();
 
@@ -105,7 +105,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
             error = 0.0;
             let mut finished_batches = 0;
 
-            let cap = 128 * batch_size * std::mem::size_of::<Position>();
+            let cap = 128 * batch_size * std::mem::size_of::<Data>();
             let file_path = self.file.clone();
 
             use std::sync::mpsc::sync_channel;
@@ -127,7 +127,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
             });
 
             while let Ok(buf) = reciever.recv() {
-                let buf_ref: &[Position] = unsafe { to_slice_with_lifetime(&buf) };
+                let buf_ref: &[Data] = unsafe { to_slice_with_lifetime(&buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
@@ -191,7 +191,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
     fn gradients<Act: Activation>(
         &self,
         nnue: &NNUEParams,
-        batch: &[Position],
+        batch: &[Data],
         error: &mut f32,
         scale: f32,
     ) -> Box<NNUEParams> {

@@ -1,11 +1,12 @@
 use crate::{
-    network::{Accumulator, Activation, NNUEParams, HIDDEN},
-    position::{Features, Position},
+    data::Features,
+    network::{Accumulator, Activation, NNUEParams},
     util::sigmoid,
+    Data, HIDDEN,
 };
 
 pub fn gradients<Act: Activation>(
-    positions: &[Position],
+    positions: &[Data],
     nnue: &NNUEParams,
     error: &mut f32,
     blend: f32,
@@ -25,7 +26,7 @@ pub fn gradients<Act: Activation>(
 }
 
 fn update_single_grad<Act: Activation>(
-    pos: &Position,
+    pos: &Data,
     nnue: &NNUEParams,
     grad: &mut NNUEParams,
     error: &mut f32,
@@ -37,15 +38,13 @@ fn update_single_grad<Act: Activation>(
     let mut activated = [[0.0; HIDDEN]; 2];
     let mut features = Features::default();
 
-    let stm = pos.stm();
+    let eval = nnue.forward::<Act>(pos, &mut accs, &mut activated, &mut features);
 
-    let eval = nnue.forward::<Act>(pos, stm, &mut accs, &mut activated, &mut features);
-
-    let result = pos.blended_result(blend, stm, scale);
+    let result = pos.blended_result(blend, scale);
 
     let sigmoid = sigmoid(eval, 1.0);
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
-    nnue.backprop::<Act>(err, stm, grad, &accs, &activated, &mut features);
+    nnue.backprop::<Act>(err, grad, &accs, &activated, &mut features);
 }
