@@ -5,9 +5,11 @@ pub mod trainer;
 pub mod util;
 
 /// Binary data type used
+///  - ChessBoard
 pub type Data = data::ChessBoard;
 
 /// Input format
+///  - Chess768
 pub type Input = network::inputs::Chess768;
 
 /// Size of hidden layer.
