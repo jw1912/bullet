@@ -94,7 +94,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Net Name       : {}", ansi!(net_name, "32;1", esc));
         println!("LR Scheduler   : {}", self.scheduler.colourful(esc));
         println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31, esc));
-        println!("Datas      : {}", ansi!(num, 31, esc));
+        println!("Positions      : {}", ansi!(num, 31, esc));
 
         let timer = Instant::now();
 
