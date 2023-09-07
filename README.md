@@ -10,6 +10,7 @@ It currently supports architectures of the form `Input -> Nx2 -> 1`, and can tra
 
 Supported input formats:
 - `Chess768`, the classic chess board of features `(colour, piece, square)`.
+- `HalfKA`, chess board of features `(friendly king square, colour, piece, square)`
 
 To learn how it works, read the [wiki](wiki.md).
 
