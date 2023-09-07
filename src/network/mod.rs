@@ -87,6 +87,10 @@ impl NNUEParams {
             features.push(wfeat, bfeat);
             accs[0].add_feature(wfeat, self);
             accs[1].add_feature(bfeat, self);
+            if Input::FACTORISER {
+                accs[0].add_feature(wfeat % 768, self);
+                accs[1].add_feature(bfeat % 768, self);
+            }
         }
 
         let mut eval = self[OUTPUT_BIAS];
