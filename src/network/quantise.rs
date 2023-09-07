@@ -70,7 +70,7 @@ impl QuantisedFactorisedNNUE {
         let mut res = Self::new();
 
         const OFFSET: usize = Data::INPUTS * HIDDEN;
-        const NEW_HIDDEN: usize = NNUE_SIZE - OFFSET;
+        const NEW_HIDDEN: usize = OUTPUT_WEIGHTS - OFFSET;
 
         for i in 0..NEW_HIDDEN {
             res.weights[i] = ((nnue[i] + nnue[NEW_HIDDEN + (i % Data::INPUTS)]) * (QA as f32)) as i16;
