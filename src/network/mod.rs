@@ -8,7 +8,7 @@ pub use activation::Activation;
 pub use inputs::InputType;
 pub use quantise::quantise_and_write;
 
-use crate::{data::Features, rng::Rand, Data, Input, HIDDEN};
+use crate::{data::{DataType, Features}, rng::Rand, Data, Input, HIDDEN};
 
 pub type NNUEParams = NNUE<f32>;
 

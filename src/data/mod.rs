@@ -7,8 +7,9 @@ use crate::{Data, Input, network::InputType};
 
 const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
 
-trait DataType {
+pub trait DataType {
     type FeatureType;
+    const INPUTS: usize;
 }
 
 pub struct Features {

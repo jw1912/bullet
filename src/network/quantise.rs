@@ -1,4 +1,4 @@
-use crate::{Data, HIDDEN, Input, network::{InputType, FEATURE_BIAS}};
+use crate::{Data, HIDDEN, Input, network::{InputType, FEATURE_BIAS}, data::DataType};
 use super::{NNUEParams, NNUE, OUTPUT_BIAS, OUTPUT_WEIGHTS, NNUE_SIZE};
 
 const QA: i32 = 255;
