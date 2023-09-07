@@ -4,7 +4,7 @@ use bullet::{
         scheduler::{LrScheduler, SchedulerType},
         Trainer,
     },
-    ActivationUsed, OptimiserUsed,
+    Optimiser,
 };
 
 fn main() {
@@ -46,7 +46,7 @@ fn main() {
         scheduler.set_gamma(lr_gamma);
     }
 
-    let optimiser = OptimiserUsed::default();
+    let optimiser = Optimiser::default();
 
     let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
 
@@ -54,7 +54,7 @@ fn main() {
     let mut params = NetworkParams::random();
 
     // carry out tuning
-    trainer.run::<ActivationUsed>(
+    trainer.run(
         &mut params,
         max_epochs,
         net_name,

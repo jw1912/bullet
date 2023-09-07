@@ -3,17 +3,17 @@ pub mod optimiser;
 pub mod scheduler;
 
 use crate::{
-    network::{activation::Activation, quantise_and_write, NetworkParams},
+    Optimiser,
+    network::{quantise_and_write, NetworkParams},
     util::to_slice_with_lifetime,
     Data,
 };
 
 use gradient::gradients;
-use optimiser::Optimiser;
 use scheduler::LrScheduler;
 
 use std::{
-    fs::{metadata, File},
+    fs::{create_dir, metadata, File},
     io::{stdout, BufRead, BufReader, Write},
     thread,
     time::Instant,
@@ -29,16 +29,16 @@ macro_rules! ansi {
     };
 }
 
-pub struct Trainer<Opt: Optimiser> {
+pub struct Trainer {
     file: String,
     threads: usize,
     scheduler: LrScheduler,
     blend: f32,
     skip_prop: f32,
-    optimiser: Opt,
+    optimiser: Optimiser,
 }
 
-impl<Opt: Optimiser> Trainer<Opt> {
+impl Trainer {
     #[must_use]
     pub fn new(
         file: String,
@@ -46,7 +46,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         scheduler: LrScheduler,
         blend: f32,
         skip_prop: f32,
-        optimiser: Opt,
+        optimiser: Optimiser,
     ) -> Self {
         Self {
             file,
@@ -58,6 +58,15 @@ impl<Opt: Optimiser> Trainer<Opt> {
         }
     }
 
+    pub fn save_to_checkpoint(&self, nnue: &NetworkParams, name: &str) {
+        let path = format!("checkpoints/{name}");
+        create_dir(path.clone()).unwrap_or(());
+
+        nnue.write_to_bin(&format!("{path}/params.bin")).unwrap();
+        self.optimiser.momentum.write_to_bin(&format!("{path}/momentum.bin")).unwrap();
+        self.optimiser.velocity.write_to_bin(&format!("{path}/velocity.bin")).unwrap();
+    }
+
     pub fn report_settings(&self, esc: &str) {
         println!("File Path      : {}", ansi!(self.file, "32;1", esc));
         println!("Threads        : {}", ansi!(self.threads, 31, esc));
@@ -66,7 +75,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn run<Act: Activation>(
+    pub fn run(
         &mut self,
         nnue: &mut NetworkParams,
         max_epochs: usize,
@@ -132,7 +141,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
                     let gradients =
-                        self.gradients::<Act>(nnue, batch, &mut error, reciprocal_scale);
+                        self.gradients(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -187,7 +196,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         }
     }
 
-    fn gradients<Act: Activation>(
+    fn gradients(
         &self,
         nnue: &NetworkParams,
         batch: &[Data],
@@ -204,7 +213,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| {
-                    s.spawn(|| gradients::<Act>(chunk, nnue, error, blend, skip_prop, scale))
+                    s.spawn(|| gradients(chunk, nnue, error, blend, skip_prop, scale))
                 })
                 .collect::<Vec<_>>()
                 .into_iter()

@@ -20,9 +20,9 @@ pub const HIDDEN: usize = 256;
 ///   - ReLU
 ///   - CReLU
 ///   - SCReLU
-pub type ActivationUsed = network::activation::CReLU;
+pub type Activation = network::activation::CReLU;
 
 /// Optimiser:
 ///   - Adam
 ///   - AdamW
-pub type OptimiserUsed = trainer::optimiser::AdamW;
+pub type Optimiser = trainer::optimiser::AdamW;
