@@ -5,14 +5,14 @@ mod quantise;
 
 pub use accumulator::Accumulator;
 pub use activation::Activation;
-use inputs::InputType;
-pub use quantise::QuantisedNNUE;
+pub use inputs::InputType;
+pub use quantise::quantise_and_write;
 
-use crate::{data::Features, rng::Rand, Data, Input, HIDDEN};
+use crate::{data::{DataType, Features}, rng::Rand, Data, Input, HIDDEN};
 
 pub type NNUEParams = NNUE<f32>;
 
-const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
+pub const NNUE_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
 const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
 const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
 const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
@@ -87,6 +87,10 @@ impl NNUEParams {
             features.push(wfeat, bfeat);
             accs[0].add_feature(wfeat, self);
             accs[1].add_feature(bfeat, self);
+            if Input::FACTORISER {
+                accs[0].add_feature(wfeat % Data::INPUTS, self);
+                accs[1].add_feature(bfeat % Data::INPUTS, self);
+            }
         }
 
         let mut eval = self[OUTPUT_BIAS];

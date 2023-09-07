@@ -1,6 +1,6 @@
 use crate::util::sigmoid;
 
-use super::marlinformat::MarlinFormat;
+use super::{marlinformat::MarlinFormat, DataType};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -16,7 +16,14 @@ pub struct ChessBoard {
 // just in case
 const _RIGHT_SIZE: () = assert!(std::mem::size_of::<ChessBoard>() == 32);
 
+impl DataType for ChessBoard {
+    type FeatureType = (u8, u8, u8, u8);
+    const INPUTS: usize = 768;
+}
+
 impl ChessBoard {
+    pub const MAX_FEATURES: usize = 32;
+
     pub fn score(&self) -> i16 {
         self.score
     }

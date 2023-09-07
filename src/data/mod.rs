@@ -3,15 +3,29 @@ pub mod marlinformat;
 
 pub use chess::ChessBoard;
 
-trait DataType {
+use crate::{Data, Input, network::InputType};
+
+const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
+
+pub trait DataType {
     type FeatureType;
+    const INPUTS: usize;
 }
 
-#[derive(Default)]
 pub struct Features {
-    features: [(usize, usize); 32],
+    features: [(usize, usize); MAX_FEATURES],
     len: usize,
     consumed: usize,
+}
+
+impl Default for Features {
+    fn default() -> Self {
+        Self {
+            features: [(0, 0); MAX_FEATURES],
+            len: 0,
+            consumed: 0,
+        }
+    }
 }
 
 impl Features {

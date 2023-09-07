@@ -3,7 +3,7 @@ pub mod optimiser;
 pub mod scheduler;
 
 use crate::{
-    network::{activation::Activation, NNUEParams, QuantisedNNUE},
+    network::{activation::Activation, NNUEParams, quantise_and_write},
     util::to_slice_with_lifetime,
     Data,
 };
@@ -180,8 +180,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
             if epoch % save_rate == 0 && epoch != max_epochs {
                 let net_path = format!("nets/{net_name}-epoch{epoch}.bin");
 
-                let qnnue = QuantisedNNUE::from_unquantised(nnue);
-                qnnue.write_to_bin(&net_path).unwrap();
+                quantise_and_write(nnue, &net_path);
 
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
