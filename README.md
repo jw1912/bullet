@@ -26,10 +26,10 @@ cargo r -r --bin convertmf <input file path> <output file path>
 ```
 it is up to the user to provide a valid Marlinformat file, as well as shuffling the data beforehand.
 
-Additionally, you can convert a text file with each line of the form `<FEN> <score> <result>`, where
-- `FEN` string must be complete (with halfmove and fullmove numbers)
+Additionally, you can convert legacy text format as in Marlinflow, where
+- each line is of the form `<FEN> | <score> | <wdl>`
 - `score` is white relative and in centipawns
-- `result` is white relative and of the form `[1.0]` for win, `[0.5]` for draw, `[0.0]` for loss
+- `result` is white relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
 
 by using the command
 ```

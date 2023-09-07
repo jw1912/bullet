@@ -40,7 +40,13 @@ impl ChessBoard {
         blend * self.result() + (1. - blend) * sigmoid(f32::from(self.score), scale)
     }
 
-    pub fn from_epd(fen: &str) -> Result<Self, String> {
+    pub fn from_epd(epd: &str) -> Result<Self, String> {
+        let split: Vec<_> = epd.split('|').collect();
+
+        let fen = split[0];
+        let score = split[1];
+        let wdl = split[2];
+
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
         let stm_str = parts[1];
@@ -93,12 +99,12 @@ impl ChessBoard {
             }
         }
 
-        board.score = parts[6].parse::<i16>().unwrap_or(0);
+        board.score = score.parse::<i16>().unwrap_or(0);
 
-        board.result = match parts[7] {
-            "[1.0]" => 2,
-            "[0.5]" => 1,
-            "[0.0]" => 0,
+        board.result = match wdl {
+            "1.0" => 2,
+            "0.5" => 1,
+            "0.0" => 0,
             _ => {
                 println!("{fen}");
                 return Err(String::from("Bad game result!"));
