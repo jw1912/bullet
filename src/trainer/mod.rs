@@ -5,7 +5,7 @@ pub mod scheduler;
 use crate::{
     Optimiser,
     network::{quantise_and_write, NetworkParams},
-    util::to_slice_with_lifetime,
+    util::{to_slice_with_lifetime, write_to_bin},
     Data,
 };
 
@@ -29,13 +29,36 @@ macro_rules! ansi {
     };
 }
 
+pub struct MetaData {
+    pub epoch: usize,
+}
+
+impl MetaData {
+    pub fn load(path: &str) -> Self {
+        use std::io::Read;
+        let mut file = File::open(path).unwrap();
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).unwrap();
+
+        assert_eq!(buf.len(), std::mem::size_of::<MetaData>());
+
+        let mut res = [0u8; std::mem::size_of::<MetaData>()];
+
+        for (i, &byte) in buf.iter().enumerate() {
+            res[i] = byte;
+        }
+
+        unsafe { std::mem::transmute(res) }
+    }
+}
+
 pub struct Trainer {
     file: String,
     threads: usize,
     scheduler: LrScheduler,
     blend: f32,
     skip_prop: f32,
-    optimiser: Optimiser,
+    pub optimiser: Optimiser,
 }
 
 impl Trainer {
@@ -58,10 +81,18 @@ impl Trainer {
         }
     }
 
-    pub fn save_to_checkpoint(&self, nnue: &NetworkParams, name: &str) {
+    pub fn save(&self, nnue: &NetworkParams, name: &str, epoch: usize) {
         let path = format!("checkpoints/{name}");
-        create_dir(path.clone()).unwrap_or(());
+        create_dir(&path).unwrap_or(());
 
+        quantise_and_write(nnue, &format!("nets/{name}"));
+
+        let meta = MetaData {
+            epoch: epoch + 1,
+        };
+
+        const META_SIZE: usize = std::mem::size_of::<MetaData>();
+        write_to_bin::<MetaData, META_SIZE>(&meta, "{path}/metadata.bin").unwrap();
         nnue.write_to_bin(&format!("{path}/params.bin")).unwrap();
         self.optimiser.momentum.write_to_bin(&format!("{path}/momentum.bin")).unwrap();
         self.optimiser.velocity.write_to_bin(&format!("{path}/velocity.bin")).unwrap();
@@ -78,6 +109,7 @@ impl Trainer {
     pub fn run(
         &mut self,
         nnue: &mut NetworkParams,
+        start_epoch: usize,
         max_epochs: usize,
         net_name: &str,
         save_rate: usize,
@@ -95,6 +127,11 @@ impl Trainer {
         let num = file_size / std::mem::size_of::<Data>() as u64;
         let batches = num / batch_size as u64 + 1;
 
+        // fast forward lr scheduler
+        for i in 1..start_epoch {
+            self.scheduler.adjust(i, num_cs, esc)
+        }
+
         // display settings to user so they can verify
         self.report_settings(esc);
         println!("Max Epochs     : {}", ansi!(max_epochs, 31, esc));
@@ -109,7 +146,7 @@ impl Trainer {
 
         let mut error;
 
-        for epoch in 1..=max_epochs {
+        for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
             error = 0.0;
             let mut finished_batches = 0;
@@ -187,9 +224,9 @@ impl Trainer {
             self.scheduler.adjust(epoch, num_cs, esc);
 
             if epoch % save_rate == 0 && epoch != max_epochs {
-                let net_path = format!("nets/{net_name}-epoch{epoch}.bin");
+                let net_path = format!("{net_name}-epoch{epoch}.bin");
 
-                quantise_and_write(nnue, &net_path);
+                self.save(nnue, &net_path, epoch);
 
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }

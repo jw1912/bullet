@@ -127,6 +127,14 @@ def main():
         print(error)
         return
 
+    try:
+        os.mkdir("checkpoints")
+    except FileExistsError:
+        pass
+    except OSError as error:
+        print(error)
+        return
+
     commands = [
         "cargo",
         "rustc",

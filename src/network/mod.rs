@@ -148,4 +148,23 @@ impl NetworkParams {
         const SIZEOF: usize = std::mem::size_of::<NetworkParams>();
         write_to_bin::<Self, SIZEOF>(self, output_path)
     }
+
+    pub fn load_from_bin(&mut self, path: &str) {
+        use std::fs::File;
+        use std::io::{Read, BufReader};
+        let file = File::open(path).unwrap();
+        let reader = BufReader::new(file);
+
+        let mut buf = [0u8; 4];
+
+        for (i, byte) in reader.bytes().enumerate() {
+            let idx = i % 4;
+
+            buf[idx] = byte.unwrap();
+
+            if idx == 3 {
+                self[i / 4] = f32::from_ne_bytes(buf);
+            }
+        }
+    }
 }

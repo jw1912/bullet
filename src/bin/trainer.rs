@@ -2,7 +2,7 @@ use bullet::{
     network::{quantise_and_write, NetworkParams},
     trainer::{
         scheduler::{LrScheduler, SchedulerType},
-        Trainer,
+        Trainer, MetaData,
     },
     Optimiser,
 };
@@ -27,6 +27,7 @@ fn main() {
     let lr_gamma = args.next().unwrap().parse().unwrap();
     let scale = args.next().unwrap().parse().unwrap();
     let cbcs = args.next().unwrap().parse().unwrap();
+    let resume: String = args.next().unwrap().parse().unwrap();
 
     let mut scheduler = LrScheduler::new(lr_start, 1.0, SchedulerType::Drop(1000));
 
@@ -49,13 +50,22 @@ fn main() {
     let optimiser = Optimiser::default();
 
     let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
-
-    // provide random starting parameters
     let mut params = NetworkParams::random();
+    let mut start_epoch = 1;
+
+    if resume != "no_way" {
+        let meta = MetaData::load(&format!("{resume}/metadata.bin"));
+        start_epoch = meta.epoch;
+        println!("Resuming at epoch {}...", start_epoch);
+        trainer.optimiser.momentum.load_from_bin(&format!("{resume}/momentum.bin"));
+        trainer.optimiser.velocity.load_from_bin(&format!("{resume}/velocity.bin"));
+        params.load_from_bin(&format!("{resume}/momentum.bin"));
+    };
 
     // carry out tuning
     trainer.run(
         &mut params,
+        start_epoch,
         max_epochs,
         net_name,
         save_rate,
