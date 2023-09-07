@@ -65,7 +65,7 @@ fn main() {
     );
 
     // safe to bin file
-    quantise_and_write(&params,"nets/{net_name}.bin");
+    quantise_and_write(&params,&format!("nets/{net_name}.bin"));
 
     println!("Saved [nets/{net_name}.bin]");
 }
