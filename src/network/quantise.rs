@@ -3,6 +3,7 @@ use crate::{
     data::DataType,
     network::{InputType, FEATURE_BIAS},
     Data, Input, HIDDEN,
+    util::write_to_bin,
 };
 
 const QA: i32 = 255;
@@ -39,18 +40,8 @@ impl QuantisedNetwork {
     }
 
     fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
-        use std::io::Write;
         const SIZEOF: usize = std::mem::size_of::<QuantisedNetwork>();
-
-        let mut file = std::fs::File::create(output_path)?;
-
-        unsafe {
-            let ptr: *const Self = self;
-            let slice_ptr: *const u8 = std::mem::transmute(ptr);
-            let slice = std::slice::from_raw_parts(slice_ptr, SIZEOF);
-            file.write_all(slice)?;
-        }
-        Ok(())
+        write_to_bin::<Self, SIZEOF>(self, output_path)
     }
 }
 
@@ -94,17 +85,7 @@ impl QuantisedFactorisedNetwork {
     }
 
     fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
-        use std::io::Write;
         const SIZEOF: usize = std::mem::size_of::<QuantisedFactorisedNetwork>();
-
-        let mut file = std::fs::File::create(output_path)?;
-
-        unsafe {
-            let ptr: *const Self = self;
-            let slice_ptr: *const u8 = std::mem::transmute(ptr);
-            let slice = std::slice::from_raw_parts(slice_ptr, SIZEOF);
-            file.write_all(slice)?;
-        }
-        Ok(())
+        write_to_bin::<Self, SIZEOF>(self, output_path)
     }
 }

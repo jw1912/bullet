@@ -113,6 +113,13 @@ def main():
         action="store_true",
     )
 
+    parser.add_argument(
+        '--resume',
+        type=str,
+        help="Path to a checkpoint folder.",
+        default="no_way"
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -121,6 +128,14 @@ def main():
 
     try:
         os.mkdir("nets")
+    except FileExistsError:
+        pass
+    except OSError as error:
+        print(error)
+        return
+
+    try:
+        os.mkdir("checkpoints")
     except FileExistsError:
         pass
     except OSError as error:
@@ -161,6 +176,7 @@ def main():
         str(args.lr_gamma),
         str(args.scale),
         str(args.cbcs).lower(),
+        args.resume,
     ]
 
     subprocess.run(commands)

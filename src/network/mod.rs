@@ -4,14 +4,14 @@ pub mod inputs;
 mod quantise;
 
 pub use accumulator::Accumulator;
-pub use activation::Activation;
 pub use inputs::InputType;
 pub use quantise::quantise_and_write;
 
 use crate::{
+    Activation,
     data::{DataType, Features},
     rng::Rand,
-    Data, Input, HIDDEN,
+    Data, Input, HIDDEN, util::write_to_bin,
 };
 
 pub type NetworkParams = Network<f32>;
@@ -77,7 +77,7 @@ impl NetworkParams {
         params
     }
 
-    pub fn forward<Act: Activation>(
+    pub fn forward(
         &self,
         pos: &Data,
         accs: &mut [Accumulator; 2],
@@ -99,19 +99,19 @@ impl NetworkParams {
         let mut eval = self[OUTPUT_BIAS];
 
         for i in 0..HIDDEN {
-            activated[0][i] = Act::activate(accs[0][i]);
+            activated[0][i] = Activation::activate(accs[0][i]);
             eval += activated[0][i] * self[OUTPUT_WEIGHTS + i];
         }
 
         for i in 0..HIDDEN {
-            activated[1][i] = Act::activate(accs[1][i]);
+            activated[1][i] = Activation::activate(accs[1][i]);
             eval += activated[1][i] * self[OUTPUT_WEIGHTS + HIDDEN + i];
         }
 
         eval
     }
 
-    pub fn backprop<Act: Activation>(
+    pub fn backprop(
         &self,
         err: f32,
         grad: &mut NetworkParams,
@@ -123,8 +123,8 @@ impl NetworkParams {
 
         for i in 0..HIDDEN {
             components[i] = (
-                err * self[OUTPUT_WEIGHTS + i] * Act::activate_prime(accs[0][i]),
-                err * self[OUTPUT_WEIGHTS + HIDDEN + i] * Act::activate_prime(accs[1][i]),
+                err * self[OUTPUT_WEIGHTS + i] * Activation::prime(accs[0][i]),
+                err * self[OUTPUT_WEIGHTS + HIDDEN + i] * Activation::prime(accs[1][i]),
             );
 
             grad[FEATURE_BIAS + i] += components[i].0 + components[i].1;
@@ -142,5 +142,29 @@ impl NetworkParams {
         }
 
         grad[OUTPUT_BIAS] += err;
+    }
+
+    pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
+        const SIZEOF: usize = std::mem::size_of::<NetworkParams>();
+        write_to_bin::<Self, SIZEOF>(self, output_path)
+    }
+
+    pub fn load_from_bin(&mut self, path: &str) {
+        use std::fs::File;
+        use std::io::{Read, BufReader};
+        let file = File::open(path).unwrap();
+        let reader = BufReader::new(file);
+
+        let mut buf = [0u8; 4];
+
+        for (i, byte) in reader.bytes().enumerate() {
+            let idx = i % 4;
+
+            buf[idx] = byte.unwrap();
+
+            if idx == 3 {
+                self[i / 4] = f32::from_ne_bytes(buf);
+            }
+        }
     }
 }

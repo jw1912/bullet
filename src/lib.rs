@@ -14,15 +14,15 @@ pub type Data = data::ChessBoard;
 pub type Input = network::inputs::Chess768;
 
 /// Size of hidden layer.
-pub const HIDDEN: usize = 256;
+pub const HIDDEN: usize = 8;
 
 /// Activation function:
 ///   - ReLU
 ///   - CReLU
 ///   - SCReLU
-pub type ActivationUsed = network::activation::CReLU;
+pub type Activation = network::activation::CReLU;
 
 /// Optimiser:
 ///   - Adam
 ///   - AdamW
-pub type OptimiserUsed = trainer::optimiser::AdamW;
+pub type Optimiser = trainer::optimiser::AdamW;

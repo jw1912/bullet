@@ -3,17 +3,17 @@ pub mod optimiser;
 pub mod scheduler;
 
 use crate::{
-    network::{activation::Activation, quantise_and_write, NetworkParams},
-    util::to_slice_with_lifetime,
+    Optimiser,
+    network::{quantise_and_write, NetworkParams},
+    util::{to_slice_with_lifetime, write_to_bin},
     Data,
 };
 
 use gradient::gradients;
-use optimiser::Optimiser;
 use scheduler::LrScheduler;
 
 use std::{
-    fs::{metadata, File},
+    fs::{create_dir, metadata, File},
     io::{stdout, BufRead, BufReader, Write},
     thread,
     time::Instant,
@@ -29,16 +29,39 @@ macro_rules! ansi {
     };
 }
 
-pub struct Trainer<Opt: Optimiser> {
+pub struct MetaData {
+    pub epoch: usize,
+}
+
+impl MetaData {
+    pub fn load(path: &str) -> Self {
+        use std::io::Read;
+        let mut file = File::open(path).unwrap();
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).unwrap();
+
+        assert_eq!(buf.len(), std::mem::size_of::<MetaData>());
+
+        let mut res = [0u8; std::mem::size_of::<MetaData>()];
+
+        for (i, &byte) in buf.iter().enumerate() {
+            res[i] = byte;
+        }
+
+        unsafe { std::mem::transmute(res) }
+    }
+}
+
+pub struct Trainer {
     file: String,
     threads: usize,
     scheduler: LrScheduler,
     blend: f32,
     skip_prop: f32,
-    optimiser: Opt,
+    pub optimiser: Optimiser,
 }
 
-impl<Opt: Optimiser> Trainer<Opt> {
+impl Trainer {
     #[must_use]
     pub fn new(
         file: String,
@@ -46,7 +69,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
         scheduler: LrScheduler,
         blend: f32,
         skip_prop: f32,
-        optimiser: Opt,
+        optimiser: Optimiser,
     ) -> Self {
         Self {
             file,
@@ -58,6 +81,23 @@ impl<Opt: Optimiser> Trainer<Opt> {
         }
     }
 
+    pub fn save(&self, nnue: &NetworkParams, name: &str, epoch: usize) {
+        let path = format!("checkpoints/{name}");
+        create_dir(&path).unwrap_or(());
+
+        quantise_and_write(nnue, &format!("nets/{name}.bin"));
+
+        let meta = MetaData {
+            epoch: epoch + 1,
+        };
+
+        const META_SIZE: usize = std::mem::size_of::<MetaData>();
+        write_to_bin::<MetaData, META_SIZE>(&meta, &format!("{path}/metadata.bin")).unwrap();
+        nnue.write_to_bin(&format!("{path}/params.bin")).unwrap();
+        self.optimiser.momentum.write_to_bin(&format!("{path}/momentum.bin")).unwrap();
+        self.optimiser.velocity.write_to_bin(&format!("{path}/velocity.bin")).unwrap();
+    }
+
     pub fn report_settings(&self, esc: &str) {
         println!("File Path      : {}", ansi!(self.file, "32;1", esc));
         println!("Threads        : {}", ansi!(self.threads, 31, esc));
@@ -66,9 +106,10 @@ impl<Opt: Optimiser> Trainer<Opt> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn run<Act: Activation>(
+    pub fn run(
         &mut self,
         nnue: &mut NetworkParams,
+        start_epoch: usize,
         max_epochs: usize,
         net_name: &str,
         save_rate: usize,
@@ -96,11 +137,16 @@ impl<Opt: Optimiser> Trainer<Opt> {
         println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31, esc));
         println!("Positions      : {}", ansi!(num, 31, esc));
 
+        // fast forward lr scheduler
+        for i in 1..start_epoch {
+            self.scheduler.adjust(i, num_cs, esc)
+        }
+
         let timer = Instant::now();
 
         let mut error;
 
-        for epoch in 1..=max_epochs {
+        for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
             error = 0.0;
             let mut finished_batches = 0;
@@ -132,7 +178,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
                     let gradients =
-                        self.gradients::<Act>(nnue, batch, &mut error, reciprocal_scale);
+                        self.gradients(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -177,17 +223,17 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
             self.scheduler.adjust(epoch, num_cs, esc);
 
-            if epoch % save_rate == 0 && epoch != max_epochs {
-                let net_path = format!("nets/{net_name}-epoch{epoch}.bin");
+            if epoch % save_rate == 0 || epoch == max_epochs {
+                let net_path = format!("{net_name}-epoch{epoch}");
 
-                quantise_and_write(nnue, &net_path);
+                self.save(nnue, &net_path, epoch);
 
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
         }
     }
 
-    fn gradients<Act: Activation>(
+    fn gradients(
         &self,
         nnue: &NetworkParams,
         batch: &[Data],
@@ -204,7 +250,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| {
-                    s.spawn(|| gradients::<Act>(chunk, nnue, error, blend, skip_prop, scale))
+                    s.spawn(|| gradients(chunk, nnue, error, blend, skip_prop, scale))
                 })
                 .collect::<Vec<_>>()
                 .into_iter()
