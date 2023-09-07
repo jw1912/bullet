@@ -18,12 +18,12 @@ fn main() {
 
     println!("Loaded [{inp_path}]");
 
-    let mut data = Vec::new();
     let mut count = 0;
 
     let cap = 128 * 16384 * std::mem::size_of::<MarlinFormat>();
 
     let mut file = BufReader::with_capacity(cap, File::open(&inp_path).unwrap());
+    let mut output = BufWriter::new(File::create(&out_path).unwrap());
     while let Ok(buf) = file.fill_buf() {
         if buf.is_empty() {
             break;
@@ -34,10 +34,16 @@ fn main() {
         let new_buf = unsafe { to_slice_with_lifetime(buf) };
 
         let additional = new_buf.len();
+        let mut data = Vec::with_capacity(additional);
 
         for mf in new_buf {
             data.push(ChessBoard::from_marlinformat(mf));
         }
+
+        let data_slice = unsafe { to_slice_with_lifetime(&data) };
+        output
+            .write_all(data_slice)
+            .expect("Nothing can go wrong in unsafe code!");
 
         file.consume(consumed);
 
@@ -50,14 +56,6 @@ fn main() {
     }
 
     println!();
-
-    let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
-
-    let data_slice = unsafe { to_slice_with_lifetime(&data) };
-
-    output
-        .write_all(data_slice)
-        .expect("Nothing can go wrong in unsafe code!");
 
     println!("Written to [{out_path}]");
 }
