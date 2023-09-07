@@ -1,12 +1,12 @@
-use crate::network::NNUEParams;
+use crate::network::NetworkParams;
 
 pub trait Optimiser: Default {
-    fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32);
+    fn update_weights(&mut self, nnue: &mut NetworkParams, grads: &NetworkParams, adj: f32, rate: f32);
 }
 
 pub struct Adam {
-    velocity: Box<NNUEParams>,
-    momentum: Box<NNUEParams>,
+    velocity: Box<NetworkParams>,
+    momentum: Box<NetworkParams>,
 }
 
 impl Adam {
@@ -17,7 +17,7 @@ impl Adam {
         &mut self,
         i: usize,
         param: &mut f32,
-        grads: &NNUEParams,
+        grads: &NetworkParams,
         adj: f32,
         rate: f32,
     ) {
@@ -31,14 +31,14 @@ impl Adam {
 impl Default for Adam {
     fn default() -> Self {
         Self {
-            velocity: NNUEParams::new(),
-            momentum: NNUEParams::new(),
+            velocity: NetworkParams::new(),
+            momentum: NetworkParams::new(),
         }
     }
 }
 
 impl Optimiser for Adam {
-    fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
+    fn update_weights(&mut self, nnue: &mut NetworkParams, grads: &NetworkParams, adj: f32, rate: f32) {
         for (i, param) in nnue.iter_mut().enumerate() {
             self.update_single(i, param, grads, adj, rate);
             *param = param.clamp(-1.98, 1.98);
@@ -61,7 +61,7 @@ impl Default for AdamW {
 }
 
 impl Optimiser for AdamW {
-    fn update_weights(&mut self, nnue: &mut NNUEParams, grads: &NNUEParams, adj: f32, rate: f32) {
+    fn update_weights(&mut self, nnue: &mut NetworkParams, grads: &NetworkParams, adj: f32, rate: f32) {
         let decay = 1.0 - self.decay * rate;
         for (i, param) in nnue.iter_mut().enumerate() {
             *param *= decay;

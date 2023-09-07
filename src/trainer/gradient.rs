@@ -1,19 +1,19 @@
 use crate::{
     data::Features,
-    network::{Accumulator, Activation, NNUEParams},
+    network::{Accumulator, Activation, NetworkParams},
     util::sigmoid,
     Data, HIDDEN,
 };
 
 pub fn gradients<Act: Activation>(
     positions: &[Data],
-    nnue: &NNUEParams,
+    nnue: &NetworkParams,
     error: &mut f32,
     blend: f32,
     skip_prop: f32,
     scale: f32,
-) -> Box<NNUEParams> {
-    let mut grad = NNUEParams::new();
+) -> Box<NetworkParams> {
+    let mut grad = NetworkParams::new();
     let mut rand = crate::rng::Rand::default();
     for pos in positions {
         if rand.rand(1.0) < skip_prop {
@@ -27,8 +27,8 @@ pub fn gradients<Act: Activation>(
 
 fn update_single_grad<Act: Activation>(
     pos: &Data,
-    nnue: &NNUEParams,
-    grad: &mut NNUEParams,
+    nnue: &NetworkParams,
+    grad: &mut NetworkParams,
     error: &mut f32,
     blend: f32,
     scale: f32,

@@ -1,5 +1,5 @@
 use bullet::{
-    network::{quantise_and_write, NNUEParams},
+    network::{quantise_and_write, NetworkParams},
     trainer::{
         scheduler::{LrScheduler, SchedulerType},
         Trainer,
@@ -51,7 +51,7 @@ fn main() {
     let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
 
     // provide random starting parameters
-    let mut params = NNUEParams::random();
+    let mut params = NetworkParams::random();
 
     // carry out tuning
     trainer.run::<ActivationUsed>(

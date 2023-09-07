@@ -3,7 +3,7 @@ pub mod optimiser;
 pub mod scheduler;
 
 use crate::{
-    network::{activation::Activation, quantise_and_write, NNUEParams},
+    network::{activation::Activation, quantise_and_write, NetworkParams},
     util::to_slice_with_lifetime,
     Data,
 };
@@ -68,7 +68,7 @@ impl<Opt: Optimiser> Trainer<Opt> {
     #[allow(clippy::too_many_arguments)]
     pub fn run<Act: Activation>(
         &mut self,
-        nnue: &mut NNUEParams,
+        nnue: &mut NetworkParams,
         max_epochs: usize,
         net_name: &str,
         save_rate: usize,
@@ -189,14 +189,14 @@ impl<Opt: Optimiser> Trainer<Opt> {
 
     fn gradients<Act: Activation>(
         &self,
-        nnue: &NNUEParams,
+        nnue: &NetworkParams,
         batch: &[Data],
         error: &mut f32,
         scale: f32,
-    ) -> Box<NNUEParams> {
+    ) -> Box<NetworkParams> {
         let size = batch.len() / self.threads;
         let mut errors = vec![0.0; self.threads];
-        let mut grad = NNUEParams::new();
+        let mut grad = NetworkParams::new();
         let blend = self.blend;
         let skip_prop = self.skip_prop;
         thread::scope(|s| {
