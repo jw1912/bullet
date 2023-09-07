@@ -11,11 +11,20 @@ trait DataType {
     type FeatureType;
 }
 
-#[derive(Default)]
 pub struct Features {
     features: [(usize, usize); MAX_FEATURES],
     len: usize,
     consumed: usize,
+}
+
+impl Default for Features {
+    fn default() -> Self {
+        Self {
+            features: [(0, 0); MAX_FEATURES],
+            len: 0,
+            consumed: 0,
+        }
+    }
 }
 
 impl Features {
