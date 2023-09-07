@@ -6,7 +6,6 @@ pub trait InputType {
 
     fn update_features_and_accumulator(
         pos: &Self::DataType,
-        stm: usize,
         features: &mut Features,
         accs: &mut [Accumulator; 2],
         nnue: &NNUEParams,
@@ -22,22 +21,19 @@ impl InputType for Chess768 {
     #[inline]
     fn update_features_and_accumulator(
         pos: &Self::DataType,
-        stm: usize,
         features: &mut Features,
         accs: &mut [Accumulator; 2],
         nnue: &NNUEParams
     ) {
-        let opp = stm ^ 1;
-        for (colour, piece, square) in pos.into_iter() {
-            let c = usize::from(colour);
+        for (piece, square) in pos.into_iter() {
             let pc = 64 * usize::from(piece);
             let sq = usize::from(square);
-            let wfeat = [0, 384][c] + pc + sq;
-            let bfeat = [384, 0][c] + pc + (sq ^ 56);
+            let wfeat = pc + sq;
+            let bfeat = pc + (sq ^ 56);
 
             features.push(wfeat, bfeat);
-            accs[stm].add_feature(wfeat, nnue);
-            accs[opp].add_feature(bfeat, nnue);
+            accs[0].add_feature(wfeat, nnue);
+            accs[1].add_feature(bfeat, nnue);
         }
     }
 }

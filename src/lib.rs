@@ -5,7 +5,7 @@ pub mod trainer;
 pub mod util;
 
 /// Binary data type used
-pub type Data = data::MarlinFormat;
+pub type Data = data::ChessBoard;
 
 /// Input format
 pub type Input = network::inputs::Chess768;

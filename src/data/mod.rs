@@ -1,8 +1,7 @@
-mod chess;
-mod marlinformat;
+pub mod chess;
+pub mod marlinformat;
 
 pub use chess::ChessBoard;
-pub use marlinformat::MarlinFormat;
 
 trait DataType {
     type FeatureType;

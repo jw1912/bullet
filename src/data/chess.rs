@@ -1,11 +1,12 @@
 use crate::util::sigmoid;
 
+use super::marlinformat::MarlinFormat;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ChessBoard {
     occ: u64,
     pcs: [u8; 16],
-    stm: u8,
     score: i16,
     result: u8,
 }
@@ -28,10 +29,6 @@ impl ChessBoard {
 
     pub fn blended_result(&self, blend: f32, scale: f32) -> f32 {
         blend * self.result() + (1. - blend) * sigmoid(f32::from(self.score), scale)
-    }
-
-    pub fn stm(&self) -> usize {
-        usize::from(self.stm)
     }
 
     pub fn from_epd(fen: &str) -> Result<Self, String> {
@@ -79,7 +76,35 @@ impl ChessBoard {
             }
         };
 
-        Ok(Self { occ, pcs, stm, score, result, })
+        Ok(Self { occ, pcs, score, result, })
+    }
+
+    pub fn from_marlinformat(mf: &MarlinFormat) -> Self {
+        let mut board = Self::default();
+
+        let stm = mf.stm();
+
+        if stm == 1 {
+            board.score = -mf.score();
+            board.result = 2 - mf.result_idx() as u8;
+        } else {
+            board.score = mf.score();
+            board.result = mf.result_idx() as u8;
+        }
+
+        for (idx, (colour, mut piece, mut square)) in mf.into_iter().enumerate() {
+            piece += 6 * colour;
+
+            if stm == 1 {
+                piece = (piece + 6) % 12;
+                square ^= 56;
+            }
+
+            board.occ |= 1 << square;
+            board.pcs[idx / 2] |= piece << (4 * (idx & 1));
+        }
+
+        board
     }
 }
 

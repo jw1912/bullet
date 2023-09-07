@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bullet::{data::MarlinFormat, util::to_slice_with_lifetime};
+use bullet::{data::ChessBoard, util::to_slice_with_lifetime};
 
 fn main() {
     let timer = Instant::now();
@@ -22,7 +22,7 @@ fn main() {
     let mut results = [0, 0, 0];
 
     for line in file.lines().map(Result::unwrap) {
-        match MarlinFormat::from_epd(&line) {
+        match ChessBoard::from_epd(&line) {
             Ok(pos) => {
                 results[pos.result_idx()] += 1;
                 data.push(pos);
@@ -51,39 +51,4 @@ fn main() {
         .expect("Nothing can go wrong in unsafe code!");
 
     println!("Written to [{out_path}]");
-}
-
-#[test]
-fn test_parse() {
-    let pos = MarlinFormat::from_epd("r1bq1bnr/pppp1kp1/2n1p3/5N1p/1PP5/8/P2PPPPP/RNBQKB1R w - - 0 1 55 [1.0]")
-        .unwrap();
-
-    let pieces = [
-        "WHITE PAWN",
-        "WHITE KNIGHT",
-        "WHITE BISHOP",
-        "WHITE ROOK",
-        "WHITE QUEEN",
-        "WHITE KING",
-        "BLACK PAWN",
-        "BLACK KNIGHT",
-        "BLACK BISHOP",
-        "BLACK ROOK",
-        "BLACK QUEEN",
-        "BLACK KING",
-    ];
-
-    let files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-
-    for (colour, piece, square) in pos {
-        let pc = pieces[usize::from(colour * 6 + piece)];
-        let sq = format!("{}{}", files[usize::from(square) % 8], 1 + square / 8);
-        println!("{pc}: {sq}")
-    }
-
-    println!("{pos:#?}");
-
-    println!("res: {}", pos.result());
-    println!("stm: {}", pos.stm());
-    println!("score: {}", pos.score());
 }
