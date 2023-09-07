@@ -1,5 +1,5 @@
 use bullet::{
-    network::{quantise_and_write, NetworkParams},
+    network::NetworkParams,
     trainer::{
         scheduler::{LrScheduler, SchedulerType},
         Trainer, MetaData,
@@ -59,7 +59,7 @@ fn main() {
         println!("Resuming at epoch {}...", start_epoch);
         trainer.optimiser.momentum.load_from_bin(&format!("{resume}/momentum.bin"));
         trainer.optimiser.velocity.load_from_bin(&format!("{resume}/velocity.bin"));
-        params.load_from_bin(&format!("{resume}/momentum.bin"));
+        params.load_from_bin(&format!("{resume}/params.bin"));
     };
 
     // carry out tuning
@@ -73,9 +73,4 @@ fn main() {
         scale,
         cbcs,
     );
-
-    // safe to bin file
-    quantise_and_write(&params, &format!("nets/{net_name}.bin"));
-
-    println!("Saved [nets/{net_name}.bin]");
 }

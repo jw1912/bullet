@@ -85,14 +85,14 @@ impl Trainer {
         let path = format!("checkpoints/{name}");
         create_dir(&path).unwrap_or(());
 
-        quantise_and_write(nnue, &format!("nets/{name}"));
+        quantise_and_write(nnue, &format!("nets/{name}.bin"));
 
         let meta = MetaData {
             epoch: epoch + 1,
         };
 
         const META_SIZE: usize = std::mem::size_of::<MetaData>();
-        write_to_bin::<MetaData, META_SIZE>(&meta, "{path}/metadata.bin").unwrap();
+        write_to_bin::<MetaData, META_SIZE>(&meta, &format!("{path}/metadata.bin")).unwrap();
         nnue.write_to_bin(&format!("{path}/params.bin")).unwrap();
         self.optimiser.momentum.write_to_bin(&format!("{path}/momentum.bin")).unwrap();
         self.optimiser.velocity.write_to_bin(&format!("{path}/velocity.bin")).unwrap();
@@ -127,11 +127,6 @@ impl Trainer {
         let num = file_size / std::mem::size_of::<Data>() as u64;
         let batches = num / batch_size as u64 + 1;
 
-        // fast forward lr scheduler
-        for i in 1..start_epoch {
-            self.scheduler.adjust(i, num_cs, esc)
-        }
-
         // display settings to user so they can verify
         self.report_settings(esc);
         println!("Max Epochs     : {}", ansi!(max_epochs, 31, esc));
@@ -141,6 +136,11 @@ impl Trainer {
         println!("LR Scheduler   : {}", self.scheduler.colourful(esc));
         println!("Scale          : {}", ansi!(format!("{scale:.0}"), 31, esc));
         println!("Positions      : {}", ansi!(num, 31, esc));
+
+        // fast forward lr scheduler
+        for i in 1..start_epoch {
+            self.scheduler.adjust(i, num_cs, esc)
+        }
 
         let timer = Instant::now();
 
@@ -223,8 +223,8 @@ impl Trainer {
 
             self.scheduler.adjust(epoch, num_cs, esc);
 
-            if epoch % save_rate == 0 && epoch != max_epochs {
-                let net_path = format!("{net_name}-epoch{epoch}.bin");
+            if epoch % save_rate == 0 || epoch == max_epochs {
+                let net_path = format!("{net_name}-epoch{epoch}");
 
                 self.save(nnue, &net_path, epoch);
 
