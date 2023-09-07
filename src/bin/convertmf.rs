@@ -35,12 +35,7 @@ fn main() {
 
         let additional = new_buf.len();
 
-        for (i, mf) in new_buf.iter().enumerate() {
-            if i == 0 && count == 0 {
-                println!("{mf:?}");
-                println!("{:?}", ChessBoard::from_marlinformat(mf));
-            }
-
+        for mf in new_buf {
             data.push(ChessBoard::from_marlinformat(mf));
         }
 

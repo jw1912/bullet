@@ -10,6 +10,7 @@ pub type Data = data::ChessBoard;
 
 /// Input format
 ///  - Chess768
+///  - HalfKA
 pub type Input = network::inputs::Chess768;
 
 /// Size of hidden layer.
