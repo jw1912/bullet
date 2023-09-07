@@ -81,7 +81,13 @@ impl NNUEParams {
         activated: &mut [[f32; HIDDEN]; 2],
         features: &mut Features,
     ) -> f32 {
-        Input::update_features_and_accumulator(pos, features, accs, self);
+        for feat in pos.into_iter() {
+            let (wfeat, bfeat) = Input::get_feature_indices(feat);
+
+            features.push(wfeat, bfeat);
+            accs[0].add_feature(wfeat, self);
+            accs[1].add_feature(bfeat, self);
+        }
 
         let mut eval = self[OUTPUT_BIAS];
 
