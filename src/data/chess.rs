@@ -101,7 +101,13 @@ impl ChessBoard {
             result = 2 - result;
         }
 
-        Ok(Self { occ, pcs, score, result, ksq })
+        Ok(Self {
+            occ,
+            pcs,
+            score,
+            result,
+            ksq,
+        })
     }
 
     pub fn from_marlinformat(mf: &MarlinFormat) -> Self {

@@ -1,4 +1,4 @@
-use super::{FEATURE_BIAS, HIDDEN, OUTPUT_WEIGHTS, NNUEParams};
+use super::{NNUEParams, FEATURE_BIAS, HIDDEN, OUTPUT_WEIGHTS};
 
 #[derive(Clone, Copy)]
 pub struct Accumulator {

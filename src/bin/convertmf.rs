@@ -5,7 +5,10 @@ use std::{
     time::Instant,
 };
 
-use bullet::{data::{ChessBoard, marlinformat::MarlinFormat}, util::to_slice_with_lifetime};
+use bullet::{
+    data::{marlinformat::MarlinFormat, ChessBoard},
+    util::to_slice_with_lifetime,
+};
 
 fn main() {
     let timer = Instant::now();
@@ -44,7 +47,10 @@ fn main() {
         file.consume(consumed);
 
         count += additional;
-        print!("Positions: {count} ({:.0} pos/sec)\r", count as f64 / timer.elapsed().as_secs_f64());
+        print!(
+            "Positions: {count} ({:.0} pos/sec)\r",
+            count as f64 / timer.elapsed().as_secs_f64()
+        );
         let _ = std::io::stdout().flush();
     }
 

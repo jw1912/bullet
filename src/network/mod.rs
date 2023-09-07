@@ -5,10 +5,10 @@ mod quantise;
 
 pub use accumulator::Accumulator;
 pub use activation::Activation;
-pub use quantise::QuantisedNNUE;
 use inputs::InputType;
+pub use quantise::QuantisedNNUE;
 
-use crate::{HIDDEN, Input, data::Features, rng::Rand, Data};
+use crate::{data::Features, rng::Rand, Data, Input, HIDDEN};
 
 pub type NNUEParams = NNUE<f32>;
 
@@ -21,7 +21,7 @@ const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
 #[derive(Clone)]
 #[repr(C)]
 pub struct NNUE<T> {
-    pub weights: [T; NNUE_SIZE],
+    weights: [T; NNUE_SIZE],
 }
 
 impl<T: std::ops::AddAssign<T> + Copy> std::ops::AddAssign<&NNUE<T>> for NNUE<T> {

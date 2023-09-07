@@ -3,9 +3,9 @@ pub mod optimiser;
 pub mod scheduler;
 
 use crate::{
-    Data,
     network::{activation::Activation, NNUEParams, QuantisedNNUE},
     util::to_slice_with_lifetime,
+    Data,
 };
 
 use gradient::gradients;

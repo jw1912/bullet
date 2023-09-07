@@ -1,9 +1,8 @@
 use crate::{
-    Data,
-    HIDDEN,
     data::Features,
     network::{Accumulator, Activation, NNUEParams},
     util::sigmoid,
+    Data, HIDDEN,
 };
 
 pub fn gradients<Act: Activation>(

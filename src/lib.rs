@@ -1,5 +1,5 @@
-pub mod network;
 pub mod data;
+pub mod network;
 pub mod rng;
 pub mod trainer;
 pub mod util;

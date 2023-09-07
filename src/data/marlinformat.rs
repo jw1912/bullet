@@ -76,9 +76,17 @@ impl MarlinFormat {
             }
         };
 
-        Ok(Self {occ, pcs, stm_enp, hfm, fmc, score, result, extra: 0})
+        Ok(Self {
+            occ,
+            pcs,
+            stm_enp,
+            hfm,
+            fmc,
+            score,
+            result,
+            extra: 0,
+        })
     }
-
 }
 
 impl IntoIterator for MarlinFormat {

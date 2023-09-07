@@ -11,7 +11,7 @@ trait DataType {
 pub struct Features {
     features: [(usize, usize); 32],
     len: usize,
-    consumed: usize
+    consumed: usize,
 }
 
 impl Features {
@@ -38,12 +38,18 @@ impl Iterator for Features {
 
 #[cfg(test)]
 mod test {
-    use super::{*, marlinformat::MarlinFormat};
+    use super::{marlinformat::MarlinFormat, *};
 
     #[test]
     fn working_conversion() {
-        let board = ChessBoard::from_epd("r2k3r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R 3 - - 0 1 5 [1.0]").unwrap();
-        let mf = MarlinFormat::from_epd("r2k3r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R 3 - - 0 1 5 [1.0]").unwrap();
+        let board = ChessBoard::from_epd(
+            "r2k3r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R 3 - - 0 1 5 [1.0]",
+        )
+        .unwrap();
+        let mf = MarlinFormat::from_epd(
+            "r2k3r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R 3 - - 0 1 5 [1.0]",
+        )
+        .unwrap();
         let mf_board = ChessBoard::from_marlinformat(&mf);
 
         println!("{mf:?}");
