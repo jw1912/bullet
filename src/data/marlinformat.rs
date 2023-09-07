@@ -1,5 +1,3 @@
-use crate::util::sigmoid;
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MarlinFormat {
@@ -26,21 +24,8 @@ impl MarlinFormat {
         self.score
     }
 
-    pub fn result(&self) -> f32 {
-        f32::from(self.result) / 2.
-    }
-
     pub fn result_idx(&self) -> usize {
         usize::from(self.result)
-    }
-
-    pub fn blended_result(&self, blend: f32, scale: f32) -> f32 {
-        let (wdl, score) = if self.stm() == 1 {
-            (1.0 - self.result(), -self.score)
-        } else {
-            (self.result(), self.score)
-        };
-        blend * wdl + (1. - blend) * sigmoid(f32::from(score), scale)
     }
 
     pub fn stm(&self) -> usize {
