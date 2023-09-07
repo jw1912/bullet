@@ -7,10 +7,10 @@ pub trait InputType {
 
 pub struct Chess768;
 impl InputType for Chess768 {
-    type FeatureType = (u8, u8, u8);
+    type FeatureType = (u8, u8, u8, u8);
     const SIZE: usize = 768;
 
-    fn get_feature_indices((colour, piece, square): Self::FeatureType) -> (usize, usize) {
+    fn get_feature_indices((colour, piece, square, _): Self::FeatureType) -> (usize, usize) {
         let c = usize::from(colour);
         let pc = 64 * usize::from(piece);
         let sq = usize::from(square);

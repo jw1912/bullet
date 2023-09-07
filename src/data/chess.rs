@@ -148,7 +148,7 @@ impl ChessBoard {
 }
 
 impl IntoIterator for ChessBoard {
-    type Item = (u8, u8, u8);
+    type Item = (u8, u8, u8, u8);
     type IntoIter = BoardIter;
     fn into_iter(self) -> Self::IntoIter {
         BoardIter {
@@ -164,7 +164,7 @@ pub struct BoardIter {
 }
 
 impl Iterator for BoardIter {
-    type Item = (u8, u8, u8);
+    type Item = (u8, u8, u8, u8);
     fn next(&mut self) -> Option<Self::Item> {
         if self.board.occ == 0 {
             return None;
@@ -179,6 +179,6 @@ impl Iterator for BoardIter {
         self.board.occ &= self.board.occ - 1;
         self.idx += 1;
 
-        Some((colour, piece, square))
+        Some((colour, piece, square, self.board.ksq))
     }
 }
