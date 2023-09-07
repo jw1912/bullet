@@ -64,7 +64,7 @@ impl ChessBoard {
                         board.ksq = square as u8;
                     }
 
-                    if piece == 11 {
+                    if piece == 13 {
                         board.opp_ksq = square as u8 ^ 56;
                     }
 
@@ -132,6 +132,10 @@ impl ChessBoard {
 
             if piece == 5 {
                 board.ksq = square;
+            }
+
+            if piece == 13 {
+                board.opp_ksq = square ^ 56;
             }
 
             features[fidx] = (piece, square);
