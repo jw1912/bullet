@@ -25,11 +25,12 @@ impl InputType for Chess768 {
         accs: &mut [Accumulator; 2],
         nnue: &NNUEParams
     ) {
-        for (piece, square) in pos.into_iter() {
+        for (colour, piece, square) in pos.into_iter() {
+            let c = usize::from(colour);
             let pc = 64 * usize::from(piece);
             let sq = usize::from(square);
-            let wfeat = pc + sq;
-            let bfeat = pc + (sq ^ 56);
+            let wfeat = [0, 384][c] + pc + sq;
+            let bfeat = [384, 0][c] + pc + (sq ^ 56);
 
             features.push(wfeat, bfeat);
             accs[0].add_feature(wfeat, nnue);

@@ -26,17 +26,24 @@ fn main() {
             break;
         }
 
+        let consumed = buf.len();
+
         let new_buf = unsafe { to_slice_with_lifetime(buf) };
 
-        count += new_buf.len();
+        let additional = new_buf.len();
 
-        for mf in new_buf {
+        for (i, mf) in new_buf.iter().enumerate() {
+            if i == 0 && count == 0 {
+                println!("{mf:?}");
+                println!("{:?}", ChessBoard::from_marlinformat(mf));
+            }
+
             data.push(ChessBoard::from_marlinformat(mf));
         }
 
-        let consumed = buf.len();
         file.consume(consumed);
 
+        count += additional;
         print!("Positions: {count} ({:.0} pos/sec)\r", count as f64 / timer.elapsed().as_secs_f64());
         let _ = std::io::stdout().flush();
     }

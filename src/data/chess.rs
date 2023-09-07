@@ -3,7 +3,7 @@ use crate::util::sigmoid;
 use super::marlinformat::MarlinFormat;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChessBoard {
     occ: u64,
     pcs: [u8; 16],
@@ -42,7 +42,8 @@ impl ChessBoard {
         let mut pcs = [0; 16];
 
         let mut idx = 0;
-        for (i, row) in board_str.split('/').rev().enumerate() {
+
+        let mut parse_row = |i: usize, row: &str| {
             let mut col = 0;
             for ch in row.chars() {
                 if ('1'..='8').contains(&ch) {
@@ -50,9 +51,11 @@ impl ChessBoard {
                 } else if let Some(mut piece) = "PNBRQKpnbrqk".chars().position(|el| el == ch) {
                     let mut square = 8 * i + col;
 
+                    piece = (piece / 6) << 3 | (piece % 6);
+
                     // black to move
                     if stm == 1 {
-                        piece = (piece + 6) % 12;
+                        piece ^= 8;
                         square ^= 56;
                     }
 
@@ -62,11 +65,21 @@ impl ChessBoard {
                     col += 1;
                 }
             }
+        };
+
+        if stm == 1 {
+            for (i, row) in board_str.split('/').enumerate() {
+                parse_row(7 - i, row);
+            }
+        } else {
+            for (i, row) in board_str.split('/').rev().enumerate() {
+                parse_row(i, row);
+            }
         }
 
-        let score = parts[6].parse::<i16>().unwrap_or(0);
+        let mut score = parts[6].parse::<i16>().unwrap_or(0);
 
-        let result = match parts[7] {
+        let mut result = match parts[7] {
             "[1.0]" => 2,
             "[0.5]" => 1,
             "[0.0]" => 0,
@@ -75,6 +88,11 @@ impl ChessBoard {
                 return Err(String::from("Bad game result!"));
             }
         };
+
+        if stm == 1 {
+            score = -score;
+            result = 2 - result;
+        }
 
         Ok(Self { occ, pcs, score, result, })
     }
@@ -92,16 +110,31 @@ impl ChessBoard {
             board.result = mf.result_idx() as u8;
         }
 
-        for (idx, (colour, mut piece, mut square)) in mf.into_iter().enumerate() {
-            piece += 6 * colour;
+        let mut features = [(0, 0); 32];
+        let mut fidx = 0;
 
-            if stm == 1 {
-                piece = (piece + 6) % 12;
-                square ^= 56;
+        if stm == 1 {
+            for (colour, mut piece, mut square) in mf.into_iter() {
+                piece |= colour << 3;
+
+                if stm == 1 {
+                    piece ^= 8;
+                    square ^= 56;
+                }
+
+                features[fidx] = (piece, square);
+                fidx += 1;
             }
 
-            board.occ |= 1 << square;
-            board.pcs[idx / 2] |= piece << (4 * (idx & 1));
+            features[..fidx].sort_by_key(|feat| feat.1);
+
+            for (idx, (piece, square)) in features.iter().enumerate().take(fidx) {
+                board.occ |= 1 << square;
+                board.pcs[idx / 2] |= piece << (4 * (idx & 1));
+            }
+        } else {
+            board.occ = mf.occ();
+            board.pcs = mf.pcs();
         }
 
         board
@@ -109,7 +142,7 @@ impl ChessBoard {
 }
 
 impl IntoIterator for ChessBoard {
-    type Item = (u8, u8);
+    type Item = (u8, u8, u8);
     type IntoIter = BoardIter;
     fn into_iter(self) -> Self::IntoIter {
         BoardIter {
@@ -125,18 +158,21 @@ pub struct BoardIter {
 }
 
 impl Iterator for BoardIter {
-    type Item = (u8, u8);
+    type Item = (u8, u8, u8);
     fn next(&mut self) -> Option<Self::Item> {
         if self.board.occ == 0 {
             return None;
         }
 
         let square = self.board.occ.trailing_zeros() as u8;
-        let piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
+        let mut piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
+
+        let colour = u8::from(piece & 8 > 0);
+        piece &= 7;
 
         self.board.occ &= self.board.occ - 1;
         self.idx += 1;
 
-        Some((piece, square))
+        Some((colour, piece, square))
     }
 }

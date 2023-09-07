@@ -35,3 +35,21 @@ impl Iterator for Features {
         Some(ret)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{*, marlinformat::MarlinFormat};
+
+    #[test]
+    fn working_conversion() {
+        let board = ChessBoard::from_epd("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 5 [1.0]").unwrap();
+        let mf = MarlinFormat::from_epd("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 5 [1.0]").unwrap();
+        let mf_board = ChessBoard::from_marlinformat(&mf);
+
+        println!("{mf:?}");
+        println!("{board:?}");
+        println!("{mf_board:?}");
+
+        assert_eq!(board, mf_board);
+    }
+}
