@@ -1,4 +1,4 @@
-use crate::{Data, HIDDEN, Input, network::InputType};
+use crate::{Data, HIDDEN, Input, network::{InputType, FEATURE_BIAS}};
 use super::{NNUEParams, NNUE, OUTPUT_BIAS, OUTPUT_WEIGHTS, NNUE_SIZE};
 
 const QA: i32 = 255;
@@ -69,11 +69,15 @@ impl QuantisedFactorisedNNUE {
     fn from_unquantised(nnue: &NNUEParams) -> Box<Self> {
         let mut res = Self::new();
 
-        const OFFSET: usize = Data::INPUTS * HIDDEN;
-        const NEW_HIDDEN: usize = OUTPUT_WEIGHTS - OFFSET;
+        const OFFSET: usize = Data::INPUTS * HIDDEN * Input::FACTORISER as usize;
+        const NEW_HIDDEN: usize = FEATURE_BIAS - OFFSET;
 
         for i in 0..NEW_HIDDEN {
-            res.weights[i] = ((nnue[i] + nnue[NEW_HIDDEN + (i % Data::INPUTS)]) * (QA as f32)) as i16;
+            res.weights[i] = ((nnue[i % Data::INPUTS] + nnue[OFFSET + i]) * (QA as f32)) as i16;
+        }
+
+        for i in FEATURE_BIAS..OUTPUT_WEIGHTS {
+            res.weights[i - OFFSET] = (nnue[i] * (QA as f32)) as i16;
         }
 
         for i in OUTPUT_WEIGHTS..OUTPUT_BIAS {
