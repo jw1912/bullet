@@ -9,6 +9,7 @@ pub struct ChessBoard {
     pcs: [u8; 16],
     score: i16,
     result: u8,
+    ksq: u8,
 }
 
 // just in case
@@ -43,6 +44,8 @@ impl ChessBoard {
 
         let mut idx = 0;
 
+        let mut ksq = 0;
+
         let mut parse_row = |i: usize, row: &str| {
             let mut col = 0;
             for ch in row.chars() {
@@ -57,6 +60,10 @@ impl ChessBoard {
                     if stm == 1 {
                         piece ^= 8;
                         square ^= 56;
+                    }
+
+                    if piece == 5 {
+                        ksq = square as u8;
                     }
 
                     occ |= 1 << square;
@@ -94,7 +101,7 @@ impl ChessBoard {
             result = 2 - result;
         }
 
-        Ok(Self { occ, pcs, score, result, })
+        Ok(Self { occ, pcs, score, result, ksq })
     }
 
     pub fn from_marlinformat(mf: &MarlinFormat) -> Self {
@@ -113,28 +120,27 @@ impl ChessBoard {
         let mut features = [(0, 0); 32];
         let mut fidx = 0;
 
-        if stm == 1 {
-            for (colour, mut piece, mut square) in mf.into_iter() {
-                piece |= colour << 3;
+        for (colour, mut piece, mut square) in mf.into_iter() {
+            piece |= colour << 3;
 
-                if stm == 1 {
-                    piece ^= 8;
-                    square ^= 56;
-                }
-
-                features[fidx] = (piece, square);
-                fidx += 1;
+            if stm == 1 {
+                piece ^= 8;
+                square ^= 56;
             }
 
-            features[..fidx].sort_by_key(|feat| feat.1);
-
-            for (idx, (piece, square)) in features.iter().enumerate().take(fidx) {
-                board.occ |= 1 << square;
-                board.pcs[idx / 2] |= piece << (4 * (idx & 1));
+            if piece == 5 {
+                board.ksq = square;
             }
-        } else {
-            board.occ = mf.occ();
-            board.pcs = mf.pcs();
+
+            features[fidx] = (piece, square);
+            fidx += 1;
+        }
+
+        features[..fidx].sort_by_key(|feat| feat.1);
+
+        for (idx, (piece, square)) in features.iter().enumerate().take(fidx) {
+            board.occ |= 1 << square;
+            board.pcs[idx / 2] |= piece << (4 * (idx & 1));
         }
 
         board
