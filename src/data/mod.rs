@@ -3,7 +3,7 @@ pub mod marlinformat;
 
 pub use chess::ChessBoard;
 
-use crate::{Data, Input, network::InputType};
+use crate::{network::InputType, Data, Input};
 
 const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
 

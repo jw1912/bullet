@@ -1,5 +1,9 @@
-use crate::{Data, HIDDEN, Input, network::{InputType, FEATURE_BIAS}, data::DataType};
-use super::{NNUEParams, NNUE, OUTPUT_BIAS, OUTPUT_WEIGHTS, NNUE_SIZE};
+use super::{NNUEParams, NNUE, NNUE_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
+use crate::{
+    data::DataType,
+    network::{InputType, FEATURE_BIAS},
+    Data, Input, HIDDEN,
+};
 
 const QA: i32 = 255;
 const QB: i32 = 64;

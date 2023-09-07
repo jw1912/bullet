@@ -3,7 +3,7 @@ pub mod optimiser;
 pub mod scheduler;
 
 use crate::{
-    network::{activation::Activation, NNUEParams, quantise_and_write},
+    network::{activation::Activation, quantise_and_write, NNUEParams},
     util::to_slice_with_lifetime,
     Data,
 };
