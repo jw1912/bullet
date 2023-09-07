@@ -10,6 +10,7 @@ pub struct ChessBoard {
     score: i16,
     result: u8,
     ksq: u8,
+    opp_ksq: u8,
 }
 
 // just in case
@@ -39,12 +40,9 @@ impl ChessBoard {
 
         let stm = u8::from(stm_str == "b");
 
-        let mut occ = 0;
-        let mut pcs = [0; 16];
+        let mut board = Self::default();
 
         let mut idx = 0;
-
-        let mut ksq = 0;
 
         let mut parse_row = |i: usize, row: &str| {
             let mut col = 0;
@@ -63,11 +61,15 @@ impl ChessBoard {
                     }
 
                     if piece == 5 {
-                        ksq = square as u8;
+                        board.ksq = square as u8;
                     }
 
-                    occ |= 1 << square;
-                    pcs[idx / 2] |= (piece as u8) << (4 * (idx & 1));
+                    if piece == 11 {
+                        board.opp_ksq = square as u8 ^ 56;
+                    }
+
+                    board.occ |= 1 << square;
+                    board.pcs[idx / 2] |= (piece as u8) << (4 * (idx & 1));
                     idx += 1;
                     col += 1;
                 }
@@ -84,9 +86,9 @@ impl ChessBoard {
             }
         }
 
-        let mut score = parts[6].parse::<i16>().unwrap_or(0);
+        board.score = parts[6].parse::<i16>().unwrap_or(0);
 
-        let mut result = match parts[7] {
+        board.result = match parts[7] {
             "[1.0]" => 2,
             "[0.5]" => 1,
             "[0.0]" => 0,
@@ -97,17 +99,11 @@ impl ChessBoard {
         };
 
         if stm == 1 {
-            score = -score;
-            result = 2 - result;
+            board.score = -board.score;
+            board.result = 2 - board.result;
         }
 
-        Ok(Self {
-            occ,
-            pcs,
-            score,
-            result,
-            ksq,
-        })
+        Ok(board)
     }
 
     pub fn from_marlinformat(mf: &MarlinFormat) -> Self {
@@ -177,14 +173,11 @@ impl Iterator for BoardIter {
         }
 
         let square = self.board.occ.trailing_zeros() as u8;
-        let mut piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
-
-        let colour = u8::from(piece & 8 > 0);
-        piece &= 7;
+        let piece = (self.board.pcs[self.idx / 2] >> (4 * (self.idx & 1))) & 0b1111;
 
         self.board.occ &= self.board.occ - 1;
         self.idx += 1;
 
-        Some((colour, piece, square, self.board.ksq))
+        Some((piece, square, self.board.ksq, self.board.opp_ksq))
     }
 }

@@ -10,9 +10,9 @@ impl InputType for Chess768 {
     type FeatureType = (u8, u8, u8, u8);
     const SIZE: usize = 768;
 
-    fn get_feature_indices((colour, piece, square, _): Self::FeatureType) -> (usize, usize) {
-        let c = usize::from(colour);
-        let pc = 64 * usize::from(piece);
+    fn get_feature_indices((piece, square, _, _): Self::FeatureType) -> (usize, usize) {
+        let c = usize::from(piece & 8 > 0);
+        let pc = 64 * usize::from(piece & 7);
         let sq = usize::from(square);
         let wfeat = [0, 384][c] + pc + sq;
         let bfeat = [384, 0][c] + pc + (sq ^ 56);
@@ -25,13 +25,12 @@ impl InputType for HalfKA {
     type FeatureType = (u8, u8, u8, u8);
     const SIZE: usize = 64 * 768;
 
-    fn get_feature_indices((colour, piece, square, ksq): Self::FeatureType) -> (usize, usize) {
-        let bucket = 768 * usize::from(ksq);
-        let c = usize::from(colour);
-        let pc = 64 * usize::from(piece);
+    fn get_feature_indices((piece, square, our_ksq, opp_ksq): Self::FeatureType) -> (usize, usize) {
+        let c = usize::from(piece & 8 > 0);
+        let pc = 64 * usize::from(piece & 7);
         let sq = usize::from(square);
-        let wfeat = bucket + [0, 384][c] + pc + sq;
-        let bfeat = bucket + [384, 0][c] + pc + (sq ^ 56);
+        let wfeat = 768 * usize::from(our_ksq) + [0, 384][c] + pc + sq;
+        let bfeat = 768 * usize::from(opp_ksq) + [384, 0][c] + pc  + (sq ^ 56);
         (wfeat, bfeat)
     }
 }
