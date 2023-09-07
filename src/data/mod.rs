@@ -3,13 +3,17 @@ pub mod marlinformat;
 
 pub use chess::ChessBoard;
 
+use crate::{Data, Input, network::InputType};
+
+const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
+
 trait DataType {
     type FeatureType;
 }
 
 #[derive(Default)]
 pub struct Features {
-    features: [(usize, usize); 32],
+    features: [(usize, usize); MAX_FEATURES],
     len: usize,
     consumed: usize,
 }

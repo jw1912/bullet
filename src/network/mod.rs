@@ -5,7 +5,7 @@ mod quantise;
 
 pub use accumulator::Accumulator;
 pub use activation::Activation;
-use inputs::InputType;
+pub use inputs::InputType;
 pub use quantise::QuantisedNNUE;
 
 use crate::{data::Features, rng::Rand, Data, Input, HIDDEN};
@@ -88,8 +88,8 @@ impl NNUEParams {
             accs[0].add_feature(wfeat, self);
             accs[1].add_feature(bfeat, self);
             if Input::FACTORISER {
-                accs[0].add_feature(wfeat % 768, self);
-                accs[1].add_feature(bfeat % 768, self);
+                accs[0].add_feature(wfeat % Data::INPUTS, self);
+                accs[1].add_feature(bfeat % Data::INPUTS, self);
             }
         }
 

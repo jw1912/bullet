@@ -17,6 +17,9 @@ pub struct ChessBoard {
 const _RIGHT_SIZE: () = assert!(std::mem::size_of::<ChessBoard>() == 32);
 
 impl ChessBoard {
+    pub const MAX_FEATURES: usize = 32;
+    pub const INPUTS: usize = 768;
+
     pub fn score(&self) -> i16 {
         self.score
     }

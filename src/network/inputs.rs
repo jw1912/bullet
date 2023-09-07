@@ -37,4 +37,3 @@ impl InputType for HalfKA {
         (wfeat, bfeat)
     }
 }
-
