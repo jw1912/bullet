@@ -8,7 +8,7 @@ pub use activation::Activation;
 pub use quantise::QuantisedNNUE;
 use inputs::InputType;
 
-use crate::{HIDDEN, Input, position::{Features, Position}, rng::Rand};
+use crate::{HIDDEN, Input, data::Features, rng::Rand, Data};
 
 pub type NNUEParams = NNUE<f32>;
 
@@ -76,7 +76,7 @@ impl NNUEParams {
 
     pub fn forward<Act: Activation>(
         &self,
-        pos: &Position,
+        pos: &Data,
         stm: usize,
         accs: &mut [Accumulator; 2],
         activated: &mut [[f32; HIDDEN]; 2],

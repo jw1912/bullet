@@ -1,4 +1,4 @@
-use crate::{position::{Features, Position}, network::{Accumulator, NNUEParams}};
+use crate::{Data, data::Features, network::{Accumulator, NNUEParams}};
 
 pub trait InputType {
     type DataType;
@@ -16,7 +16,7 @@ pub trait InputType {
 pub struct Chess768;
 
 impl InputType for Chess768 {
-    type DataType = Position;
+    type DataType = Data;
     const SIZE: usize = 768;
 
     #[inline]
