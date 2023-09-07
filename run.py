@@ -5,7 +5,7 @@ import subprocess
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Network Trainer",
+        description="Neural Network Trainer",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
