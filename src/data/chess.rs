@@ -44,8 +44,8 @@ impl ChessBoard {
         let split: Vec<_> = epd.split('|').collect();
 
         let fen = split[0];
-        let score = split[1];
-        let wdl = split[2];
+        let score = split[1].trim();
+        let wdl = split[2].trim();
 
         let parts: Vec<&str> = fen.split_whitespace().collect();
         let board_str = parts[0];
