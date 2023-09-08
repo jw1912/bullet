@@ -21,6 +21,8 @@ fn main() {
 
     let mut results = [0, 0, 0];
 
+    let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
+
     for line in file.lines().map(Result::unwrap) {
         match ChessBoard::from_epd(&line) {
             Ok(pos) => {
@@ -29,7 +31,13 @@ fn main() {
             }
             Err(message) => println!("{message}"),
         }
+
+        if data.len() % 16384 == 0 {
+            write(&mut data, &mut output);
+        }
     }
+
+    write(&mut data, &mut output);
 
     println!("Parsed to Position");
     println!(
@@ -42,13 +50,19 @@ fn main() {
         results[2], results[1], results[0]
     );
 
-    let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
+    println!("Written to [{out_path}]");
+}
 
-    let data_slice = unsafe { to_slice_with_lifetime(&data) };
+fn write(data: &mut Vec<ChessBoard>, output: &mut BufWriter<File>) {
+    if data.is_empty() {
+        return
+    }
+
+    let data_slice = unsafe { to_slice_with_lifetime(data) };
 
     output
         .write_all(data_slice)
         .expect("Nothing can go wrong in unsafe code!");
 
-    println!("Written to [{out_path}]");
+    data.clear();
 }
