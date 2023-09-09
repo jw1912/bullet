@@ -35,14 +35,14 @@ pub struct HalfKA;
 impl ChessBucketed for HalfKA {
     #[rustfmt::skip]
     const BUCKETING: [usize; 64] = [
-         1,  2,  3,  4,  5,  6,  7,  8,
-         9, 10, 11, 12 ,13, 14, 15, 16,
-        17, 18, 19, 20, 21, 22, 23, 24,
-        25, 26, 27, 28, 29, 30, 31, 32,
-        33, 34, 35, 36, 37, 38, 39, 40,
-        41, 42, 43, 44, 45, 46, 47, 48,
-        49, 50, 51, 52, 53, 54, 55, 56,
-        57, 58, 59, 60, 61, 62, 63, 64,
+         0,  1,  2,  3,  4,  5,  6,  7,
+         8,  9, 10, 11, 12 ,13, 14, 15,
+        16, 17, 18, 19, 20, 21, 22, 23,
+        24, 25, 26, 27, 28, 29, 30, 31,
+        32, 33, 34, 35, 36, 37, 38, 39,
+        40, 41, 42, 43, 44, 45, 46, 47,
+        48, 49, 50, 51, 52, 53, 54, 55,
+        56, 57, 58, 59, 60, 61, 62, 63,
     ];
 }
 
@@ -53,7 +53,7 @@ pub trait ChessBucketed {
         let mut idx = 0;
         let mut ret = [0; 64];
         while idx < 64 {
-            ret[idx] = 768 * Self::BUCKETING[idx];
+            ret[idx] = 768 * (Self::BUCKETING[idx] + 1);
             idx += 1;
         }
         ret
@@ -75,7 +75,7 @@ impl<T: ChessBucketed> InputType for T {
             }
             idx += 1;
         }
-        max
+        max + 1
     };
 
     fn get_feature_indices(
