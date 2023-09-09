@@ -63,8 +63,6 @@ pub trait ChessBucketed {
 impl<T: ChessBucketed> InputType for T {
     type RequiredDataType = ChessBoard;
     const FACTORISER: bool = true;
-
-    // why rust why
     const BUCKETS: usize = {
         let mut idx = 0;
         let mut max = 1;
