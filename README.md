@@ -4,7 +4,7 @@
 
 </div>
 
-A work-in-progress Network Trainer, used to train [akimbo](https://github.com/JacquesRW/akimbo)'s networks.
+A work-in-progress Network Trainer, used to train [akimbo](https://github.com/jw1912/akimbo)'s networks.
 
 It currently supports architectures of the form `Input -> Nx2 -> 1`, and can train on CPU with any number of threads.
 

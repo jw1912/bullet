@@ -11,7 +11,7 @@ pub type Data = data::ChessBoard;
 /// Input format
 ///  - Chess768
 ///  - HalfKA
-pub type Input = network::inputs::Chess768;
+pub type Input = network::inputs::HalfKA;
 
 /// Size of hidden layer.
 pub const HIDDEN: usize = 8;
