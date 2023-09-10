@@ -9,7 +9,7 @@ use crate::{
     Data,
 };
 
-use gradient::gradients;
+use gradient::gradients_cpu;
 use scheduler::LrScheduler;
 
 use std::{
@@ -250,7 +250,7 @@ impl Trainer {
                 .chunks(size)
                 .zip(errors.iter_mut())
                 .map(|(chunk, error)| {
-                    s.spawn(|| gradients(chunk, nnue, error, blend, skip_prop, scale))
+                    s.spawn(|| gradients_cpu(chunk, nnue, error, blend, skip_prop, scale))
                 })
                 .collect::<Vec<_>>()
                 .into_iter()

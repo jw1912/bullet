@@ -9,3 +9,9 @@ panic = 'abort'
 strip = true
 codegen-units = 1
 lto = true
+
+[dependencies]
+bindgen = "0.68.1"
+
+[build-dependencies]
+bindgen = "0.68.1"
