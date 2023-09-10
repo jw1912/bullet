@@ -5,12 +5,16 @@ pub mod rng;
 pub mod trainer;
 pub mod util;
 
+// Using CUDA:
+// At the moment this will hard lock you into using
+// CReLU Activation and the AdamW Optimiser.
+
 /// Binary data type used
 ///  - ChessBoard
 pub type Data = data::ChessBoard;
 
 /// Input format
-///  - Chess768
+///  - Chess768  (recommended)
 ///  - HalfKA
 pub type Input = network::inputs::Chess768;
 
@@ -19,11 +23,11 @@ pub const HIDDEN: usize = 8;
 
 /// Activation function:
 ///   - ReLU
-///   - CReLU
+///   - CReLU    (recommended)
 ///   - SCReLU
 pub type Activation = network::activation::CReLU;
 
 /// Optimiser:
 ///   - Adam
-///   - AdamW
+///   - AdamW    (recommended)
 pub type Optimiser = trainer::optimiser::AdamW;

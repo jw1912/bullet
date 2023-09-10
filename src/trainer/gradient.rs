@@ -117,22 +117,22 @@ pub unsafe fn gradients_gpu(
     res
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn update_single_grad_gpu(
     pos: &Data,
     nnue: *mut c_float,
     grad: *mut c_float,
     accs: [*mut c_float; 2],
-    acctivated: [*mut c_float; 2],
+    activated: [*mut c_float; 2],
     error: &mut f32,
     blend: f32,
     scale: f32,
 ) {
-
-
+    use crate::network::gpu::{gpu_backprop, gpu_forward};
 
     let mut features = Features::default();
 
-    let eval = nnue.gpu_forward(pos, accs, activated, &mut features);
+    let eval = gpu_forward(pos, nnue, accs, activated, &mut features);
 
     let result = pos.blended_result(blend, scale);
 
@@ -140,7 +140,7 @@ unsafe fn update_single_grad_gpu(
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
-    nnue.gpu_backprop(err, grad, &accs, &activated, &mut features);
+    gpu_backprop(err, nnue, grad, accs, activated, &mut features);
 
 
 }
