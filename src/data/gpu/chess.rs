@@ -19,33 +19,33 @@ impl Default for ChessBoardCUDA {
 impl ChessBoardCUDA {
     pub fn push(
         board: &ChessBoard,
-        inputs: &mut Vec<ChessBoardCUDA>,
+        our_inputs: &mut Vec<ChessBoardCUDA>,
+        opp_inputs: &mut Vec<ChessBoardCUDA>,
         results: &mut Vec<f32>,
         blend: f32,
         scale: f32,
     ) {
-        let mut cuda_board = ChessBoardCUDA::default();
+        assert!(std::any::type_name::<Input>() == "Chess768", "Only Chess768 is currently supported!");
+
+        let mut our_board = ChessBoardCUDA::default();
+        let mut opp_board = ChessBoardCUDA::default();
 
         let mut i = 0;
 
         for feat in board.into_iter() {
             let (wfeat, bfeat) = Input::get_feature_indices(feat);
-
-            cuda_board.features[i] = wfeat as u16;
-            cuda_board.features[i + 1] = bfeat as u16;
-            i += 2;
-            if Input::FACTORISER {
-                cuda_board.features[i] = (wfeat % 768) as u16;
-                cuda_board.features[i + 1] = (bfeat % 768) as u16;
-                i += 2;
-            }
+            our_board.features[i] = wfeat as u16;
+            opp_board.features[i] = bfeat as u16;
+            i += 1;
         }
 
         if i < MAX_FEATURES {
-            cuda_board.features[i] = u16::MAX;
+            our_board.features[i] = u16::MAX;
+            opp_board.features[i] = u16::MAX;
         }
 
-        inputs.push(cuda_board);
+        our_inputs.push(our_board);
+        opp_inputs.push(opp_board);
         results.push(board.blended_result(blend, scale));
     }
 }

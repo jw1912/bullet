@@ -105,7 +105,7 @@ fn main() {
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-        println!("cargo:rerun-if-changed=src/cuda/kernels.cu");
+    println!("cargo:rerun-if-changed=src/cuda/kernel.cu");
 
     cc::Build::new()
         .cuda(true)
