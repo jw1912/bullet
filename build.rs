@@ -48,8 +48,6 @@ fn link_cuda() -> Vec<PathBuf> {
     ]
 }
 
-// see https://github.com/rust-lang/rust-bindgen/issues/687,
-// specifically https://github.com/rust-lang/rust-bindgen/issues/687#issuecomment-450750547
 const IGNORED_MACROS: &[&str] = &[
     "FP_INFINITE",
     "FP_NAN",
@@ -81,10 +79,8 @@ fn main() {
     let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let builder = Builder::default();
 
-    // tell cargo to link cuda libs
     println!("cargo:rustc-link-lib=dylib=cuda");
 
-    // find include directories and set up link search paths
     let include_paths = link_cuda();
     let builder = include_paths.iter().fold(builder, |builder, path| {
         let path = path.to_str().unwrap();
@@ -96,20 +92,27 @@ fn main() {
     println!("cargo:rerun-if-changed=src/cuda/wrapper.h");
 
     builder
-        // input
         .header("src/cuda/wrapper.h")
         .parse_callbacks(Box::new(CustomParseCallBacks))
-        // settings
         .size_t_is_usize(true)
-        //TODO correctly handle this non-exhaustiveness in FFI
         .default_enum_style(EnumVariation::Rust { non_exhaustive: true })
         .must_use_type("cudaError")
         .must_use_type("CUresult")
         .must_use_type("cudaError_enum")
         .layout_tests(false)
-        // output
         .generate()
         .expect("Unable to generate bindings")
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
+
+        println!("cargo:rerun-if-changed=src/cuda/kernels.cu");
+
+    cc::Build::new()
+        .cuda(true)
+        .cudart("shared")
+        .debug(false)
+        .opt_level(3)
+        .include("cuda")
+        .files(vec!["src/cuda/kernel.cu"])
+        .compile("libkernels.a");
 }

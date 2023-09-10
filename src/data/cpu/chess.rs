@@ -1,6 +1,7 @@
-use crate::util::sigmoid;
-
-use super::{marlinformat::MarlinFormat, DataType};
+use crate::{
+    data::{DataType, cpu::marlinformat::MarlinFormat},
+    util::sigmoid,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

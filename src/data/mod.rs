@@ -1,7 +1,8 @@
-pub mod chess;
-pub mod marlinformat;
+pub mod cpu;
+pub mod gpu;
 
-pub use chess::ChessBoard;
+pub use cpu::chess::ChessBoard;
+pub use gpu::chess::ChessBoardCUDA;
 
 use crate::{network::InputType, Data, Input};
 

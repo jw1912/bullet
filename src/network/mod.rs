@@ -1,7 +1,6 @@
 mod accumulator;
 pub mod activation;
 mod cpu;
-pub mod gpu;
 pub mod inputs;
 mod quantise;
 

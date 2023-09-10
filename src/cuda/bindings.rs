@@ -13,3 +13,12 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 pub const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut c_void;
 pub const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut c_void;
 pub const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut c_void;
+
+#[link(name = "kernels", kind = "static")]
+extern "C" {
+    pub fn add(
+        input: *const f32,
+        filter: *const f32,
+        output: *mut f32,
+    ) -> cudaError;
+}

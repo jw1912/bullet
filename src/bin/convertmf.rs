@@ -6,7 +6,7 @@ use std::{
 };
 
 use bullet::{
-    data::{marlinformat::MarlinFormat, ChessBoard},
+    data::{cpu::marlinformat::MarlinFormat, ChessBoard},
     util::to_slice_with_lifetime,
 };
 

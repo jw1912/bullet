@@ -9,13 +9,12 @@ use crate::{
     Data,
 };
 
-use gradient::gradients_cpu;
+use gradient::{gradients_batch_cpu, gradients_batch_gpu};
 use scheduler::LrScheduler;
 
 use std::{
     fs::{create_dir, metadata, File},
     io::{stdout, BufRead, BufReader, Write},
-    thread,
     time::Instant,
 };
 
@@ -178,7 +177,7 @@ impl Trainer {
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
                     let gradients =
-                        self.gradients(nnue, batch, &mut error, reciprocal_scale);
+                        self.gradients_cpu(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -233,31 +232,41 @@ impl Trainer {
         }
     }
 
-    fn gradients(
+    fn gradients_cpu(
         &self,
         nnue: &NetworkParams,
         batch: &[Data],
         error: &mut f32,
         scale: f32,
     ) -> Box<NetworkParams> {
-        let size = batch.len() / self.threads;
-        let mut errors = vec![0.0; self.threads];
-        let mut grad = NetworkParams::new();
-        let blend = self.blend;
-        let skip_prop = self.skip_prop;
-        thread::scope(|s| {
-            batch
-                .chunks(size)
-                .zip(errors.iter_mut())
-                .map(|(chunk, error)| {
-                    s.spawn(|| gradients_cpu(chunk, nnue, error, blend, skip_prop, scale))
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .map(|p| p.join().unwrap())
-                .for_each(|part| *grad += &part);
-        });
-        *error += errors.iter().sum::<f32>();
-        grad
+        gradients_batch_cpu(
+            batch,
+            nnue,
+            error,
+            scale,
+            self.blend,
+            self.skip_prop,
+            self.threads,
+        )
+    }
+
+    fn _gradients_gpu(
+        &self,
+        nnue: &NetworkParams,
+        batch: &[Data],
+        error: &mut f32,
+        scale: f32,
+    ) {
+        unsafe {
+            gradients_batch_gpu(
+                batch,
+                nnue,
+                error,
+                scale,
+                self.blend,
+                self.skip_prop,
+                self.threads,
+            );
+        }
     }
 }
