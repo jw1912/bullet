@@ -9,13 +9,11 @@ use crate::{
     Data,
 };
 
-use gradient::gradients;
 use scheduler::LrScheduler;
 
 use std::{
     fs::{create_dir, metadata, File},
     io::{stdout, BufRead, BufReader, Write},
-    thread,
     time::Instant,
 };
 
@@ -183,7 +181,7 @@ impl Trainer {
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
 
-                    if finished_batches % 500 == 0 {
+                    if finished_batches % 128 == 0 {
                         let pct = finished_batches as f32 / batches as f32 * 100.0;
                         let positions = finished_batches * batch_size;
                         let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
@@ -240,24 +238,35 @@ impl Trainer {
         error: &mut f32,
         scale: f32,
     ) -> Box<NetworkParams> {
-        let size = batch.len() / self.threads;
-        let mut errors = vec![0.0; self.threads];
-        let mut grad = NetworkParams::new();
-        let blend = self.blend;
-        let skip_prop = self.skip_prop;
-        thread::scope(|s| {
-            batch
-                .chunks(size)
-                .zip(errors.iter_mut())
-                .map(|(chunk, error)| {
-                    s.spawn(|| gradients(chunk, nnue, error, blend, skip_prop, scale))
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .map(|p| p.join().unwrap())
-                .for_each(|part| *grad += &part);
-        });
-        *error += errors.iter().sum::<f32>();
-        grad
+        #[cfg(not(feature = "cuda"))]
+        {
+            use gradient::gradients_batch_cpu;
+            gradients_batch_cpu(
+                batch,
+                nnue,
+                error,
+                scale,
+                self.blend,
+                self.skip_prop,
+                self.threads,
+            )
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            use gradient::gradients_batch_gpu;
+            unsafe {
+                gradients_batch_gpu(
+                    batch,
+                    nnue,
+                    error,
+                    scale,
+                    self.blend,
+                    self.skip_prop,
+                    self.threads,
+                )
+            }
+        }
+
     }
 }

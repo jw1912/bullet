@@ -1,5 +1,6 @@
 mod accumulator;
 pub mod activation;
+mod cpu;
 pub mod inputs;
 mod quantise;
 
@@ -7,19 +8,14 @@ pub use accumulator::Accumulator;
 pub use inputs::InputType;
 pub use quantise::quantise_and_write;
 
-use crate::{
-    Activation,
-    data::{DataType, Features},
-    rng::Rand,
-    Data, Input, HIDDEN, util::write_to_bin,
-};
+use crate::{rng::Rand, Input, HIDDEN, util::write_to_bin};
 
 pub type NetworkParams = Network<f32>;
 
 pub const NETWORK_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
-const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
-const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
-const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
+pub const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
+pub const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
+pub const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
 
 #[derive(Clone)]
 #[repr(C)]
@@ -75,73 +71,6 @@ impl NetworkParams {
         }
 
         params
-    }
-
-    pub fn forward(
-        &self,
-        pos: &Data,
-        accs: &mut [Accumulator; 2],
-        activated: &mut [[f32; HIDDEN]; 2],
-        features: &mut Features,
-    ) -> f32 {
-        for feat in pos.into_iter() {
-            let (wfeat, bfeat) = Input::get_feature_indices(feat);
-
-            features.push(wfeat, bfeat);
-            accs[0].add_feature(wfeat, self);
-            accs[1].add_feature(bfeat, self);
-            if Input::FACTORISER {
-                accs[0].add_feature(wfeat % Data::INPUTS, self);
-                accs[1].add_feature(bfeat % Data::INPUTS, self);
-            }
-        }
-
-        let mut eval = self[OUTPUT_BIAS];
-
-        for i in 0..HIDDEN {
-            activated[0][i] = Activation::activate(accs[0][i]);
-            eval += activated[0][i] * self[OUTPUT_WEIGHTS + i];
-        }
-
-        for i in 0..HIDDEN {
-            activated[1][i] = Activation::activate(accs[1][i]);
-            eval += activated[1][i] * self[OUTPUT_WEIGHTS + HIDDEN + i];
-        }
-
-        eval
-    }
-
-    pub fn backprop(
-        &self,
-        err: f32,
-        grad: &mut NetworkParams,
-        accs: &[Accumulator; 2],
-        activated: &[[f32; HIDDEN]; 2],
-        features: &mut Features,
-    ) {
-        let mut components = [(0.0, 0.0); HIDDEN];
-
-        for i in 0..HIDDEN {
-            components[i] = (
-                err * self[OUTPUT_WEIGHTS + i] * Activation::prime(accs[0][i]),
-                err * self[OUTPUT_WEIGHTS + HIDDEN + i] * Activation::prime(accs[1][i]),
-            );
-
-            grad[FEATURE_BIAS + i] += components[i].0 + components[i].1;
-
-            grad[OUTPUT_WEIGHTS + i] += err * activated[0][i];
-            grad[OUTPUT_WEIGHTS + HIDDEN + i] += err * activated[1][i];
-        }
-
-        for (wfeat, bfeat) in features {
-            let (widx, bidx) = (wfeat * HIDDEN, bfeat * HIDDEN);
-            for i in 0..HIDDEN {
-                grad[widx + i] += components[i].0;
-                grad[bidx + i] += components[i].1;
-            }
-        }
-
-        grad[OUTPUT_BIAS] += err;
     }
 
     pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {

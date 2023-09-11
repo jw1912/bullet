@@ -9,3 +9,10 @@ panic = 'abort'
 strip = true
 codegen-units = 1
 lto = true
+
+[build-dependencies]
+bindgen = { version = "0.68.1", optional = true}
+cc = { version = "1.0.83", optional = true}
+
+[features]
+cuda = ["dep:bindgen", "dep:cc"]
