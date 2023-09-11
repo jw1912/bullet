@@ -34,7 +34,7 @@ __global__ void populateAccumulator(
     float elementVal = featureBiases[element];
 
     for (size_t i = 0; i < INPUT; i++) {
-        if (thisInput[i] >= static_cast<uint16_t>(768))
+        if (thisInput[i] == static_cast<uint16_t>(65535))
             break;
 
         const size_t idx = static_cast<size_t>(thisInput[i]) * HIDDEN + element;
@@ -121,7 +121,7 @@ __global__ void backpropSide(
     atomicAdd(&outputWeightsGradient[outputWeightIdx], error * accumulatorVal);
 
     for (int i = 0; i < INPUT; i++) {
-        if (thisInput[i] >= static_cast<uint16_t>(768))
+        if (thisInput[i] == static_cast<uint16_t>(65535))
             break;
 
         const size_t x = thisInput[i] * HIDDEN + element;

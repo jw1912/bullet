@@ -1,9 +1,9 @@
 use crate::{
-    data::{cpu::chess::ChessBoard, MAX_FEATURES},
+    Data,
     Input,
+    data::{ChessBoard, DataType, MAX_FEATURES},
     inputs::InputType,
 };
-
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,6 +40,11 @@ impl ChessBoardCUDA {
             our_board.features[i] = wfeat as u16;
             opp_board.features[i] = bfeat as u16;
             i += 1;
+            if Input::FACTORISER {
+                our_board.features[i] = (wfeat % Data::INPUTS) as u16;
+                opp_board.features[i] = (bfeat % Data::INPUTS) as u16;
+                i += 1;
+            }
         }
 
         if i < MAX_FEATURES {
