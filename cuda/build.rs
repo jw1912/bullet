@@ -4,6 +4,9 @@ use std::path::PathBuf;
 use bindgen::{Builder, CargoCallbacks, EnumVariation};
 use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
 
+const WRAPPER_PATH: &str = "./src/wrapper.h";
+const KERNEL_PATH: &str = "./src/kernel.cu";
+
 fn main() {
     let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let builder = Builder::default();
@@ -18,10 +21,10 @@ fn main() {
         builder.clang_arg(format!("-I{}", path))
     });
 
-    println!("cargo:rerun-if-changed=src/cuda/wrapper.h");
+    println!("cargo:rerun-if-changed={WRAPPER_PATH}");
 
     builder
-        .header("src/cuda/wrapper.h")
+        .header(WRAPPER_PATH)
         .parse_callbacks(Box::new(CustomParseCallBacks))
         .size_t_is_usize(true)
         .default_enum_style(EnumVariation::Rust { non_exhaustive: true })
@@ -34,7 +37,7 @@ fn main() {
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-    println!("cargo:rerun-if-changed=src/cuda/kernel.cu");
+    println!("cargo:rerun-if-changed={KERNEL_PATH}");
 
     cc::Build::new()
         .cuda(true)
@@ -42,7 +45,7 @@ fn main() {
         .debug(false)
         .opt_level(3)
         .include("cuda")
-        .files(vec!["src/cuda/kernel.cu"])
+        .files(vec![KERNEL_PATH])
         .compile("libkernels.a");
 }
 

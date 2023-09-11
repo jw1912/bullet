@@ -11,7 +11,32 @@ use common::{
     Activation,
     data::{DataType, Features},
     Data, Input, HIDDEN,
+    util::sigmoid,
 };
+
+pub fn update_single_grad_cpu(
+    pos: &Data,
+    nnue: &NetworkParams,
+    grad: &mut NetworkParams,
+    error: &mut f32,
+    blend: f32,
+    scale: f32,
+) {
+    let bias = Accumulator::load_biases(nnue);
+    let mut accs = [bias; 2];
+    let mut activated = [[0.0; HIDDEN]; 2];
+    let mut features = Features::default();
+
+    let eval = nnue.forward(pos, &mut accs, &mut activated, &mut features);
+
+    let result = pos.blended_result(blend, scale);
+
+    let sigmoid = sigmoid(eval, 1.0);
+    let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
+    *error += (sigmoid - result).powi(2);
+
+    nnue.backprop(err, grad, &accs, &activated, &mut features);
+}
 
 impl NetworkParams {
     pub fn forward(
