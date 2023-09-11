@@ -215,7 +215,7 @@ extern "C" {
         const size_t blocks = (batchSize + hiddenSize - 1) / hiddenSize;
 
         float* ourAccumulators;
-        cudaMalloc(&ourAccumulators, accumulatorSize);
+        cudaMallocManaged(&ourAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
         checkError("malloc 1");
 
@@ -228,7 +228,7 @@ extern "C" {
             std::cout << "  " << ourAccumulators[i] << std::endl;
 
         float* oppAccumulators;
-        cudaMalloc(&oppAccumulators, accumulatorSize);
+        cudaMallocManaged(&oppAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
         checkError("malloc 2");
 
