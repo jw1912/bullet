@@ -4,18 +4,10 @@
 #include <iostream>
 #include <cstdint>
 
-#define INPUT 32
 #define HIDDEN 768
 
-__global__ void addInternal(const float* A, const float* B, float* C, int size)
-{
-    int i = threadIdx.x;
-
-    if (i >= size)
-        return;
-
-    C[i] = A[i] + B[i];
-}
+// do not touch
+#define INPUT 32
 
 __global__ void populateAccumulator(
     const size_t batchSize,
@@ -162,89 +154,80 @@ size_t calcBlocks(size_t total, size_t threads)
     return (total + threads - 1) / threads;
 }
 
-extern "C" {
-    cudaError add(const float* A, const float* B, float* C, int size)
+extern "C" cudaError trainBatch(
+    const size_t batchSize,
+    const size_t hiddenSize,
+    const size_t inputSize,
+    const float* featureWeights,
+    const float* featureBiases,
+    const float* outputWeights,
+    const float* outputBiases,
+    const uint16_t* ourInputs,
+    const uint16_t* oppInputs,
+    const float* results,
+    float* featureWeightsGradient,
+    float* featureBiasesGradient,
+    float* outputWeightsGradient,
+    float* outputBiasesGradient,
+    float* error)
+{
+    if (inputSize != INPUT)
     {
-        addInternal<<<1, 3>>>(A, B, C, size);
-
-        return cudaGetLastError();
+        std::cout << "Incompatible input format.";
+        exit(1);
     }
 
-    cudaError trainBatch(
-        const size_t batchSize,
-        const size_t hiddenSize,
-        const size_t inputSize,
-        const float* featureWeights,
-        const float* featureBiases,
-        const float* outputWeights,
-        const float* outputBiases,
-        const uint16_t* ourInputs,
-        const uint16_t* oppInputs,
-        const float* results,
-        float* featureWeightsGradient,
-        float* featureBiasesGradient,
-        float* outputWeightsGradient,
-        float* outputBiasesGradient,
-        float* error)
+    if (hiddenSize != HIDDEN)
     {
-        if (inputSize != INPUT)
-        {
-            std::cout << "Incompatible input format.";
-            exit(1);
-        }
-
-        if (hiddenSize != HIDDEN)
-        {
-            std::cout << "HIDDEN must be set to " << hiddenSize << " in src/cuda/kernel.cu";
-            exit(1);
-        }
-
-        const size_t accumulatorSize = batchSize * HIDDEN * sizeof(float);
-        const size_t outputSize = batchSize * sizeof(float);
-        const size_t blocks = calcBlocks(batchSize, HIDDEN);
-        const size_t sumBlocks = calcBlocks(batchSize, 1024);
-
-        float* ourAccumulators;
-        cudaMalloc(&ourAccumulators, accumulatorSize);
-        float* oppAccumulators;
-        cudaMalloc(&oppAccumulators, accumulatorSize);
-        cudaDeviceSynchronize();
-
-        populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
-        cudaDeviceSynchronize();
-
-        populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
-        cudaDeviceSynchronize();
-
-        float* outputs;
-        cudaMalloc(&outputs, outputSize);
-        cudaDeviceSynchronize();
-
-        calculateErrors<<<sumBlocks, 1024>>>(batchSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, results, outputs, error);
-        cudaDeviceSynchronize();
-
-        backpropSide<<<batchSize, HIDDEN>>>(
-            batchSize, 0,
-            outputWeights, ourAccumulators, ourInputs, outputs,
-            featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
-        );
-        cudaDeviceSynchronize();
-
-        backpropSide<<<batchSize, HIDDEN>>>(
-            batchSize, HIDDEN,
-            outputWeights, oppAccumulators, oppInputs, outputs,
-            featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
-        );
-        cudaDeviceSynchronize();
-
-        backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, outputBiasesGradient);
-        cudaDeviceSynchronize();
-
-        cudaFree(ourAccumulators);
-        cudaFree(oppAccumulators);
-        cudaFree(outputs);
-        cudaDeviceSynchronize();
-
-        return cudaGetLastError();
+        std::cout << "HIDDEN must be set to " << hiddenSize << " in src/cuda/kernel.cu";
+        exit(1);
     }
+
+    const size_t accumulatorSize = batchSize * HIDDEN * sizeof(float);
+    const size_t outputSize = batchSize * sizeof(float);
+    const size_t blocks = calcBlocks(batchSize, HIDDEN);
+    const size_t sumBlocks = calcBlocks(batchSize, 1024);
+
+    float* ourAccumulators;
+    cudaMalloc(&ourAccumulators, accumulatorSize);
+    float* oppAccumulators;
+    cudaMalloc(&oppAccumulators, accumulatorSize);
+    cudaDeviceSynchronize();
+
+    populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
+    cudaDeviceSynchronize();
+
+    populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
+    cudaDeviceSynchronize();
+
+    float* outputs;
+    cudaMalloc(&outputs, outputSize);
+    cudaDeviceSynchronize();
+
+    calculateErrors<<<sumBlocks, 1024>>>(batchSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, results, outputs, error);
+    cudaDeviceSynchronize();
+
+    backpropSide<<<batchSize, HIDDEN>>>(
+        batchSize, 0,
+        outputWeights, ourAccumulators, ourInputs, outputs,
+        featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
+    );
+    cudaDeviceSynchronize();
+
+    backpropSide<<<batchSize, HIDDEN>>>(
+        batchSize, HIDDEN,
+        outputWeights, oppAccumulators, oppInputs, outputs,
+        featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
+    );
+    cudaDeviceSynchronize();
+
+    backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, outputBiasesGradient);
+    cudaDeviceSynchronize();
+
+    cudaFree(ourAccumulators);
+    cudaFree(oppAccumulators);
+    cudaFree(outputs);
+    cudaDeviceSynchronize();
+
+    return cudaGetLastError();
 }
