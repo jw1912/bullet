@@ -95,7 +95,6 @@ pub unsafe fn gradients_batch_gpu(
     let results_ptr = cuda_malloc::<f32>(batch_size * std::mem::size_of::<f32>());
 
     catch!(cudaDeviceSynchronize());
-
     thread::scope(|s| {
         let mut copy_count = 0;
         batch
@@ -188,8 +187,6 @@ pub unsafe fn gradients_batch_gpu(
     catch!(cudaDeviceSynchronize());
 
     *error += batch_error;
-
-    //println!("{batch_error}");
 
     let mut res = NetworkParams::new();
     let res_ptr = res.as_mut_ptr() as *mut c_void;

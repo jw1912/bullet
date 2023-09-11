@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <iostream>
 #include <cstdint>
+#include <chrono>
 
 __global__ void addInternal(const float* A, const float* B, float* C, int size)
 {
@@ -75,20 +76,22 @@ __global__ void calculateEvals(
     const float* oppAccumulators,
     float* outputs)
 {
-    if (blockIdx.x >= batchSize)
+    const size_t outputIdx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (outputIdx >= batchSize)
         return;
 
-    if (threadIdx.x >= hiddenSize)
-        return;
+    const size_t idx = outputIdx * hiddenSize;
 
-    const size_t element = threadIdx.x;
-    const size_t outputIdx = blockIdx.x;
-    const size_t idx = outputIdx * hiddenSize + element;
+    float outputVal = outputBiases[0];
 
-    float outputVal = ourAccumulators[idx] * outputWeights[element];
-    outputVal += oppAccumulators[idx] * outputWeights[hiddenSize + element];
+    for (size_t i = 0; i < hiddenSize; i++)
+        outputVal += ourAccumulators[idx + i] * outputWeights[i];;
 
-    atomicAdd(&outputs[outputIdx], outputVal);
+    for (size_t i = 0; i < hiddenSize; i++)
+        outputVal += oppAccumulators[idx + i] * outputWeights[hiddenSize + i];
+
+    outputs[outputIdx] = outputVal;
 }
 
 __global__ void calculateErrors(
@@ -185,6 +188,18 @@ void checkError(std::string message)
     }
 }
 
+#define REPORT_TIMES false
+std::chrono::high_resolution_clock::time_point reportTime(
+    std::chrono::high_resolution_clock::time_point prev,
+    std::string message)
+{
+    auto now = std::chrono::high_resolution_clock::now();
+    auto dur = std::chrono::duration_cast<std::chrono::microseconds>(now - prev);
+    if (REPORT_TIMES)
+        std::cout << message << dur.count() << std::endl;
+    return now;
+}
+
 extern "C" {
     cudaError add(const float* A, const float* B, float* C, int size)
     {
@@ -214,32 +229,44 @@ extern "C" {
         const size_t outputSize = batchSize * sizeof(float);
         const size_t blocks = (batchSize + hiddenSize - 1) / hiddenSize;
 
+        if (REPORT_TIMES)
+            std::cout << std::endl;
+
+        auto c1 = std::chrono::high_resolution_clock::now();
+
         float* ourAccumulators;
-        cudaMallocManaged(&ourAccumulators, accumulatorSize);
+        cudaMalloc(&ourAccumulators, accumulatorSize);
+        float* oppAccumulators;
+        cudaMalloc(&oppAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
 
         populateAccumulator<<<batchSize, hiddenSize>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
-        cudaDeviceSynchronize();
-
-        float* oppAccumulators;
-        cudaMallocManaged(&oppAccumulators, accumulatorSize);
-        cudaDeviceSynchronize();
-
         populateAccumulator<<<batchSize, hiddenSize>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
         cudaDeviceSynchronize();
 
+        auto c2 = reportTime(c1, "  accumulator: ");
+
         float* outputs;
-        cudaMallocManaged(&outputs, outputSize);
+        cudaMalloc(&outputs, outputSize);
         cudaDeviceSynchronize();
 
-        setOutputBias<<<blocks, hiddenSize>>>(batchSize, outputBiases, outputs);
+        auto s1 = reportTime(c2, "  malloc: ");
+
+        //setOutputBias<<<blocks, hiddenSize>>>(batchSize, outputBiases, outputs);
+        //cudaDeviceSynchronize();
+        //auto s2 = reportTime(s1, "  bias: ");
+
+        const auto sumBlocks = (batchSize + 1023) / 1024;
+        calculateEvals<<<sumBlocks, 1024>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
         cudaDeviceSynchronize();
 
-        calculateEvals<<<batchSize, hiddenSize>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
-        cudaDeviceSynchronize();
+        auto s2 = reportTime(s1, "  evals: ");
 
         calculateErrors<<<blocks, hiddenSize>>>(batchSize, hiddenSize, results, outputs, error);
         cudaDeviceSynchronize();
+
+        reportTime(s2, "  errors: ");
+        auto c3 = reportTime(c2, "  error: ");
 
         backpropSide<<<batchSize, hiddenSize>>>(
             batchSize, hiddenSize, inputSize, 0,
@@ -248,6 +275,8 @@ extern "C" {
         );
         cudaDeviceSynchronize();
 
+        auto ourT = reportTime(c3, "    our weights: ");
+
         backpropSide<<<batchSize, hiddenSize>>>(
             batchSize, hiddenSize, inputSize, hiddenSize,
             outputWeights, oppAccumulators, oppInputs, outputs,
@@ -255,13 +284,20 @@ extern "C" {
         );
         cudaDeviceSynchronize();
 
-        backpropOutputBias<<<1, 1>>>(batchSize, outputs, outputBiasesGradient);
+        auto oppT = reportTime(ourT, "    opp weights: ");
+
+        backpropOutputBias<<<blocks, hiddenSize>>>(batchSize, outputs, outputBiasesGradient);
         cudaDeviceSynchronize();
+
+        reportTime(oppT, "    bias: ");
+        reportTime(c3, "  backprop: ");
 
         cudaFree(ourAccumulators);
         cudaFree(oppAccumulators);
         cudaFree(outputs);
         cudaDeviceSynchronize();
+
+        reportTime(c1, "total: ");
 
         return cudaGetLastError();
     }

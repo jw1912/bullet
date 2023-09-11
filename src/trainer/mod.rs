@@ -175,6 +175,7 @@ impl Trainer {
                 let buf_ref: &[Data] = unsafe { to_slice_with_lifetime(&buf) };
 
                 for batch in buf_ref.chunks(batch_size) {
+                    let batch_timer = Instant::now();
                     let adj = 2. / batch.len() as f32;
                     let gradients =
                         self.gradients_gpu(nnue, batch, &mut error, reciprocal_scale);
