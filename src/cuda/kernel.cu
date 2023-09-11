@@ -65,9 +65,9 @@ __global__ void calculateEvals(
     if (threadIdx.x >= hiddenSize)
         return;
 
-    const size_t outputIdx = blockIdx.x;
     const size_t element = threadIdx.x;
-    const size_t idx = hiddenSize * outputIdx + element;
+    const size_t outputIdx = blockIdx.x;
+    const size_t idx = outputIdx * hiddenSize + element;
 
     float outputVal = outputBiases[element];
     outputVal += ourAccumulators[idx] * outputWeights[element];
@@ -120,14 +120,15 @@ __global__ void backpropSide(
 
     const size_t element = threadIdx.x;
     const size_t outputIdx = blockIdx.x;
-    const size_t inputIdx = inputSize * outputIdx;
+    const size_t inputIdx = outputIdx * inputSize;
     const size_t outputWeightIdx = element + outputOffset;
+    const size_t accumulatorIdx = outputIdx * hiddenSize + element;
 
     const uint16_t* thisInput = inputs + inputIdx;
 
     const float error = outputs[outputIdx];
     const float weight = outputWeights[outputWeightIdx];
-    const float accumulatorVal = accumulator[element];
+    const float accumulatorVal = accumulator[accumulatorIdx];
 
     // uses a trick
     const float component = accumulatorVal > 0 && accumulatorVal < 1

@@ -196,7 +196,7 @@ pub unsafe fn gradients_batch_gpu(
 
     catch!(cudaMemcpy(
         res_ptr,
-        grad as *mut c_void,
+        grad as *const c_void,
         NET_SIZE,
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
     ), "memcpy");
@@ -216,6 +216,8 @@ pub unsafe fn gradients_batch_gpu(
 
     catch!(cudaFree(network.cast()), "free");
     catch!(cudaDeviceSynchronize());
+
+    println!("output bias gradient: {}", res[OUTPUT_BIAS]);
 
     res
 }
