@@ -221,11 +221,13 @@ extern "C" {
         cudaDeviceSynchronize();
         checkError("malloc 3");
 
-        calculateEvals<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
+        const size_t blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+
+        calculateEvals<<<blocks, threadsPerBlock>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
         cudaDeviceSynchronize();
         checkError("eval");
 
-        calculateErrors<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, results, outputs, error);
+        calculateErrors<<<blocks, threadsPerBlock>>>(batchSize, hiddenSize, results, outputs, error);
         cudaDeviceSynchronize();
         checkError("error");
 
@@ -245,7 +247,7 @@ extern "C" {
         cudaDeviceSynchronize();
         checkError("backprops 2");
 
-        backpropOutputBias<<<blocksPerGrid, threadsPerBlock>>>(batchSize, outputs, outputBiasesGradient);
+        backpropOutputBias<<<1, 1>>>(batchSize, outputs, outputBiasesGradient);
         cudaDeviceSynchronize();
         checkError("backprops 3");
 
