@@ -2,15 +2,36 @@ pub mod bindings;
 
 use std::ffi::{c_float, c_void};
 
-use bindings::{cudaDeviceSynchronize, cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset};
+use bindings::{
+    cudaDeviceSynchronize,
+    cudaError,
+    cudaMalloc,
+    cudaMemcpy,
+    cudaMemcpyKind,
+    cudaMemset,
+};
+
+#[macro_export]
+macro_rules! catch {
+    ($func:expr, $caller:expr) => {
+        let err = $func;
+        if err != cudaError::cudaSuccess {
+            panic!("{}: {:?}", $caller, err);
+        }
+    };
+    ($func:expr) => {
+        catch!($func, "synchronise")
+    }
+}
 
 pub fn cuda_malloc<T>(size: usize) -> *mut T {
     let mut grad = std::ptr::null_mut::<T>();
 
     unsafe {
         let grad_ptr = (&mut grad) as *mut *mut T;
-        let _ = cudaMalloc(grad_ptr as *mut *mut c_void, size);
-        let _ = cudaDeviceSynchronize();
+        assert!(!grad_ptr.is_null(), "null pointer");
+        catch!(cudaMalloc(grad_ptr.cast(), size), "malloc");
+        catch!(cudaDeviceSynchronize());
     }
 
     grad
@@ -21,10 +42,10 @@ pub fn cuda_calloc<const SIZE: usize>() -> *mut c_float {
 
     unsafe {
         let grad_ptr = (&mut grad) as *mut *mut c_float;
-        let _ = cudaMalloc(grad_ptr.cast(), SIZE);
-        let _ = cudaDeviceSynchronize();
-        let _ = cudaMemset(grad as *mut c_void, 0, SIZE);
-        let _ = cudaDeviceSynchronize();
+        catch!(cudaMalloc(grad_ptr.cast(), SIZE), "malloc");
+        catch!(cudaDeviceSynchronize());
+        catch!(cudaMemset(grad as *mut c_void, 0, SIZE), "memset");
+        catch!(cudaDeviceSynchronize());
     }
 
     grad
@@ -32,13 +53,13 @@ pub fn cuda_calloc<const SIZE: usize>() -> *mut c_float {
 
 pub fn cuda_copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
     unsafe {
-        let _ = cudaMemcpy(
+        catch!(cudaMemcpy(
             dest.cast(),
             src.cast(),
             amt * std::mem::size_of::<T>(),
             cudaMemcpyKind::cudaMemcpyHostToDevice
-        );
-        let _ = cudaDeviceSynchronize();
+        ), "memcpy");
+        catch!(cudaDeviceSynchronize());
     }
 }
 

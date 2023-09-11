@@ -1,9 +1,10 @@
 use std::{ffi::c_void, thread};
 
 use crate::{
+    catch,
     cuda::{
         cuda_calloc, cuda_copy_to_gpu, cuda_malloc,
-        bindings::{cudaFree, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, train_batch},
+        bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, trainBatch},
     },
     data::{Features, gpu::chess::ChessBoardCUDA},
     network::{Accumulator, NetworkParams, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
@@ -75,7 +76,6 @@ fn update_single_grad_cpu(
     nnue.backprop(err, grad, &accs, &activated, &mut features);
 }
 
-#[allow(unused)]
 pub unsafe fn gradients_batch_gpu(
     batch: &[Data],
     nnue: &NetworkParams,
@@ -94,7 +94,7 @@ pub unsafe fn gradients_batch_gpu(
     let opp_inputs_ptr = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
     let results_ptr = cuda_malloc::<f32>(batch_size * std::mem::size_of::<f32>());
 
-    cudaDeviceSynchronize();
+    catch!(cudaDeviceSynchronize());
 
     let mut copy_count = 0;
 
@@ -104,11 +104,16 @@ pub unsafe fn gradients_batch_gpu(
             .map(|chunk| {
                 s.spawn(move || {
                     let num = chunk.len();
+                    let mut rand = crate::rng::Rand::default();
                     let mut our_inputs = Vec::with_capacity(num);
                     let mut opp_inputs = Vec::with_capacity(num);
                     let mut results = Vec::with_capacity(num);
 
                     for pos in chunk {
+                        if rand.rand(1.0) < skip_prop {
+                            continue;
+                        }
+
                         ChessBoardCUDA::push(
                             pos,
                             &mut our_inputs,
@@ -154,7 +159,7 @@ pub unsafe fn gradients_batch_gpu(
 
     let gpu_error = cuda_calloc::<1>();
 
-    train_batch(
+    catch!(trainBatch(
         batch_size,
         HIDDEN,
         INPUT_SIZE,
@@ -170,33 +175,36 @@ pub unsafe fn gradients_batch_gpu(
         output_weights_grad,
         output_biases_grad,
         gpu_error,
-    );
+    ), "training");
 
-    cudaMemcpy(
+    catch!(cudaMemcpy(
         (error as *mut f32).cast(),
         gpu_error.cast(),
         std::mem::size_of::<f32>(),
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
-    );
+    ), "memcpy");
+
+    catch!(cudaDeviceSynchronize());
 
     let mut res = NetworkParams::new();
     let res_ptr = res.as_mut_ptr() as *mut c_void;
 
-    cudaMemcpy(
+    catch!(cudaMemcpy(
         res_ptr,
         grad as *mut c_void,
         NET_SIZE,
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
-    );
+    ), "memcpy");
 
-    cudaDeviceSynchronize();
+    catch!(cudaDeviceSynchronize());
 
-    cudaFree(grad.cast());
-    cudaFree(our_inputs_ptr.cast());
-    cudaFree(opp_inputs_ptr.cast());
-    cudaFree(results_ptr.cast());
+    catch!(cudaFree(grad.cast()), "free");
+    catch!(cudaFree(our_inputs_ptr.cast()), "free");
+    catch!(cudaFree(opp_inputs_ptr.cast()), "free");
+    catch!(cudaFree(results_ptr.cast()), "free");
+    catch!(cudaFree(network.cast()), "free");
 
-    cudaDeviceSynchronize();
+    catch!(cudaDeviceSynchronize());
 
     res
 }

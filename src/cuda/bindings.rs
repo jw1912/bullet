@@ -22,7 +22,7 @@ extern "C" {
         size: c_int,
     ) -> cudaError_t;
 
-    pub fn train_batch(
+    pub fn trainBatch(
         batch_size: usize,
         hidden_size: usize,
         input_size: usize,

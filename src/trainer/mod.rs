@@ -177,7 +177,7 @@ impl Trainer {
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
                     let gradients =
-                        self.gradients_cpu(nnue, batch, &mut error, reciprocal_scale);
+                        self.gradients_gpu(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -250,13 +250,13 @@ impl Trainer {
         )
     }
 
-    fn _gradients_gpu(
+    fn gradients_gpu(
         &self,
         nnue: &NetworkParams,
         batch: &[Data],
         error: &mut f32,
         scale: f32,
-    ) {
+    ) -> Box<NetworkParams> {
         unsafe {
             gradients_batch_gpu(
                 batch,
@@ -266,7 +266,7 @@ impl Trainer {
                 self.blend,
                 self.skip_prop,
                 self.threads,
-            );
+            )
         }
     }
 }
