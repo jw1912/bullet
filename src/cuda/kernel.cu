@@ -15,22 +15,22 @@ __global__ void addInternal(const float* A, const float* B, float* C, int size)
 }
 
 template<const size_t hiddenSize, const size_t inputSize>
-__global__ void accumulatePerspective(
+__device__ void accumulatePerspective(
     float* featureWeights,
     float* featureBiases,
     const uint16_t* inputs,
-    float* outputs,
+    float* accumulators,
     const size_t batchSize)
 {
+    if (blockIdx.x >= batchSize)
+        return;
+
+    if (threadIdx.x >= hiddenSize)
+        return;
+
     const size_t inputIdx = inputSize * blockIdx.x;
     const size_t element = threadIdx.x;
     const size_t outputIdx = blockIdx.x * hiddenSize + element;
-
-    if (inputIdx >= inputSize * batchSize)
-        return;
-
-    if (element >= hiddenSize)
-        return;
 
     const std::uint16_t* thisInput = inputs + inputIdx;
 
@@ -45,13 +45,39 @@ __global__ void accumulatePerspective(
 
     elementVal = elementVal < 0 ? 0 : elementVal > 1 ? 1 : elementVal;
 
-    outputs[outputIdx] = elementVal;
+    accumulators[outputIdx] = elementVal;
+}
+
+template<const size_t hiddenSize>
+__device__ void eval(
+    float* outputWeights,
+    float* outputBiases,
+    const uint16_t* ourAccumulators,
+    const uint16_t* oppAccumulators,
+    float* outputs,
+    const size_t batchSize)
+{
+    if (blockIdx.x >= batchSize)
+        return;
+
+    if (threadIdx.x >= hiddenSize)
+        return;
+
+    const size_t outputIdx = blockIdx.x;
+    const size_t element = threadIdx.x;
+    const size_t idx = hiddenSize * outputIdx + element;
+
+    float outputVal = outputBiases[element];
+    outputVal += ourAccumulators[idx] * outputWeights[element];
+    outputVal += oppAccumulators[idx] * outputWeights[hiddenSize + element];
+
+    atomicAdd(&outputs[outputIdx], outputVal);
 }
 
 extern "C" {
-cudaError add(const float* A, const float* B, float* C, int size) {
-    addInternal<<<1, 3>>>(A, B, C, size);
+    cudaError add(const float* A, const float* B, float* C, int size) {
+        addInternal<<<1, 3>>>(A, B, C, size);
 
-    return cudaGetLastError();
-}
+        return cudaGetLastError();
+    }
 }
