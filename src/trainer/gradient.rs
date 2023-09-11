@@ -48,7 +48,8 @@ pub fn gradients_batch_cpu(
             .map(|p| p.join().unwrap())
             .for_each(|part| *grad += &part);
     });
-    *error += errors.iter().sum::<f32>();
+    let batch_error = errors.iter().sum::<f32>();
+    *error += batch_error;
     grad
 }
 

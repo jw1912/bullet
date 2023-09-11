@@ -67,54 +67,39 @@ __global__ void setOutputBias(
     outputs[idx] = outputBias[0];
 }
 
-__global__ void calculateEvals(
+__global__ void calculateErrors(
     const size_t batchSize,
     const size_t hiddenSize,
     const float* outputWeights,
     const float* outputBiases,
     const float* ourAccumulators,
     const float* oppAccumulators,
-    float* outputs)
+    const float* results,
+    float* outputs,
+    float* error)
 {
     const size_t outputIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (outputIdx >= batchSize)
         return;
 
-    const size_t idx = outputIdx * hiddenSize;
+    const size_t accumulatorIdx = outputIdx * hiddenSize;
 
-    float outputVal = outputBiases[0];
-
-    for (size_t i = 0; i < hiddenSize; i++)
-        outputVal += ourAccumulators[idx + i] * outputWeights[i];;
+    float eval = outputBiases[0];
 
     for (size_t i = 0; i < hiddenSize; i++)
-        outputVal += oppAccumulators[idx + i] * outputWeights[hiddenSize + i];
+        eval += ourAccumulators[accumulatorIdx + i] * outputWeights[i];;
 
-    outputs[outputIdx] = outputVal;
-}
+    for (size_t i = 0; i < hiddenSize; i++)
+        eval += oppAccumulators[accumulatorIdx + i] * outputWeights[hiddenSize + i];
 
-__global__ void calculateErrors(
-    const size_t batchSize,
-    const size_t hiddenSize,
-    const float* results,
-    float* outputs,
-    float* error)
-{
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (idx >= batchSize)
-        return;
-
-    const float eval = outputs[idx];
-    const float result = results[idx];
     const float sigmoid = 1.0 / (1.0 + expf(-eval));
-    const float diff = sigmoid - result;
+    const float diff = sigmoid - results[outputIdx];
     const float singleError = diff * sigmoid * (1.0 - sigmoid);
 
     atomicAdd(error, diff * diff);
 
-    outputs[idx] = singleError;
+    outputs[outputIdx] = singleError;
 }
 
 __global__ void backpropSide(
@@ -252,20 +237,11 @@ extern "C" {
 
         auto s1 = reportTime(c2, "  malloc: ");
 
-        //setOutputBias<<<blocks, hiddenSize>>>(batchSize, outputBiases, outputs);
-        //cudaDeviceSynchronize();
-        //auto s2 = reportTime(s1, "  bias: ");
-
-        const auto sumBlocks = (batchSize + 1023) / 1024;
-        calculateEvals<<<sumBlocks, 1024>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
+        const size_t sumBlocks = (batchSize + 1023) / 1024;
+        calculateErrors<<<sumBlocks, 1024>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, results, outputs, error);
         cudaDeviceSynchronize();
 
-        auto s2 = reportTime(s1, "  evals: ");
-
-        calculateErrors<<<blocks, hiddenSize>>>(batchSize, hiddenSize, results, outputs, error);
-        cudaDeviceSynchronize();
-
-        reportTime(s2, "  errors: ");
+        reportTime(s1, "  errors: ");
         auto c3 = reportTime(c2, "  error: ");
 
         backpropSide<<<batchSize, hiddenSize>>>(
@@ -286,7 +262,7 @@ extern "C" {
 
         auto oppT = reportTime(ourT, "    opp weights: ");
 
-        backpropOutputBias<<<blocks, hiddenSize>>>(batchSize, outputs, outputBiasesGradient);
+        backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, outputBiasesGradient);
         cudaDeviceSynchronize();
 
         reportTime(oppT, "    bias: ");
