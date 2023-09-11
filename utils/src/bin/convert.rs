@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bullet::{data::ChessBoard, util::to_slice_with_lifetime};
+use common::{data::ChessBoard, util::to_slice_with_lifetime};
 
 fn main() {
     let timer = Instant::now();

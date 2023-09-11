@@ -1,6 +1,7 @@
 use crate::{
-    data::{cpu::chess::ChessBoard, InputType, MAX_FEATURES},
-    Input, network::inputs::Chess768,
+    data::{cpu::chess::ChessBoard, MAX_FEATURES},
+    Input,
+    inputs::{InputType, Chess768},
 };
 
 

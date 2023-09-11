@@ -1,11 +1,14 @@
-use bullet::{
-    network::NetworkParams,
-    trainer::{
-        scheduler::{LrScheduler, SchedulerType},
-        Trainer, MetaData,
-    },
-    Optimiser,
-};
+mod gradient;
+mod optimiser;
+mod scheduler;
+mod trainer;
+
+use cpu::NetworkParams;
+
+
+use optimiser::AdamW;
+use scheduler::{LrScheduler, SchedulerType};
+use trainer::{Trainer, MetaData};
 
 fn main() {
     let mut args = std::env::args();
@@ -47,7 +50,7 @@ fn main() {
         scheduler.set_gamma(lr_gamma);
     }
 
-    let optimiser = Optimiser::default();
+    let optimiser = AdamW::default();
 
     let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
     let mut params = NetworkParams::random();

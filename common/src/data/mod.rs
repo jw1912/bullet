@@ -4,7 +4,7 @@ pub mod gpu;
 pub use cpu::chess::ChessBoard;
 pub use gpu::chess::ChessBoardCUDA;
 
-use crate::{network::InputType, Data, Input};
+use crate::{inputs::InputType, Data, Input};
 
 const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
 

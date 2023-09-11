@@ -7,7 +7,7 @@ use super::{
     InputType
 };
 
-use crate::{
+use common::{
     Activation,
     data::{DataType, Features},
     Data, Input, HIDDEN,

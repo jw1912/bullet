@@ -1,15 +1,15 @@
-mod gradient;
-pub mod optimiser;
-pub mod scheduler;
-
 use crate::{
-    Optimiser,
-    network::{quantise_and_write, NetworkParams},
-    util::{to_slice_with_lifetime, write_to_bin},
-    Data,
+    optimiser::AdamW,
+    scheduler::LrScheduler,
+
 };
 
-use scheduler::LrScheduler;
+use cpu::{quantise_and_write, NetworkParams};
+
+use common::{
+    util::{to_slice_with_lifetime, write_to_bin},
+    Data
+};
 
 use std::{
     fs::{create_dir, metadata, File},
@@ -56,7 +56,7 @@ pub struct Trainer {
     scheduler: LrScheduler,
     blend: f32,
     skip_prop: f32,
-    pub optimiser: Optimiser,
+    pub optimiser: AdamW,
 }
 
 impl Trainer {
@@ -67,7 +67,7 @@ impl Trainer {
         scheduler: LrScheduler,
         blend: f32,
         skip_prop: f32,
-        optimiser: Optimiser,
+        optimiser: AdamW,
     ) -> Self {
         Self {
             file,
@@ -240,7 +240,7 @@ impl Trainer {
     ) -> Box<NetworkParams> {
         #[cfg(not(feature = "cuda"))]
         {
-            use gradient::gradients_batch_cpu;
+            use crate::gradient::gradients_batch_cpu;
             gradients_batch_cpu(
                 batch,
                 nnue,
@@ -254,7 +254,7 @@ impl Trainer {
 
         #[cfg(feature = "cuda")]
         {
-            use gradient::gradients_batch_gpu;
+            use crate::gradient::gradients_batch_gpu;
             unsafe {
                 gradients_batch_gpu(
                     batch,

@@ -1,14 +1,11 @@
 use std::thread;
 
-use crate::{
-    network::NetworkParams,
-    Data, HIDDEN,
-};
+use cpu::{Accumulator, NetworkParams};
+use common::{Data, HIDDEN, rng::Rand};
 
 #[cfg(not(feature = "cuda"))]
-use crate::{
+use common::{
     data::Features,
-    network::Accumulator,
     util::sigmoid,
 };
 
@@ -33,7 +30,7 @@ pub fn gradients_batch_cpu(
             .map(|(chunk, error)| {
                 s.spawn(move || {
                     let mut grad = NetworkParams::new();
-                    let mut rand = crate::rng::Rand::default();
+                    let mut rand = Rand::default();
                     for pos in chunk {
                         if rand.rand(1.0) < skip_prop {
                             continue;
@@ -120,7 +117,7 @@ pub unsafe fn gradients_batch_gpu(
             .map(|chunk| {
                 s.spawn(move || {
                     let num = chunk.len();
-                    let mut rand = crate::rng::Rand::default();
+                    let mut rand = Rand::default();
                     let mut our_inputs = Vec::with_capacity(num);
                     let mut opp_inputs = Vec::with_capacity(num);
                     let mut results = Vec::with_capacity(num);

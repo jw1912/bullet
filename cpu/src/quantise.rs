@@ -1,7 +1,7 @@
-use super::{NetworkParams, Network, NETWORK_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS};
-use crate::{
+use super::{NetworkParams, Network, NETWORK_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS, FEATURE_BIAS};
+use common::{
     data::DataType,
-    network::{InputType, FEATURE_BIAS},
+    inputs::InputType,
     Data, Input, HIDDEN,
     util::write_to_bin,
 };
