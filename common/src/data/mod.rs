@@ -6,7 +6,7 @@ pub use gpu::chess::ChessBoardCUDA;
 
 use crate::{inputs::InputType, Data, Input};
 
-const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
+pub const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
 
 pub trait DataType {
     type FeatureType;

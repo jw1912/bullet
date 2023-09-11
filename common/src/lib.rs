@@ -6,7 +6,7 @@ pub mod util;
 
 // Using CUDA:
 // At the moment this will hard lock you into using
-// CReLU Activation and the AdamW Optimiser.
+// CReLU Activation and Chess768 Input.
 
 /// Binary data type used
 ///  - ChessBoard
@@ -18,7 +18,7 @@ pub type Data = data::ChessBoard;
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
-pub const HIDDEN: usize = 768;
+pub const HIDDEN: usize = 8;
 
 /// Activation function:
 ///   - ReLU

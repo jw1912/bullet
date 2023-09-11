@@ -1,7 +1,7 @@
 use crate::{
     data::{cpu::chess::ChessBoard, MAX_FEATURES},
     Input,
-    inputs::{InputType, Chess768},
+    inputs::InputType,
 };
 
 
@@ -30,11 +30,6 @@ impl ChessBoardCUDA {
         blend: f32,
         scale: f32,
     ) {
-        assert!(
-            std::any::TypeId::of::<Input>() == std::any::TypeId::of::<Chess768>(),
-            "Only Chess768 is currently supported!"
-        );
-
         let mut our_board = ChessBoardCUDA::default();
         let mut opp_board = ChessBoardCUDA::default();
 

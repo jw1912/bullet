@@ -4,10 +4,13 @@
 #include <iostream>
 #include <cstdint>
 
+#ifndef HIDDEN
 #define HIDDEN 768
+#endif
 
-// do not touch
+#ifndef INPUT
 #define INPUT 32
+#endif
 
 __global__ void populateAccumulator(
     const size_t batchSize,

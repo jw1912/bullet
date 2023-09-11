@@ -44,6 +44,8 @@ fn main() {
         .cudart("shared")
         .debug(false)
         .opt_level(3)
+        .define("HIDDEN", Some(common::HIDDEN.to_string().as_str()))
+        .define("INPUT", Some(common::data::MAX_FEATURES.to_string().as_str()))
         .include("cuda")
         .files(vec![KERNEL_PATH])
         .compile("libkernels.a");

@@ -11,3 +11,4 @@ cpu = { path = "../cpu" }
 [build-dependencies]
 bindgen = "0.68.1"
 cc = "1.0.83"
+common = { path = "../common" }
