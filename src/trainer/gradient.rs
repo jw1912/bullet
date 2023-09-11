@@ -1,17 +1,18 @@
-use std::{ffi::c_void, thread};
+use std::thread;
 
 use crate::{
-    catch,
-    cuda::{
-        cuda_calloc, cuda_copy_to_gpu, cuda_malloc,
-        bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, trainBatch},
-    },
-    data::{Features, gpu::chess::ChessBoardCUDA},
-    network::{Accumulator, NetworkParams, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
-    util::sigmoid,
+    network::NetworkParams,
     Data, HIDDEN,
 };
 
+#[cfg(not(feature = "cuda"))]
+use crate::{
+    data::Features,
+    network::Accumulator,
+    util::sigmoid,
+};
+
+#[cfg(not(feature = "cuda"))]
 pub fn gradients_batch_cpu(
     batch: &[Data],
     nnue: &NetworkParams,
@@ -53,6 +54,7 @@ pub fn gradients_batch_cpu(
     grad
 }
 
+#[cfg(not(feature = "cuda"))]
 fn update_single_grad_cpu(
     pos: &Data,
     nnue: &NetworkParams,
@@ -77,6 +79,21 @@ fn update_single_grad_cpu(
     nnue.backprop(err, grad, &accs, &activated, &mut features);
 }
 
+#[cfg(feature = "cuda")]
+use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+use crate::{
+    catch,
+    cuda::{
+        cuda_calloc, cuda_copy_to_gpu, cuda_malloc,
+        bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, trainBatch},
+    },
+    data::gpu::chess::ChessBoardCUDA,
+    network::{FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
+};
+
+#[cfg(feature = "cuda")]
 pub unsafe fn gradients_batch_gpu(
     batch: &[Data],
     nnue: &NetworkParams,

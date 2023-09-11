@@ -1,3 +1,4 @@
+#[cfg(feature = "cuda")]
 pub mod cuda;
 pub mod data;
 pub mod network;

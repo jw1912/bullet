@@ -9,7 +9,6 @@ use crate::{
     Data,
 };
 
-use gradient::{gradients_batch_cpu, gradients_batch_gpu};
 use scheduler::LrScheduler;
 
 use std::{
@@ -177,7 +176,7 @@ impl Trainer {
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
                     let gradients =
-                        self.gradients_gpu(nnue, batch, &mut error, reciprocal_scale);
+                        self.gradients(nnue, batch, &mut error, reciprocal_scale);
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -232,33 +231,17 @@ impl Trainer {
         }
     }
 
-    fn gradients_cpu(
+    fn gradients(
         &self,
         nnue: &NetworkParams,
         batch: &[Data],
         error: &mut f32,
         scale: f32,
     ) -> Box<NetworkParams> {
-        gradients_batch_cpu(
-            batch,
-            nnue,
-            error,
-            scale,
-            self.blend,
-            self.skip_prop,
-            self.threads,
-        )
-    }
-
-    fn gradients_gpu(
-        &self,
-        nnue: &NetworkParams,
-        batch: &[Data],
-        error: &mut f32,
-        scale: f32,
-    ) -> Box<NetworkParams> {
-        unsafe {
-            gradients_batch_gpu(
+        #[cfg(not(feature = "cuda"))]
+        {
+            use gradient::gradients_batch_cpu;
+            gradients_batch_cpu(
                 batch,
                 nnue,
                 error,
@@ -268,5 +251,22 @@ impl Trainer {
                 self.threads,
             )
         }
+
+        #[cfg(feature = "cuda")]
+        {
+            use gradient::gradients_batch_gpu;
+            unsafe {
+                gradients_batch_gpu(
+                    batch,
+                    nnue,
+                    error,
+                    scale,
+                    self.blend,
+                    self.skip_prop,
+                    self.threads,
+                )
+            }
+        }
+
     }
 }

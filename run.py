@@ -120,6 +120,12 @@ def main():
         default="no_way"
     )
 
+    parser.add_argument(
+        '--cuda',
+        help="Compile with CUDA.",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -148,10 +154,15 @@ def main():
         "--release",
         "--bin",
         "trainer",
-        "--",
-        "-C",
-        "target-cpu=native",
     ]
+
+    if args.cuda:
+        commands.append("--features")
+        commands.append("cuda")
+
+    commands.append("--")
+    commands.append("-C")
+    commands.append("target-cpu=native")
 
     subprocess.run(commands)
 
