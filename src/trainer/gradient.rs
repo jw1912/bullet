@@ -96,9 +96,8 @@ pub unsafe fn gradients_batch_gpu(
 
     catch!(cudaDeviceSynchronize());
 
-    let mut copy_count = 0;
-
     thread::scope(|s| {
+        let mut copy_count = 0;
         batch
             .chunks(chunk_size)
             .map(|chunk| {
@@ -132,9 +131,10 @@ pub unsafe fn gradients_batch_gpu(
             .map(|p| p.join().unwrap())
             .for_each(|(our_inputs, opp_inputs, results)| {
                 let additional = results.len();
+                let size = additional * ChessBoardCUDA::len();
 
-                cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(copy_count), our_inputs.as_ptr().cast(), additional);
-                cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(copy_count), opp_inputs.as_ptr().cast(), additional);
+                cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(copy_count), our_inputs.as_ptr().cast(), size);
+                cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(copy_count), opp_inputs.as_ptr().cast(), size);
                 cuda_copy_to_gpu(results_ptr.wrapping_add(copy_count), results.as_ptr(), additional);
 
                 copy_count += additional;
@@ -216,8 +216,6 @@ pub unsafe fn gradients_batch_gpu(
 
     catch!(cudaFree(network.cast()), "free");
     catch!(cudaDeviceSynchronize());
-
-    //println!("output bias gradient: {}", res[OUTPUT_BIAS]);
 
     res
 }

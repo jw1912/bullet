@@ -37,11 +37,11 @@ __global__ void populateAccumulator(
 
     float elementVal = featureBiases[element];
 
-    for (int i = 0; i < inputSize; i++) {
+    for (size_t i = 0; i < inputSize; i++) {
         if (thisInput[i] >= static_cast<uint16_t>(768))
             break;
 
-        const size_t idx = thisInput[i] * hiddenSize + element;
+        const size_t idx = static_cast<size_t>(thisInput[i]) * hiddenSize + element;
         elementVal += featureWeights[idx];
     }
 
@@ -217,51 +217,29 @@ extern "C" {
         float* ourAccumulators;
         cudaMallocManaged(&ourAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
-        checkError("malloc 1");
 
         populateAccumulator<<<batchSize, hiddenSize>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
         cudaDeviceSynchronize();
-        checkError("accumulator 1");
-
-        std::cout << "our accumulator: " << std::endl;
-        for (size_t i = 0; i < hiddenSize; i++)
-            std::cout << "  " << ourAccumulators[i] << std::endl;
 
         float* oppAccumulators;
         cudaMallocManaged(&oppAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
-        checkError("malloc 2");
 
         populateAccumulator<<<batchSize, hiddenSize>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
         cudaDeviceSynchronize();
-        checkError("accumulator 2 ");
-
-        std::cout << "opp accumulator: " << std::endl;
-        for (size_t i = 0; i < hiddenSize; i++)
-            std::cout << "  " << oppAccumulators[i] << std::endl;
 
         float* outputs;
         cudaMallocManaged(&outputs, outputSize);
         cudaDeviceSynchronize();
-        checkError("malloc 3");
 
         setOutputBias<<<blocks, hiddenSize>>>(batchSize, outputBiases, outputs);
         cudaDeviceSynchronize();
-        checkError("memset");
-
-        std::cout << "bias: " << outputs[0] << std::endl;
 
         calculateEvals<<<batchSize, hiddenSize>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
         cudaDeviceSynchronize();
-        checkError("eval");
-
-        std::cout << "eval: " << outputs[0] << std::endl;
 
         calculateErrors<<<blocks, hiddenSize>>>(batchSize, hiddenSize, results, outputs, error);
         cudaDeviceSynchronize();
-        checkError("error");
-
-        std::cout << "error: " << outputs[0] << std::endl;
 
         backpropSide<<<batchSize, hiddenSize>>>(
             batchSize, hiddenSize, inputSize, 0,
@@ -269,7 +247,6 @@ extern "C" {
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
         );
         cudaDeviceSynchronize();
-        checkError("backprops 1");
 
         backpropSide<<<batchSize, hiddenSize>>>(
             batchSize, hiddenSize, inputSize, hiddenSize,
@@ -277,17 +254,14 @@ extern "C" {
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
         );
         cudaDeviceSynchronize();
-        checkError("backprops 2");
 
         backpropOutputBias<<<1, 1>>>(batchSize, outputs, outputBiasesGradient);
         cudaDeviceSynchronize();
-        checkError("backprops 3");
 
         cudaFree(ourAccumulators);
         cudaFree(oppAccumulators);
         cudaFree(outputs);
         cudaDeviceSynchronize();
-        checkError("freeing");
 
         return cudaGetLastError();
     }

@@ -13,6 +13,7 @@ pub trait DataType {
     const INPUTS: usize;
 }
 
+#[derive(Debug)]
 pub struct Features {
     features: [(usize, usize); MAX_FEATURES],
     len: usize,
