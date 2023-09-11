@@ -21,4 +21,22 @@ extern "C" {
         c: *mut c_float,
         size: c_int,
     ) -> cudaError_t;
+
+    pub fn train_batch(
+        batch_size: usize,
+        hidden_size: usize,
+        input_size: usize,
+        featureWeights: *const c_float,
+        featureBiases: *const c_float,
+        outputWeights: *const c_float,
+        outputBiases: *const c_float,
+        ourInputs: *const u16,
+        oppInputs: *const u16,
+        results: *const c_float,
+        featureWeightsGradient: *mut c_float,
+        featureBiasesGradient: *mut c_float,
+        outputWeightsGradient: *mut c_float,
+        outputBiasesGradient: *mut c_float,
+        error: *mut c_float
+    ) -> cudaError_t;
 }

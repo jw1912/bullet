@@ -2,11 +2,11 @@ use std::{ffi::c_void, thread};
 
 use crate::{
     cuda::{
-        cuda_calloc,
-        bindings::{cudaFree, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize}, cuda_copy_to_gpu, cuda_malloc,
+        cuda_calloc, cuda_copy_to_gpu, cuda_malloc,
+        bindings::{cudaFree, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, train_batch},
     },
     data::{Features, gpu::chess::ChessBoardCUDA},
-    network::{Accumulator, NetworkParams},
+    network::{Accumulator, NetworkParams, FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
     util::sigmoid,
     Data, HIDDEN,
 };
@@ -85,11 +85,14 @@ pub unsafe fn gradients_batch_gpu(
     skip_prop: f32,
     threads: usize,
 ) -> Box<NetworkParams> {
-    let size = batch.len() / threads;
+    let batch_size = batch.len();
+    let chunk_size = batch.len() / threads;
 
-    let our_inputs_ptr = cuda_malloc(batch.len() * std::mem::size_of::<ChessBoardCUDA>());
-    let opp_inputs_ptr = cuda_malloc(batch.len() * std::mem::size_of::<ChessBoardCUDA>());
-    let results_ptr = cuda_malloc(batch.len() * std::mem::size_of::<f32>());
+    const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
+
+    let our_inputs_ptr = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
+    let opp_inputs_ptr = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
+    let results_ptr = cuda_malloc::<f32>(batch_size * std::mem::size_of::<f32>());
 
     cudaDeviceSynchronize();
 
@@ -97,7 +100,7 @@ pub unsafe fn gradients_batch_gpu(
 
     thread::scope(|s| {
         batch
-            .chunks(size)
+            .chunks(chunk_size)
             .map(|chunk| {
                 s.spawn(move || {
                     let num = chunk.len();
@@ -125,8 +128,8 @@ pub unsafe fn gradients_batch_gpu(
             .for_each(|(our_inputs, opp_inputs, results)| {
                 let additional = results.len();
 
-                cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(copy_count), our_inputs.as_ptr(), additional);
-                cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(copy_count), opp_inputs.as_ptr(), additional);
+                cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(copy_count), our_inputs.as_ptr().cast(), additional);
+                cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(copy_count), opp_inputs.as_ptr().cast(), additional);
                 cuda_copy_to_gpu(results_ptr.wrapping_add(copy_count), results.as_ptr(), additional);
 
                 copy_count += additional;
@@ -136,11 +139,45 @@ pub unsafe fn gradients_batch_gpu(
     const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
     let grad = cuda_calloc::<NET_SIZE>();
 
-    //forwardBatch(nnue, inputs_ptr, error, outputs, std::mem::size_of::<ChessBoardCUDA>());
-    //cudaDeviceSynchronize();
+    let network = cuda_malloc(NET_SIZE);
+    cuda_copy_to_gpu(network, nnue as *const NetworkParams, 1);
 
-    //backpropBatch(nnue, grad, outputs, results_ptr);
-    //cudaDeviceSynchronize();
+    let feature_weights: *const f32 = (network as *const NetworkParams).cast();
+    let feature_biases = feature_weights.wrapping_add(FEATURE_BIAS);
+    let output_weights = feature_weights.wrapping_add(OUTPUT_WEIGHTS);
+    let output_biases = feature_weights.wrapping_add(OUTPUT_BIAS);
+
+    let feature_weights_grad: *mut f32 = (grad as *mut NetworkParams).cast();
+    let feature_biases_grad = feature_weights_grad.wrapping_add(FEATURE_BIAS);
+    let output_weights_grad = feature_weights_grad.wrapping_add(OUTPUT_WEIGHTS);
+    let output_biases_grad = feature_weights_grad.wrapping_add(OUTPUT_BIAS);
+
+    let gpu_error = cuda_calloc::<1>();
+
+    train_batch(
+        batch_size,
+        HIDDEN,
+        INPUT_SIZE,
+        feature_weights,
+        feature_biases,
+        output_weights,
+        output_biases,
+        our_inputs_ptr,
+        opp_inputs_ptr,
+        results_ptr,
+        feature_weights_grad,
+        feature_biases_grad,
+        output_weights_grad,
+        output_biases_grad,
+        gpu_error,
+    );
+
+    cudaMemcpy(
+        (error as *mut f32).cast(),
+        gpu_error.cast(),
+        std::mem::size_of::<f32>(),
+        cudaMemcpyKind::cudaMemcpyDeviceToHost,
+    );
 
     let mut res = NetworkParams::new();
     let res_ptr = res.as_mut_ptr() as *mut c_void;
@@ -149,7 +186,7 @@ pub unsafe fn gradients_batch_gpu(
         res_ptr,
         grad as *mut c_void,
         NET_SIZE,
-        cudaMemcpyKind::cudaMemcpyDeviceToHost
+        cudaMemcpyKind::cudaMemcpyDeviceToHost,
     );
 
     cudaDeviceSynchronize();

@@ -4,11 +4,11 @@ use std::ffi::{c_float, c_void};
 
 use bindings::{cudaDeviceSynchronize, cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset};
 
-pub fn cuda_malloc(size: usize) -> *mut c_float {
-    let mut grad = std::ptr::null_mut::<c_float>();
+pub fn cuda_malloc<T>(size: usize) -> *mut T {
+    let mut grad = std::ptr::null_mut::<T>();
 
     unsafe {
-        let grad_ptr = (&mut grad) as *mut *mut c_float;
+        let grad_ptr = (&mut grad) as *mut *mut T;
         let _ = cudaMalloc(grad_ptr as *mut *mut c_void, size);
         let _ = cudaDeviceSynchronize();
     }
@@ -30,7 +30,7 @@ pub fn cuda_calloc<const SIZE: usize>() -> *mut c_float {
     grad
 }
 
-pub fn cuda_copy_to_gpu<T>(dest: *mut c_float, src: *const T, amt: usize) {
+pub fn cuda_copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
     unsafe {
         let _ = cudaMemcpy(
             dest.cast(),

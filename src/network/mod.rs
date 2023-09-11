@@ -13,9 +13,9 @@ use crate::{rng::Rand, Input, HIDDEN, util::write_to_bin};
 pub type NetworkParams = Network<f32>;
 
 pub const NETWORK_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
-const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
-const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
-const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
+pub const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
+pub const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
+pub const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
 
 #[derive(Clone)]
 #[repr(C)]
