@@ -50,6 +50,19 @@ __global__ void populateAccumulator(
     accumulators[outputIdx] = elementVal;
 }
 
+__global__ void setOutputBias(
+    const size_t batchSize,
+    const float* outputBias,
+    float* outputs)
+{
+    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= batchSize)
+        return;
+
+    outputs[idx] = outputBias[0];
+}
+
 __global__ void calculateEvals(
     const size_t batchSize,
     const size_t hiddenSize,
@@ -69,8 +82,7 @@ __global__ void calculateEvals(
     const size_t outputIdx = blockIdx.x;
     const size_t idx = outputIdx * hiddenSize + element;
 
-    float outputVal = outputBiases[element];
-    outputVal += ourAccumulators[idx] * outputWeights[element];
+    float outputVal = ourAccumulators[idx] * outputWeights[element];
     outputVal += oppAccumulators[idx] * outputWeights[hiddenSize + element];
 
     atomicAdd(&outputs[outputIdx], outputVal);
@@ -90,7 +102,7 @@ __global__ void calculateErrors(
 
     const float eval = outputs[idx];
     const float result = results[idx];
-    const float sigmoid = 1.0 / (1.0 + __expf(eval));
+    const float sigmoid = 1.0 / (1.0 + expf(-eval));
     const float diff = sigmoid - result;
     const float singleError = diff * sigmoid * (1.0 - sigmoid);
 
@@ -198,6 +210,8 @@ extern "C" {
         const size_t threadsPerBlock = min(hiddenSize, static_cast<size_t>(1024));
         const size_t blocksPerGrid = batchSize;
         const size_t accumulatorSize = batchSize * hiddenSize * sizeof(float);
+        const size_t outputSize = batchSize * sizeof(float);
+        const size_t blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
 
         float* ourAccumulators;
         cudaMalloc(&ourAccumulators, accumulatorSize);
@@ -218,15 +232,19 @@ extern "C" {
         checkError("accumulator 2 ");
 
         float* outputs;
-        cudaMalloc(&outputs, batchSize * sizeof(float));
+        cudaMallocManaged(&outputs, outputSize);
         cudaDeviceSynchronize();
         checkError("malloc 3");
 
-        const size_t blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+        setOutputBias<<<blocks, threadsPerBlock>>>(batchSize, outputBiases, outputs);
+        cudaDeviceSynchronize();
+        checkError("memset");
 
         calculateEvals<<<blocks, threadsPerBlock>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
         cudaDeviceSynchronize();
         checkError("eval");
+
+        std::cout << outputs[0] << std::endl;
 
         calculateErrors<<<blocks, threadsPerBlock>>>(batchSize, hiddenSize, results, outputs, error);
         cudaDeviceSynchronize();

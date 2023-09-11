@@ -189,7 +189,7 @@ pub unsafe fn gradients_batch_gpu(
 
     *error += batch_error;
 
-    println!("{batch_error}");
+    //println!("{batch_error}");
 
     let mut res = NetworkParams::new();
     let res_ptr = res.as_mut_ptr() as *mut c_void;
@@ -217,7 +217,7 @@ pub unsafe fn gradients_batch_gpu(
     catch!(cudaFree(network.cast()), "free");
     catch!(cudaDeviceSynchronize());
 
-    println!("output bias gradient: {}", res[OUTPUT_BIAS]);
+    //println!("output bias gradient: {}", res[OUTPUT_BIAS]);
 
     res
 }
