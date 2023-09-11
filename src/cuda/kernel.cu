@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstdint>
 
+#define INPUT 32
 #define HIDDEN 768
 
 __global__ void addInternal(const float* A, const float* B, float* C, int size)
@@ -18,7 +19,6 @@ __global__ void addInternal(const float* A, const float* B, float* C, int size)
 
 __global__ void populateAccumulator(
     const size_t batchSize,
-    const size_t inputSize,
     const float* featureWeights,
     const float* featureBiases,
     const uint16_t* inputs,
@@ -30,7 +30,7 @@ __global__ void populateAccumulator(
     if (threadIdx.x >= HIDDEN)
         return;
 
-    const size_t inputIdx = inputSize * blockIdx.x;
+    const size_t inputIdx = INPUT * blockIdx.x;
     const size_t element = threadIdx.x;
     const size_t outputIdx = HIDDEN * blockIdx.x + element;
 
@@ -38,7 +38,7 @@ __global__ void populateAccumulator(
 
     float elementVal = featureBiases[element];
 
-    for (size_t i = 0; i < inputSize; i++) {
+    for (size_t i = 0; i < INPUT; i++) {
         if (thisInput[i] >= static_cast<uint16_t>(768))
             break;
 
@@ -90,7 +90,6 @@ __global__ void calculateErrors(
 
 __global__ void backpropSide(
     const size_t batchSize,
-    const size_t inputSize,
     const size_t outputOffset,
     const float* outputWeights,
     const float* accumulator,
@@ -108,7 +107,7 @@ __global__ void backpropSide(
 
     const size_t element = threadIdx.x;
     const size_t outputIdx = blockIdx.x;
-    const size_t inputIdx = outputIdx * inputSize;
+    const size_t inputIdx = outputIdx * INPUT;
     const size_t outputWeightIdx = element + outputOffset;
     const size_t accumulatorIdx = outputIdx * HIDDEN + element;
 
@@ -126,7 +125,7 @@ __global__ void backpropSide(
     atomicAdd(&featureBiasesGradient[element], component);
     atomicAdd(&outputWeightsGradient[outputWeightIdx], error * accumulatorVal);
 
-    for (int i = 0; i < inputSize; i++) {
+    for (int i = 0; i < INPUT; i++) {
         if (thisInput[i] >= static_cast<uint16_t>(768))
             break;
 
@@ -188,6 +187,12 @@ extern "C" {
         float* outputBiasesGradient,
         float* error)
     {
+        if (inputSize != INPUT)
+        {
+            std::cout << "Incompatible input format.";
+            exit(1);
+        }
+
         if (hiddenSize != HIDDEN)
         {
             std::cout << "HIDDEN must be set to " << hiddenSize << " in src/cuda/kernel.cu";
@@ -205,10 +210,10 @@ extern "C" {
         cudaMalloc(&oppAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
 
-        populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, inputSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
+        populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
         cudaDeviceSynchronize();
 
-        populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, inputSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
+        populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
         cudaDeviceSynchronize();
 
         float* outputs;
@@ -219,14 +224,14 @@ extern "C" {
         cudaDeviceSynchronize();
 
         backpropSide<<<batchSize, HIDDEN>>>(
-            batchSize, inputSize, 0,
+            batchSize, 0,
             outputWeights, ourAccumulators, ourInputs, outputs,
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
         );
         cudaDeviceSynchronize();
 
         backpropSide<<<batchSize, HIDDEN>>>(
-            batchSize, inputSize, HIDDEN,
+            batchSize, HIDDEN,
             outputWeights, oppAccumulators, oppInputs, outputs,
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
         );
