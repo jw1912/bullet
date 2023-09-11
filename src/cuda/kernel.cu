@@ -31,17 +31,18 @@ __global__ void populateAccumulator(
 
     const size_t inputIdx = inputSize * blockIdx.x;
     const size_t element = threadIdx.x;
-    const size_t outputIdx = blockIdx.x * hiddenSize + element;
+    const size_t outputIdx = hiddenSize * blockIdx.x + element;
 
-    const std::uint16_t* thisInput = inputs + inputIdx;
+    const uint16_t* thisInput = inputs + inputIdx;
 
     float elementVal = featureBiases[element];
 
     for (int i = 0; i < inputSize; i++) {
-        if (thisInput[i] == 65535)
+        if (thisInput[i] >= 768)
             break;
 
-        elementVal += featureWeights[thisInput[i] * hiddenSize + element];
+        const size_t idx = thisInput[i] * hiddenSize + element;
+        elementVal += featureWeights[idx];
     }
 
     elementVal = elementVal < 0 ? 0 : elementVal > 1 ? 1 : elementVal;
@@ -84,7 +85,7 @@ __global__ void calculateErrors(
 {
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx > batchSize)
+    if (idx >= batchSize)
         return;
 
     const float eval = outputs[idx];
@@ -117,12 +118,12 @@ __global__ void backpropSide(
     if (threadIdx.x >= hiddenSize)
         return;
 
-    const size_t inputIdx = inputSize * blockIdx.x;
     const size_t element = threadIdx.x;
-    const size_t outputIdx = blockIdx.x * hiddenSize + element;
+    const size_t outputIdx = blockIdx.x;
+    const size_t inputIdx = inputSize * outputIdx;
     const size_t outputWeightIdx = element + outputOffset;
 
-    const std::uint16_t* thisInput = inputs + inputIdx;
+    const uint16_t* thisInput = inputs + inputIdx;
 
     const float error = outputs[outputIdx];
     const float weight = outputWeights[outputWeightIdx];
@@ -134,10 +135,10 @@ __global__ void backpropSide(
         : 0;
 
     atomicAdd(&featureBiasesGradient[element], component);
-    atomicAdd(&featureBiasesGradient[outputWeightIdx], error * accumulatorVal);
+    atomicAdd(&outputWeightsGradient[outputWeightIdx], error * accumulatorVal);
 
     for (int i = 0; i < inputSize; i++) {
-        if (thisInput[i] == 65535)
+        if (thisInput[i] >= 768)
             break;
 
         const size_t x = thisInput[i] * hiddenSize + element;
@@ -156,6 +157,16 @@ __global__ void backpropOutputBias(
         return;
 
     atomicAdd(outputBiasesGradient, outputs[idx]);
+}
+
+void checkError(std::string message)
+{
+    const auto error = cudaGetLastError();
+    if (error != cudaSuccess)
+    {
+        std::cout << message << std::endl;
+        std::cout << cudaGetErrorString(error) << std::endl;
+    }
 }
 
 extern "C" {
@@ -185,32 +196,38 @@ extern "C" {
     {
         const size_t threadsPerBlock = min(hiddenSize, static_cast<size_t>(1024));
         const size_t blocksPerGrid = batchSize;
-
         const size_t accumulatorSize = batchSize * hiddenSize * sizeof(float);
 
         float* ourAccumulators;
-        cudaMallocManaged(&ourAccumulators, accumulatorSize);
+        cudaMalloc(&ourAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
+        checkError("malloc 1");
 
         populateAccumulator<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
         cudaDeviceSynchronize();
+        checkError("accumulator 1");
 
         float* oppAccumulators;
-        cudaMallocManaged(&oppAccumulators, accumulatorSize);
+        cudaMalloc(&oppAccumulators, accumulatorSize);
         cudaDeviceSynchronize();
+        checkError("malloc 2");
 
         populateAccumulator<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
         cudaDeviceSynchronize();
+        checkError("accumulator 2 ");
 
         float* outputs;
-        cudaMallocManaged(&outputs, batchSize * sizeof(float));
+        cudaMalloc(&outputs, batchSize * sizeof(float));
         cudaDeviceSynchronize();
+        checkError("malloc 3");
 
         calculateEvals<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
         cudaDeviceSynchronize();
+        checkError("eval");
 
         calculateErrors<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, results, outputs, error);
         cudaDeviceSynchronize();
+        checkError("error");
 
         backpropSide<<<blocksPerGrid, threadsPerBlock>>>(
             batchSize, hiddenSize, inputSize, 0,
@@ -218,6 +235,7 @@ extern "C" {
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
         );
         cudaDeviceSynchronize();
+        checkError("backprops 1");
 
         backpropSide<<<blocksPerGrid, threadsPerBlock>>>(
             batchSize, hiddenSize, inputSize, hiddenSize,
@@ -225,9 +243,17 @@ extern "C" {
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
         );
         cudaDeviceSynchronize();
+        checkError("backprops 2");
 
         backpropOutputBias<<<blocksPerGrid, threadsPerBlock>>>(batchSize, outputs, outputBiasesGradient);
         cudaDeviceSynchronize();
+        checkError("backprops 3");
+
+        cudaFree(ourAccumulators);
+        cudaFree(oppAccumulators);
+        cudaFree(outputs);
+        cudaDeviceSynchronize();
+        checkError("freeing");
 
         return cudaGetLastError();
     }

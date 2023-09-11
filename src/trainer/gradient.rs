@@ -157,12 +157,12 @@ pub unsafe fn gradients_batch_gpu(
     let output_weights_grad = feature_weights_grad.wrapping_add(OUTPUT_WEIGHTS);
     let output_biases_grad = feature_weights_grad.wrapping_add(OUTPUT_BIAS);
 
-    let gpu_error = cuda_calloc::<1>();
+    let gpu_error = cuda_calloc::<4>();
 
     catch!(trainBatch(
         batch_size,
         HIDDEN,
-        INPUT_SIZE,
+        ChessBoardCUDA::len(),
         feature_weights,
         feature_biases,
         output_weights,
@@ -177,14 +177,17 @@ pub unsafe fn gradients_batch_gpu(
         gpu_error,
     ), "training");
 
+    let mut batch_error = 0.0f32;
+
     catch!(cudaMemcpy(
-        (error as *mut f32).cast(),
+        ((&mut batch_error) as *mut f32).cast(),
         gpu_error.cast(),
         std::mem::size_of::<f32>(),
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
     ), "memcpy");
-
     catch!(cudaDeviceSynchronize());
+
+    *error += batch_error;
 
     let mut res = NetworkParams::new();
     let res_ptr = res.as_mut_ptr() as *mut c_void;
@@ -195,15 +198,21 @@ pub unsafe fn gradients_batch_gpu(
         NET_SIZE,
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
     ), "memcpy");
-
     catch!(cudaDeviceSynchronize());
 
     catch!(cudaFree(grad.cast()), "free");
-    catch!(cudaFree(our_inputs_ptr.cast()), "free");
-    catch!(cudaFree(opp_inputs_ptr.cast()), "free");
-    catch!(cudaFree(results_ptr.cast()), "free");
-    catch!(cudaFree(network.cast()), "free");
+    catch!(cudaDeviceSynchronize());
 
+    catch!(cudaFree(our_inputs_ptr.cast()), "free");
+    catch!(cudaDeviceSynchronize());
+
+    catch!(cudaFree(opp_inputs_ptr.cast()), "free");
+    catch!(cudaDeviceSynchronize());
+
+    catch!(cudaFree(results_ptr.cast()), "free");
+    catch!(cudaDeviceSynchronize());
+
+    catch!(cudaFree(network.cast()), "free");
     catch!(cudaDeviceSynchronize());
 
     res

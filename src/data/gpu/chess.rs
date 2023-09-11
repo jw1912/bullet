@@ -17,6 +17,10 @@ impl Default for ChessBoardCUDA {
 }
 
 impl ChessBoardCUDA {
+    pub fn len() -> usize {
+        MAX_FEATURES
+    }
+
     pub fn push(
         board: &ChessBoard,
         our_inputs: &mut Vec<ChessBoardCUDA>,
