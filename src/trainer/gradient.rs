@@ -132,9 +132,10 @@ pub unsafe fn gradients_batch_gpu(
             .for_each(|(our_inputs, opp_inputs, results)| {
                 let additional = results.len();
                 let size = additional * ChessBoardCUDA::len();
+                let offset = copy_count * ChessBoardCUDA::len();
 
-                cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(copy_count), our_inputs.as_ptr().cast(), size);
-                cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(copy_count), opp_inputs.as_ptr().cast(), size);
+                cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(offset), our_inputs.as_ptr().cast(), size);
+                cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(offset), opp_inputs.as_ptr().cast(), size);
                 cuda_copy_to_gpu(results_ptr.wrapping_add(copy_count), results.as_ptr(), additional);
 
                 copy_count += additional;
