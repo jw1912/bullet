@@ -208,7 +208,6 @@ extern "C" {
         float* error)
     {
         const size_t threadsPerBlock = min(hiddenSize, static_cast<size_t>(1024));
-        const size_t blocksPerGrid = batchSize;
         const size_t accumulatorSize = batchSize * hiddenSize * sizeof(float);
         const size_t outputSize = batchSize * sizeof(float);
         const size_t blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
@@ -218,7 +217,7 @@ extern "C" {
         cudaDeviceSynchronize();
         checkError("malloc 1");
 
-        populateAccumulator<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
+        populateAccumulator<<<batchSize, threadsPerBlock>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
         cudaDeviceSynchronize();
         checkError("accumulator 1");
 
@@ -227,7 +226,7 @@ extern "C" {
         cudaDeviceSynchronize();
         checkError("malloc 2");
 
-        populateAccumulator<<<blocksPerGrid, threadsPerBlock>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
+        populateAccumulator<<<batchSize, threadsPerBlock>>>(batchSize, hiddenSize, inputSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
         cudaDeviceSynchronize();
         checkError("accumulator 2 ");
 
@@ -240,17 +239,15 @@ extern "C" {
         cudaDeviceSynchronize();
         checkError("memset");
 
-        calculateEvals<<<blocks, threadsPerBlock>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
+        calculateEvals<<<batchSize, threadsPerBlock>>>(batchSize, hiddenSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, outputs);
         cudaDeviceSynchronize();
         checkError("eval");
-
-        std::cout << outputs[0] << std::endl;
 
         calculateErrors<<<blocks, threadsPerBlock>>>(batchSize, hiddenSize, results, outputs, error);
         cudaDeviceSynchronize();
         checkError("error");
 
-        backpropSide<<<blocksPerGrid, threadsPerBlock>>>(
+        backpropSide<<<batchSize, threadsPerBlock>>>(
             batchSize, hiddenSize, inputSize, 0,
             outputWeights, ourAccumulators, ourInputs, outputs,
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
@@ -258,7 +255,7 @@ extern "C" {
         cudaDeviceSynchronize();
         checkError("backprops 1");
 
-        backpropSide<<<blocksPerGrid, threadsPerBlock>>>(
+        backpropSide<<<batchSize, threadsPerBlock>>>(
             batchSize, hiddenSize, inputSize, hiddenSize,
             outputWeights, oppAccumulators, oppInputs, outputs,
             featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
