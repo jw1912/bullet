@@ -158,7 +158,7 @@ def main():
 
     if args.cuda:
         commands.append("--features")
-        commands.append("cuda")
+        commands.append("gpu")
 
     commands.append("--")
     commands.append("-C")
