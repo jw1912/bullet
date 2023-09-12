@@ -12,15 +12,13 @@
 #define INPUT 32
 #endif
 
-#ifdef RELU
+#if defined(RELU)
     __device__ float activate(float in) { return in > 0 ? in : 0; }
     __device__ float prime(float in) { return in > 0 ? 1 : 0; }
-#else
-#ifdef SCRELU
+#elif defined(SCRELU)
     __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : (in * in)); }
     __device__ float prime(float in) { return in > 0 && in < 1 ? 2 * in : 0; }
-#else
-#ifdef FASTSCRELU
+#elif defined(FASTSCRELU)
     constexpr float fastFactor = 255.0 / 256.0;
     __device__ float activate(float in)
     {
@@ -31,8 +29,6 @@
 #else
     __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : in); }
     __device__ float prime(float in) { return in > 0 && in < 1 ? 1 : 0; }
-#endif
-#endif
 #endif
 
 __global__ void populateAccumulator(
