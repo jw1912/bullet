@@ -12,6 +12,29 @@
 #define INPUT 32
 #endif
 
+#ifdef RELU
+    __device__ float activate(float in) { return in > 0 ? in : 0; }
+    __device__ float prime(float in) { return in > 0 ? 1 : 0; }
+#else
+#ifdef SCRELU
+    __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : (in * in)); }
+    __device__ float prime(float in) { return in > 0 && in < 1 ? 2 * in : 0; }
+#else
+#ifdef FASTSCRELU
+    constexpr float fastFactor = 255.0 / 256.0;
+    __device__ float activate(float in)
+    {
+        const float sq = in * in * fastFactor;
+        return sq < 0 ? 0 : (sq > 1 ? 1 : sq);
+    }
+    __device__ float prime(float in) { return fastFactor * (in > 0 && in < 1 ? 2 * in : 0); }
+#else
+    __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : in); }
+    __device__ float prime(float in) { return in > 0 && in < 1 ? 1 : 0; }
+#endif
+#endif
+#endif
+
 __global__ void populateAccumulator(
     const size_t batchSize,
     const float* featureWeights,
@@ -41,10 +64,7 @@ __global__ void populateAccumulator(
         elementVal += featureWeights[idx];
     }
 
-    if (elementVal < 0)
-        elementVal = 0;
-    else if (elementVal > 1)
-        elementVal = 1;
+    elementVal = activate(elementVal);
 
     accumulators[outputIdx] = elementVal;
 }
@@ -113,9 +133,7 @@ __global__ void backpropSide(
     const float accumulatorVal = accumulator[accumulatorIdx];
 
     // uses a trick
-    const float component = accumulatorVal > 0 && accumulatorVal < 1
-        ? error * weight
-        : 0;
+    const float component = prime(accumulatorVal) * error * weight;
 
     atomicAdd(&featureBiasesGradient[element], component);
     atomicAdd(&outputWeightsGradient[outputWeightIdx], error * accumulatorVal);

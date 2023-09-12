@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use bindgen::{Builder, CargoCallbacks, EnumVariation};
 use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
 
-const WRAPPER_PATH: &str = "./src/wrapper.h";
-const KERNEL_PATH: &str = "./src/kernel.cu";
+const WRAPPER_PATH: &str = "./kernels/wrapper.h";
+const KERNEL_PATH: &str = "./kernels/gradient.cu";
 
 fn main() {
     let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -39,6 +39,13 @@ fn main() {
 
     println!("cargo:rerun-if-changed={KERNEL_PATH}");
 
+    let activation = std::any::type_name::<common::Activation>()
+        .split("::")
+        .last()
+        .unwrap()
+        .to_uppercase();
+    let activation_str = activation.as_str();
+
     cc::Build::new()
         .cuda(true)
         .cudart("shared")
@@ -46,6 +53,7 @@ fn main() {
         .opt_level(3)
         .define("HIDDEN", Some(common::HIDDEN.to_string().as_str()))
         .define("INPUT", Some(common::data::MAX_FEATURES.to_string().as_str()))
+        .define(activation_str, None)
         .include("cuda")
         .files(vec![KERNEL_PATH])
         .compile("libkernels.a");

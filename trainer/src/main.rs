@@ -5,7 +5,6 @@ mod trainer;
 
 use cpu::NetworkParams;
 
-
 use optimiser::AdamW;
 use scheduler::{LrScheduler, SchedulerType};
 use trainer::{Trainer, MetaData};

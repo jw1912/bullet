@@ -24,4 +24,5 @@ pub const HIDDEN: usize = 256;
 ///   - ReLU
 ///   - CReLU    (recommended)
 ///   - SCReLU
+///   - FastSCReLU
 pub type Activation = activation::CReLU;
