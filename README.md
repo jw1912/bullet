@@ -56,10 +56,33 @@ python3 run.py         \
   --threads 6          \
   --lr 0.001           \
   --wdl 0.5            \
-  --max-epochs 65      \
+  --max-epochs 40      \
   --batch-size 16384   \
   --save-rate 10       \
   --skip-prop 0.0      \
-  --lr-drop 30         \
+  --lr-step 15         \
   --lr-gamma 0.1
 ```
+
+of these options, only `data-path`, `threads` and `lr-step` are not default values.
+
+#### Learning Rate Scheduler
+There are 3 separate learning rate options:
+- `lr-step N` drops the learning rate every `N` epochs by a factor of `lr-gamma`
+- `lr-drop N` drops the learning rate once, at `N` epochs, by a factor of `lr-gamma`
+- `lr-end x` is exponential LR, starting at `lr` and ending at `x` when at `max-epochs`,
+it is equivalent to `lr-step 1` with an appropriate `lr-gamma`.
+
+By default `lr-gamma` is set to 0.1, but no learning rate scheduler is chosen. It is highly
+recommended to have at least one learning rate drop during training.
+#### CUDA
+
+Add `--cuda` to use CUDA, it will fail to compile if not available.
+
+#### Resuming
+
+Every `save-rate` epochs and at the end of training, a quantised network is saved to `/nets`, and a checkpoint
+is saved to `/checkpoints` (which contains the raw network params, if you want them). You can "resume" from a checkpoint by
+adding `--resume checkpoints/<name of checkpoint folder>` to the run command. This is designed such that if you use an identical
+command with the resuming appended, it would be as if you never stopped training, so if using a different command be wary that
+it will try to resume from the epoch number the checkpoint was saved at, meaning it will fast-forward Learning Rate to that epoch.

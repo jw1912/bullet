@@ -41,7 +41,7 @@ def main():
         '--max-epochs',
         type=int,
         help="Number of epochs for which the trainer will run.",
-        default=65
+        default=40
     )
 
     parser.add_argument(
@@ -122,7 +122,7 @@ def main():
 
     parser.add_argument(
         '--cuda',
-        help="Compile with CUDA.",
+        help="Compile and run with CUDA.",
         action="store_true",
     )
 
