@@ -3,13 +3,13 @@ use std::thread;
 use cpu::NetworkParams;
 use common::{Data, rng::Rand};
 
-#[cfg(not(feature = "cuda"))]
+#[cfg(not(feature = "gpu"))]
 use cpu::update_single_grad_cpu;
 
-#[cfg(feature = "cuda")]
+#[cfg(feature = "gpu")]
 use common::data::gpu::chess::ChessBoardCUDA;
 
-#[cfg(feature = "cuda")]
+#[cfg(feature = "gpu")]
 use cuda::{
     bindings::{cudaDeviceSynchronize, cudaError, cudaFree},
     calc_gradient,
@@ -17,7 +17,7 @@ use cuda::{
     util::{cuda_copy_to_gpu, cuda_malloc},
 };
 
-#[cfg(not(feature = "cuda"))]
+#[cfg(not(feature = "gpu"))]
 pub fn gradients_batch_cpu(
     batch: &[Data],
     nnue: &NetworkParams,
@@ -59,8 +59,8 @@ pub fn gradients_batch_cpu(
     grad
 }
 
-#[cfg(feature = "cuda")]
-pub unsafe fn gradients_batch_gpu(
+#[cfg(feature = "gpu")]
+pub fn gradients_batch_gpu(
     batch: &[Data],
     nnue: &NetworkParams,
     error: &mut f32,
@@ -125,7 +125,9 @@ pub unsafe fn gradients_batch_gpu(
             });
     });
 
-    let grad = calc_gradient(nnue, error, batch_size, our_inputs_ptr, opp_inputs_ptr, results_ptr);
+    let grad = unsafe {
+        calc_gradient(nnue, error, batch_size, our_inputs_ptr, opp_inputs_ptr, results_ptr)
+    };
 
     catch!(cudaFree(our_inputs_ptr.cast()), "free");
     catch!(cudaDeviceSynchronize());

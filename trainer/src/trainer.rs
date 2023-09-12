@@ -238,7 +238,7 @@ impl Trainer {
         error: &mut f32,
         scale: f32,
     ) -> Box<NetworkParams> {
-        #[cfg(not(feature = "cuda"))]
+        #[cfg(not(feature = "gpu"))]
         {
             use crate::gradient::gradients_batch_cpu;
             gradients_batch_cpu(
@@ -252,20 +252,18 @@ impl Trainer {
             )
         }
 
-        #[cfg(feature = "cuda")]
+        #[cfg(feature = "gpu")]
         {
             use crate::gradient::gradients_batch_gpu;
-            unsafe {
-                gradients_batch_gpu(
-                    batch,
-                    nnue,
-                    error,
-                    scale,
-                    self.blend,
-                    self.skip_prop,
-                    self.threads,
-                )
-            }
+            gradients_batch_gpu(
+                batch,
+                nnue,
+                error,
+                scale,
+                self.blend,
+                self.skip_prop,
+                self.threads,
+            )
         }
 
     }

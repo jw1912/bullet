@@ -10,7 +10,7 @@ use common::{data::ChessBoardCUDA, HIDDEN};
 use cpu::{NetworkParams, FEATURE_BIAS, OUTPUT_WEIGHTS, OUTPUT_BIAS};
 
 /// # Safety
-/// because i say so
+/// Error checked.
 pub unsafe fn calc_gradient(
     nnue: &NetworkParams,
     error: &mut f32,
