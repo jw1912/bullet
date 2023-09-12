@@ -38,7 +38,7 @@ cargo r -r --bin convert <input file path> <output file path>
 
 ### Training
 
-General architecture settings, that must be known at compile time, are found in [`src/lib.rs`](src/lib.rs).
+General architecture settings, that must be known at compile time, are found in [`common/src/lib.rs`](common/src/lib.rs).
 It is like this because of Rust's limitations when it comes to const code.
 
 After settings those as you please, you can run the trainer using the `run.py` script, and use
