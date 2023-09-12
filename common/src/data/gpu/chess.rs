@@ -1,8 +1,9 @@
 use crate::{
-    data::{cpu::chess::ChessBoard, InputType, MAX_FEATURES},
-    Input, network::inputs::Chess768,
+    Data,
+    Input,
+    data::{ChessBoard, DataType, MAX_FEATURES},
+    inputs::InputType,
 };
-
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,11 +30,6 @@ impl ChessBoardCUDA {
         blend: f32,
         scale: f32,
     ) {
-        assert!(
-            std::any::TypeId::of::<Input>() == std::any::TypeId::of::<Chess768>(),
-            "Only Chess768 is currently supported!"
-        );
-
         let mut our_board = ChessBoardCUDA::default();
         let mut opp_board = ChessBoardCUDA::default();
 
@@ -44,6 +40,11 @@ impl ChessBoardCUDA {
             our_board.features[i] = wfeat as u16;
             opp_board.features[i] = bfeat as u16;
             i += 1;
+            if Input::FACTORISER {
+                our_board.features[i] = (wfeat % Data::INPUTS) as u16;
+                opp_board.features[i] = (bfeat % Data::INPUTS) as u16;
+                i += 1;
+            }
         }
 
         if i < MAX_FEATURES {

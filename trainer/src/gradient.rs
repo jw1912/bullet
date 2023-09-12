@@ -1,15 +1,20 @@
 use std::thread;
 
-use crate::{
-    network::NetworkParams,
-    Data, HIDDEN,
-};
+use cpu::NetworkParams;
+use common::{Data, rng::Rand};
 
 #[cfg(not(feature = "cuda"))]
-use crate::{
-    data::Features,
-    network::Accumulator,
-    util::sigmoid,
+use cpu::update_single_grad_cpu;
+
+#[cfg(feature = "cuda")]
+use common::data::gpu::chess::ChessBoardCUDA;
+
+#[cfg(feature = "cuda")]
+use cuda::{
+    bindings::{cudaDeviceSynchronize, cudaError, cudaFree},
+    calc_gradient,
+    catch,
+    util::{cuda_copy_to_gpu, cuda_malloc},
 };
 
 #[cfg(not(feature = "cuda"))]
@@ -33,7 +38,7 @@ pub fn gradients_batch_cpu(
             .map(|(chunk, error)| {
                 s.spawn(move || {
                     let mut grad = NetworkParams::new();
-                    let mut rand = crate::rng::Rand::default();
+                    let mut rand = Rand::default();
                     for pos in chunk {
                         if rand.rand(1.0) < skip_prop {
                             continue;
@@ -53,45 +58,6 @@ pub fn gradients_batch_cpu(
     *error += batch_error;
     grad
 }
-
-#[cfg(not(feature = "cuda"))]
-fn update_single_grad_cpu(
-    pos: &Data,
-    nnue: &NetworkParams,
-    grad: &mut NetworkParams,
-    error: &mut f32,
-    blend: f32,
-    scale: f32,
-) {
-    let bias = Accumulator::load_biases(nnue);
-    let mut accs = [bias; 2];
-    let mut activated = [[0.0; HIDDEN]; 2];
-    let mut features = Features::default();
-
-    let eval = nnue.forward(pos, &mut accs, &mut activated, &mut features);
-
-    let result = pos.blended_result(blend, scale);
-
-    let sigmoid = sigmoid(eval, 1.0);
-    let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
-    *error += (sigmoid - result).powi(2);
-
-    nnue.backprop(err, grad, &accs, &activated, &mut features);
-}
-
-#[cfg(feature = "cuda")]
-use std::ffi::c_void;
-
-#[cfg(feature = "cuda")]
-use crate::{
-    catch,
-    cuda::{
-        cuda_calloc, cuda_copy_to_gpu, cuda_malloc,
-        bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, trainBatch},
-    },
-    data::gpu::chess::ChessBoardCUDA,
-    network::{FEATURE_BIAS, OUTPUT_BIAS, OUTPUT_WEIGHTS},
-};
 
 #[cfg(feature = "cuda")]
 pub unsafe fn gradients_batch_gpu(
@@ -120,7 +86,7 @@ pub unsafe fn gradients_batch_gpu(
             .map(|chunk| {
                 s.spawn(move || {
                     let num = chunk.len();
-                    let mut rand = crate::rng::Rand::default();
+                    let mut rand = Rand::default();
                     let mut our_inputs = Vec::with_capacity(num);
                     let mut opp_inputs = Vec::with_capacity(num);
                     let mut results = Vec::with_capacity(num);
@@ -159,67 +125,7 @@ pub unsafe fn gradients_batch_gpu(
             });
     });
 
-    const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
-    let grad = cuda_calloc::<NET_SIZE>();
-
-    let network = cuda_malloc(NET_SIZE);
-    cuda_copy_to_gpu(network, nnue as *const NetworkParams, 1);
-
-    let feature_weights: *const f32 = (network as *const NetworkParams).cast();
-    let feature_biases = feature_weights.wrapping_add(FEATURE_BIAS);
-    let output_weights = feature_weights.wrapping_add(OUTPUT_WEIGHTS);
-    let output_biases = feature_weights.wrapping_add(OUTPUT_BIAS);
-
-    let feature_weights_grad: *mut f32 = (grad as *mut NetworkParams).cast();
-    let feature_biases_grad = feature_weights_grad.wrapping_add(FEATURE_BIAS);
-    let output_weights_grad = feature_weights_grad.wrapping_add(OUTPUT_WEIGHTS);
-    let output_biases_grad = feature_weights_grad.wrapping_add(OUTPUT_BIAS);
-
-    let gpu_error = cuda_calloc::<4>();
-
-    catch!(trainBatch(
-        batch_size,
-        HIDDEN,
-        ChessBoardCUDA::len(),
-        feature_weights,
-        feature_biases,
-        output_weights,
-        output_biases,
-        our_inputs_ptr,
-        opp_inputs_ptr,
-        results_ptr,
-        feature_weights_grad,
-        feature_biases_grad,
-        output_weights_grad,
-        output_biases_grad,
-        gpu_error,
-    ), "training");
-
-    let mut batch_error = 0.0f32;
-
-    catch!(cudaMemcpy(
-        ((&mut batch_error) as *mut f32).cast(),
-        gpu_error.cast(),
-        std::mem::size_of::<f32>(),
-        cudaMemcpyKind::cudaMemcpyDeviceToHost,
-    ), "memcpy");
-    catch!(cudaDeviceSynchronize());
-
-    *error += batch_error;
-
-    let mut res = NetworkParams::new();
-    let res_ptr = res.as_mut_ptr() as *mut c_void;
-
-    catch!(cudaMemcpy(
-        res_ptr,
-        grad as *const c_void,
-        NET_SIZE,
-        cudaMemcpyKind::cudaMemcpyDeviceToHost,
-    ), "memcpy");
-    catch!(cudaDeviceSynchronize());
-
-    catch!(cudaFree(grad.cast()), "free");
-    catch!(cudaDeviceSynchronize());
+    let grad = calc_gradient(nnue, error, batch_size, our_inputs_ptr, opp_inputs_ptr, results_ptr);
 
     catch!(cudaFree(our_inputs_ptr.cast()), "free");
     catch!(cudaDeviceSynchronize());
@@ -230,8 +136,5 @@ pub unsafe fn gradients_batch_gpu(
     catch!(cudaFree(results_ptr.cast()), "free");
     catch!(cudaDeviceSynchronize());
 
-    catch!(cudaFree(network.cast()), "free");
-    catch!(cudaDeviceSynchronize());
-
-    res
+    grad
 }

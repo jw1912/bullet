@@ -152,7 +152,7 @@ def main():
         "cargo",
         "rustc",
         "--release",
-        "--bin",
+        "--package",
         "trainer",
     ]
 

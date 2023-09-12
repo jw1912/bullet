@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bullet::{
+use common::{
     data::{cpu::marlinformat::MarlinFormat, ChessBoard},
     util::to_slice_with_lifetime,
 };

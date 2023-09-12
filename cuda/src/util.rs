@@ -1,8 +1,6 @@
-pub mod bindings;
-
 use std::ffi::{c_float, c_void};
 
-use bindings::{
+use crate::bindings::{
     cudaDeviceSynchronize,
     cudaError,
     cudaMalloc,

@@ -15,7 +15,7 @@ pub const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut c_void;
 
 #[link(name = "kernels", kind = "static")]
 extern "C" {
-    pub fn trainBatch(
+    pub fn calcGradient(
         batch_size: usize,
         hidden_size: usize,
         input_size: usize,
