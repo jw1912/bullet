@@ -26,9 +26,12 @@
         return sq < 0 ? 0 : (sq > 1 ? 1 : sq);
     }
     __device__ float prime(float in) { return fastFactor * (in > 0 && in < 1 ? 2 * in : 0); }
-#else
+#elif defined(CRELU)
     __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : in); }
     __device__ float prime(float in) { return in > 0 && in < 1 ? 1 : 0; }
+#else
+    __device__ float activate(float in);
+    __device__ float prime(float in);
 #endif
 
 __global__ void populateAccumulator(
