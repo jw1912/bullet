@@ -1,7 +1,7 @@
 use std::ffi::{c_float, c_void};
 
 use crate::{
-    bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, trainBatch},
+    bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, calcGradient},
     catch,
     util::{cuda_calloc, cuda_copy_to_gpu, cuda_malloc},
 };
@@ -37,7 +37,7 @@ pub unsafe fn calc_gradient(
 
     let gpu_error = cuda_calloc::<4>();
 
-    catch!(trainBatch(
+    catch!(calcGradient(
         batch_size,
         HIDDEN,
         ChessBoardCUDA::len(),

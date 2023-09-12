@@ -157,7 +157,7 @@ size_t calcBlocks(size_t total, size_t threads)
     return (total + threads - 1) / threads;
 }
 
-extern "C" cudaError trainBatch(
+extern "C" cudaError calcGradient(
     const size_t batchSize,
     const size_t hiddenSize,
     const size_t inputSize,
