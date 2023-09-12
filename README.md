@@ -6,11 +6,12 @@
 
 A work-in-progress Network Trainer, used to train [akimbo](https://github.com/jw1912/akimbo)'s networks.
 
-It currently supports architectures of the form `Input -> Nx2 -> 1`, and can train on CPU with any number of threads.
+It currently supports architectures of the form `Input -> Nx2 -> 1`, and can train on both CPU and GPU,
+with a handwritten CUDA backend.
 
 Supported input formats:
-- `Chess768`, the classic chess board of features `(colour, piece, square)`.
-- `HalfKA`, chess board of features `(friendly king square, colour, piece, square)`
+- `Chess768`, chess board of features `(colour, piece, square)`.
+- `HalfKA`, chess board of features `(king square, colour, piece, square)`
 
 To learn how it works, read the [wiki](wiki.md).
 
