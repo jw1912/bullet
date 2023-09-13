@@ -9,8 +9,36 @@ use crate::{
 use common::{data::ChessBoardCUDA, HIDDEN};
 use cpu::{NetworkParams, FEATURE_BIAS, OUTPUT_WEIGHTS, OUTPUT_BIAS};
 
+pub fn malloc_everything(
+    batch_size: usize
+) -> (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32) {
+    const F32: usize = std::mem::size_of::<f32>();
+    const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
+
+    let our_inputs = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
+    let opp_inputs = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
+    let results = cuda_malloc::<f32>(batch_size * F32);
+    let our_acc = cuda_malloc::<f32>(batch_size * HIDDEN * F32);
+    let opp_acc = cuda_malloc::<f32>(batch_size * HIDDEN * F32);
+    let outputs = cuda_malloc::<f32>(batch_size * F32);
+
+    (our_inputs, opp_inputs, results, our_acc, opp_acc, outputs)
+}
+
+pub fn free_everything(
+    ptrs: (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32)
+) {
+    catch!(cudaFree(ptrs.0.cast()), "free");
+    catch!(cudaFree(ptrs.1.cast()), "free");
+    catch!(cudaFree(ptrs.2.cast()), "free");
+    catch!(cudaFree(ptrs.3.cast()), "free");
+    catch!(cudaFree(ptrs.4.cast()), "free");
+    catch!(cudaFree(ptrs.5.cast()), "free");
+}
+
 /// # Safety
 /// Error checked.
+#[allow(clippy::too_many_arguments)]
 pub unsafe fn calc_gradient(
     nnue: &NetworkParams,
     error: &mut f32,
@@ -18,6 +46,9 @@ pub unsafe fn calc_gradient(
     our_inputs: *const u16,
     opp_inputs: *const u16,
     results: *const c_float,
+    our_acc: *mut c_float,
+    opp_acc: *mut c_float,
+    outputs: *mut c_float,
 ) -> Box<NetworkParams> {
     const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
     let grad = cuda_calloc::<NET_SIZE>();
@@ -53,6 +84,9 @@ pub unsafe fn calc_gradient(
         output_weights_grad,
         output_biases_grad,
         gpu_error,
+        our_acc,
+        opp_acc,
+        outputs,
     ), "training");
 
     let mut batch_error = 0.0f32;

@@ -30,6 +30,9 @@ extern "C" {
         featureBiasesGradient: *mut c_float,
         outputWeightsGradient: *mut c_float,
         outputBiasesGradient: *mut c_float,
-        error: *mut c_float
+        error: *mut c_float,
+        our_acc: *mut c_float,
+        opp_acc: *mut c_float,
+        outputs: *mut c_float,
     ) -> cudaError_t;
 }

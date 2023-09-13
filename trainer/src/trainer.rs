@@ -4,6 +4,9 @@ use crate::{
 
 };
 
+#[cfg(feature = "gpu")]
+use cuda::{free_everything, malloc_everything};
+
 use cpu::{quantise_and_write, NetworkParams};
 
 use common::{
@@ -120,7 +123,7 @@ impl Trainer {
         print!("{esc}");
 
         println!("{}", ansi!("Beginning Training", "34;1", esc));
-        let reciprocal_scale = 1.0 / scale;
+        let rscale = 1.0 / scale;
         let file_size = metadata(&self.file).unwrap().len();
         let num = file_size / std::mem::size_of::<Data>() as u64;
         let batches = num / batch_size as u64 + 1;
@@ -143,6 +146,9 @@ impl Trainer {
         let timer = Instant::now();
 
         let mut error;
+
+        #[cfg(feature = "gpu")]
+        let ptrs = malloc_everything(batch_size);
 
         for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
@@ -175,8 +181,19 @@ impl Trainer {
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
-                    let gradients =
-                        self.gradients(nnue, batch, &mut error, reciprocal_scale);
+                    let gradients = {
+                        #[cfg(not(feature = "gpu"))]
+                        {
+                            use crate::gradient::gradients_batch_cpu;
+                            gradients_batch_cpu(batch, nnue, error, rscale, self.blend, self.skip_prop, self.threads)
+                        }
+
+                        #[cfg(feature = "gpu")]
+                        {
+                            use crate::gradient::gradients_batch_gpu;
+                            gradients_batch_gpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs)
+                        }
+                    };
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
@@ -229,42 +246,8 @@ impl Trainer {
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
         }
-    }
-
-    fn gradients(
-        &self,
-        nnue: &NetworkParams,
-        batch: &[Data],
-        error: &mut f32,
-        scale: f32,
-    ) -> Box<NetworkParams> {
-        #[cfg(not(feature = "gpu"))]
-        {
-            use crate::gradient::gradients_batch_cpu;
-            gradients_batch_cpu(
-                batch,
-                nnue,
-                error,
-                scale,
-                self.blend,
-                self.skip_prop,
-                self.threads,
-            )
-        }
 
         #[cfg(feature = "gpu")]
-        {
-            use crate::gradient::gradients_batch_gpu;
-            gradients_batch_gpu(
-                batch,
-                nnue,
-                error,
-                scale,
-                self.blend,
-                self.skip_prop,
-                self.threads,
-            )
-        }
-
+        free_everything(ptrs);
     }
 }

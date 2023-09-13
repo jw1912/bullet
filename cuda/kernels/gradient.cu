@@ -189,7 +189,10 @@ extern "C" cudaError calcGradient(
     float* featureBiasesGradient,
     float* outputWeightsGradient,
     float* outputBiasesGradient,
-    float* error)
+    float* error,
+    float* ourAccumulators,
+    float* oppAccumulators,
+    float* outputs)
 {
     if (inputSize != INPUT)
     {
@@ -203,22 +206,12 @@ extern "C" cudaError calcGradient(
         exit(1);
     }
 
-    const size_t accumulatorSize = batchSize * HIDDEN * sizeof(float);
-    const size_t outputSize = batchSize * sizeof(float);
     const size_t blocks = calcBlocks(batchSize, HIDDEN);
     const size_t sumBlocks = calcBlocks(batchSize, 1024);
-
-    float* ourAccumulators;
-    cudaMalloc(&ourAccumulators, accumulatorSize);
-    float* oppAccumulators;
-    cudaMalloc(&oppAccumulators, accumulatorSize);
 
     populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
 
     populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
-
-    float* outputs;
-    cudaMalloc(&outputs, outputSize);
 
     calculateErrors<<<sumBlocks, 1024>>>(batchSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, results, outputs, error);
 
@@ -236,9 +229,6 @@ extern "C" cudaError calcGradient(
 
     backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, outputBiasesGradient);
 
-    cudaFree(ourAccumulators);
-    cudaFree(oppAccumulators);
-    cudaFree(outputs);
     cudaDeviceSynchronize();
 
     return cudaGetLastError();
