@@ -11,10 +11,10 @@ use common::data::gpu::chess::ChessBoardCUDA;
 
 #[cfg(feature = "gpu")]
 use cuda::{
-    bindings::{cudaDeviceSynchronize, cudaError, cudaFree},
+    bindings::{cudaDeviceSynchronize, cudaError},
     calc_gradient,
     catch,
-    util::{cuda_copy_to_gpu, cuda_malloc},
+    util::cuda_copy_to_gpu,
 };
 
 #[cfg(not(feature = "gpu"))]
@@ -60,6 +60,7 @@ pub fn gradients_batch_cpu(
 }
 
 #[cfg(feature = "gpu")]
+#[allow(clippy::too_many_arguments)]
 pub fn gradients_batch_gpu(
     batch: &[Data],
     nnue: &NetworkParams,
@@ -68,15 +69,19 @@ pub fn gradients_batch_gpu(
     blend: f32,
     skip_prop: f32,
     threads: usize,
+    (
+        our_inputs_ptr,
+        opp_inputs_ptr,
+        results_ptr,
+        our_acc,
+        opp_acc,
+        outputs,
+        grad,
+        network,
+    ): (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams)
 ) -> Box<NetworkParams> {
     let batch_size = batch.len();
     let chunk_size = batch.len() / threads;
-
-    const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
-
-    let our_inputs_ptr = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
-    let opp_inputs_ptr = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
-    let results_ptr = cuda_malloc::<f32>(batch_size * std::mem::size_of::<f32>());
 
     catch!(cudaDeviceSynchronize());
     thread::scope(|s| {
@@ -125,18 +130,19 @@ pub fn gradients_batch_gpu(
             });
     });
 
-    let grad = unsafe {
-        calc_gradient(nnue, error, batch_size, our_inputs_ptr, opp_inputs_ptr, results_ptr)
-    };
-
-    catch!(cudaFree(our_inputs_ptr.cast()), "free");
-    catch!(cudaDeviceSynchronize());
-
-    catch!(cudaFree(opp_inputs_ptr.cast()), "free");
-    catch!(cudaDeviceSynchronize());
-
-    catch!(cudaFree(results_ptr.cast()), "free");
-    catch!(cudaDeviceSynchronize());
-
-    grad
+    unsafe {
+        calc_gradient(
+            nnue,
+            error,
+            batch_size,
+            our_inputs_ptr,
+            opp_inputs_ptr,
+            results_ptr,
+            our_acc,
+            opp_acc,
+            outputs,
+            grad,
+            network,
+        )
+    }
 }

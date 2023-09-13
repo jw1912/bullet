@@ -77,7 +77,8 @@ By default `lr-gamma` is set to 0.1, but no learning rate scheduler is chosen. I
 recommended to have at least one learning rate drop during training.
 #### CUDA
 
-Add `--cuda` to use CUDA, it will fail to compile if not available.
+Add `--cuda` to use CUDA, it will fail to compile if not available. It is not recommended to use CUDA
+for small net sizes (unbucketed + hidden layer < 256).
 
 #### Resuming
 
