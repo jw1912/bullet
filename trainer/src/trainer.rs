@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[cfg(feature = "gpu")]
-use cuda::{free_everything, malloc_everything};
+use cuda::{free_preallocations, preallocate};
 
 use cpu::{quantise_and_write, NetworkParams};
 
@@ -148,7 +148,7 @@ impl Trainer {
         let mut error;
 
         #[cfg(feature = "gpu")]
-        let ptrs = malloc_everything(batch_size);
+        let ptrs = preallocate(batch_size);
 
         for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
@@ -185,7 +185,7 @@ impl Trainer {
                         #[cfg(not(feature = "gpu"))]
                         {
                             use crate::gradient::gradients_batch_cpu;
-                            gradients_batch_cpu(batch, nnue, error, rscale, self.blend, self.skip_prop, self.threads)
+                            gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads)
                         }
 
                         #[cfg(feature = "gpu")]
@@ -248,6 +248,6 @@ impl Trainer {
         }
 
         #[cfg(feature = "gpu")]
-        free_everything(ptrs);
+        free_preallocations(ptrs);
     }
 }

@@ -1,7 +1,7 @@
 use std::ffi::{c_float, c_void};
 
 use crate::{
-    bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, calcGradient},
+    bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, calcGradient, cudaMemset},
     catch,
     util::{cuda_calloc, cuda_copy_to_gpu, cuda_malloc},
 };
@@ -9,24 +9,28 @@ use crate::{
 use common::{data::ChessBoardCUDA, HIDDEN};
 use cpu::{NetworkParams, FEATURE_BIAS, OUTPUT_WEIGHTS, OUTPUT_BIAS};
 
-pub fn malloc_everything(
+const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
+
+pub fn preallocate(
     batch_size: usize
-) -> (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32) {
+) -> (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams) {
     const F32: usize = std::mem::size_of::<f32>();
     const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
 
-    let our_inputs = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
-    let opp_inputs = cuda_malloc::<u16>(batch_size * INPUT_SIZE);
-    let results = cuda_malloc::<f32>(batch_size * F32);
-    let our_acc = cuda_malloc::<f32>(batch_size * HIDDEN * F32);
-    let opp_acc = cuda_malloc::<f32>(batch_size * HIDDEN * F32);
-    let outputs = cuda_malloc::<f32>(batch_size * F32);
+    let our_inputs = cuda_malloc(batch_size * INPUT_SIZE);
+    let opp_inputs = cuda_malloc(batch_size * INPUT_SIZE);
+    let results = cuda_malloc(batch_size * F32);
+    let our_acc = cuda_malloc(batch_size * HIDDEN * F32);
+    let opp_acc = cuda_malloc(batch_size * HIDDEN * F32);
+    let outputs = cuda_malloc(batch_size * F32);
+    let grad = cuda_malloc(NET_SIZE);
+    let network = cuda_malloc(NET_SIZE);
 
-    (our_inputs, opp_inputs, results, our_acc, opp_acc, outputs)
+    (our_inputs, opp_inputs, results, our_acc, opp_acc, outputs, grad, network)
 }
 
-pub fn free_everything(
-    ptrs: (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32)
+pub fn free_preallocations(
+    ptrs: (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams)
 ) {
     catch!(cudaFree(ptrs.0.cast()), "free");
     catch!(cudaFree(ptrs.1.cast()), "free");
@@ -34,6 +38,8 @@ pub fn free_everything(
     catch!(cudaFree(ptrs.3.cast()), "free");
     catch!(cudaFree(ptrs.4.cast()), "free");
     catch!(cudaFree(ptrs.5.cast()), "free");
+    catch!(cudaFree(ptrs.6.cast()), "free");
+    catch!(cudaFree(ptrs.7.cast()), "free");
 }
 
 /// # Safety
@@ -49,19 +55,18 @@ pub unsafe fn calc_gradient(
     our_acc: *mut c_float,
     opp_acc: *mut c_float,
     outputs: *mut c_float,
+    grad: *mut c_float,
+    network: *mut NetworkParams,
 ) -> Box<NetworkParams> {
-    const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
-    let grad = cuda_calloc::<NET_SIZE>();
-
-    let network = cuda_malloc(NET_SIZE);
+    catch!(cudaMemset(grad as *mut c_void, 0, NET_SIZE), "memset");
     cuda_copy_to_gpu(network, nnue as *const NetworkParams, 1);
 
-    let feature_weights: *const f32 = (network as *const NetworkParams).cast();
+    let feature_weights: *const f32 = network.cast();
     let feature_biases = feature_weights.wrapping_add(FEATURE_BIAS);
     let output_weights = feature_weights.wrapping_add(OUTPUT_WEIGHTS);
     let output_biases = feature_weights.wrapping_add(OUTPUT_BIAS);
 
-    let feature_weights_grad: *mut f32 = (grad as *mut NetworkParams).cast();
+    let feature_weights_grad = grad;
     let feature_biases_grad = feature_weights_grad.wrapping_add(FEATURE_BIAS);
     let output_weights_grad = feature_weights_grad.wrapping_add(OUTPUT_WEIGHTS);
     let output_biases_grad = feature_weights_grad.wrapping_add(OUTPUT_BIAS);
@@ -97,6 +102,7 @@ pub unsafe fn calc_gradient(
         std::mem::size_of::<f32>(),
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
     ), "memcpy");
+    catch!(cudaFree(gpu_error.cast()), "free");
     catch!(cudaDeviceSynchronize());
 
     *error += batch_error;
@@ -110,12 +116,7 @@ pub unsafe fn calc_gradient(
         NET_SIZE,
         cudaMemcpyKind::cudaMemcpyDeviceToHost,
     ), "memcpy");
-    catch!(cudaDeviceSynchronize());
 
-    catch!(cudaFree(grad.cast()), "free");
-    catch!(cudaDeviceSynchronize());
-
-    catch!(cudaFree(network.cast()), "free");
     catch!(cudaDeviceSynchronize());
 
     res

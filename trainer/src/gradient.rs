@@ -75,8 +75,10 @@ pub fn gradients_batch_gpu(
         results_ptr,
         our_acc,
         opp_acc,
-        outputs
-    ): (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32)
+        outputs,
+        grad,
+        network,
+    ): (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams)
 ) -> Box<NetworkParams> {
     let batch_size = batch.len();
     let chunk_size = batch.len() / threads;
@@ -139,6 +141,8 @@ pub fn gradients_batch_gpu(
             our_acc,
             opp_acc,
             outputs,
+            grad,
+            network,
         )
     }
 }
