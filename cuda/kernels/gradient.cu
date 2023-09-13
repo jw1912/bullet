@@ -212,37 +212,29 @@ extern "C" cudaError calcGradient(
     cudaMalloc(&ourAccumulators, accumulatorSize);
     float* oppAccumulators;
     cudaMalloc(&oppAccumulators, accumulatorSize);
-    cudaDeviceSynchronize();
 
     populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
-    cudaDeviceSynchronize();
 
     populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
-    cudaDeviceSynchronize();
 
     float* outputs;
     cudaMalloc(&outputs, outputSize);
-    cudaDeviceSynchronize();
 
     calculateErrors<<<sumBlocks, 1024>>>(batchSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, results, outputs, error);
-    cudaDeviceSynchronize();
 
     backpropSide<<<batchSize, HIDDEN>>>(
         batchSize, 0,
         outputWeights, ourAccumulators, ourInputs, outputs,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
-    cudaDeviceSynchronize();
 
     backpropSide<<<batchSize, HIDDEN>>>(
         batchSize, HIDDEN,
         outputWeights, oppAccumulators, oppInputs, outputs,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
-    cudaDeviceSynchronize();
 
     backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, outputBiasesGradient);
-    cudaDeviceSynchronize();
 
     cudaFree(ourAccumulators);
     cudaFree(oppAccumulators);
