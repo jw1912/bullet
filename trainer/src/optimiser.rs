@@ -28,7 +28,7 @@ impl AdamW {
             self.momentum[i] = B1 * self.momentum[i] + (1. - B1) * grad;
             self.velocity[i] = B2 * self.velocity[i] + (1. - B2) * grad * grad;
             *param -= rate * self.momentum[i] / (self.velocity[i].sqrt() + 0.000_000_01);
-            *param = param.clamp(-1.98, 1.98);
+            *param = param.clamp(-0.98, 0.98);
         }
     }
 }

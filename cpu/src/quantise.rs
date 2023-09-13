@@ -6,8 +6,8 @@ use common::{
     util::write_to_bin,
 };
 
-const QA: i32 = 255;
-const QB: i32 = 64;
+const QA: i32 = 32;
+const QB: i32 = 32;
 const QAB: i32 = QA * QB;
 
 pub fn quantise_and_write(nnue: &NetworkParams, net_path: &str) {
