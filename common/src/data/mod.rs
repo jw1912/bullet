@@ -1,17 +1,19 @@
-pub mod chess;
-pub mod marlinformat;
+pub mod cpu;
+pub mod gpu;
 
-pub use chess::ChessBoard;
+pub use cpu::chess::ChessBoard;
+pub use gpu::chess::ChessBoardCUDA;
 
-use crate::{network::InputType, Data, Input};
+use crate::{inputs::InputType, Data, Input};
 
-const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
+pub const MAX_FEATURES: usize = Data::MAX_FEATURES * (1 + Input::FACTORISER as usize);
 
 pub trait DataType {
     type FeatureType;
     const INPUTS: usize;
 }
 
+#[derive(Debug)]
 pub struct Features {
     features: [(usize, usize); MAX_FEATURES],
     len: usize,

@@ -3,6 +3,7 @@
 /nets
 /checkpoints
 /.idea
+/.vscode
 
 *.epd
 *.txt

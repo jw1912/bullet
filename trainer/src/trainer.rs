@@ -1,21 +1,22 @@
-mod gradient;
-pub mod optimiser;
-pub mod scheduler;
-
 use crate::{
-    Optimiser,
-    network::{quantise_and_write, NetworkParams},
-    util::{to_slice_with_lifetime, write_to_bin},
-    Data,
+    optimiser::AdamW,
+    scheduler::LrScheduler,
+
 };
 
-use gradient::gradients;
-use scheduler::LrScheduler;
+#[cfg(feature = "gpu")]
+use cuda::{free_preallocations, preallocate};
+
+use cpu::{quantise_and_write, NetworkParams};
+
+use common::{
+    util::{to_slice_with_lifetime, write_to_bin},
+    Data
+};
 
 use std::{
     fs::{create_dir, metadata, File},
     io::{stdout, BufRead, BufReader, Write},
-    thread,
     time::Instant,
 };
 
@@ -58,7 +59,7 @@ pub struct Trainer {
     scheduler: LrScheduler,
     blend: f32,
     skip_prop: f32,
-    pub optimiser: Optimiser,
+    pub optimiser: AdamW,
 }
 
 impl Trainer {
@@ -69,7 +70,7 @@ impl Trainer {
         scheduler: LrScheduler,
         blend: f32,
         skip_prop: f32,
-        optimiser: Optimiser,
+        optimiser: AdamW,
     ) -> Self {
         Self {
             file,
@@ -122,7 +123,7 @@ impl Trainer {
         print!("{esc}");
 
         println!("{}", ansi!("Beginning Training", "34;1", esc));
-        let reciprocal_scale = 1.0 / scale;
+        let rscale = 1.0 / scale;
         let file_size = metadata(&self.file).unwrap().len();
         let num = file_size / std::mem::size_of::<Data>() as u64;
         let batches = num / batch_size as u64 + 1;
@@ -145,6 +146,9 @@ impl Trainer {
         let timer = Instant::now();
 
         let mut error;
+
+        #[cfg(feature = "gpu")]
+        let ptrs = preallocate(batch_size);
 
         for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
@@ -177,13 +181,24 @@ impl Trainer {
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
-                    let gradients =
-                        self.gradients(nnue, batch, &mut error, reciprocal_scale);
+                    let gradients = {
+                        #[cfg(not(feature = "gpu"))]
+                        {
+                            use crate::gradient::gradients_batch_cpu;
+                            gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads)
+                        }
+
+                        #[cfg(feature = "gpu")]
+                        {
+                            use crate::gradient::gradients_batch_gpu;
+                            gradients_batch_gpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs)
+                        }
+                    };
 
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
 
-                    if finished_batches % 500 == 0 {
+                    if finished_batches % 128 == 0 {
                         let pct = finished_batches as f32 / batches as f32 * 100.0;
                         let positions = finished_batches * batch_size;
                         let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
@@ -231,33 +246,8 @@ impl Trainer {
                 println!("Saved [{}]", ansi!(net_path, "32;1"));
             }
         }
-    }
 
-    fn gradients(
-        &self,
-        nnue: &NetworkParams,
-        batch: &[Data],
-        error: &mut f32,
-        scale: f32,
-    ) -> Box<NetworkParams> {
-        let size = batch.len() / self.threads;
-        let mut errors = vec![0.0; self.threads];
-        let mut grad = NetworkParams::new();
-        let blend = self.blend;
-        let skip_prop = self.skip_prop;
-        thread::scope(|s| {
-            batch
-                .chunks(size)
-                .zip(errors.iter_mut())
-                .map(|(chunk, error)| {
-                    s.spawn(|| gradients(chunk, nnue, error, blend, skip_prop, scale))
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .map(|p| p.join().unwrap())
-                .for_each(|part| *grad += &part);
-        });
-        *error += errors.iter().sum::<f32>();
-        grad
+        #[cfg(feature = "gpu")]
+        free_preallocations(ptrs);
     }
 }

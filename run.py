@@ -41,7 +41,7 @@ def main():
         '--max-epochs',
         type=int,
         help="Number of epochs for which the trainer will run.",
-        default=65
+        default=40
     )
 
     parser.add_argument(
@@ -120,6 +120,12 @@ def main():
         default="no_way"
     )
 
+    parser.add_argument(
+        '--cuda',
+        help="Compile and run with CUDA.",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -146,12 +152,17 @@ def main():
         "cargo",
         "rustc",
         "--release",
-        "--bin",
+        "--package",
         "trainer",
-        "--",
-        "-C",
-        "target-cpu=native",
     ]
+
+    if args.cuda:
+        commands.append("--features")
+        commands.append("gpu")
+
+    commands.append("--")
+    commands.append("-C")
+    commands.append("target-cpu=native")
 
     subprocess.run(commands)
 
