@@ -46,8 +46,14 @@ impl NetworkParams {
         activated: &mut [[f32; HIDDEN]; 2],
         features: &mut Features,
     ) -> f32 {
+        const MATERIAL: [f32; 6] = [0.25, 0.75, 0.75, 1.25, 2.25, 0.0];
+        let mut mat = 0.0;
+
         for feat in pos.into_iter() {
             let (wfeat, bfeat) = Input::get_feature_indices(feat);
+
+            let val = MATERIAL[usize::from(feat.0 & 7)];
+            mat += if feat.0 & 8 > 0 {-val} else {val};
 
             features.push(wfeat, bfeat);
             accs[0].add_feature(wfeat, self);
@@ -58,7 +64,7 @@ impl NetworkParams {
             }
         }
 
-        let mut eval = self[OUTPUT_BIAS];
+        let mut eval = self[OUTPUT_BIAS] + mat;
 
         for i in 0..HIDDEN {
             activated[0][i] = Activation::activate(accs[0][i]);

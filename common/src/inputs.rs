@@ -13,6 +13,36 @@ pub trait InputType {
     ) -> (usize, usize);
 }
 
+const MIRROR: [usize; 64] = [
+    0,  1,  2,  3,  3,  2,  1,  0,
+    4,  5,  6,  7,  7,  6,  5,  4,
+    8,  9, 10, 11, 11, 10,  9,  8,
+   12, 13, 14, 15, 15, 14, 13, 12,
+   16, 17, 18, 19, 19, 18, 17, 16,
+   20, 21, 22, 23, 23, 22, 21, 20,
+   24, 25, 26, 27, 27, 26, 25, 24,
+   28, 29, 30, 31, 31, 30, 29, 28,
+];
+
+pub struct Chess384;
+impl InputType for Chess384 {
+    type RequiredDataType = ChessBoard;
+    const BUCKETS: usize = 1;
+    const FACTORISER: bool = false;
+    const SIZE: usize = 384;
+
+    fn get_feature_indices(
+        (piece, square, _, _): <Self::RequiredDataType as DataType>::FeatureType,
+    ) -> (usize, usize) {
+        let c = usize::from(piece & 8 > 0);
+        let pc = 32 * usize::from(piece & 7);
+        let sq = MIRROR[usize::from(square)];
+        let wfeat = [0, 192][c] + pc + sq;
+        let bfeat = [192, 0][c] + pc + (sq ^ 28);
+        (wfeat, bfeat)
+    }
+}
+
 pub struct Chess768;
 impl InputType for Chess768 {
     type RequiredDataType = ChessBoard;

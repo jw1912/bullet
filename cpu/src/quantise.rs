@@ -46,7 +46,7 @@ impl QuantisedNetwork {
 }
 
 pub struct QuantisedFactorisedNetwork {
-    weights: [i16; NETWORK_SIZE - Data::INPUTS * HIDDEN],
+    weights: [i16; NETWORK_SIZE - Data::INPUTS * HIDDEN * Input::FACTORISER as usize],
 }
 
 impl QuantisedFactorisedNetwork {
