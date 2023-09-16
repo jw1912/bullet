@@ -31,7 +31,7 @@ __global__ void updateWeight(
     momentum[i] = B1 * momentum[i] + (1.0 - B1) * grad;
     velocity[i] = B2 * velocity[i] + (1.0 - B2) * grad * grad;
 
-    param -= rate * momentum[i] / (sqrt(velocity[i] + 0.00000001));
+    param -= rate * momentum[i] / (sqrt(velocity[i]) + 0.00000001);
     param = min(max(param, -1.98), 1.98);
 
     network[i] = param;

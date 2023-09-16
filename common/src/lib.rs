@@ -18,7 +18,7 @@ pub type Data = data::ChessBoard;
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
-pub const HIDDEN: usize = 16;
+pub const HIDDEN: usize = 256;
 
 /// Activation function:
 ///   - ReLU
