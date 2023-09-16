@@ -20,7 +20,7 @@ __global__ void updateWeight(
 {
     const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i > networkSize)
+    if (i >= networkSize)
         return;
 
     const float grad = adj * gradients[i];
