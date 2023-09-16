@@ -1,13 +1,12 @@
-use crate::{
-    optimiser::AdamW,
-    scheduler::LrScheduler,
-
-};
+use crate::scheduler::LrScheduler;
 
 #[cfg(feature = "gpu")]
-use cuda::{free_preallocations, preallocate};
+use cuda::{free_preallocations, preallocate ,update_weights, copy_weights_from_gpu, util::cuda_copy_to_gpu};
 
-use cpu::{quantise_and_write, NetworkParams};
+#[cfg(feature = "gpu")]
+use cpu::NETWORK_SIZE;
+
+use cpu::{quantise_and_write, NetworkParams, AdamW};
 
 use common::{
     util::{to_slice_with_lifetime, write_to_bin},
@@ -150,6 +149,13 @@ impl Trainer {
         #[cfg(feature = "gpu")]
         let ptrs = preallocate(batch_size);
 
+        #[cfg(feature = "gpu")]
+        {
+            cuda_copy_to_gpu(ptrs.7, nnue as *const NetworkParams, 1);
+            cuda_copy_to_gpu(ptrs.8, self.optimiser.momentum.as_ptr(), NETWORK_SIZE);
+            cuda_copy_to_gpu(ptrs.9, self.optimiser.velocity.as_ptr(), NETWORK_SIZE);
+        }
+
         for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
             error = 0.0;
@@ -181,22 +187,20 @@ impl Trainer {
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
-                    let gradients = {
-                        #[cfg(not(feature = "gpu"))]
-                        {
-                            use crate::gradient::gradients_batch_cpu;
-                            gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads)
-                        }
+                    #[cfg(not(feature = "gpu"))]
+                    {
+                        use crate::gradient::gradients_batch_cpu;
+                        let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads);
+                        self.optimiser
+                            .update_weights(nnue, &gradients, adj, self.scheduler.lr());
+                    }
 
-                        #[cfg(feature = "gpu")]
-                        {
-                            use crate::gradient::gradients_batch_gpu;
-                            gradients_batch_gpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs)
-                        }
-                    };
-
-                    self.optimiser
-                        .update_weights(nnue, &gradients, adj, self.scheduler.lr());
+                    #[cfg(feature = "gpu")]
+                    unsafe {
+                        use crate::gradient::gradients_batch_gpu;
+                        gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs);
+                        update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
+                    }
 
                     if finished_batches % 128 == 0 {
                         let pct = finished_batches as f32 / batches as f32 * 100.0;
@@ -240,6 +244,14 @@ impl Trainer {
 
             if epoch % save_rate == 0 || epoch == max_epochs {
                 let net_path = format!("{net_name}-epoch{epoch}");
+
+                #[cfg(feature = "gpu")]
+                copy_weights_from_gpu(
+                    nnue,
+                    &mut self.optimiser.momentum,
+                    &mut self.optimiser.velocity,
+                    ptrs
+                );
 
                 self.save(nnue, &net_path, epoch);
 

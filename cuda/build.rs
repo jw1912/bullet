@@ -5,7 +5,6 @@ use bindgen::{Builder, CargoCallbacks, EnumVariation};
 use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
 
 const WRAPPER_PATH: &str = "./kernels/wrapper.h";
-const KERNEL_PATH: &str = "./kernels/gradient.cu";
 
 fn main() {
     let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -37,14 +36,14 @@ fn main() {
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-    println!("cargo:rerun-if-changed={KERNEL_PATH}");
-
     let activation = std::any::type_name::<common::Activation>()
         .split("::")
         .last()
         .unwrap()
         .to_uppercase();
     let activation_str = activation.as_str();
+
+    println!("cargo:rerun-if-changed=./kernels");
 
     cc::Build::new()
         .cuda(true)
@@ -55,7 +54,7 @@ fn main() {
         .define("INPUT", Some(common::data::MAX_FEATURES.to_string().as_str()))
         .define(activation_str, None)
         .include("cuda")
-        .files(vec![KERNEL_PATH])
+        .files(vec!["./kernels/gradient.cu", "./kernels/update.cu"])
         .compile("libkernels.a");
 }
 

@@ -1,9 +1,11 @@
 mod accumulator;
 mod gradient;
+mod optimiser;
 mod quantise;
 
 pub use accumulator::Accumulator;
 pub use gradient::update_single_grad_cpu;
+pub use optimiser::AdamW;
 pub use quantise::quantise_and_write;
 
 use common::{rng::Rand, Input, inputs::InputType, HIDDEN, util::write_to_bin};

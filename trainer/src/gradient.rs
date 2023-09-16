@@ -1,10 +1,9 @@
 use std::thread;
 
-use cpu::NetworkParams;
 use common::{Data, rng::Rand};
 
 #[cfg(not(feature = "gpu"))]
-use cpu::update_single_grad_cpu;
+use cpu::{NetworkParams, update_single_grad_cpu};
 
 #[cfg(feature = "gpu")]
 use common::data::gpu::chess::ChessBoardCUDA;
@@ -14,6 +13,7 @@ use cuda::{
     bindings::{cudaDeviceSynchronize, cudaError},
     calc_gradient,
     catch,
+    CudaAllocations,
     util::cuda_copy_to_gpu,
 };
 
@@ -63,7 +63,6 @@ pub fn gradients_batch_cpu(
 #[allow(clippy::too_many_arguments)]
 pub fn gradients_batch_gpu(
     batch: &[Data],
-    nnue: &NetworkParams,
     error: &mut f32,
     scale: f32,
     blend: f32,
@@ -78,8 +77,9 @@ pub fn gradients_batch_gpu(
         outputs,
         grad,
         network,
-    ): (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams)
-) -> Box<NetworkParams> {
+        _, _,
+    ): CudaAllocations
+) {
     let batch_size = batch.len();
     let chunk_size = batch.len() / threads;
 
@@ -132,7 +132,6 @@ pub fn gradients_batch_gpu(
 
     unsafe {
         calc_gradient(
-            nnue,
             error,
             batch_size,
             our_inputs_ptr,

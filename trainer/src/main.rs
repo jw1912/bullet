@@ -1,11 +1,9 @@
 mod gradient;
-mod optimiser;
 mod scheduler;
 mod trainer;
 
-use cpu::NetworkParams;
+use cpu::{AdamW, NetworkParams};
 
-use optimiser::AdamW;
 use scheduler::{LrScheduler, SchedulerType};
 use trainer::{Trainer, MetaData};
 

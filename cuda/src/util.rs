@@ -33,13 +33,13 @@ pub fn cuda_malloc<T>(size: usize) -> *mut T {
     grad
 }
 
-pub fn cuda_calloc<const SIZE: usize>() -> *mut c_float {
+pub fn cuda_calloc(size: usize) -> *mut c_float {
     let mut grad = std::ptr::null_mut::<c_float>();
 
     let grad_ptr = (&mut grad) as *mut *mut c_float;
-    catch!(cudaMalloc(grad_ptr.cast(), SIZE), "malloc");
+    catch!(cudaMalloc(grad_ptr.cast(), size), "malloc");
     catch!(cudaDeviceSynchronize());
-    catch!(cudaMemset(grad as *mut c_void, 0, SIZE), "memset");
+    catch!(cudaMemset(grad as *mut c_void, 0, size), "memset");
     catch!(cudaDeviceSynchronize());
 
     grad
@@ -51,6 +51,16 @@ pub fn cuda_copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
         src.cast(),
         amt * std::mem::size_of::<T>(),
         cudaMemcpyKind::cudaMemcpyHostToDevice
+    ), "memcpy");
+    catch!(cudaDeviceSynchronize());
+}
+
+pub fn cuda_copy_from_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
+    catch!(cudaMemcpy(
+        dest.cast(),
+        src.cast(),
+        amt * std::mem::size_of::<T>(),
+        cudaMemcpyKind::cudaMemcpyDeviceToHost
     ), "memcpy");
     catch!(cudaDeviceSynchronize());
 }

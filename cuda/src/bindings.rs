@@ -16,9 +16,9 @@ pub const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut c_void;
 #[link(name = "kernels", kind = "static")]
 extern "C" {
     pub fn calcGradient(
-        batch_size: usize,
-        hidden_size: usize,
-        input_size: usize,
+        batchSize: usize,
+        hiddenSize: usize,
+        inputSize: usize,
         featureWeights: *const c_float,
         featureBiases: *const c_float,
         outputWeights: *const c_float,
@@ -31,8 +31,19 @@ extern "C" {
         outputWeightsGradient: *mut c_float,
         outputBiasesGradient: *mut c_float,
         error: *mut c_float,
-        our_acc: *mut c_float,
-        opp_acc: *mut c_float,
+        ourAcc: *mut c_float,
+        oppAcc: *mut c_float,
         outputs: *mut c_float,
+    ) -> cudaError_t;
+
+    pub fn updateWeights(
+        networkSize: usize,
+        decay: c_float,
+        adj: c_float,
+        rate: c_float,
+        network: *mut c_float,
+        momentum: *mut c_float,
+        velocity: *mut c_float,
+        gradients: *const c_float,
     ) -> cudaError_t;
 }

@@ -1,4 +1,4 @@
-use cpu::NetworkParams;
+use crate::NetworkParams;
 
 const B1: f32 = 0.9;
 const B2: f32 = 0.999;
@@ -6,7 +6,7 @@ const B2: f32 = 0.999;
 pub struct AdamW {
     pub velocity: Box<NetworkParams>,
     pub momentum: Box<NetworkParams>,
-    decay: f32,
+    pub decay: f32,
 }
 
 impl Default for AdamW {
