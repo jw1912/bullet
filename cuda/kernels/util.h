@@ -3,7 +3,8 @@ Rust constants and directives are passed via macros.
 If anyone has a simpler way, please PR it.
 */
 
-#pragma once
+#ifndef UTIL
+#define UTIL
 
 constexpr size_t calcBlocks(size_t total, size_t threads)
 {
@@ -38,4 +39,6 @@ constexpr size_t calcBlocks(size_t total, size_t threads)
 #else
     __device__ float activate(float in);
     __device__ float prime(float in);
+#endif
+
 #endif

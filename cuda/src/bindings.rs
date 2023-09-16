@@ -35,4 +35,15 @@ extern "C" {
         opp_acc: *mut c_float,
         outputs: *mut c_float,
     ) -> cudaError_t;
+
+    pub fn updateWeights(
+        networkSize: usize,
+        decay: c_float,
+        adj: c_float,
+        rate: c_float,
+        network: *mut c_float,
+        momentum: *mut c_float,
+        velocity: *mut c_float,
+        gradients: *const c_float,
+    ) -> cudaError_t;
 }

@@ -5,8 +5,6 @@ Updating network weights given a gradient.
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "util.h"
-
 constexpr float B1 = 0.9;
 constexpr float B2 = 0.999;
 
@@ -49,7 +47,7 @@ extern "C" cudaError updateWeights(
     float* velocity,
     const float* gradients)
 {
-    const size_t blockSize = calcBlocks(networkSize, 1024);
+    const size_t blockSize = (networkSize + 1023) / 1024;
     updateWeight<<<blockSize, 1024>>>(
         networkSize,
         decay,
