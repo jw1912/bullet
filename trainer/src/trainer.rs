@@ -1,7 +1,7 @@
 use crate::scheduler::LrScheduler;
 
 #[cfg(feature = "gpu")]
-use cuda::{free_preallocations, preallocate ,update_weights, copy_weights_from_gpu};
+use cuda::{free_preallocations, preallocate ,update_weights, copy_weights_from_gpu, util::cuda_copy_to_gpu};
 
 use cpu::{quantise_and_write, NetworkParams, AdamW};
 
@@ -146,6 +146,9 @@ impl Trainer {
         #[cfg(feature = "gpu")]
         let ptrs = preallocate(batch_size);
 
+        #[cfg(feature = "gpu")]
+        cuda_copy_to_gpu(ptrs.7, nnue as *const NetworkParams, 1);
+
         for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
             error = 0.0;
@@ -188,7 +191,7 @@ impl Trainer {
                     #[cfg(feature = "gpu")]
                     unsafe {
                         use crate::gradient::gradients_batch_gpu;
-                        gradients_batch_gpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs);
+                        gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs);
                         update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
                     }
 

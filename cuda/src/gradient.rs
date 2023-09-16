@@ -3,7 +3,7 @@ use std::ffi::{c_float, c_void};
 use crate::{
     bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, calcGradient, cudaMemset},
     catch,
-    util::{cuda_calloc, cuda_copy_to_gpu},
+    util::cuda_calloc,
 };
 
 use common::{data::ChessBoardCUDA, HIDDEN};
@@ -15,7 +15,6 @@ const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
 /// Error checked.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn calc_gradient(
-    nnue: &NetworkParams,
     error: &mut f32,
     batch_size: usize,
     our_inputs: *const u16,
@@ -28,7 +27,6 @@ pub unsafe fn calc_gradient(
     network: *mut NetworkParams,
 ) {
     catch!(cudaMemset(grad as *mut c_void, 0, NET_SIZE), "memset");
-    cuda_copy_to_gpu(network, nnue as *const NetworkParams, 1);
 
     let feature_weights: *const f32 = network.cast();
     let feature_biases = feature_weights.wrapping_add(FEATURE_BIAS);
