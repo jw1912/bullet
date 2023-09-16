@@ -3,7 +3,10 @@ use crate::scheduler::LrScheduler;
 #[cfg(feature = "gpu")]
 use cuda::{free_preallocations, preallocate ,update_weights, copy_weights_from_gpu, util::cuda_copy_to_gpu};
 
-use cpu::{quantise_and_write, NetworkParams, AdamW, NETWORK_SIZE};
+#[cfg(feature = "gpu")]
+use cpu::NETWORK_SIZE;
+
+use cpu::{quantise_and_write, NetworkParams, AdamW};
 
 use common::{
     util::{to_slice_with_lifetime, write_to_bin},
