@@ -1,4 +1,4 @@
-use cpu::NetworkParams;
+use crate::NetworkParams;
 
 const B1: f32 = 0.9;
 const B2: f32 = 0.999;

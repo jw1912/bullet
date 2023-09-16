@@ -1,4 +1,7 @@
-#pragma once
+/*
+Calculating the gradient for a batch.
+*/
+
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <iostream>

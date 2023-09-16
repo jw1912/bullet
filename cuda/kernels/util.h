@@ -3,6 +3,8 @@ Rust constants and directives are passed via macros.
 If anyone has a simpler way, please PR it.
 */
 
+#pragma once
+
 constexpr size_t calcBlocks(size_t total, size_t threads)
 {
     return (total + threads - 1) / threads;

@@ -1,13 +1,9 @@
-use crate::{
-    optimiser::AdamW,
-    scheduler::LrScheduler,
-
-};
+use crate::scheduler::LrScheduler;
 
 #[cfg(feature = "gpu")]
 use cuda::{free_preallocations, preallocate};
 
-use cpu::{quantise_and_write, NetworkParams};
+use cpu::{quantise_and_write, NetworkParams, AdamW};
 
 use common::{
     util::{to_slice_with_lifetime, write_to_bin},
