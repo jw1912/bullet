@@ -3,7 +3,7 @@ use crate::scheduler::LrScheduler;
 #[cfg(feature = "gpu")]
 use cuda::{free_preallocations, preallocate ,update_weights, copy_weights_from_gpu, util::cuda_copy_to_gpu};
 
-use cpu::{quantise_and_write, NetworkParams, AdamW};
+use cpu::{quantise_and_write, NetworkParams, AdamW, NETWORK_SIZE};
 
 use common::{
     util::{to_slice_with_lifetime, write_to_bin},
@@ -147,7 +147,11 @@ impl Trainer {
         let ptrs = preallocate(batch_size);
 
         #[cfg(feature = "gpu")]
-        cuda_copy_to_gpu(ptrs.7, nnue as *const NetworkParams, 1);
+        {
+            cuda_copy_to_gpu(ptrs.7, nnue as *const NetworkParams, 1);
+            cuda_copy_to_gpu(ptrs.8, self.optimiser.momentum.as_ptr(), NETWORK_SIZE);
+            cuda_copy_to_gpu(ptrs.9, self.optimiser.velocity.as_ptr(), NETWORK_SIZE);
+        }
 
         for epoch in start_epoch..=max_epochs {
             let epoch_timer = Instant::now();
