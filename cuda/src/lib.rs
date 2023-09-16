@@ -6,7 +6,7 @@ pub mod util;
 use bindings::{cudaFree, cudaError};
 pub use gradient::calc_gradient;
 pub use optimiser::update_weights;
-use util::{cuda_calloc, cuda_malloc};
+use util::{cuda_calloc, cuda_malloc, cuda_copy_from_gpu};
 
 use common::{data::ChessBoardCUDA, HIDDEN};
 use cpu::NetworkParams;
@@ -23,9 +23,7 @@ pub type CudaAllocations = (
     *mut f32, *mut f32,
 );
 
-pub fn preallocate(
-    batch_size: usize
-) -> CudaAllocations {
+pub fn preallocate(batch_size: usize) -> CudaAllocations {
     const F32: usize = std::mem::size_of::<f32>();
     const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
 
@@ -54,4 +52,15 @@ pub fn free_preallocations(ptrs: CudaAllocations) {
     catch!(cudaFree(ptrs.7.cast()), "free");
     catch!(cudaFree(ptrs.8.cast()), "free");
     catch!(cudaFree(ptrs.9.cast()), "free");
+}
+
+pub fn copy_weights_from_gpu(
+    cpu_network: &mut NetworkParams,
+    cpu_momentum: &mut NetworkParams,
+    cpu_velocity: &mut NetworkParams,
+    (_, _, _, _, _, _, _, network, momentum, velocity): CudaAllocations,
+) {
+    cuda_copy_from_gpu(cpu_network, network, 1);
+    cuda_copy_from_gpu(cpu_momentum, momentum.cast(), 1);
+    cuda_copy_from_gpu(cpu_velocity, velocity.cast(), 1);
 }

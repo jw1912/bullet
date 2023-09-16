@@ -54,3 +54,13 @@ pub fn cuda_copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
     ), "memcpy");
     catch!(cudaDeviceSynchronize());
 }
+
+pub fn cuda_copy_from_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
+    catch!(cudaMemcpy(
+        dest.cast(),
+        src.cast(),
+        amt * std::mem::size_of::<T>(),
+        cudaMemcpyKind::cudaMemcpyDeviceToHost
+    ), "memcpy");
+    catch!(cudaDeviceSynchronize());
+}
