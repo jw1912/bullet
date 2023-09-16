@@ -10,5 +10,4 @@ cpu = { path = "../cpu" }
 cuda = { path = "../cuda", optional = true }
 
 [features]
-default = ["gpu"]
 gpu = ["dep:cuda"]
