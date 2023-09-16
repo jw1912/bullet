@@ -33,13 +33,13 @@ pub fn cuda_malloc<T>(size: usize) -> *mut T {
     grad
 }
 
-pub fn cuda_calloc<const SIZE: usize>() -> *mut c_float {
+pub fn cuda_calloc(size: usize) -> *mut c_float {
     let mut grad = std::ptr::null_mut::<c_float>();
 
     let grad_ptr = (&mut grad) as *mut *mut c_float;
-    catch!(cudaMalloc(grad_ptr.cast(), SIZE), "malloc");
+    catch!(cudaMalloc(grad_ptr.cast(), size), "malloc");
     catch!(cudaDeviceSynchronize());
-    catch!(cudaMemset(grad as *mut c_void, 0, SIZE), "memset");
+    catch!(cudaMemset(grad as *mut c_void, 0, size), "memset");
     catch!(cudaDeviceSynchronize());
 
     grad

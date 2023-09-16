@@ -1,11 +1,25 @@
-pub fn update_weights(&mut self, nnue: &mut NetworkParams, grads: &NetworkParams, adj: f32, rate: f32) {
-    let decay = 1.0 - self.decay * rate;
-    for (i, param) in nnue.iter_mut().enumerate() {
-        *param *= decay;
-        let grad = adj * grads[i];
-        self.momentum[i] = B1 * self.momentum[i] + (1. - B1) * grad;
-        self.velocity[i] = B2 * self.velocity[i] + (1. - B2) * grad * grad;
-        *param -= rate * self.momentum[i] / (self.velocity[i].sqrt() + 0.000_000_01);
-        *param = param.clamp(-1.98, 1.98);
-    }
+use crate::{bindings::{cudaError, updateWeights}, catch, CudaAllocations};
+
+use cpu::NETWORK_SIZE;
+
+/// # Safety
+/// Error checked.
+pub unsafe fn update_weights(
+    adj: f32,
+    decay_rate: f32,
+    rate: f32,
+    (_, _, _, _, _, _, gradients, network, momentum, velocity): CudaAllocations
+) {
+    let decay = 1.0 - decay_rate * rate;
+
+    catch!(updateWeights(
+        NETWORK_SIZE,
+        decay,
+        adj,
+        rate,
+        network.cast(),
+        momentum,
+        velocity,
+        gradients
+    ));
 }

@@ -3,44 +3,13 @@ use std::ffi::{c_float, c_void};
 use crate::{
     bindings::{cudaFree, cudaError, cudaMemcpy, cudaMemcpyKind, cudaDeviceSynchronize, calcGradient, cudaMemset},
     catch,
-    util::{cuda_calloc, cuda_copy_to_gpu, cuda_malloc},
+    util::{cuda_calloc, cuda_copy_to_gpu},
 };
 
 use common::{data::ChessBoardCUDA, HIDDEN};
 use cpu::{NetworkParams, FEATURE_BIAS, OUTPUT_WEIGHTS, OUTPUT_BIAS};
 
 const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
-
-pub fn preallocate(
-    batch_size: usize
-) -> (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams) {
-    const F32: usize = std::mem::size_of::<f32>();
-    const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
-
-    let our_inputs = cuda_malloc(batch_size * INPUT_SIZE);
-    let opp_inputs = cuda_malloc(batch_size * INPUT_SIZE);
-    let results = cuda_malloc(batch_size * F32);
-    let our_acc = cuda_malloc(batch_size * HIDDEN * F32);
-    let opp_acc = cuda_malloc(batch_size * HIDDEN * F32);
-    let outputs = cuda_malloc(batch_size * F32);
-    let grad = cuda_malloc(NET_SIZE);
-    let network = cuda_malloc(NET_SIZE);
-
-    (our_inputs, opp_inputs, results, our_acc, opp_acc, outputs, grad, network)
-}
-
-pub fn free_preallocations(
-    ptrs: (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams)
-) {
-    catch!(cudaFree(ptrs.0.cast()), "free");
-    catch!(cudaFree(ptrs.1.cast()), "free");
-    catch!(cudaFree(ptrs.2.cast()), "free");
-    catch!(cudaFree(ptrs.3.cast()), "free");
-    catch!(cudaFree(ptrs.4.cast()), "free");
-    catch!(cudaFree(ptrs.5.cast()), "free");
-    catch!(cudaFree(ptrs.6.cast()), "free");
-    catch!(cudaFree(ptrs.7.cast()), "free");
-}
 
 /// # Safety
 /// Error checked.
@@ -57,7 +26,7 @@ pub unsafe fn calc_gradient(
     outputs: *mut c_float,
     grad: *mut c_float,
     network: *mut NetworkParams,
-) -> Box<NetworkParams> {
+) {
     catch!(cudaMemset(grad as *mut c_void, 0, NET_SIZE), "memset");
     cuda_copy_to_gpu(network, nnue as *const NetworkParams, 1);
 
@@ -71,7 +40,7 @@ pub unsafe fn calc_gradient(
     let output_weights_grad = feature_weights_grad.wrapping_add(OUTPUT_WEIGHTS);
     let output_biases_grad = feature_weights_grad.wrapping_add(OUTPUT_BIAS);
 
-    let gpu_error = cuda_calloc::<4>();
+    let gpu_error = cuda_calloc(4);
 
     catch!(calcGradient(
         batch_size,
@@ -106,18 +75,4 @@ pub unsafe fn calc_gradient(
     catch!(cudaDeviceSynchronize());
 
     *error += batch_error;
-
-    let mut res = NetworkParams::new();
-    let res_ptr = res.as_mut_ptr() as *mut c_void;
-
-    catch!(cudaMemcpy(
-        res_ptr,
-        grad as *const c_void,
-        NET_SIZE,
-        cudaMemcpyKind::cudaMemcpyDeviceToHost,
-    ), "memcpy");
-
-    catch!(cudaDeviceSynchronize());
-
-    res
 }

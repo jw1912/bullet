@@ -177,22 +177,21 @@ impl Trainer {
 
                 for batch in buf_ref.chunks(batch_size) {
                     let adj = 2. / batch.len() as f32;
-                    let gradients = {
-                        #[cfg(not(feature = "gpu"))]
-                        {
-                            use crate::gradient::gradients_batch_cpu;
-                            gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads)
-                        }
+                    #[cfg(not(feature = "gpu"))]
+                    {
+                        use crate::gradient::gradients_batch_cpu;
+                        let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads);
+                        self.optimiser
+                            .update_weights(nnue, &gradients, adj, self.scheduler.lr());
+                    }
 
-                        #[cfg(feature = "gpu")]
-                        {
-                            use crate::gradient::gradients_batch_gpu;
-                            gradients_batch_gpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs)
-                        }
-                    };
-
-                    self.optimiser
-                        .update_weights(nnue, &gradients, adj, self.scheduler.lr());
+                    #[cfg(feature = "gpu")]
+                    unsafe {
+                        use crate::gradient::gradients_batch_gpu;
+                        use cuda::update_weights;
+                        gradients_batch_gpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs);
+                        update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
+                    }
 
                     if finished_batches % 128 == 0 {
                         let pct = finished_batches as f32 / batches as f32 * 100.0;

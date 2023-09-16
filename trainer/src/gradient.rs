@@ -14,6 +14,7 @@ use cuda::{
     bindings::{cudaDeviceSynchronize, cudaError},
     calc_gradient,
     catch,
+    CudaAllocations,
     util::cuda_copy_to_gpu,
 };
 
@@ -78,8 +79,9 @@ pub fn gradients_batch_gpu(
         outputs,
         grad,
         network,
-    ): (*mut u16, *mut u16, *mut f32, *mut f32, *mut f32, *mut f32, *mut f32, *mut NetworkParams)
-) -> Box<NetworkParams> {
+        _, _,
+    ): CudaAllocations
+) {
     let batch_size = batch.len();
     let chunk_size = batch.len() / threads;
 
