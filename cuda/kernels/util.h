@@ -24,7 +24,7 @@ constexpr size_t calcBlocks(size_t total, size_t threads)
     __device__ float prime(float in) { return in > 0 ? 1 : 0; }
 #elif defined(SCRELU)
     __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : (in * in)); }
-    __device__ float prime(float in) { return in > 0 && in < 1 ? 2 * in : 0; }
+    __device__ float prime(float in) { return in > 0 && in < 1 ? 2 * sqrt(in) : 0; }
 #elif defined(FASTSCRELU)
     constexpr float fastFactor = 255.0 / 256.0;
     __device__ float activate(float in)
@@ -32,7 +32,7 @@ constexpr size_t calcBlocks(size_t total, size_t threads)
         const float sq = in * in * fastFactor;
         return sq < 0 ? 0 : (sq > 1 ? 1 : sq);
     }
-    __device__ float prime(float in) { return fastFactor * (in > 0 && in < 1 ? 2 * in : 0); }
+    __device__ float prime(float in) { return fastFactor * (in > 0 && in < 1 ? 2 * sqrt(in) : 0); }
 #elif defined(CRELU)
     __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : in); }
     __device__ float prime(float in) { return in > 0 && in < 1 ? 1 : 0; }
