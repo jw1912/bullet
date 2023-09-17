@@ -4,10 +4,6 @@ pub mod inputs;
 pub mod rng;
 pub mod util;
 
-// Using CUDA:
-// At the moment this will hard lock you into using
-// CReLU Activation and Chess768 Input.
-
 /// Binary data type used
 ///  - ChessBoard
 pub type Data = data::ChessBoard;
