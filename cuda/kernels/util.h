@@ -30,7 +30,7 @@ constexpr size_t calcBlocks(size_t total, size_t threads)
     __device__ float activate(float in)
     {
         const float sq = in * in * fastFactor;
-        return sq < 0 ? 0 : (sq > 1 ? 1 : sq);
+        return sq > 1 ? 1 : sq;
     }
     __device__ float prime(float in) { return fastFactor * (in > 0 && in < 1 ? 2 * sqrt(in) : 0); }
 #elif defined(CRELU)
