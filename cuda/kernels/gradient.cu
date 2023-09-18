@@ -9,6 +9,29 @@ Calculating the gradient for a batch.
 
 #include "util.h"
 
+// Just bit-twiddle to get next highest power of 2.
+constexpr size_t determineChunkSize(size_t size)
+{
+    size--;
+    size |= size >> 1;
+    size |= size >> 2;
+    size |= size >> 4;
+    size |= size >> 8;
+    size |= size >> 16;
+    size |= size >> 32;
+    size++;
+
+    const size_t chunkSize = size / 1024;
+
+    static_assert(HIDDEN % ChunkSize == 0,
+        "Net of this size must be divisible by an appropriate power of 2.");
+
+    return chunkSize;
+}
+
+constexpr size_t ChunkSize = determineChunkSize(static_cast<size_t>(HIDDEN));
+constexpr size_t NumChunks = static_cast<size_t>(HIDDEN) / ChunkSize;
+
 __global__ void populateAccumulator(
     const size_t batchSize,
     const float* featureWeights,
@@ -19,28 +42,33 @@ __global__ void populateAccumulator(
     if (blockIdx.x >= batchSize)
         return;
 
-    if (threadIdx.x >= HIDDEN)
+    if (threadIdx.x >= NumChunks)
         return;
 
     const size_t inputIdx = INPUT * blockIdx.x;
-    const size_t element = threadIdx.x;
-    const size_t outputIdx = HIDDEN * blockIdx.x + element;
-
+    const size_t chunk = ChunkSize * threadIdx.x;
+    const size_t outputIdx = HIDDEN * blockIdx.x + chunk;
     const uint16_t* thisInput = inputs + inputIdx;
+    float* thisAccumulator = accumulators + outputIdx;
 
-    float elementVal = featureBiases[element];
+    for (size_t element = 0; element < ChunkSize; element++)
+    {
+        const size_t offset = chunk + element;
 
-    for (size_t i = 0; i < INPUT; i++) {
-        if (thisInput[i] == static_cast<uint16_t>(65535))
-            break;
+        float elementVal = featureBiases[offset];
 
-        const size_t idx = static_cast<size_t>(thisInput[i]) * HIDDEN + element;
-        elementVal += featureWeights[idx];
+        for (size_t i = 0; i < INPUT; i++) {
+            if (thisInput[i] == static_cast<uint16_t>(65535))
+                break;
+
+            const size_t idx = static_cast<size_t>(thisInput[i]) * HIDDEN + offset;
+            elementVal += featureWeights[idx];
+        }
+
+        elementVal = activate(elementVal);
+
+        thisAccumulator[element] = elementVal;
     }
-
-    elementVal = activate(elementVal);
-
-    accumulators[outputIdx] = elementVal;
 }
 
 __global__ void calculateErrors(
@@ -91,33 +119,36 @@ __global__ void backpropSide(
     if (blockIdx.x >= batchSize)
         return;
 
-    if (threadIdx.x >= HIDDEN)
+    if (threadIdx.x >= NumChunks)
         return;
 
-    const size_t element = threadIdx.x;
+    const size_t chunk = ChunkSize * threadIdx.x;
     const size_t outputIdx = blockIdx.x;
     const size_t inputIdx = outputIdx * INPUT;
-    const size_t outputWeightIdx = element + outputOffset;
-    const size_t accumulatorIdx = outputIdx * HIDDEN + element;
+    const size_t outputWeightIdx = chunk + outputOffset;
+    const size_t accumulatorIdx = outputIdx * HIDDEN + chunk;
 
     const uint16_t* thisInput = inputs + inputIdx;
 
-    const float error = outputs[outputIdx];
-    const float weight = outputWeights[outputWeightIdx];
-    const float accumulatorVal = accumulator[accumulatorIdx];
+    for (size_t element = 0; element < ChunkSize; element++)
+    {
+        const float error = outputs[outputIdx];
+        const float weight = outputWeights[outputWeightIdx + element];
+        const float accumulatorVal = accumulator[accumulatorIdx + element];
 
-    // uses a trick
-    const float component = prime(accumulatorVal) * error * weight;
+        // uses a trick
+        const float component = prime(accumulatorVal) * error * weight;
 
-    atomicAdd(&featureBiasesGradient[element], component);
-    atomicAdd(&outputWeightsGradient[outputWeightIdx], error * accumulatorVal);
+        atomicAdd(&featureBiasesGradient[chunk + element], component);
+        atomicAdd(&outputWeightsGradient[outputWeightIdx + element], error * accumulatorVal);
 
-    for (int i = 0; i < INPUT; i++) {
-        if (thisInput[i] == static_cast<uint16_t>(65535))
-            break;
+        for (int i = 0; i < INPUT; i++) {
+            if (thisInput[i] == static_cast<uint16_t>(65535))
+                break;
 
-        const size_t x = thisInput[i] * HIDDEN + element;
-        atomicAdd(&featureWeightsGradient[x], component);
+            const size_t x = thisInput[i] * HIDDEN + chunk + element;
+            atomicAdd(&featureWeightsGradient[x], component);
+        }
     }
 }
 
