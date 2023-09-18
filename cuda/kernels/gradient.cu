@@ -23,10 +23,7 @@ constexpr size_t determineChunkSize(size_t size)
 
     const size_t chunkSize = size / 1024;
 
-    static_assert(HIDDEN % ChunkSize == 0,
-        "Net of this size must be divisible by an appropriate power of 2.");
-
-    return chunkSize;
+    return chunkSize == 0 ? 1 : chunkSize;
 }
 
 constexpr size_t ChunkSize = determineChunkSize(static_cast<size_t>(HIDDEN));
@@ -185,6 +182,9 @@ extern "C" cudaError calcGradient(
     float* oppAccumulators,
     float* outputs)
 {
+    static_assert(HIDDEN % ChunkSize == 0,
+        "Net of this size must be divisible by an appropriate power of 2.");
+
     if (inputSize != INPUT)
     {
         std::cout << "Incompatible input format.";
