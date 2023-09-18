@@ -68,9 +68,9 @@ __global__ void calculateErrors(
     for (size_t i = 0; i < HIDDEN; i++)
         eval += oppAccumulators[accumulatorIdx + i] * outputWeights[HIDDEN + i];
 
-    const float sigmoid = 1.0 / (1.0 + expf(-eval));
+    const float sigmoid = 1.0F / (1.0F + expf(-eval));
     const float diff = sigmoid - results[outputIdx];
-    const float singleError = diff * sigmoid * (1.0 - sigmoid);
+    const float singleError = diff * sigmoid * (1.0F - sigmoid);
 
     atomicAdd(error, diff * diff);
 
