@@ -5,8 +5,12 @@ Updating network weights given a gradient.
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-constexpr float B1 = 0.9;
-constexpr float B2 = 0.999;
+constexpr float B1 = 0.9F;
+constexpr float B2 = 0.999F;
+constexpr float B1P = 1.0F - B1;
+constexpr float B2P = 1.0F - B2;
+constexpr float Epsilon = 0.00000001F;
+constexpr float MaxWeight = 1.98F;
 
 __global__ void updateWeight(
     const size_t networkSize,
@@ -28,11 +32,11 @@ __global__ void updateWeight(
     float param = network[i];
     param *= decay;
 
-    momentum[i] = B1 * momentum[i] + (1.0 - B1) * grad;
-    velocity[i] = B2 * velocity[i] + (1.0 - B2) * grad * grad;
+    momentum[i] = B1 * momentum[i] + B1P * grad;
+    velocity[i] = B2 * velocity[i] + B2P * grad * grad;
 
-    param -= rate * momentum[i] / (sqrt(velocity[i]) + 0.00000001);
-    param = min(max(param, -1.98), 1.98);
+    param -= rate * momentum[i] / (sqrt(velocity[i]) + Epsilon);
+    param = min(max(param, -MaxWeight), MaxWeight);
 
     network[i] = param;
 }

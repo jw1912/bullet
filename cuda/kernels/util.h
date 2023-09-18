@@ -3,9 +3,6 @@ Rust constants and directives are passed via macros.
 If anyone has a simpler way, please PR it.
 */
 
-#ifndef UTIL
-#define UTIL
-
 constexpr size_t calcBlocks(size_t total, size_t threads)
 {
     return (total + threads - 1) / threads;
@@ -20,25 +17,23 @@ constexpr size_t calcBlocks(size_t total, size_t threads)
 #endif
 
 #if defined(RELU)
-    __device__ float activate(float in) { return in > 0 ? in : 0; }
-    __device__ float prime(float in) { return in > 0 ? 1 : 0; }
+    __device__ float activate(float in) { return in > 0.0F ? in : 0.0F; }
+    __device__ float prime(float in) { return in > 0.0F ? 1.0F : 0.0F; }
 #elif defined(SCRELU)
-    __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : (in * in)); }
-    __device__ float prime(float in) { return in > 0 && in < 1 ? 2 * sqrt(in) : 0; }
+    __device__ float activate(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : (in * in)); }
+    __device__ float prime(float in) { return in > 0.0F && in < 1.0F ? 2.0F * sqrt(in) : 0.0F; }
 #elif defined(FASTSCRELU)
-    constexpr float fastFactor = 255.0 / 256.0;
+    constexpr float fastFactor = 255.0F / 256.0F;
     __device__ float activate(float in)
     {
         const float sq = in * in * fastFactor;
-        return sq > 1 ? 1 : sq;
+        return sq > 1.0F ? 1.0F : sq;
     }
-    __device__ float prime(float in) { return fastFactor * (in > 0 && in < 1 ? 2 * sqrt(in) : 0); }
+    __device__ float prime(float in) { return fastFactor * (in > 0.0F && in < 1.0F ? 2.0F * sqrt(in) : 0.0F); }
 #elif defined(CRELU)
-    __device__ float activate(float in) { return in < 0 ? 0 : (in > 1 ? 1 : in); }
-    __device__ float prime(float in) { return in > 0 && in < 1 ? 1 : 0; }
+    __device__ float activate(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : in); }
+    __device__ float prime(float in) { return in > 0.0F && in < 1.0F ? 1.0F : 0.0F; }
 #else
     __device__ float activate(float in);
     __device__ float prime(float in);
-#endif
-
 #endif
