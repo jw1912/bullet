@@ -48,6 +48,7 @@ __global__ void populateAccumulator(
     const uint16_t* thisInput = inputs + inputIdx;
     float* thisAccumulator = accumulators + outputIdx;
 
+    #pragma unroll
     for (size_t element = 0; element < ChunkSize; element++)
     {
         const size_t offset = chunk + element;
@@ -127,6 +128,7 @@ __global__ void backpropSide(
 
     const uint16_t* thisInput = inputs + inputIdx;
 
+    #pragma unroll
     for (size_t element = 0; element < ChunkSize; element++)
     {
         const float error = outputs[outputIdx];
