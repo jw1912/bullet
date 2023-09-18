@@ -202,19 +202,19 @@ extern "C" cudaError calcGradient(
     const size_t blocks = calcBlocks(batchSize, HIDDEN);
     const size_t sumBlocks = calcBlocks(batchSize, 1024);
 
-    populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
+    populateAccumulator<<<batchSize, NumChunks>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
 
-    populateAccumulator<<<batchSize, HIDDEN>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
+    populateAccumulator<<<batchSize, NumChunks>>>(batchSize, featureWeights, featureBiases, oppInputs, oppAccumulators);
 
     calculateErrors<<<sumBlocks, 1024>>>(batchSize, outputWeights, outputBiases, ourAccumulators, oppAccumulators, results, outputs, error);
 
-    backpropSide<<<batchSize, HIDDEN>>>(
+    backpropSide<<<batchSize, NumChunks>>>(
         batchSize, 0,
         outputWeights, ourAccumulators, ourInputs, outputs,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
 
-    backpropSide<<<batchSize, HIDDEN>>>(
+    backpropSide<<<batchSize, NumChunks>>>(
         batchSize, HIDDEN,
         outputWeights, oppAccumulators, oppInputs, outputs,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
