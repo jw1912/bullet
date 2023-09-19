@@ -126,6 +126,12 @@ def main():
         action="store_true",
     )
 
+    parser.add_argument(
+        '--simd',
+        help="Compile and run with handwritten SIMD.",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -150,7 +156,7 @@ def main():
 
     commands = [
         "cargo",
-        "rustc",
+        "build",
         "--release",
         "--package",
         "trainer",
@@ -159,10 +165,9 @@ def main():
     if args.cuda:
         commands.append("--features")
         commands.append("gpu")
-
-    commands.append("--")
-    commands.append("-C")
-    commands.append("target-cpu=native")
+    elif args.simd:
+        commands.append("--features")
+        commands.append("simd")
 
     subprocess.run(commands)
 

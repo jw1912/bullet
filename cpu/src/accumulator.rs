@@ -41,8 +41,6 @@ impl Accumulator {
 impl Accumulator {
     pub fn add_feature(&mut self, feature_idx: usize, nnue: &NetworkParams) {
         let start = feature_idx * HIDDEN;
-        for (i, d) in self.vals.iter_mut().zip(&nnue[start..start + HIDDEN]) {
-            *i += *d;
-        }
+        crate::simd::add_to_all(&mut self.vals, &nnue[start..start + HIDDEN]);
     }
 }
