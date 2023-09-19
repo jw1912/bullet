@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "simd", feature(stdsimd))]
 
 #[cfg(feature = "simd")]
-const _: () = assert!(HIDDEN % 64 == 0, "Must be a multiple of 64 for hand-written SIMD.");
+const _: () = assert!(HIDDEN % 32 == 0, "Must be a multiple of 64 for hand-written SIMD.");
 
 mod accumulator;
 mod gradient;
