@@ -154,13 +154,15 @@ def main():
         print(error)
         return
 
-    commands = [
-        "cargo",
-        "build",
-        "--release",
-        "--package",
-        "trainer",
-    ]
+    commands = []
+
+    commands.append("cargo")
+    if args.simd:
+        commands.append("+nightly")
+    commands.append("build")
+    commands.append("--release")
+    commands.append("--package")
+    commands.append("trainer")
 
     if args.cuda:
         commands.append("--features")
