@@ -13,6 +13,7 @@ pub fn add_to_all<const SIZE: usize>(
     add_to_all_base(a, b);
 }
 
+#[inline]
 fn add_to_all_base<const SIZE: usize>(
     a: &mut [f32; SIZE],
     b: &[f32]
@@ -24,6 +25,7 @@ fn add_to_all_base<const SIZE: usize>(
 
 #[cfg(feature = "simd")]
 #[cfg(target_feature = "avx512f")]
+#[inline]
 unsafe fn add_to_all_avx512<const SIZE: usize>(
     a: &mut [f32; SIZE],
     b: &[f32],
