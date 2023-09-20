@@ -11,3 +11,4 @@ cuda = { path = "../cuda", optional = true }
 
 [features]
 gpu = ["dep:cuda"]
+simd = ["cpu/simd"]

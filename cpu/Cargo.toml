@@ -6,3 +6,6 @@ authors = ["Jamie Whiting"]
 
 [dependencies]
 common = { path = "../common" }
+
+[features]
+simd = []
