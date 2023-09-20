@@ -171,7 +171,10 @@ def main():
         commands.append("--features")
         commands.append("simd")
 
-    subprocess.run(commands)
+    result = subprocess.run(commands)
+
+    if result.returncode != 0:
+        exit(1)
 
     exe_path = "target/release/trainer"
     if os.name == 'nt':
