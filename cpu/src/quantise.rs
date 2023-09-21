@@ -34,7 +34,9 @@ impl QuantisedNetwork {
             res[i] = (nnue[i] * (QB as f32)) as i16;
         }
 
-        res[OUTPUT_BIAS] = (nnue[OUTPUT_BIAS] * (QAB as f32)) as i16;
+        for i in OUTPUT_BIAS..NETWORK_SIZE {
+            res[i] = (nnue[i] * (QAB as f32)) as i16;
+        }
 
         res
     }
@@ -79,7 +81,9 @@ impl QuantisedFactorisedNetwork {
             res.weights[i - OFFSET] = (nnue[i] * (QB as f32)) as i16;
         }
 
-        res.weights[OUTPUT_BIAS - OFFSET] = (nnue[OUTPUT_BIAS] * (QAB as f32)) as i16;
+        for i in OUTPUT_BIAS..NETWORK_SIZE {
+            res.weights[i - OFFSET] = (nnue[i] * (QAB as f32)) as i16;
+        }
 
         res
     }

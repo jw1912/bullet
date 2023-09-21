@@ -11,7 +11,7 @@ use common::{
     Activation,
     data::{DataType, Features},
     Data, Input, HIDDEN,
-    util::sigmoid,
+    util::sigmoid, OutputBucket,
 };
 
 pub fn update_single_grad_cpu(
@@ -27,7 +27,7 @@ pub fn update_single_grad_cpu(
     let mut activated = [[0.0; HIDDEN]; 2];
     let mut features = Features::default();
 
-    let eval = nnue.forward(pos, &mut accs, &mut activated, &mut features);
+    let (eval, bucket) = nnue.forward(pos, &mut accs, &mut activated, &mut features);
 
     let result = pos.blended_result(blend, scale);
 
@@ -35,7 +35,7 @@ pub fn update_single_grad_cpu(
     let err = (sigmoid - result) * sigmoid * (1. - sigmoid);
     *error += (sigmoid - result).powi(2);
 
-    nnue.backprop(err, grad, &accs, &activated, &mut features);
+    nnue.backprop(err, grad, &accs, &activated, &mut features, bucket);
 }
 
 impl NetworkParams {
@@ -45,32 +45,40 @@ impl NetworkParams {
         accs: &mut [Accumulator; 2],
         activated: &mut [[f32; HIDDEN]; 2],
         features: &mut Features,
-    ) -> f32 {
+    ) -> (f32, usize) {
+        let mut idx = 0;
+
         for feat in pos.into_iter() {
             let (wfeat, bfeat) = Input::get_feature_indices(feat);
 
             features.push(wfeat, bfeat);
             accs[0].add_feature(wfeat, self);
             accs[1].add_feature(bfeat, self);
+
+            OutputBucket::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
+
             if Input::FACTORISER {
                 accs[0].add_feature(wfeat % Data::INPUTS, self);
                 accs[1].add_feature(bfeat % Data::INPUTS, self);
             }
         }
 
-        let mut eval = self[OUTPUT_BIAS];
+        let bucket = OutputBucket::get_bucket(idx);
+
+        let mut eval = self[OUTPUT_BIAS + bucket];
+        let output_idx = OUTPUT_WEIGHTS + 2 * HIDDEN * bucket;
 
         for i in 0..HIDDEN {
             activated[0][i] = Activation::activate(accs[0][i]);
-            eval += activated[0][i] * self[OUTPUT_WEIGHTS + i];
+            eval += activated[0][i] * self[output_idx + i];
         }
 
         for i in 0..HIDDEN {
             activated[1][i] = Activation::activate(accs[1][i]);
-            eval += activated[1][i] * self[OUTPUT_WEIGHTS + HIDDEN + i];
+            eval += activated[1][i] * self[output_idx + HIDDEN + i];
         }
 
-        eval
+        (eval, bucket)
     }
 
     pub fn backprop(
@@ -80,19 +88,21 @@ impl NetworkParams {
         accs: &[Accumulator; 2],
         activated: &[[f32; HIDDEN]; 2],
         features: &mut Features,
+        bucket: usize,
     ) {
+        let output_idx = OUTPUT_WEIGHTS + 2 * HIDDEN * bucket;
         let mut components = [(0.0, 0.0); HIDDEN];
 
         for i in 0..HIDDEN {
             components[i] = (
-                err * self[OUTPUT_WEIGHTS + i] * Activation::prime(accs[0][i]),
-                err * self[OUTPUT_WEIGHTS + HIDDEN + i] * Activation::prime(accs[1][i]),
+                err * self[output_idx + i] * Activation::prime(accs[0][i]),
+                err * self[output_idx + HIDDEN + i] * Activation::prime(accs[1][i]),
             );
 
             grad[FEATURE_BIAS + i] += components[i].0 + components[i].1;
 
-            grad[OUTPUT_WEIGHTS + i] += err * activated[0][i];
-            grad[OUTPUT_WEIGHTS + HIDDEN + i] += err * activated[1][i];
+            grad[output_idx + i] += err * activated[0][i];
+            grad[output_idx + HIDDEN + i] += err * activated[1][i];
         }
 
         for (wfeat, bfeat) in features {
@@ -103,6 +113,6 @@ impl NetworkParams {
             }
         }
 
-        grad[OUTPUT_BIAS] += err;
+        grad[OUTPUT_BIAS + bucket] += err;
     }
 }
