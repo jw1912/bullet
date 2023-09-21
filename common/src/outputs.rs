@@ -20,6 +20,6 @@ impl<const N: usize> MaterialCount<N> {
     }
 
     pub fn get_bucket(idx: usize) -> usize {
-        idx / Self::DIVISOR
+        (idx - 2) / Self::DIVISOR
     }
 }
