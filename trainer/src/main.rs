@@ -7,9 +7,6 @@ use cpu::{AdamW, NetworkParams};
 use scheduler::{LrScheduler, SchedulerType};
 use trainer::{Trainer, MetaData};
 
-#[cfg(feature = "gpu")]
-const _: () = assert!(common::OutputBucket::NUM == 1, "Output buckets not supported with CUDA");
-
 fn main() {
     let mut args = std::env::args();
     args.next();
