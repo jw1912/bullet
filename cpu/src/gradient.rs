@@ -48,6 +48,9 @@ impl NetworkParams {
     ) -> (f32, usize) {
         let mut idx = 0;
 
+        const MATERIAL: [f32; 6] = [0.25, 0.75, 0.75, 1.25, 2.25, 0.0];
+        let mut mat = 0.0;
+
         for feat in pos.into_iter() {
             let (wfeat, bfeat) = Input::get_feature_indices(feat);
 
@@ -68,7 +71,7 @@ impl NetworkParams {
 
         let bucket = OutputBucket::get_bucket(idx);
 
-        let mut eval = self[OUTPUT_BIAS + bucket];
+        let mut eval = self[OUTPUT_BIAS + bucket] + mat;
         let output_idx = OUTPUT_WEIGHTS + 2 * HIDDEN * bucket;
 
         for i in 0..HIDDEN {
