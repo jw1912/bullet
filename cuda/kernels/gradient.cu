@@ -169,6 +169,7 @@ __global__ void backpropSide(
 __global__ void backpropOutputBias(
     const size_t batchSize,
     const float* outputs,
+    const Result* results,
     float* outputBiasesGradient)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -176,7 +177,13 @@ __global__ void backpropOutputBias(
     if (idx >= batchSize)
         return;
 
-    atomicAdd(outputBiasesGradient, outputs[idx]);
+    size_t outIdx = 0;
+    if constexpr (OUTPUT > 1)
+    {
+        outIdx = results[idx].bucket;
+    }
+
+    atomicAdd(&outputBiasesGradient[outIdx], outputs[idx]);
 }
 
 extern "C" cudaError calcGradient(
@@ -235,7 +242,7 @@ extern "C" cudaError calcGradient(
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
 
-    backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, outputBiasesGradient);
+    backpropOutputBias<<<sumBlocks, 1024>>>(batchSize, outputs, results, outputBiasesGradient);
 
     cudaDeviceSynchronize();
 
