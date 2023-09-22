@@ -8,14 +8,14 @@ pub use gradient::calc_gradient;
 pub use optimiser::update_weights;
 use util::{cuda_calloc, cuda_malloc, cuda_copy_from_gpu};
 
-use common::{data::ChessBoardCUDA, HIDDEN};
+use common::{data::{ChessBoardCUDA, CudaResult}, HIDDEN};
 use cpu::NetworkParams;
 
 const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
 
 pub type CudaAllocations = (
     *mut u16, *mut u16,
-    *mut f32,
+    *mut CudaResult,
     *mut f32, *mut f32,
     *mut f32,
     *mut f32,
@@ -25,11 +25,12 @@ pub type CudaAllocations = (
 
 pub fn preallocate(batch_size: usize) -> CudaAllocations {
     const F32: usize = std::mem::size_of::<f32>();
+    const RESULT: usize = std::mem::size_of::<CudaResult>();
     const INPUT_SIZE: usize = std::mem::size_of::<ChessBoardCUDA>();
 
     let our_inputs = cuda_malloc(batch_size * INPUT_SIZE);
     let opp_inputs = cuda_malloc(batch_size * INPUT_SIZE);
-    let results = cuda_malloc(batch_size * F32);
+    let results = cuda_malloc(batch_size * RESULT);
     let our_acc = cuda_malloc(batch_size * HIDDEN * F32);
     let opp_acc = cuda_malloc(batch_size * HIDDEN * F32);
     let outputs = cuda_malloc(batch_size * F32);

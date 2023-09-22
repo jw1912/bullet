@@ -52,6 +52,7 @@ fn main() {
         .opt_level(3)
         .define("HIDDEN", Some(common::HIDDEN.to_string().as_str()))
         .define("INPUT", Some(common::data::MAX_FEATURES.to_string().as_str()))
+        .define("OUTPUT", Some(common::OutputBucket::NUM.to_string().as_str()))
         .define(activation_str, None)
         .include("cuda")
         .files(vec!["./kernels/gradient.cu", "./kernels/update.cu"])

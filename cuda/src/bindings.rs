@@ -7,6 +7,8 @@
 
 use std::ffi::{c_void, c_float};
 
+use common::data::CudaResult;
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut c_void;
@@ -25,7 +27,7 @@ extern "C" {
         outputBiases: *const c_float,
         ourInputs: *const u16,
         oppInputs: *const u16,
-        results: *const c_float,
+        results: *const CudaResult,
         featureWeightsGradient: *mut c_float,
         featureBiasesGradient: *mut c_float,
         outputWeightsGradient: *mut c_float,

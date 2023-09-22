@@ -6,7 +6,7 @@ use crate::{
     util::cuda_calloc,
 };
 
-use common::{data::ChessBoardCUDA, HIDDEN};
+use common::{data::{ChessBoardCUDA, CudaResult}, HIDDEN};
 use cpu::{NetworkParams, FEATURE_BIAS, OUTPUT_WEIGHTS, OUTPUT_BIAS};
 
 const NET_SIZE: usize = std::mem::size_of::<NetworkParams>();
@@ -19,7 +19,7 @@ pub unsafe fn calc_gradient(
     batch_size: usize,
     our_inputs: *const u16,
     opp_inputs: *const u16,
-    results: *const c_float,
+    results: *const CudaResult,
     our_acc: *mut c_float,
     opp_acc: *mut c_float,
     outputs: *mut c_float,

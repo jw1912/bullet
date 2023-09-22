@@ -1,6 +1,7 @@
 pub mod activation;
 pub mod data;
 pub mod inputs;
+pub mod outputs;
 pub mod rng;
 pub mod util;
 
@@ -22,3 +23,9 @@ pub const HIDDEN: usize = 256;
 ///   - SCReLU
 ///   - FastSCReLU
 pub type Activation = activation::CReLU;
+
+/// Output Buckets:
+///
+///  - Single    (recommended)
+///  - MaterialCount<Buckets>
+pub type OutputBucket = outputs::Single;

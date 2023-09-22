@@ -16,6 +16,10 @@ constexpr size_t calcBlocks(size_t total, size_t threads)
 #define INPUT 32
 #endif
 
+#ifndef OUTPUT
+#define OUTPUT 1
+#endif
+
 #if defined(RELU)
     __device__ float activate(float in) { return in > 0.0F ? in : 0.0F; }
     __device__ float prime(float in) { return in > 0.0F ? 1.0F : 0.0F; }
