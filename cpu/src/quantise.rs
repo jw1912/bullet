@@ -38,6 +38,23 @@ impl QuantisedNetwork {
             res[i] = (nnue[i] * (QAB as f32)) as i16;
         }
 
+        println!("{{");
+        for (i, chunk) in res.weights.chunks(16).enumerate() {
+            let mut integer = 0u128;
+            for (j, &val) in chunk.iter().enumerate() {
+                assert!(val.abs() < 32);
+                let adj = (val + 31) as u128;
+                assert!(adj < 64);
+                integer ^= adj << (6 * j);
+            }
+            print!("{integer}m,");
+            if i % 8 == 7 {
+                println!();
+            }
+        }
+        println!();
+        println!("}}");
+
         res
     }
 
