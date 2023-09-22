@@ -49,8 +49,8 @@ impl FastSCReLU {
     const FAST_SCRELU_FACTOR: f32 = 255.0 / 256.0;
 
     pub fn activate(x: f32) -> f32 {
-        let x = x * x * Self::FAST_SCRELU_FACTOR;
-        x.clamp(0.0, 1.0)
+        let squared = x * x * Self::FAST_SCRELU_FACTOR;
+        squared.min(1.0)
     }
 
     pub fn prime(x: f32) -> f32 {

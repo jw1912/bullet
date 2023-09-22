@@ -1,19 +1,27 @@
+#![cfg_attr(feature = "simd", feature(stdsimd))]
+
+#[cfg(feature = "simd")]
+const _: () = assert!(HIDDEN % 32 == 0, "Must be a multiple of 64 for hand-written SIMD.");
+
 mod accumulator;
 mod gradient;
+mod optimiser;
 mod quantise;
+mod simd;
 
 pub use accumulator::Accumulator;
 pub use gradient::update_single_grad_cpu;
+pub use optimiser::AdamW;
 pub use quantise::quantise_and_write;
 
-use common::{rng::Rand, Input, inputs::InputType, HIDDEN, util::write_to_bin};
+use common::{rng::Rand, Input, inputs::InputType, OutputBucket, HIDDEN, util::write_to_bin};
 
 pub type NetworkParams = Network<f32>;
 
-pub const NETWORK_SIZE: usize = (Input::SIZE + 3) * HIDDEN + 1;
+pub const NETWORK_SIZE: usize = OUTPUT_BIAS + OutputBucket::NUM;
 pub const FEATURE_BIAS: usize = Input::SIZE * HIDDEN;
 pub const OUTPUT_WEIGHTS: usize = (Input::SIZE + 1) * HIDDEN;
-pub const OUTPUT_BIAS: usize = (Input::SIZE + 3) * HIDDEN;
+pub const OUTPUT_BIAS: usize = OUTPUT_WEIGHTS + 2 * OutputBucket::NUM * HIDDEN;
 
 #[derive(Clone)]
 #[repr(C)]

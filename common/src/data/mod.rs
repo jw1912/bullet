@@ -2,7 +2,7 @@ pub mod cpu;
 pub mod gpu;
 
 pub use cpu::chess::ChessBoard;
-pub use gpu::chess::ChessBoardCUDA;
+pub use gpu::chess::{ChessBoardCUDA, CudaResult};
 
 use crate::{inputs::InputType, Data, Input};
 

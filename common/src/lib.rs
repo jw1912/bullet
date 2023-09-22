@@ -1,12 +1,9 @@
 pub mod activation;
 pub mod data;
 pub mod inputs;
+pub mod outputs;
 pub mod rng;
 pub mod util;
-
-// Using CUDA:
-// At the moment this will hard lock you into using
-// CReLU Activation and Chess768 Input.
 
 /// Binary data type used
 ///  - ChessBoard
@@ -26,3 +23,9 @@ pub const HIDDEN: usize = 8;
 ///   - SCReLU
 ///   - FastSCReLU
 pub type Activation = activation::CReLU;
+
+/// Output Buckets:
+///
+///  - Single    (recommended)
+///  - MaterialCount<Buckets>
+pub type OutputBucket = outputs::Single;

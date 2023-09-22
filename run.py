@@ -126,6 +126,12 @@ def main():
         action="store_true",
     )
 
+    parser.add_argument(
+        '--simd',
+        help="Compile and run with handwritten SIMD.",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     if args.data_path is None:
@@ -148,23 +154,27 @@ def main():
         print(error)
         return
 
-    commands = [
-        "cargo",
-        "rustc",
-        "--release",
-        "--package",
-        "trainer",
-    ]
+    commands = []
+
+    commands.append("cargo")
+    if args.simd:
+        commands.append("+nightly")
+    commands.append("build")
+    commands.append("--release")
+    commands.append("--package")
+    commands.append("trainer")
 
     if args.cuda:
         commands.append("--features")
         commands.append("gpu")
+    elif args.simd:
+        commands.append("--features")
+        commands.append("simd")
 
-    commands.append("--")
-    commands.append("-C")
-    commands.append("target-cpu=native")
+    result = subprocess.run(commands)
 
-    subprocess.run(commands)
+    if result.returncode != 0:
+        exit(1)
 
     exe_path = "target/release/trainer"
     if os.name == 'nt':
