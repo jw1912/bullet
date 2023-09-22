@@ -9,6 +9,11 @@ Calculating the gradient for a batch.
 
 #include "util.h"
 
+struct Result {
+    float score;
+    uint32_t bucket;
+};
+
 // Just bit-twiddle to get next highest power of 2.
 constexpr size_t determineChunkSize(size_t size)
 {
@@ -75,7 +80,7 @@ __global__ void calculateErrors(
     const float* outputBiases,
     const float* ourAccumulators,
     const float* oppAccumulators,
-    const float* results,
+    const Result* results,
     float* outputs,
     float* error)
 {
@@ -86,16 +91,19 @@ __global__ void calculateErrors(
 
     const size_t accumulatorIdx = outputIdx * HIDDEN;
 
-    float eval = outputBiases[0];
+    const Result thisResult = results[outputIdx];
+    const float* thisOutputWeights = outputWeights + 2 * HIDDEN * thisResult.bucket;
+
+    float eval = outputBiases[thisResult.bucket];
 
     for (size_t i = 0; i < HIDDEN; i++)
-        eval += ourAccumulators[accumulatorIdx + i] * outputWeights[i];;
+        eval += ourAccumulators[accumulatorIdx + i] * thisOutputWeights[i];;
 
     for (size_t i = 0; i < HIDDEN; i++)
-        eval += oppAccumulators[accumulatorIdx + i] * outputWeights[HIDDEN + i];
+        eval += oppAccumulators[accumulatorIdx + i] * thisOutputWeights[HIDDEN + i];
 
     const float sigmoid = 1.0F / (1.0F + expf(-eval));
-    const float diff = sigmoid - results[outputIdx];
+    const float diff = sigmoid - thisResult.score;
     const float singleError = diff * sigmoid * (1.0F - sigmoid);
 
     atomicAdd(error, diff * diff);
@@ -110,6 +118,7 @@ __global__ void backpropSide(
     const float* accumulator,
     const uint16_t* inputs,
     const float* outputs,
+    const Result* results,
     float* featureWeightsGradient,
     float* featureBiasesGradient,
     float* outputWeightsGradient)
@@ -123,8 +132,14 @@ __global__ void backpropSide(
     const size_t chunk = ChunkSize * threadIdx.x;
     const size_t outputIdx = blockIdx.x;
     const size_t inputIdx = outputIdx * INPUT;
-    const size_t outputWeightIdx = chunk + outputOffset;
     const size_t accumulatorIdx = outputIdx * HIDDEN + chunk;
+
+    size_t outputWeightIdx = chunk + outputOffset;
+
+    if constexpr (OUTPUT > 1)
+    {
+        outputWeightIdx += 2 * HIDDEN * results[outputIdx].bucket;
+    }
 
     const uint16_t* thisInput = inputs + inputIdx;
 
@@ -174,7 +189,7 @@ extern "C" cudaError calcGradient(
     const float* outputBiases,
     const uint16_t* ourInputs,
     const uint16_t* oppInputs,
-    const float* results,
+    const Result* results,
     float* featureWeightsGradient,
     float* featureBiasesGradient,
     float* outputWeightsGradient,
@@ -210,13 +225,13 @@ extern "C" cudaError calcGradient(
 
     backpropSide<<<batchSize, NumChunks>>>(
         batchSize, 0,
-        outputWeights, ourAccumulators, ourInputs, outputs,
+        outputWeights, ourAccumulators, ourInputs, outputs, results,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
 
     backpropSide<<<batchSize, NumChunks>>>(
         batchSize, HIDDEN,
-        outputWeights, oppAccumulators, oppInputs, outputs,
+        outputWeights, oppAccumulators, oppInputs, outputs, results,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
 
