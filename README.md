@@ -4,14 +4,10 @@
 
 </div>
 
-A work-in-progress Network Trainer, used to train [akimbo](https://github.com/jw1912/akimbo)'s networks.
+A Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
 
-It currently supports architectures of the form `Input -> Nx2 -> 1`, and can train on both CPU and GPU,
+It currently supports architectures of the form `Input -> Nx2 -> Output`, and can train on both CPU and GPU,
 with a handwritten CUDA backend.
-
-Supported input formats:
-- `Chess768`, chess board of features `(colour, piece, square)`.
-- `HalfKA`, chess board of features `(king square, colour, piece, square)`
 
 To learn how it works, read the [wiki](wiki.md).
 

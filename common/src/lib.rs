@@ -12,6 +12,7 @@ pub type Data = data::ChessBoard;
 /// Input format
 ///  - Chess768  (recommended)
 ///  - HalfKA
+///  - MirroredHalfKA
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
@@ -25,7 +26,6 @@ pub const HIDDEN: usize = 256;
 pub type Activation = activation::CReLU;
 
 /// Output Buckets:
-///
 ///  - Single    (recommended)
 ///  - MaterialCount<Buckets>
 pub type OutputBucket = outputs::Single;
