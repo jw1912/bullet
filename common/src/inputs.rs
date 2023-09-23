@@ -43,6 +43,30 @@ impl InputType for Chess384 {
     }
 }
 
+pub struct ChessRF;
+impl ChessRF {
+    pub const BUCKETS: usize = 1;
+    pub const FACTORISER: bool = false;
+    pub const SIZE: usize = 192;
+    pub const MUL: usize = 2;
+
+    pub fn get_feature_indices(
+        (piece, square, _, _): <ChessBoard as DataType>::FeatureType,
+    ) -> (usize, usize, usize, usize) {
+        let c = usize::from(piece & 8 > 0);
+        let pc = 16 * usize::from(piece & 7);
+        let sq = usize::from(square);
+
+        let rank = sq / 8;
+        let file = sq % 8;
+
+        let wbase = [0, 96][c] + pc;
+        let bbase = [96, 0][c] + pc;
+
+        (wbase + rank, wbase + 8 + file, bbase + 7 - rank, bbase + 8 + file)
+    }
+}
+
 pub struct Chess768;
 impl InputType for Chess768 {
     type RequiredDataType = ChessBoard;

@@ -14,7 +14,7 @@ pub use gradient::update_single_grad_cpu;
 pub use optimiser::AdamW;
 pub use quantise::quantise_and_write;
 
-use common::{rng::Rand, Input, inputs::InputType, OutputBucket, HIDDEN, util::write_to_bin};
+use common::{rng::Rand, Input, OutputBucket, HIDDEN, util::write_to_bin};
 
 pub type NetworkParams = Network<f32>;
 

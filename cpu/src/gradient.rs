@@ -4,12 +4,11 @@ use super::{
     FEATURE_BIAS,
     OUTPUT_BIAS,
     OUTPUT_WEIGHTS,
-    InputType
 };
 
 use common::{
     Activation,
-    data::{DataType, Features},
+    data::Features,
     Data, Input, HIDDEN,
     util::sigmoid, OutputBucket,
 };
@@ -52,21 +51,19 @@ impl NetworkParams {
         let mut mat = 0.0;
 
         for feat in pos.into_iter() {
-            let (wfeat, bfeat) = Input::get_feature_indices(feat);
+            let (wrank, wfile, brank, bfile) = Input::get_feature_indices(feat);
 
             let val = MATERIAL[usize::from(feat.0 & 7)];
             mat += if feat.0 & 8 > 0 {-val} else {val};
 
-            features.push(wfeat, bfeat);
-            accs[0].add_feature(wfeat, self);
-            accs[1].add_feature(bfeat, self);
+            features.push(wrank, brank);
+            features.push(wfile, bfile);
+            accs[0].add_feature(wrank, self);
+            accs[0].add_feature(wfile, self);
+            accs[1].add_feature(brank, self);
+            accs[1].add_feature(bfile, self);
 
             OutputBucket::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
-
-            if Input::FACTORISER {
-                accs[0].add_feature(wfeat % Data::INPUTS, self);
-                accs[1].add_feature(bfeat % Data::INPUTS, self);
-            }
         }
 
         let bucket = OutputBucket::get_bucket(idx);

@@ -2,7 +2,7 @@ use crate::{
     Data,
     Input,
     data::{ChessBoard, DataType, MAX_FEATURES},
-    inputs::InputType, OutputBucket,
+    OutputBucket,
 };
 
 #[repr(C)]
@@ -44,7 +44,7 @@ impl ChessBoardCUDA {
         let mut idx = 0;
 
         for feat in board.into_iter() {
-            let (wfeat, bfeat) = Input::get_feature_indices(feat);
+            let (wfeat, bfeat, _, _) = Input::get_feature_indices(feat);
 
             OutputBucket::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
 

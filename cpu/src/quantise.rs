@@ -1,7 +1,6 @@
 use super::{NetworkParams, Network, NETWORK_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS, FEATURE_BIAS};
 use common::{
     data::DataType,
-    inputs::InputType,
     Data, Input, HIDDEN,
     util::write_to_bin,
 };
