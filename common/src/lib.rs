@@ -28,4 +28,4 @@ pub type Activation = activation::CReLU;
 ///
 ///  - Single    (recommended)
 ///  - MaterialCount<Buckets>
-pub type OutputBucket = outputs::Single;
+pub type OutputBucket = outputs::MaterialCount<8>;

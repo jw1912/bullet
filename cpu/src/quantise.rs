@@ -26,16 +26,12 @@ impl QuantisedNetwork {
     fn from_unquantised(nnue: &NetworkParams) -> Box<Self> {
         let mut res = QuantisedNetwork::new();
 
-        for i in 0..OUTPUT_WEIGHTS {
-            res[i] = (nnue[i] * (QA as f32)) as i16;
-        }
-
-        for i in OUTPUT_WEIGHTS..OUTPUT_BIAS {
-            res[i] = (nnue[i] * (QB as f32)) as i16;
+        for i in 0..OUTPUT_BIAS {
+            res[i] = (nnue[i] * 32.0) as i16;
         }
 
         for i in OUTPUT_BIAS..NETWORK_SIZE {
-            res[i] = (nnue[i] * (QAB as f32)) as i16;
+            res[i] = (nnue[i] * 128.0) as i16;
         }
 
         println!("{{");
