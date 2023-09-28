@@ -43,7 +43,7 @@ impl QuantisedNetwork {
 
     fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         const SIZEOF: usize = std::mem::size_of::<QuantisedNetwork>();
-        write_to_bin::<Self, SIZEOF>(self, output_path)
+        write_to_bin::<Self, SIZEOF>(self, output_path, true)
     }
 }
 
@@ -90,6 +90,6 @@ impl QuantisedFactorisedNetwork {
 
     fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         const SIZEOF: usize = std::mem::size_of::<QuantisedFactorisedNetwork>();
-        write_to_bin::<Self, SIZEOF>(self, output_path)
+        write_to_bin::<Self, SIZEOF>(self, output_path, true)
     }
 }
