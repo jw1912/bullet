@@ -81,7 +81,7 @@ impl NetworkParams {
 
     pub fn write_to_bin(&self, output_path: &str) -> std::io::Result<()> {
         const SIZEOF: usize = std::mem::size_of::<NetworkParams>();
-        write_to_bin::<Self, SIZEOF>(self, output_path)
+        write_to_bin::<Self, SIZEOF>(self, output_path, true)
     }
 
     pub fn load_from_bin(&mut self, path: &str) {

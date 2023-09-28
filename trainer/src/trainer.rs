@@ -92,7 +92,7 @@ impl Trainer {
         };
 
         const META_SIZE: usize = std::mem::size_of::<MetaData>();
-        write_to_bin::<MetaData, META_SIZE>(&meta, &format!("{path}/metadata.bin")).unwrap();
+        write_to_bin::<MetaData, META_SIZE>(&meta, &format!("{path}/metadata.bin"), false).unwrap();
         nnue.write_to_bin(&format!("{path}/params.bin")).unwrap();
         self.optimiser.momentum.write_to_bin(&format!("{path}/momentum.bin")).unwrap();
         self.optimiser.velocity.write_to_bin(&format!("{path}/velocity.bin")).unwrap();
