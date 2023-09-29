@@ -31,8 +31,11 @@ constexpr size_t determineChunkSize(size_t size)
     return chunkSize == 0 ? 1 : chunkSize;
 }
 
-constexpr size_t ChunkSize = determineChunkSize(static_cast<size_t>(HIDDEN));
-constexpr size_t NumChunks = static_cast<size_t>(HIDDEN) / ChunkSize;
+constexpr size_t HiddenSize = static_cast<size_t>(HIDDEN);
+constexpr size_t InputSize = static_cast<size_t>(INPUT);
+
+constexpr size_t ChunkSize = determineChunkSize(HiddenSize);
+constexpr size_t NumChunks = HiddenSize / ChunkSize;
 
 __global__ void populateAccumulator(
     const size_t batchSize,
@@ -47,9 +50,9 @@ __global__ void populateAccumulator(
     if (threadIdx.x >= NumChunks)
         return;
 
-    const size_t inputIdx = INPUT * blockIdx.x;
+    const size_t inputIdx = InputSize * blockIdx.x;
     const size_t chunk = ChunkSize * threadIdx.x;
-    const size_t outputIdx = HIDDEN * blockIdx.x + chunk;
+    const size_t outputIdx = HiddenSize * blockIdx.x + chunk;
     const uint16_t* thisInput = inputs + inputIdx;
     float* thisAccumulator = accumulators + outputIdx;
 
@@ -60,11 +63,13 @@ __global__ void populateAccumulator(
 
         float elementVal = featureBiases[offset];
 
-        for (size_t i = 0; i < INPUT; i++) {
-            if (thisInput[i] == static_cast<uint16_t>(65535))
+        for (size_t i = 0; i < InputSize; i++) {
+            const size_t inp = static_cast<size_t>(thisInput[i]);
+
+            if (inp == static_cast<size_t>(65535))
                 break;
 
-            const size_t idx = static_cast<size_t>(thisInput[i]) * HIDDEN + offset;
+            const size_t idx = inp * HiddenSize + offset;
             elementVal += featureWeights[idx];
         }
 
@@ -89,18 +94,18 @@ __global__ void calculateErrors(
     if (outputIdx >= batchSize)
         return;
 
-    const size_t accumulatorIdx = outputIdx * HIDDEN;
+    const size_t accumulatorIdx = outputIdx * HiddenSize;
 
     const Result thisResult = results[outputIdx];
-    const float* thisOutputWeights = outputWeights + 2 * HIDDEN * thisResult.bucket;
+    const float* thisOutputWeights = outputWeights + 2 * HiddenSize * thisResult.bucket;
 
     float eval = outputBiases[thisResult.bucket];
 
-    for (size_t i = 0; i < HIDDEN; i++)
-        eval += ourAccumulators[accumulatorIdx + i] * thisOutputWeights[i];;
+    for (size_t i = 0; i < HiddenSize; i++)
+        eval += ourAccumulators[accumulatorIdx + i] * thisOutputWeights[i];
 
-    for (size_t i = 0; i < HIDDEN; i++)
-        eval += oppAccumulators[accumulatorIdx + i] * thisOutputWeights[HIDDEN + i];
+    for (size_t i = 0; i < HiddenSize; i++)
+        eval += oppAccumulators[accumulatorIdx + i] * thisOutputWeights[HiddenSize + i];
 
     const float sigmoid = 1.0F / (1.0F + expf(-eval));
     const float diff = sigmoid - thisResult.score;
@@ -131,14 +136,14 @@ __global__ void backpropSide(
 
     const size_t chunk = ChunkSize * threadIdx.x;
     const size_t outputIdx = blockIdx.x;
-    const size_t inputIdx = outputIdx * INPUT;
-    const size_t accumulatorIdx = outputIdx * HIDDEN + chunk;
+    const size_t inputIdx = outputIdx * InputSize;
+    const size_t accumulatorIdx = outputIdx * HiddenSize + chunk;
 
     size_t outputWeightIdx = chunk + outputOffset;
 
     if constexpr (OUTPUT > 1)
     {
-        outputWeightIdx += 2 * HIDDEN * results[outputIdx].bucket;
+        outputWeightIdx += 2 * HiddenSize * results[outputIdx].bucket;
     }
 
     const uint16_t* thisInput = inputs + inputIdx;
@@ -156,11 +161,13 @@ __global__ void backpropSide(
         atomicAdd(&featureBiasesGradient[chunk + element], component);
         atomicAdd(&outputWeightsGradient[outputWeightIdx + element], error * accumulatorVal);
 
-        for (int i = 0; i < INPUT; i++) {
-            if (thisInput[i] == static_cast<uint16_t>(65535))
+        for (int i = 0; i < InputSize; i++) {
+            const size_t inp = static_cast<size_t>(thisInput[i]);
+
+            if (inp == static_cast<size_t>(65535))
                 break;
 
-            const size_t x = thisInput[i] * HIDDEN + chunk + element;
+            const size_t x = inp * HiddenSize + chunk + element;
             atomicAdd(&featureWeightsGradient[x], component);
         }
     }
@@ -179,9 +186,7 @@ __global__ void backpropOutputBias(
 
     size_t outIdx = 0;
     if constexpr (OUTPUT > 1)
-    {
         outIdx = results[idx].bucket;
-    }
 
     atomicAdd(&outputBiasesGradient[outIdx], outputs[idx]);
 }
@@ -206,22 +211,22 @@ extern "C" cudaError calcGradient(
     float* oppAccumulators,
     float* outputs)
 {
-    static_assert(HIDDEN % ChunkSize == 0,
+    static_assert(HiddenSize % ChunkSize == 0,
         "Net of this size must be divisible by an appropriate power of 2.");
 
-    if (inputSize != INPUT)
+    if (inputSize != InputSize)
     {
         std::cout << "Incompatible input format.";
         exit(1);
     }
 
-    if (hiddenSize != HIDDEN)
+    if (hiddenSize != HiddenSize)
     {
         std::cout << "HIDDEN must be set to " << hiddenSize << " in src/cuda/kernel.cu";
         exit(1);
     }
 
-    const size_t blocks = calcBlocks(batchSize, HIDDEN);
+    const size_t blocks = calcBlocks(batchSize, HiddenSize);
     const size_t sumBlocks = calcBlocks(batchSize, 1024);
 
     populateAccumulator<<<batchSize, NumChunks>>>(batchSize, featureWeights, featureBiases, ourInputs, ourAccumulators);
@@ -237,7 +242,7 @@ extern "C" cudaError calcGradient(
     );
 
     backpropSide<<<batchSize, NumChunks>>>(
-        batchSize, HIDDEN,
+        batchSize, HiddenSize,
         outputWeights, oppAccumulators, oppInputs, outputs, results,
         featureWeightsGradient, featureBiasesGradient, outputWeightsGradient
     );
