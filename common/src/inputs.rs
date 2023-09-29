@@ -78,7 +78,7 @@ pub trait ChessBucketed {
         let mut idx = 0;
         let mut ret = [0; 64];
         while idx < 64 {
-            ret[idx] = 768 * (Self::BUCKETING[idx] + 1);
+            ret[idx] = 768 * Self::BUCKETING[idx];
             idx += 1;
         }
         ret
@@ -87,7 +87,7 @@ pub trait ChessBucketed {
 
 impl<T: ChessBucketed> InputType for T {
     type RequiredDataType = ChessBoard;
-    const FACTORISER: bool = true;
+    const FACTORISER: bool = false;
     const BUCKETS: usize = {
         let mut idx = 0;
         let mut max = 1;
