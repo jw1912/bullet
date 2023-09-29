@@ -13,10 +13,10 @@ pub type Data = data::ChessBoard;
 ///  - Chess768  (recommended)
 ///  - HalfKA
 ///  - MirroredHalfKA
-pub type Input = inputs::HalfKA;
+pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
-pub const HIDDEN: usize = 32;
+pub const HIDDEN: usize = 256;
 
 /// Activation function:
 ///   - ReLU
