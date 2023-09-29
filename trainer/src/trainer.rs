@@ -29,6 +29,7 @@ macro_rules! ansi {
     };
 }
 
+#[repr(C)]
 pub struct MetaData {
     pub epoch: usize,
 }
