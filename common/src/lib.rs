@@ -12,7 +12,6 @@ pub type Data = data::ChessBoard;
 /// Input format
 ///  - Chess768  (recommended)
 ///  - HalfKA
-///  - MirroredHalfKA
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
