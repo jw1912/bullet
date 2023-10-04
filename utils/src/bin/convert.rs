@@ -29,7 +29,7 @@ fn main() {
                 results[pos.result_idx()] += 1;
                 data.push(pos);
             }
-            Err(message) => println!("{message}"),
+            Err(message) => println!("error parsing: {message}"),
         }
 
         if data.len() % 16384 == 0 {
