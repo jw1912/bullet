@@ -31,6 +31,12 @@ impl InputType for Chess768 {
     }
 }
 
+pub struct CustomBuckets;
+impl ChessBucketed for CustomBuckets {
+    const BUCKETING: [usize; 64] = crate::CUSTOM_BUCKETS;
+}
+
+
 pub struct HalfKA;
 impl ChessBucketed for HalfKA {
     #[rustfmt::skip]
