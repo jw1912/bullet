@@ -83,20 +83,26 @@ impl ChessBoard {
                     }
 
                     board.occ |= 1 << square;
+
+                    if idx >= 32 {
+                        return Err(epd);
+                    }
+
                     board.pcs[idx / 2] |= (piece as u8) << (4 * (idx & 1));
                     idx += 1;
                     col += 1;
                 }
             }
+            Ok(())
         };
 
         if stm == 1 {
             for (i, row) in board_str.split('/').enumerate() {
-                parse_row(7 - i, row);
+                parse_row(7 - i, row)?;
             }
         } else {
             for (i, row) in board_str.split('/').rev().enumerate() {
-                parse_row(i, row);
+                parse_row(i, row)?;
             }
         }
 
