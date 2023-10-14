@@ -6,3 +6,4 @@ authors = ["Jamie Whiting"]
 
 [dependencies]
 common = { path = "../common" }
+cpu = { path = "../cpu" }
