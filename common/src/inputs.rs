@@ -68,7 +68,7 @@ pub trait ChessBucketed {
 
 impl<T: ChessBucketed> InputType for T {
     type RequiredDataType = ChessBoard;
-    const FACTORISER: bool = false;
+    const FACTORISER: bool = crate::FACTORISED;
     const BUCKETS: usize = {
         let mut idx = 0;
         let mut max = 1;
@@ -85,11 +85,12 @@ impl<T: ChessBucketed> InputType for T {
     fn get_feature_indices(
         (piece, square, our_ksq, opp_ksq): <Self::RequiredDataType as DataType>::FeatureType,
     ) -> (usize, usize) {
+        let fac = 768 * Self::FACTORISER as usize;
         let c = usize::from(piece & 8 > 0);
         let pc = 64 * usize::from(piece & 7);
         let sq = usize::from(square);
-        let wfeat = Self::SCALED[usize::from(our_ksq)] + [0, 384][c] + pc + sq;
-        let bfeat = Self::SCALED[usize::from(opp_ksq)] + [384, 0][c] + pc + (sq ^ 56);
+        let wfeat = fac + Self::SCALED[usize::from(our_ksq)] + [0, 384][c] + pc + sq;
+        let bfeat = fac + Self::SCALED[usize::from(opp_ksq)] + [384, 0][c] + pc + (sq ^ 56);
         (wfeat, bfeat)
     }
 }

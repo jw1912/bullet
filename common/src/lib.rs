@@ -46,3 +46,6 @@ pub const CUSTOM_BUCKETS: [usize; 64] = [
     2, 2, 2, 2, 3, 3, 3, 3,
     2, 2, 2, 2, 3, 3, 3, 3,
 ];
+
+/// Only applicable for bucketed networks, doesn't currently work on GPU.
+pub const FACTORISED: bool = false;
