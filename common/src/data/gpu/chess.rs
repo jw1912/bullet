@@ -51,7 +51,7 @@ impl ChessBoardCUDA {
             our_board.features[i] = wfeat as u16;
             opp_board.features[i] = bfeat as u16;
             i += 1;
-            if Input::FACTORISER {
+            if crate::FACTORISED {
                 our_board.features[i] = (wfeat % Data::INPUTS) as u16;
                 opp_board.features[i] = (bfeat % Data::INPUTS) as u16;
                 i += 1;

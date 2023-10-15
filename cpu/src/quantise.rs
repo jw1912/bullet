@@ -1,8 +1,8 @@
 use super::{NetworkParams, Network, NETWORK_SIZE, OUTPUT_BIAS, OUTPUT_WEIGHTS, FEATURE_BIAS};
 use common::{
     data::DataType,
-    inputs::InputType,
-    Data, Input, HIDDEN,
+    FACTORISED,
+    Data, HIDDEN,
     util::write_to_bin,
 };
 
@@ -11,7 +11,7 @@ const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
 pub fn quantise_and_write(nnue: &NetworkParams, net_path: &str) {
-    if Input::FACTORISER {
+    if FACTORISED {
         let qfnnue = QuantisedFactorisedNetwork::from_unquantised(nnue);
         qfnnue.write_to_bin(net_path).unwrap();
     } else {
@@ -49,7 +49,7 @@ impl QuantisedNetwork {
 
 #[repr(C)]
 pub struct QuantisedFactorisedNetwork {
-    weights: [i16; NETWORK_SIZE - Data::INPUTS * HIDDEN * Input::FACTORISER as usize],
+    weights: [i16; NETWORK_SIZE - Data::INPUTS * HIDDEN * FACTORISED as usize],
 }
 
 impl QuantisedFactorisedNetwork {
@@ -67,7 +67,7 @@ impl QuantisedFactorisedNetwork {
     fn from_unquantised(nnue: &NetworkParams) -> Box<Self> {
         let mut res = Self::new();
 
-        const OFFSET: usize = Data::INPUTS * HIDDEN * Input::FACTORISER as usize;
+        const OFFSET: usize = Data::INPUTS * HIDDEN * FACTORISED as usize;
         const NEW_HIDDEN: usize = FEATURE_BIAS - OFFSET;
 
         for i in 0..NEW_HIDDEN {
