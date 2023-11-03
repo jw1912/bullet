@@ -58,7 +58,6 @@ pub struct Trainer {
     threads: usize,
     scheduler: LrScheduler,
     blend: f32,
-    skip_prop: f32,
     pub optimiser: AdamW,
 }
 
@@ -69,7 +68,6 @@ impl Trainer {
         threads: usize,
         scheduler: LrScheduler,
         blend: f32,
-        skip_prop: f32,
         optimiser: AdamW,
     ) -> Self {
         Self {
@@ -77,7 +75,6 @@ impl Trainer {
             threads,
             scheduler,
             blend,
-            skip_prop,
             optimiser,
         }
     }
@@ -103,7 +100,6 @@ impl Trainer {
         println!("File Path      : {}", ansi!(self.file, "32;1", esc));
         println!("Threads        : {}", ansi!(self.threads, 31, esc));
         println!("WDL Proportion : {}", ansi!(self.blend, 31, esc));
-        println!("Skip Proportion: {}", ansi!(self.skip_prop, 31, esc));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -191,7 +187,7 @@ impl Trainer {
                     #[cfg(not(feature = "gpu"))]
                     {
                         use crate::gradient::gradients_batch_cpu;
-                        let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.skip_prop, self.threads);
+                        let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.threads);
                         self.optimiser
                             .update_weights(nnue, &gradients, adj, self.scheduler.lr());
                     }
@@ -199,7 +195,7 @@ impl Trainer {
                     #[cfg(feature = "gpu")]
                     unsafe {
                         use crate::gradient::gradients_batch_gpu;
-                        gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.skip_prop, self.threads, ptrs);
+                        gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.threads, ptrs);
                         update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
                     }
 

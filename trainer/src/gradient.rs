@@ -1,6 +1,6 @@
 use std::thread;
 
-use common::{Data, rng::Rand};
+use common::Data;
 
 #[cfg(not(feature = "gpu"))]
 use cpu::{NetworkParams, update_single_grad_cpu};
@@ -24,7 +24,6 @@ pub fn gradients_batch_cpu(
     error: &mut f32,
     scale: f32,
     blend: f32,
-    skip_prop: f32,
     threads: usize,
 ) -> Box<NetworkParams> {
     let size = batch.len() / threads;
@@ -38,12 +37,7 @@ pub fn gradients_batch_cpu(
             .map(|(chunk, error)| {
                 s.spawn(move || {
                     let mut grad = NetworkParams::new();
-                    let mut rand = Rand::default();
                     for pos in chunk {
-                        if rand.rand(1.0) < skip_prop {
-                            continue;
-                        }
-
                         update_single_grad_cpu(pos, nnue, &mut grad, error, blend, scale);
                     }
                     grad
@@ -66,7 +60,6 @@ pub fn gradients_batch_gpu(
     error: &mut f32,
     scale: f32,
     blend: f32,
-    skip_prop: f32,
     threads: usize,
     (
         our_inputs_ptr,
@@ -97,10 +90,6 @@ pub fn gradients_batch_gpu(
                     let mut results = Vec::with_capacity(num);
 
                     for pos in chunk {
-                        if rand.rand(1.0) < skip_prop {
-                            continue;
-                        }
-
                         ChessBoardCUDA::push(
                             pos,
                             &mut our_inputs,

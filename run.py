@@ -66,13 +66,6 @@ def main():
     )
 
     parser.add_argument(
-        '--skip-prop',
-        type=float,
-        help="Proportion of fens skipped each epoch.",
-        default=0.0
-    )
-
-    parser.add_argument(
         '--lr-end',
         type=float,
         help="Ending value of lR for exponential LR decay.",
@@ -190,7 +183,6 @@ def main():
         str(args.max_epochs),
         str(args.batch_size),
         str(args.save_rate),
-        str(args.skip_prop),
         str(args.lr_end),
         str(args.lr_step),
         str(args.lr_drop),

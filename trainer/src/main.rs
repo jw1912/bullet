@@ -20,7 +20,6 @@ fn main() {
     let max_epochs: usize = args.next().unwrap().parse().unwrap();
     let batch_size = args.next().unwrap().parse().unwrap();
     let save_rate = args.next().unwrap().parse().unwrap();
-    let skip_prop = args.next().unwrap().parse().unwrap();
     let lr_end: f32 = args.next().unwrap().parse().unwrap();
     let lr_step = args.next().unwrap().parse().unwrap();
     let lr_drop = args.next().unwrap().parse().unwrap();
@@ -49,7 +48,7 @@ fn main() {
 
     let optimiser = AdamW::default();
 
-    let mut trainer = Trainer::new(file_path, threads, scheduler, blend, skip_prop, optimiser);
+    let mut trainer = Trainer::new(file_path, threads, scheduler, blend, optimiser);
     let mut params = NetworkParams::random();
     let mut start_epoch = 1;
 
