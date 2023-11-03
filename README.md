@@ -5,6 +5,11 @@
 </div>
 
 A Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
+Also used by a number of other engines, including:
+- [Carp](https://github.com/dede1751/carp)
+- [Midnight](https://github.com/archishou/MidnightChessEngine)
+- [Stormphrax](https://github.com/Ciekce/Stormphrax)
+- [Willow](https://github.com/Adam-Kulju/Willow)
 
 It currently supports architectures of the form `Input -> Nx2 -> Output`, and can train on both CPU and GPU,
 with a handwritten CUDA backend.
