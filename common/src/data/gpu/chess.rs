@@ -1,7 +1,6 @@
 use crate::{
-    Data,
     Input,
-    data::{ChessBoard, DataType, MAX_FEATURES},
+    data::{ChessBoard, MAX_FEATURES},
     inputs::InputType, OutputBucket,
 };
 
@@ -51,11 +50,6 @@ impl ChessBoardCUDA {
             our_board.features[i] = wfeat as u16;
             opp_board.features[i] = bfeat as u16;
             i += 1;
-            if crate::FACTORISED {
-                our_board.features[i] = (wfeat % Data::INPUTS) as u16;
-                opp_board.features[i] = (bfeat % Data::INPUTS) as u16;
-                i += 1;
-            }
         }
 
         let bucket = OutputBucket::get_bucket(idx);
