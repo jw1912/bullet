@@ -10,27 +10,27 @@ pub mod util;
 pub type Data = data::ChessBoard;
 
 /// Input format
-///  - Chess768  (recommended)
+///  - Chess768
 ///  - ChessBuckets
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
-pub const HIDDEN: usize = 256;
+pub const HIDDEN: usize = 512;
 
 /// Activation function:
 ///   - ReLU
-///   - CReLU    (recommended)
+///   - CReLU
 ///   - SCReLU
 ///   - FastSCReLU
 pub type Activation = activation::CReLU;
 
 /// Output Buckets:
-///  - Single    (recommended)
+///  - Single
 ///  - MaterialCount<Buckets>
 pub type OutputBucket = outputs::Single;
 
 /// Applicable only with `Input` option
-/// "CustomBuckets", it is indexed from white POV,
+/// `ChessBuckets`, it is indexed from white POV,
 /// so index 0 corresponds to A1, 7 corresponds to H1,
 /// 56 corresponds to A8 and 63 corresponds to H8.
 /// With `N` buckets, the values in this array need to be
