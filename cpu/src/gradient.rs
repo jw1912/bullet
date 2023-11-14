@@ -9,8 +9,8 @@ use super::{
 
 use common::{
     Activation,
-    data::{DataType, Features},
-    Data, Input, HIDDEN, FACTORISED,
+    data::Features,
+    Data, Input, HIDDEN,
     util::sigmoid, OutputBucket,
 };
 
@@ -56,11 +56,6 @@ impl NetworkParams {
             accs[1].add_feature(bfeat, self);
 
             OutputBucket::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
-
-            if FACTORISED {
-                accs[0].add_feature(wfeat % Data::INPUTS, self);
-                accs[1].add_feature(bfeat % Data::INPUTS, self);
-            }
         }
 
         let bucket = OutputBucket::get_bucket(idx);

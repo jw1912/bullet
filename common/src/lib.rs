@@ -11,8 +11,7 @@ pub type Data = data::ChessBoard;
 
 /// Input format
 ///  - Chess768  (recommended)
-///  - HalfKA
-///  - CustomBuckets
+///  - ChessBuckets
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
@@ -36,7 +35,7 @@ pub type OutputBucket = outputs::Single;
 /// 56 corresponds to A8 and 63 corresponds to H8.
 /// With `N` buckets, the values in this array need to be
 /// in the set {0, 1, ..., N - 1}.
-pub const CUSTOM_BUCKETS: [usize; 64] = [
+pub const BUCKETS: [usize; 64] = [
     0, 0, 0, 0, 1, 1, 1, 1,
     0, 0, 0, 0, 1, 1, 1, 1,
     2, 2, 2, 2, 3, 3, 3, 3,
@@ -46,6 +45,3 @@ pub const CUSTOM_BUCKETS: [usize; 64] = [
     2, 2, 2, 2, 3, 3, 3, 3,
     2, 2, 2, 2, 3, 3, 3, 3,
 ];
-
-/// Only applicable for bucketed networks, doesn't currently work on GPU.
-pub const FACTORISED: bool = false;

@@ -1,13 +1,10 @@
 use crate::data::{ChessBoard, DataType};
 
-const FACTORISER: usize = crate::FACTORISED as usize;
-
 pub trait InputType {
     type RequiredDataType: DataType;
     const BUCKETS: usize;
 
-    const SIZE: usize =
-        Self::RequiredDataType::INPUTS * (Self::BUCKETS + FACTORISER);
+    const SIZE: usize = Self::RequiredDataType::INPUTS * Self::BUCKETS;
 
     fn get_feature_indices(
         feat: <Self::RequiredDataType as DataType>::FeatureType,
@@ -31,42 +28,22 @@ impl InputType for Chess768 {
     }
 }
 
-pub struct CustomBuckets;
-impl ChessBucketed for CustomBuckets {
-    const BUCKETING: [usize; 64] = crate::CUSTOM_BUCKETS;
-}
-
-
-pub struct HalfKA;
-impl ChessBucketed for HalfKA {
-    #[rustfmt::skip]
-    const BUCKETING: [usize; 64] = [
-         0,  1,  2,  3,  4,  5,  6,  7,
-         8,  9, 10, 11, 12 ,13, 14, 15,
-        16, 17, 18, 19, 20, 21, 22, 23,
-        24, 25, 26, 27, 28, 29, 30, 31,
-        32, 33, 34, 35, 36, 37, 38, 39,
-        40, 41, 42, 43, 44, 45, 46, 47,
-        48, 49, 50, 51, 52, 53, 54, 55,
-        56, 57, 58, 59, 60, 61, 62, 63,
-    ];
-}
-
-pub trait ChessBucketed {
-    const BUCKETING: [usize; 64];
+pub struct ChessBuckets;
+impl ChessBuckets {
+    const BUCKETING: [usize; 64] = crate::BUCKETS;
 
     const SCALED: [usize; 64] = {
         let mut idx = 0;
         let mut ret = [0; 64];
         while idx < 64 {
-            ret[idx] = 768 * (Self::BUCKETING[idx] + FACTORISER);
+            ret[idx] = 768 * Self::BUCKETING[idx];
             idx += 1;
         }
         ret
     };
 }
 
-impl<T: ChessBucketed> InputType for T {
+impl InputType for ChessBuckets {
     type RequiredDataType = ChessBoard;
     const BUCKETS: usize = {
         let mut idx = 0;
