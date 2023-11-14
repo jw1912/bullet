@@ -84,7 +84,6 @@ pub fn gradients_batch_gpu(
             .map(|chunk| {
                 s.spawn(move || {
                     let num = chunk.len();
-                    let mut rand = Rand::default();
                     let mut our_inputs = Vec::with_capacity(num);
                     let mut opp_inputs = Vec::with_capacity(num);
                     let mut results = Vec::with_capacity(num);
