@@ -114,9 +114,9 @@ impl ChessBoard {
         };
 
         board.result = match wdl {
-            "1.0" => 2,
-            "0.5" => 1,
-            "0.0" => 0,
+            "1.0" | "[1.0]" | "1" => 2,
+            "0.5" | "[0.5]" | "1/2" => 1,
+            "0.0" | "[0.0]" | "0" => 0,
             _ => {
                 println!("{fen}");
                 return Err(String::from("Bad game result!"));
