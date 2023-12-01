@@ -106,7 +106,12 @@ impl ChessBoard {
             }
         }
 
-        board.score = score.parse::<i16>().unwrap_or(0);
+        board.score = if let Ok(x) = score.parse::<i16>() {
+            x
+        } else {
+            println!("{fen}");
+            return Err(String::from("Bad score!"));
+        };
 
         board.result = match wdl {
             "1.0" => 2,
