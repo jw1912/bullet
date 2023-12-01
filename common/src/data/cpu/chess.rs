@@ -109,7 +109,7 @@ impl ChessBoard {
         board.score = if let Ok(x) = score.parse::<i16>() {
             x
         } else {
-            println!("{fen}");
+            println!("{epd}");
             return Err(String::from("Bad score!"));
         };
 
@@ -118,7 +118,7 @@ impl ChessBoard {
             "0.5" | "[0.5]" | "1/2" => 1,
             "0.0" | "[0.0]" | "0" => 0,
             _ => {
-                println!("{fen}");
+                println!("{epd}");
                 return Err(String::from("Bad game result!"));
             }
         };
