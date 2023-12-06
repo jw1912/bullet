@@ -46,7 +46,7 @@ impl BoardCUDA {
         for feat in board.into_iter() {
             let (wfeat, bfeat) = Input::get_feature_indices(feat);
 
-            OutputBucket::update_output_bucket(&mut idx, feat.0 & 7);
+            OutputBucket::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
 
             our_board.features[i] = wfeat as u16;
             opp_board.features[i] = bfeat as u16;

@@ -55,7 +55,7 @@ impl NetworkParams {
             accs[0].add_feature(wfeat, self);
             accs[1].add_feature(bfeat, self);
 
-            OutputBucket::update_output_bucket(&mut idx, feat.0 & 7);
+            OutputBucket::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
         }
 
         let bucket = OutputBucket::get_bucket(idx);

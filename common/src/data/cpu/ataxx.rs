@@ -12,7 +12,7 @@ pub struct AtaxxBoard {
 const _RIGHT_SIZE: () = assert!(std::mem::size_of::<AtaxxBoard>() == 32);
 
 impl DataType for AtaxxBoard {
-    type FeatureType = (usize, usize);
+    type FeatureType = (u8, u8);
     const INPUTS: usize = 147;
 }
 
@@ -37,7 +37,7 @@ impl AtaxxBoard {
 }
 
 impl IntoIterator for AtaxxBoard {
-    type Item = (usize, usize);
+    type Item = (u8, u8);
     type IntoIter = AtaxxBoardIter;
     fn into_iter(self) -> Self::IntoIter {
         AtaxxBoardIter {
@@ -53,7 +53,7 @@ pub struct AtaxxBoardIter {
 }
 
 impl Iterator for AtaxxBoardIter {
-    type Item = (usize, usize);
+    type Item = (u8, u8);
     fn next(&mut self) -> Option<Self::Item> {
         if self.board.bbs[self.stage] == 0 {
             self.stage += 1;
@@ -63,7 +63,7 @@ impl Iterator for AtaxxBoardIter {
             }
         }
 
-        let sq = self.board.bbs[self.stage].trailing_zeros() as usize;
-        Some((self.stage, sq))
+        let sq = self.board.bbs[self.stage].trailing_zeros();
+        Some((self.stage as u8, sq as u8))
     }
 }

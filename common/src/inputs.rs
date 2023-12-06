@@ -30,8 +30,9 @@ impl InputType for Ataxx147 {
     fn get_feature_indices(
         (piece, square): <Self::RequiredDataType as DataType>::FeatureType,
     ) -> (usize, usize) {
-        let pc = 49 * piece;
-        (pc + square, pc + FLIP[square])
+        let pc = 49 * usize::from(piece);
+        let sq = usize::from(square);
+        (pc + sq, pc + FLIP[sq])
     }
 }
 
