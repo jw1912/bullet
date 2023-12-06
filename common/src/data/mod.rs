@@ -1,8 +1,8 @@
 pub mod cpu;
 pub mod gpu;
 
-pub use cpu::chess::ChessBoard;
-pub use gpu::chess::{ChessBoardCUDA, CudaResult};
+pub use cpu::{ataxx::AtaxxBoard, chess::ChessBoard};
+pub use gpu::{BoardCUDA, CudaResult};
 
 use crate::Data;
 

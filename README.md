@@ -12,7 +12,7 @@ Also used by a number of other engines, including:
 - [Willow](https://github.com/Adam-Kulju/Willow)
 
 It currently supports architectures of the form `Input -> Nx2 -> Output`, and can train on both CPU and GPU,
-with a handwritten CUDA backend.
+with a handwritten CUDA backend, for both Chess and Ataxx.
 
 To learn how it works, read the [wiki](wiki.md).
 

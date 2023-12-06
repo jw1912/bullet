@@ -5,11 +5,10 @@ pub mod outputs;
 pub mod rng;
 pub mod util;
 
-/// Binary data type used
-///  - ChessBoard
-pub type Data = data::ChessBoard;
+pub type Data = <Input as inputs::InputType>::RequiredDataType;
 
 /// Input format
+///  - Ataxx147
 ///  - Chess768
 ///  - ChessBuckets
 pub type Input = inputs::Chess768;

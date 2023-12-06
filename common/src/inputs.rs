@@ -1,4 +1,4 @@
-use crate::data::{ChessBoard, DataType};
+use crate::data::{AtaxxBoard, ChessBoard, DataType};
 
 pub trait InputType {
     type RequiredDataType: DataType;
@@ -9,6 +9,31 @@ pub trait InputType {
     fn get_feature_indices(
         feat: <Self::RequiredDataType as DataType>::FeatureType,
     ) -> (usize, usize);
+}
+
+#[rustfmt::skip]
+const FLIP: [usize; 49] = [
+    42, 43, 44, 45, 46, 47, 48,
+    35, 36, 37, 38, 39, 40, 41,
+    28, 29, 30, 31, 32, 33, 34,
+    21, 22, 23, 24, 25, 26, 27,
+    14, 15, 16, 17, 18, 19, 20,
+     7,  8,  9, 10, 11, 12, 13,
+     0,  1,  2,  3,  4,  5,  6,
+];
+
+pub struct Ataxx147;
+impl InputType for Ataxx147 {
+    type RequiredDataType = AtaxxBoard;
+    const BUCKETS: usize = 1;
+
+    fn get_feature_indices(
+        (piece, square): <Self::RequiredDataType as DataType>::FeatureType,
+    ) -> (usize, usize) {
+        let pc = 49 * usize::from(piece);
+        let sq = usize::from(square);
+        (pc + sq, pc + FLIP[sq])
+    }
 }
 
 pub struct Chess768;

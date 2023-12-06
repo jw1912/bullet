@@ -1,12 +1,13 @@
 use crate::{
+    Data,
     Input,
-    data::{ChessBoard, MAX_FEATURES},
+    data::MAX_FEATURES,
     inputs::InputType, OutputBucket,
 };
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ChessBoardCUDA {
+pub struct BoardCUDA {
     features: [u16; MAX_FEATURES],
 }
 
@@ -17,27 +18,27 @@ pub struct CudaResult {
     pub bucket: u32,
 }
 
-impl Default for ChessBoardCUDA {
+impl Default for BoardCUDA {
     fn default() -> Self {
         Self { features: [0; MAX_FEATURES] }
     }
 }
 
-impl ChessBoardCUDA {
+impl BoardCUDA {
     pub fn len() -> usize {
         MAX_FEATURES
     }
 
     pub fn push(
-        board: &ChessBoard,
-        our_inputs: &mut Vec<ChessBoardCUDA>,
-        opp_inputs: &mut Vec<ChessBoardCUDA>,
+        board: &Data,
+        our_inputs: &mut Vec<BoardCUDA>,
+        opp_inputs: &mut Vec<BoardCUDA>,
         results: &mut Vec<CudaResult>,
         blend: f32,
         scale: f32,
     ) {
-        let mut our_board = ChessBoardCUDA::default();
-        let mut opp_board = ChessBoardCUDA::default();
+        let mut our_board = BoardCUDA::default();
+        let mut opp_board = BoardCUDA::default();
 
         let mut i = 0;
         let mut idx = 0;
