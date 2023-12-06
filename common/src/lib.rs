@@ -5,15 +5,13 @@ pub mod outputs;
 pub mod rng;
 pub mod util;
 
-/// Binary data type used
-///  - ChessBoard
-pub type Data = data::AtaxxBoard;
+pub type Data = <Input as inputs::InputType>::RequiredDataType;
 
 /// Input format
 ///  - Ataxx147
 ///  - Chess768
 ///  - ChessBuckets
-pub type Input = inputs::Ataxx147;
+pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
 pub const HIDDEN: usize = 512;
