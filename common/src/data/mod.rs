@@ -1,6 +1,6 @@
 pub mod gpu;
 
-pub use bulletformat::{AtaxxBoard, BulletFormat, ChessBoard};
+use bulletformat::BulletFormat;
 pub use gpu::{BoardCUDA, CudaResult};
 
 use crate::Data;

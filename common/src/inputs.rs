@@ -1,4 +1,4 @@
-use crate::data::{AtaxxBoard, BulletFormat, ChessBoard};
+use bulletformat::{AtaxxBoard, BulletFormat, ChessBoard};
 
 pub trait InputType {
     type RequiredDataType: BulletFormat;
