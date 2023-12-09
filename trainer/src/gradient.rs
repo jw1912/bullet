@@ -6,7 +6,7 @@ use common::Data;
 use cpu::{NetworkParams, update_single_grad_cpu};
 
 #[cfg(feature = "gpu")]
-use common::data::gpu::chess::ChessBoardCUDA;
+use common::data::gpu::BoardCUDA;
 
 #[cfg(feature = "gpu")]
 use cuda::{
@@ -89,7 +89,7 @@ pub fn gradients_batch_gpu(
                     let mut results = Vec::with_capacity(num);
 
                     for pos in chunk {
-                        ChessBoardCUDA::push(
+                        BoardCUDA::push(
                             pos,
                             &mut our_inputs,
                             &mut opp_inputs,
@@ -107,8 +107,8 @@ pub fn gradients_batch_gpu(
             .map(|p| p.join().unwrap())
             .for_each(|(our_inputs, opp_inputs, results)| {
                 let additional = results.len();
-                let size = additional * ChessBoardCUDA::len();
-                let offset = copy_count * ChessBoardCUDA::len();
+                let size = additional * BoardCUDA::len();
+                let offset = copy_count * BoardCUDA::len();
 
                 cuda_copy_to_gpu(our_inputs_ptr.wrapping_add(offset), our_inputs.as_ptr().cast(), size);
                 cuda_copy_to_gpu(opp_inputs_ptr.wrapping_add(offset), opp_inputs.as_ptr().cast(), size);
