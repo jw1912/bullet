@@ -1,13 +1,13 @@
-use crate::data::{AtaxxBoard, ChessBoard, DataType};
+use crate::data::{AtaxxBoard, BulletFormat, ChessBoard};
 
 pub trait InputType {
-    type RequiredDataType: DataType;
+    type RequiredDataType: BulletFormat;
     const BUCKETS: usize;
 
     const SIZE: usize = Self::RequiredDataType::INPUTS * Self::BUCKETS;
 
     fn get_feature_indices(
-        feat: <Self::RequiredDataType as DataType>::FeatureType,
+        feat: <Self::RequiredDataType as BulletFormat>::FeatureType,
     ) -> (usize, usize);
 }
 
@@ -28,7 +28,7 @@ impl InputType for Ataxx147 {
     const BUCKETS: usize = 1;
 
     fn get_feature_indices(
-        (piece, square): <Self::RequiredDataType as DataType>::FeatureType,
+        (piece, square): <Self::RequiredDataType as BulletFormat>::FeatureType,
     ) -> (usize, usize) {
         let pc = 49 * usize::from(piece);
         let sq = usize::from(square);
@@ -42,7 +42,7 @@ impl InputType for Chess768 {
     const BUCKETS: usize = 1;
 
     fn get_feature_indices(
-        (piece, square, _, _): <Self::RequiredDataType as DataType>::FeatureType,
+        (piece, square, _, _): <Self::RequiredDataType as BulletFormat>::FeatureType,
     ) -> (usize, usize) {
         let c = usize::from(piece & 8 > 0);
         let pc = 64 * usize::from(piece & 7);
@@ -84,7 +84,7 @@ impl InputType for ChessBuckets {
     };
 
     fn get_feature_indices(
-        (piece, square, our_ksq, opp_ksq): <Self::RequiredDataType as DataType>::FeatureType,
+        (piece, square, our_ksq, opp_ksq): <Self::RequiredDataType as BulletFormat>::FeatureType,
     ) -> (usize, usize) {
         let c = usize::from(piece & 8 > 0);
         let pc = 64 * usize::from(piece & 7);

@@ -1,7 +1,7 @@
 use crate::{
     Data,
     Input,
-    data::MAX_FEATURES,
+    data::{BulletFormat, MAX_FEATURES},
     inputs::InputType, OutputBucket,
 };
 

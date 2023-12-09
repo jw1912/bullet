@@ -9,7 +9,7 @@ use cpu::NETWORK_SIZE;
 use cpu::{quantise_and_write, NetworkParams, AdamW};
 
 use common::{
-    util::{to_slice_with_lifetime, write_to_bin},
+    util::write_to_bin,
     Data
 };
 
