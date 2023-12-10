@@ -1,17 +1,11 @@
-pub mod cpu;
 pub mod gpu;
 
-pub use cpu::{ataxx::AtaxxBoard, chess::ChessBoard};
+use bulletformat::BulletFormat;
 pub use gpu::{BoardCUDA, CudaResult};
 
 use crate::Data;
 
 pub const MAX_FEATURES: usize = Data::MAX_FEATURES;
-
-pub trait DataType {
-    type FeatureType;
-    const INPUTS: usize;
-}
 
 #[derive(Debug)]
 pub struct Features {

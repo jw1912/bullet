@@ -1,5 +1,7 @@
 use crate::scheduler::LrScheduler;
 
+use bulletformat::DataLoader;
+
 #[cfg(feature = "gpu")]
 use cuda::{free_preallocations, preallocate ,update_weights, copy_weights_from_gpu, util::cuda_copy_to_gpu};
 
@@ -9,13 +11,13 @@ use cpu::NETWORK_SIZE;
 use cpu::{quantise_and_write, NetworkParams, AdamW};
 
 use common::{
-    util::{to_slice_with_lifetime, write_to_bin},
+    util::write_to_bin,
     Data
 };
 
 use std::{
     fs::{create_dir, metadata, File},
-    io::{stdout, BufRead, BufReader, Write},
+    io::{stdout, Write},
     time::Instant,
 };
 
@@ -157,68 +159,43 @@ impl Trainer {
             let epoch_timer = Instant::now();
             error = 0.0;
             let mut finished_batches = 0;
-
-            let cap = 128 * batch_size * std::mem::size_of::<Data>();
             let file_path = self.file.clone();
+            let loader = DataLoader::new(file_path, 1_024).unwrap();
 
-            use std::sync::mpsc::sync_channel;
-
-            let (sender, reciever) = sync_channel::<Vec<u8>>(2);
-
-            let dataloader = std::thread::spawn(move || {
-                let mut file = BufReader::with_capacity(cap, File::open(&file_path).unwrap());
-                while let Ok(buf) = file.fill_buf() {
-                    if buf.is_empty() {
-                        break;
-                    }
-
-                    sender.send(buf.to_vec()).unwrap();
-
-                    let consumed = buf.len();
-                    file.consume(consumed);
+            loader.map_batches_threaded_loading(batch_size, |batch| {
+                let adj = 2. / batch.len() as f32;
+                #[cfg(not(feature = "gpu"))]
+                {
+                    use crate::gradient::gradients_batch_cpu;
+                    let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.threads);
+                    self.optimiser
+                        .update_weights(nnue, &gradients, adj, self.scheduler.lr());
                 }
+
+                #[cfg(feature = "gpu")]
+                unsafe {
+                    use crate::gradient::gradients_batch_gpu;
+                    gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.threads, ptrs);
+                    update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
+                }
+
+                if finished_batches % 128 == 0 {
+                    let pct = finished_batches as f32 / batches as f32 * 100.0;
+                    let positions = finished_batches * batch_size;
+                    let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
+                    print!(
+                        "epoch {} [{}% ({}/{} batches, {} pos/sec)]\r",
+                        ansi!(epoch, num_cs, esc),
+                        ansi!(format!("{pct:.1}"), 35, esc),
+                        ansi!(finished_batches, num_cs, esc),
+                        ansi!(batches, num_cs, esc),
+                        ansi!(format!("{pos_per_sec:.0}"), num_cs, esc),
+                    );
+                    let _ = stdout().flush();
+                }
+
+                finished_batches += 1;
             });
-
-            while let Ok(buf) = reciever.recv() {
-                let buf_ref: &[Data] = unsafe { to_slice_with_lifetime(&buf) };
-
-                for batch in buf_ref.chunks(batch_size) {
-                    let adj = 2. / batch.len() as f32;
-                    #[cfg(not(feature = "gpu"))]
-                    {
-                        use crate::gradient::gradients_batch_cpu;
-                        let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.threads);
-                        self.optimiser
-                            .update_weights(nnue, &gradients, adj, self.scheduler.lr());
-                    }
-
-                    #[cfg(feature = "gpu")]
-                    unsafe {
-                        use crate::gradient::gradients_batch_gpu;
-                        gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.threads, ptrs);
-                        update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
-                    }
-
-                    if finished_batches % 128 == 0 {
-                        let pct = finished_batches as f32 / batches as f32 * 100.0;
-                        let positions = finished_batches * batch_size;
-                        let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
-                        print!(
-                            "epoch {} [{}% ({}/{} batches, {} pos/sec)]\r",
-                            ansi!(epoch, num_cs, esc),
-                            ansi!(format!("{pct:.1}"), 35, esc),
-                            ansi!(finished_batches, num_cs, esc),
-                            ansi!(batches, num_cs, esc),
-                            ansi!(format!("{pos_per_sec:.0}"), num_cs, esc),
-                        );
-                        let _ = stdout().flush();
-                    }
-
-                    finished_batches += 1;
-                }
-            }
-
-            dataloader.join().unwrap();
 
             error /= num as f32;
 

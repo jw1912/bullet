@@ -7,11 +7,14 @@ use super::{
     InputType
 };
 
+use bulletformat::BulletFormat;
+
 use common::{
     Activation,
     data::Features,
     Data, Input, HIDDEN,
-    util::sigmoid, OutputBucket,
+    OutputBucket,
+    util::sigmoid,
 };
 
 pub fn update_single_grad_cpu(

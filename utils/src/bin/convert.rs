@@ -1,11 +1,11 @@
 use std::{
     env::args,
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter},
     time::Instant,
 };
 
-use common::{data::ChessBoard, util::to_slice_with_lifetime};
+use bulletformat::{BulletFormat, ChessBoard};
 
 fn main() {
     let timer = Instant::now();
@@ -24,7 +24,7 @@ fn main() {
     let mut output = BufWriter::new(File::create(&out_path).expect("Provide a correct path!"));
 
     for line in file.lines().map(Result::unwrap) {
-        match ChessBoard::from_epd(&line) {
+        match line.parse::<ChessBoard>() {
             Ok(pos) => {
                 results[pos.result_idx()] += 1;
                 data.push(pos);
@@ -33,11 +33,12 @@ fn main() {
         }
 
         if data.len() % 16384 == 0 {
-            write(&mut data, &mut output);
+            BulletFormat::write_to_bin(&mut output, &data).unwrap();
+            data.clear();
         }
     }
 
-    write(&mut data, &mut output);
+    BulletFormat::write_to_bin(&mut output, &data).unwrap();
 
     println!("Parsed to Position");
     println!(
@@ -51,18 +52,4 @@ fn main() {
     );
 
     println!("Written to [{out_path}]");
-}
-
-fn write(data: &mut Vec<ChessBoard>, output: &mut BufWriter<File>) {
-    if data.is_empty() {
-        return
-    }
-
-    let data_slice = unsafe { to_slice_with_lifetime(data) };
-
-    output
-        .write_all(data_slice)
-        .expect("Nothing can go wrong in unsafe code!");
-
-    data.clear();
 }
