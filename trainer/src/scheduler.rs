@@ -6,6 +6,34 @@ pub struct LrScheduler {
     scheduler: SchedulerType,
 }
 
+pub struct WdlScheduler {
+    start: f32,
+    end: f32,
+}
+
+impl WdlScheduler {
+    pub fn new(start: f32, mut end: f32) -> Self {
+        if end < 0.0 {
+            end = start;
+        }
+
+        Self { start, end }
+    }
+
+    pub fn blend(&self, epoch: usize, max_epochs: usize) -> f32 {
+        let grad = (self.end - self.start) / (max_epochs - 1).max(1) as f32;
+        self.start + grad * (epoch - 1) as f32
+    }
+
+    pub fn start(&self) -> f32 {
+        self.start
+    }
+
+    pub fn end(&self) -> f32 {
+        self.end
+    }
+}
+
 pub enum SchedulerType {
     /// Drop once, by a factor of `gamma`.
     Drop(usize),
