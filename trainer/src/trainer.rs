@@ -176,7 +176,7 @@ impl Trainer {
                 #[cfg(feature = "gpu")]
                 unsafe {
                     use crate::gradient::gradients_batch_gpu;
-                    gradients_batch_gpu(batch, &mut error, rscale, self.blend, self.threads, ptrs);
+                    gradients_batch_gpu(batch, &mut error, rscale, wdl, self.threads, ptrs);
                     update_weights(adj, self.optimiser.decay, self.scheduler.lr(), ptrs);
                 }
 
