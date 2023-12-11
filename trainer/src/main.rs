@@ -4,7 +4,7 @@ mod trainer;
 
 use cpu::{AdamW, NetworkParams};
 
-use scheduler::{LrScheduler, SchedulerType};
+use scheduler::{LrScheduler, SchedulerType, WdlScheduler};
 use trainer::{Trainer, MetaData};
 
 fn main() {
@@ -27,8 +27,14 @@ fn main() {
     let scale = args.next().unwrap().parse().unwrap();
     let cbcs = args.next().unwrap().parse().unwrap();
     let resume: String = args.next().unwrap().parse().unwrap();
+    let mut wdl_end = args.next().unwrap().parse().unwrap();
+
+    if wdl_end == -1.0 {
+        wdl_end = blend;
+    }
 
     let mut scheduler = LrScheduler::new(lr_start, 1.0, SchedulerType::Drop(1000));
+    let wdl_scheduler = WdlScheduler::new(blend, wdl_end);
 
     if lr_end != 0.0 {
         scheduler.set_type(SchedulerType::Step(1));
@@ -48,7 +54,7 @@ fn main() {
 
     let optimiser = AdamW::default();
 
-    let mut trainer = Trainer::new(file_path, threads, scheduler, blend, optimiser);
+    let mut trainer = Trainer::new(file_path, threads, scheduler, wdl_scheduler, optimiser);
     let mut params = NetworkParams::random();
     let mut start_epoch = 1;
 

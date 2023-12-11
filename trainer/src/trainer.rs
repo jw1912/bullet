@@ -1,4 +1,4 @@
-use crate::scheduler::LrScheduler;
+use crate::scheduler::{LrScheduler, WdlScheduler};
 
 use bulletformat::DataLoader;
 
@@ -59,7 +59,7 @@ pub struct Trainer {
     file: String,
     threads: usize,
     scheduler: LrScheduler,
-    blend: f32,
+    wdl: WdlScheduler,
     pub optimiser: AdamW,
 }
 
@@ -69,14 +69,14 @@ impl Trainer {
         file: String,
         threads: usize,
         scheduler: LrScheduler,
-        blend: f32,
+        wdl: WdlScheduler,
         optimiser: AdamW,
     ) -> Self {
         Self {
             file,
             threads,
             scheduler,
-            blend,
+            wdl,
             optimiser,
         }
     }
@@ -101,7 +101,7 @@ impl Trainer {
     pub fn report_settings(&self, esc: &str) {
         println!("File Path      : {}", ansi!(self.file, "32;1", esc));
         println!("Threads        : {}", ansi!(self.threads, 31, esc));
-        println!("WDL Proportion : {}", ansi!(self.blend, 31, esc));
+        println!("WDL Proportion : start {} end {}", ansi!(self.wdl.start(), 31, esc), ansi!(self.wdl.end(), 31, esc));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -161,13 +161,14 @@ impl Trainer {
             let mut finished_batches = 0;
             let file_path = self.file.clone();
             let loader = DataLoader::new(file_path, 1_024).unwrap();
+            let wdl = self.wdl.blend(epoch, max_epochs);
 
             loader.map_batches_threaded_loading(batch_size, |batch| {
                 let adj = 2. / batch.len() as f32;
                 #[cfg(not(feature = "gpu"))]
                 {
                     use crate::gradient::gradients_batch_cpu;
-                    let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, self.blend, self.threads);
+                    let gradients = gradients_batch_cpu(batch, nnue, &mut error, rscale, wdl, self.threads);
                     self.optimiser
                         .update_weights(nnue, &gradients, adj, self.scheduler.lr());
                 }

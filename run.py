@@ -38,6 +38,13 @@ def main():
     )
 
     parser.add_argument(
+        '--wdl-end',
+        type=float,
+        help="Optional end weighting of WDL, linear interpolation between.",
+        default=-1.0
+    )
+
+    parser.add_argument(
         '--max-epochs',
         type=int,
         help="Number of epochs for which the trainer will run.",
@@ -190,6 +197,7 @@ def main():
         str(args.scale),
         str(args.cbcs).lower(),
         args.resume,
+        str(args.wdl_end),
     ]
 
     subprocess.run(commands)
