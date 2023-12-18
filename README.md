@@ -81,6 +81,8 @@ python3 run.py         \
 
 of these options, only `data-path`, `threads` and `lr-step` are not default values.
 
+NOTE: You may need to run `cargo update` if you pull a newer version from `main`.
+
 ### Learning Rate Scheduler
 There are 3 separate learning rate options:
 - `lr-step N` drops the learning rate every `N` epochs by a factor of `lr-gamma`
