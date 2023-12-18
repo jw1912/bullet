@@ -35,13 +35,27 @@ The trainer uses its own binary data format for each game.
 
 The specifications for the data formats are found in the [bulletformat](https://github.com/jw1912/bulletformat) crate.
 
+Additionally, each type implements `from_raw` which is recommended for use if your engine is written in Rust (or you don't
+mind FFI).
+
+All data types at present are 32 bytes, so you can use [marlinflow-utils](https://github.com/jnlt3/marlinflow) to shuffle
+and interleave files.
+
+### Ataxx
+
+You can convert text format, where
+- each line is of the form `<FEN> | <score> | <result>`
+- `FEN` has 'r', 'b' and '-' for red, blue and gaps/blockers, respectively, in the same format as FEN for chess
+- `score` is red relative and an integer
+- `result` is red relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
+
 ### Chess
 
 You can convert a [Marlinformat](https://github.com/jnlt3/marlinflow) file by running
 ```
 cargo r -r --bin convertmf <input file path> <output file path>
 ```
-it is up to the user to provide a valid Marlinformat file, as well as shuffling the data beforehand.
+it is up to the user to provide a valid Marlinformat file.
 
 Additionally, you can convert legacy text format as in Marlinflow, where
 - each line is of the form `<FEN> | <score> | <result>`
