@@ -11,22 +11,23 @@ pub type Data = <Input as inputs::InputType>::RequiredDataType;
 ///  - Ataxx147
 ///  - Chess768
 ///  - ChessBuckets
+///  - ChessBucketsMirrored
 pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
-pub const HIDDEN: usize = 512;
+pub const HIDDEN: usize = 768;
 
 /// Activation function:
 ///   - ReLU
 ///   - CReLU
 ///   - SCReLU
 ///   - FastSCReLU
-pub type Activation = activation::CReLU;
+pub type Activation = activation::SCReLU;
 
 /// Output Buckets:
 ///  - Single
 ///  - MaterialCount<Buckets>
-pub type OutputBucket = outputs::Single;
+pub type OutputBucket = outputs::MaterialCount<8>;
 
 /// Applicable only with `Input` option
 /// `ChessBuckets`, it is indexed from white POV,
@@ -43,4 +44,16 @@ pub const BUCKETS: [usize; 64] = [
     2, 2, 2, 2, 3, 3, 3, 3,
     2, 2, 2, 2, 3, 3, 3, 3,
     2, 2, 2, 2, 3, 3, 3, 3,
+];
+
+/// Applicable only with `Input` option`ChessBucketsMirrored`.
+pub const BUCKETS_MIRRORED: [usize; 32] = [
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    1, 1, 1, 1,
+    1, 1, 1, 1,
+    1, 1, 1, 1,
+    1, 1, 1, 1,
+    1, 1, 1, 1,
+    1, 1, 1, 1,
 ];
