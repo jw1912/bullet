@@ -49,6 +49,11 @@ You can convert text format, where
 - `score` is red relative and an integer
 - `result` is red relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
 
+by using the command
+```
+cargo r -r --bin convertataxx <input file path> <output file path>
+```
+
 ### Chess
 
 You can convert a [Marlinformat](https://github.com/jnlt3/marlinflow) file by running
