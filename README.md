@@ -58,7 +58,7 @@ cargo r -r --bin convertataxx <input file path> <output file path>
 
 You can convert a [Marlinformat](https://github.com/jnlt3/marlinflow) file by running
 ```
-cargo r -r --bin convertmf <input file path> <output file path>
+cargo r -r --bin convertmf <input file path> <output file path> <threads>
 ```
 it is up to the user to provide a valid Marlinformat file.
 
