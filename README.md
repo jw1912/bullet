@@ -45,7 +45,7 @@ and interleave files.
 
 You can convert text format, where
 - each line is of the form `<FEN> | <score> | <result>`
-- `FEN` has 'r', 'b' and '-' for red, blue and gaps/blockers, respectively, in the same format as FEN for chess
+- `FEN` has 'x'/'r', 'o'/'b' and '-' for red, blue and gaps/blockers, respectively, in the same format as FEN for chess
 - `score` is red relative and an integer
 - `result` is red relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
 
