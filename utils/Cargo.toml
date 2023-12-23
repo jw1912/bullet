@@ -6,3 +6,4 @@ authors = ["Jamie Whiting"]
 
 [dependencies]
 bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
+cpu = { path = "../cpu" }

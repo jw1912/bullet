@@ -57,3 +57,9 @@ pub const BUCKETS_MIRRORED: [usize; 32] = [
     1, 1, 1, 1,
     1, 1, 1, 1,
 ];
+
+/// Hidden Layer Quantisation Factor
+pub const QA: i32 = 255;
+
+/// Output Layer Quantisation Factor
+pub const QB: i32 = 64;

@@ -72,6 +72,13 @@ by using the command
 cargo r -r --bin convert <input file path> <output file path>
 ```
 
+## Quantising
+By default all trained nets are quantised with the `QA` and `QB` factors found in [`common/src/lib.rs`](common/src/lib.rs).
+However, if you have a `params.bin` file from a checkpoint folder then you can quantise this however you want with
+```
+cargo r -r --bin quantise <input file path> <output file path> <QA> <QB>
+```
+
 ## Training
 
 General architecture settings, that must be known at compile time, are found in [`common/src/lib.rs`](common/src/lib.rs).

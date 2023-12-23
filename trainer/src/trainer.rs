@@ -11,6 +11,7 @@ use cpu::NETWORK_SIZE;
 use cpu::{quantise_and_write, NetworkParams, AdamW};
 
 use common::{
+    QA, QB,
     util::write_to_bin,
     Data
 };
@@ -85,7 +86,7 @@ impl Trainer {
         let path = format!("checkpoints/{name}");
         create_dir(&path).unwrap_or(());
 
-        quantise_and_write(nnue, &format!("nets/{name}.bin"));
+        quantise_and_write(nnue, &format!("nets/{name}.bin"), QA, QB);
 
         let meta = MetaData {
             epoch: epoch + 1,
