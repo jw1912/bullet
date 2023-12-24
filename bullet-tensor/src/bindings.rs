@@ -44,33 +44,39 @@ extern "C" {
     );
 
     pub fn activateReLU(
-        bufferSize: usize,
-        buffer: *mut f32,
+        size: usize,
+        inp: *const f32,
+        out: *mut f32,
     );
 
     pub fn activateCReLU(
-        bufferSize: usize,
-        buffer: *mut f32,
+        size: usize,
+        inp: *const f32,
+        out: *mut f32,
     );
 
     pub fn activateSCReLU(
-        bufferSize: usize,
-        buffer: *mut f32,
+        size: usize,
+        inp: *const f32,
+        out: *mut f32,
     );
 
     pub fn backpropReLU(
-        bufferSize: usize,
-        buffer: *mut f32,
+        size: usize,
+        inp: *const f32,
+        out: *mut f32,
     );
 
     pub fn backpropCReLU(
-        bufferSize: usize,
-        buffer: *mut f32,
+        size: usize,
+        inp: *const f32,
+        out: *mut f32,
     );
 
     pub fn backpropSCReLU(
-        bufferSize: usize,
-        buffer: *mut f32,
+        size: usize,
+        inp: *const f32,
+        out: *mut f32,
     );
 
     pub fn sigmoidMSE(

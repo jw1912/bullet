@@ -1,1 +1,3 @@
-pub use bullet_tensor::*;
+mod network;
+
+pub use network::Trainer;

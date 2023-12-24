@@ -6,6 +6,7 @@ mod sparse;
 mod tensor;
 mod util;
 
+pub use bindings::cublasHandle_t;
 pub use buffer::GpuBuffer;
 pub use optimiser::Optimiser;
 pub use shape::Shape;

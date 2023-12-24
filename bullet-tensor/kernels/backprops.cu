@@ -15,30 +15,32 @@ __device__ float primeSCReLU(float in) { return in > 0.0F && in < 1.0F ? 2.0F * 
 typedef float(*OpType)(float);
 
 template<OpType op>
-__global__ void bufferBackprop(const size_t bufferSize, float* buffer)
+__global__ void bufferBackprop(const size_t size, const float* in, float* out)
 {
     const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i >= bufferSize)
+    if (i >= size)
         return;
 
-    buffer[i] *= op(buffer[i]);
+    const float thisIn = in[i];
+
+    out[i] = thisIn * op(thisIn);
 }
 
-extern "C" void backpropReLU(const size_t bufferSize, float* buffer)
+extern "C" void backpropReLU(const size_t size, const float* in, float* out)
 {
-    const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeReLU><<<numBlocks, threadsPerBlock>>>(bufferSize, buffer);
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    bufferBackprop<primeReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
 
-extern "C" void backpropCReLU(const size_t bufferSize, float* buffer)
+extern "C" void backpropCReLU(const size_t size, const float* in, float* out)
 {
-    const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeCReLU><<<numBlocks, threadsPerBlock>>>(bufferSize, buffer);
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    bufferBackprop<primeCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
 
-extern "C" void backpropSCReLU(const size_t bufferSize, float* buffer)
+extern "C" void backpropSCReLU(const size_t size, const float* in, float* out)
 {
-    const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeSCReLU><<<numBlocks, threadsPerBlock>>>(bufferSize, buffer);
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    bufferBackprop<primeSCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }

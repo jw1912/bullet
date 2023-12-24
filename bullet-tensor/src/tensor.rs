@@ -268,30 +268,34 @@ impl TensorBatch {
     }
 
     /// Modifies a batch of tensors in-place.
-    fn modify(
-        &self,
-        f: unsafe extern "C" fn(usize, *mut f32),
+    fn map(
+        f: unsafe extern "C" fn(usize, *const f32, *mut f32),
+        inp: &Self,
+        out: &Self,
     ) {
+        assert_eq!(inp.shape(), out.shape(), "Mismatched tensor shapes!");
+        assert_eq!(inp.len(), out.len(), "Mismatched batch sizes!");
+        let size = inp.num_elements();
         unsafe {
-            f(self.num_elements(), self.ptr());
+            f(size, inp.ptr(), out.ptr());
         }
     }
 
     /// Activates a batch of tensors in-place.
-    pub fn activate(&self, op: Activation) {
+    pub fn activate(op: Activation, inp: &Self, out: &Self) {
         match op {
-            Activation::ReLU => self.modify(bindings::activateReLU),
-            Activation::CReLU => self.modify(bindings::activateCReLU),
-            Activation::SCReLU => self.modify(bindings::activateSCReLU),
+            Activation::ReLU => Self::map(bindings::activateReLU, inp, out),
+            Activation::CReLU => Self::map(bindings::activateCReLU, inp, out),
+            Activation::SCReLU => Self::map(bindings::activateSCReLU, inp, out),
         }
     }
 
-    /// This calulates `x[i] *= op'(op_inv(x[i]))` for a batch of input.
-    pub fn backprop_activation(&self, op: Activation) {
+    /// This calulates `y[i] *= x[i] * op'(op_inv(x[i]))` for a batch of input.
+    pub fn backprop_activation(op: Activation, inp: &Self, out: &Self) {
         match op {
-            Activation::ReLU => self.modify(bindings::backpropReLU),
-            Activation::CReLU => self.modify(bindings::backpropCReLU),
-            Activation::SCReLU => self.modify(bindings::backpropSCReLU),
+            Activation::ReLU => Self::map(bindings::backpropReLU, inp, out),
+            Activation::CReLU => Self::map(bindings::backpropCReLU, inp, out),
+            Activation::SCReLU => Self::map(bindings::backpropSCReLU, inp, out),
         }
     }
 }
