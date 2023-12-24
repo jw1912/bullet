@@ -78,6 +78,8 @@ However, if you have a `params.bin` file from a checkpoint folder then you can q
 ```
 cargo r -r --bin quantise <input file path> <output file path> <QA> <QB>
 ```
+It is recommended to change `QA` to 181 or less if using SCReLU activation, as then you can utilise manual SIMD to
+achieve a significant speedup.
 
 ## Training
 
@@ -122,7 +124,8 @@ recommended to have at least one learning rate drop during training.
 ### CUDA
 
 Add `--cuda` to use CUDA, it will fail to compile if not available.
-It is not recommended to use CUDA for small net sizes (unbucketed & hidden layer < 256).
+Note that for small net sizes (generally unbucketed & hidden layer size < 256),
+CUDA may be slower than using the CPU.
 
 ### AVX512
 
