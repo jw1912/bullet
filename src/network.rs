@@ -18,7 +18,7 @@ pub struct Affine {
 
 pub enum Operation {
     Activate(Activation),
-    AffineTransform(Affine),
+    Affine(Affine),
 }
 
 pub struct Node {
@@ -47,11 +47,19 @@ impl<T> Trainer<T> {
         for node in &self.nodes {
             match &node.op {
                 Operation::Activate(activation) => {
-                    TensorBatch::activate(*activation, inputs, &node.outputs);
+                    TensorBatch::activate(
+                        *activation,
+                        inputs,
+                        &node.outputs,
+                    );
                 }
-                Operation::AffineTransform(info) => {
-                    TensorBatch::single_lt(self.handle, &info.weights, inputs, &node.outputs);
-                    //TensorBatch::single_add(&info.biases, &node.outputs);
+                Operation::Affine(info) => {
+                    TensorBatch::affine(
+                        &info.weights,
+                        inputs,
+                        &info.biases,
+                        &node.outputs,
+                    );
                 }
             }
 
@@ -68,32 +76,11 @@ impl<T> Trainer<T> {
     pub unsafe fn backprop(&self, sparse_inputs: &SparseTensor) {
         let num_nodes = self.nodes.len();
 
-        if num_nodes > 1 {
-            for node in (1..num_nodes).rev() {
-                let this_node = &self.nodes[node];
-                let last_node = &self.nodes[node - 1];
-
-                match &this_node.op {
-                    Operation::Activate(activation) => {
-                        TensorBatch::backprop_activation(*activation, &this_node.outputs, &last_node.outputs);
-                    }
-                    Operation::AffineTransform(_) => {
-
-                    }
-                }
-            }
+        for node in (1..num_nodes).rev() {
+            backprop_single(&self.nodes[node], &self.nodes[node - 1].outputs);
         }
 
-        let first_layer = &self.nodes[0];
-
-        match &first_layer.op {
-            Operation::Activate(activation) => {
-                TensorBatch::backprop_activation(*activation, &first_layer.outputs, &self.ft.outputs);
-            }
-            Operation::AffineTransform(_) => {
-
-            }
-        }
+        backprop_single(&self.nodes[0], &self.ft.outputs);
 
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
@@ -103,5 +90,26 @@ impl<T> Trainer<T> {
         );
 
         bullet_tensor::device_synchronise();
+    }
+}
+
+fn backprop_single(this_node: &Node, inputs: &TensorBatch) {
+    match &this_node.op {
+        Operation::Activate(activation) => {
+            TensorBatch::backprop_activation(
+                *activation,
+                &this_node.outputs,
+                inputs,
+            );
+        }
+        Operation::Affine(info) => {
+            TensorBatch::backprop_affine(
+                &info.weights,
+                &this_node.outputs,
+                inputs,
+                &info.weights_grad,
+                &info.biases_grad,
+            );
+        }
     }
 }
