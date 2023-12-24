@@ -1,4 +1,12 @@
-use bullet_tensor::{Activation, TensorBatch, cublasHandle_t, Optimiser, SparseTensor, Tensor};
+use bullet_tensor::{
+    Activation,
+    TensorBatch,
+    cublasHandle_t,
+    Optimiser,
+    SparseTensor,
+    Tensor,
+    device_synchronise,
+};
 
 pub struct FeatureTransormer {
     weights: Tensor,
@@ -66,7 +74,7 @@ impl<T> Trainer<T> {
             inputs = &node.outputs;
         }
 
-        bullet_tensor::device_synchronise();
+        device_synchronise();
     }
 
     /// # Safety
@@ -89,7 +97,7 @@ impl<T> Trainer<T> {
             &self.ft.outputs,
         );
 
-        bullet_tensor::device_synchronise();
+        device_synchronise();
     }
 }
 
