@@ -1,5 +1,5 @@
 [workspace]
-members = ["bullet-data", "bullet-tensor", "bullet-trainer", "bullet-utils"]
+members = ["bullet-core", "bullet-tensor", "bullet-utils"]
 resolver = "2"
 
 [profile.release]

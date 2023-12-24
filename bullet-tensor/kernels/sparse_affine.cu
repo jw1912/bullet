@@ -1,0 +1,140 @@
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <iostream>
+#include <cstdint>
+
+__global__ void __kernel_sparse_affine_forward(
+    const size_t chunkSize,
+    const size_t inputSize,
+    const size_t outputSize,
+    const float* weights,
+    const float* biases,
+    const uint16_t* inputs,
+    float* outputs)
+{
+    const size_t inputIdx = inputSize * blockIdx.x;
+    const size_t chunk = chunkSize * threadIdx.x;
+    const size_t outputIdx = outputSize * blockIdx.x + chunk;
+    const uint16_t* thisInput = inputs + inputIdx;
+    float* thisAccumulator = outputs + outputIdx;
+
+    for (size_t element = 0; element < chunkSize; element++)
+    {
+        const size_t offset = chunk + element;
+
+        if (offset >= outputSize)
+            return;
+
+        float elementVal = biases[offset];
+
+        for (size_t i = 0; i < inputSize; i++) {
+            const size_t inp = static_cast<size_t>(thisInput[i]);
+
+            if (inp == static_cast<size_t>(65535))
+                break;
+
+            const size_t idx = inp * outputSize + offset;
+            elementVal += weights[idx];
+        }
+
+        thisAccumulator[element] = elementVal;
+    }
+}
+
+__global__ void __kernel_sparse_affine_backward(
+    const size_t chunkSize,
+    const size_t inputSize,
+    const size_t outputSize,
+    float* weightsGrad,
+    float* biasesGrad,
+    const uint16_t* inputs,
+    const float* errors)
+{
+    const size_t inputIdx = inputSize * blockIdx.x;
+    const size_t chunk = chunkSize * threadIdx.x;
+    const size_t outputIdx = outputSize * blockIdx.x + chunk;
+    const uint16_t* thisInput = inputs + inputIdx;
+
+    for (size_t element = 0; element < chunkSize; element++)
+    {
+        const size_t offset = chunk + element;
+
+        if (offset >= outputSize)
+            return;
+
+        const float error = errors[outputIdx + element];
+        atomicAdd(&biasesGrad[offset], error);
+
+        for (size_t i = 0; i < inputSize; i++) {
+            const size_t inp = static_cast<size_t>(thisInput[i]);
+
+            if (inp == static_cast<size_t>(65535))
+                break;
+
+            const size_t idx = inp * outputSize + offset;
+            atomicAdd(&weightsGrad[idx], error);
+        }
+    }
+}
+
+size_t determineChunkSize(size_t size)
+{
+    size--;
+    size |= size >> 1;
+    size |= size >> 2;
+    size |= size >> 4;
+    size |= size >> 8;
+    size |= size >> 16;
+    size |= size >> 32;
+    size++;
+
+    const size_t chunkSize = size / 1024;
+
+    return chunkSize == 0 ? 1 : chunkSize;
+}
+
+extern "C" void sparseAffineForward(
+    const size_t batchSize,
+    const size_t chunkSize,
+    const size_t maxInputSize,
+    const size_t outputSize,
+    const float* weights,
+    const float* biases,
+    const uint16_t* inputs,
+    float* outputs)
+{
+    const size_t numChunks = outputSize / chunkSize;
+
+    __kernel_sparse_affine_forward<<<batchSize, numChunks>>>(
+        chunkSize,
+        maxInputSize,
+        outputSize,
+        weights,
+        biases,
+        inputs,
+        outputs
+    );
+}
+
+extern "C" void sparseAffineBackward(
+    const size_t batchSize,
+    const size_t chunkSize,
+    const size_t maxInputSize,
+    const size_t outputSize,
+    float* weightsGrad,
+    float* biasesGrad,
+    const uint16_t* inputs,
+    const float* errors)
+{
+    const size_t numChunks = outputSize / chunkSize;
+
+    __kernel_sparse_affine_backward<<<batchSize, numChunks>>>(
+        chunkSize,
+        maxInputSize,
+        outputSize,
+        weightsGrad,
+        biasesGrad,
+        inputs,
+        errors
+    );
+}

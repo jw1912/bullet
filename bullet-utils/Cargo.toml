@@ -1,9 +1,8 @@
 [package]
-name = "utils"
+name = "bullet-utils"
 version = "0.1.0"
 edition = "2021"
 authors = ["Jamie Whiting"]
 
 [dependencies]
 bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
-cpu = { path = "../cpu" }

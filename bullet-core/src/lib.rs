@@ -1,4 +1,3 @@
-pub mod activation;
 pub mod data;
 pub mod inputs;
 pub mod outputs;
@@ -16,18 +15,6 @@ pub type Input = inputs::Chess768;
 
 /// Size of hidden layer.
 pub const HIDDEN: usize = 512;
-
-/// Activation function:
-///   - ReLU
-///   - CReLU
-///   - SCReLU
-///   - FastSCReLU
-pub type Activation = activation::CReLU;
-
-/// Output Buckets:
-///  - Single
-///  - MaterialCount<Buckets>
-pub type OutputBucket = outputs::Single;
 
 /// Applicable only with `Input` option
 /// `ChessBuckets`, it is indexed from white POV,

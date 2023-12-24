@@ -1,0 +1,9 @@
+[package]
+name = "bullet-tensor"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
+
+[build-dependencies]
+bindgen = "0.68.1"
+cc = "1.0.83"

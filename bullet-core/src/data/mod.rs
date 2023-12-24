@@ -1,7 +1,7 @@
 pub mod gpu;
 
 use bulletformat::BulletFormat;
-pub use gpu::{BoardCUDA, CudaResult};
+pub use gpu::BoardCUDA;
 
 use crate::Data;
 
