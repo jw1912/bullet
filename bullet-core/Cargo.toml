@@ -2,7 +2,8 @@
 name = "bullet-core"
 version = "0.1.0"
 edition = "2021"
-authors = ["Jamie Whiting"]
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
 bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
