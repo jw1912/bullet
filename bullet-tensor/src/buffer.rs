@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::util;
 
@@ -64,7 +64,7 @@ impl GpuBuffer {
 
     fn report(&self, msg: &str) {
         if TRACKING.load(Ordering::SeqCst) {
-            println!("[CUDA#{}] {msg}" ,self.id);
+            println!("[CUDA#{}] {msg}", self.id);
         }
     }
 }

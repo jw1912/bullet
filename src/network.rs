@@ -1,11 +1,5 @@
 use bullet_tensor::{
-    Activation,
-    TensorBatch,
-    cublasHandle_t,
-    Optimiser,
-    SparseTensor,
-    Tensor,
-    device_synchronise,
+    cublasHandle_t, device_synchronise, Activation, Optimiser, SparseTensor, Tensor, TensorBatch,
 };
 
 pub struct FeatureTransormer {
@@ -48,26 +42,22 @@ impl<T> Trainer<T> {
     /// It is undefined behaviour to call this if `sparse_inputs` is not
     /// properly initialised.
     pub unsafe fn forward(&self, sparse_inputs: &SparseTensor) {
-        SparseTensor::affine(&self.ft.weights, sparse_inputs, &self.ft.biases, &self.ft.outputs);
+        SparseTensor::affine(
+            &self.ft.weights,
+            sparse_inputs,
+            &self.ft.biases,
+            &self.ft.outputs,
+        );
 
         let mut inputs = &self.ft.outputs;
 
         for node in &self.nodes {
             match &node.op {
                 Operation::Activate(activation) => {
-                    TensorBatch::activate(
-                        *activation,
-                        inputs,
-                        &node.outputs,
-                    );
+                    TensorBatch::activate(*activation, inputs, &node.outputs);
                 }
                 Operation::Affine(info) => {
-                    TensorBatch::affine(
-                        &info.weights,
-                        inputs,
-                        &info.biases,
-                        &node.outputs,
-                    );
+                    TensorBatch::affine(&info.weights, inputs, &info.biases, &node.outputs);
                 }
             }
 
@@ -104,11 +94,7 @@ impl<T> Trainer<T> {
 fn backprop_single(this_node: &Node, inputs: &TensorBatch) {
     match &this_node.op {
         Operation::Activate(activation) => {
-            TensorBatch::backprop_activation(
-                *activation,
-                &this_node.outputs,
-                inputs,
-            );
+            TensorBatch::backprop_activation(*activation, &this_node.outputs, inputs);
         }
         Operation::Affine(info) => {
             TensorBatch::backprop_affine(

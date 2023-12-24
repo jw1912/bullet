@@ -6,13 +6,16 @@ mod sparse;
 mod tensor;
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 pub use bindings::cublasHandle_t;
 pub use buffer::GpuBuffer;
 pub use optimiser::Optimiser;
 pub use shape::Shape;
 pub use sparse::SparseTensor;
 pub use tensor::{Tensor, TensorBatch};
-pub use util::{create_cublas_handle, panic_if_cuda_error, device_synchronise};
+pub use util::{create_cublas_handle, device_synchronise, panic_if_cuda_error};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Activation {

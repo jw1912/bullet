@@ -1,6 +1,6 @@
 use std::env::args;
 
-use bulletformat::{AtaxxBoard, convert_from_text};
+use bulletformat::{convert_from_text, AtaxxBoard};
 
 fn main() -> std::io::Result<()> {
     let inp_path = args().nth(1).expect("Expected a file name!");

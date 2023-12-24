@@ -23,11 +23,7 @@ impl InputType for Ataxx147 {
         let sq = usize::from(square);
 
         let stm_idx = 49 * pc + sq;
-        let nstm_idx = if pc == 2 {
-            stm_idx
-        } else {
-            49 * (pc ^ 1) + sq
-        };
+        let nstm_idx = if pc == 2 { stm_idx } else { 49 * (pc ^ 1) + sq };
 
         (stm_idx, nstm_idx)
     }

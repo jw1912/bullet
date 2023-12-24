@@ -2,7 +2,11 @@ pub fn sigmoid(x: f32, k: f32) -> f32 {
     1. / (1. + (-x * k).exp())
 }
 
-pub fn write_to_bin<T, const SIZEOF: usize>(item: &T, output_path: &str, pad: bool) -> std::io::Result<()> {
+pub fn write_to_bin<T, const SIZEOF: usize>(
+    item: &T,
+    output_path: &str,
+    pad: bool,
+) -> std::io::Result<()> {
     use std::io::Write;
 
     let mut file = std::fs::File::create(output_path)?;

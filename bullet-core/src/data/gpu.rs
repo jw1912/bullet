@@ -1,8 +1,7 @@
 use crate::{
-    Data,
-    Input,
     data::{BulletFormat, MAX_FEATURES},
     inputs::InputType,
+    Data, Input,
 };
 
 #[repr(C)]
@@ -13,7 +12,9 @@ pub struct BoardCUDA {
 
 impl Default for BoardCUDA {
     fn default() -> Self {
-        Self { features: [0; MAX_FEATURES] }
+        Self {
+            features: [0; MAX_FEATURES],
+        }
     }
 }
 

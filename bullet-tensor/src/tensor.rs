@@ -1,8 +1,8 @@
 use std::ffi::c_int;
 
 use crate::{
-    bindings::{cublasHandle_t, cublasOperation_t, cublasSgemmStridedBatched, self},
-    util, Shape, GpuBuffer, Activation,
+    bindings::{self, cublasHandle_t, cublasOperation_t, cublasSgemmStridedBatched},
+    util, Activation, GpuBuffer, Shape,
 };
 
 /// Single Rank-2 Tensor on the GPU.
@@ -147,12 +147,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn single_lt(
-        handle: cublasHandle_t,
-        a: &Tensor,
-        x: &TensorBatch,
-        y: &TensorBatch,
-    ) {
+    pub unsafe fn single_lt(handle: cublasHandle_t, a: &Tensor, x: &TensorBatch, y: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -181,12 +176,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn single_tlt(
-        handle: cublasHandle_t,
-        a: &Tensor,
-        y: &TensorBatch,
-        x: &TensorBatch,
-    ) {
+    pub unsafe fn single_tlt(handle: cublasHandle_t, a: &Tensor, y: &TensorBatch, x: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -211,12 +201,7 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn multi_lt(
-        handle: cublasHandle_t,
-        a: &TensorBatch,
-        x: &TensorBatch,
-        y: &TensorBatch,
-    ) {
+    pub fn multi_lt(handle: cublasHandle_t, a: &TensorBatch, x: &TensorBatch, y: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -242,12 +227,7 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn multi_tlt(
-        handle: cublasHandle_t,
-        a: &TensorBatch,
-        y: &TensorBatch,
-        x: &TensorBatch,
-    ) {
+    pub fn multi_tlt(handle: cublasHandle_t, a: &TensorBatch, y: &TensorBatch, x: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -268,11 +248,7 @@ impl TensorBatch {
     }
 
     /// Modifies a batch of tensors in-place.
-    fn map(
-        f: unsafe extern "C" fn(usize, *const f32, *mut f32),
-        inp: &Self,
-        out: &Self,
-    ) {
+    fn map(f: unsafe extern "C" fn(usize, *const f32, *mut f32), inp: &Self, out: &Self) {
         assert_eq!(inp.shape(), out.shape(), "Mismatched tensor shapes!");
         assert_eq!(inp.len(), out.len(), "Mismatched batch sizes!");
         let size = inp.num_elements();
@@ -300,11 +276,7 @@ impl TensorBatch {
     }
 }
 
-fn validate_dims(
-    a_shape: Shape,
-    x: &TensorBatch,
-    y: &TensorBatch,
-) -> (c_int, c_int) {
+fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (c_int, c_int) {
     assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
     assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
     assert_eq!(x.len, y.len, "Not all tensor batches are the same length!");

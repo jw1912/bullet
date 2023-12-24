@@ -43,46 +43,17 @@ extern "C" {
         errors: *const f32,
     );
 
-    pub fn activateReLU(
-        size: usize,
-        inp: *const f32,
-        out: *mut f32,
-    );
+    pub fn activateReLU(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn activateCReLU(
-        size: usize,
-        inp: *const f32,
-        out: *mut f32,
-    );
+    pub fn activateCReLU(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn activateSCReLU(
-        size: usize,
-        inp: *const f32,
-        out: *mut f32,
-    );
+    pub fn activateSCReLU(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn backpropReLU(
-        size: usize,
-        inp: *const f32,
-        out: *mut f32,
-    );
+    pub fn backpropReLU(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn backpropCReLU(
-        size: usize,
-        inp: *const f32,
-        out: *mut f32,
-    );
+    pub fn backpropCReLU(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn backpropSCReLU(
-        size: usize,
-        inp: *const f32,
-        out: *mut f32,
-    );
+    pub fn backpropSCReLU(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn sigmoidMSE(
-        bufferSize: usize,
-        outputs: *mut f32,
-        results: *const f32,
-        error: *mut f32,
-    );
+    pub fn sigmoidMSE(bufferSize: usize, outputs: *mut f32, results: *const f32, error: *mut f32);
 }
