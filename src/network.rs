@@ -2,7 +2,8 @@ use bullet_tensor::{
     cublasHandle_t, device_synchronise, Activation, Optimiser, SparseTensor, Tensor, TensorBatch,
 };
 
-pub struct FeatureTransormer {
+pub struct FeatureTransormer<T> {
+    marker: std::marker::PhantomData<T>,
     weights: Tensor,
     biases: Tensor,
     weights_grad: Tensor,
@@ -29,11 +30,10 @@ pub struct Node {
 }
 
 pub struct Trainer<T> {
-    marker: std::marker::PhantomData<T>,
     handle: cublasHandle_t,
     optimiser: Optimiser,
     batch_size: usize,
-    ft: FeatureTransormer,
+    ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
 }
 
