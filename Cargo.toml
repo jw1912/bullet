@@ -1,5 +1,5 @@
 [workspace]
-members = ["common", "cpu", "cuda", "trainer", "utils"]
+members = ["bullet-data", "bullet-tensor", "bullet-trainer", "bullet-utils"]
 resolver = "2"
 
 [profile.release]
