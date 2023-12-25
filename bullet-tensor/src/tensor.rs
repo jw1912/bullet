@@ -249,7 +249,7 @@ impl TensorBatch {
 
     /// Multi Transposed-Linear-Transform:
     ///
-    /// Computes a[i] = y[i](x[i]^T) on a batch of strided inputs, where
+    /// Computes a[i] = y[i]x[i]^T on a batch of strided inputs, where
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
@@ -322,9 +322,9 @@ impl TensorBatch {
         inputs: &TensorBatch,
         _weights_grad: &Tensor,
         _biases_grad: &Tensor,
-        _weights_intermediate: &TensorBatch,
+        weights_intermediate: &TensorBatch,
     ) {
-        //TensorBatch::multi_lt_nt(handle, errors, inputs, weights_intermediate);
+        TensorBatch::multi_lt_nt(handle, errors, inputs, weights_intermediate);
         //TensorBatch::reduce_add(weights_intermediate, weights_grad);
         //TensorBatch::reduce_add(errors, biases_grad);
         TensorBatch::single_lt_tn(handle, weights, errors, inputs);
@@ -415,12 +415,12 @@ fn sgemm2(
             n,
             1,
             &alpha,
-            y_ptr,
-            n,
-            n.into(),
             x_ptr,
             m,
             m.into(),
+            y_ptr,
+            n,
+            n.into(),
             &beta,
             a_ptr,
             m,

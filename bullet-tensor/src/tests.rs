@@ -249,3 +249,45 @@ fn tensor_sparse_affine() {
     let expected = [1.5, -0.5, 1.5, 0.5, 0.5, 0.5];
     assert_eq!(expected, ys_gpu);
 }
+
+#[test]
+fn tensor_lt_nt() {
+    let handle = create_cublas_handle();
+
+    const M: usize = 3;
+    const N: usize = 2;
+    const B: usize = 3;
+
+    let x = [
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+    ];
+
+    let y = [
+        1.0, 0.0,
+        0.0, 1.0,
+        1.0, 1.0,
+    ];
+
+    let x_gpu = TensorBatch::new(Shape::new(1, M), B);
+    let y_gpu = TensorBatch::new(Shape::new(1, N), B);
+    let a_gpu = TensorBatch::new(Shape::new(M, N), B);
+
+    x_gpu.load_from_cpu(&x);
+    y_gpu.load_from_cpu(&y);
+
+    TensorBatch::multi_lt_nt(handle, &y_gpu, &x_gpu, &a_gpu);
+
+    let mut a = [0.0; M * N * B];
+    a_gpu.write_to_cpu(&mut a);
+
+    assert_eq!(a, [
+        1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+    ]);
+}
