@@ -1,3 +1,3 @@
 mod network;
 
-pub use network::Trainer;
+pub use network::{Affine, Operation, Trainer};

@@ -1,5 +1,6 @@
 use bullet_tensor::{
-    cublasHandle_t, device_synchronise, Activation, Optimiser, SparseTensor, Tensor, TensorBatch, GpuBuffer,
+    cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser, SparseTensor, Tensor,
+    TensorBatch,
 };
 
 pub struct FeatureTransormer<T> {
@@ -32,12 +33,25 @@ pub struct Node {
 pub struct Trainer<T> {
     handle: cublasHandle_t,
     optimiser: Optimiser,
-    batch_size: usize,
     ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
 }
 
 impl<T> Trainer<T> {
+    pub fn new(
+        handle: cublasHandle_t,
+        optimiser: Optimiser,
+        ft: FeatureTransormer<T>,
+        nodes: Vec<Node>,
+    ) -> Self {
+        Self {
+            handle,
+            optimiser,
+            ft,
+            nodes,
+        }
+    }
+
     pub fn train_on_batch(
         &self,
         sparse_inputs: &SparseTensor,
@@ -75,8 +89,10 @@ impl<T> Trainer<T> {
                 Operation::Activate(activation) => {
                     TensorBatch::activate(*activation, inputs, &node.outputs);
                 }
-                Operation::Affine(info) => {
-                    TensorBatch::affine(&info.weights, inputs, &info.biases, &node.outputs);
+                Operation::Affine(Affine {
+                    weights, biases, ..
+                }) => {
+                    TensorBatch::affine(self.handle, weights, inputs, biases, &node.outputs);
                 }
             }
 
@@ -88,7 +104,11 @@ impl<T> Trainer<T> {
     /// It is undefined behaviour to call this without previously calling
     /// `self.forward`.
     unsafe fn calc_errors(&self, results: &TensorBatch, error: &GpuBuffer) {
-        self.nodes.last().unwrap().outputs.sigmoid_mse(results, error);
+        self.nodes
+            .last()
+            .unwrap()
+            .outputs
+            .sigmoid_mse(results, error);
     }
 
     /// # Safety
@@ -99,10 +119,14 @@ impl<T> Trainer<T> {
         let num_nodes = self.nodes.len();
 
         for node in (1..num_nodes).rev() {
-            backprop_single(&self.nodes[node], &self.nodes[node - 1].outputs);
+            backprop_single(
+                self.handle,
+                &self.nodes[node],
+                &self.nodes[node - 1].outputs,
+            );
         }
 
-        backprop_single(&self.nodes[0], &self.ft.outputs);
+        backprop_single(self.handle, &self.nodes[0], &self.ft.outputs);
 
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
@@ -113,19 +137,21 @@ impl<T> Trainer<T> {
     }
 }
 
-fn backprop_single(this_node: &Node, inputs: &TensorBatch) {
+fn backprop_single(handle: cublasHandle_t, this_node: &Node, inputs: &TensorBatch) {
+    let errors = &this_node.outputs;
+
     match &this_node.op {
         Operation::Activate(activation) => {
-            TensorBatch::backprop_activation(*activation, &this_node.outputs, inputs);
+            TensorBatch::backprop_activation(*activation, errors, inputs);
         }
-        Operation::Affine(info) => {
-            TensorBatch::backprop_affine(
-                &info.weights,
-                &this_node.outputs,
-                inputs,
-                &info.weights_grad,
-                &info.biases_grad,
-            );
+        Operation::Affine(Affine {
+            weights: w,
+            weights_grad: wg,
+            biases_grad: bg,
+            weights_intermediate: wi,
+            ..
+        }) => unsafe {
+            TensorBatch::backprop_affine(handle, w, errors, inputs, wg, bg, wi);
         }
     }
 }
