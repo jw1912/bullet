@@ -149,7 +149,13 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn splat_lt_nn(handle: cublasHandle_t, batch_size: usize, a: &Tensor, x: &TensorBatch, y: &TensorBatch) {
+    pub unsafe fn splat_lt_nn(
+        handle: cublasHandle_t,
+        batch_size: usize,
+        a: &Tensor,
+        x: &TensorBatch,
+        y: &TensorBatch,
+    ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -180,7 +186,13 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn splat_lt_tn(handle: cublasHandle_t, batch_size: usize, a: &Tensor, y: &TensorBatch, x: &TensorBatch) {
+    pub unsafe fn splat_lt_tn(
+        handle: cublasHandle_t,
+        batch_size: usize,
+        a: &Tensor,
+        y: &TensorBatch,
+        x: &TensorBatch,
+    ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -205,7 +217,13 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn lt_nn(handle: cublasHandle_t, batch_size: usize, a: &TensorBatch, x: &TensorBatch, y: &TensorBatch) {
+    pub fn lt_nn(
+        handle: cublasHandle_t,
+        batch_size: usize,
+        a: &TensorBatch,
+        x: &TensorBatch,
+        y: &TensorBatch,
+    ) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -231,7 +249,13 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn lt_tn(handle: cublasHandle_t, batch_size: usize, a: &TensorBatch, y: &TensorBatch, x: &TensorBatch) {
+    pub fn lt_tn(
+        handle: cublasHandle_t,
+        batch_size: usize,
+        a: &TensorBatch,
+        y: &TensorBatch,
+        x: &TensorBatch,
+    ) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -257,7 +281,13 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn lt_nt(handle: cublasHandle_t, batch_size: usize, y: &TensorBatch, x: &TensorBatch, a: &TensorBatch) {
+    pub fn lt_nt(
+        handle: cublasHandle_t,
+        batch_size: usize,
+        y: &TensorBatch,
+        x: &TensorBatch,
+        a: &TensorBatch,
+    ) {
         let a_shape = a.shape();
         assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
         assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
@@ -280,7 +310,12 @@ impl TensorBatch {
     }
 
     /// Modifies a batch of tensors.
-    fn map(f: unsafe extern "C" fn(usize, *const f32, *mut f32), batch_size: usize, inp: &Self, out: &Self) {
+    fn map(
+        f: unsafe extern "C" fn(usize, *const f32, *mut f32),
+        batch_size: usize,
+        inp: &Self,
+        out: &Self,
+    ) {
         assert_eq!(inp.shape(), out.shape(), "Mismatched tensor shapes!");
         assert_eq!(inp.len(), out.len(), "Mismatched cap sizes!");
         assert!(batch_size <= inp.len());

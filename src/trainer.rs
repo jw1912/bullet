@@ -96,7 +96,14 @@ impl<T> Trainer<T> {
                 Operation::Affine(Affine {
                     weights, biases, ..
                 }) => {
-                    TensorBatch::affine(self.handle, batch_size, weights, inputs, biases, &node.outputs);
+                    TensorBatch::affine(
+                        self.handle,
+                        batch_size,
+                        weights,
+                        inputs,
+                        biases,
+                        &node.outputs,
+                    );
                 }
             }
 
@@ -143,7 +150,12 @@ impl<T> Trainer<T> {
     }
 }
 
-fn backprop_single(handle: cublasHandle_t, batch_size: usize, this_node: &Node, inputs: &TensorBatch) {
+fn backprop_single(
+    handle: cublasHandle_t,
+    batch_size: usize,
+    this_node: &Node,
+    inputs: &TensorBatch,
+) {
     let errors = &this_node.outputs;
 
     match &this_node.op {
@@ -158,6 +170,6 @@ fn backprop_single(handle: cublasHandle_t, batch_size: usize, this_node: &Node, 
             ..
         }) => unsafe {
             TensorBatch::backprop_affine(handle, batch_size, w, errors, inputs, wg, bg, wi);
-        }
+        },
     }
 }
