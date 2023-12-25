@@ -149,7 +149,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn splat_lt_nn(handle: cublasHandle_t, a: &Tensor, x: &TensorBatch, y: &TensorBatch) {
+    pub unsafe fn splat_lt_nn(handle: cublasHandle_t, batch_size: usize, a: &Tensor, x: &TensorBatch, y: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -164,7 +164,7 @@ impl TensorBatch {
             m,
             y.ptr(),
             n,
-            x.len as c_int,
+            batch_size as c_int,
         );
     }
 
@@ -180,7 +180,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn splat_lt_tn(handle: cublasHandle_t, a: &Tensor, y: &TensorBatch, x: &TensorBatch) {
+    pub unsafe fn splat_lt_tn(handle: cublasHandle_t, batch_size: usize, a: &Tensor, y: &TensorBatch, x: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -195,7 +195,7 @@ impl TensorBatch {
             n,
             x.ptr(),
             m,
-            x.len as c_int,
+            batch_size as c_int,
         );
     }
 
@@ -205,7 +205,7 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn lt_nn(handle: cublasHandle_t, a: &TensorBatch, x: &TensorBatch, y: &TensorBatch) {
+    pub fn lt_nn(handle: cublasHandle_t, batch_size: usize, a: &TensorBatch, x: &TensorBatch, y: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -221,7 +221,7 @@ impl TensorBatch {
             m,
             y.ptr(),
             n,
-            x.len as c_int,
+            batch_size as c_int,
         );
     }
 
@@ -231,7 +231,7 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn lt_tn(handle: cublasHandle_t, a: &TensorBatch, y: &TensorBatch, x: &TensorBatch) {
+    pub fn lt_tn(handle: cublasHandle_t, batch_size: usize, a: &TensorBatch, y: &TensorBatch, x: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -247,7 +247,7 @@ impl TensorBatch {
             n,
             x.ptr(),
             m,
-            x.len as c_int,
+            batch_size as c_int,
         );
     }
 
@@ -257,7 +257,7 @@ impl TensorBatch {
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn lt_nt(handle: cublasHandle_t, y: &TensorBatch, x: &TensorBatch, a: &TensorBatch) {
+    pub fn lt_nt(handle: cublasHandle_t, batch_size: usize, y: &TensorBatch, x: &TensorBatch, a: &TensorBatch) {
         let a_shape = a.shape();
         assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
         assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
@@ -275,35 +275,35 @@ impl TensorBatch {
             x.ptr(),
             a.ptr(),
             a.element_size() as c_int,
-            x.len as c_int,
+            batch_size as c_int,
         );
     }
 
-    /// Modifies a batch of tensors in-place.
-    fn map(f: unsafe extern "C" fn(usize, *const f32, *mut f32), inp: &Self, out: &Self) {
+    /// Modifies a batch of tensors.
+    fn map(f: unsafe extern "C" fn(usize, *const f32, *mut f32), batch_size: usize, inp: &Self, out: &Self) {
         assert_eq!(inp.shape(), out.shape(), "Mismatched tensor shapes!");
-        assert_eq!(inp.len(), out.len(), "Mismatched batch sizes!");
-        let size = inp.num_elements();
+        assert_eq!(inp.len(), out.len(), "Mismatched cap sizes!");
+        assert!(batch_size <= inp.len());
         unsafe {
-            f(size, inp.ptr(), out.ptr());
+            f(batch_size * inp.element_size(), inp.ptr(), out.ptr());
         }
     }
 
-    /// Activates a batch of tensors in-place.
-    pub fn activate(op: Activation, inp: &Self, out: &Self) {
+    /// Activates a batch of tensors.
+    pub fn activate(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
         match op {
-            Activation::ReLU => Self::map(bindings::activateReLU, inp, out),
-            Activation::CReLU => Self::map(bindings::activateCReLU, inp, out),
-            Activation::SCReLU => Self::map(bindings::activateSCReLU, inp, out),
+            Activation::ReLU => Self::map(bindings::activateReLU, batch_size, inp, out),
+            Activation::CReLU => Self::map(bindings::activateCReLU, batch_size, inp, out),
+            Activation::SCReLU => Self::map(bindings::activateSCReLU, batch_size, inp, out),
         }
     }
 
-    /// This calulates `y[i] *= x[i] * op'(op_inv(x[i]))` for a batch of input.
-    pub fn backprop_activation(op: Activation, inp: &Self, out: &Self) {
+    /// This calulates `out[i] *= inp[i] * op'(op_inv(inp[i]))` for a batch of input.
+    pub fn backprop_activation(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
         match op {
-            Activation::ReLU => Self::map(bindings::backpropReLU, inp, out),
-            Activation::CReLU => Self::map(bindings::backpropCReLU, inp, out),
-            Activation::SCReLU => Self::map(bindings::backpropSCReLU, inp, out),
+            Activation::ReLU => Self::map(bindings::backpropReLU, batch_size, inp, out),
+            Activation::CReLU => Self::map(bindings::backpropCReLU, batch_size, inp, out),
+            Activation::SCReLU => Self::map(bindings::backpropSCReLU, batch_size, inp, out),
         }
     }
 
@@ -311,19 +311,22 @@ impl TensorBatch {
     /// `weights` must be initialised.
     pub unsafe fn affine(
         handle: cublasHandle_t,
+        batch_size: usize,
         weights: &Tensor,
         inputs: &TensorBatch,
         _biases: &Tensor,
         outputs: &TensorBatch,
     ) {
-        TensorBatch::splat_lt_nn(handle, weights, inputs, outputs);
-        //TensorBatch::splat_add(biases, outputs);
+        TensorBatch::splat_lt_nn(handle, batch_size, weights, inputs, outputs);
+        //TensorBatch::splat_add(batch_size, biases, outputs);
     }
 
     /// # Safety
     /// `weights` must be initialised.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn backprop_affine(
         handle: cublasHandle_t,
+        batch_size: usize,
         weights: &Tensor,
         errors: &TensorBatch,
         inputs: &TensorBatch,
@@ -331,20 +334,19 @@ impl TensorBatch {
         _biases_grad: &Tensor,
         weights_intermediate: &TensorBatch,
     ) {
-        TensorBatch::lt_nt(handle, errors, inputs, weights_intermediate);
-        //TensorBatch::reduce_add(weights_intermediate, weights_grad);
-        //TensorBatch::reduce_add(errors, biases_grad);
-        TensorBatch::splat_lt_tn(handle, weights, errors, inputs);
+        TensorBatch::lt_nt(handle, batch_size, errors, inputs, weights_intermediate);
+        //TensorBatch::reduce_add(batch_size, weights_intermediate, weights_grad);
+        //TensorBatch::reduce_add(batch_size, errors, biases_grad);
+        TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn sigmoid_mse(&self, results: &TensorBatch, error: &GpuBuffer) {
+    pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {
         assert_eq!(error.size(), 1);
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 
-        let size = self.num_elements();
         unsafe {
-            bindings::sigmoidMSE(size, self.ptr(), results.ptr(), error.ptr());
+            bindings::sigmoidMSE(batch_size, self.ptr(), results.ptr(), error.ptr());
         }
     }
 }

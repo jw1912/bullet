@@ -51,13 +51,13 @@ impl GpuBuffer {
     }
 
     pub fn load_from_cpu(&self, buf: &[f32]) {
-        assert!(buf.len() == self.size, "Must be exactly the same size!");
+        assert!(buf.len() <= self.size, "Overflow!");
         util::copy_to_gpu(self.ptr, buf.as_ptr(), self.size);
         self.report("Loaded from CPU");
     }
 
     pub fn write_to_cpu(&self, buf: &mut [f32]) {
-        assert!(buf.len() == self.size, "Must be exactly the same size!");
+        assert!(buf.len() <= self.size, "Overflow!");
         util::copy_from_gpu(buf.as_mut_ptr(), self.ptr, self.size);
         self.report("Wrote to CPU");
     }
