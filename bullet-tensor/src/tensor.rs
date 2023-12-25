@@ -137,7 +137,9 @@ impl TensorBatch {
         self.buf.write_to_cpu(buf);
     }
 
-    /// Single Linear-Transform:
+    /// Splat Batched Linear-Transform: Not Transposed * Not Transposed
+    ///
+    /// So called as it "splats" `a` implicitly into a batch.
     ///
     /// Computes y[i] = ax[i] on a batch of strided inputs, where
     /// - a is an `m x n` matrix, stored row-major (m columns, n rows).
@@ -147,7 +149,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn single_lt_nn(handle: cublasHandle_t, a: &Tensor, x: &TensorBatch, y: &TensorBatch) {
+    pub unsafe fn splat_lt_nn(handle: cublasHandle_t, a: &Tensor, x: &TensorBatch, y: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -166,7 +168,9 @@ impl TensorBatch {
         );
     }
 
-    /// Single Transposed-Linear-Transform:
+    /// Splat Batched Linear-Transform: Transposed * Not Transposed
+    ///
+    /// So called as it "splats" `a` implicitly into a batch.
     ///
     /// Computes x[i] = (a^T)y[i] on a batch of strided inputs, where
     /// - a is an `m x n` matrix, stored row-major (m columns, n rows).
@@ -176,7 +180,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn single_lt_tn(handle: cublasHandle_t, a: &Tensor, y: &TensorBatch, x: &TensorBatch) {
+    pub unsafe fn splat_lt_tn(handle: cublasHandle_t, a: &Tensor, y: &TensorBatch, x: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
         sgemm(
@@ -195,13 +199,13 @@ impl TensorBatch {
         );
     }
 
-    /// Multi Linear-Transform:
+    /// Batched Linear-Transform: Not Transposed * Not Transposed
     ///
     /// Computes y[i] = a[i]x[i] on a batch of strided inputs, where
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn multi_lt_nn(handle: cublasHandle_t, a: &TensorBatch, x: &TensorBatch, y: &TensorBatch) {
+    pub fn lt_nn(handle: cublasHandle_t, a: &TensorBatch, x: &TensorBatch, y: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -221,13 +225,13 @@ impl TensorBatch {
         );
     }
 
-    /// Multi Transposed-Linear-Transform:
+    /// Batched Linear-Transform: Transposed * Not Transposed
     ///
     /// Computes x[i] = (a[i]^T)y[i] on a batch of strided inputs, where
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn multi_lt_tn(handle: cublasHandle_t, a: &TensorBatch, y: &TensorBatch, x: &TensorBatch) {
+    pub fn lt_tn(handle: cublasHandle_t, a: &TensorBatch, y: &TensorBatch, x: &TensorBatch) {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
 
@@ -247,13 +251,13 @@ impl TensorBatch {
         );
     }
 
-    /// Multi Transposed-Linear-Transform:
+    /// Batched Linear-Transform: Not Transposed * Transposed
     ///
     /// Computes a[i] = y[i]x[i]^T on a batch of strided inputs, where
     /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
     /// - x[i] is an `m` dimensional vector.
     /// - y[i] is an `n` dimensional vector
-    pub fn multi_lt_nt(handle: cublasHandle_t, y: &TensorBatch, x: &TensorBatch, a: &TensorBatch) {
+    pub fn lt_nt(handle: cublasHandle_t, y: &TensorBatch, x: &TensorBatch, a: &TensorBatch) {
         let a_shape = a.shape();
         assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
         assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
@@ -303,14 +307,17 @@ impl TensorBatch {
         }
     }
 
-    pub fn affine(
-        _handle: cublasHandle_t,
-        _weights: &Tensor,
-        _inputs: &TensorBatch,
+    /// # Safety
+    /// `weights` must be initialised.
+    pub unsafe fn affine(
+        handle: cublasHandle_t,
+        weights: &Tensor,
+        inputs: &TensorBatch,
         _biases: &Tensor,
-        _outputs: &TensorBatch,
+        outputs: &TensorBatch,
     ) {
-        unimplemented!();
+        TensorBatch::splat_lt_nn(handle, weights, inputs, outputs);
+        //TensorBatch::splat_add(biases, outputs);
     }
 
     /// # Safety
@@ -324,10 +331,10 @@ impl TensorBatch {
         _biases_grad: &Tensor,
         weights_intermediate: &TensorBatch,
     ) {
-        TensorBatch::multi_lt_nt(handle, errors, inputs, weights_intermediate);
+        TensorBatch::lt_nt(handle, errors, inputs, weights_intermediate);
         //TensorBatch::reduce_add(weights_intermediate, weights_grad);
         //TensorBatch::reduce_add(errors, biases_grad);
-        TensorBatch::single_lt_tn(handle, weights, errors, inputs);
+        TensorBatch::splat_lt_tn(handle, weights, errors, inputs);
     }
 
     pub fn sigmoid_mse(&self, results: &TensorBatch, error: &GpuBuffer) {

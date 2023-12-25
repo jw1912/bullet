@@ -121,22 +121,6 @@ it is equivalent to `lr-step 1` with an appropriate `lr-gamma`.
 By default `lr-gamma` is set to 0.1, but no learning rate scheduler is chosen. It is highly
 recommended to have at least one learning rate drop during training.
 
-### CUDA
-
-Add `--cuda` to use CUDA, it will fail to compile if not available.
-Note that for small net sizes (generally unbucketed & hidden layer size < 256),
-CUDA may be slower than using the CPU.
-
-### AVX512
-
-Currently (at the time of writing) rustc does not emit avx512 via autovec, so if you have an avx512 cpu, switch to the nightly
-Rust channel and add the `--simd` flag to the run command to enable usage of hand-written SIMD.
-This comes with the caveat that hidden layer size must be a multiple of 32.
-
-As rust nightly is unstable
-and has a bunch of experimental compiler changes, there may be an overall diminished performance compared
-to compiling on stable, so I'd recommend testing the two on your machine.
-
 ### Resuming
 
 Every `save-rate` epochs and at the end of training, a quantised network is saved to `/nets`, and a checkpoint

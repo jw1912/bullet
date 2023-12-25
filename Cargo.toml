@@ -20,7 +20,6 @@ authors.workspace = true
 [dependencies]
 bullet-core = { path = "bullet-core" }
 bullet-tensor = { path = "bullet-tensor" }
-bullet-utils = { path = "bullet-utils" }
 
 [profile.release]
 panic = 'abort'

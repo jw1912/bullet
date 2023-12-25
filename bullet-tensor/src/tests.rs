@@ -91,7 +91,7 @@ fn tensor_lt() {
         a_gpu.calloc();
         a_gpu.load_from_cpu(&a);
         xs_gpu.load_from_cpu(&xs);
-        TensorBatch::single_lt_nn(handle, &a_gpu, &xs_gpu, &ys_gpu);
+        TensorBatch::splat_lt_nn(handle, &a_gpu, &xs_gpu, &ys_gpu);
 
         a_gpu.free();
 
@@ -114,7 +114,7 @@ fn tensor_lt() {
         a_gpu.load_from_cpu(&a);
         ys_gpu.load_from_cpu(&ys);
 
-        TensorBatch::single_lt_tn(handle, &a_gpu, &ys_gpu, &xs_gpu);
+        TensorBatch::splat_lt_tn(handle, &a_gpu, &ys_gpu, &xs_gpu);
 
         a_gpu.free();
 
@@ -175,7 +175,7 @@ fn tensor_multi_lt() {
 
         a_gpu.load_from_cpu(&a);
         xs_gpu.load_from_cpu(&xs);
-        TensorBatch::multi_lt_nn(handle, &a_gpu, &xs_gpu, &ys_gpu);
+        TensorBatch::lt_nn(handle, &a_gpu, &xs_gpu, &ys_gpu);
 
         let mut ys = [0.0; N * B];
         ys_gpu.write_to_cpu(&mut ys);
@@ -197,7 +197,7 @@ fn tensor_multi_lt() {
         a_gpu.load_from_cpu(&a);
         ys_gpu.load_from_cpu(&ys);
 
-        TensorBatch::multi_lt_tn(handle, &a_gpu, &ys_gpu, &xs_gpu);
+        TensorBatch::lt_tn(handle, &a_gpu, &ys_gpu, &xs_gpu);
 
         let mut xs = [0.0; M * B];
         xs_gpu.write_to_cpu(&mut xs);
@@ -277,7 +277,7 @@ fn tensor_lt_nt() {
     x_gpu.load_from_cpu(&x);
     y_gpu.load_from_cpu(&y);
 
-    TensorBatch::multi_lt_nt(handle, &y_gpu, &x_gpu, &a_gpu);
+    TensorBatch::lt_nt(handle, &y_gpu, &x_gpu, &a_gpu);
 
     let mut a = [0.0; M * N * B];
     a_gpu.write_to_cpu(&mut a);
