@@ -88,20 +88,20 @@ impl Tensor {
 
 pub struct TensorBatch {
     shape: Shape,
-    len: usize,
+    cap: usize,
     buf: GpuBuffer,
 }
 
 impl TensorBatch {
-    /// Creates a new tensor with given `shape` and `len`
-    /// length, with a zeroed buffer on the GPU
-    pub fn new(shape: Shape, len: usize) -> Self {
-        assert!(len > 0, "Cannot have a 0 sized batch!");
+    /// Creates a new tensor with given `shape` and `cap`
+    /// buffer length, with a zeroed buffer on the GPU
+    pub fn new(shape: Shape, cap: usize) -> Self {
+        assert!(cap > 0, "Cannot have a 0 sized batch!");
 
         Self {
             shape,
-            len,
-            buf: GpuBuffer::new(len * shape.size()),
+            cap,
+            buf: GpuBuffer::new(cap * shape.size()),
         }
     }
 
@@ -109,8 +109,8 @@ impl TensorBatch {
         self.shape
     }
 
-    pub fn len(&self) -> usize {
-        self.len
+    pub fn cap(&self) -> usize {
+        self.cap
     }
 
     pub fn is_empty(&self) -> bool {
@@ -225,7 +225,7 @@ impl TensorBatch {
         y: &TensorBatch,
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
-        assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
+        assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
         sgemm(
             handle,
@@ -257,7 +257,7 @@ impl TensorBatch {
         x: &TensorBatch,
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
-        assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
+        assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
         sgemm(
             handle,
@@ -291,8 +291,8 @@ impl TensorBatch {
         let a_shape = a.shape();
         assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
         assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
-        assert_eq!(x.len, y.len, "Not all tensor batches are the same length!");
-        assert_eq!(x.len, a.len, "Not all tensor batches are the same length!");
+        assert_eq!(x.cap(), y.cap(), "Not all tensor caps are the same length!");
+        assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
         let m = a_shape.cols() as c_int;
         let n = a_shape.rows() as c_int;
@@ -317,8 +317,8 @@ impl TensorBatch {
         out: &Self,
     ) {
         assert_eq!(inp.shape(), out.shape(), "Mismatched tensor shapes!");
-        assert_eq!(inp.len(), out.len(), "Mismatched cap sizes!");
-        assert!(batch_size <= inp.len());
+        assert_eq!(inp.cap(), out.cap(), "Mismatched cap sizes!");
+        assert!(batch_size <= inp.cap(), "Overflow!");
         unsafe {
             f(batch_size * inp.element_size(), inp.ptr(), out.ptr());
         }
@@ -389,7 +389,7 @@ impl TensorBatch {
 fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (c_int, c_int) {
     assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
     assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
-    assert_eq!(x.len, y.len, "Not all tensor batches are the same length!");
+    assert_eq!(x.cap(), y.cap(), "Not all tensor caps are the same length!");
 
     (a_shape.cols() as c_int, a_shape.rows() as c_int)
 }
