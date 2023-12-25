@@ -265,15 +265,11 @@ impl TensorBatch {
 
         sgemm2(
             handle,
-            cublasOperation_t::CUBLAS_OP_T,
             m,
             n,
             y.ptr(),
-            n,
             x.ptr(),
-            m,
             a.ptr(),
-            m,
             a.element_size() as c_int,
             x.len as c_int,
         );
@@ -399,15 +395,11 @@ fn sgemm(
 #[allow(clippy::too_many_arguments)]
 fn sgemm2(
     handle: cublasHandle_t,
-    transa: cublasOperation_t,
-    n: c_int,
     m: c_int,
+    n: c_int,
     y_ptr: *const f32,
-    y_ld: c_int,
     x_ptr: *const f32,
-    x_ld: c_int,
     a_ptr: *mut f32,
-    a_ld: c_int,
     a_str: c_int,
     batch_size: c_int,
 ) {
@@ -417,21 +409,21 @@ fn sgemm2(
     unsafe {
         cublasSgemmStridedBatched(
             handle,
-            transa,
             cublasOperation_t::CUBLAS_OP_N,
+            cublasOperation_t::CUBLAS_OP_T,
+            m,
             n,
             1,
-            m,
             &alpha,
             y_ptr,
-            y_ld,
-            y_ld.into(),
+            n,
+            n.into(),
             x_ptr,
-            x_ld,
-            x_ld.into(),
+            m,
+            m.into(),
             &beta,
             a_ptr,
-            a_ld,
+            m,
             a_str.into(),
             batch_size,
         );
