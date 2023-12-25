@@ -1,5 +1,5 @@
 use bullet_tensor::{
-    cublasHandle_t, device_synchronise, Activation, Optimiser, SparseTensor, Tensor, TensorBatch,
+    cublasHandle_t, device_synchronise, Activation, Optimiser, SparseTensor, Tensor, TensorBatch, GpuBuffer,
 };
 
 pub struct FeatureTransormer<T> {
@@ -38,10 +38,29 @@ pub struct Trainer<T> {
 }
 
 impl<T> Trainer<T> {
+    pub fn train_on_batch(
+        &self,
+        sparse_inputs: &SparseTensor,
+        results: &TensorBatch,
+        decay: f32,
+        rate: f32,
+        error: &GpuBuffer,
+    ) {
+        unsafe {
+            self.forward(sparse_inputs);
+            self.calc_errors(results, error);
+            self.backprop(sparse_inputs);
+            device_synchronise();
+        };
+
+        let adj = 2. / sparse_inputs.used() as f32;
+        self.optimiser.update(decay, adj, rate);
+    }
+
     /// # Safety
     /// It is undefined behaviour to call this if `sparse_inputs` is not
     /// properly initialised.
-    pub unsafe fn forward(&self, sparse_inputs: &SparseTensor) {
+    unsafe fn forward(&self, sparse_inputs: &SparseTensor) {
         SparseTensor::affine(
             &self.ft.weights,
             sparse_inputs,
@@ -63,15 +82,20 @@ impl<T> Trainer<T> {
 
             inputs = &node.outputs;
         }
-
-        device_synchronise();
     }
 
     /// # Safety
-    /// It is undefined behaviour to call this without previously calling,
-    /// `self.forward` and `self.calc_errors`, as well as if `sparse_inputs`
+    /// It is undefined behaviour to call this without previously calling
+    /// `self.forward`.
+    unsafe fn calc_errors(&self, results: &TensorBatch, error: &GpuBuffer) {
+        self.nodes.last().unwrap().outputs.sigmoid_mse(results, error);
+    }
+
+    /// # Safety
+    /// It is undefined behaviour to call this without previously calling
+    /// `self.forward` and `self.calc_errors()`, as well as if `sparse_inputs`
     /// is not properly initialised.
-    pub unsafe fn backprop(&self, sparse_inputs: &SparseTensor) {
+    unsafe fn backprop(&self, sparse_inputs: &SparseTensor) {
         let num_nodes = self.nodes.len();
 
         for node in (1..num_nodes).rev() {
@@ -86,8 +110,6 @@ impl<T> Trainer<T> {
             &self.ft.biases_grad,
             &self.ft.outputs,
         );
-
-        device_synchronise();
     }
 }
 

@@ -274,6 +274,17 @@ impl TensorBatch {
             Activation::SCReLU => Self::map(bindings::backpropSCReLU, inp, out),
         }
     }
+
+    pub fn sigmoid_mse(&self, results: &TensorBatch, error: &GpuBuffer) {
+        assert_eq!(error.size(), 1);
+        assert_eq!(self.shape(), results.shape());
+        assert_eq!(self.element_size(), results.element_size());
+
+        let size = self.num_elements();
+        unsafe {
+            bindings::sigmoidMSE(size, self.ptr(), results.ptr(), error.ptr());
+        }
+    }
 }
 
 fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (c_int, c_int) {
