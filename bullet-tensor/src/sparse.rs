@@ -41,15 +41,25 @@ impl SparseTensor {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.used = 0;
+    }
+
     pub fn used(&self) -> usize {
         self.used
     }
 
-    pub fn load_from_cpu(&mut self, inputs: &[u16]) {
-        assert!(inputs.len() <= self.cap * self.max_num_inputs);
+    pub fn append(&mut self, inputs: &[u16]) {
+        let num_inputs = inputs.len() / self.max_num_inputs;
+        assert!(self.used + num_inputs <= self.cap);
 
-        self.used = inputs.len();
-        util::copy_to_gpu(self.ptr, inputs.as_ptr(), inputs.len());
+        let used_space = self.used * self.max_num_inputs;
+
+        unsafe {
+            util::copy_to_gpu(self.ptr, inputs.as_ptr().add(used_space), inputs.len());
+        }
+
+        self.used += num_inputs;
     }
 
     /// Sparse Affine Transformation:

@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
-use bullet_core::inputs::InputType;
+use bulletformat::BulletFormat;
+use bullet_core::{inputs::InputType, data::BoardCUDA};
 use bullet_tensor::{
     cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser, SparseTensor,
     Tensor, TensorBatch, create_cublas_handle, Shape,
@@ -38,6 +39,11 @@ pub struct Trainer<T> {
     optimiser: Optimiser,
     ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
+    our_inputs: SparseTensor,
+    opp_inputs: SparseTensor,
+    results: TensorBatch,
+    error: GpuBuffer,
+    used: usize,
 }
 
 impl<T: InputType> std::fmt::Display for Trainer<T> {
@@ -51,50 +57,64 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 }
 
 impl<T> Trainer<T> {
-    fn new(
-        handle: cublasHandle_t,
-        optimiser: Optimiser,
-        ft: FeatureTransormer<T>,
-        nodes: Vec<Node>,
-    ) -> Self {
-        Self {
-            handle,
-            optimiser,
-            ft,
-            nodes,
+    pub fn prep_for_epoch(&mut self) {
+        self.error.load_from_cpu(&[0.0]);
+    }
+
+    pub fn error(&self) -> f32 {
+        let mut buf = [0.0];
+        self.error.write_to_cpu(&mut buf);
+        buf[0]
+    }
+
+    pub fn clear_data(&mut self) {
+        self.used = 0;
+        self.our_inputs.clear();
+        self.opp_inputs.clear();
+    }
+
+    pub fn append_data(
+        &mut self,
+        our_inputs: &[BoardCUDA],
+        opp_inputs: &[BoardCUDA],
+        results: &[f32]
+    ) {
+        unsafe {
+            let our = std::slice::from_raw_parts(our_inputs.as_ptr().cast(), our_inputs.len() * BoardCUDA::len());
+            let opp = std::slice::from_raw_parts(opp_inputs.as_ptr().cast(), opp_inputs.len() * BoardCUDA::len());
+
+            self.our_inputs.append(our);
+            self.opp_inputs.append(opp);
+            self.results.offset_load_from_cpu(results, self.used);
+            self.used += results.len();
         }
     }
 
-    pub fn train_on_batch(
-        &self,
-        sparse_inputs: &SparseTensor,
-        results: &TensorBatch,
-        decay: f32,
-        rate: f32,
-        error: &GpuBuffer,
-    ) {
-        let batch_size = sparse_inputs.used();
+    pub fn batch_size(&self) -> usize {
+        self.ft.outputs.cap()
+    }
 
+    pub fn train_on_batch(&self, decay: f32, rate: f32) {
         unsafe {
-            self.forward(sparse_inputs);
-            self.calc_errors(batch_size, results, error);
-            self.backprop(sparse_inputs);
+            self.forward();
+            self.calc_errors();
+            self.backprop();
             device_synchronise();
         };
 
-        let adj = 2. / sparse_inputs.used() as f32;
+        let adj = 2. / self.our_inputs.used() as f32;
         self.optimiser.update(decay, adj, rate);
     }
 
     /// # Safety
-    /// It is undefined behaviour to call this if `sparse_inputs` is not
+    /// It is undefined behaviour to call this if `our_inputs` is not
     /// properly initialised.
-    unsafe fn forward(&self, sparse_inputs: &SparseTensor) {
-        let batch_size = sparse_inputs.used();
+    unsafe fn forward(&self) {
+        let batch_size = self.our_inputs.used();
 
         SparseTensor::affine(
             &self.ft.weights,
-            sparse_inputs,
+            &self.our_inputs,
             &self.ft.biases,
             &self.ft.outputs,
         );
@@ -127,23 +147,24 @@ impl<T> Trainer<T> {
     /// # Safety
     /// It is undefined behaviour to call this without previously calling
     /// `self.forward`.
-    unsafe fn calc_errors(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {
+    unsafe fn calc_errors(&self) {
+        let batch_size = self.our_inputs.used();
         let output_layer = self.nodes.last().unwrap();
-        assert_eq!(output_layer.outputs.shape(), results.shape());
+        assert_eq!(output_layer.outputs.shape(), self.results.shape());
 
         self.nodes
             .last()
             .unwrap()
             .outputs
-            .sigmoid_mse(batch_size, results, error);
+            .sigmoid_mse(batch_size, &self.results, &self.error);
     }
 
     /// # Safety
     /// It is undefined behaviour to call this without previously calling
-    /// `self.forward` and `self.calc_errors()`, as well as if `sparse_inputs`
+    /// `self.forward` and `self.calc_errors()`, as well as if `our_inputs`
     /// is not properly initialised.
-    unsafe fn backprop(&self, sparse_inputs: &SparseTensor) {
-        let batch_size = sparse_inputs.used();
+    unsafe fn backprop(&self) {
+        let batch_size = self.our_inputs.used();
         let num_nodes = self.nodes.len();
 
         for node in (1..num_nodes).rev() {
@@ -159,7 +180,7 @@ impl<T> Trainer<T> {
 
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
-            sparse_inputs,
+            &self.our_inputs,
             &self.ft.biases_grad,
             &self.ft.outputs,
         );
@@ -328,7 +349,35 @@ impl<T: InputType> TrainerBuilder<T> {
                 inp_size = size;
             }
 
-            Trainer::new(create_cublas_handle(), opt, ft, nodes)
+            let our_inp = SparseTensor::uninit(
+                batch_size,
+                T::SIZE,
+                T::RequiredDataType::MAX_FEATURES,
+                self.ft_out_size,
+            );
+
+            let opp_inp = SparseTensor::uninit(
+                batch_size,
+                T::SIZE,
+                T::RequiredDataType::MAX_FEATURES,
+                self.ft_out_size,
+            );
+
+            let last_layer = nodes.last().unwrap();
+            let res = TensorBatch::new(last_layer.outputs.shape(), batch_size);
+            let err = GpuBuffer::new(1);
+
+            Trainer {
+                handle: create_cublas_handle(),
+                optimiser: opt,
+                ft,
+                nodes,
+                our_inputs: our_inp,
+                opp_inputs: opp_inp,
+                results: res,
+                error: err,
+                used: 0,
+            }
         }
     }
 }

@@ -18,6 +18,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
 bullet-core = { path = "bullet-core" }
 bullet-tensor = { path = "bullet-tensor" }
 

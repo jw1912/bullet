@@ -202,7 +202,7 @@ fn tensor_sparse_affine() {
         weights.load_from_cpu(&a_t);
         biases.load_from_cpu(&b);
 
-        inputs.load_from_cpu(&xs);
+        inputs.append(&xs);
 
         SparseTensor::affine(&weights, &inputs, &biases, &outputs);
 

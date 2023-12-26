@@ -13,9 +13,6 @@ pub type Data = <Input as inputs::InputType>::RequiredDataType;
 ///  - ChessBucketsMirrored
 pub type Input = inputs::Chess768;
 
-/// Size of hidden layer.
-pub const HIDDEN: usize = 512;
-
 /// Applicable only with `Input` option
 /// `ChessBuckets`, it is indexed from white POV,
 /// so index 0 corresponds to A1, 7 corresponds to H1,

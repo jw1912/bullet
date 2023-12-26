@@ -133,6 +133,10 @@ impl TensorBatch {
         self.buf.load_from_cpu(buf);
     }
 
+    pub fn offset_load_from_cpu(&self, buf: &[f32], offset: usize) {
+        self.buf.offset_load_from_cpu(buf, offset);
+    }
+
     pub fn write_to_cpu(&self, buf: &mut [f32]) {
         self.buf.write_to_cpu(buf);
     }
