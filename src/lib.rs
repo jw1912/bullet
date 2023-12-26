@@ -104,7 +104,6 @@ pub fn run_training(
 
         let net_path = format!("net_test-epoch{epoch}");
 
-
         println!("Saved [{net_path}]");
     }
 }

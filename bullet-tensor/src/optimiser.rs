@@ -1,4 +1,4 @@
-use crate::{bindings, GpuBuffer};
+use crate::{bindings, GpuBuffer, util};
 
 /// A struct intended to hold all network weights and biases
 /// needed for training.
@@ -19,6 +19,10 @@ impl Optimiser {
             velocity: GpuBuffer::new(size),
             gradients: GpuBuffer::new(size),
         }
+    }
+
+    pub fn zero_gradient(&self) {
+        util::set_zero(self.gradients.ptr(), self.gradients.size());
     }
 
     /// Pointer to network buffer starting at `network.ptr() + index`.
@@ -48,7 +52,11 @@ impl Optimiser {
         }
     }
 
-    pub fn load_from_cpu(&mut self, network: &[f32], momentum: &[f32], velocity: &[f32]) {
+    pub fn load_weights_from_cpu(&self, network: &[f32]) {
+        self.network.load_from_cpu(network);
+    }
+
+    pub fn load_from_cpu(&self, network: &[f32], momentum: &[f32], velocity: &[f32]) {
         self.network.load_from_cpu(network);
         self.momentum.load_from_cpu(momentum);
         self.velocity.load_from_cpu(velocity);

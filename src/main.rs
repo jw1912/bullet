@@ -5,7 +5,7 @@ use bullet_tensor::{Activation, device_synchronise};
 fn main() {
     let mut net = TrainerBuilder::<Chess768>::default()
         .set_batch_size(16_384)
-        .ft(512)
+        .ft(32)
         .activate(Activation::ReLU)
         .add_layer(1)
         .build();

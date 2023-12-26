@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bulletformat::BulletFormat;
-use bullet_core::{inputs::InputType, data::BoardCUDA};
+use bullet_core::{inputs::InputType, data::BoardCUDA, rng::Rand};
 use bullet_tensor::{
     cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser, SparseTensor,
     Tensor, TensorBatch, create_cublas_handle, Shape,
@@ -97,6 +97,8 @@ impl<T> Trainer<T> {
     }
 
     pub fn train_on_batch(&self, decay: f32, rate: f32) {
+        self.optimiser.zero_gradient();
+
         unsafe {
             self.forward();
             self.calc_errors();
@@ -368,6 +370,15 @@ impl<T: InputType> TrainerBuilder<T> {
             let last_layer = nodes.last().unwrap();
             let res = TensorBatch::new(last_layer.outputs.shape(), batch_size);
             let err = GpuBuffer::new(1);
+
+            let mut net = vec![0.0; net_size];
+            let mut rng = Rand::default();
+
+            for val in net.iter_mut() {
+                *val = rng.rand(0.01);
+            }
+
+            opt.load_weights_from_cpu(&net);
 
             Trainer {
                 handle: create_cublas_handle(),

@@ -14,6 +14,11 @@ fn tensor_activate() {
     y.write_to_cpu(&mut xs);
 
     assert_eq!(xs, [1.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0]);
+
+    TensorBatch::backprop_activation(3, Activation::CReLU, &y, &x);
+    x.write_to_cpu(&mut xs);
+
+    assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
 }
 
 fn cpu_linear<const M: usize, const N: usize, const MN: usize>(
@@ -190,7 +195,7 @@ fn tensor_sparse_affine() {
 
     let xs = [0, 1, 2];
 
-    let ys_gpu = unsafe {
+    unsafe {
         let mut weights = Tensor::uninit(Shape::new(N, M));
         let mut biases = Tensor::uninit(Shape::new(1, N));
         let mut inputs = SparseTensor::uninit(B, M, 1, N);
@@ -209,14 +214,30 @@ fn tensor_sparse_affine() {
         let mut ys = [0.0; N * B];
         outputs.write_to_cpu(&mut ys);
 
+        let expected = [1.5, -0.5, 1.5, 0.5, 0.5, 0.5];
+        assert_eq!(expected, ys);
+
+        let mut wg = Tensor::uninit(Shape::new(N, M));
+        let mut bg = Tensor::uninit(Shape::new(1, N));
+
+        wg.calloc();
+        bg.calloc();
+
+        SparseTensor::affine_backprop(&wg, &inputs, &bg, &outputs);
+
+        let mut wbuf = [0.0; 6];
+        wg.write_to_cpu(&mut wbuf);
+        assert_eq!(wbuf, expected);
+
+        let mut bbuf = [0.0; 2];
+        bg.write_to_cpu(&mut bbuf);
+        assert_eq!(bbuf, [3.5, 0.5]);
+
         weights.free();
         biases.free();
-
-        ys
-    };
-
-    let expected = [1.5, -0.5, 1.5, 0.5, 0.5, 0.5];
-    assert_eq!(expected, ys_gpu);
+        wg.free();
+        bg.free();
+    }
 }
 
 #[test]
@@ -297,5 +318,63 @@ fn tensor_splat_add() {
 
     unsafe {
         inp.free();
+    }
+}
+
+#[test]
+fn affine() {
+    let handle = create_cublas_handle();
+    let inps = [1.0, 2.0, -0.5];
+    let ws = [
+        1.0, 0.0, 1.0,
+        0.0, 1.0, 0.0,
+        1.0, 0.0, 1.0,
+    ];
+    let bs = [0.1, 0.2, 0.3];
+
+    unsafe {
+        let mut w = Tensor::uninit(Shape::new(3, 3));
+        let mut b = Tensor::uninit(Shape::new(1, 3));
+        let x = TensorBatch::new(Shape::new(1, 3), 1);
+        let y = TensorBatch::new(Shape::new(1, 3), 1);
+
+        w.calloc();
+        b.calloc();
+
+        w.load_from_cpu(&ws);
+        b.load_from_cpu(&bs);
+
+        x.load_from_cpu(&inps);
+
+        TensorBatch::affine(handle, 1, &w, &x, &b, &y);
+
+        let mut buf = [0.0; 3];
+        y.write_to_cpu(&mut buf);
+        assert_eq!(buf, [0.6, 2.2, 0.8]);
+
+        let mut wg = Tensor::uninit(Shape::new(3, 3));
+        let mut bg = Tensor::uninit(Shape::new(1, 3));
+        let wi = TensorBatch::new(Shape::new(3, 3), 1);
+
+        wg.calloc();
+        bg.calloc();
+
+        TensorBatch::backprop_affine(handle, 1, &w, &y, &x, &wg, &bg, &wi);
+
+        x.write_to_cpu(&mut buf);
+        assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);
+
+        let mut wbuf = [0.0; 9];
+        wg.write_to_cpu(&mut wbuf);
+        assert_eq!(wbuf, [0.6, 1.2, -0.3, 2.2, 4.4, -1.1, 0.8, 1.6, -0.4]);
+
+        let mut bbuf = [0.0; 3];
+        bg.write_to_cpu(&mut bbuf);
+        assert_eq!(bbuf, [0.6, 2.2, 0.8]);
+
+        w.free();
+        b.free();
+        wg.free();
+        bg.free();
     }
 }
