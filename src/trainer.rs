@@ -89,6 +89,8 @@ impl<T> Trainer<T> {
         opp_inputs: &[BoardCUDA],
         results: &[f32]
     ) {
+        assert_eq!(our_inputs.len(), opp_inputs.len());
+        assert_eq!(opp_inputs.len(), results.len());
         unsafe {
             let our = std::slice::from_raw_parts(our_inputs.as_ptr().cast(), our_inputs.len() * BoardCUDA::len());
             let opp = std::slice::from_raw_parts(opp_inputs.as_ptr().cast(), opp_inputs.len() * BoardCUDA::len());
@@ -361,14 +363,16 @@ impl<T: InputType> TrainerBuilder<T> {
                 inp_size = size;
             }
 
-            let our_inp = SparseTensor::uninit(
+            assert_eq!(offset, net_size);
+
+            let our_inputs = SparseTensor::uninit(
                 batch_size,
                 T::SIZE,
                 T::RequiredDataType::MAX_FEATURES,
                 self.ft_out_size,
             );
 
-            let opp_inp = SparseTensor::uninit(
+            let opp_inputs = SparseTensor::uninit(
                 batch_size,
                 T::SIZE,
                 T::RequiredDataType::MAX_FEATURES,
@@ -376,8 +380,8 @@ impl<T: InputType> TrainerBuilder<T> {
             );
 
             let last_layer = nodes.last().unwrap();
-            let res = TensorBatch::new(last_layer.outputs.shape(), batch_size);
-            let err = GpuBuffer::new(1);
+            let results = TensorBatch::new(last_layer.outputs.shape(), batch_size);
+            let error = GpuBuffer::new(1);
 
             let mut net = vec![0.0; net_size];
             let mut rng = Rand::default();
@@ -393,10 +397,10 @@ impl<T: InputType> TrainerBuilder<T> {
                 optimiser: opt,
                 ft,
                 nodes,
-                our_inputs: our_inp,
-                opp_inputs: opp_inp,
-                results: res,
-                error: err,
+                our_inputs,
+                opp_inputs,
+                results,
+                error,
                 used: 0,
             }
         }
