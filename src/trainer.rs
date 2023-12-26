@@ -59,9 +59,11 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 impl<T> Trainer<T> {
     pub fn prep_for_epoch(&mut self) {
         self.error.load_from_cpu(&[0.0]);
+        device_synchronise();
     }
 
     pub fn error(&self) -> f32 {
+        device_synchronise();
         let mut buf = [0.0];
         self.error.write_to_cpu(&mut buf);
         buf[0]

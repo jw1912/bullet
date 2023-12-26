@@ -56,7 +56,7 @@ impl SparseTensor {
         let used_space = self.used * self.max_num_inputs;
 
         unsafe {
-            util::copy_to_gpu(self.ptr, inputs.as_ptr().add(used_space), inputs.len());
+            util::copy_to_gpu(self.ptr.add(used_space), inputs.as_ptr(), inputs.len());
         }
 
         self.used += num_inputs;

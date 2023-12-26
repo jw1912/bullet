@@ -23,7 +23,11 @@ pub fn run_training(
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
 
+    println!("Positions: {num}");
+
     let timer = Instant::now();
+
+    device_synchronise();
 
     for epoch in 1..=max_epochs {
         trainer.prep_for_epoch();
@@ -72,6 +76,8 @@ pub fn run_training(
             });
 
             trainer.train_on_batch(0.01, 0.001);
+
+            device_synchronise();
 
             if finished_batches % 128 == 0 {
                 let pct = finished_batches as f32 / batches as f32 * 100.0;
