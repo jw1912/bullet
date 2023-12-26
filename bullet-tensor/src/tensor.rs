@@ -349,11 +349,11 @@ impl TensorBatch {
         batch_size: usize,
         weights: &Tensor,
         inputs: &TensorBatch,
-        _biases: &Tensor,
+        biases: &Tensor,
         outputs: &TensorBatch,
     ) {
         TensorBatch::splat_lt_nn(handle, batch_size, weights, inputs, outputs);
-        //TensorBatch::splat_add(batch_size, biases, outputs);
+        TensorBatch::splat_add(batch_size, biases, outputs);
     }
 
     /// # Safety
@@ -365,13 +365,13 @@ impl TensorBatch {
         weights: &Tensor,
         errors: &TensorBatch,
         inputs: &TensorBatch,
-        _weights_grad: &Tensor,
-        _biases_grad: &Tensor,
+        weights_grad: &Tensor,
+        biases_grad: &Tensor,
         weights_intermediate: &TensorBatch,
     ) {
         TensorBatch::lt_nt(handle, batch_size, errors, inputs, weights_intermediate);
-        //TensorBatch::reduce_add(batch_size, weights_intermediate, weights_grad);
-        //TensorBatch::reduce_add(batch_size, errors, biases_grad);
+        TensorBatch::reduce_add(batch_size, weights_intermediate, weights_grad);
+        TensorBatch::reduce_add(batch_size, errors, biases_grad);
         TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
     }
 
