@@ -47,6 +47,7 @@ fn main() {
         "mse",
         "reduce_add",
         "sparse_affine",
+        "splat_add",
         "update",
     ]
     .iter()

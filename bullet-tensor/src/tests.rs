@@ -274,3 +274,28 @@ fn tensor_reduce_add() {
         out.free();
     }
 }
+
+#[test]
+fn tensor_splat_add() {
+    let splat = [0.5, -1.0, 1.0];
+    let vecs = [1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.5, 1.0, 1.0];
+
+    let mut inp = unsafe { Tensor::uninit(Shape::new(1, 3)) };
+    inp.calloc();
+    inp.load_from_cpu(&splat);
+
+    let out = TensorBatch::new(Shape::new(1, 3), 7);
+    out.load_from_cpu(&vecs);
+
+    unsafe {
+        TensorBatch::splat_add(4, &inp, &out);
+    }
+
+    let mut buf = [0.0; 12];
+    out.write_to_cpu(&mut buf);
+    assert_eq!(buf, [1.5, 0.0, 1.0, 1.5, 0.0, 1.0, 1.5, 0.0, 2.0, 2.0, 0.0, 2.0]);
+
+    unsafe {
+        inp.free();
+    }
+}
