@@ -5,7 +5,8 @@ use crate::util;
 static ALLOC_ID: AtomicUsize = AtomicUsize::new(0);
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
-/// Managed memory buffer of single-precision floats on the GPU.
+/// Managed memory buffer of single-precision floats on the GPU.#
+#[derive(Debug)]
 pub struct GpuBuffer {
     size: usize,
     ptr: *mut f32,

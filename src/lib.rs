@@ -1,3 +1,3 @@
 mod trainer;
 
-pub use trainer::{Affine, Operation, Trainer};
+pub use trainer::{Trainer, TrainerBuilder};

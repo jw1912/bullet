@@ -9,6 +9,7 @@ use crate::{
 /// This data type does not own the memory it points to,
 /// it must be manually allocated and freed, or used to
 /// borrow data only.
+#[derive(Debug)]
 pub struct Tensor {
     shape: Shape,
     ptr: *mut f32,
@@ -86,6 +87,7 @@ impl Tensor {
     }
 }
 
+#[derive(Debug)]
 pub struct TensorBatch {
     shape: Shape,
     cap: usize,
