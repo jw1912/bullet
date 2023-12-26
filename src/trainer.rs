@@ -128,6 +128,9 @@ impl<T> Trainer<T> {
     /// It is undefined behaviour to call this without previously calling
     /// `self.forward`.
     unsafe fn calc_errors(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {
+        let output_layer = self.nodes.last().unwrap();
+        assert_eq!(output_layer.outputs.shape(), results.shape());
+
         self.nodes
             .last()
             .unwrap()
