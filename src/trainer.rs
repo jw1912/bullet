@@ -69,6 +69,18 @@ impl<T> Trainer<T> {
         buf[0]
     }
 
+    pub fn net_size(&self) -> usize {
+        self.optimiser.size()
+    }
+
+    pub fn write_weights_to_cpu(&self, buf: &mut [f32]) {
+        self.optimiser.write_weights_to_buffer(buf);
+    }
+
+    pub fn write_gradients_to_cpu(&self, buf: &mut [f32]) {
+        self.optimiser.write_gradients_to_buffer(buf);
+    }
+
     pub fn clear_data(&mut self) {
         self.used = 0;
         self.our_inputs.clear();

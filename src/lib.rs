@@ -39,7 +39,7 @@ pub fn run_training(
         loader.map_batches_threaded_loading(batch_size, |batch| {
             trainer.clear_data();
             let batch_size = batch.len();
-            let chunk_size = batch.len() / threads;
+            let chunk_size = (batch.len() + threads - 1) / threads;
 
             device_synchronise();
 

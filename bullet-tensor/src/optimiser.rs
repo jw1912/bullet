@@ -21,6 +21,10 @@ impl Optimiser {
         }
     }
 
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
     pub fn zero_gradient(&self) {
         util::set_zero(self.gradients.ptr(), self.gradients.size());
     }
@@ -64,6 +68,10 @@ impl Optimiser {
 
     pub fn write_weights_to_buffer(&self, buf: &mut [f32]) {
         self.network.write_to_cpu(buf);
+    }
+
+    pub fn write_gradients_to_buffer(&self, buf: &mut [f32]) {
+        self.gradients.write_to_cpu(buf);
     }
 
     pub fn write_to_cpu(&self, network: &mut [f32], momentum: &mut [f32], velocity: &mut [f32]) {
