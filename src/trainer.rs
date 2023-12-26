@@ -461,5 +461,16 @@ mod test {
             assert_eq!(wbuf[0], 0.0);
             assert_eq!(wbuf[1], 7.192903e-5);
         }
+
+        trainer.train_on_batch(0.01, 0.001);
+        unsafe {
+            let mut outw = Tensor::uninit(Shape::new(2, 1));
+            outw.set_ptr(trainer.optimiser.gradients_offset(323 * 32 + 31));
+
+            let mut wbuf = [0.0; 2];
+            outw.write_to_cpu(&mut wbuf);
+            assert_eq!(wbuf[0], 0.0);
+            assert_eq!(wbuf[1], 7.192903e-5);
+        }
     }
 }
