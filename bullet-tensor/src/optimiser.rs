@@ -42,10 +42,11 @@ impl Optimiser {
     }
 
     pub fn update(&self, decay: f32, adj: f32, rate: f32) {
+        let decay_gamma = 1.0 - decay * rate;
         unsafe {
             bindings::updateWeights(
                 self.size,
-                decay,
+                decay_gamma,
                 adj,
                 rate,
                 self.network.ptr(),
