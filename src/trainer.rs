@@ -166,9 +166,7 @@ impl<T> Trainer<T> {
         let output_layer = self.nodes.last().unwrap();
         assert_eq!(output_layer.outputs.shape(), self.results.shape());
 
-        self.nodes
-            .last()
-            .unwrap()
+        output_layer
             .outputs
             .sigmoid_mse(batch_size, &self.results, &self.error);
     }
@@ -404,6 +402,64 @@ impl<T: InputType> TrainerBuilder<T> {
                 error,
                 used: 0,
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use bullet_core::inputs::Chess768;
+
+    #[test]
+    fn train() {
+        let mut trainer = TrainerBuilder::<Chess768>::default()
+            .set_batch_size(1)
+            .ft(32)
+            .activate(Activation::ReLU)
+            .add_layer(1)
+            .build();
+
+        let buf = vec![0.01; trainer.net_size()];
+
+        trainer.optimiser.load_weights_from_cpu(&buf);
+
+        let bfmt = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.5".parse().unwrap();
+        let mut our_inputs = Vec::new();
+        let mut opp_inputs = Vec::new();
+        let mut results = Vec::new();
+        BoardCUDA::push(&bfmt, &mut our_inputs, &mut opp_inputs, &mut results, 0.5, 1.0 / 400.0);
+        trainer.append_data(&our_inputs, &opp_inputs, &results);
+
+        unsafe {
+            trainer.forward();
+        }
+
+        let mut out = [0.0];
+        trainer.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
+        assert!(out[0] - 0.33 < 0.00001);
+
+        unsafe {
+            trainer.calc_errors();
+        }
+
+        let sig = 1.0 / (1.0 + (-out[0]).exp());
+        let err = sig * (1.0 - sig) * (sig - 0.5);
+
+        trainer.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
+        device_synchronise();
+
+        assert!(out[0] - err < 0.00001);
+
+        unsafe {
+            trainer.backprop();
+            let mut outw = Tensor::uninit(Shape::new(2, 1));
+            outw.set_ptr(trainer.optimiser.gradients_offset(323 * 32 + 31));
+
+            let mut wbuf = [0.0; 2];
+            outw.write_to_cpu(&mut wbuf);
+            assert_eq!(wbuf[0], 0.0);
+            assert_eq!(wbuf[1], 7.192903e-5);
         }
     }
 }
