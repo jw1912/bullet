@@ -1,5 +1,5 @@
 use crate::{
-    create_cublas_handle, panic_if_cuda_error, Activation, Shape, SparseTensor, Tensor, TensorBatch,
+    create_cublas_handle, panic_if_cuda_error, Activation, Shape, SparseTensor, Tensor, TensorBatch, GpuBuffer,
 };
 
 #[test]
@@ -376,5 +376,31 @@ fn affine() {
         b.free();
         wg.free();
         bg.free();
+    }
+}
+
+#[test]
+fn mse() {
+    let out = [1.5, 0.0, 1.0];
+    let res = [0.5, 0.5, 0.5];
+
+    let error = GpuBuffer::new(1);
+
+    let x = TensorBatch::new(Shape::new(1, 1), 9);
+    x.load_from_cpu(&out);
+
+    let r = TensorBatch::new(Shape::new(1, 1), 9);
+    r.load_from_cpu(&res);
+
+    x.sigmoid_mse(3, &r, &error);
+
+    let mut buf = [0.0; 3];
+    x.write_to_cpu(&mut buf);
+
+    for (e, (&o, &r)) in buf.iter().zip(out.iter().zip(res.iter())) {
+        let sig = 1.0 / (1.0 + (-o).exp());
+
+        let diff = e - (sig - r) * sig * (1.0 - sig);
+        assert!(diff.abs() < 0.00001);
     }
 }

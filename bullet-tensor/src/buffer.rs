@@ -50,7 +50,6 @@ impl GpuBuffer {
     }
 
     pub fn ptr(&self) -> *mut f32 {
-        self.report("Accessed");
         self.ptr
     }
 

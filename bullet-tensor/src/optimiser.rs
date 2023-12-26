@@ -70,10 +70,6 @@ impl Optimiser {
         self.network.write_to_cpu(buf);
     }
 
-    pub fn write_gradients_to_buffer(&self, buf: &mut [f32]) {
-        self.gradients.write_to_cpu(buf);
-    }
-
     pub fn write_to_cpu(&self, network: &mut [f32], momentum: &mut [f32], velocity: &mut [f32]) {
         self.network.write_to_cpu(network);
         self.momentum.write_to_cpu(momentum);
