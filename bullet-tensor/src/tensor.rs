@@ -375,6 +375,15 @@ impl TensorBatch {
         TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
     }
 
+    /// # Safety
+    /// `out` must be pointing to valid allocated memory.
+    pub unsafe fn reduce_add(batch_size: usize, inp: &TensorBatch, out: &Tensor) {
+        assert_eq!(inp.shape(), out.shape());
+        bindings::reduceAdd(batch_size, inp.element_size(), inp.ptr(), out.ptr());
+        let err = bindings::cudaGetLastError();
+        println!("{err:?}");
+    }
+
     pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {
         assert_eq!(error.size(), 1);
         assert_eq!(self.shape(), results.shape());

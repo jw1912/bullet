@@ -282,3 +282,27 @@ fn tensor_lt_nt() {
         ]
     );
 }
+
+#[test]
+fn tensor_reduce_add() {
+    let vecs = [
+        1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0,
+    ];
+
+    let inp = TensorBatch::new(Shape::new(1, 3), 7);
+    inp.load_from_cpu(&vecs);
+
+    let mut out = unsafe { Tensor::uninit(Shape::new(1, 3)) };
+    out.calloc();
+
+    unsafe { TensorBatch::reduce_add(3, &inp, &out); }
+
+    let mut buf = [0.0; 3];
+    out.write_to_cpu(&mut buf);
+    assert_eq!(buf, [3.0, 3.0, 3.0]);
+
+    unsafe { out.free(); }
+}

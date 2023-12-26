@@ -41,7 +41,14 @@ fn main() {
 
     println!("cargo:rerun-if-changed=./kernels");
 
-    let files: Vec<String> = ["backprops", "bufops", "sparse_affine", "update"]
+    let files: Vec<String> = [
+        "backprops",
+        "bufops",
+        "mse",
+        "reduce_add",
+        "sparse_affine",
+        "update",
+        ]
         .iter()
         .map(|s| format!("./kernels/{s}.cu"))
         .collect();
