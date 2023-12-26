@@ -48,10 +48,10 @@ fn main() {
         "reduce_add",
         "sparse_affine",
         "update",
-        ]
-        .iter()
-        .map(|s| format!("./kernels/{s}.cu"))
-        .collect();
+    ]
+    .iter()
+    .map(|s| format!("./kernels/{s}.cu"))
+    .collect();
 
     cc::Build::new()
         .cuda(true)
