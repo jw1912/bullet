@@ -17,6 +17,6 @@ mod test {
             .add_layer(1)
             .build();
 
-        println!("{net}");
+        println!("Network Architecture: {net}");
     }
 }
