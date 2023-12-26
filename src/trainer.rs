@@ -270,6 +270,7 @@ impl<T> TrainerBuilder<T> {
     }
 
     pub fn ft(mut self, size: usize) -> Self {
+        assert!(self.nodes.is_empty());
         self.ft_out_size = size;
         self
     }
