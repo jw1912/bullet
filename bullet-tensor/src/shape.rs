@@ -4,6 +4,12 @@ pub struct Shape {
     rows: usize,
 }
 
+impl std::fmt::Display for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} x {}", self.cols, self.rows)
+    }
+}
+
 impl std::ops::Mul<Shape> for Shape {
     type Output = Shape;
     fn mul(self, rhs: Shape) -> Self::Output {

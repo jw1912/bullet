@@ -11,6 +11,7 @@ pub trait InputType {
     ) -> (usize, usize);
 }
 
+#[derive(Debug)]
 pub struct Ataxx147;
 impl InputType for Ataxx147 {
     type RequiredDataType = AtaxxBoard;
@@ -29,6 +30,7 @@ impl InputType for Ataxx147 {
     }
 }
 
+#[derive(Debug)]
 pub struct Chess768;
 impl InputType for Chess768 {
     type RequiredDataType = ChessBoard;
@@ -59,6 +61,7 @@ const fn get_num_buckets<const N: usize>(arr: [usize; N]) -> usize {
     max + 1
 }
 
+#[derive(Debug)]
 pub struct ChessBuckets;
 impl ChessBuckets {
     const BUCKETING: [usize; 64] = crate::BUCKETS;
@@ -90,6 +93,7 @@ impl InputType for ChessBuckets {
     }
 }
 
+#[derive(Debug)]
 pub struct ChessBucketsMirrored;
 impl ChessBucketsMirrored {
     const BUCKETING: [usize; 32] = crate::BUCKETS_MIRRORED;

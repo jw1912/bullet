@@ -6,7 +6,6 @@ use bullet_tensor::{
     Tensor, TensorBatch, create_cublas_handle, Shape,
 };
 
-#[derive(Debug)]
 struct FeatureTransormer<T> {
     marker: PhantomData<T>,
     weights: Tensor,
@@ -16,7 +15,6 @@ struct FeatureTransormer<T> {
     outputs: TensorBatch,
 }
 
-#[derive(Debug)]
 struct Affine {
     weights: Tensor,
     biases: Tensor,
@@ -25,24 +23,31 @@ struct Affine {
     weights_intermediate: TensorBatch,
 }
 
-#[derive(Debug)]
 enum Operation {
     Activate(Activation),
     Affine(Affine),
 }
 
-#[derive(Debug)]
 struct Node {
     outputs: TensorBatch,
     op: Operation,
 }
 
-#[derive(Debug)]
 pub struct Trainer<T> {
     handle: cublasHandle_t,
     optimiser: Optimiser,
     ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
+}
+
+impl<T: InputType> std::fmt::Display for Trainer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", T::SIZE)?;
+        for node in &self.nodes {
+            write!(f, " -> {}", node.outputs.shape().rows())?;
+        }
+        Ok(())
+    }
 }
 
 impl<T> Trainer<T> {
@@ -182,19 +187,16 @@ fn backprop_single(
     }
 }
 
-#[derive(Debug)]
 enum OpType {
     Activate(Activation),
     Affine,
 }
 
-#[derive(Debug)]
 struct NodeType {
     size: usize,
     op: OpType,
 }
 
-#[derive(Debug)]
 pub struct TrainerBuilder<T> {
     marker: PhantomData<T>,
     batch_size: usize,
@@ -281,7 +283,7 @@ impl<T: InputType> TrainerBuilder<T> {
 
             ft.biases.set_ptr(opt.weights_offset(offset));
             ft.biases_grad.set_ptr(opt.gradients_offset(offset));
-            offset += T::SIZE;
+            offset += self.ft_out_size;
 
             let mut nodes = Vec::new();
             let mut inp_size = self.ft_out_size;
