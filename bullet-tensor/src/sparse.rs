@@ -68,22 +68,36 @@ impl SparseTensor {
     ///
     /// # Safety
     /// `weights`, `biases` and `inputs` must be initialised properly.
-    pub unsafe fn affine(weights: &Tensor, inputs: &Self, biases: &Tensor, outputs: &TensorBatch) {
-        assert!(inputs.used > 0);
-        let input_dim = inputs.input_dim;
-        let output_dim = outputs.element_size();
+    pub unsafe fn affine(weights: &Tensor, our: &SparseTensor, opp: &SparseTensor, biases: &Tensor, outputs: &TensorBatch) {
+        assert_eq!(our.used, opp.used);
+        assert!(our.used > 0);
+        let input_dim = our.input_dim;
+        let output_dim = outputs.element_size() / 2;
 
         assert_eq!(weights.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases.shape(), Shape::new(1, output_dim));
 
         bindings::sparseAffineForward(
-            inputs.used,
-            inputs.chunk_size,
-            inputs.max_num_inputs,
+            our.used,
+            our.chunk_size,
+            our.max_num_inputs,
+            output_dim,
+            0,
+            weights.ptr(),
+            biases.ptr(),
+            our.ptr,
+            outputs.ptr(),
+        );
+
+        bindings::sparseAffineForward(
+            opp.used,
+            opp.chunk_size,
+            opp.max_num_inputs,
+            output_dim,
             output_dim,
             weights.ptr(),
             biases.ptr(),
-            inputs.ptr,
+            opp.ptr,
             outputs.ptr(),
         );
     }
@@ -96,25 +110,39 @@ impl SparseTensor {
     /// `weights`, `biases` and `errors` must be initialised properly.
     pub unsafe fn affine_backprop(
         weights_grad: &Tensor,
-        inputs: &Self,
+        our: &SparseTensor,
+        opp: &SparseTensor,
         biases_grad: &Tensor,
         errors: &TensorBatch,
     ) {
-        assert!(inputs.used > 0);
-        let input_dim = inputs.input_dim;
-        let output_dim = errors.element_size();
+        assert!(our.used > 0);
+        let input_dim = our.input_dim;
+        let output_dim = errors.element_size() / 2;
 
         assert_eq!(weights_grad.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
 
         bindings::sparseAffineBackward(
-            inputs.used,
-            inputs.chunk_size,
-            inputs.max_num_inputs,
+            our.used,
+            our.chunk_size,
+            our.max_num_inputs,
+            output_dim,
+            0,
+            weights_grad.ptr(),
+            biases_grad.ptr(),
+            our.ptr,
+            errors.ptr(),
+        );
+
+        bindings::sparseAffineBackward(
+            opp.used,
+            opp.chunk_size,
+            opp.max_num_inputs,
+            output_dim,
             output_dim,
             weights_grad.ptr(),
             biases_grad.ptr(),
-            inputs.ptr,
+            opp.ptr,
             errors.ptr(),
         );
     }

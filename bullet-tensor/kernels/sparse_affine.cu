@@ -7,6 +7,7 @@ __global__ void __kernel_sparse_affine_forward(
     const size_t chunkSize,
     const size_t inputSize,
     const size_t outputSize,
+    const size_t half,
     const float* weights,
     const float* biases,
     const uint16_t* inputs,
@@ -14,7 +15,10 @@ __global__ void __kernel_sparse_affine_forward(
 {
     const size_t inputIdx = inputSize * blockIdx.x;
     const size_t chunk = chunkSize * threadIdx.x;
-    const size_t outputIdx = outputSize * blockIdx.x + chunk;
+
+    // 2 perspectives
+    const size_t outputIdx = 2 * outputSize * blockIdx.x + chunk;
+
     const uint16_t* thisInput = inputs + inputIdx;
     float* thisAccumulator = outputs + outputIdx;
 
@@ -37,7 +41,7 @@ __global__ void __kernel_sparse_affine_forward(
             elementVal += weights[idx];
         }
 
-        thisAccumulator[element] = elementVal;
+        thisAccumulator[half + element] = elementVal;
     }
 }
 
@@ -45,6 +49,7 @@ __global__ void __kernel_sparse_affine_backward(
     const size_t chunkSize,
     const size_t inputSize,
     const size_t outputSize,
+    const size_t half,
     float* weightsGrad,
     float* biasesGrad,
     const uint16_t* inputs,
@@ -52,7 +57,10 @@ __global__ void __kernel_sparse_affine_backward(
 {
     const size_t inputIdx = inputSize * blockIdx.x;
     const size_t chunk = chunkSize * threadIdx.x;
-    const size_t outputIdx = outputSize * blockIdx.x + chunk;
+
+    // two perspectives
+    const size_t outputIdx = half + 2 * outputSize * blockIdx.x + chunk;
+
     const uint16_t* thisInput = inputs + inputIdx;
 
     for (size_t element = 0; element < chunkSize; element++)
@@ -98,6 +106,7 @@ extern "C" void sparseAffineForward(
     const size_t chunkSize,
     const size_t maxInputSize,
     const size_t outputSize,
+    const size_t half,
     const float* weights,
     const float* biases,
     const uint16_t* inputs,
@@ -109,6 +118,7 @@ extern "C" void sparseAffineForward(
         chunkSize,
         maxInputSize,
         outputSize,
+        half,
         weights,
         biases,
         inputs,
@@ -121,6 +131,7 @@ extern "C" void sparseAffineBackward(
     const size_t chunkSize,
     const size_t maxInputSize,
     const size_t outputSize,
+    const size_t half,
     float* weightsGrad,
     float* biasesGrad,
     const uint16_t* inputs,
@@ -132,6 +143,7 @@ extern "C" void sparseAffineBackward(
         chunkSize,
         maxInputSize,
         outputSize,
+        half,
         weightsGrad,
         biasesGrad,
         inputs,

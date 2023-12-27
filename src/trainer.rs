@@ -129,6 +129,7 @@ impl<T> Trainer<T> {
         SparseTensor::affine(
             &self.ft.weights,
             &self.our_inputs,
+            &self.opp_inputs,
             &self.ft.biases,
             &self.ft.outputs,
         );
@@ -191,6 +192,7 @@ impl<T> Trainer<T> {
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
             &self.our_inputs,
+            &self.opp_inputs,
             &self.ft.biases_grad,
             &self.ft.outputs,
         );
@@ -276,7 +278,7 @@ impl<T> TrainerBuilder<T> {
         if let Some(node) = self.nodes.last() {
             node.size
         } else {
-            self.ft_out_size
+            2 * self.ft_out_size
         }
     }
 
@@ -328,7 +330,7 @@ impl<T: InputType> TrainerBuilder<T> {
                 biases: Tensor::uninit(ftb_shape),
                 weights_grad: Tensor::uninit(ftw_shape),
                 biases_grad: Tensor::uninit(ftb_shape),
-                outputs: TensorBatch::new(ftb_shape, batch_size),
+                outputs: TensorBatch::new(Shape::new(1, 2 * self.ft_out_size), batch_size),
             };
 
             let mut offset = 0;
@@ -341,7 +343,7 @@ impl<T: InputType> TrainerBuilder<T> {
             offset += self.ft_out_size;
 
             let mut nodes = Vec::new();
-            let mut inp_size = self.ft_out_size;
+            let mut inp_size = 2 * self.ft_out_size;
 
             for NodeType { size, op } in &self.nodes {
                 let size = *size;

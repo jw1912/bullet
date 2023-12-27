@@ -199,7 +199,7 @@ fn tensor_sparse_affine() {
         let mut weights = Tensor::uninit(Shape::new(N, M));
         let mut biases = Tensor::uninit(Shape::new(1, N));
         let mut inputs = SparseTensor::uninit(B, M, 1, N);
-        let outputs = TensorBatch::new(Shape::new(1, N), B);
+        let outputs = TensorBatch::new(Shape::new(1, 2 * N), B);
 
         weights.calloc();
         biases.calloc();
@@ -209,12 +209,12 @@ fn tensor_sparse_affine() {
 
         inputs.append(&xs);
 
-        SparseTensor::affine(&weights, &inputs, &biases, &outputs);
+        SparseTensor::affine(&weights, &inputs, &inputs, &biases, &outputs);
 
-        let mut ys = [0.0; N * B];
+        let mut ys = [0.0; N * B * 2];
         outputs.write_to_cpu(&mut ys);
 
-        let expected = [1.5, -0.5, 1.5, 0.5, 0.5, 0.5];
+        let expected = [1.5, -0.5, 1.5, -0.5, 1.5, 0.5, 1.5, 0.5, 0.5, 0.5, 0.5, 0.5];
         assert_eq!(expected, ys);
 
         let mut wg = Tensor::uninit(Shape::new(N, M));
@@ -223,15 +223,16 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(&wg, &inputs, &bg, &outputs);
+        SparseTensor::affine_backprop(&wg, &inputs, &inputs, &bg, &outputs);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_cpu(&mut wbuf);
+        let expected = [3.0, -1.0, 3.0, 1.0, 1.0, 1.0];
         assert_eq!(wbuf, expected);
 
         let mut bbuf = [0.0; 2];
         bg.write_to_cpu(&mut bbuf);
-        assert_eq!(bbuf, [3.5, 0.5]);
+        assert_eq!(bbuf, [7.0, 1.0]);
 
         weights.free();
         biases.free();
