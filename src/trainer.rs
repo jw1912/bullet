@@ -164,8 +164,6 @@ impl<T> Trainer<T> {
     unsafe fn calc_errors(&self) {
         let batch_size = self.our_inputs.used();
         let output_layer = self.nodes.last().unwrap();
-        assert_eq!(output_layer.outputs.shape(), self.results.shape());
-
         output_layer
             .outputs
             .sigmoid_mse(batch_size, &self.results, &self.error);

@@ -103,7 +103,7 @@ extern "C" void sparseAffineForward(
     const uint16_t* inputs,
     float* outputs)
 {
-    const size_t numChunks = outputSize / chunkSize;
+    const size_t numChunks = (outputSize + chunkSize - 1) / chunkSize;
 
     __kernel_sparse_affine_forward<<<batchSize, numChunks>>>(
         chunkSize,
@@ -126,7 +126,7 @@ extern "C" void sparseAffineBackward(
     const uint16_t* inputs,
     const float* errors)
 {
-    const size_t numChunks = outputSize / chunkSize;
+    const size_t numChunks = (outputSize + chunkSize - 1) / chunkSize;
 
     __kernel_sparse_affine_backward<<<batchSize, numChunks>>>(
         chunkSize,
