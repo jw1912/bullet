@@ -27,6 +27,8 @@ pub fn run_training(
 
     let timer = Instant::now();
 
+    trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.5");
+
     device_synchronise();
 
     for epoch in 1..=max_epochs {
@@ -70,10 +72,12 @@ pub fn run_training(
                     .collect::<Vec<_>>()
                     .into_iter()
                     .map(|p| p.join().unwrap())
-                    .for_each(|(our_inputs, opp_inputs, results)|
-                        trainer.append_data(&our_inputs, &opp_inputs, &results)
-                    );
+                    .for_each(|(our_inputs, opp_inputs, results)| {
+                        trainer.append_data(&our_inputs, &opp_inputs, &results);
+                    });
             });
+
+            device_synchronise();
 
             trainer.train_on_batch(0.01, 0.001);
 
@@ -95,6 +99,8 @@ pub fn run_training(
         let error = trainer.error() / num as f32;
 
         let epoch_time = epoch_timer.elapsed().as_secs_f32();
+
+        trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.5");
 
         println!(
             "epoch {epoch} | time {epoch_time:.2} | running loss {error:.6} | {} pos/sec | total time {}",

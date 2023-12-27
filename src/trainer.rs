@@ -197,6 +197,26 @@ impl<T> Trainer<T> {
             &self.ft.outputs,
         );
     }
+
+    pub fn eval(&mut self, fen: &str) {
+        let bfmt = fen.parse().unwrap();
+        let mut our_inputs = Vec::new();
+        let mut opp_inputs = Vec::new();
+        let mut results = Vec::new();
+        BoardCUDA::push(&bfmt, &mut our_inputs, &mut opp_inputs, &mut results, 0.5, 1.0 / 400.0);
+        self.clear_data();
+        self.append_data(&our_inputs, &opp_inputs, &results);
+
+        unsafe {
+            self.forward();
+        }
+
+        let mut out = vec![0.0; self.batch_size()];
+        self.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
+        self.clear_data();
+
+        println!("{}", out[0]);
+    }
 }
 
 fn backprop_single(
