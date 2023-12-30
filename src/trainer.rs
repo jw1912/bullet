@@ -116,10 +116,10 @@ impl<T> Trainer<T> {
             device_synchronise();
         };
 
-        let mut buf = [0.0; 65];
+        let mut buf = [0.0; 32];
         unsafe {
-        let mut tensor = Tensor::uninit(Shape::new(1, 65));
-        tensor.set_ptr(self.optimiser.gradients_offset(24608));
+        let mut tensor = Tensor::uninit(Shape::new(1, 32));
+        tensor.set_ptr(self.optimiser.gradients_offset(768 * 32));
         tensor.write_to_cpu(&mut buf)
         }
         println!("{buf:?}");
