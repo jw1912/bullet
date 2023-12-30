@@ -23,7 +23,6 @@ extern "C" {
 
     pub fn sparseAffineForward(
         batchSize: usize,
-        chunkSize: usize,
         maxInputSize: usize,
         outputSize: usize,
         half: usize,
@@ -35,7 +34,6 @@ extern "C" {
 
     pub fn sparseAffineBackward(
         batchSize: usize,
-        chunkSize: usize,
         maxInputSize: usize,
         outputSize: usize,
         half: usize,

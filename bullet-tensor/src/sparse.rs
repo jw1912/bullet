@@ -4,7 +4,6 @@ use crate::{bindings, util, Shape, Tensor, TensorBatch};
 pub struct SparseTensor {
     cap: usize,
     used: usize,
-    chunk_size: usize,
     input_dim: usize,
     max_num_inputs: usize,
     ptr: *mut u16,
@@ -26,15 +25,12 @@ impl SparseTensor {
         cap: usize,
         input_dim: usize,
         max_num_inputs: usize,
-        output_size: usize,
     ) -> Self {
         assert!(input_dim < 65_535, "Unsupported dimension!");
-        let chunk_size = determine_chunk_size(output_size);
 
         Self {
             cap,
             used: 0,
-            chunk_size,
             input_dim,
             max_num_inputs,
             ptr: util::malloc(max_num_inputs * cap),
@@ -79,7 +75,6 @@ impl SparseTensor {
 
         bindings::sparseAffineForward(
             our.used,
-            our.chunk_size,
             our.max_num_inputs,
             output_dim,
             0,
@@ -91,7 +86,6 @@ impl SparseTensor {
 
         bindings::sparseAffineForward(
             opp.used,
-            opp.chunk_size,
             opp.max_num_inputs,
             output_dim,
             output_dim,
@@ -124,7 +118,6 @@ impl SparseTensor {
 
         bindings::sparseAffineBackward(
             our.used,
-            our.chunk_size,
             our.max_num_inputs,
             output_dim,
             0,
@@ -136,7 +129,6 @@ impl SparseTensor {
 
         bindings::sparseAffineBackward(
             opp.used,
-            opp.chunk_size,
             opp.max_num_inputs,
             output_dim,
             output_dim,
@@ -145,24 +137,5 @@ impl SparseTensor {
             opp.ptr,
             errors.ptr(),
         );
-    }
-}
-
-fn determine_chunk_size(mut size: usize) -> usize {
-    size -= 1;
-    size |= size >> 1;
-    size |= size >> 2;
-    size |= size >> 4;
-    size |= size >> 8;
-    size |= size >> 16;
-    size |= size >> 32;
-    size += 1;
-
-    let chunk_size = size / 1024;
-
-    if chunk_size == 0 {
-        1
-    } else {
-        chunk_size
     }
 }

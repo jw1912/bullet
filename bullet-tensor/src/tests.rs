@@ -198,7 +198,7 @@ fn tensor_sparse_affine() {
     unsafe {
         let mut weights = Tensor::uninit(Shape::new(N, M));
         let mut biases = Tensor::uninit(Shape::new(1, N));
-        let mut inputs = SparseTensor::uninit(B, M, 1, N);
+        let mut inputs = SparseTensor::uninit(B, M, 1);
         let outputs = TensorBatch::new(Shape::new(1, 2 * N), B);
 
         weights.calloc();

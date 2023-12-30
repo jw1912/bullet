@@ -467,14 +467,12 @@ impl<T: InputType> TrainerBuilder<T> {
                 batch_size,
                 T::SIZE,
                 T::RequiredDataType::MAX_FEATURES,
-                self.ft_out_size,
             );
 
             let opp_inputs = SparseTensor::uninit(
                 batch_size,
                 T::SIZE,
                 T::RequiredDataType::MAX_FEATURES,
-                self.ft_out_size,
             );
 
             let results = TensorBatch::new(Shape::new(1, 1), batch_size);
