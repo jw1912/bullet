@@ -24,16 +24,17 @@ __global__ void reduceAddKernel(
     const float* inp,
     float* out)
 {
-    extern __shared__ float sdata[];
+    __shared__ float sdata[threads];
 
     const size_t offset = blockIdx.y;
     const size_t tid = threadIdx.x;
-    const size_t myId = blockDim.x * blockIdx.x + tid;
+    const size_t myId = 2 * blockDim.x * blockIdx.x + tid;
 
-    if (myId < batchSize)
-        sdata[tid] = inp[offset + stride * myId];
-    else
-        sdata[tid] = 0;
+    sdata[tid] = myId < batchSize ? inp[offset + stride * myId] : 0;
+
+    const size_t myId2 = myId + blockDim.x;
+    if (myId2 < batchSize)
+        sdata[tid] += inp[offset + stride * myId2];
 
     __syncthreads();
 
@@ -57,10 +58,11 @@ extern "C" void reduceAdd(
     const float* inp,
     float* out)
 {
-    const size_t grid_x = (batchSize + threads - 1) / threads;
+    const size_t dual = 2 * threads;
+    const size_t grid_x = (batchSize + dual - 1) / dual;
     const dim3 grid(grid_x, tensorSize);
 
-    reduceAddKernel<<<grid, threads, threads * sizeof(float)>>>(
+    reduceAddKernel<<<grid, threads>>>(
         batchSize,
         tensorSize,
         inp,

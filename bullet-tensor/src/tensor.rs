@@ -373,10 +373,27 @@ impl TensorBatch {
         biases_grad: &Tensor,
         weights_intermediate: &TensorBatch,
     ) {
+        println!("Backprop Affine");
+        let mut t = std::time::Instant::now();
         TensorBatch::lt_nt(handle, batch_size, errors, inputs, weights_intermediate);
+        crate::device_synchronise();
+        let t1 = t.elapsed();
+        t = std::time::Instant::now();
         TensorBatch::reduce_add(batch_size, weights_intermediate, weights_grad);
+        crate::device_synchronise();
+        let t2 = t.elapsed();
+        t = std::time::Instant::now();
         TensorBatch::reduce_add(batch_size, errors, biases_grad);
+        crate::device_synchronise();
+        let t3 = t.elapsed();
+        t = std::time::Instant::now();
         TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
+        crate::device_synchronise();
+        let t4 = t.elapsed();
+        println!("      lt_nt {}", t1.as_micros());
+        println!("      r_a_w {}", t2.as_micros());
+        println!("      r_a_b {}", t3.as_micros());
+        println!("      lt_tn {}", t4.as_micros());
     }
 
     /// # Safety

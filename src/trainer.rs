@@ -176,17 +176,41 @@ impl<T> Trainer<T> {
     }
 
     pub fn train_on_batch(&self, decay: f32, rate: f32) {
+        println!("Batch");
+        let t = std::time::Instant::now();
         self.optimiser.zero_gradient();
+        device_synchronise();
+        let t1 = t.elapsed();
 
         unsafe {
+            let mut tm = std::time::Instant::now();
             self.forward();
+            device_synchronise();
+            let t2 = tm.elapsed();
+            tm = std::time::Instant::now();
             self.calc_errors();
+            device_synchronise();
+            let t3 = tm.elapsed();
+            tm = std::time::Instant::now();
             self.backprop();
             device_synchronise();
-        };
+            let t4 = tm.elapsed();
+
 
         let adj = 2. / self.our_inputs.used() as f32;
+        tm = std::time::Instant::now();
         self.optimiser.update(decay, adj, rate);
+        device_synchronise();
+        let t5 = tm.elapsed();
+        let t6 = t.elapsed();
+
+        println!("Zero         {}", t1.as_micros());
+        println!("Forward      {}", t2.as_micros());
+        println!("Calc Errors  {}", t3.as_micros());
+        println!("Backwards    {}", t4.as_micros());
+        println!("Update       {}", t5.as_micros());
+        println!("Total        {}", t6.as_micros());
+        }
     }
 
     /// # Safety
