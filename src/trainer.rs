@@ -118,9 +118,9 @@ impl<T> Trainer<T> {
 
         let mut buf = [0.0; 32];
         unsafe {
-        let mut tensor = Tensor::uninit(Shape::new(1, 32));
-        tensor.set_ptr(self.optimiser.gradients_offset(768 * 32));
-        tensor.write_to_cpu(&mut buf)
+            let mut tensor = Tensor::uninit(Shape::new(1, 32));
+            tensor.set_ptr(self.optimiser.gradients_offset((5 * 64 + 4) * 32));
+            tensor.write_to_cpu(&mut buf)
         }
         println!("{buf:?}");
 
@@ -196,6 +196,12 @@ impl<T> Trainer<T> {
         }
 
         backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs);
+
+        let mut buf = Box::new([0.0; 64 * 16_384]);
+        device_synchronise();
+        self.ft.outputs.write_to_cpu(&mut *buf);
+        device_synchronise();
+        println!("{:?}", &buf[..128]);
 
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
