@@ -49,9 +49,25 @@ pub struct Trainer<T> {
 
 impl<T: InputType> std::fmt::Display for Trainer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", T::SIZE)?;
-        for node in &self.nodes {
-            write!(f, " -> {}", node.outputs.shape().rows())?;
+        let inp_size = T::RequiredDataType::INPUTS;
+        let buckets = T::BUCKETS;
+        write!(f, "({inp_size}")?;
+        if buckets > 1 {
+            write!(f, "x{buckets}")?;
+        }
+        write!(f, " -> {})x2", self.nodes[0].outputs.shape().rows() / 2)?;
+        for (i, node) in self.nodes.iter().enumerate() {
+            if let Operation::Activate(_) = node.op {
+                continue;
+            }
+
+            let rows = node.outputs.shape().rows();
+
+            if i == 0 {
+                write!(f, " -> {})x2", rows / 2)?;
+            } else {
+                write!(f, " -> {rows}")?;
+            }
         }
         Ok(())
     }

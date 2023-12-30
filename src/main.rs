@@ -29,7 +29,5 @@ fn main() {
         save_rate: 1,
     };
 
-    println!("Network Architecture: {trainer}");
-
     run_training(&mut trainer, &mut schedule, 4, "../../data/wha.data");
 }

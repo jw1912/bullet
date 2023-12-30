@@ -8,7 +8,7 @@ pub use trainer::{Trainer, TrainerBuilder};
 
 use std::{io::{Write, stdout}, time::Instant, sync::atomic::{AtomicBool, Ordering::SeqCst}};
 use bulletformat::DataLoader;
-use bullet_core::data::BoardCUDA;
+use bullet_core::{data::BoardCUDA, inputs::InputType};
 use bullet_tensor::device_synchronise;
 
 static CBCS: AtomicBool = AtomicBool::new(false);
@@ -28,7 +28,7 @@ macro_rules! ansi {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run_training<T>(
+pub fn run_training<T: InputType>(
     trainer: &mut Trainer<T>,
     schedule: &mut TrainingSchedule,
     threads: usize,
@@ -49,6 +49,7 @@ pub fn run_training<T>(
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
 
+    println!("Arch           : {trainer}");
     println!("Data File Path : {}", ansi!(file, "32;1", esc));
     println!("Threads        : {}", ansi!(threads, 31, esc));
     println!("WDL Proportion : start {} end {}",
