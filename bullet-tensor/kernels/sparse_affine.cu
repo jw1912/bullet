@@ -59,7 +59,7 @@ __global__ void __kernel_sparse_affine_backward(
     const size_t chunk = chunkSize * threadIdx.x;
 
     // two perspectives
-    const size_t outputIdx = half + 2 * outputSize * blockIdx.x + chunk;
+    const size_t outputIdx = 2 * outputSize * blockIdx.x + chunk;
 
     const uint16_t* thisInput = inputs + inputIdx;
 
@@ -70,7 +70,7 @@ __global__ void __kernel_sparse_affine_backward(
         if (offset >= outputSize)
             return;
 
-        const float error = errors[outputIdx + element];
+        const float error = errors[outputIdx + element + half];
         atomicAdd(&biasesGrad[offset], error);
 
         for (size_t i = 0; i < inputSize; i++) {
