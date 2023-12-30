@@ -36,7 +36,7 @@ struct Node {
 
 pub struct Trainer<T> {
     handle: cublasHandle_t,
-    pub optimiser: Optimiser,
+    optimiser: Optimiser,
     ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
     our_inputs: SparseTensor,
@@ -44,6 +44,7 @@ pub struct Trainer<T> {
     results: TensorBatch,
     error: GpuBuffer,
     used: usize,
+    scale: f32,
 }
 
 impl<T: InputType> std::fmt::Display for Trainer<T> {
@@ -71,6 +72,10 @@ impl<T> Trainer<T> {
 
     pub fn net_size(&self) -> usize {
         self.optimiser.size()
+    }
+
+    pub fn eval_scale(&self) -> f32 {
+        self.scale
     }
 
     pub fn write_weights_to_cpu(&self, buf: &mut [f32]) {
@@ -259,6 +264,7 @@ pub struct TrainerBuilder<T> {
     ft_out_size: usize,
     nodes: Vec<NodeType>,
     size: usize,
+    scale: f32,
 }
 
 impl<T> Default for TrainerBuilder<T> {
@@ -269,6 +275,7 @@ impl<T> Default for TrainerBuilder<T> {
             ft_out_size: 0,
             nodes: Vec::new(),
             size: 0,
+            scale: 400.0,
         }
     }
 }
@@ -284,6 +291,11 @@ impl<T> TrainerBuilder<T> {
 
     pub fn set_batch_size(mut self, batch_size: usize) -> Self {
         self.batch_size = batch_size;
+        self
+    }
+
+    pub fn set_eval_scale(mut self, scale: f32) -> Self {
+        self.scale = scale;
         self
     }
 
@@ -421,6 +433,7 @@ impl<T: InputType> TrainerBuilder<T> {
                 results,
                 error,
                 used: 0,
+                scale: self.scale,
             }
         }
     }
