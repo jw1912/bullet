@@ -10,7 +10,7 @@ constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __device__ float primeReLU(float in) { return in > 0.0F ? 1.0F : 0.0F; }
 __device__ float primeCReLU(float in) { return in > 0.0F && in < 1.0F ? 1.0F : 0.0F; }
-__device__ float primeSCReLU(float in) { return in > 0.0F && in < 1.0F ? 2.0F * sqrt(in) : 0.0F; }
+__device__ float primeSCReLU(float in) { return in > 0.0F && in < 1.0F ? 2.0F * in : 0.0F; }
 
 typedef float(*OpType)(float);
 
@@ -23,8 +23,9 @@ __global__ void bufferBackprop(const size_t size, const float* in, float* out)
         return;
 
     const float thisIn = in[i];
+    const float thisOut = out[i];
 
-    out[i] = thisIn * op(thisIn);
+    out[i] = thisIn * op(thisOut);
 }
 
 extern "C" void backpropReLU(const size_t size, const float* in, float* out)
