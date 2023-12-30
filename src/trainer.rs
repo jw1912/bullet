@@ -58,7 +58,7 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 }
 
 impl<T> Trainer<T> {
-    pub fn save(&self, name: String, epoch: usize) -> std::io::Result<()> {
+    pub fn save(&self, name: String, epoch: usize) {
         let size = self.optimiser.size();
 
         let mut buf1 = vec![0.0; size];
@@ -69,11 +69,11 @@ impl<T> Trainer<T> {
 
         let path = format!("checkpoints/{name}-epoch{epoch}");
 
-        std::fs::create_dir(path.as_str())?;
+        std::fs::create_dir(path.as_str()).unwrap_or(());
 
-        util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false)?;
-        util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false)?;
-        util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false)
+        util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false).unwrap();
+        util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false).unwrap();
+        util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false).unwrap();
     }
 
     pub fn load_from_checkpoint(&self, path: &str) {
@@ -218,6 +218,9 @@ impl<T> Trainer<T> {
     unsafe fn calc_errors(&self) {
         let batch_size = self.our_inputs.used();
         let output_layer = self.nodes.last().unwrap();
+
+        assert_eq!(self.results.shape(), output_layer.outputs.shape());
+
         output_layer
             .outputs
             .sigmoid_mse(batch_size, &self.results, &self.error);
@@ -458,8 +461,7 @@ impl<T: InputType> TrainerBuilder<T> {
                 self.ft_out_size,
             );
 
-            let last_layer = nodes.last().unwrap();
-            let results = TensorBatch::new(last_layer.outputs.shape(), batch_size);
+            let results = TensorBatch::new(Shape::new(1, 1), batch_size);
             let error = GpuBuffer::new(1);
 
             let mut net = vec![0.0; net_size];

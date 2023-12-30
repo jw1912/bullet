@@ -1,30 +1,15 @@
 use crate::ansi;
 
 pub struct TrainingSchedule {
-    net_id: String,
-    num_epochs: usize,
-    wdl_scheduler: WdlScheduler,
-    lr_scheduler: LrScheduler,
-    save_rate: usize,
+    pub net_id: String,
+    pub start_epoch: usize,
+    pub num_epochs: usize,
+    pub wdl_scheduler: WdlScheduler,
+    pub lr_scheduler: LrScheduler,
+    pub save_rate: usize,
 }
 
 impl TrainingSchedule {
-    pub fn new(
-        net_id: String,
-        num_epochs: usize,
-        wdl_scheduler: WdlScheduler,
-        lr_scheduler: LrScheduler,
-        save_rate: usize,
-    ) -> Self {
-        Self {
-            net_id,
-            num_epochs,
-            wdl_scheduler,
-            lr_scheduler,
-            save_rate,
-        }
-    }
-
     pub fn net_id(&self) -> String {
         self.net_id.clone()
     }
