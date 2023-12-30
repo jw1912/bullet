@@ -356,8 +356,15 @@ impl TensorBatch {
         biases: &Tensor,
         outputs: &TensorBatch,
     ) {
+        let t1 = std::time::Instant::now();
         TensorBatch::splat_lt_nn(handle, batch_size, weights, inputs, outputs);
+        crate::device_synchronise();
+        println!("    lt_nn    {: >5}", t1.elapsed().as_micros());
+        let t2 = std::time::Instant::now();
         TensorBatch::splat_add(batch_size, biases, outputs);
+        crate::device_synchronise();
+        println!("    spadd    {: >5}", t2.elapsed().as_micros());
+        println!("  affine     {: >5}", t1.elapsed().as_micros());
     }
 
     /// # Safety
@@ -373,7 +380,6 @@ impl TensorBatch {
         biases_grad: &Tensor,
         weights_intermediate: &TensorBatch,
     ) {
-        println!("Backprop Affine");
         let mut t = std::time::Instant::now();
         TensorBatch::lt_nt(handle, batch_size, errors, inputs, weights_intermediate);
         crate::device_synchronise();
@@ -390,10 +396,10 @@ impl TensorBatch {
         TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
         crate::device_synchronise();
         let t4 = t.elapsed();
-        println!("      lt_nt {}", t1.as_micros());
-        println!("      r_a_w {}", t2.as_micros());
-        println!("      r_a_b {}", t3.as_micros());
-        println!("      lt_tn {}", t4.as_micros());
+        println!("    lt_nt    {: >5}", t1.as_micros());
+        println!("    r_a_w    {: >5}", t2.as_micros());
+        println!("    r_a_b    {: >5}", t3.as_micros());
+        println!("    lt_tn    {: >5}", t4.as_micros());
     }
 
     /// # Safety

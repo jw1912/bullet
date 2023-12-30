@@ -25,10 +25,10 @@ extern "C" {
         batchSize: usize,
         maxInputSize: usize,
         outputSize: usize,
-        half: usize,
         weights: *const f32,
         biases: *const f32,
-        inputs: *const u16,
+        ourInputs: *const u16,
+        oppInputs: *const u16,
         outputs: *mut f32,
     );
 
@@ -36,10 +36,10 @@ extern "C" {
         batchSize: usize,
         maxInputSize: usize,
         outputSize: usize,
-        half: usize,
         weightsGrad: *mut f32,
         biasesGrad: *mut f32,
-        inputs: *const u16,
+        ourInputs: *const u16,
+        oppInputs: *const u16,
         errors: *const f32,
     );
 

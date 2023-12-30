@@ -28,17 +28,18 @@ __global__ void reduceAddKernel(
 
     const size_t offset = blockIdx.y;
     const size_t tid = threadIdx.x;
-    const size_t myId = 2 * blockDim.x * blockIdx.x + tid;
+    const size_t myId = 2 * threads * blockIdx.x + tid;
 
     sdata[tid] = myId < batchSize ? inp[offset + stride * myId] : 0;
 
-    const size_t myId2 = myId + blockDim.x;
+    const size_t myId2 = myId + threads;
     if (myId2 < batchSize)
         sdata[tid] += inp[offset + stride * myId2];
 
     __syncthreads();
 
-    for (size_t s = blockDim.x / 2; s > 32; s >>= 1)
+    #pragma unroll
+    for (size_t s = threads / 2; s > 32; s >>= 1)
     {
         if (tid < s)
             sdata[tid] += sdata[tid + s];

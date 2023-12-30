@@ -77,20 +77,9 @@ impl SparseTensor {
             our.used,
             our.max_num_inputs,
             output_dim,
-            0,
             weights.ptr(),
             biases.ptr(),
             our.ptr,
-            outputs.ptr(),
-        );
-
-        bindings::sparseAffineForward(
-            opp.used,
-            opp.max_num_inputs,
-            output_dim,
-            output_dim,
-            weights.ptr(),
-            biases.ptr(),
             opp.ptr,
             outputs.ptr(),
         );
@@ -120,22 +109,12 @@ impl SparseTensor {
             our.used,
             our.max_num_inputs,
             output_dim,
-            0,
             weights_grad.ptr(),
             biases_grad.ptr(),
             our.ptr,
-            errors.ptr(),
-        );
-
-        bindings::sparseAffineBackward(
-            opp.used,
-            opp.max_num_inputs,
-            output_dim,
-            output_dim,
-            weights_grad.ptr(),
-            biases_grad.ptr(),
             opp.ptr,
             errors.ptr(),
         );
+
     }
 }

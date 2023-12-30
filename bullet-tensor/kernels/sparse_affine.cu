@@ -6,10 +6,10 @@
 __global__ void __kernel_sparse_affine_forward(
     const size_t inputSize,
     const size_t outputSize,
-    const size_t half,
     const float* weights,
     const float* biases,
-    const uint16_t* inputs,
+    const uint16_t* ourInputs,
+    const uint16_t* oppInputs,
     float* outputs)
 {
     const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
@@ -17,31 +17,38 @@ __global__ void __kernel_sparse_affine_forward(
     if (elem >= outputSize)
         return;
 
-    const uint16_t* thisInput = inputs + inputSize * blockIdx.y;
-    float* thisOutput = outputs + 2 * outputSize * blockIdx.y + half + elem;
+    const size_t inputIdx = inputSize * blockIdx.y;
+    const uint16_t* thisOurInput = ourInputs + inputSize * blockIdx.y;
+    const uint16_t* thisOppInput = oppInputs + inputSize * blockIdx.y;
+    float* thisOutput = outputs + 2 * outputSize * blockIdx.y + elem;
 
-    float elementVal = biases[elem];
+    float ourElementVal = biases[elem];
+    float oppElementVal = ourElementVal;
 
     for (size_t i = 0; i < inputSize; i++) {
-        const size_t inp = static_cast<size_t>(thisInput[i]);
+        const size_t ourInp = static_cast<size_t>(thisOurInput[i]);
+        const size_t oppInp = static_cast<size_t>(thisOppInput[i]);
 
-        if (inp == static_cast<size_t>(65535))
+        if (ourInp == static_cast<size_t>(65535))
             break;
 
-        const size_t idx = inp * outputSize + elem;
-        elementVal += weights[idx];
+        const size_t ourIdx = ourInp * outputSize + elem;
+        const size_t oppIdx = oppInp * outputSize + elem;
+        ourElementVal += weights[ourIdx];
+        oppElementVal += weights[oppIdx];
     }
 
-    thisOutput[0] = elementVal;
+    thisOutput[         0] = ourElementVal;
+    thisOutput[outputSize] = oppElementVal;
 }
 
 __global__ void __kernel_sparse_affine_backward(
     const size_t inputSize,
     const size_t outputSize,
-    const size_t half,
     float* weightsGrad,
     float* biasesGrad,
-    const uint16_t* inputs,
+    const uint16_t* ourInputs,
+    const uint16_t* oppInputs,
     const float* errors)
 {
     const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
@@ -49,21 +56,27 @@ __global__ void __kernel_sparse_affine_backward(
     if (elem >= outputSize)
         return;
 
-    const uint16_t* thisInput = inputs + inputSize * blockIdx.y;
-    const float* thisErrors = errors + 2 * outputSize * blockIdx.y + half;
+    const size_t inputIdx = inputSize * blockIdx.y;
+    const uint16_t* thisOurInput = ourInputs + inputIdx;
+    const uint16_t* thisOppInput = oppInputs + inputIdx;
+    const float* thisErrors = errors + 2 * outputSize * blockIdx.y;
 
-    const float error = thisErrors[elem];
+    const float ourError = thisErrors[elem];
+    const float oppError = thisErrors[elem + outputSize];
 
-    atomicAdd(&biasesGrad[elem], error);
+    atomicAdd(&biasesGrad[elem], ourError + oppError);
 
     for (size_t i = 0; i < inputSize; i++) {
-        const size_t inp = static_cast<size_t>(thisInput[i]);
+        const size_t ourInp = static_cast<size_t>(thisOurInput[i]);
+        const size_t oppInp = static_cast<size_t>(thisOppInput[i]);
 
-        if (inp == static_cast<size_t>(65535))
+        if (ourInp == static_cast<size_t>(65535))
             break;
 
-        const size_t idx = inp * outputSize + elem;
-        atomicAdd(&weightsGrad[idx], error);
+        const size_t ourIdx = ourInp * outputSize + elem;
+        const size_t oppIdx = oppInp * outputSize + elem;
+        atomicAdd(&weightsGrad[ourIdx], ourError);
+        atomicAdd(&weightsGrad[oppIdx], oppError);
     }
 }
 
@@ -71,10 +84,10 @@ extern "C" void sparseAffineForward(
     const size_t batchSize,
     const size_t maxInputSize,
     const size_t outputSize,
-    const size_t half,
     const float* weights,
     const float* biases,
-    const uint16_t* inputs,
+    const uint16_t* ourInputs,
+    const uint16_t* oppInputs,
     float* outputs)
 {
     const size_t numChunks = static_cast<size_t>(1) + outputSize / static_cast<size_t>(1024);
@@ -86,10 +99,10 @@ extern "C" void sparseAffineForward(
     __kernel_sparse_affine_forward<<<grid, threads>>>(
         maxInputSize,
         outputSize,
-        half,
         weights,
         biases,
-        inputs,
+        ourInputs,
+        oppInputs,
         outputs
     );
 }
@@ -98,10 +111,10 @@ extern "C" void sparseAffineBackward(
     const size_t batchSize,
     const size_t maxInputSize,
     const size_t outputSize,
-    const size_t half,
     float* weightsGrad,
     float* biasesGrad,
-    const uint16_t* inputs,
+    const uint16_t* ourInputs,
+    const uint16_t* oppInputs,
     const float* errors)
 {
     const size_t numChunks = static_cast<size_t>(1) + outputSize / static_cast<size_t>(1024);
@@ -113,10 +126,10 @@ extern "C" void sparseAffineBackward(
     __kernel_sparse_affine_backward<<<grid, threads>>>(
         maxInputSize,
         outputSize,
-        half,
         weightsGrad,
         biasesGrad,
-        inputs,
+        ourInputs,
+        oppInputs,
         errors
     );
 }

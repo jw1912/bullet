@@ -176,41 +176,33 @@ impl<T> Trainer<T> {
     }
 
     pub fn train_on_batch(&self, decay: f32, rate: f32) {
-        println!("Batch");
+        println!();
         let t = std::time::Instant::now();
         self.optimiser.zero_gradient();
         device_synchronise();
-        let t1 = t.elapsed();
+        println!("Zero         {: >5}", t.elapsed().as_micros());
 
         unsafe {
             let mut tm = std::time::Instant::now();
             self.forward();
             device_synchronise();
-            let t2 = tm.elapsed();
+            println!("Forward      {: >5}", tm.elapsed().as_micros());
             tm = std::time::Instant::now();
             self.calc_errors();
             device_synchronise();
-            let t3 = tm.elapsed();
+            println!("Calc Errors  {: >5}", tm.elapsed().as_micros());
             tm = std::time::Instant::now();
             self.backprop();
             device_synchronise();
-            let t4 = tm.elapsed();
-
+            println!("Backwards    {: >5}", tm.elapsed().as_micros());
+        }
 
         let adj = 2. / self.our_inputs.used() as f32;
-        tm = std::time::Instant::now();
+        let tm = std::time::Instant::now();
         self.optimiser.update(decay, adj, rate);
         device_synchronise();
-        let t5 = tm.elapsed();
-        let t6 = t.elapsed();
-
-        println!("Zero         {}", t1.as_micros());
-        println!("Forward      {}", t2.as_micros());
-        println!("Calc Errors  {}", t3.as_micros());
-        println!("Backwards    {}", t4.as_micros());
-        println!("Update       {}", t5.as_micros());
-        println!("Total        {}", t6.as_micros());
-        }
+        println!("Update       {: >5}", tm.elapsed().as_micros());
+        println!("Total        {: >5}", t.elapsed().as_micros());
     }
 
     /// # Safety
@@ -219,6 +211,7 @@ impl<T> Trainer<T> {
     unsafe fn forward(&self) {
         let batch_size = self.our_inputs.used();
 
+        let t = std::time::Instant::now();
         SparseTensor::affine(
             &self.ft.weights,
             &self.our_inputs,
@@ -226,17 +219,23 @@ impl<T> Trainer<T> {
             &self.ft.biases,
             &self.ft.outputs,
         );
+        device_synchronise();
+        println!("  sparse     {: >5}", t.elapsed().as_micros());
 
         let mut inputs = &self.ft.outputs;
 
         for node in &self.nodes {
             match &node.op {
                 Operation::Activate(activation) => {
+                    let t = std::time::Instant::now();
                     TensorBatch::activate(batch_size, *activation, inputs, &node.outputs);
+                    device_synchronise();
+                    println!("  activate   {: >5}", t.elapsed().as_micros());
                 }
                 Operation::Affine(Affine {
                     weights, biases, ..
                 }) => {
+                    let t = std::time::Instant::now();
                     TensorBatch::affine(
                         self.handle,
                         batch_size,
@@ -245,6 +244,7 @@ impl<T> Trainer<T> {
                         biases,
                         &node.outputs,
                     );
+                    println!("  affine     {: >5}", t.elapsed().as_micros());
                 }
             }
 
@@ -285,6 +285,7 @@ impl<T> Trainer<T> {
 
         backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs);
 
+        let t = std::time::Instant::now();
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
             &self.our_inputs,
@@ -292,6 +293,8 @@ impl<T> Trainer<T> {
             &self.ft.biases_grad,
             &self.ft.outputs,
         );
+        device_synchronise();
+        println!("  sparse     {: >5}", t.elapsed().as_micros());
     }
 
     pub fn eval(&mut self, fen: &str) {
@@ -323,9 +326,12 @@ fn backprop_single(
 ) {
     let errors = &this_node.outputs;
 
+    let t = std::time::Instant::now();
     match &this_node.op {
         Operation::Activate(activation) => {
             TensorBatch::backprop_activation(batch_size, *activation, errors, inputs);
+            device_synchronise();
+            println!("  activate   {: >5}", t.elapsed().as_micros())
         }
         Operation::Affine(Affine {
             weights: w,
@@ -335,6 +341,8 @@ fn backprop_single(
             ..
         }) => unsafe {
             TensorBatch::backprop_affine(handle, batch_size, w, errors, inputs, wg, bg, wi);
+            device_synchronise();
+            println!("  affine     {: >5}", t.elapsed().as_micros())
         },
     }
 }
