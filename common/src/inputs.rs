@@ -110,7 +110,7 @@ impl ChessBucketsMirrored {
     };
 
     fn get_sq(mut sq: usize, ksq: usize) -> usize {
-        if ksq % 8 > 0 {
+        if ksq % 8 > 3 {
             sq ^= 7;
         }
 
