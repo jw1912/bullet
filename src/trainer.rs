@@ -273,6 +273,7 @@ impl<T> Trainer<T> {
     unsafe fn backprop(&self) {
         let batch_size = self.our_inputs.used();
         let num_nodes = self.nodes.len();
+        device_synchronise();
 
         for node in (1..num_nodes).rev() {
             backprop_single(
@@ -342,7 +343,6 @@ fn backprop_single(
         }) => unsafe {
             TensorBatch::backprop_affine(handle, batch_size, w, errors, inputs, wg, bg, wi);
             device_synchronise();
-            println!("  affine     {: >5}", t.elapsed().as_micros())
         },
     }
 }
