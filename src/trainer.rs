@@ -215,7 +215,7 @@ impl<T> Trainer<T> {
         self.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
         self.clear_data();
 
-        println!("{}", out[0]);
+        println!("{fen} -> {}", out[0]);
     }
 }
 

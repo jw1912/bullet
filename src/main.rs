@@ -14,5 +14,5 @@ fn main() {
 
     println!("Network Architecture: {net}");
 
-    run_training(&mut net, 4, 5, 400.0, "../../data/10m.data");
+    run_training(&mut net, 4, 1, 400.0, "../../data/batch.data");
 }
