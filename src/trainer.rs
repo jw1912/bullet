@@ -36,7 +36,7 @@ struct Node {
 
 pub struct Trainer<T> {
     handle: cublasHandle_t,
-    optimiser: Optimiser,
+    pub optimiser: Optimiser,
     ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
     our_inputs: SparseTensor,
