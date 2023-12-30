@@ -141,6 +141,8 @@ pub fn run_training<T>(
         if schedule.should_save(epoch) {
             let net_path = format!("net_test-epoch{epoch}");
 
+            trainer.save(schedule.net_id(), epoch).unwrap();
+
             println!("Saved [{net_path}]");
         }
     }

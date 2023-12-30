@@ -1,6 +1,7 @@
 use crate::ansi;
 
 pub struct TrainingSchedule {
+    net_id: String,
     num_epochs: usize,
     wdl_scheduler: WdlScheduler,
     lr_scheduler: LrScheduler,
@@ -9,17 +10,23 @@ pub struct TrainingSchedule {
 
 impl TrainingSchedule {
     pub fn new(
+        net_id: String,
         num_epochs: usize,
         wdl_scheduler: WdlScheduler,
         lr_scheduler: LrScheduler,
         save_rate: usize,
     ) -> Self {
         Self {
+            net_id,
             num_epochs,
             wdl_scheduler,
             lr_scheduler,
             save_rate,
         }
+    }
+
+    pub fn net_id(&self) -> String {
+        self.net_id.clone()
     }
 
     pub fn num_epochs(&self) -> usize {

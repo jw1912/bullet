@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bulletformat::BulletFormat;
-use bullet_core::{inputs::InputType, data::BoardCUDA, rng::Rand};
+use bullet_core::{inputs::InputType, data::BoardCUDA, rng::Rand, util};
 use bullet_tensor::{
     cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser, SparseTensor,
     Tensor, TensorBatch, create_cublas_handle, Shape,
@@ -58,6 +58,54 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 }
 
 impl<T> Trainer<T> {
+    pub fn save(&self, name: String, epoch: usize) -> std::io::Result<()> {
+        let size = self.optimiser.size();
+
+        let mut buf1 = vec![0.0; size];
+        let mut buf2 = vec![0.0; size];
+        let mut buf3 = vec![0.0; size];
+
+        self.optimiser.write_to_cpu(&mut buf1, &mut buf2, &mut buf3);
+
+        let path = format!("checkpoints/{name}-epoch{epoch}");
+
+        std::fs::create_dir(path.as_str())?;
+
+        util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false)?;
+        util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false)?;
+        util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false)
+    }
+
+    pub fn load_from_checkpoint(&self, path: &str) {
+        let load_from_bin = |name: &str| {
+            use std::fs::File;
+            use std::io::{Read, BufReader};
+            let file = File::open(format!("{path}/{name}.bin")).unwrap();
+            let reader = BufReader::new(file);
+            let mut res = vec![0.0; self.net_size()];
+
+            let mut buf = [0u8; 4];
+
+            for (i, byte) in reader.bytes().enumerate() {
+                let idx = i % 4;
+
+                buf[idx] = byte.unwrap();
+
+                if idx == 3 {
+                    res[i / 4] = f32::from_ne_bytes(buf);
+                }
+            }
+
+            res
+        };
+
+        let network = load_from_bin("params");
+        let momentum = load_from_bin("momentum");
+        let velocity = load_from_bin("velocity");
+
+        self.optimiser.load_from_cpu(&network, &momentum, &velocity)
+    }
+
     pub fn prep_for_epoch(&mut self) {
         self.error.load_from_cpu(&[0.0]);
         device_synchronise();
