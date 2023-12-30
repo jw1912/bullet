@@ -27,8 +27,6 @@ pub fn run_training(
 
     let timer = Instant::now();
 
-    trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.5");
-
     device_synchronise();
 
     for epoch in 1..=max_epochs {
@@ -36,7 +34,7 @@ pub fn run_training(
         let epoch_timer = Instant::now();
         let mut finished_batches = 0;
         let loader = DataLoader::new(file, 1_024).unwrap();
-        let blend = 0.5;
+        let blend = 0.8;
 
         loader.map_batches_threaded_loading(batch_size, |batch| {
             trainer.clear_data();
@@ -99,8 +97,6 @@ pub fn run_training(
         let error = trainer.error() / num as f32;
 
         let epoch_time = epoch_timer.elapsed().as_secs_f32();
-
-        trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.5");
 
         println!(
             "epoch {epoch} | time {epoch_time:.2} | running loss {error:.6} | {} pos/sec | total time {}",
