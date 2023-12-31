@@ -22,6 +22,7 @@ struct Affine {
     weights_grad: Tensor,
     biases_grad: Tensor,
     weights_intermediate: TensorBatch,
+    ones: GpuBuffer,
 }
 
 enum Operation {
@@ -309,9 +310,10 @@ fn backprop_single(
             weights_grad: wg,
             biases_grad: bg,
             weights_intermediate: wi,
+            ones,
             ..
         }) => unsafe {
-            TensorBatch::backprop_affine(handle, batch_size, w, errors, inputs, wg, bg, wi);
+            TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg, wi);
         },
     }
 }
@@ -432,12 +434,15 @@ impl<T: InputType> TrainerBuilder<T> {
                 let op = match op {
                     OpType::Affine => {
                         let wsh = Shape::new(inp_size, size);
+                        let ones = GpuBuffer::new(1);
+                        ones.load_from_cpu(&[1.0]);
                         let mut affine = Affine {
                             weights: Tensor::uninit(wsh),
                             biases: Tensor::uninit(bsh),
                             weights_grad: Tensor::uninit(wsh),
                             biases_grad: Tensor::uninit(bsh),
                             weights_intermediate: TensorBatch::new(wsh, batch_size),
+                            ones,
                         };
 
                         affine.weights.set_ptr(opt.weights_offset(offset));
