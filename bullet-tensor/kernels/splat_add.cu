@@ -28,7 +28,7 @@ extern "C" void splatAdd(
     const size_t grid_x = (batchSize + threads - 1) / threads;
     const dim3 grid(grid_x, tensorSize);
 
-    splatAddKernel<<<grid, threads, threads * sizeof(float)>>>(
+    splatAddKernel<<<grid, threads>>>(
         batchSize,
         tensorSize,
         inp,
