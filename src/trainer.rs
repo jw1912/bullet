@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use bulletformat::BulletFormat;
 use bullet_core::{inputs::InputType, Rand, util, GpuDataLoader};
 use bullet_tensor::{
@@ -7,8 +5,7 @@ use bullet_tensor::{
     Tensor, TensorBatch, create_cublas_handle, Shape,
 };
 
-struct FeatureTransormer<T> {
-    marker: PhantomData<T>,
+struct FeatureTransormer {
     weights: Tensor,
     biases: Tensor,
     weights_grad: Tensor,
@@ -36,9 +33,10 @@ struct Node {
 }
 
 pub struct Trainer<T> {
+    input_getter: T,
     handle: cublasHandle_t,
     optimiser: Optimiser,
-    ft: FeatureTransormer<T>,
+    ft: FeatureTransormer,
     nodes: Vec<Node>,
     inputs: SparseTensor,
     results: TensorBatch,
@@ -49,8 +47,8 @@ pub struct Trainer<T> {
 
 impl<T: InputType> std::fmt::Display for Trainer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let inp_size = T::RequiredDataType::INPUTS;
-        let buckets = T::BUCKETS;
+        let inp_size = self.input_getter.inputs();
+        let buckets = self.input_getter.buckets();
         write!(f, "({inp_size}")?;
         if buckets > 1 {
             write!(f, "x{buckets}")?;
@@ -134,6 +132,10 @@ where T: InputType
         let mut buf = [0.0];
         self.error.write_to_cpu(&mut buf);
         buf[0]
+    }
+
+    pub fn input_getter(&self) -> T {
+        self.input_getter
     }
 
     pub fn net_size(&self) -> usize {
@@ -303,7 +305,7 @@ struct NodeType {
 }
 
 pub struct TrainerBuilder<T> {
-    marker: PhantomData<T>,
+    input_getter: T,
     batch_size: usize,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
@@ -311,10 +313,10 @@ pub struct TrainerBuilder<T> {
     scale: f32,
 }
 
-impl<T> Default for TrainerBuilder<T> {
+impl<T: InputType> Default for TrainerBuilder<T> {
     fn default() -> Self {
         Self {
-            marker: PhantomData,
+            input_getter: T::default(),
             batch_size: 0,
             ft_out_size: 0,
             nodes: Vec::new(),
@@ -324,13 +326,18 @@ impl<T> Default for TrainerBuilder<T> {
     }
 }
 
-impl<T> TrainerBuilder<T> {
+impl<T: InputType> TrainerBuilder<T> {
     fn get_last_layer_size(&self) -> usize {
         if let Some(node) = self.nodes.last() {
             node.size
         } else {
             2 * self.ft_out_size
         }
+    }
+
+    pub fn set_input(mut self, input_getter: T) -> Self {
+        self.input_getter = input_getter;
+        self
     }
 
     pub fn set_batch_size(mut self, batch_size: usize) -> Self {
@@ -370,18 +377,19 @@ impl<T> TrainerBuilder<T> {
 
 impl<T: InputType> TrainerBuilder<T> {
     pub fn build(self) -> Trainer<T> {
-        let ft_size = (T::SIZE + 1) * self.ft_out_size;
+        let inp_getter_size = self.input_getter.size();
+
+        let ft_size = (inp_getter_size + 1) * self.ft_out_size;
         let net_size = self.size + ft_size;
 
         let opt = Optimiser::new(net_size);
         let batch_size = self.batch_size;
 
         unsafe {
-            let ftw_shape = Shape::new(self.ft_out_size, T::SIZE);
+            let ftw_shape = Shape::new(self.ft_out_size, inp_getter_size);
             let ftb_shape = Shape::new(1, self.ft_out_size);
 
             let mut ft = FeatureTransormer {
-                marker: PhantomData,
                 weights: Tensor::uninit(ftw_shape),
                 biases: Tensor::uninit(ftb_shape),
                 weights_grad: Tensor::uninit(ftw_shape),
@@ -392,7 +400,7 @@ impl<T: InputType> TrainerBuilder<T> {
             let mut offset = 0;
             ft.weights.set_ptr(opt.weights_offset(offset));
             ft.weights_grad.set_ptr(opt.gradients_offset(offset));
-            offset += self.ft_out_size * T::SIZE;
+            offset += self.ft_out_size * inp_getter_size;
 
             ft.biases.set_ptr(opt.weights_offset(offset));
             ft.biases_grad.set_ptr(opt.gradients_offset(offset));
@@ -445,7 +453,7 @@ impl<T: InputType> TrainerBuilder<T> {
 
             let inputs = SparseTensor::uninit(
                 batch_size,
-                T::SIZE,
+                inp_getter_size,
                 T::RequiredDataType::MAX_FEATURES,
             );
 
@@ -462,6 +470,7 @@ impl<T: InputType> TrainerBuilder<T> {
             opt.load_weights_from_cpu(&net);
 
             Trainer {
+                input_getter: self.input_getter,
                 handle: create_cublas_handle(),
                 optimiser: opt,
                 ft,

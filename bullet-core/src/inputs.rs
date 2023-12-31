@@ -1,23 +1,37 @@
 use bulletformat::{AtaxxBoard, BulletFormat, ChessBoard};
 
-pub trait InputType {
+pub trait InputType: Send + Sync + Copy + Default {
     type RequiredDataType: BulletFormat + Copy + Send + Sync;
-    const BUCKETS: usize;
 
-    const SIZE: usize = Self::RequiredDataType::INPUTS * Self::BUCKETS;
+    fn inputs(&self) -> usize;
+
+    fn buckets(&self) -> usize;
+
+    fn size(&self) -> usize {
+        self.inputs() * self.buckets()
+    }
 
     fn get_feature_indices(
+        &self,
         feat: <Self::RequiredDataType as std::iter::IntoIterator>::Item,
     ) -> (usize, usize);
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Ataxx147;
 impl InputType for Ataxx147 {
     type RequiredDataType = AtaxxBoard;
-    const BUCKETS: usize = 1;
+
+    fn inputs(&self) -> usize {
+        147
+    }
+
+    fn buckets(&self) -> usize {
+        1
+    }
 
     fn get_feature_indices(
+        &self,
         (piece, square): <Self::RequiredDataType as std::iter::IntoIterator>::Item,
     ) -> (usize, usize) {
         let pc = usize::from(piece);
@@ -30,13 +44,21 @@ impl InputType for Ataxx147 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Chess768;
 impl InputType for Chess768 {
     type RequiredDataType = ChessBoard;
-    const BUCKETS: usize = 1;
+
+    fn inputs(&self) -> usize {
+        768
+    }
+
+    fn buckets(&self) -> usize {
+        1
+    }
 
     fn get_feature_indices(
+        &self,
         (piece, square, _, _): <Self::RequiredDataType as std::iter::IntoIterator>::Item,
     ) -> (usize, usize) {
         let c = usize::from(piece & 8 > 0);
@@ -48,66 +70,101 @@ impl InputType for Chess768 {
     }
 }
 
-const fn get_num_buckets<const N: usize>(arr: [usize; N]) -> usize {
-    let mut idx = 0;
-    let mut max = 1;
-    while idx < N {
-        let val = arr[idx];
-        if val > max {
-            max = val;
-        }
-        idx += 1;
+fn get_num_buckets<const N: usize>(arr: &[usize; N]) -> usize {
+    let mut max = 0;
+    for &val in arr {
+        max = max.max(val)
     }
     max + 1
 }
 
-#[derive(Debug)]
-pub struct ChessBuckets;
-impl ChessBuckets {
-    const BUCKETING: [usize; 64] = crate::BUCKETS;
+#[derive(Clone, Copy, Debug)]
+pub struct ChessBuckets {
+    buckets: [usize; 64],
+    num_buckets: usize,
+}
 
-    const SCALED: [usize; 64] = {
-        let mut idx = 0;
-        let mut ret = [0; 64];
-        while idx < 64 {
-            ret[idx] = 768 * Self::BUCKETING[idx];
-            idx += 1;
+impl Default for ChessBuckets {
+    fn default() -> Self {
+        Self {
+            buckets: [0; 64],
+            num_buckets: 1,
         }
-        ret
-    };
+    }
+}
+
+impl ChessBuckets {
+    pub fn new(buckets: [usize; 64]) -> Self {
+        let num_buckets = get_num_buckets(&buckets);
+        let buckets = {
+            let mut idx = 0;
+            let mut ret = [0; 64];
+            while idx < 64 {
+                ret[idx] = 768 * buckets[idx];
+                idx += 1;
+            }
+            ret
+        };
+
+        Self { buckets, num_buckets }
+    }
 }
 
 impl InputType for ChessBuckets {
     type RequiredDataType = ChessBoard;
-    const BUCKETS: usize = get_num_buckets(Self::BUCKETING);
+
+    fn inputs(&self) -> usize {
+        768
+    }
+
+    fn buckets(&self) -> usize {
+        self.num_buckets
+    }
 
     fn get_feature_indices(
+        &self,
         (piece, square, our_ksq, opp_ksq): <Self::RequiredDataType as std::iter::IntoIterator>::Item,
     ) -> (usize, usize) {
         let c = usize::from(piece & 8 > 0);
         let pc = 64 * usize::from(piece & 7);
         let sq = usize::from(square);
-        let wfeat = Self::SCALED[usize::from(our_ksq)] + [0, 384][c] + pc + sq;
-        let bfeat = Self::SCALED[usize::from(opp_ksq)] + [384, 0][c] + pc + (sq ^ 56);
+        let wfeat = self.buckets[usize::from(our_ksq)] + [0, 384][c] + pc + sq;
+        let bfeat = self.buckets[usize::from(opp_ksq)] + [384, 0][c] + pc + (sq ^ 56);
         (wfeat, bfeat)
     }
 }
 
-#[derive(Debug)]
-pub struct ChessBucketsMirrored;
-impl ChessBucketsMirrored {
-    const BUCKETING: [usize; 32] = crate::BUCKETS_MIRRORED;
+#[derive(Clone, Copy, Debug)]
+pub struct ChessBucketsMirrored {
+    buckets: [usize; 64],
+    num_buckets: usize,
+}
 
-    const SCALED: [usize; 64] = {
-        let mut idx = 0;
-        let mut ret = [0; 64];
-        while idx < 64 {
-            let sq = (idx / 8) * 4 + [0, 1, 2, 3, 3, 2, 1, 0][idx % 8];
-            ret[idx] = 768 * Self::BUCKETING[sq];
-            idx += 1;
+impl Default for ChessBucketsMirrored {
+    fn default() -> Self {
+        Self {
+            buckets: [0; 64],
+            num_buckets: 1,
         }
-        ret
-    };
+    }
+}
+
+impl ChessBucketsMirrored {
+    pub fn new(buckets: [usize; 32]) -> Self {
+        let num_buckets = get_num_buckets(&buckets);
+        let buckets = {
+            let mut idx = 0;
+            let mut ret = [0; 64];
+            while idx < 64 {
+                let sq = (idx / 8) * 4 + [0, 1, 2, 3, 3, 2, 1, 0][idx % 8];
+                ret[idx] = 768 * buckets[sq];
+                idx += 1;
+            }
+            ret
+        };
+
+        Self { buckets, num_buckets }
+    }
 
     fn get_sq(mut sq: usize, ksq: usize) -> usize {
         if ksq % 8 > 3 {
@@ -120,9 +177,17 @@ impl ChessBucketsMirrored {
 
 impl InputType for ChessBucketsMirrored {
     type RequiredDataType = ChessBoard;
-    const BUCKETS: usize = get_num_buckets(Self::BUCKETING);
+
+    fn inputs(&self) -> usize {
+        768
+    }
+
+    fn buckets(&self) -> usize {
+        self.num_buckets
+    }
 
     fn get_feature_indices(
+        &self,
         (piece, square, our_ksq, opp_ksq): <Self::RequiredDataType as BulletFormat>::FeatureType,
     ) -> (usize, usize) {
         let c = usize::from(piece & 8 > 0);
@@ -132,8 +197,8 @@ impl InputType for ChessBucketsMirrored {
         let our_sq = Self::get_sq(sq, usize::from(our_ksq));
         let opp_sq = Self::get_sq(sq, usize::from(opp_ksq)) ^ 56;
 
-        let wfeat = Self::SCALED[usize::from(our_ksq)] + [0, 384][c] + pc + our_sq;
-        let bfeat = Self::SCALED[usize::from(opp_ksq)] + [384, 0][c] + pc + opp_sq;
+        let wfeat = self.buckets[usize::from(our_ksq)] + [0, 384][c] + pc + our_sq;
+        let bfeat = self.buckets[usize::from(opp_ksq)] + [384, 0][c] + pc + opp_sq;
         (wfeat, bfeat)
     }
 }

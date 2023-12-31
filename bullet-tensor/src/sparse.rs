@@ -28,7 +28,7 @@ impl SparseTensor {
         input_dim: usize,
         max_num_inputs: usize,
     ) -> Self {
-        assert!(input_dim < 65_535, "Unsupported dimension!");
+        assert!(input_dim < 65_535, "Unsupported dimension {input_dim}!");
 
         Self {
             cap,

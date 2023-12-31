@@ -1,7 +1,5 @@
 use bulletformat::BulletFormat;
 
-use std::marker::PhantomData;
-
 use crate::inputs::InputType;
 
 #[repr(C)]
@@ -20,22 +18,18 @@ impl Feat {
 pub struct GpuDataLoader<I: InputType> {
     inputs: Vec<Feat>,
     results: Vec<f32>,
-    marker: PhantomData<I>,
+    input_getter: I,
 }
 
-impl<I: InputType> Default for GpuDataLoader<I> {
-    fn default() -> Self {
-        Self {
-            inputs: Vec::new(),
-            results: Vec::new(),
-            marker: PhantomData,
-        }
-    }
-}
-
-impl<I: InputType> GpuDataLoader<I>
-where I::RequiredDataType: Send + Sync + Copy
+impl<I> GpuDataLoader<I>
+where
+    I: InputType + Send + Sync,
+    I::RequiredDataType: Send + Sync + Copy
 {
+    pub fn new(input_getter: I) -> Self {
+        Self { inputs: Vec::new(), results: Vec::new(), input_getter }
+    }
+
     pub fn inputs(&self) -> &Vec<Feat> {
         &self.inputs
     }
@@ -56,6 +50,7 @@ where I::RequiredDataType: Send + Sync + Copy
                 .zip(self.inputs.chunks_mut(32 * chunk_size))
                 .zip(self.results.chunks_mut(chunk_size))
                 .for_each(|((data_chunk, input_chunk), results_chunk)| {
+                    let inp = &self.input_getter;
                     s.spawn(move || {
                         let chunk_len = data_chunk.len();
 
@@ -65,7 +60,7 @@ where I::RequiredDataType: Send + Sync + Copy
                             let offset = 32 * i;
 
                             for feat in pos.into_iter() {
-                                let (our, opp) = I::get_feature_indices(feat);
+                                let (our, opp) = inp.get_feature_indices(feat);
                                 input_chunk[offset + j] = Feat { our: our as u16, opp: opp as u16 };
                                 j += 1;
                             }

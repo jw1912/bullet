@@ -70,7 +70,7 @@ pub fn run_training<T: InputType>(
 
     let timer = Instant::now();
 
-    let mut gpu_loader = GpuDataLoader::<T>::default();
+    let mut gpu_loader = GpuDataLoader::<T>::new(trainer.input_getter());
 
     device_synchronise();
 

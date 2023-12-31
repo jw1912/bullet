@@ -10,11 +10,23 @@ use bullet::{
 };
 
 fn main() {
-    let mut trainer = TrainerBuilder::<inputs::Chess768>::default()
+    let mut trainer = TrainerBuilder::default()
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
-        .ft(256)
-        .activate(Activation::ReLU)
+        .set_input(
+            inputs::ChessBuckets::new([
+                0, 0, 0, 0, 1, 1, 1, 1,
+                0, 0, 0, 0, 1, 1, 1, 1,
+                2, 2, 2, 2, 3, 3, 3, 3,
+                2, 2, 2, 2, 3, 3, 3, 3,
+                2, 2, 2, 2, 3, 3, 3, 3,
+                2, 2, 2, 2, 3, 3, 3, 3,
+                2, 2, 2, 2, 3, 3, 3, 3,
+                2, 2, 2, 2, 3, 3, 3, 3,
+            ])
+        )
+        .ft(768)
+        .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
 
