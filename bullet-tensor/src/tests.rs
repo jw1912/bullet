@@ -276,7 +276,13 @@ fn tensor_lt_nt() {
 
 #[test]
 fn tensor_reduce_add() {
-    let vecs = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+    let handle = create_cublas_handle();
+    let vecs = [
+        1.0, 1.0, 2.0,
+        1.0, 0.0, 1.0,
+        1.0, 1.0, 3.0,
+        1.0, 1.0, 1.0,
+    ];
 
     let inp = TensorBatch::new(Shape::new(1, 3), 7);
     inp.load_from_cpu(&vecs);
@@ -284,13 +290,17 @@ fn tensor_reduce_add() {
     let mut out = unsafe { Tensor::uninit(Shape::new(1, 3)) };
     out.calloc();
 
+    let ones = GpuBuffer::new(1);
+    let ones_cpu = [1.0];
+    ones.load_from_cpu(&ones_cpu);
+
     unsafe {
-        TensorBatch::reduce_add(3, &inp, &out);
+        TensorBatch::reduce_add(handle, &ones, 4, &inp, &out);
     }
 
     let mut buf = [0.0; 3];
     out.write_to_cpu(&mut buf);
-    assert_eq!(buf, [3.0, 3.0, 3.0]);
+    assert_eq!(buf, [4.0, 3.0, 7.0]);
 
     unsafe {
         out.free();
@@ -338,6 +348,8 @@ fn affine() {
         let mut b = Tensor::uninit(Shape::new(1, 3));
         let x = TensorBatch::new(Shape::new(1, 3), 1);
         let y = TensorBatch::new(Shape::new(1, 3), 1);
+        let ones = GpuBuffer::new(1);
+        ones.load_from_cpu(&[1.0]);
 
         w.calloc();
         b.calloc();
@@ -360,7 +372,7 @@ fn affine() {
         wg.calloc();
         bg.calloc();
 
-        TensorBatch::backprop_affine(handle, 1, &w, &y, &x, &wg, &bg, &wi);
+        TensorBatch::backprop_affine(handle, &ones, 1, &w, &y, &x, &wg, &bg, &wi);
 
         x.write_to_cpu(&mut buf);
         assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);

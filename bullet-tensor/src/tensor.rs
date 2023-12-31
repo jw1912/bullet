@@ -337,7 +337,7 @@ impl TensorBatch {
         }
     }
 
-    /// This calulates `out[i] = inp[i] * op'(op_inv(inp[i]))` for a batch of input.
+    /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
     pub fn backprop_activation(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
         match op {
             Activation::ReLU => Self::map(bindings::backpropReLU, batch_size, inp, out),
@@ -365,6 +365,7 @@ impl TensorBatch {
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn backprop_affine(
         handle: cublasHandle_t,
+        ones: &GpuBuffer,
         batch_size: usize,
         weights: &Tensor,
         errors: &TensorBatch,
@@ -374,16 +375,35 @@ impl TensorBatch {
         weights_intermediate: &TensorBatch,
     ) {
         TensorBatch::lt_nt(handle, batch_size, errors, inputs, weights_intermediate);
-        TensorBatch::reduce_add(batch_size, weights_intermediate, weights_grad);
-        TensorBatch::reduce_add(batch_size, errors, biases_grad);
+        TensorBatch::reduce_add(handle, ones, batch_size, weights_intermediate, weights_grad);
+        TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
         TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
     }
 
     /// # Safety
     /// `out` must be pointing to valid allocated memory.
-    pub unsafe fn reduce_add(batch_size: usize, inp: &TensorBatch, out: &Tensor) {
+    pub unsafe fn reduce_add(handle: cublasHandle_t, ones: &GpuBuffer, batch_size: usize, inp: &TensorBatch, out: &Tensor) {
         assert_eq!(inp.shape(), out.shape());
-        bindings::reduceAdd(batch_size, inp.element_size(), inp.ptr(), out.ptr());
+        let alpha = 1.0;
+        let beta = 0.0;
+
+        let m = batch_size as c_int;
+        let n = out.num_elements() as c_int;
+
+        bindings::cublasSgemv_v2(
+            handle,
+            cublasOperation_t::CUBLAS_OP_N,
+            n,
+            m,
+            &alpha,
+            inp.ptr(),
+            n,
+            ones.ptr(),
+            0,
+            &beta,
+            out.ptr(),
+            1,
+        );
     }
 
     /// # Safety

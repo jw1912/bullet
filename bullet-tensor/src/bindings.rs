@@ -25,10 +25,10 @@ extern "C" {
         batchSize: usize,
         maxInputSize: usize,
         outputSize: usize,
-        half: usize,
         weights: *const f32,
         biases: *const f32,
-        inputs: *const u16,
+        ourInputs: *const u16,
+        oppInputs: *const u16,
         outputs: *mut f32,
     );
 
@@ -36,10 +36,10 @@ extern "C" {
         batchSize: usize,
         maxInputSize: usize,
         outputSize: usize,
-        half: usize,
         weightsGrad: *mut f32,
         biasesGrad: *mut f32,
-        inputs: *const u16,
+        ourInputs: *const u16,
+        oppInputs: *const u16,
         errors: *const f32,
     );
 
@@ -56,8 +56,6 @@ extern "C" {
     pub fn backpropSCReLU(size: usize, inp: *const f32, out: *mut f32);
 
     pub fn sigmoidMSE(bufferSize: usize, outputs: *mut f32, results: *const f32, error: *mut f32);
-
-    pub fn reduceAdd(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
 
     pub fn splatAdd(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
 }

@@ -18,7 +18,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    //trainer.load_from_checkpoint("checkpoints/net-gpu-epoch1");
+    //trainer.load_from_checkpoint("checkpoints/net-epoch1");
 
     let mut schedule = TrainingSchedule {
         net_id: "net".to_string(),
