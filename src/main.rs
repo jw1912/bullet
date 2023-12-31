@@ -13,8 +13,8 @@ fn main() {
     let mut trainer = TrainerBuilder::<inputs::Chess768>::default()
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
-        .ft(768)
-        .activate(Activation::SCReLU)
+        .ft(256)
+        .activate(Activation::ReLU)
         .add_layer(1)
         .build();
 

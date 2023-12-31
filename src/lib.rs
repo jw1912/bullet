@@ -49,7 +49,7 @@ pub fn run_training<T: InputType>(
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
 
-    println!("Arch           : {trainer}");
+    println!("Arch           : {}", ansi!(format!("{trainer}"), 31, esc));
     println!("Data File Path : {}", ansi!(file, "32;1", esc));
     println!("Threads        : {}", ansi!(threads, 31, esc));
     println!("WDL Proportion : start {} end {}",
@@ -134,11 +134,10 @@ pub fn run_training<T: InputType>(
         schedule.update(epoch, num_cs, esc);
 
         if schedule.should_save(epoch) {
-            let net_path = format!("net_test-epoch{epoch}");
-
             trainer.save(schedule.net_id(), epoch);
 
-            println!("Saved [{net_path}]");
+            let name = ansi!(format!("{}-epoch{epoch}", schedule.net_id()), "32;1", esc);
+            println!("Saved [{name}]");
         }
     }
 }
