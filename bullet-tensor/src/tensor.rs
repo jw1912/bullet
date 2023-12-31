@@ -1,7 +1,7 @@
 use std::ffi::c_int;
 
 use crate::{
-    bindings::{self, cublasHandle_t, cublasOperation_t, cublasSgemmStridedBatched},
+    bindings::{self, cublasHandle_t, cublasOperation_t},
     util, Activation, GpuBuffer, Shape,
 };
 
@@ -401,23 +401,20 @@ fn sgemv<const TRANSA: bool>(
     };
 
     unsafe {
-        cublasSgemmStridedBatched(
+        bindings::cublasSgemvStridedBatched(
             handle,
             transa,
-            cublasOperation_t::CUBLAS_OP_N,
-            y_ld,
-            1,
-            x_ld,
+            n, m,
             &alpha,
             a_ptr,
             n,
             a_str.into(),
             x_ptr,
-            x_ld,
+            1,
             x_ld.into(),
             &beta,
             y_ptr,
-            y_ld,
+            1,
             y_ld.into(),
             batch_size,
         );
@@ -439,7 +436,7 @@ fn sgemm(
     let beta = 0.0;
 
     unsafe {
-        cublasSgemmStridedBatched(
+        bindings::cublasSgemmStridedBatched(
             handle,
             cublasOperation_t::CUBLAS_OP_N,
             cublasOperation_t::CUBLAS_OP_T,
