@@ -11,6 +11,12 @@ pub struct Feat {
     opp: u16,
 }
 
+impl Feat {
+    pub fn new(our: u16, opp: u16) -> Self {
+        Self { our, opp }
+    }
+}
+
 pub struct GpuDataLoader<I: InputType> {
     inputs: Vec<Feat>,
     results: Vec<f32>,

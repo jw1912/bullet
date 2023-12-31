@@ -1,3 +1,5 @@
+use bullet_core::Feat;
+
 use crate::{
     create_cublas_handle, panic_if_cuda_error, Activation, Shape, SparseTensor, Tensor, TensorBatch, GpuBuffer,
 };
@@ -183,7 +185,7 @@ fn tensor_sparse_affine() {
 
     let b = [0.5, -0.5];
 
-    let xs = [0, 1, 2];
+    let xs = [Feat::new(0, 0), Feat::new(1, 1), Feat::new(2, 2)];
 
     unsafe {
         let mut weights = Tensor::uninit(Shape::new(N, M));
@@ -199,7 +201,7 @@ fn tensor_sparse_affine() {
 
         inputs.append(&xs);
 
-        SparseTensor::affine(&weights, &inputs, &inputs, &biases, &outputs);
+        SparseTensor::affine(&weights, &inputs, &biases, &outputs);
 
         let mut ys = [0.0; N * B * 2];
         outputs.write_to_cpu(&mut ys);
@@ -213,7 +215,7 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(&wg, &inputs, &inputs, &bg, &outputs);
+        SparseTensor::affine_backprop(&wg, &inputs, &bg, &outputs);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_cpu(&mut wbuf);

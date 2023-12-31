@@ -6,6 +6,8 @@
 #![allow(improper_ctypes)]
 #![allow(unused)]
 
+use bullet_core::Feat;
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[link(name = "kernels", kind = "static")]
@@ -27,8 +29,7 @@ extern "C" {
         outputSize: usize,
         weights: *const f32,
         biases: *const f32,
-        ourInputs: *const u16,
-        oppInputs: *const u16,
+        inputs: *const Feat,
         outputs: *mut f32,
     );
 
@@ -38,8 +39,7 @@ extern "C" {
         outputSize: usize,
         weightsGrad: *mut f32,
         biasesGrad: *mut f32,
-        ourInputs: *const u16,
-        oppInputs: *const u16,
+        inputs: *const Feat,
         errors: *const f32,
     );
 

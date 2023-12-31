@@ -443,13 +443,7 @@ impl<T: InputType> TrainerBuilder<T> {
 
             assert_eq!(offset, net_size);
 
-            let our_inputs = SparseTensor::uninit(
-                batch_size,
-                T::SIZE,
-                T::RequiredDataType::MAX_FEATURES,
-            );
-
-            let opp_inputs = SparseTensor::uninit(
+            let inputs = SparseTensor::uninit(
                 batch_size,
                 T::SIZE,
                 T::RequiredDataType::MAX_FEATURES,

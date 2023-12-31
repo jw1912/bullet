@@ -1,3 +1,5 @@
+use bullet_core::Feat;
+
 use crate::{bindings, util, Shape, Tensor, TensorBatch};
 
 /// A sparse representation of a tensor with dimensions `(1, input_dim)`.
@@ -6,7 +8,7 @@ pub struct SparseTensor {
     used: usize,
     input_dim: usize,
     max_num_inputs: usize,
-    ptr: *mut u16,
+    ptr: *mut Feat,
 }
 
 impl Drop for SparseTensor {
@@ -45,7 +47,7 @@ impl SparseTensor {
         self.used
     }
 
-    pub fn append(&mut self, inputs: &[u16]) {
+    pub fn append(&mut self, inputs: &[Feat]) {
         let num_inputs = inputs.len() / self.max_num_inputs;
         assert!(self.used + num_inputs <= self.cap);
 
@@ -64,23 +66,21 @@ impl SparseTensor {
     ///
     /// # Safety
     /// `weights`, `biases` and `inputs` must be initialised properly.
-    pub unsafe fn affine(weights: &Tensor, our: &SparseTensor, opp: &SparseTensor, biases: &Tensor, outputs: &TensorBatch) {
-        assert_eq!(our.used, opp.used);
-        assert!(our.used > 0);
-        let input_dim = our.input_dim;
+    pub unsafe fn affine(weights: &Tensor, inputs: &SparseTensor, biases: &Tensor, outputs: &TensorBatch) {
+        assert!(inputs.used > 0);
+        let input_dim = inputs.input_dim;
         let output_dim = outputs.element_size() / 2;
 
         assert_eq!(weights.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases.shape(), Shape::new(1, output_dim));
 
         bindings::sparseAffineForward(
-            our.used,
-            our.max_num_inputs,
+            inputs.used,
+            inputs.max_num_inputs,
             output_dim,
             weights.ptr(),
             biases.ptr(),
-            our.ptr,
-            opp.ptr,
+            inputs.ptr,
             outputs.ptr(),
         );
     }
@@ -93,26 +93,24 @@ impl SparseTensor {
     /// `weights`, `biases` and `errors` must be initialised properly.
     pub unsafe fn affine_backprop(
         weights_grad: &Tensor,
-        our: &SparseTensor,
-        opp: &SparseTensor,
+        inputs: &SparseTensor,
         biases_grad: &Tensor,
         errors: &TensorBatch,
     ) {
-        assert!(our.used > 0);
-        let input_dim = our.input_dim;
+        assert!(inputs.used > 0);
+        let input_dim = inputs.input_dim;
         let output_dim = errors.element_size() / 2;
 
         assert_eq!(weights_grad.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
 
         bindings::sparseAffineBackward(
-            our.used,
-            our.max_num_inputs,
+            inputs.used,
+            inputs.max_num_inputs,
             output_dim,
             weights_grad.ptr(),
             biases_grad.ptr(),
-            our.ptr,
-            opp.ptr,
+            inputs.ptr,
             errors.ptr(),
         );
 
