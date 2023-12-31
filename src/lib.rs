@@ -88,6 +88,7 @@ pub fn run_training<T: InputType>(
         let mut finished_batches = 0;
         let loader = DataLoader::new(file, 1_024).unwrap();
         let blend = schedule.wdl(epoch);
+        let lrate = schedule.lr();
 
         loader.map_batches_threaded_loading(batch_size, |batch| {
             let batch_size = batch.len();
@@ -99,7 +100,7 @@ pub fn run_training<T: InputType>(
             trainer.load_data(&gpu_loader);
             device_synchronise();
 
-            trainer.train_on_batch(0.01, 0.001);
+            trainer.train_on_batch(0.01, lrate);
 
             device_synchronise();
 

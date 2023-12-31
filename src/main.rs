@@ -8,7 +8,7 @@ fn main() {
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_input(inputs::Chess768)
-        .ft(256)
+        .ft(768)
         .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
@@ -16,13 +16,13 @@ fn main() {
     //trainer.load_from_checkpoint("checkpoints/net-epoch1");
 
     let mut schedule = TrainingSchedule {
-        net_id: "net".to_string(),
-        start_epoch: 1,
+        net_id: "net-01.01.24".to_string(),
+        start_epoch: 5,
         num_epochs: 20,
         wdl_scheduler: WdlScheduler::new(0.2, 0.5),
         lr_scheduler: LrScheduler::new(0.001, 0.1, LrSchedulerType::Step(8)),
         save_rate: 1,
     };
 
-    run_training(&mut trainer, &mut schedule, 4, "../../data/wha.data");
+    run_training(&mut trainer, &mut schedule, 4, "../../data/akimbo3-9.data");
 }
