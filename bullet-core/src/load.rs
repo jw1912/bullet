@@ -40,14 +40,15 @@ where
 
     pub fn load(&mut self, data: &[I::RequiredDataType], threads: usize, blend: f32, rscale: f32) {
         let batch_size = data.len();
+        let max_features = I::RequiredDataType::MAX_FEATURES;
         let chunk_size = (batch_size + threads - 1) / threads;
 
-        self.inputs = vec![Feat { our: 0, opp: 0 }; 32 * batch_size];
+        self.inputs = vec![Feat { our: 0, opp: 0 }; max_features * batch_size];
         self.results = vec![0.0; batch_size];
 
         std::thread::scope(move |s| {
             data.chunks(chunk_size)
-                .zip(self.inputs.chunks_mut(32 * chunk_size))
+                .zip(self.inputs.chunks_mut(max_features * chunk_size))
                 .zip(self.results.chunks_mut(chunk_size))
                 .for_each(|((data_chunk, input_chunk), results_chunk)| {
                     let inp = &self.input_getter;
@@ -57,7 +58,7 @@ where
                         for i in 0..chunk_len {
                             let pos = &data_chunk[i];
                             let mut j = 0;
-                            let offset = 32 * i;
+                            let offset = max_features * i;
 
                             for feat in pos.into_iter() {
                                 let (our, opp) = inp.get_feature_indices(feat);
@@ -65,7 +66,7 @@ where
                                 j += 1;
                             }
 
-                            if j < I::RequiredDataType::MAX_FEATURES {
+                            if j < max_features {
                                 input_chunk[offset + j] = Feat { our: u16::MAX, opp: u16::MAX };
                             }
 
