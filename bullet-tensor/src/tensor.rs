@@ -337,7 +337,7 @@ impl TensorBatch {
         }
     }
 
-    /// This calulates `out[i] = inp[i] * op'(op_inv(inp[i]))` for a batch of input.
+    /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
     pub fn backprop_activation(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
         match op {
             Activation::ReLU => Self::map(bindings::backpropReLU, batch_size, inp, out),
