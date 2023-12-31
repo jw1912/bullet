@@ -91,7 +91,6 @@ pub fn run_training<T: InputType>(
             trainer.load_data(&gpu_loader);
             device_synchronise();
 
-
             trainer.train_on_batch(0.01, 0.001);
 
             device_synchronise();
