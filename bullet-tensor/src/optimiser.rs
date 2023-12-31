@@ -1,4 +1,4 @@
-use crate::{bindings, GpuBuffer, util};
+use crate::{bindings, util, GpuBuffer};
 
 /// A struct intended to hold all network weights and biases
 /// needed for training.
@@ -31,13 +31,21 @@ impl Optimiser {
 
     /// Pointer to network buffer starting at `network.ptr() + index`.
     pub fn weights_offset(&self, index: usize) -> *mut f32 {
-        assert!(index < self.size, "Index out of bounds: {index} >= {}!", self.size);
+        assert!(
+            index < self.size,
+            "Index out of bounds: {index} >= {}!",
+            self.size
+        );
         unsafe { self.network.ptr().add(index) }
     }
 
     /// Pointer to gradient buffer starting at `gradient.ptr() + index`.
     pub fn gradients_offset(&self, index: usize) -> *mut f32 {
-        assert!(index < self.size, "Index out of bounds: {index} >= {}!", self.size);
+        assert!(
+            index < self.size,
+            "Index out of bounds: {index} >= {}!",
+            self.size
+        );
         unsafe { self.gradients.ptr().add(index) }
     }
 

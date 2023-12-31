@@ -23,11 +23,7 @@ impl SparseTensor {
     /// # Safety
     /// This creates an uninitialised instance, it is up to the
     /// user to perform an operation which initialises it.
-    pub unsafe fn uninit(
-        cap: usize,
-        input_dim: usize,
-        max_num_inputs: usize,
-    ) -> Self {
+    pub unsafe fn uninit(cap: usize, input_dim: usize, max_num_inputs: usize) -> Self {
         assert!(input_dim < 65_535, "Unsupported dimension {input_dim}!");
 
         Self {
@@ -66,7 +62,12 @@ impl SparseTensor {
     ///
     /// # Safety
     /// `weights`, `biases` and `inputs` must be initialised properly.
-    pub unsafe fn affine(weights: &Tensor, inputs: &SparseTensor, biases: &Tensor, outputs: &TensorBatch) {
+    pub unsafe fn affine(
+        weights: &Tensor,
+        inputs: &SparseTensor,
+        biases: &Tensor,
+        outputs: &TensorBatch,
+    ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
         let output_dim = outputs.element_size() / 2;
@@ -113,6 +114,5 @@ impl SparseTensor {
             inputs.ptr,
             errors.ptr(),
         );
-
     }
 }

@@ -1,9 +1,9 @@
-use bulletformat::BulletFormat;
-use bullet_core::{inputs::InputType, Rand, util, GpuDataLoader};
+use bullet_core::{inputs::InputType, util, GpuDataLoader, Rand};
 use bullet_tensor::{
-    cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser, SparseTensor,
-    Tensor, TensorBatch, create_cublas_handle, Shape,
+    create_cublas_handle, cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser,
+    Shape, SparseTensor, Tensor, TensorBatch,
 };
+use bulletformat::BulletFormat;
 
 struct FeatureTransormer {
     weights: Tensor,
@@ -71,9 +71,7 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
     }
 }
 
-impl<T> Trainer<T>
-where T: InputType
-{
+impl<T: InputType> Trainer<T> {
     pub fn save(&self, name: String, epoch: usize) {
         let size = self.optimiser.size();
 
@@ -95,7 +93,7 @@ where T: InputType
     pub fn load_from_checkpoint(&self, path: &str) {
         let load_from_bin = |name: &str| {
             use std::fs::File;
-            use std::io::{Read, BufReader};
+            use std::io::{BufReader, Read};
             let file = File::open(format!("{path}/{name}.bin")).unwrap();
             let reader = BufReader::new(file);
             let mut res = vec![0.0; self.net_size()];
@@ -155,10 +153,7 @@ where T: InputType
         self.inputs.clear();
     }
 
-    pub fn load_data(
-        &mut self,
-        loader: &GpuDataLoader<T>,
-    ) {
+    pub fn load_data(&mut self, loader: &GpuDataLoader<T>) {
         let inputs = loader.inputs();
         let results = loader.results();
 
@@ -357,9 +352,7 @@ impl<T: InputType> TrainerBuilder<T> {
     }
 
     fn add(mut self, size: usize, op: OpType) -> Self {
-        self.nodes.push(
-            NodeType { size, op }
-        );
+        self.nodes.push(NodeType { size, op });
 
         self
     }

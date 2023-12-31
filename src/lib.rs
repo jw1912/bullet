@@ -3,13 +3,17 @@ mod trainer;
 
 pub use bullet_core::inputs;
 pub use bullet_tensor::Activation;
-pub use schedule::{TrainingSchedule, WdlScheduler, LrScheduler, LrSchedulerType};
+pub use schedule::{LrScheduler, LrSchedulerType, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 
-use std::{io::{Write, stdout}, time::Instant, sync::atomic::{AtomicBool, Ordering::SeqCst}};
-use bulletformat::DataLoader;
 use bullet_core::{inputs::InputType, GpuDataLoader};
 use bullet_tensor::device_synchronise;
+use bulletformat::DataLoader;
+use std::{
+    io::{stdout, Write},
+    sync::atomic::{AtomicBool, Ordering::SeqCst},
+    time::Instant,
+};
 
 static CBCS: AtomicBool = AtomicBool::new(false);
 
@@ -52,7 +56,8 @@ pub fn run_training<T: InputType>(
     println!("Arch           : {}", ansi!(format!("{trainer}"), 31, esc));
     println!("Data File Path : {}", ansi!(file, "32;1", esc));
     println!("Threads        : {}", ansi!(threads, 31, esc));
-    println!("WDL Proportion : start {} end {}",
+    println!(
+        "WDL Proportion : start {} end {}",
         ansi!(schedule.wdl_scheduler.start(), 31, esc),
         ansi!(schedule.wdl_scheduler.end(), 31, esc),
     );
@@ -61,7 +66,10 @@ pub fn run_training<T: InputType>(
     println!("Batch Size     : {}", ansi!(trainer.batch_size(), 31, esc));
     println!("Net Name       : {}", ansi!(schedule.net_id, "32;1", esc));
     println!("LR Scheduler   : {}", schedule.lr_scheduler.colourful(esc));
-    println!("Scale          : {}", ansi!(format!("{:.0}", trainer.eval_scale()), 31, esc));
+    println!(
+        "Scale          : {}",
+        ansi!(format!("{:.0}", trainer.eval_scale()), 31, esc)
+    );
     println!("Positions      : {}", ansi!(num, 31, esc));
 
     for i in 1..schedule.start_epoch {

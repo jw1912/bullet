@@ -37,10 +37,6 @@ impl GpuBuffer {
         res
     }
 
-    pub fn zero(&self) {
-
-    }
-
     pub fn set_tracking(tracking: bool) {
         TRACKING.store(tracking, Ordering::SeqCst);
     }

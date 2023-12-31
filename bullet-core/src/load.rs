@@ -24,10 +24,14 @@ pub struct GpuDataLoader<I: InputType> {
 impl<I> GpuDataLoader<I>
 where
     I: InputType + Send + Sync,
-    I::RequiredDataType: Send + Sync + Copy
+    I::RequiredDataType: Send + Sync + Copy,
 {
     pub fn new(input_getter: I) -> Self {
-        Self { inputs: Vec::new(), results: Vec::new(), input_getter }
+        Self {
+            inputs: Vec::new(),
+            results: Vec::new(),
+            input_getter,
+        }
     }
 
     pub fn inputs(&self) -> &Vec<Feat> {
@@ -62,12 +66,12 @@ where
 
                             for feat in pos.into_iter() {
                                 let (our, opp) = inp.get_feature_indices(feat);
-                                input_chunk[offset + j] = Feat { our: our as u16, opp: opp as u16 };
+                                input_chunk[offset + j] = Feat::new(our as u16, opp as u16);
                                 j += 1;
                             }
 
                             if j < max_features {
-                                input_chunk[offset + j] = Feat { our: u16::MAX, opp: u16::MAX };
+                                input_chunk[offset + j] = Feat::new(u16::MAX, u16::MAX);
                             }
 
                             results_chunk[i] = pos.blended_result(blend, rscale);

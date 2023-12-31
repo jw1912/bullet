@@ -63,7 +63,10 @@ pub fn calloc<T>(num: usize) -> *mut T {
 }
 
 pub fn set_zero<T>(ptr: *mut T, num: usize) {
-    catch!(cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()), "memset");
+    catch!(
+        cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()),
+        "memset"
+    );
     catch!(cudaDeviceSynchronize());
 }
 

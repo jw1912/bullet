@@ -1,12 +1,6 @@
 use bullet::{
-    Activation,
-    inputs,
-    TrainerBuilder,
-    run_training,
-    TrainingSchedule,
-    WdlScheduler,
-    LrScheduler,
-    LrSchedulerType,
+    inputs, run_training, Activation, LrScheduler, LrSchedulerType, TrainerBuilder,
+    TrainingSchedule, WdlScheduler,
 };
 
 fn main() {

@@ -106,7 +106,10 @@ impl ChessBuckets {
             ret
         };
 
-        Self { buckets, num_buckets }
+        Self {
+            buckets,
+            num_buckets,
+        }
     }
 }
 
@@ -163,7 +166,10 @@ impl ChessBucketsMirrored {
             ret
         };
 
-        Self { buckets, num_buckets }
+        Self {
+            buckets,
+            num_buckets,
+        }
     }
 
     fn get_sq(mut sq: usize, ksq: usize) -> usize {

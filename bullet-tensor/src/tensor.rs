@@ -330,7 +330,13 @@ impl TensorBatch {
 
     /// # Safety
     /// `out` must be pointing to valid allocated memory.
-    pub unsafe fn reduce_add(handle: cublasHandle_t, ones: &GpuBuffer, batch_size: usize, inp: &TensorBatch, out: &Tensor) {
+    pub unsafe fn reduce_add(
+        handle: cublasHandle_t,
+        ones: &GpuBuffer,
+        batch_size: usize,
+        inp: &TensorBatch,
+        out: &Tensor,
+    ) {
         assert_eq!(inp.shape(), out.shape());
         let alpha = 1.0;
         let beta = 0.0;
@@ -404,7 +410,8 @@ fn sgemv<const TRANSA: bool>(
         bindings::cublasSgemvStridedBatched(
             handle,
             transa,
-            n, m,
+            n,
+            m,
             &alpha,
             a_ptr,
             n,
