@@ -141,15 +141,6 @@ impl TensorBatch {
         self.buf.write_to_cpu(buf);
     }
 
-    /// Splat Batched Linear-Transform: Not Transposed * Not Transposed
-    ///
-    /// So called as it "splats" `a` implicitly into a batch.
-    ///
-    /// Computes y[i] = ax[i] on a batch of strided inputs, where
-    /// - a is an `m x n` matrix, stored row-major (m columns, n rows).
-    /// - x[i] is an `m` dimensional vector.
-    /// - y[i] is an `n` dimensional vector
-    ///
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
@@ -174,15 +165,6 @@ impl TensorBatch {
         );
     }
 
-    /// Splat Batched Linear-Transform: Transposed * Not Transposed
-    ///
-    /// So called as it "splats" `a` implicitly into a batch.
-    ///
-    /// Computes x[i] = (a^T)y[i] on a batch of strided inputs, where
-    /// - a is an `m x n` matrix, stored row-major (m columns, n rows).
-    /// - x[i] is an `m` dimensional vector.
-    /// - y[i] is an `n` dimensional vector
-    ///
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
@@ -207,12 +189,6 @@ impl TensorBatch {
         );
     }
 
-    /// Batched Linear-Transform: Not Transposed * Not Transposed
-    ///
-    /// Computes y[i] = a[i]x[i] on a batch of strided inputs, where
-    /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
-    /// - x[i] is an `m` dimensional vector.
-    /// - y[i] is an `n` dimensional vector
     pub fn lt_nn(
         handle: cublasHandle_t,
         batch_size: usize,
@@ -235,12 +211,6 @@ impl TensorBatch {
         );
     }
 
-    /// Batched Linear-Transform: Transposed * Not Transposed
-    ///
-    /// Computes x[i] = (a[i]^T)y[i] on a batch of strided inputs, where
-    /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
-    /// - x[i] is an `m` dimensional vector.
-    /// - y[i] is an `n` dimensional vector
     pub fn lt_tn(
         handle: cublasHandle_t,
         batch_size: usize,
@@ -263,12 +233,6 @@ impl TensorBatch {
         );
     }
 
-    /// Batched Linear-Transform: Not Transposed * Transposed
-    ///
-    /// Computes a[i] = y[i]x[i]^T on a batch of strided inputs, where
-    /// - a[i] is an `m x n` matrix, stored row-major (m columns, n rows).
-    /// - x[i] is an `m` dimensional vector.
-    /// - y[i] is an `n` dimensional vector
     pub fn lt_nt(
         handle: cublasHandle_t,
         batch_size: usize,
@@ -431,9 +395,9 @@ fn sgemv<const TRANSA: bool>(
     let beta = 0.0;
 
     let (transa, x_ld, y_ld) = if TRANSA {
-        (cublasOperation_t::CUBLAS_OP_N, n, m)
+        (cublasOperation_t::CUBLAS_OP_T, n, m)
     } else {
-        (cublasOperation_t::CUBLAS_OP_T, m, n)
+        (cublasOperation_t::CUBLAS_OP_N, m, n)
     };
 
     unsafe {
@@ -446,7 +410,7 @@ fn sgemv<const TRANSA: bool>(
             x_ld,
             &alpha,
             a_ptr,
-            m,
+            n,
             a_str.into(),
             x_ptr,
             x_ld,
@@ -479,19 +443,19 @@ fn sgemm(
             handle,
             cublasOperation_t::CUBLAS_OP_N,
             cublasOperation_t::CUBLAS_OP_T,
-            m,
             n,
+            m,
             1,
             &alpha,
-            x_ptr,
-            m,
-            m.into(),
             y_ptr,
             n,
             n.into(),
+            x_ptr,
+            m,
+            m.into(),
             &beta,
             a_ptr,
-            m,
+            n,
             a_str.into(),
             batch_size,
         );

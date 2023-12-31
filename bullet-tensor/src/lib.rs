@@ -7,6 +7,7 @@ mod tensor;
 mod util;
 
 #[cfg(test)]
+#[rustfmt::skip]
 mod tests;
 
 pub use bindings::cublasHandle_t;

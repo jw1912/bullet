@@ -21,41 +21,25 @@ fn tensor_activate() {
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
 }
 
-fn cpu_linear<const M: usize, const N: usize, const MN: usize>(
-    a: &[f32; MN],
-    xs: &[f32],
-) -> Vec<f32> {
-    assert_eq!(xs.len() % M, 0);
-    let mut ys = Vec::new();
-
-    for x in xs.chunks_exact(M) {
-        let mut y = [0.0; N];
-
-        for (i, row) in a.chunks(M).enumerate() {
-            for j in 0..M {
-                y[i] += row[j] * x[j];
-            }
-        }
-
-        for y1 in y {
-            ys.push(y1);
-        }
-    }
-
-    ys
-}
-
 #[test]
 fn tensor_lt() {
     let handle = create_cublas_handle();
 
     const M: usize = 3;
     const N: usize = 2;
-    const MN: usize = 6;
-    let a = [1.0, 1.0, 0.0, 0.0, 1.0, 1.0];
-    let xs = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    let a = [
+        1.0, 0.0,
+        1.0, 1.0,
+        0.0, 1.0,
+        //1.0, 1.0, 0.0,
+        //0.0, 1.0, 1.0,
+        ];
+    let xs = [
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0];
 
-    let ys_cpu = cpu_linear::<M, N, MN>(&a, &xs[..6]);
+    let ys_cpu = [1.0, 0.0, 1.0, 1.0];
 
     let ys_gpu = unsafe {
         let mut a_gpu = Tensor::uninit(Shape::new(M, N));
@@ -103,44 +87,44 @@ fn tensor_lt() {
     assert_eq!(ys_cpu, ys_gpu);
 }
 
-fn cpu_multi_linear<const M: usize, const N: usize, const MNB: usize>(
-    a: &[f32; MNB],
-    xs: &[f32],
-) -> Vec<f32> {
-    assert_eq!(xs.len() % M, 0);
-    let mut ys = Vec::new();
-    for (x, a) in xs.chunks_exact(M).zip(a.chunks_exact(M * N)) {
-        let mut y = [0.0; N];
-
-        for (i, row) in a.chunks(M).enumerate() {
-            for j in 0..M {
-                y[i] += row[j] * x[j];
-            }
-        }
-
-        for y1 in y {
-            ys.push(y1);
-        }
-    }
-
-    ys
-}
-
 #[test]
 fn tensor_multi_lt() {
     let handle = create_cublas_handle();
 
     const M: usize = 3;
     const N: usize = 2;
-    const MN: usize = 6;
     const B: usize = 3;
 
     let a = [
-        1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0,
-    ];
-    let xs = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+        1.0, 0.0,
+        1.0, 1.0,
+        0.0, 1.0,
+        //1.0, 1.0, 0.0,
+        //0.0, 1.0, 1.0,
 
-    let ys_cpu = cpu_multi_linear::<M, N, { MN * B }>(&a, &xs);
+        0.0, 1.0,
+        1.0, 0.0,
+        0.0, 1.0,
+        //0.0, 1.0, 0.0,
+        //1.0, 0.0, 1.0,
+
+        0.0, 0.0,
+        1.0, 1.0,
+        1.0, 0.0,
+        //0.0, 1.0, 1.0,
+        //0.0, 1.0, 0.0,
+    ];
+    let xs = [
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+        ];
+
+    let ys_cpu = [
+        1.0, 0.0,
+        1.0, 0.0,
+        1.0, 0.0,
+    ];
 
     let ys_gpu = {
         let a_gpu = TensorBatch::new(Shape::new(M, N), B);
@@ -189,7 +173,13 @@ fn tensor_sparse_affine() {
     const N: usize = 2;
     const B: usize = 3;
 
-    let a_t = [1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+    let a_t = [
+        //1.0, 1.0, 0.0,
+        //0.0, 1.0, 1.0,
+        1.0, 0.0,
+        1.0, 1.0,
+        0.0, 1.0,
+    ];
 
     let b = [0.5, -0.5];
 
@@ -249,9 +239,17 @@ fn tensor_lt_nt() {
     const N: usize = 2;
     const B: usize = 3;
 
-    let x = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    let x = [
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+        ];
 
-    let y = [1.0, 0.0, 0.0, 1.0, 1.0, 1.0];
+    let y = [
+        1.0, 0.0,
+        0.0, 1.0,
+        1.0, 1.0,
+        ];
 
     let x_gpu = TensorBatch::new(Shape::new(1, M), B);
     let y_gpu = TensorBatch::new(Shape::new(1, N), B);
@@ -268,8 +266,23 @@ fn tensor_lt_nt() {
     assert_eq!(
         a,
         [
-            1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
-            1.0,
+            1.0, 0.0,
+            0.0, 0.0,
+            0.0, 0.0,
+            //1.0, 0.0, 0.0,
+            //0.0, 0.0, 0.0,
+
+            0.0, 0.0,
+            0.0, 1.0,
+            0.0, 0.0,
+            //0.0, 0.0, 0.0,
+            //0.0, 1.0, 0.0,
+
+            0.0, 0.0,
+            0.0, 0.0,
+            1.0, 1.0,
+            //0.0, 0.0, 1.0,
+            //0.0, 0.0, 1.0,
         ]
     );
 }
@@ -379,7 +392,14 @@ fn affine() {
 
         let mut wbuf = [0.0; 9];
         wg.write_to_cpu(&mut wbuf);
-        assert_eq!(wbuf, [0.6, 1.2, -0.3, 2.2, 4.4, -1.1, 0.8, 1.6, -0.4]);
+        assert_eq!(wbuf, [
+            0.6, 2.2, 0.8,
+            1.2, 4.4, 1.6,
+            -0.3, -1.1, -0.4,
+            //0.6, 1.2, -0.3,
+            //2.2, 4.4, -1.1,
+            //0.8, 1.6, -0.4,
+            ]);
 
         let mut bbuf = [0.0; 3];
         bg.write_to_cpu(&mut bbuf);
