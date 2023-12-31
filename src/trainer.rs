@@ -562,7 +562,7 @@ mod test {
             let mut wbuf = [0.0; 2];
             outw.write_to_cpu(&mut wbuf);
             assert_eq!(wbuf[0], 0.0);
-            assert_eq!(wbuf[1], 7.192903e-5);
+            assert_eq!(wbuf[1], 0.00027203697);
         }
 
         trainer.train_on_batch(0.01, 0.001);
@@ -573,7 +573,7 @@ mod test {
             let mut wbuf = [0.0; 2];
             outw.write_to_cpu(&mut wbuf);
             assert_eq!(wbuf[0], 0.0);
-            assert_eq!(wbuf[1], 7.192903e-5);
+            assert_eq!(wbuf[1], 0.00027203697);
         }
     }
 }

@@ -162,18 +162,14 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        sgemm(
+        sgemv::<false>(
             handle,
-            cublasOperation_t::CUBLAS_OP_T,
+            m,
             n,
-            m,
             a.ptr,
-            m,
             0,
             x.ptr(),
-            m,
             y.ptr(),
-            n,
             batch_size as c_int,
         );
     }
@@ -199,18 +195,14 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        sgemm(
+        sgemv::<true>(
             handle,
-            cublasOperation_t::CUBLAS_OP_N,
             m,
             n,
             a.ptr,
-            m,
             0,
             y.ptr(),
-            n,
             x.ptr(),
-            m,
             batch_size as c_int,
         );
     }
@@ -231,18 +223,14 @@ impl TensorBatch {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
-        sgemm(
+        sgemv::<false>(
             handle,
-            cublasOperation_t::CUBLAS_OP_T,
+            m,
             n,
-            m,
             a.ptr(),
-            m,
             a.element_size() as c_int,
             x.ptr(),
-            m,
             y.ptr(),
-            n,
             batch_size as c_int,
         );
     }
@@ -263,18 +251,14 @@ impl TensorBatch {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
-        sgemm(
+        sgemv::<true>(
             handle,
-            cublasOperation_t::CUBLAS_OP_N,
             m,
             n,
             a.ptr(),
-            m,
             a.element_size() as c_int,
             y.ptr(),
-            n,
             x.ptr(),
-            m,
             batch_size as c_int,
         );
     }
@@ -301,7 +285,7 @@ impl TensorBatch {
         let m = a_shape.cols() as c_int;
         let n = a_shape.rows() as c_int;
 
-        sgemm2(
+        sgemm(
             handle,
             m,
             n,
@@ -433,34 +417,36 @@ fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (c_int, c_
 }
 
 #[allow(clippy::too_many_arguments)]
-fn sgemm(
+fn sgemv<const TRANSA: bool>(
     handle: cublasHandle_t,
-    transa: cublasOperation_t,
-    n: c_int,
     m: c_int,
+    n: c_int,
     a_ptr: *const f32,
-    a_ld: c_int,
     a_str: c_int,
     x_ptr: *const f32,
-    x_ld: c_int,
     y_ptr: *mut f32,
-    y_ld: c_int,
     batch_size: c_int,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let (transa, x_ld, y_ld) = if TRANSA {
+        (cublasOperation_t::CUBLAS_OP_N, n, m)
+    } else {
+        (cublasOperation_t::CUBLAS_OP_T, m, n)
+    };
 
     unsafe {
         cublasSgemmStridedBatched(
             handle,
             transa,
             cublasOperation_t::CUBLAS_OP_N,
-            n,
+            y_ld,
             1,
-            m,
+            x_ld,
             &alpha,
             a_ptr,
-            a_ld,
+            m,
             a_str.into(),
             x_ptr,
             x_ld,
@@ -475,7 +461,7 @@ fn sgemm(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn sgemm2(
+fn sgemm(
     handle: cublasHandle_t,
     m: c_int,
     n: c_int,
