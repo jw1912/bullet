@@ -8,7 +8,7 @@ pub use trainer::{Trainer, TrainerBuilder};
 
 use std::{io::{Write, stdout}, time::Instant, sync::atomic::{AtomicBool, Ordering::SeqCst}};
 use bulletformat::DataLoader;
-use bullet_core::{data::BoardCUDA, inputs::InputType};
+use bullet_core::{inputs::InputType, GpuDataLoader};
 use bullet_tensor::device_synchronise;
 
 static CBCS: AtomicBool = AtomicBool::new(false);
@@ -49,7 +49,7 @@ pub fn run_training<T: InputType>(
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
 
-    println!("Arch           : {trainer}");
+    println!("Arch           : {}", ansi!(format!("{trainer}"), 31, esc));
     println!("Data File Path : {}", ansi!(file, "32;1", esc));
     println!("Threads        : {}", ansi!(threads, 31, esc));
     println!("WDL Proportion : start {} end {}",
@@ -70,6 +70,8 @@ pub fn run_training<T: InputType>(
 
     let timer = Instant::now();
 
+    let mut gpu_loader = GpuDataLoader::<T>::default();
+
     device_synchronise();
 
     for epoch in schedule.start_epoch..=schedule.num_epochs() {
@@ -80,45 +82,15 @@ pub fn run_training<T: InputType>(
         let blend = schedule.wdl(epoch);
 
         loader.map_batches_threaded_loading(batch_size, |batch| {
-            trainer.clear_data();
             let batch_size = batch.len();
-            let chunk_size = (batch.len() + threads - 1) / threads;
 
+            trainer.clear_data();
             device_synchronise();
 
-            std::thread::scope(|s| {
-                batch
-                    .chunks(chunk_size)
-                    .map(|chunk| {
-                        s.spawn(move || {
-                            let num = chunk.len();
-                            let mut our_inputs = Vec::with_capacity(num);
-                            let mut opp_inputs = Vec::with_capacity(num);
-                            let mut results = Vec::with_capacity(num);
-
-                            for pos in chunk {
-                                BoardCUDA::push(
-                                    pos,
-                                    &mut our_inputs,
-                                    &mut opp_inputs,
-                                    &mut results,
-                                    blend,
-                                    rscale
-                                );
-                            }
-
-                            (our_inputs, opp_inputs, results)
-                        })
-                    })
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .map(|p| p.join().unwrap())
-                    .for_each(|(our_inputs, opp_inputs, results)| {
-                        trainer.append_data(&our_inputs, &opp_inputs, &results);
-                    });
-            });
-
+            gpu_loader.load(batch, threads, blend, rscale);
+            trainer.load_data(&gpu_loader);
             device_synchronise();
+
 
             trainer.train_on_batch(0.01, 0.001);
 
@@ -162,11 +134,10 @@ pub fn run_training<T: InputType>(
         schedule.update(epoch, num_cs, esc);
 
         if schedule.should_save(epoch) {
-            let net_path = format!("net_test-epoch{epoch}");
-
             trainer.save(schedule.net_id(), epoch);
 
-            println!("Saved [{net_path}]");
+            let name = ansi!(format!("{}-epoch{epoch}", schedule.net_id()), "32;1", esc);
+            println!("Saved [{name}]");
         }
     }
 }
