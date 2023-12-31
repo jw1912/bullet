@@ -1,17 +1,10 @@
-pub mod data;
 pub mod inputs;
-pub mod outputs;
-pub mod rng;
+mod load;
+mod rng;
 pub mod util;
 
-pub type Data = <Input as inputs::InputType>::RequiredDataType;
-
-/// Input format
-///  - Ataxx147
-///  - Chess768
-///  - ChessBuckets
-///  - ChessBucketsMirrored
-pub type Input = inputs::Chess768;
+pub use load::{Feat, GpuDataLoader};
+pub use rng::Rand;
 
 /// Applicable only with `Input` option
 /// `ChessBuckets`, it is indexed from white POV,
@@ -28,9 +21,3 @@ pub const BUCKETS: [usize; 64] = [
 pub const BUCKETS_MIRRORED: [usize; 32] = [
     0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 ];
-
-/// Hidden Layer Quantisation Factor
-pub const QA: i32 = 255;
-
-/// Output Layer Quantisation Factor
-pub const QB: i32 = 64;

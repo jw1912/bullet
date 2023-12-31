@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bulletformat::BulletFormat;
-use bullet_core::{inputs::InputType, data::BoardCUDA, rng::Rand, util};
+use bullet_core::{inputs::InputType, Rand, util, GpuDataLoader};
 use bullet_tensor::{
     cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser, SparseTensor,
     Tensor, TensorBatch, create_cublas_handle, Shape,
@@ -40,8 +40,7 @@ pub struct Trainer<T> {
     optimiser: Optimiser,
     ft: FeatureTransormer<T>,
     nodes: Vec<Node>,
-    our_inputs: SparseTensor,
-    opp_inputs: SparseTensor,
+    inputs: SparseTensor,
     results: TensorBatch,
     error: GpuBuffer,
     used: usize,
@@ -74,7 +73,9 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
     }
 }
 
-impl<T> Trainer<T> {
+impl<T> Trainer<T>
+where T: InputType
+{
     pub fn save(&self, name: String, epoch: usize) {
         let size = self.optimiser.size();
 
@@ -149,25 +150,20 @@ impl<T> Trainer<T> {
 
     pub fn clear_data(&mut self) {
         self.used = 0;
-        self.our_inputs.clear();
-        self.opp_inputs.clear();
+        self.inputs.clear();
     }
 
-    pub fn append_data(
+    pub fn load_data(
         &mut self,
-        our_inputs: &[BoardCUDA],
-        opp_inputs: &[BoardCUDA],
-        results: &[f32]
+        loader: &GpuDataLoader<T>,
     ) {
-        assert_eq!(our_inputs.len(), opp_inputs.len());
-        assert_eq!(opp_inputs.len(), results.len());
-        unsafe {
-            let our = std::slice::from_raw_parts(our_inputs.as_ptr().cast(), our_inputs.len() * BoardCUDA::len());
-            let opp = std::slice::from_raw_parts(opp_inputs.as_ptr().cast(), opp_inputs.len() * BoardCUDA::len());
+        let inputs = loader.inputs();
+        let results = loader.results();
 
-            self.our_inputs.append(our);
-            self.opp_inputs.append(opp);
-            self.results.offset_load_from_cpu(results, self.used);
+        unsafe {
+            let our = std::slice::from_raw_parts(inputs.as_ptr().cast(), inputs.len());
+            self.inputs.append(our);
+            self.results.load_from_cpu(results);
             self.used += results.len();
         }
     }
@@ -185,7 +181,7 @@ impl<T> Trainer<T> {
             self.backprop();
         }
 
-        let adj = 2. / self.our_inputs.used() as f32;
+        let adj = 2. / self.inputs.used() as f32;
         self.optimiser.update(decay, adj, rate);
         device_synchronise();
     }
@@ -194,12 +190,11 @@ impl<T> Trainer<T> {
     /// It is undefined behaviour to call this if `our_inputs` is not
     /// properly initialised.
     unsafe fn forward(&self) {
-        let batch_size = self.our_inputs.used();
+        let batch_size = self.inputs.used();
 
         SparseTensor::affine(
             &self.ft.weights,
-            &self.our_inputs,
-            &self.opp_inputs,
+            &self.inputs,
             &self.ft.biases,
             &self.ft.outputs,
         );
@@ -233,7 +228,7 @@ impl<T> Trainer<T> {
     /// It is undefined behaviour to call this without previously calling
     /// `self.forward`.
     unsafe fn calc_errors(&self) {
-        let batch_size = self.our_inputs.used();
+        let batch_size = self.inputs.used();
         let output_layer = self.nodes.last().unwrap();
 
         assert_eq!(self.results.shape(), output_layer.outputs.shape());
@@ -248,7 +243,7 @@ impl<T> Trainer<T> {
     /// `self.forward` and `self.calc_errors()`, as well as if `our_inputs`
     /// is not properly initialised.
     unsafe fn backprop(&self) {
-        let batch_size = self.our_inputs.used();
+        let batch_size = self.inputs.used();
         let num_nodes = self.nodes.len();
         device_synchronise();
 
@@ -265,31 +260,10 @@ impl<T> Trainer<T> {
 
         SparseTensor::affine_backprop(
             &self.ft.weights_grad,
-            &self.our_inputs,
-            &self.opp_inputs,
+            &self.inputs,
             &self.ft.biases_grad,
             &self.ft.outputs,
         );
-    }
-
-    pub fn eval(&mut self, fen: &str) {
-        let bfmt = fen.parse().unwrap();
-        let mut our_inputs = Vec::new();
-        let mut opp_inputs = Vec::new();
-        let mut results = Vec::new();
-        BoardCUDA::push(&bfmt, &mut our_inputs, &mut opp_inputs, &mut results, 0.5, 1.0 / 400.0);
-        self.clear_data();
-        self.append_data(&our_inputs, &opp_inputs, &results);
-
-        unsafe {
-            self.forward();
-        }
-
-        let mut out = vec![0.0; self.batch_size()];
-        self.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
-        self.clear_data();
-
-        println!("{fen} -> {:.0}cp", out[0] * 400.0);
     }
 }
 
@@ -498,82 +472,12 @@ impl<T: InputType> TrainerBuilder<T> {
                 optimiser: opt,
                 ft,
                 nodes,
-                our_inputs,
-                opp_inputs,
+                inputs,
                 results,
                 error,
                 used: 0,
                 scale: self.scale,
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use bullet_core::inputs::Chess768;
-
-    #[test]
-    fn train() {
-        let mut trainer = TrainerBuilder::<Chess768>::default()
-            .set_batch_size(1)
-            .ft(32)
-            .activate(Activation::ReLU)
-            .add_layer(1)
-            .build();
-
-        let buf = vec![0.01; trainer.net_size()];
-
-        trainer.optimiser.load_weights_from_cpu(&buf);
-
-        let bfmt = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.5".parse().unwrap();
-        let mut our_inputs = Vec::new();
-        let mut opp_inputs = Vec::new();
-        let mut results = Vec::new();
-        BoardCUDA::push(&bfmt, &mut our_inputs, &mut opp_inputs, &mut results, 0.5, 1.0 / 400.0);
-        trainer.append_data(&our_inputs, &opp_inputs, &results);
-
-        unsafe {
-            trainer.forward();
-        }
-
-        let mut out = [0.0];
-        trainer.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
-        assert!(out[0] - 0.33 < 0.00001);
-
-        unsafe {
-            trainer.calc_errors();
-        }
-
-        let sig = 1.0 / (1.0 + (-out[0]).exp());
-        let err = sig * (1.0 - sig) * (sig - 0.5);
-
-        trainer.nodes.last().unwrap().outputs.write_to_cpu(&mut out);
-        device_synchronise();
-
-        assert!(out[0] - err < 0.00001);
-
-        unsafe {
-            trainer.backprop();
-            let mut outw = Tensor::uninit(Shape::new(2, 1));
-            outw.set_ptr(trainer.optimiser.gradients_offset(323 * 32 + 31));
-
-            let mut wbuf = [0.0; 2];
-            outw.write_to_cpu(&mut wbuf);
-            assert_eq!(wbuf[0], 0.0);
-            assert_eq!(wbuf[1], 0.00027203697);
-        }
-
-        trainer.train_on_batch(0.01, 0.001);
-        unsafe {
-            let mut outw = Tensor::uninit(Shape::new(2, 1));
-            outw.set_ptr(trainer.optimiser.gradients_offset(323 * 32 + 31));
-
-            let mut wbuf = [0.0; 2];
-            outw.write_to_cpu(&mut wbuf);
-            assert_eq!(wbuf[0], 0.0);
-            assert_eq!(wbuf[1], 0.00027203697);
         }
     }
 }
