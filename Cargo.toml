@@ -1,6 +1,27 @@
 [workspace]
-members = ["common", "cpu", "cuda", "trainer", "utils"]
 resolver = "2"
+members = [
+    "bullet-core",
+    "bullet-cuda",
+    "bullet-tensor",
+    "bullet-utils",
+]
+
+[workspace.package]
+license = "MIT"
+authors = ["Jamie Whiting"]
+
+[package]
+name = "bullet"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
+bullet-core = { path = "bullet-core" }
+bullet-tensor = { path = "bullet-tensor" }
 
 [profile.release]
 panic = 'abort'

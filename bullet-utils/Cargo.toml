@@ -1,0 +1,9 @@
+[package]
+name = "bullet-utils"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
