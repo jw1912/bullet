@@ -52,6 +52,7 @@ impl GpuBuffer {
     pub fn load_from_cpu(&self, buf: &[f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
         util::copy_to_gpu(self.ptr, buf.as_ptr(), buf.len());
+        util::device_synchronise();
     }
 
     pub fn offset_load_from_cpu(&self, buf: &[f32], offset: usize) {
@@ -59,6 +60,7 @@ impl GpuBuffer {
         unsafe {
             util::copy_to_gpu(self.ptr.add(offset), buf.as_ptr(), buf.len());
         }
+        util::device_synchronise();
     }
 
     pub fn write_to_cpu(&self, buf: &mut [f32]) {
