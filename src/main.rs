@@ -15,6 +15,7 @@ fn main() {
         .build();
 
     trainer.load_from_checkpoint("checkpoints/testnet");
+    trainer.save_quantised("newq.bin");
 
     let mut schedule = TrainingSchedule {
         net_id: "net-01.01.24".to_string(),

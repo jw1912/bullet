@@ -64,6 +64,7 @@ impl GpuBuffer {
     pub fn write_to_cpu(&self, buf: &mut [f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
         util::copy_from_gpu(buf.as_mut_ptr(), self.ptr, self.size);
+        util::device_synchronise();
     }
 
     fn report(&self, msg: &str) {
