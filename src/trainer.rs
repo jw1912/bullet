@@ -442,8 +442,10 @@ impl<T: InputType> TrainerBuilder<T> {
 
             let mut quantiser = Vec::new();
             let mut qi = 0;
+            let mut accq = 1;
             if !self.quantisations.is_empty() {
                 quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: 0 });
+                accq *= self.quantisations[qi];
                 qi += 1;
             }
 
@@ -453,11 +455,6 @@ impl<T: InputType> TrainerBuilder<T> {
 
                 let op = match op {
                     OpType::Affine => {
-                        if !self.quantisations.is_empty() {
-                            quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: offset });
-                            qi += 1;
-                        }
-
                         let wsh = Shape::new(inp_size, size);
                         let ones = GpuBuffer::new(1);
                         ones.load_from_cpu(&[1.0]);
@@ -472,10 +469,20 @@ impl<T: InputType> TrainerBuilder<T> {
                         affine.weights.set_ptr(opt.weights_offset(offset));
                         affine.weights_grad.set_ptr(opt.gradients_offset(offset));
 
+                        if !self.quantisations.is_empty() {
+                            quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: offset });
+                        }
+
                         offset += inp_size * size;
 
                         affine.biases.set_ptr(opt.weights_offset(offset));
                         affine.biases_grad.set_ptr(opt.gradients_offset(offset));
+
+                        if !self.quantisations.is_empty() {
+                            accq *= self.quantisations[qi];
+                            quantiser.push(QuantiseInfo { val: accq, start: offset });
+                            qi += 1;
+                        }
 
                         offset += size;
 
