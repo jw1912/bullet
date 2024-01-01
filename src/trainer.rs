@@ -31,6 +31,11 @@ struct Node {
     op: Operation,
 }
 
+struct QuantiseInfo {
+    val: i16,
+    start: usize,
+}
+
 pub struct Trainer<T> {
     input_getter: T,
     handle: CublasHandle,
@@ -42,6 +47,7 @@ pub struct Trainer<T> {
     error: GpuBuffer,
     used: usize,
     scale: f32,
+    quantiser: Vec<QuantiseInfo>
 }
 
 impl<T: InputType> std::fmt::Display for Trainer<T> {
@@ -87,6 +93,33 @@ impl<T: InputType> Trainer<T> {
         util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false).unwrap();
         util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false).unwrap();
         util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false).unwrap();
+
+        if !self.quantiser.is_empty() {
+            self.save_quantised(&format!("{path}/{name}-epoch{epoch}.bin"));
+        }
+    }
+
+    pub fn save_quantised(&self, out_path: &str) {
+        let size = self.optimiser.size();
+        let mut buf = vec![0.0; size];
+
+        self.optimiser.write_weights_to_buffer(&mut buf);
+
+        let mut qbuf = vec![0; size];
+        let mut qiter = self.quantiser.iter().peekable();
+        while let Some(&QuantiseInfo { val, start }) = qiter.next() {
+            let end = if let Some(QuantiseInfo { start: next_start, .. }) = qiter.peek() {
+                *next_start
+            } else {
+                size
+            };
+
+            for i in start..end {
+                qbuf[i] = (f32::from(val) * buf[i]) as i16;
+            }
+        }
+
+        util::write_to_bin(&qbuf, size, out_path, true).unwrap();
     }
 
     pub fn load_from_checkpoint(&self, path: &str) {
@@ -302,6 +335,7 @@ pub struct TrainerBuilder<T> {
     batch_size: usize,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
+    quantisations: Vec<i16>,
     size: usize,
     scale: f32,
 }
@@ -313,6 +347,7 @@ impl<T: InputType> Default for TrainerBuilder<T> {
             batch_size: 0,
             ft_out_size: 0,
             nodes: Vec::new(),
+            quantisations: Vec::new(),
             size: 0,
             scale: 400.0,
         }
@@ -340,6 +375,11 @@ impl<T: InputType> TrainerBuilder<T> {
 
     pub fn set_eval_scale(mut self, scale: f32) -> Self {
         self.scale = scale;
+        self
+    }
+
+    pub fn set_quantisations(mut self, quants: &[i16]) -> Self {
+        self.quantisations = quants.to_vec();
         self
     }
 
@@ -400,12 +440,24 @@ impl<T: InputType> TrainerBuilder<T> {
             let mut nodes = Vec::new();
             let mut inp_size = 2 * self.ft_out_size;
 
+            let mut quantiser = Vec::new();
+            let mut qi = 0;
+            if !self.quantisations.is_empty() {
+                quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: 0 });
+                qi += 1;
+            }
+
             for NodeType { size, op } in &self.nodes {
                 let size = *size;
                 let bsh = Shape::new(1, size);
 
                 let op = match op {
                     OpType::Affine => {
+                        if !self.quantisations.is_empty() {
+                            quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: offset });
+                            qi += 1;
+                        }
+
                         let wsh = Shape::new(inp_size, size);
                         let ones = GpuBuffer::new(1);
                         ones.load_from_cpu(&[1.0]);
@@ -439,6 +491,7 @@ impl<T: InputType> TrainerBuilder<T> {
                 inp_size = size;
             }
 
+            assert_eq!(qi, self.quantisations.len(), "Incorrectly specified number of quantisations!");
             assert_eq!(offset, net_size);
 
             let inputs = SparseTensor::uninit(
@@ -470,6 +523,7 @@ impl<T: InputType> TrainerBuilder<T> {
                 error,
                 used: 0,
                 scale: self.scale,
+                quantiser,
             }
         }
     }

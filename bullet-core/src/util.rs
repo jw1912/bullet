@@ -2,8 +2,8 @@ pub fn sigmoid(x: f32, k: f32) -> f32 {
     1. / (1. + (-x * k).exp())
 }
 
-pub fn write_to_bin(
-    item: &[f32],
+pub fn write_to_bin<T>(
+    item: &[T],
     size: usize,
     output_path: &str,
     pad: bool,
@@ -12,9 +12,11 @@ pub fn write_to_bin(
 
     let mut file = std::fs::File::create(output_path)?;
 
+    let size = std::mem::size_of::<T>() * size;
+
     unsafe {
         let slice_ptr: *const u8 = item.as_ptr().cast();
-        let slice = std::slice::from_raw_parts(slice_ptr, 4 * size);
+        let slice = std::slice::from_raw_parts(slice_ptr, size);
         file.write_all(slice)?;
     }
 
