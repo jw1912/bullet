@@ -17,12 +17,11 @@ pub use bindings::backpropSCReLU as backprop_screlu;
 #[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
-pub unsafe fn mul_matrix_vector<const TRANSA: bool>(
+pub unsafe fn splat_mul_matrix_vector(
     handle: CublasHandle,
     m: c_int,
     n: c_int,
     a_ptr: *const f32,
-    a_str: c_int,
     x_ptr: *const f32,
     y_ptr: *mut f32,
     batch_size: c_int,
@@ -30,30 +29,17 @@ pub unsafe fn mul_matrix_vector<const TRANSA: bool>(
     let alpha = 1.0;
     let beta = 0.0;
 
-    let (transa, x_ld, y_ld) = if TRANSA {
-        (cublasOperation_t::CUBLAS_OP_T, n, m)
-    } else {
-        (cublasOperation_t::CUBLAS_OP_N, m, n)
-    };
-
     unsafe {
-        bindings::cublasSgemvStridedBatched(
+        bindings::cublasSgemm_v2(
             *handle,
-            transa,
-            n,
-            m,
+            cublasOperation_t::CUBLAS_OP_N,
+            cublasOperation_t::CUBLAS_OP_N,
+            n, batch_size, m,
             &alpha,
-            a_ptr,
-            n,
-            a_str.into(),
-            x_ptr,
-            1,
-            x_ld.into(),
+            a_ptr, n,
+            x_ptr, m,
             &beta,
-            y_ptr,
-            1,
-            y_ld.into(),
-            batch_size,
+            y_ptr, n,
         );
     }
 }

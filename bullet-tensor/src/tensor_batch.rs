@@ -71,12 +71,11 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::mul_matrix_vector::<false>(
+        ops::splat_mul_matrix_vector(
             handle,
             m,
             n,
             a.ptr(),
-            0,
             x.ptr(),
             y.ptr(),
             batch_size as c_int,
