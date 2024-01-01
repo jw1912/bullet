@@ -52,7 +52,7 @@ fn tensor_lt() {
         a_gpu.calloc();
         a_gpu.load_from_cpu(&a);
         xs_gpu.load_from_cpu(&xs);
-        TensorBatch::splat_lt_nn(handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
+        TensorBatch::splat_mul_matrix_vector(handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
 
         a_gpu.free();
 
@@ -75,7 +75,7 @@ fn tensor_lt() {
         a_gpu.load_from_cpu(&a);
         ys_gpu.load_from_cpu(&ys);
 
-        TensorBatch::splat_lt_tn(handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
+        TensorBatch::splat_mul_matrixt_vector(handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
 
         a_gpu.free();
 
@@ -88,86 +88,6 @@ fn tensor_lt() {
     panic_if_cuda_error("cuda error!");
     assert_eq!(xs, xs_gpu);
     assert_eq!(ys_cpu, ys_gpu);
-}
-
-#[test]
-fn tensor_multi_lt() {
-    let handle = CublasHandle::default();
-
-    const M: usize = 3;
-    const N: usize = 2;
-    const B: usize = 3;
-
-    let a = [
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
-        //1.0, 1.0, 0.0,
-        //0.0, 1.0, 1.0,
-
-        0.0, 1.0,
-        1.0, 0.0,
-        0.0, 1.0,
-        //0.0, 1.0, 0.0,
-        //1.0, 0.0, 1.0,
-
-        0.0, 0.0,
-        1.0, 1.0,
-        1.0, 0.0,
-        //0.0, 1.0, 1.0,
-        //0.0, 1.0, 0.0,
-    ];
-    let xs = [
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0,
-        ];
-
-    let ys_cpu = [
-        1.0, 0.0,
-        1.0, 0.0,
-        1.0, 0.0,
-    ];
-
-    let ys_gpu = {
-        let a_gpu = TensorBatch::new(Shape::new(M, N), B);
-        let xs_gpu = TensorBatch::new(Shape::new(1, M), B);
-        let ys_gpu = TensorBatch::new(Shape::new(1, N), B);
-
-        a_gpu.load_from_cpu(&a);
-        xs_gpu.load_from_cpu(&xs);
-        TensorBatch::lt_nn(handle, B, &a_gpu, &xs_gpu, &ys_gpu);
-
-        let mut ys = [0.0; N * B];
-        ys_gpu.write_to_cpu(&mut ys);
-
-        ys
-    };
-
-    assert_eq!(ys_cpu, ys_gpu);
-
-    let ys = ys_gpu;
-
-    let xs = [1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0];
-
-    let xs_gpu = {
-        let a_gpu = TensorBatch::new(Shape::new(M, N), B);
-        let xs_gpu = TensorBatch::new(Shape::new(1, M), B);
-        let ys_gpu = TensorBatch::new(Shape::new(1, N), B);
-
-        a_gpu.load_from_cpu(&a);
-        ys_gpu.load_from_cpu(&ys);
-
-        TensorBatch::lt_tn(handle, B, &a_gpu, &ys_gpu, &xs_gpu);
-
-        let mut xs = [0.0; M * B];
-        xs_gpu.write_to_cpu(&mut xs);
-
-        xs
-    };
-
-    panic_if_cuda_error("cuda error!");
-    assert_eq!(xs, xs_gpu);
 }
 
 #[test]
@@ -235,7 +155,7 @@ fn tensor_sparse_affine() {
 }
 
 #[test]
-fn tensor_lt_nt() {
+fn mul_vector_vectort() {
     let handle = CublasHandle::default();
 
     const M: usize = 3;
@@ -261,7 +181,7 @@ fn tensor_lt_nt() {
     x_gpu.load_from_cpu(&x);
     y_gpu.load_from_cpu(&y);
 
-    TensorBatch::lt_nt(handle, B, &y_gpu, &x_gpu, &a_gpu);
+    TensorBatch::mul_vector_vectort(handle, B, &y_gpu, &x_gpu, &a_gpu);
 
     let mut a = [0.0; M * N * B];
     a_gpu.write_to_cpu(&mut a);

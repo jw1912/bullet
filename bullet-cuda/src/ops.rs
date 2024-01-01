@@ -17,7 +17,7 @@ pub use bindings::backpropSCReLU as backprop_screlu;
 #[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
-pub unsafe fn sgemv<const TRANSA: bool>(
+pub unsafe fn mul_matrix_vector<const TRANSA: bool>(
     handle: CublasHandle,
     m: c_int,
     n: c_int,
@@ -61,7 +61,7 @@ pub unsafe fn sgemv<const TRANSA: bool>(
 #[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
-pub unsafe fn sgemm(
+pub unsafe fn mul_vector_vectort(
     handle: CublasHandle,
     m: c_int,
     n: c_int,

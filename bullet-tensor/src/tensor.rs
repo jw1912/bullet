@@ -143,7 +143,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn splat_lt_nn(
+    pub unsafe fn splat_mul_matrix_vector(
         handle: CublasHandle,
         batch_size: usize,
         a: &Tensor,
@@ -152,7 +152,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::sgemv::<false>(
+        ops::mul_matrix_vector::<false>(
             handle,
             m,
             n,
@@ -167,7 +167,7 @@ impl TensorBatch {
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
-    pub unsafe fn splat_lt_tn(
+    pub unsafe fn splat_mul_matrixt_vector(
         handle: CublasHandle,
         batch_size: usize,
         a: &Tensor,
@@ -176,7 +176,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::sgemv::<true>(
+        ops::mul_matrix_vector::<true>(
             handle,
             m,
             n,
@@ -188,55 +188,7 @@ impl TensorBatch {
         );
     }
 
-    pub fn lt_nn(
-        handle: CublasHandle,
-        batch_size: usize,
-        a: &TensorBatch,
-        x: &TensorBatch,
-        y: &TensorBatch,
-    ) {
-        let (m, n) = validate_dims(a.shape(), x, y);
-        assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
-
-        unsafe {
-            ops::sgemv::<false>(
-                handle,
-                m,
-                n,
-                a.ptr(),
-                a.element_size() as c_int,
-                x.ptr(),
-                y.ptr(),
-                batch_size as c_int,
-            );
-        }
-    }
-
-    pub fn lt_tn(
-        handle: CublasHandle,
-        batch_size: usize,
-        a: &TensorBatch,
-        y: &TensorBatch,
-        x: &TensorBatch,
-    ) {
-        let (m, n) = validate_dims(a.shape(), x, y);
-        assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
-
-        unsafe {
-            ops::sgemv::<true>(
-                handle,
-                m,
-                n,
-                a.ptr(),
-                a.element_size() as c_int,
-                y.ptr(),
-                x.ptr(),
-                batch_size as c_int,
-            );
-        }
-    }
-
-    pub fn lt_nt(
+    pub fn mul_vector_vectort(
         handle: CublasHandle,
         batch_size: usize,
         y: &TensorBatch,
@@ -248,12 +200,13 @@ impl TensorBatch {
         assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
         assert_eq!(x.cap(), y.cap(), "Not all tensor caps are the same length!");
         assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
+        assert!(batch_size <= x.cap());
 
         let m = a_shape.cols() as c_int;
         let n = a_shape.rows() as c_int;
 
         unsafe {
-            ops::sgemm(
+            ops::mul_vector_vectort(
                 handle,
                 m,
                 n,
@@ -270,8 +223,8 @@ impl TensorBatch {
     fn map(
         f: unsafe extern "C" fn(usize, *const f32, *mut f32),
         batch_size: usize,
-        inp: &Self,
-        out: &Self,
+        inp: &TensorBatch,
+        out: &TensorBatch,
     ) {
         assert_eq!(inp.shape(), out.shape(), "Mismatched tensor shapes!");
         assert_eq!(inp.cap(), out.cap(), "Mismatched cap sizes!");
@@ -282,7 +235,7 @@ impl TensorBatch {
     }
 
     /// This calulates `out[i] = op(inp[i])` for a batch of input.
-    pub fn activate(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
+    pub fn activate(batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
         match op {
             Activation::ReLU => Self::map(ops::activate_relu, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::activate_crelu, batch_size, inp, out),
@@ -291,7 +244,7 @@ impl TensorBatch {
     }
 
     /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
-    pub fn backprop_activation(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
+    pub fn backprop_activation(batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
         match op {
             Activation::ReLU => Self::map(ops::backprop_relu, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::backprop_crelu, batch_size, inp, out),
@@ -300,7 +253,7 @@ impl TensorBatch {
     }
 
     /// # Safety
-    /// `weights` must be initialised.
+    /// `weights` and `biases` must be initialised.
     pub unsafe fn affine(
         handle: CublasHandle,
         batch_size: usize,
@@ -309,7 +262,7 @@ impl TensorBatch {
         biases: &Tensor,
         outputs: &TensorBatch,
     ) {
-        TensorBatch::splat_lt_nn(handle, batch_size, weights, inputs, outputs);
+        TensorBatch::splat_mul_matrix_vector(handle, batch_size, weights, inputs, outputs);
         TensorBatch::splat_add(batch_size, biases, outputs);
     }
 
@@ -327,10 +280,10 @@ impl TensorBatch {
         biases_grad: &Tensor,
         weights_intermediate: &TensorBatch,
     ) {
-        TensorBatch::lt_nt(handle, batch_size, errors, inputs, weights_intermediate);
+        TensorBatch::mul_vector_vectort(handle, batch_size, errors, inputs, weights_intermediate);
         TensorBatch::reduce_add(handle, ones, batch_size, weights_intermediate, weights_grad);
         TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
-        TensorBatch::splat_lt_tn(handle, batch_size, weights, errors, inputs);
+        TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
     /// # Safety
