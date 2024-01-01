@@ -21,7 +21,7 @@ fn main() {
         net_id: "net-01.01.24".to_string(),
         start_epoch: 1,
         num_epochs: 5,
-        wdl_scheduler: WdlScheduler::new(0.2, 0.2),
+        wdl_scheduler: WdlScheduler::new(0.2, 0.5),
         lr_scheduler: LrScheduler::new(0.001, 0.1, LrSchedulerType::Step(8)),
         save_rate: 1,
     };
