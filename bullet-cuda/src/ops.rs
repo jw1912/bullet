@@ -61,6 +61,36 @@ pub unsafe fn mul_matrix_vector<const TRANSA: bool>(
 #[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
+pub unsafe fn splat_mul_matrixt_vector(
+    handle: CublasHandle,
+    m: c_int,
+    n: c_int,
+    a_ptr: *const f32,
+    y_ptr: *const f32,
+    x_ptr: *mut f32,
+    batch_size: c_int,
+) {
+    let alpha = 1.0;
+    let beta = 0.0;
+
+    unsafe {
+        bindings::cublasSgemm_v2(
+            *handle,
+            cublasOperation_t::CUBLAS_OP_T,
+            cublasOperation_t::CUBLAS_OP_N,
+            m, batch_size, n,
+            &alpha,
+            a_ptr, n,
+            y_ptr, n,
+            &beta,
+            x_ptr, m,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+/// # Safety
+/// This should only be used and exposed internally.
 pub unsafe fn reduce_add_mul_vector_vectort(
     handle: CublasHandle,
     m: c_int,
