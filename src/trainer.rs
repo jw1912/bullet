@@ -71,7 +71,7 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 }
 
 impl<T: InputType> Trainer<T> {
-    pub fn save(&self, name: String, epoch: usize) {
+    pub fn save(&self, out_dir: &str, name: String, epoch: usize) {
         let size = self.optimiser.size();
 
         let mut buf1 = vec![0.0; size];
@@ -80,7 +80,7 @@ impl<T: InputType> Trainer<T> {
 
         self.optimiser.write_to_cpu(&mut buf1, &mut buf2, &mut buf3);
 
-        let path = format!("checkpoints/{name}-epoch{epoch}");
+        let path = format!("{out_dir}/{name}-epoch{epoch}");
 
         std::fs::create_dir(path.as_str()).unwrap_or(());
 

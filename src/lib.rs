@@ -37,7 +37,10 @@ pub fn run_training<T: InputType>(
     schedule: &mut TrainingSchedule,
     threads: usize,
     file: &str,
+    out_dir: &str,
 ) {
+    std::fs::create_dir(out_dir).unwrap_or(());
+
     device_synchronise();
 
     let cbcs = CBCS.load(SeqCst);
@@ -142,7 +145,7 @@ pub fn run_training<T: InputType>(
         schedule.update(epoch, num_cs, esc);
 
         if schedule.should_save(epoch) {
-            trainer.save(schedule.net_id(), epoch);
+            trainer.save(out_dir, schedule.net_id(), epoch);
 
             let name = ansi!(format!("{}-epoch{epoch}", schedule.net_id()), "32;1", esc);
             println!("Saved [{name}]");
