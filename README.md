@@ -19,6 +19,8 @@ Also used by a number of other engines, including:
 
 Used exclusively to train architectures of the form `(SparseInput -> N)x2 -> MoreHiddenLayers -> 1`.
 
+If you need to train on CPU, you can use the [legacy branch](https://github.com/jw1912/bullet/tree/legacy).
+
 Currently Supported Games:
 - Chess
 - Ataxx
