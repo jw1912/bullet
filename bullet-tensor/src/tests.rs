@@ -1,7 +1,8 @@
 use bullet_core::Feat;
+use bullet_cuda::CublasHandle;
 
 use crate::{
-    create_cublas_handle, panic_if_cuda_error, Activation, Shape, SparseTensor, Tensor, TensorBatch, GpuBuffer,
+    panic_if_cuda_error, Activation, Shape, SparseTensor, Tensor, TensorBatch, GpuBuffer,
 };
 
 #[test]
@@ -25,7 +26,7 @@ fn tensor_activate() {
 
 #[test]
 fn tensor_lt() {
-    let handle = create_cublas_handle();
+    let handle = CublasHandle::default();
 
     const M: usize = 3;
     const N: usize = 2;
@@ -91,7 +92,7 @@ fn tensor_lt() {
 
 #[test]
 fn tensor_multi_lt() {
-    let handle = create_cublas_handle();
+    let handle = CublasHandle::default();
 
     const M: usize = 3;
     const N: usize = 2;
@@ -235,7 +236,7 @@ fn tensor_sparse_affine() {
 
 #[test]
 fn tensor_lt_nt() {
-    let handle = create_cublas_handle();
+    let handle = CublasHandle::default();
 
     const M: usize = 3;
     const N: usize = 2;
@@ -291,7 +292,7 @@ fn tensor_lt_nt() {
 
 #[test]
 fn tensor_reduce_add() {
-    let handle = create_cublas_handle();
+    let handle = CublasHandle::default();
     let vecs = [
         1.0, 1.0, 2.0,
         1.0, 0.0, 1.0,
@@ -349,7 +350,7 @@ fn tensor_splat_add() {
 
 #[test]
 fn affine() {
-    let handle = create_cublas_handle();
+    let handle = CublasHandle::default();
     let inps = [1.0, 2.0, -0.5];
     let ws = [
         1.0, 0.0, 1.0,

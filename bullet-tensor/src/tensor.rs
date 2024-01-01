@@ -1,9 +1,8 @@
 use std::ffi::c_int;
 
-use crate::{
-    bindings::{self, cublasHandle_t, cublasOperation_t},
-    util, Activation, GpuBuffer, Shape,
-};
+use bullet_cuda::{util, ops, CublasHandle};
+
+use crate::{Activation, GpuBuffer, Shape};
 
 /// Single Rank-2 Tensor on the GPU.
 /// This data type does not own the memory it points to,
@@ -145,7 +144,7 @@ impl TensorBatch {
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
     pub unsafe fn splat_lt_nn(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         batch_size: usize,
         a: &Tensor,
         x: &TensorBatch,
@@ -153,7 +152,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        sgemv::<false>(
+        ops::sgemv::<false>(
             handle,
             m,
             n,
@@ -169,7 +168,7 @@ impl TensorBatch {
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
     pub unsafe fn splat_lt_tn(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         batch_size: usize,
         a: &Tensor,
         y: &TensorBatch,
@@ -177,7 +176,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        sgemv::<true>(
+        ops::sgemv::<true>(
             handle,
             m,
             n,
@@ -190,7 +189,7 @@ impl TensorBatch {
     }
 
     pub fn lt_nn(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         batch_size: usize,
         a: &TensorBatch,
         x: &TensorBatch,
@@ -199,20 +198,22 @@ impl TensorBatch {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
-        sgemv::<false>(
-            handle,
-            m,
-            n,
-            a.ptr(),
-            a.element_size() as c_int,
-            x.ptr(),
-            y.ptr(),
-            batch_size as c_int,
-        );
+        unsafe {
+            ops::sgemv::<false>(
+                handle,
+                m,
+                n,
+                a.ptr(),
+                a.element_size() as c_int,
+                x.ptr(),
+                y.ptr(),
+                batch_size as c_int,
+            );
+        }
     }
 
     pub fn lt_tn(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         batch_size: usize,
         a: &TensorBatch,
         y: &TensorBatch,
@@ -221,20 +222,22 @@ impl TensorBatch {
         let (m, n) = validate_dims(a.shape(), x, y);
         assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
 
-        sgemv::<true>(
-            handle,
-            m,
-            n,
-            a.ptr(),
-            a.element_size() as c_int,
-            y.ptr(),
-            x.ptr(),
-            batch_size as c_int,
-        );
+        unsafe {
+            ops::sgemv::<true>(
+                handle,
+                m,
+                n,
+                a.ptr(),
+                a.element_size() as c_int,
+                y.ptr(),
+                x.ptr(),
+                batch_size as c_int,
+            );
+        }
     }
 
     pub fn lt_nt(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         batch_size: usize,
         y: &TensorBatch,
         x: &TensorBatch,
@@ -249,16 +252,18 @@ impl TensorBatch {
         let m = a_shape.cols() as c_int;
         let n = a_shape.rows() as c_int;
 
-        sgemm(
-            handle,
-            m,
-            n,
-            y.ptr(),
-            x.ptr(),
-            a.ptr(),
-            a.element_size() as c_int,
-            batch_size as c_int,
-        );
+        unsafe {
+            ops::sgemm(
+                handle,
+                m,
+                n,
+                y.ptr(),
+                x.ptr(),
+                a.ptr(),
+                a.element_size() as c_int,
+                batch_size as c_int,
+            );
+        }
     }
 
     /// Modifies a batch of tensors.
@@ -279,25 +284,25 @@ impl TensorBatch {
     /// This calulates `out[i] = op(inp[i])` for a batch of input.
     pub fn activate(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
         match op {
-            Activation::ReLU => Self::map(bindings::activateReLU, batch_size, inp, out),
-            Activation::CReLU => Self::map(bindings::activateCReLU, batch_size, inp, out),
-            Activation::SCReLU => Self::map(bindings::activateSCReLU, batch_size, inp, out),
+            Activation::ReLU => Self::map(ops::activate_relu, batch_size, inp, out),
+            Activation::CReLU => Self::map(ops::activate_crelu, batch_size, inp, out),
+            Activation::SCReLU => Self::map(ops::activate_screlu, batch_size, inp, out),
         }
     }
 
     /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
     pub fn backprop_activation(batch_size: usize, op: Activation, inp: &Self, out: &Self) {
         match op {
-            Activation::ReLU => Self::map(bindings::backpropReLU, batch_size, inp, out),
-            Activation::CReLU => Self::map(bindings::backpropCReLU, batch_size, inp, out),
-            Activation::SCReLU => Self::map(bindings::backpropSCReLU, batch_size, inp, out),
+            Activation::ReLU => Self::map(ops::backprop_relu, batch_size, inp, out),
+            Activation::CReLU => Self::map(ops::backprop_crelu, batch_size, inp, out),
+            Activation::SCReLU => Self::map(ops::backprop_screlu, batch_size, inp, out),
         }
     }
 
     /// # Safety
     /// `weights` must be initialised.
     pub unsafe fn affine(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         batch_size: usize,
         weights: &Tensor,
         inputs: &TensorBatch,
@@ -312,7 +317,7 @@ impl TensorBatch {
     /// `weights` must be initialised.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn backprop_affine(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         ones: &GpuBuffer,
         batch_size: usize,
         weights: &Tensor,
@@ -331,40 +336,21 @@ impl TensorBatch {
     /// # Safety
     /// `out` must be pointing to valid allocated memory.
     pub unsafe fn reduce_add(
-        handle: cublasHandle_t,
+        handle: CublasHandle,
         ones: &GpuBuffer,
         batch_size: usize,
         inp: &TensorBatch,
         out: &Tensor,
     ) {
         assert_eq!(inp.shape(), out.shape());
-        let alpha = 1.0;
-        let beta = 0.0;
-
-        let m = batch_size as c_int;
-        let n = out.num_elements() as c_int;
-
-        bindings::cublasSgemv_v2(
-            handle,
-            cublasOperation_t::CUBLAS_OP_N,
-            n,
-            m,
-            &alpha,
-            inp.ptr(),
-            n,
-            ones.ptr(),
-            0,
-            &beta,
-            out.ptr(),
-            1,
-        );
+        ops::reduce_add(handle, ones.ptr(), batch_size, out.num_elements(), inp.ptr(), out.ptr());
     }
 
     /// # Safety
     /// `inp` must be pointing to valid allocated memory.
     pub unsafe fn splat_add(batch_size: usize, inp: &Tensor, out: &TensorBatch) {
         assert_eq!(inp.shape(), out.shape());
-        bindings::splatAdd(batch_size, out.element_size(), inp.ptr(), out.ptr());
+        ops::splat_add(batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
 
     pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {
@@ -373,7 +359,7 @@ impl TensorBatch {
         assert_eq!(self.element_size(), results.element_size());
 
         unsafe {
-            bindings::sigmoidMSE(batch_size, self.ptr(), results.ptr(), error.ptr());
+            ops::sigmoid_mse(batch_size, self.ptr(), results.ptr(), error.ptr());
         }
     }
 }
@@ -384,84 +370,4 @@ fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (c_int, c_
     assert_eq!(x.cap(), y.cap(), "Not all tensor caps are the same length!");
 
     (a_shape.cols() as c_int, a_shape.rows() as c_int)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn sgemv<const TRANSA: bool>(
-    handle: cublasHandle_t,
-    m: c_int,
-    n: c_int,
-    a_ptr: *const f32,
-    a_str: c_int,
-    x_ptr: *const f32,
-    y_ptr: *mut f32,
-    batch_size: c_int,
-) {
-    let alpha = 1.0;
-    let beta = 0.0;
-
-    let (transa, x_ld, y_ld) = if TRANSA {
-        (cublasOperation_t::CUBLAS_OP_T, n, m)
-    } else {
-        (cublasOperation_t::CUBLAS_OP_N, m, n)
-    };
-
-    unsafe {
-        bindings::cublasSgemvStridedBatched(
-            handle,
-            transa,
-            n,
-            m,
-            &alpha,
-            a_ptr,
-            n,
-            a_str.into(),
-            x_ptr,
-            1,
-            x_ld.into(),
-            &beta,
-            y_ptr,
-            1,
-            y_ld.into(),
-            batch_size,
-        );
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn sgemm(
-    handle: cublasHandle_t,
-    m: c_int,
-    n: c_int,
-    y_ptr: *const f32,
-    x_ptr: *const f32,
-    a_ptr: *mut f32,
-    a_str: c_int,
-    batch_size: c_int,
-) {
-    let alpha = 1.0;
-    let beta = 0.0;
-
-    unsafe {
-        bindings::cublasSgemmStridedBatched(
-            handle,
-            cublasOperation_t::CUBLAS_OP_N,
-            cublasOperation_t::CUBLAS_OP_T,
-            n,
-            m,
-            1,
-            &alpha,
-            y_ptr,
-            n,
-            n.into(),
-            x_ptr,
-            m,
-            m.into(),
-            &beta,
-            a_ptr,
-            n,
-            a_str.into(),
-            batch_size,
-        );
-    }
 }

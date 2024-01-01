@@ -1,6 +1,6 @@
 use bullet_core::{inputs::InputType, util, GpuDataLoader, Rand};
 use bullet_tensor::{
-    create_cublas_handle, cublasHandle_t, device_synchronise, Activation, GpuBuffer, Optimiser,
+    CublasHandle, device_synchronise, Activation, GpuBuffer, Optimiser,
     Shape, SparseTensor, Tensor, TensorBatch,
 };
 use bulletformat::BulletFormat;
@@ -34,7 +34,7 @@ struct Node {
 
 pub struct Trainer<T> {
     input_getter: T,
-    handle: cublasHandle_t,
+    handle: CublasHandle,
     optimiser: Optimiser,
     ft: FeatureTransormer,
     nodes: Vec<Node>,
@@ -265,7 +265,7 @@ impl<T: InputType> Trainer<T> {
 }
 
 fn backprop_single(
-    handle: cublasHandle_t,
+    handle: CublasHandle,
     batch_size: usize,
     this_node: &Node,
     inputs: &TensorBatch,
@@ -464,7 +464,7 @@ impl<T: InputType> TrainerBuilder<T> {
 
             Trainer {
                 input_getter: self.input_getter,
-                handle: create_cublas_handle(),
+                handle: CublasHandle::default(),
                 optimiser: opt,
                 ft,
                 nodes,

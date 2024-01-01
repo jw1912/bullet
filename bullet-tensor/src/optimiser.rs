@@ -1,4 +1,6 @@
-use crate::{bindings, util, GpuBuffer};
+use bullet_cuda::{util, ops};
+
+use crate::GpuBuffer;
 
 /// A struct intended to hold all network weights and biases
 /// needed for training.
@@ -52,7 +54,7 @@ impl Optimiser {
     pub fn update(&self, decay: f32, adj: f32, rate: f32) {
         let decay_gamma = 1.0 - decay * rate;
         unsafe {
-            bindings::updateWeights(
+            ops::update_weights(
                 self.size,
                 decay_gamma,
                 adj,

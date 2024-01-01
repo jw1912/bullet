@@ -1,6 +1,7 @@
 use bullet_core::Feat;
+use bullet_cuda::{util, ops};
 
-use crate::{bindings, util, Shape, Tensor, TensorBatch};
+use crate::{Shape, Tensor, TensorBatch};
 
 /// A sparse representation of a tensor with dimensions `(1, input_dim)`.
 pub struct SparseTensor {
@@ -75,7 +76,7 @@ impl SparseTensor {
         assert_eq!(weights.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases.shape(), Shape::new(1, output_dim));
 
-        bindings::sparseAffineForward(
+        ops::sparse_affine_forward(
             inputs.used,
             inputs.max_num_inputs,
             output_dim,
@@ -105,7 +106,7 @@ impl SparseTensor {
         assert_eq!(weights_grad.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
 
-        bindings::sparseAffineBackward(
+        ops::sparse_affine_backward(
             inputs.used,
             inputs.max_num_inputs,
             output_dim,
