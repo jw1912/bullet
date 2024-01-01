@@ -27,6 +27,8 @@ Currently Supported Games:
 
 Raise an issue for support of a new game.
 
+Check out the [examples](/examples) to see how to use the crate.
+
 ## Data
 
 The trainer uses its own binary data format for each game.
