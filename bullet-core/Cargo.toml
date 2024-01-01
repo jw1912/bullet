@@ -6,4 +6,4 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
+bulletformat = { workspace = true }

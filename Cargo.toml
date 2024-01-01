@@ -18,8 +18,11 @@ edition = "2021"
 license.workspace = true
 authors.workspace = true
 
+[workspace.dependencies]
+bulletformat = "0.1.0"
+
 [dependencies]
-bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
+bulletformat = { workspace = true }
 bullet-core = { path = "bullet-core" }
 bullet-tensor = { path = "bullet-tensor" }
 
