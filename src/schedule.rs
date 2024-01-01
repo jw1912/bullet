@@ -19,7 +19,7 @@ impl TrainingSchedule {
     }
 
     pub fn should_save(&self, epoch: usize) -> bool {
-        epoch % self.save_rate == 0
+        epoch % self.save_rate == 0 || epoch == self.num_epochs
     }
 
     pub fn lr(&self) -> f32 {
