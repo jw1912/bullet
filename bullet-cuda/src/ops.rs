@@ -68,7 +68,7 @@ pub unsafe fn reduce_add_mul_vector_vectort(
     y_ptr: *const f32,
     x_ptr: *const f32,
     a_ptr: *mut f32,
-    b: c_int,
+    batch_size: c_int,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
@@ -78,7 +78,7 @@ pub unsafe fn reduce_add_mul_vector_vectort(
             *handle,
             cublasOperation_t::CUBLAS_OP_N,
             cublasOperation_t::CUBLAS_OP_T,
-            n, m, b,
+            n, m, batch_size,
             &alpha,
             y_ptr, n,
             x_ptr, m,
