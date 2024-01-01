@@ -5,5 +5,5 @@ edition = "2021"
 authors = ["Jamie Whiting"]
 
 [dependencies]
-bulletformat = { git = 'https://github.com/jw1912/bulletformat' }
+bulletformat = "0.1.0"
 cpu = { path = "../cpu" }
