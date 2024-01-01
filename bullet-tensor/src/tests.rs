@@ -155,7 +155,7 @@ fn tensor_sparse_affine() {
 }
 
 #[test]
-fn mul_vector_vectort() {
+fn reduce_add_mul_vector_vectort() {
     let handle = CublasHandle::default();
 
     const M: usize = 3;
@@ -176,38 +176,32 @@ fn mul_vector_vectort() {
 
     let x_gpu = TensorBatch::new(Shape::new(1, M), B);
     let y_gpu = TensorBatch::new(Shape::new(1, N), B);
-    let a_gpu = TensorBatch::new(Shape::new(M, N), B);
 
-    x_gpu.load_from_cpu(&x);
-    y_gpu.load_from_cpu(&y);
+    unsafe {
+        let mut a_gpu = Tensor::uninit(Shape::new(M, N));
+        a_gpu.calloc();
 
-    TensorBatch::mul_vector_vectort(handle, B, &y_gpu, &x_gpu, &a_gpu);
+        x_gpu.load_from_cpu(&x);
+        y_gpu.load_from_cpu(&y);
 
-    let mut a = [0.0; M * N * B];
-    a_gpu.write_to_cpu(&mut a);
+        TensorBatch::reduce_add_mul_vector_vectort(handle, B, &y_gpu, &x_gpu, &a_gpu);
 
-    assert_eq!(
-        a,
-        [
-            1.0, 0.0,
-            0.0, 0.0,
-            0.0, 0.0,
-            //1.0, 0.0, 0.0,
-            //0.0, 0.0, 0.0,
+        let mut a = [0.0; M * N];
+        a_gpu.write_to_cpu(&mut a);
 
-            0.0, 0.0,
-            0.0, 1.0,
-            0.0, 0.0,
-            //0.0, 0.0, 0.0,
-            //0.0, 1.0, 0.0,
+        assert_eq!(
+            a,
+            [
+                1.0, 0.0,
+                0.0, 1.0,
+                1.0, 1.0,
+                //1.0, 0.0, 1.0,
+                //0.0, 1.0, 1.0,
+            ]
+        );
 
-            0.0, 0.0,
-            0.0, 0.0,
-            1.0, 1.0,
-            //0.0, 0.0, 1.0,
-            //0.0, 0.0, 1.0,
-        ]
-    );
+        a_gpu.free();
+    }
 }
 
 #[test]
@@ -303,12 +297,11 @@ fn affine() {
 
         let mut wg = Tensor::uninit(Shape::new(3, 3));
         let mut bg = Tensor::uninit(Shape::new(1, 3));
-        let wi = TensorBatch::new(Shape::new(3, 3), 1);
 
         wg.calloc();
         bg.calloc();
 
-        TensorBatch::backprop_affine(handle, &ones, 1, &w, &y, &x, &wg, &bg, &wi);
+        TensorBatch::backprop_affine(handle, &ones, 1, &w, &y, &x, &wg, &bg);
 
         x.write_to_cpu(&mut buf);
         assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);

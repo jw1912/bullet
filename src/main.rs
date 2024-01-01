@@ -13,7 +13,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    //trainer.load_from_checkpoint("checkpoints/net-epoch1");
+    trainer.load_from_checkpoint("checkpoints/testnet");
 
     let mut schedule = TrainingSchedule {
         net_id: "net-01.01.24".to_string(),

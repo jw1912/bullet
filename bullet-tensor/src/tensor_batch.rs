@@ -107,35 +107,50 @@ impl TensorBatch {
         );
     }
 
-    pub fn mul_vector_vectort(
+    pub fn reduce_add_mul_vector_vectort(
         handle: CublasHandle,
         batch_size: usize,
         y: &TensorBatch,
         x: &TensorBatch,
-        a: &TensorBatch,
+        a: &Tensor,
     ) {
         let a_shape = a.shape();
         assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
         assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
         assert_eq!(x.cap(), y.cap(), "Not all tensor caps are the same length!");
-        assert_eq!(x.cap(), a.cap(), "Not all tensor caps are the same length!");
         assert!(batch_size <= x.cap());
 
-        let m = a_shape.cols() as c_int;
-        let n = a_shape.rows() as c_int;
-
         unsafe {
-            ops::mul_vector_vectort(
+            ops::reduce_add_mul_vector_vectort(
                 handle,
-                m,
-                n,
+                a_shape.cols() as c_int,
+                a_shape.rows() as c_int,
                 y.ptr(),
                 x.ptr(),
                 a.ptr(),
-                a.element_size() as c_int,
                 batch_size as c_int,
             );
         }
+    }
+
+    /// # Safety
+    /// `out` must be pointing to valid allocated memory.
+    pub unsafe fn reduce_add(
+        handle: CublasHandle,
+        ones: &GpuBuffer,
+        batch_size: usize,
+        inp: &TensorBatch,
+        out: &Tensor,
+    ) {
+        assert_eq!(inp.shape(), out.shape());
+        ops::reduce_add(handle, ones.ptr(), batch_size, out.num_elements(), inp.ptr(), out.ptr());
+    }
+
+    /// # Safety
+    /// `inp` must be pointing to valid allocated memory.
+    pub unsafe fn splat_add(batch_size: usize, inp: &Tensor, out: &TensorBatch) {
+        assert_eq!(inp.shape(), out.shape());
+        ops::splat_add(batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
 
     /// Modifies a batch of tensors.
@@ -197,32 +212,10 @@ impl TensorBatch {
         inputs: &TensorBatch,
         weights_grad: &Tensor,
         biases_grad: &Tensor,
-        weights_intermediate: &TensorBatch,
     ) {
-        TensorBatch::mul_vector_vectort(handle, batch_size, errors, inputs, weights_intermediate);
-        TensorBatch::reduce_add(handle, ones, batch_size, weights_intermediate, weights_grad);
+        TensorBatch::reduce_add_mul_vector_vectort(handle, batch_size, errors, inputs, weights_grad);
         TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
-    }
-
-    /// # Safety
-    /// `out` must be pointing to valid allocated memory.
-    pub unsafe fn reduce_add(
-        handle: CublasHandle,
-        ones: &GpuBuffer,
-        batch_size: usize,
-        inp: &TensorBatch,
-        out: &Tensor,
-    ) {
-        assert_eq!(inp.shape(), out.shape());
-        ops::reduce_add(handle, ones.ptr(), batch_size, out.num_elements(), inp.ptr(), out.ptr());
-    }
-
-    /// # Safety
-    /// `inp` must be pointing to valid allocated memory.
-    pub unsafe fn splat_add(batch_size: usize, inp: &Tensor, out: &TensorBatch) {
-        assert_eq!(inp.shape(), out.shape());
-        ops::splat_add(batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
 
     pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {

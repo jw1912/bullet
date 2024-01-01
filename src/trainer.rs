@@ -18,7 +18,6 @@ struct Affine {
     biases: Tensor,
     weights_grad: Tensor,
     biases_grad: Tensor,
-    weights_intermediate: TensorBatch,
     ones: GpuBuffer,
 }
 
@@ -280,11 +279,10 @@ fn backprop_single(
             weights: w,
             weights_grad: wg,
             biases_grad: bg,
-            weights_intermediate: wi,
             ones,
             ..
         }) => unsafe {
-            TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg, wi);
+            TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
         },
     }
 }
@@ -416,7 +414,6 @@ impl<T: InputType> TrainerBuilder<T> {
                             biases: Tensor::uninit(bsh),
                             weights_grad: Tensor::uninit(wsh),
                             biases_grad: Tensor::uninit(bsh),
-                            weights_intermediate: TensorBatch::new(wsh, batch_size),
                             ones,
                         };
 
