@@ -8,6 +8,8 @@ use bullet::{
 };
 
 fn main() {
+    bullet::set_cbcs(true);
+
     let mut trainer = TrainerBuilder::default()
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
