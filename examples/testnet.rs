@@ -25,5 +25,11 @@ fn main() {
         save_rate: 10,
     };
 
-    run_training(&mut trainer, &mut schedule, 4, "../../data/batch.data", "checkpoints");
+    run_training(
+        &mut trainer,
+        &mut schedule,
+        4,
+        "../../data/batch.data",
+        "checkpoints",
+    );
 }

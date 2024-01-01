@@ -1,18 +1,21 @@
-use crate::{bindings::{self, cublasOperation_t}, CublasHandle};
+use crate::{
+    bindings::{self, cublasOperation_t},
+    CublasHandle,
+};
 
 use std::ffi::c_int;
 
-pub use bindings::splatAdd as splat_add;
-pub use bindings::sigmoidMSE as sigmoid_mse;
-pub use bindings::sparseAffineForward as sparse_affine_forward;
-pub use bindings::sparseAffineBackward as sparse_affine_backward;
-pub use bindings::updateWeights as update_weights;
-pub use bindings::activateReLU as activate_relu;
 pub use bindings::activateCReLU as activate_crelu;
+pub use bindings::activateReLU as activate_relu;
 pub use bindings::activateSCReLU as activate_screlu;
-pub use bindings::backpropReLU as backprop_relu;
 pub use bindings::backpropCReLU as backprop_crelu;
+pub use bindings::backpropReLU as backprop_relu;
 pub use bindings::backpropSCReLU as backprop_screlu;
+pub use bindings::sigmoidMSE as sigmoid_mse;
+pub use bindings::sparseAffineBackward as sparse_affine_backward;
+pub use bindings::sparseAffineForward as sparse_affine_forward;
+pub use bindings::splatAdd as splat_add;
+pub use bindings::updateWeights as update_weights;
 
 #[allow(clippy::too_many_arguments)]
 /// # Safety
@@ -34,12 +37,17 @@ pub unsafe fn splat_mul_matrix_vector(
             *handle,
             cublasOperation_t::CUBLAS_OP_N,
             cublasOperation_t::CUBLAS_OP_N,
-            n, batch_size, m,
+            n,
+            batch_size,
+            m,
             &alpha,
-            a_ptr, n,
-            x_ptr, m,
+            a_ptr,
+            n,
+            x_ptr,
+            m,
             &beta,
-            y_ptr, n,
+            y_ptr,
+            n,
         );
     }
 }
@@ -64,12 +72,17 @@ pub unsafe fn splat_mul_matrixt_vector(
             *handle,
             cublasOperation_t::CUBLAS_OP_T,
             cublasOperation_t::CUBLAS_OP_N,
-            m, batch_size, n,
+            m,
+            batch_size,
+            n,
             &alpha,
-            a_ptr, n,
-            y_ptr, n,
+            a_ptr,
+            n,
+            y_ptr,
+            n,
             &beta,
-            x_ptr, m,
+            x_ptr,
+            m,
         );
     }
 }
@@ -94,12 +107,17 @@ pub unsafe fn reduce_add_mul_vector_vectort(
             *handle,
             cublasOperation_t::CUBLAS_OP_N,
             cublasOperation_t::CUBLAS_OP_T,
-            n, m, batch_size,
+            n,
+            m,
+            batch_size,
             &alpha,
-            y_ptr, n,
-            x_ptr, m,
+            y_ptr,
+            n,
+            x_ptr,
+            m,
             &beta,
-            a_ptr, n,
+            a_ptr,
+            n,
         );
     }
 }

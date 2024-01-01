@@ -1,5 +1,5 @@
 use bullet_core::Feat;
-use bullet_cuda::{util, ops};
+use bullet_cuda::{ops, util};
 
 use crate::{Shape, Tensor, TensorBatch};
 

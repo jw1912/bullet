@@ -71,15 +71,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::splat_mul_matrix_vector(
-            handle,
-            m,
-            n,
-            a.ptr(),
-            x.ptr(),
-            y.ptr(),
-            batch_size as c_int,
-        );
+        ops::splat_mul_matrix_vector(handle, m, n, a.ptr(), x.ptr(), y.ptr(), batch_size as c_int);
     }
 
     /// # Safety
@@ -94,15 +86,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::splat_mul_matrixt_vector(
-            handle,
-            m,
-            n,
-            a.ptr(),
-            y.ptr(),
-            x.ptr(),
-            batch_size as c_int,
-        )
+        ops::splat_mul_matrixt_vector(handle, m, n, a.ptr(), y.ptr(), x.ptr(), batch_size as c_int)
     }
 
     pub fn reduce_add_mul_vector_vectort(
@@ -141,7 +125,14 @@ impl TensorBatch {
         out: &Tensor,
     ) {
         assert_eq!(inp.shape(), out.shape());
-        ops::reduce_add(handle, ones.ptr(), batch_size, out.num_elements(), inp.ptr(), out.ptr());
+        ops::reduce_add(
+            handle,
+            ones.ptr(),
+            batch_size,
+            out.num_elements(),
+            inp.ptr(),
+            out.ptr(),
+        );
     }
 
     /// # Safety
@@ -176,7 +167,12 @@ impl TensorBatch {
     }
 
     /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
-    pub fn backprop_activation(batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
+    pub fn backprop_activation(
+        batch_size: usize,
+        op: Activation,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+    ) {
         match op {
             Activation::ReLU => Self::map(ops::backprop_relu, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::backprop_crelu, batch_size, inp, out),
@@ -211,7 +207,13 @@ impl TensorBatch {
         weights_grad: &Tensor,
         biases_grad: &Tensor,
     ) {
-        TensorBatch::reduce_add_mul_vector_vectort(handle, batch_size, errors, inputs, weights_grad);
+        TensorBatch::reduce_add_mul_vector_vectort(
+            handle,
+            batch_size,
+            errors,
+            inputs,
+            weights_grad,
+        );
         TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }

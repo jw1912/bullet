@@ -1,4 +1,4 @@
-use bullet_cuda::{util, ops};
+use bullet_cuda::{ops, util};
 
 use crate::GpuBuffer;
 

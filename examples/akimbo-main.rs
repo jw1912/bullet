@@ -23,5 +23,11 @@ fn main() {
         save_rate: 1,
     };
 
-    run_training(&mut trainer, &mut schedule, 4, "../../data/akimbo3-9.data", "checkpoints");
+    run_training(
+        &mut trainer,
+        &mut schedule,
+        4,
+        "../../data/akimbo3-9.data",
+        "checkpoints",
+    );
 }
