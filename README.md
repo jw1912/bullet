@@ -4,7 +4,7 @@
 
 </div>
 
-A Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
+A CUDA-powered Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
 
 Also used by a number of other engines, including:
 - [Alexandria](https://github.com/PGG106/Alexandria)
@@ -17,17 +17,13 @@ Also used by a number of other engines, including:
 
 ## About
 
-Used exclusively to train architectures of the form `Input -> Nx2 -> Output`.
-
-Can use either a CPU or hand-written CUDA backend.
+Used exclusively to train architectures of the form `(SparseInput -> N)x2 -> MoreHiddenLayers -> 1`.
 
 Currently Supported Games:
 - Chess
 - Ataxx
 
 Raise an issue for support of a new game.
-
-To learn how it works, read the [wiki](wiki.md).
 
 ## Data
 
