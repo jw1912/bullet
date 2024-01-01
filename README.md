@@ -27,7 +27,15 @@ Currently Supported Games:
 
 Raise an issue for support of a new game.
 
-Check out the [examples](/examples) to see how to use the crate.
+Check out the [examples](/examples) to see how to use the crate - and if you don't want to use bullet
+as a crate, you can edit one of them and run with `cargo r -r --example <example name (without .rs)>`.
+
+When a checkpoint is saved to a directory `<out_dir>/<checkpoint_name>`, it will contain `params.bin`,
+which is the raw floating point parameters of the network, and if quantisation has been specified then
+it will also contain `<checkpoint_name>.bin`, which is the quantised network parameters.
+
+In each case, the format of these files is `(layer 1 weights)(layer 1 biases)(layer 2 weights)...` stored
+contiguously, with the weights matrices being stored column-major.
 
 ## Data
 
