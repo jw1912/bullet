@@ -1,7 +1,7 @@
 use bullet_core::{inputs::InputType, util, GpuDataLoader, Rand};
 use bullet_tensor::{
-    CublasHandle, device_synchronise, Activation, GpuBuffer, Optimiser,
-    Shape, SparseTensor, Tensor, TensorBatch,
+    device_synchronise, Activation, CublasHandle, GpuBuffer, Optimiser, Shape, SparseTensor,
+    Tensor, TensorBatch,
 };
 use bulletformat::BulletFormat;
 
@@ -47,7 +47,7 @@ pub struct Trainer<T> {
     error: GpuBuffer,
     used: usize,
     scale: f32,
-    quantiser: Vec<QuantiseInfo>
+    quantiser: Vec<QuantiseInfo>,
 }
 
 impl<T: InputType> std::fmt::Display for Trainer<T> {
@@ -108,7 +108,10 @@ impl<T: InputType> Trainer<T> {
         let mut qbuf = vec![0; size];
         let mut qiter = self.quantiser.iter().peekable();
         while let Some(&QuantiseInfo { val, start }) = qiter.next() {
-            let end = if let Some(QuantiseInfo { start: next_start, .. }) = qiter.peek() {
+            let end = if let Some(QuantiseInfo {
+                start: next_start, ..
+            }) = qiter.peek()
+            {
                 *next_start
             } else {
                 size
@@ -444,7 +447,10 @@ impl<T: InputType> TrainerBuilder<T> {
             let mut qi = 0;
             let mut accq = 1;
             if !self.quantisations.is_empty() {
-                quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: 0 });
+                quantiser.push(QuantiseInfo {
+                    val: self.quantisations[qi],
+                    start: 0,
+                });
                 accq *= self.quantisations[qi];
                 qi += 1;
             }
@@ -470,7 +476,10 @@ impl<T: InputType> TrainerBuilder<T> {
                         affine.weights_grad.set_ptr(opt.gradients_offset(offset));
 
                         if !self.quantisations.is_empty() {
-                            quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: offset });
+                            quantiser.push(QuantiseInfo {
+                                val: self.quantisations[qi],
+                                start: offset,
+                            });
                         }
 
                         offset += inp_size * size;
@@ -480,7 +489,10 @@ impl<T: InputType> TrainerBuilder<T> {
 
                         if !self.quantisations.is_empty() {
                             accq *= self.quantisations[qi];
-                            quantiser.push(QuantiseInfo { val: accq, start: offset });
+                            quantiser.push(QuantiseInfo {
+                                val: accq,
+                                start: offset,
+                            });
                             qi += 1;
                         }
 
@@ -498,7 +510,11 @@ impl<T: InputType> TrainerBuilder<T> {
                 inp_size = size;
             }
 
-            assert_eq!(qi, self.quantisations.len(), "Incorrectly specified number of quantisations!");
+            assert_eq!(
+                qi,
+                self.quantisations.len(),
+                "Incorrectly specified number of quantisations!"
+            );
             assert_eq!(offset, net_size);
 
             let inputs = SparseTensor::uninit(

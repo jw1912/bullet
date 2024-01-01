@@ -1,7 +1,6 @@
 /// Network codenamed `signalis`, from Viridithas.
 ///
 /// NOTE: This network failed SPRT, but its a nice example for using buckets.
-
 use bullet::{
     inputs, run_training, Activation, LrScheduler, LrSchedulerType, TrainerBuilder,
     TrainingSchedule, WdlScheduler,
@@ -14,18 +13,10 @@ fn main() {
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_quantisations(&[181, 64])
-        .set_input(
-            inputs::ChessBucketsMirrored::new([
-                0, 0, 0, 0,
-                1, 1, 1, 1,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
-                3, 3, 3, 3,
-                3, 3, 3, 3,
-                3, 3, 3, 3,
-                3, 3, 3, 3,
-            ]
-        ))
+        .set_input(inputs::ChessBucketsMirrored::new([
+            0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+            3, 3, 3,
+        ]))
         .ft(1536)
         .activate(Activation::SCReLU)
         .add_layer(1)
@@ -40,5 +31,11 @@ fn main() {
         save_rate: 1,
     };
 
-    run_training(&mut trainer, &mut schedule, 8, "../../thepile.data", "checkpoints");
+    run_training(
+        &mut trainer,
+        &mut schedule,
+        8,
+        "../../thepile.data",
+        "checkpoints",
+    );
 }
