@@ -32,7 +32,7 @@ struct Node {
 }
 
 struct QuantiseInfo {
-    val: i16,
+    val: i32,
     start: usize,
 }
 
@@ -118,7 +118,7 @@ impl<T: InputType> Trainer<T> {
             };
 
             for i in start..end {
-                qbuf[i] = (f32::from(val) * buf[i]) as i16;
+                qbuf[i] = (f64::from(val) * f64::from(buf[i])) as i32;
             }
         }
 
@@ -338,7 +338,7 @@ pub struct TrainerBuilder<T> {
     batch_size: usize,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
-    quantisations: Vec<i16>,
+    quantisations: Vec<i32>,
     size: usize,
     scale: f32,
 }
@@ -381,7 +381,7 @@ impl<T: InputType> TrainerBuilder<T> {
         self
     }
 
-    pub fn set_quantisations(mut self, quants: &[i16]) -> Self {
+    pub fn set_quantisations(mut self, quants: &[i32]) -> Self {
         self.quantisations = quants.to_vec();
         self
     }
