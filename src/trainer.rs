@@ -207,6 +207,8 @@ impl<T: InputType> Trainer<T> {
     pub fn eval(&mut self, fen: &str)
     where T::RequiredDataType: std::str::FromStr<Err = String>
     {
+        self.prep_for_epoch();
+        self.clear_data();
         let board = fen.parse::<T::RequiredDataType>().unwrap();
         let mut loader = GpuDataLoader::new(self.input_getter);
         loader.load(&[board], 1, 0.0, self.scale);
