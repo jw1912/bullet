@@ -204,6 +204,28 @@ impl<T: InputType> Trainer<T> {
         self.ft.outputs.cap()
     }
 
+    pub fn eval(&mut self, fen: &str)
+    where T::RequiredDataType: std::str::FromStr<Err = String>
+    {
+        let board = fen.parse::<T::RequiredDataType>().unwrap();
+        let mut loader = GpuDataLoader::new(self.input_getter);
+        loader.load(&[board], 1, 0.0, self.scale);
+        self.load_data(&loader);
+
+        unsafe {
+            self.forward();
+        }
+
+        bullet_tensor::panic_if_cuda_error("Something went wrong!");
+
+        let mut eval = vec![0.0; self.batch_size()];
+        self.nodes.last().unwrap().outputs.write_to_cpu(&mut eval);
+        println!("FEN: {fen}");
+        println!("EVAL: {}", self.scale * eval[0]);
+
+        self.clear_data();
+    }
+
     pub fn train_on_batch(&self, decay: f32, rate: f32) {
         self.optimiser.zero_gradient();
 
