@@ -5,7 +5,7 @@ use bullet_tensor::{
 };
 use bulletformat::BulletFormat;
 
-struct FeatureTransormer {
+struct FeatureTransformer {
     weights: Tensor,
     biases: Tensor,
     weights_grad: Tensor,
@@ -40,7 +40,7 @@ pub struct Trainer<T> {
     input_getter: T,
     handle: CublasHandle,
     optimiser: Optimiser,
-    ft: FeatureTransormer,
+    ft: FeatureTransformer,
     nodes: Vec<Node>,
     inputs: SparseTensor,
     results: TensorBatch,
@@ -423,7 +423,7 @@ impl<T: InputType> TrainerBuilder<T> {
             let ftw_shape = Shape::new(self.ft_out_size, inp_getter_size);
             let ftb_shape = Shape::new(1, self.ft_out_size);
 
-            let mut ft = FeatureTransormer {
+            let mut ft = FeatureTransformer {
                 weights: Tensor::uninit(ftw_shape),
                 biases: Tensor::uninit(ftb_shape),
                 weights_grad: Tensor::uninit(ftw_shape),

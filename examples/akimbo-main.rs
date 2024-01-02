@@ -61,7 +61,7 @@ fn screlu(x: i32) -> i32 {
 /// This is the quantised format that bullet outputs.
 #[repr(C)]
 pub struct Network {
-    /// Column-Major matrix, 768 Input Features.
+    /// Column-Major `HIDDEN_SIZE x 768` matrix.
     feature_weights: [Accumulator; 768],
     /// Vector with dimension `HIDDEN_SIZE`.
     feature_bias: Accumulator,
@@ -120,7 +120,7 @@ impl Accumulator {
         net.feature_bias
     }
 
-    /// Add a feature from an accumulator.
+    /// Add a feature to an accumulator.
     pub fn add_feature(&mut self, feature_idx: usize, net: &Network) {
         for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
             *i += *d
