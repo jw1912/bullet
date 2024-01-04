@@ -9,11 +9,10 @@ mod tensor_batch;
 #[rustfmt::skip]
 mod tests;
 
-pub use buffer::GpuBuffer;
-pub use bullet_cuda::{
-    util::{device_synchronise, panic_if_cuda_error},
-    CublasHandle,
-};
+use bullet_cuda as backend;
+
+pub use backend::{util::{device_synchronise, panic_if_device_error}, DeviceHandles};
+pub use buffer::DeviceBuffer;
 pub use optimiser::Optimiser;
 pub use shape::Shape;
 pub use sparse::SparseTensor;

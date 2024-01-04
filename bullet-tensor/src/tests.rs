@@ -1,8 +1,8 @@
 use bullet_core::Feat;
-use bullet_cuda::CublasHandle;
 
 use crate::{
-    panic_if_cuda_error, Activation, Shape, SparseTensor, Tensor, TensorBatch, GpuBuffer,
+    backend::{DeviceHandles, util},
+    Activation, Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer,
 };
 
 #[test]
@@ -12,21 +12,21 @@ fn tensor_activate() {
     let x = TensorBatch::new(Shape::new(1, 3), 3);
     let y = TensorBatch::new(Shape::new(1, 3), 3);
 
-    x.load_from_cpu(&xs);
+    x.load_from_host(&xs);
     TensorBatch::activate(3, Activation::ReLU, &x, &y);
-    y.write_to_cpu(&mut xs);
+    y.write_to_host(&mut xs);
 
     assert_eq!(xs, [1.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0]);
 
     TensorBatch::backprop_activation(3, Activation::CReLU, &y, &x);
-    x.write_to_cpu(&mut xs);
+    x.write_to_host(&mut xs);
 
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
 }
 
 #[test]
 fn tensor_lt() {
-    let handle = CublasHandle::default();
+    let handle = DeviceHandles::default();
 
     const M: usize = 3;
     const N: usize = 2;
@@ -50,14 +50,14 @@ fn tensor_lt() {
         let ys_gpu = TensorBatch::new(Shape::new(1, N), 3);
 
         a_gpu.calloc();
-        a_gpu.load_from_cpu(&a);
-        xs_gpu.load_from_cpu(&xs);
+        a_gpu.load_from_host(&a);
+        xs_gpu.load_from_host(&xs);
         TensorBatch::splat_mul_matrix_vector(handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
 
         a_gpu.free();
 
         let mut ys = [0.0; N * 2];
-        ys_gpu.write_to_cpu(&mut ys);
+        ys_gpu.write_to_host(&mut ys);
 
         ys
     };
@@ -72,20 +72,20 @@ fn tensor_lt() {
         let ys_gpu = TensorBatch::new(Shape::new(1, N), 3);
 
         a_gpu.calloc();
-        a_gpu.load_from_cpu(&a);
-        ys_gpu.load_from_cpu(&ys);
+        a_gpu.load_from_host(&a);
+        ys_gpu.load_from_host(&ys);
 
         TensorBatch::splat_mul_matrixt_vector(handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
 
         a_gpu.free();
 
         let mut xs = [0.0; M * 3];
-        xs_gpu.write_to_cpu(&mut xs);
+        xs_gpu.write_to_host(&mut xs);
 
         xs
     };
 
-    panic_if_cuda_error("cuda error!");
+    util::panic_if_device_error("cuda error!");
     assert_eq!(xs, xs_gpu);
     assert_eq!(ys_cpu, ys_gpu);
 }
@@ -117,15 +117,15 @@ fn tensor_sparse_affine() {
         weights.calloc();
         biases.calloc();
 
-        weights.load_from_cpu(&a_t);
-        biases.load_from_cpu(&b);
+        weights.load_from_host(&a_t);
+        biases.load_from_host(&b);
 
         inputs.append(&xs);
 
         SparseTensor::affine(&weights, &inputs, &biases, &outputs);
 
         let mut ys = [0.0; N * B * 2];
-        outputs.write_to_cpu(&mut ys);
+        outputs.write_to_host(&mut ys);
 
         let expected = [1.5, -0.5, 1.5, -0.5, 1.5, 0.5, 1.5, 0.5, 0.5, 0.5, 0.5, 0.5];
         assert_eq!(expected, ys);
@@ -139,12 +139,12 @@ fn tensor_sparse_affine() {
         SparseTensor::affine_backprop(&wg, &inputs, &bg, &outputs);
 
         let mut wbuf = [0.0; 6];
-        wg.write_to_cpu(&mut wbuf);
+        wg.write_to_host(&mut wbuf);
         let expected = [3.0, -1.0, 3.0, 1.0, 1.0, 1.0];
         assert_eq!(wbuf, expected);
 
         let mut bbuf = [0.0; 2];
-        bg.write_to_cpu(&mut bbuf);
+        bg.write_to_host(&mut bbuf);
         assert_eq!(bbuf, [7.0, 1.0]);
 
         weights.free();
@@ -156,7 +156,7 @@ fn tensor_sparse_affine() {
 
 #[test]
 fn reduce_add_mul_vector_vectort() {
-    let handle = CublasHandle::default();
+    let handle = DeviceHandles::default();
 
     const M: usize = 3;
     const N: usize = 2;
@@ -181,13 +181,13 @@ fn reduce_add_mul_vector_vectort() {
         let mut a_gpu = Tensor::uninit(Shape::new(M, N));
         a_gpu.calloc();
 
-        x_gpu.load_from_cpu(&x);
-        y_gpu.load_from_cpu(&y);
+        x_gpu.load_from_host(&x);
+        y_gpu.load_from_host(&y);
 
         TensorBatch::reduce_add_mul_vector_vectort(handle, B, &y_gpu, &x_gpu, &a_gpu);
 
         let mut a = [0.0; M * N];
-        a_gpu.write_to_cpu(&mut a);
+        a_gpu.write_to_host(&mut a);
 
         assert_eq!(
             a,
@@ -206,7 +206,7 @@ fn reduce_add_mul_vector_vectort() {
 
 #[test]
 fn tensor_reduce_add() {
-    let handle = CublasHandle::default();
+    let handle = DeviceHandles::default();
     let vecs = [
         1.0, 1.0, 2.0,
         1.0, 0.0, 1.0,
@@ -215,21 +215,21 @@ fn tensor_reduce_add() {
     ];
 
     let inp = TensorBatch::new(Shape::new(1, 3), 7);
-    inp.load_from_cpu(&vecs);
+    inp.load_from_host(&vecs);
 
     let mut out = unsafe { Tensor::uninit(Shape::new(1, 3)) };
     out.calloc();
 
-    let ones = GpuBuffer::new(1);
+    let ones = DeviceBuffer::new(1);
     let ones_cpu = [1.0];
-    ones.load_from_cpu(&ones_cpu);
+    ones.load_from_host(&ones_cpu);
 
     unsafe {
         TensorBatch::reduce_add(handle, &ones, 4, &inp, &out);
     }
 
     let mut buf = [0.0; 3];
-    out.write_to_cpu(&mut buf);
+    out.write_to_host(&mut buf);
     assert_eq!(buf, [4.0, 3.0, 7.0]);
 
     unsafe {
@@ -244,17 +244,17 @@ fn tensor_splat_add() {
 
     let mut inp = unsafe { Tensor::uninit(Shape::new(1, 3)) };
     inp.calloc();
-    inp.load_from_cpu(&splat);
+    inp.load_from_host(&splat);
 
     let out = TensorBatch::new(Shape::new(1, 3), 7);
-    out.load_from_cpu(&vecs);
+    out.load_from_host(&vecs);
 
     unsafe {
         TensorBatch::splat_add(4, &inp, &out);
     }
 
     let mut buf = [0.0; 12];
-    out.write_to_cpu(&mut buf);
+    out.write_to_host(&mut buf);
     assert_eq!(buf, [1.5, 0.0, 1.0, 1.5, 0.0, 1.0, 1.5, 0.0, 2.0, 2.0, 0.0, 2.0]);
 
     unsafe {
@@ -264,7 +264,7 @@ fn tensor_splat_add() {
 
 #[test]
 fn affine() {
-    let handle = CublasHandle::default();
+    let handle = DeviceHandles::default();
     let inps = [1.0, 2.0, -0.5];
     let ws = [
         1.0, 0.0, 1.0,
@@ -278,21 +278,21 @@ fn affine() {
         let mut b = Tensor::uninit(Shape::new(1, 3));
         let x = TensorBatch::new(Shape::new(1, 3), 1);
         let y = TensorBatch::new(Shape::new(1, 3), 1);
-        let ones = GpuBuffer::new(1);
-        ones.load_from_cpu(&[1.0]);
+        let ones = DeviceBuffer::new(1);
+        ones.load_from_host(&[1.0]);
 
         w.calloc();
         b.calloc();
 
-        w.load_from_cpu(&ws);
-        b.load_from_cpu(&bs);
+        w.load_from_host(&ws);
+        b.load_from_host(&bs);
 
-        x.load_from_cpu(&inps);
+        x.load_from_host(&inps);
 
         TensorBatch::affine(handle, 1, &w, &x, &b, &y);
 
         let mut buf = [0.0; 3];
-        y.write_to_cpu(&mut buf);
+        y.write_to_host(&mut buf);
         assert_eq!(buf, [0.6, 2.2, 0.8]);
 
         let mut wg = Tensor::uninit(Shape::new(3, 3));
@@ -303,11 +303,11 @@ fn affine() {
 
         TensorBatch::backprop_affine(handle, &ones, 1, &w, &y, &x, &wg, &bg);
 
-        x.write_to_cpu(&mut buf);
+        x.write_to_host(&mut buf);
         assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);
 
         let mut wbuf = [0.0; 9];
-        wg.write_to_cpu(&mut wbuf);
+        wg.write_to_host(&mut wbuf);
         assert_eq!(wbuf, [
             0.6, 2.2, 0.8,
             1.2, 4.4, 1.6,
@@ -318,7 +318,7 @@ fn affine() {
             ]);
 
         let mut bbuf = [0.0; 3];
-        bg.write_to_cpu(&mut bbuf);
+        bg.write_to_host(&mut bbuf);
         assert_eq!(bbuf, [0.6, 2.2, 0.8]);
 
         w.free();
@@ -333,18 +333,18 @@ fn mse() {
     let out = [1.5, 0.0, 1.0];
     let res = [0.5, 0.5, 0.5];
 
-    let error = GpuBuffer::new(1);
+    let error = DeviceBuffer::new(1);
 
     let x = TensorBatch::new(Shape::new(1, 1), 9);
-    x.load_from_cpu(&out);
+    x.load_from_host(&out);
 
     let r = TensorBatch::new(Shape::new(1, 1), 9);
-    r.load_from_cpu(&res);
+    r.load_from_host(&res);
 
     x.sigmoid_mse(3, &r, &error);
 
     let mut buf = [0.0; 3];
-    x.write_to_cpu(&mut buf);
+    x.write_to_host(&mut buf);
 
     for (e, (&o, &r)) in buf.iter().zip(out.iter().zip(res.iter())) {
         let sig = 1.0 / (1.0 + (-o).exp());

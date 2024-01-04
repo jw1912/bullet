@@ -1,7 +1,6 @@
 use bullet_core::Feat;
-use bullet_cuda::{ops, util};
 
-use crate::{Shape, Tensor, TensorBatch};
+use crate::{backend::{ops, util}, Shape, Tensor, TensorBatch};
 
 /// A sparse representation of a tensor with dimensions `(1, input_dim)`.
 pub struct SparseTensor {
@@ -51,7 +50,7 @@ impl SparseTensor {
         let used_space = self.used * self.max_num_inputs;
 
         unsafe {
-            util::copy_to_gpu(self.ptr.add(used_space), inputs.as_ptr(), inputs.len());
+            util::copy_to_device(self.ptr.add(used_space), inputs.as_ptr(), inputs.len());
         }
 
         self.used += num_inputs;

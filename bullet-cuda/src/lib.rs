@@ -5,9 +5,9 @@ pub mod util;
 use bindings::cublasHandle_t;
 
 #[derive(Clone, Copy)]
-pub struct CublasHandle(cublasHandle_t);
+pub struct DeviceHandles(cublasHandle_t);
 
-impl std::ops::Deref for CublasHandle {
+impl std::ops::Deref for DeviceHandles {
     type Target = cublasHandle_t;
 
     fn deref(&self) -> &Self::Target {
@@ -15,7 +15,7 @@ impl std::ops::Deref for CublasHandle {
     }
 }
 
-impl Default for CublasHandle {
+impl Default for DeviceHandles {
     fn default() -> Self {
         let mut handle: cublasHandle_t = std::ptr::null_mut();
 

@@ -1,25 +1,23 @@
-use bullet_cuda::{ops, util};
-
-use crate::GpuBuffer;
+use crate::{backend::{ops, util}, DeviceBuffer};
 
 /// A struct intended to hold all network weights and biases
 /// needed for training.
 pub struct Optimiser {
     size: usize,
-    network: GpuBuffer,
-    momentum: GpuBuffer,
-    velocity: GpuBuffer,
-    gradients: GpuBuffer,
+    network: DeviceBuffer,
+    momentum: DeviceBuffer,
+    velocity: DeviceBuffer,
+    gradients: DeviceBuffer,
 }
 
 impl Optimiser {
     pub fn new(size: usize) -> Self {
         Self {
             size,
-            network: GpuBuffer::new(size),
-            momentum: GpuBuffer::new(size),
-            velocity: GpuBuffer::new(size),
-            gradients: GpuBuffer::new(size),
+            network: DeviceBuffer::new(size),
+            momentum: DeviceBuffer::new(size),
+            velocity: DeviceBuffer::new(size),
+            gradients: DeviceBuffer::new(size),
         }
     }
 
@@ -67,23 +65,23 @@ impl Optimiser {
         }
     }
 
-    pub fn load_weights_from_cpu(&self, network: &[f32]) {
-        self.network.load_from_cpu(network);
+    pub fn load_weights_from_host(&self, network: &[f32]) {
+        self.network.load_from_host(network);
     }
 
     pub fn load_from_cpu(&self, network: &[f32], momentum: &[f32], velocity: &[f32]) {
-        self.network.load_from_cpu(network);
-        self.momentum.load_from_cpu(momentum);
-        self.velocity.load_from_cpu(velocity);
+        self.network.load_from_host(network);
+        self.momentum.load_from_host(momentum);
+        self.velocity.load_from_host(velocity);
     }
 
-    pub fn write_weights_to_buffer(&self, buf: &mut [f32]) {
-        self.network.write_to_cpu(buf);
+    pub fn write_weights_to_host(&self, buf: &mut [f32]) {
+        self.network.write_to_host(buf);
     }
 
-    pub fn write_to_cpu(&self, network: &mut [f32], momentum: &mut [f32], velocity: &mut [f32]) {
-        self.network.write_to_cpu(network);
-        self.momentum.write_to_cpu(momentum);
-        self.velocity.write_to_cpu(velocity);
+    pub fn write_to_host(&self, network: &mut [f32], momentum: &mut [f32], velocity: &mut [f32]) {
+        self.network.write_to_host(network);
+        self.momentum.write_to_host(momentum);
+        self.velocity.write_to_host(velocity);
     }
 }

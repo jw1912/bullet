@@ -1,6 +1,4 @@
-use bullet_cuda::util;
-
-use crate::Shape;
+use crate::{backend::util, Shape};
 
 /// Single Rank-2 Tensor on the GPU.
 /// This data type does not own the memory it points to,
@@ -54,7 +52,7 @@ impl Tensor {
         self.shape.size()
     }
 
-    pub fn load_from_cpu(&self, buf: &[f32]) {
+    pub fn load_from_host(&self, buf: &[f32]) {
         assert!(
             !self.ptr.is_null(),
             "Attempting to dereference null pointer!"
@@ -65,10 +63,10 @@ impl Tensor {
             "Must be exactly the same size!"
         );
 
-        util::copy_to_gpu(self.ptr, buf.as_ptr(), buf.len());
+        util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
     }
 
-    pub fn write_to_cpu(&self, buf: &mut [f32]) {
+    pub fn write_to_host(&self, buf: &mut [f32]) {
         assert!(
             !self.ptr.is_null(),
             "Attempting to dereference null pointer!"
@@ -79,6 +77,6 @@ impl Tensor {
             "Must be exactly the same size!"
         );
 
-        util::copy_from_gpu(buf.as_mut_ptr(), self.ptr, buf.len());
+        util::copy_from_device(buf.as_mut_ptr(), self.ptr, buf.len());
     }
 }

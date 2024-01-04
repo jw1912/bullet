@@ -1,18 +1,18 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use bullet_cuda::util;
+use crate::backend::util;
 
 static ALLOC_ID: AtomicUsize = AtomicUsize::new(0);
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
 /// Managed memory buffer of single-precision floats on the GPU.#
-pub struct GpuBuffer {
+pub struct DeviceBuffer {
     size: usize,
     ptr: *mut f32,
     id: usize,
 }
 
-impl Drop for GpuBuffer {
+impl Drop for DeviceBuffer {
     fn drop(&mut self) {
         self.report("Freed");
         unsafe {
@@ -21,7 +21,7 @@ impl Drop for GpuBuffer {
     }
 }
 
-impl GpuBuffer {
+impl DeviceBuffer {
     pub fn new(size: usize) -> Self {
         ALLOC_ID.fetch_add(1, Ordering::SeqCst);
         let id = ALLOC_ID.load(Ordering::SeqCst);
@@ -49,23 +49,23 @@ impl GpuBuffer {
         self.ptr
     }
 
-    pub fn load_from_cpu(&self, buf: &[f32]) {
+    pub fn load_from_host(&self, buf: &[f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
-        util::copy_to_gpu(self.ptr, buf.as_ptr(), buf.len());
+        util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
         util::device_synchronise();
     }
 
-    pub fn offset_load_from_cpu(&self, buf: &[f32], offset: usize) {
+    pub fn offset_load_from_host(&self, buf: &[f32], offset: usize) {
         assert!(offset + buf.len() <= self.size, "Overflow!");
         unsafe {
-            util::copy_to_gpu(self.ptr.add(offset), buf.as_ptr(), buf.len());
+            util::copy_to_device(self.ptr.add(offset), buf.as_ptr(), buf.len());
         }
         util::device_synchronise();
     }
 
-    pub fn write_to_cpu(&self, buf: &mut [f32]) {
+    pub fn write_to_host(&self, buf: &mut [f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
-        util::copy_from_gpu(buf.as_mut_ptr(), self.ptr, self.size);
+        util::copy_from_device(buf.as_mut_ptr(), self.ptr, self.size);
         util::device_synchronise();
     }
 

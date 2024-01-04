@@ -30,7 +30,7 @@ pub fn device_synchronise() {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn panic_if_cuda_error(msg: &str) {
+pub fn panic_if_device_error(msg: &str) {
     catch!(cudaGetLastError(), msg);
 }
 
@@ -70,7 +70,7 @@ pub fn set_zero<T>(ptr: *mut T, num: usize) {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
+pub fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
         cudaMemcpy(
             dest.cast(),
@@ -83,7 +83,7 @@ pub fn copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn copy_from_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
+pub fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
         cudaMemcpy(
             dest.cast(),

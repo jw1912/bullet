@@ -1,13 +1,11 @@
 use std::ffi::c_int;
 
-use bullet_cuda::{ops, CublasHandle};
-
-use crate::{Activation, GpuBuffer, Shape, Tensor};
+use crate::{backend::{ops, DeviceHandles}, Activation, DeviceBuffer, Shape, Tensor};
 
 pub struct TensorBatch {
     shape: Shape,
     cap: usize,
-    buf: GpuBuffer,
+    buf: DeviceBuffer,
 }
 
 impl TensorBatch {
@@ -19,7 +17,7 @@ impl TensorBatch {
         Self {
             shape,
             cap,
-            buf: GpuBuffer::new(cap * shape.size()),
+            buf: DeviceBuffer::new(cap * shape.size()),
         }
     }
 
@@ -47,23 +45,23 @@ impl TensorBatch {
         self.buf.size()
     }
 
-    pub fn load_from_cpu(&self, buf: &[f32]) {
-        self.buf.load_from_cpu(buf);
+    pub fn load_from_host(&self, buf: &[f32]) {
+        self.buf.load_from_host(buf);
     }
 
-    pub fn offset_load_from_cpu(&self, buf: &[f32], offset: usize) {
-        self.buf.offset_load_from_cpu(buf, offset);
+    pub fn offset_load_from_host(&self, buf: &[f32], offset: usize) {
+        self.buf.offset_load_from_host(buf, offset);
     }
 
-    pub fn write_to_cpu(&self, buf: &mut [f32]) {
-        self.buf.write_to_cpu(buf);
+    pub fn write_to_host(&self, buf: &mut [f32]) {
+        self.buf.write_to_host(buf);
     }
 
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
     pub unsafe fn splat_mul_matrix_vector(
-        handle: CublasHandle,
+        handle: DeviceHandles,
         batch_size: usize,
         a: &Tensor,
         x: &TensorBatch,
@@ -78,7 +76,7 @@ impl TensorBatch {
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
     pub unsafe fn splat_mul_matrixt_vector(
-        handle: CublasHandle,
+        handle: DeviceHandles,
         batch_size: usize,
         a: &Tensor,
         y: &TensorBatch,
@@ -90,7 +88,7 @@ impl TensorBatch {
     }
 
     pub fn reduce_add_mul_vector_vectort(
-        handle: CublasHandle,
+        handle: DeviceHandles,
         batch_size: usize,
         y: &TensorBatch,
         x: &TensorBatch,
@@ -118,8 +116,8 @@ impl TensorBatch {
     /// # Safety
     /// `out` must be pointing to valid allocated memory.
     pub unsafe fn reduce_add(
-        handle: CublasHandle,
-        ones: &GpuBuffer,
+        handle: DeviceHandles,
+        ones: &DeviceBuffer,
         batch_size: usize,
         inp: &TensorBatch,
         out: &Tensor,
@@ -183,7 +181,7 @@ impl TensorBatch {
     /// # Safety
     /// `weights` and `biases` must be initialised.
     pub unsafe fn affine(
-        handle: CublasHandle,
+        handle: DeviceHandles,
         batch_size: usize,
         weights: &Tensor,
         inputs: &TensorBatch,
@@ -198,8 +196,8 @@ impl TensorBatch {
     /// `weights` must be initialised.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn backprop_affine(
-        handle: CublasHandle,
-        ones: &GpuBuffer,
+        handle: DeviceHandles,
+        ones: &DeviceBuffer,
         batch_size: usize,
         weights: &Tensor,
         errors: &TensorBatch,
@@ -218,7 +216,7 @@ impl TensorBatch {
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &GpuBuffer) {
+    pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
         assert_eq!(error.size(), 1);
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
