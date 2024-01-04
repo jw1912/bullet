@@ -108,13 +108,20 @@ pub fn run<T: InputType>(
                 let pct = finished_batches as f32 / batches as f32 * 100.0;
                 let positions = finished_batches * batch_size;
                 let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
+
+                let epoch_elapsed = epoch_timer.elapsed().as_secs_f32();
+                let epoch_estimate = epoch_elapsed / (pct / 100.);
+                let remaining = epoch_estimate - epoch_elapsed;
+
                 print!(
-                    "epoch {} [{}% ({}/{} batches, {} pos/sec)]\r",
+                    "epoch {} [{}% ({}/{} batches, {} pos/sec)]\n\
+                    Estimated time to end of epoch: {} sec\x1b[F",
                     ansi!(epoch, num_cs, esc),
                     ansi!(format!("{pct:.1}"), 35, esc),
                     ansi!(finished_batches, num_cs, esc),
                     ansi!(batches, num_cs, esc),
                     ansi!(format!("{pos_per_sec:.0}"), num_cs, esc),
+                    ansi!(format!("{remaining:6.1}"), num_cs, esc),
                 );
                 let _ = stdout().flush();
             }
@@ -127,7 +134,7 @@ pub fn run<T: InputType>(
         let epoch_time = epoch_timer.elapsed().as_secs_f32();
 
         println!(
-            "epoch {} | time {} | running loss {} | {} pos/sec | total time {}",
+            "epoch {} | time {} | running loss {} | {} pos/sec | total time {} sec",
             ansi!(epoch, num_cs, esc),
             ansi!(format!("{epoch_time:.2}"), num_cs, esc),
             ansi!(format!("{error:.6}"), num_cs, esc),
@@ -137,6 +144,15 @@ pub fn run<T: InputType>(
                 esc
             ),
             ansi!(format!("{:.2}", timer.elapsed().as_secs_f32()), num_cs, esc),
+        );
+
+        let pct_completion = (epoch - schedule.start_epoch + 1) as f32
+            / (schedule.end_epoch - schedule.start_epoch + 1) as f32;
+        let estimate = timer.elapsed().as_secs_f32() / pct_completion as f32;
+        let remaining = estimate - timer.elapsed().as_secs_f32();
+        println!(
+            "Estimated time remaining in training: {} sec",
+            ansi!(format!("{remaining:.1}"), num_cs, esc),
         );
 
         if schedule.should_save(epoch) {
