@@ -1,6 +1,4 @@
 /// Network codenamed `signalis`, from Viridithas.
-///
-/// NOTE: This network failed SPRT, but its a nice example for using buckets.
 use bullet::{
     inputs, run_training, Activation, LrScheduler, LrSchedulerType, TrainerBuilder,
     TrainingSchedule, WdlScheduler,
@@ -43,6 +41,23 @@ fn main() {
     run_training(
         &mut trainer,
         &mut schedule,
+        8,
+        "../../thepile.data",
+        "checkpoints",
+    );
+
+    let mut schedule2 = TrainingSchedule {
+        net_id: "signalis".to_string(),
+        start_epoch: 16,
+        num_epochs: 16,
+        wdl_scheduler: WdlScheduler::new(1.0, 1.0),
+        lr_scheduler: LrScheduler::new(0.001, 0.3, LrSchedulerType::Step(4)),
+        save_rate: 1,
+    };
+
+    run_training(
+        &mut trainer,
+        &mut schedule2,
         8,
         "../../thepile.data",
         "checkpoints",
