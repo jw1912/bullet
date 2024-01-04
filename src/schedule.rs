@@ -30,7 +30,7 @@ impl TrainingSchedule {
 #[derive(Clone, Copy)]
 pub enum LrScheduler {
     /// Constant Rate
-    Constant { start: f32 },
+    Constant { value: f32 },
     /// Drop once at epoch `drop`, by a factor of `gamma`.
     Drop { start: f32, gamma: f32, drop: usize },
     /// Drop every `step` epochs by a factor of `gamma`.
@@ -40,7 +40,7 @@ pub enum LrScheduler {
 impl LrScheduler {
     pub fn lr(&self, epoch: usize) -> f32 {
         match *self {
-            Self::Constant { start } => start,
+            Self::Constant { value } => value,
             Self::Drop { start, gamma, drop } => {
                 if epoch > drop { start * gamma } else { start }
             }
@@ -53,7 +53,7 @@ impl LrScheduler {
 
     pub fn colourful(&self, esc: &str) -> String {
         match *self {
-            Self::Constant { start } => format!("{start}"),
+            Self::Constant { value } => format!("{value}"),
             Self::Drop { start, gamma, drop } => {
                 format!(
                     "start {} gamma {} drop at {} epochs",
@@ -74,30 +74,33 @@ impl LrScheduler {
     }
 }
 
-pub struct WdlScheduler {
-    start: f32,
-    end: f32,
+#[derive(Clone, Copy)]
+pub enum WdlScheduler {
+    Constant { value: f32 },
+    Linear {start: f32, end: f32 },
 }
 
 impl WdlScheduler {
-    pub fn new(start: f32, mut end: f32) -> Self {
-        if end < 0.0 {
-            end = start;
-        }
-
-        Self { start, end }
-    }
-
     pub fn blend(&self, epoch: usize, max_epochs: usize) -> f32 {
-        let grad = (self.end - self.start) / (max_epochs - 1).max(1) as f32;
-        self.start + grad * (epoch - 1) as f32
+        match *self {
+            Self::Constant { value } => value,
+            Self::Linear { start, end } => {
+                let grad = (end - start) / (max_epochs - 1).max(1) as f32;
+                start + grad * (epoch - 1) as f32
+            }
+        }
     }
 
-    pub fn start(&self) -> f32 {
-        self.start
-    }
-
-    pub fn end(&self) -> f32 {
-        self.end
+    pub fn colourful(&self, esc: &str) -> String {
+        match *self {
+            Self::Constant { value } => format!("{value}"),
+            Self::Linear { start, end } => {
+                format!(
+                    "linear taper start {} end {}",
+                    ansi!(start, 31, esc),
+                    ansi!(end, 31, esc),
+                )
+            }
+        }
     }
 }

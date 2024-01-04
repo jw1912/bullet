@@ -33,7 +33,7 @@ fn main() {
         net_id: "signalis".to_string(),
         start_epoch: 1,
         end_epoch: 15,
-        wdl_scheduler: WdlScheduler::new(0.4, 0.4),
+        wdl_scheduler: WdlScheduler::Constant { value: 0.4 },
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.3, step: 4 },
         save_rate: 1,
     };
@@ -48,7 +48,7 @@ fn main() {
 
     schedule.start_epoch = 16;
     schedule.end_epoch = 16;
-    schedule.wdl_scheduler = WdlScheduler::new(1.0, 1.0);
+    schedule.wdl_scheduler = WdlScheduler::Constant { value: 1.0 };
 
     run_training(
         &mut trainer,

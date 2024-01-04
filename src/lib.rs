@@ -56,24 +56,24 @@ pub fn run_training<T: InputType>(
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
 
-    println!("Arch           : {}", ansi!(format!("{trainer}"), 31, esc));
-    println!("Data File Path : {}", ansi!(file, "32;1", esc));
-    println!("Threads        : {}", ansi!(threads, 31, esc));
-    println!(
-        "WDL Proportion : start {} end {}",
-        ansi!(schedule.wdl_scheduler.start(), 31, esc),
-        ansi!(schedule.wdl_scheduler.end(), 31, esc),
-    );
-    println!("Start Epoch    : {}", ansi!(schedule.start_epoch, 31, esc));
-    println!("End Epoch      : {}", ansi!(schedule.end_epoch, 31, esc));
-    println!("Save Rate      : {}", ansi!(schedule.save_rate, 31, esc));
-    println!("Batch Size     : {}", ansi!(trainer.batch_size(), 31, esc));
     println!("Net Name       : {}", ansi!(schedule.net_id, "32;1", esc));
-    println!("LR Scheduler   : {}", schedule.lr_scheduler.colourful(esc));
+    println!("Arch           : {}", ansi!(format!("{trainer}"), 31, esc));
+    println!("Batch Size     : {}", ansi!(trainer.batch_size(), 31, esc));
     println!(
         "Scale          : {}",
         ansi!(format!("{:.0}", trainer.eval_scale()), 31, esc)
     );
+
+    println!("Start Epoch    : {}", ansi!(schedule.start_epoch, 31, esc));
+    println!("End Epoch      : {}", ansi!(schedule.end_epoch, 31, esc));
+    println!("Save Rate      : {}", ansi!(schedule.save_rate, 31, esc));
+    println!("WDL Scheduler  : {}", schedule.wdl_scheduler.colourful(esc));
+        //ansi!(schedule.wdl_scheduler.start(), 31, esc),
+        //ansi!(schedule.wdl_scheduler.end(), 31, esc),
+
+    println!("LR Scheduler   : {}", schedule.lr_scheduler.colourful(esc));
+    println!("Threads        : {}", ansi!(threads, 31, esc));
+    println!("Data File Path : {}", ansi!(file, "32;1", esc));
     println!("Positions      : {}", ansi!(num, 31, esc));
 
     let timer = Instant::now();
@@ -82,6 +82,8 @@ pub fn run_training<T: InputType>(
 
     device_synchronise();
 
+    let mut prev_lr = schedule.lr(schedule.start_epoch);
+
     for epoch in schedule.start_epoch..=schedule.end_epoch {
         trainer.prep_for_epoch();
         let epoch_timer = Instant::now();
@@ -89,6 +91,12 @@ pub fn run_training<T: InputType>(
         let loader = DataLoader::new(file, 1_024).unwrap();
         let blend = schedule.wdl(epoch);
         let lrate = schedule.lr(epoch);
+
+        if lrate != prev_lr {
+            println!("LR Dropped to {}", ansi!(lrate, num_cs, esc));
+        }
+
+        prev_lr = lrate;
 
         loader.map_batches_threaded_loading(batch_size, |batch| {
             let batch_size = batch.len();
