@@ -59,6 +59,7 @@ pub fn run<T: InputType>(
     schedule.display(esc);
     println!("Device         : {}", ansi!(device_name(), 31, esc));
     settings.display(esc);
+    println!("Positions      : {}", ansi!(num, 31, esc));
 
     let timer = Instant::now();
 

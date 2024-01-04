@@ -18,7 +18,7 @@ impl<'a> LocalSettings<'a> {
     pub fn display(&self, esc: &str) {
         println!("Threads        : {}", ansi!(self.threads, 31, esc));
         println!("Data File Path : {}", ansi!(self.data_file_path, "32;1", esc));
-        println!("Positions      : {}", ansi!(self.output_directory, 31, esc));
+        println!("Output Path    : {}", ansi!(self.output_directory, 31, esc));
     }
 }
 
