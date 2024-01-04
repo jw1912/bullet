@@ -62,14 +62,14 @@ You can convert text format, where
 
 by using the command
 ```
-cargo r -r --bin convertataxx <input file path> <output file path>
+cargo r -r --package bullet-utils --bin convertataxx <input file path> <output file path>
 ```
 
 ### Chess
 
 You can convert a [Marlinformat](https://github.com/jnlt3/marlinflow) file by running
 ```
-cargo r -r --bin convertmf <input file path> <output file path> <threads>
+cargo r -r --package bullet-utils --bin convertmf <input file path> <output file path> <threads>
 ```
 it is up to the user to provide a valid Marlinformat file.
 
@@ -80,5 +80,5 @@ Additionally, you can convert legacy text format as in Marlinflow, where
 
 by using the command
 ```
-cargo r -r --bin convert <input file path> <output file path>
+cargo r -r --package bullet-utils --bin convert <input file path> <output file path>
 ```
