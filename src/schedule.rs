@@ -26,12 +26,12 @@ impl TrainingSchedule {
         self.wdl_scheduler.blend(epoch, self.end_epoch)
     }
 
-    pub fn display(&self, esc: &str) {
-        println!("Start Epoch    : {}", ansi!(self.start_epoch, 31, esc));
-        println!("End Epoch      : {}", ansi!(self.end_epoch, 31, esc));
-        println!("Save Rate      : {}", ansi!(self.save_rate, 31, esc));
-        println!("WDL Scheduler  : {}", self.wdl_scheduler.colourful(esc));
-        println!("LR Scheduler   : {}", self.lr_scheduler.colourful(esc));
+    pub fn display(&self) {
+        println!("Start Epoch    : {}", ansi(self.start_epoch, 31));
+        println!("End Epoch      : {}", ansi(self.end_epoch, 31));
+        println!("Save Rate      : {}", ansi(self.save_rate, 31));
+        println!("WDL Scheduler  : {}", self.wdl_scheduler.colourful());
+        println!("LR Scheduler   : {}", self.lr_scheduler.colourful());
     }
 }
 
@@ -63,23 +63,23 @@ impl LrScheduler {
         }
     }
 
-    pub fn colourful(&self, esc: &str) -> String {
+    pub fn colourful(&self) -> String {
         match *self {
-            Self::Constant { value } => format!("constant {}", ansi!(value, 31, esc)),
+            Self::Constant { value } => format!("constant {}", ansi(value, 31)),
             Self::Drop { start, gamma, drop } => {
                 format!(
                     "start {} gamma {} drop at {} epochs",
-                    ansi!(start, 31, esc),
-                    ansi!(gamma, 31, esc),
-                    ansi!(drop, 31, esc),
+                    ansi(start, 31),
+                    ansi(gamma, 31),
+                    ansi(drop, 31),
                 )
             }
             Self::Step { start, gamma, step } => {
                 format!(
                     "start {} gamma {} drop every {} epochs",
-                    ansi!(start, 31, esc),
-                    ansi!(gamma, 31, esc),
-                    ansi!(step, 31, esc),
+                    ansi(start, 31),
+                    ansi(gamma, 31),
+                    ansi(step, 31),
                 )
             }
         }
@@ -103,15 +103,11 @@ impl WdlScheduler {
         }
     }
 
-    pub fn colourful(&self, esc: &str) -> String {
+    pub fn colourful(&self) -> String {
         match *self {
-            Self::Constant { value } => format!("constant {}", ansi!(value, 31, esc)),
+            Self::Constant { value } => format!("constant {}", ansi(value, 31)),
             Self::Linear { start, end } => {
-                format!(
-                    "linear taper start {} end {}",
-                    ansi!(start, 31, esc),
-                    ansi!(end, 31, esc),
-                )
+                format!("linear taper start {} end {}", ansi(start, 31), ansi(end, 31))
             }
         }
     }

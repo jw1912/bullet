@@ -5,6 +5,8 @@ use bullet_tensor::{
 };
 use bulletformat::BulletFormat;
 
+use crate::ansi;
+
 struct FeatureTransformer {
     weights: Tensor,
     biases: Tensor,
@@ -77,14 +79,10 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 }
 
 impl<T: InputType> Trainer<T> {
-    pub fn display(&self, esc: &str) {
-        use crate::ansi;
-        println!("Arch           : {}", ansi!(format!("{self}"), 31, esc));
-        println!("Batch Size     : {}", ansi!(self.batch_size(), 31, esc));
-        println!(
-            "Scale          : {}",
-            ansi!(format!("{:.0}", self.eval_scale()), 31, esc)
-        );
+    pub fn display(&self) {
+        println!("Arch           : {}", ansi(format!("{self}"), 31));
+        println!("Batch Size     : {}", ansi(self.batch_size(), 31));
+        println!("Scale          : {}", ansi(format!("{:.0}", self.eval_scale()), 31));
     }
 
     pub fn save(&self, out_dir: &str, name: String, epoch: usize) {
