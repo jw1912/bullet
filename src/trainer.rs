@@ -113,7 +113,7 @@ impl<T: InputType> Trainer<T> {
 
         self.optimiser.write_weights_to_host(&mut buf);
 
-        let mut qbuf = vec![0; size];
+        let mut qbuf = vec![0i32; size];
         let mut qiter = self.quantiser.iter().peekable();
         while let Some(&QuantiseInfo { val, start }) = qiter.next() {
             let end = if let Some(QuantiseInfo {
@@ -126,7 +126,17 @@ impl<T: InputType> Trainer<T> {
             };
 
             for i in start..end {
-                qbuf[i] = (f64::from(val) * f64::from(buf[i])) as i32;
+                let qf = (f64::from(val) * f64::from(buf[i])).trunc();
+                let q = qf as i32;
+                if f64::from(q) != qf {
+                    println!("================= WARNING ================");
+                    println!("   An error occured during quantisation:  ");
+                    println!("     > Cannot convert \"{qf:.0}\"");
+                    println!("   You will need to quantise manually.    ");
+                    println!("==========================================");
+                    return;
+                }
+                qbuf[i] = q;
             }
         }
 
@@ -137,6 +147,13 @@ impl<T: InputType> Trainer<T> {
         use std::fs::File;
         use std::io::{BufReader, Read};
         let file = File::open(path).unwrap();
+
+        assert_eq!(
+            file.metadata().unwrap().len() as usize,
+            self.net_size() * std::mem::size_of::<f32>(),
+            "Incorrect File Size!"
+        );
+
         let reader = BufReader::new(file);
         let mut res = vec![0.0; self.net_size()];
 
