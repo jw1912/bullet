@@ -26,15 +26,15 @@ pub fn device_name() -> String {
     let mut props = bullet_core::util::boxed_and_zeroed();
     catch!(cudaGetDeviceProperties_v2(&mut *props, 0));
 
-    let props_ptr = props.name.as_ptr();
-    let props_len = props.name.len();
+    let mut buf = [0u8; 256];
 
-    unsafe {
-        let name = std::slice::from_raw_parts(props_ptr.cast(), props_len);
-        let cstr = CStr::from_bytes_until_nul(name).unwrap();
-        let my_str = cstr.to_str().unwrap();
-        my_str.to_string()
+    for (val, &ch) in buf.iter_mut().zip(props.name.iter()) {
+        *val = ch as u8;
     }
+
+    let cstr = CStr::from_bytes_until_nul(&buf).unwrap();
+    let my_str = cstr.to_str().unwrap();
+    my_str.to_string()
 }
 
 pub fn create_cublas_handle() -> cublasHandle_t {
