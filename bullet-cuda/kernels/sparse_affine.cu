@@ -87,7 +87,7 @@ extern "C" void sparseAffineForward(
     const Feat* inputs,
     float* outputs)
 {
-    const size_t numChunks = static_cast<size_t>(1) + outputSize / static_cast<size_t>(1024);
+    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
     dim3 grid(numChunks, batchSize);
 
@@ -112,7 +112,7 @@ extern "C" void sparseAffineBackward(
     const Feat* inputs,
     const float* errors)
 {
-    const size_t numChunks = static_cast<size_t>(1) + outputSize / static_cast<size_t>(1024);
+    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
     dim3 grid(numChunks, batchSize);
 
