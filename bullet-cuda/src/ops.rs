@@ -22,15 +22,19 @@ pub use bindings::updateWeights as update_weights;
 /// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrix_vector(
     handle: DeviceHandles,
-    m: c_int,
-    n: c_int,
+    m: usize,
+    n: usize,
     a_ptr: *const f32,
     x_ptr: *const f32,
     y_ptr: *mut f32,
-    batch_size: c_int,
+    batch_size: usize,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let batch_size = batch_size as c_int;
 
     unsafe {
         bindings::cublasSgemm_v2(
@@ -57,15 +61,19 @@ pub unsafe fn splat_mul_matrix_vector(
 /// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrixt_vector(
     handle: DeviceHandles,
-    m: c_int,
-    n: c_int,
+    m: usize,
+    n: usize,
     a_ptr: *const f32,
     y_ptr: *const f32,
     x_ptr: *mut f32,
-    batch_size: c_int,
+    batch_size: usize,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let batch_size = batch_size as c_int;
 
     unsafe {
         bindings::cublasSgemm_v2(
@@ -92,15 +100,19 @@ pub unsafe fn splat_mul_matrixt_vector(
 /// This should only be used and exposed internally.
 pub unsafe fn reduce_add_mul_vector_vectort(
     handle: DeviceHandles,
-    m: c_int,
-    n: c_int,
+    m: usize,
+    n: usize,
     y_ptr: *const f32,
     x_ptr: *const f32,
     a_ptr: *mut f32,
-    batch_size: c_int,
+    batch_size: usize,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let batch_size = batch_size as c_int;
 
     unsafe {
         bindings::cublasSgemm_v2(

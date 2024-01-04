@@ -1,5 +1,3 @@
-use std::ffi::c_int;
-
 use crate::{backend::{ops, DeviceHandles}, Activation, DeviceBuffer, Shape, Tensor};
 
 pub struct TensorBatch {
@@ -69,7 +67,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::splat_mul_matrix_vector(handle, m, n, a.ptr(), x.ptr(), y.ptr(), batch_size as c_int);
+        ops::splat_mul_matrix_vector(handle, m, n, a.ptr(), x.ptr(), y.ptr(), batch_size);
     }
 
     /// # Safety
@@ -84,7 +82,7 @@ impl TensorBatch {
     ) {
         let (m, n) = validate_dims(a.shape(), x, y);
 
-        ops::splat_mul_matrixt_vector(handle, m, n, a.ptr(), y.ptr(), x.ptr(), batch_size as c_int)
+        ops::splat_mul_matrixt_vector(handle, m, n, a.ptr(), y.ptr(), x.ptr(), batch_size);
     }
 
     pub fn reduce_add_mul_vector_vectort(
@@ -103,12 +101,12 @@ impl TensorBatch {
         unsafe {
             ops::reduce_add_mul_vector_vectort(
                 handle,
-                a_shape.cols() as c_int,
-                a_shape.rows() as c_int,
+                a_shape.cols(),
+                a_shape.rows(),
                 y.ptr(),
                 x.ptr(),
                 a.ptr(),
-                batch_size as c_int,
+                batch_size,
             );
         }
     }
@@ -227,10 +225,10 @@ impl TensorBatch {
     }
 }
 
-fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (c_int, c_int) {
+fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (usize, usize) {
     assert_eq!(x.shape(), Shape::new(1, a_shape.cols()));
     assert_eq!(y.shape(), Shape::new(1, a_shape.rows()));
     assert_eq!(x.cap(), y.cap(), "Not all tensor caps are the same length!");
 
-    (a_shape.cols() as c_int, a_shape.rows() as c_int)
+    (a_shape.cols(), a_shape.rows())
 }
