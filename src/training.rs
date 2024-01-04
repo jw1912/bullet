@@ -88,7 +88,7 @@ pub fn run<T: InputType>(
 
         let error = trainer.error() / num as f32;
 
-        report_epoch_finished(epoch, error, &epoch_timer, &timer, num);
+        report_epoch_finished(schedule, epoch, error, &epoch_timer, &timer, num);
 
         if schedule.should_save(epoch) {
             trainer.save(out_dir, schedule.net_id(), epoch);
@@ -127,22 +127,28 @@ fn report_epoch_progress(
     epoch_timer: &Instant,
 ) {
     let num_cs = num_cs();
-    let pct = finished_batches as f32 / batches as f32 * 100.0;
+    let epoch_time = epoch_timer.elapsed().as_secs_f32();
+    let pct = finished_batches as f32 / batches as f32;
     let positions = finished_batches * batch_size;
-    let pos_per_sec = positions as f32 / epoch_timer.elapsed().as_secs_f32();
+    let pos_per_sec = positions as f32 / epoch_time;
+
+    let seconds = epoch_time / pct - epoch_time;
 
     print!(
-        "epoch {} [{}% ({}/{} batches, {} pos/sec)]\r",
+        "epoch {} [{}% ({}/{} batches, {} pos/sec)]\n\
+        Estimated time to end of epoch: {}s     \x1b[F",
         ansi(epoch, num_cs),
-        ansi(format!("{pct:.1}"), 35),
+        ansi(format!("{:.1}", pct * 100.0), 35),
         ansi(finished_batches, num_cs),
         ansi(batches, num_cs),
         ansi(format!("{pos_per_sec:.0}"), num_cs),
+        ansi(format!("{seconds:.1}"), num_cs),
     );
     let _ = stdout().flush();
 }
 
 fn report_epoch_finished(
+    schedule: &TrainingSchedule,
     epoch: usize,
     error: f32,
     epoch_timer: &Instant,
@@ -151,15 +157,31 @@ fn report_epoch_finished(
 ) {
     let num_cs = num_cs();
     let epoch_time = epoch_timer.elapsed().as_secs_f32();
-    let total_time = timer.elapsed().as_secs();
+    let total_time = timer.elapsed().as_secs_f32();
     let pos_per_sec = positions as f32 / epoch_time;
 
     println!(
         "epoch {} | time {}s | running loss {} | {} pos/sec | total time {}s",
         ansi(epoch, num_cs),
-        ansi(format!("{epoch_time:.0}"), num_cs),
+        ansi(format!("{epoch_time:.1}"), num_cs),
         ansi(format!("{error:.6}"), num_cs),
         ansi(format!("{:.0}", pos_per_sec), num_cs),
-        ansi(total_time, num_cs),
+        ansi(format!("{total_time:.1}"), num_cs),
+    );
+
+    let finished_epochs = epoch - schedule.start_epoch + 1;
+    let total_epochs = schedule.end_epoch - schedule.start_epoch + 1;
+    let pct = finished_epochs as f32 / total_epochs as f32;
+    let mut seconds = (total_time / pct - total_time) as u32;
+    let mut minutes = seconds / 60;
+    let hours = minutes / 60;
+    seconds -= minutes * 60;
+    minutes -= hours * 60;
+
+    println!(
+        "Estimated time remaining in training: {}h {}m {}s",
+        ansi(hours, num_cs),
+        ansi(minutes, num_cs),
+        ansi(seconds, num_cs),
     );
 }
