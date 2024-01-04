@@ -1,5 +1,5 @@
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -31,8 +31,7 @@ fn main() {
         save_rate: 1,
     };
 
-    run_training(
-        &mut trainer,
+    trainer.run(
         &schedule,
         4,
         "../../data/akimbo3-9.data",

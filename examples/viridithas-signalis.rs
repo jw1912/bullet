@@ -1,6 +1,6 @@
 /// Network codenamed `signalis`, from Viridithas.
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -41,8 +41,7 @@ fn main() {
         save_rate: 1,
     };
 
-    run_training(
-        &mut trainer,
+    trainer.run(
         &schedule,
         8,
         "../../thepile.data",
@@ -53,8 +52,7 @@ fn main() {
     schedule.end_epoch = 16;
     schedule.wdl_scheduler = WdlScheduler::Constant { value: 1.0 };
 
-    run_training(
-        &mut trainer,
+    trainer.run(
         &schedule,
         8,
         "../../thepile.data",
