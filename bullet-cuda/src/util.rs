@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use crate::bindings::{
     cublasCreate_v2, cublasHandle_t, cudaDeviceSynchronize, cudaError, cudaFree, cudaGetLastError,
-    cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset,
+    cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset, cudaGetDeviceCount, cudaGetDeviceProperties_v2,
 };
 
 #[macro_export]
@@ -18,6 +18,25 @@ macro_rules! catch {
     };
 }
 
+pub fn device_name() -> String {
+    use std::ffi::CStr;
+    let mut num = 0;
+    catch!(cudaGetDeviceCount(&mut num));
+    assert!(num >= 1);
+    let mut props = bullet_core::util::boxed_and_zeroed();
+    catch!(cudaGetDeviceProperties_v2(&mut *props, 0));
+
+    let props_ptr = props.name.as_ptr();
+    let props_len = props.name.len();
+
+    unsafe {
+        let name = std::slice::from_raw_parts(props_ptr.cast(), props_len);
+        let cstr = CStr::from_bytes_until_nul(name).unwrap();
+        let my_str = cstr.to_str().unwrap();
+        my_str.to_string()
+    }
+}
+
 pub fn create_cublas_handle() -> cublasHandle_t {
     let mut handle: cublasHandle_t = std::ptr::null_mut();
     unsafe {
@@ -30,7 +49,7 @@ pub fn device_synchronise() {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn panic_if_cuda_error(msg: &str) {
+pub fn panic_if_device_error(msg: &str) {
     catch!(cudaGetLastError(), msg);
 }
 
@@ -70,7 +89,7 @@ pub fn set_zero<T>(ptr: *mut T, num: usize) {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
+pub fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
         cudaMemcpy(
             dest.cast(),
@@ -83,7 +102,7 @@ pub fn copy_to_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn copy_from_gpu<T>(dest: *mut T, src: *const T, amt: usize) {
+pub fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
         cudaMemcpy(
             dest.cast(),

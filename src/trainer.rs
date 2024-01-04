@@ -1,6 +1,6 @@
 use bullet_core::{inputs::InputType, util, GpuDataLoader, Rand};
 use bullet_tensor::{
-    device_synchronise, Activation, CublasHandle, GpuBuffer, Optimiser, Shape, SparseTensor,
+    device_synchronise, Activation, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
     Tensor, TensorBatch,
 };
 use bulletformat::BulletFormat;
@@ -18,7 +18,7 @@ struct Affine {
     biases: Tensor,
     weights_grad: Tensor,
     biases_grad: Tensor,
-    ones: GpuBuffer,
+    ones: DeviceBuffer,
 }
 
 enum Operation {
@@ -38,13 +38,13 @@ struct QuantiseInfo {
 
 pub struct Trainer<T> {
     input_getter: T,
-    handle: CublasHandle,
+    handle: DeviceHandles,
     optimiser: Optimiser,
     ft: FeatureTransformer,
     nodes: Vec<Node>,
     inputs: SparseTensor,
     results: TensorBatch,
-    error: GpuBuffer,
+    error: DeviceBuffer,
     used: usize,
     scale: f32,
     quantiser: Vec<QuantiseInfo>,
@@ -84,7 +84,7 @@ impl<T: InputType> Trainer<T> {
         let mut buf2 = vec![0.0; size];
         let mut buf3 = vec![0.0; size];
 
-        self.optimiser.write_to_cpu(&mut buf1, &mut buf2, &mut buf3);
+        self.optimiser.write_to_host(&mut buf1, &mut buf2, &mut buf3);
 
         let path = format!("{out_dir}/{name}-epoch{epoch}");
 
@@ -103,7 +103,7 @@ impl<T: InputType> Trainer<T> {
         let size = self.optimiser.size();
         let mut buf = vec![0.0; size];
 
-        self.optimiser.write_weights_to_buffer(&mut buf);
+        self.optimiser.write_weights_to_host(&mut buf);
 
         let mut qbuf = vec![0; size];
         let mut qiter = self.quantiser.iter().peekable();
@@ -156,14 +156,14 @@ impl<T: InputType> Trainer<T> {
     }
 
     pub fn prep_for_epoch(&mut self) {
-        self.error.load_from_cpu(&[0.0]);
+        self.error.load_from_host(&[0.0]);
         device_synchronise();
     }
 
     pub fn error(&self) -> f32 {
         device_synchronise();
         let mut buf = [0.0];
-        self.error.write_to_cpu(&mut buf);
+        self.error.write_to_host(&mut buf);
         buf[0]
     }
 
@@ -180,7 +180,7 @@ impl<T: InputType> Trainer<T> {
     }
 
     pub fn write_weights_to_cpu(&self, buf: &mut [f32]) {
-        self.optimiser.write_weights_to_buffer(buf);
+        self.optimiser.write_weights_to_host(buf);
     }
 
     pub fn clear_data(&mut self) {
@@ -195,7 +195,7 @@ impl<T: InputType> Trainer<T> {
         unsafe {
             let our = std::slice::from_raw_parts(inputs.as_ptr().cast(), inputs.len());
             self.inputs.append(our);
-            self.results.load_from_cpu(results);
+            self.results.load_from_host(results);
             self.used += results.len();
         }
     }
@@ -219,10 +219,10 @@ impl<T: InputType> Trainer<T> {
             self.forward();
         }
 
-        bullet_tensor::panic_if_cuda_error("Something went wrong!");
+        bullet_tensor::panic_if_device_error("Something went wrong!");
 
         let mut eval = vec![0.0; self.batch_size()];
-        self.nodes.last().unwrap().outputs.write_to_cpu(&mut eval);
+        self.nodes.last().unwrap().outputs.write_to_host(&mut eval);
         println!("FEN: {fen}");
         println!("EVAL: {}", self.scale * eval[0]);
 
@@ -325,7 +325,7 @@ impl<T: InputType> Trainer<T> {
 }
 
 fn backprop_single(
-    handle: CublasHandle,
+    handle: DeviceHandles,
     batch_size: usize,
     this_node: &Node,
     inputs: &TensorBatch,
@@ -487,8 +487,8 @@ impl<T: InputType> TrainerBuilder<T> {
                 let op = match op {
                     OpType::Affine => {
                         let wsh = Shape::new(inp_size, size);
-                        let ones = GpuBuffer::new(1);
-                        ones.load_from_cpu(&[1.0]);
+                        let ones = DeviceBuffer::new(1);
+                        ones.load_from_host(&[1.0]);
                         let mut affine = Affine {
                             weights: Tensor::uninit(wsh),
                             biases: Tensor::uninit(bsh),
@@ -549,7 +549,7 @@ impl<T: InputType> TrainerBuilder<T> {
             );
 
             let results = TensorBatch::new(Shape::new(1, 1), batch_size);
-            let error = GpuBuffer::new(1);
+            let error = DeviceBuffer::new(1);
 
             let mut net = vec![0.0; net_size];
             let mut rng = Rand::default();
@@ -558,11 +558,11 @@ impl<T: InputType> TrainerBuilder<T> {
                 *val = rng.rand(0.01);
             }
 
-            opt.load_weights_from_cpu(&net);
+            opt.load_weights_from_host(&net);
 
             Trainer {
                 input_getter: self.input_getter,
-                handle: CublasHandle::default(),
+                handle: DeviceHandles::default(),
                 optimiser: opt,
                 ft,
                 nodes,

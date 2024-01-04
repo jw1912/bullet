@@ -1,7 +1,7 @@
 use crate::{Trainer, TrainingSchedule};
 
 use bullet_core::{inputs::InputType, GpuDataLoader};
-use bullet_tensor::device_synchronise;
+use bullet_tensor::{device_name, device_synchronise};
 use bulletformat::DataLoader;
 use std::{
     io::{stdout, Write},
@@ -62,8 +62,9 @@ pub fn run<T: InputType>(
     println!("End Epoch      : {}", ansi!(schedule.end_epoch, 31, esc));
     println!("Save Rate      : {}", ansi!(schedule.save_rate, 31, esc));
     println!("WDL Scheduler  : {}", schedule.wdl_scheduler.colourful(esc));
-
     println!("LR Scheduler   : {}", schedule.lr_scheduler.colourful(esc));
+
+    println!("Device         : {}", ansi!(device_name(), 31, esc));
     println!("Threads        : {}", ansi!(threads, 31, esc));
     println!("Data File Path : {}", ansi!(file, "32;1", esc));
     println!("Positions      : {}", ansi!(num, 31, esc));

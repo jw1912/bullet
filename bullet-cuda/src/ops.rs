@@ -1,6 +1,6 @@
 use crate::{
     bindings::{self, cublasOperation_t},
-    CublasHandle,
+    DeviceHandles,
 };
 
 use std::ffi::c_int;
@@ -21,16 +21,20 @@ pub use bindings::updateWeights as update_weights;
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrix_vector(
-    handle: CublasHandle,
-    m: c_int,
-    n: c_int,
+    handle: DeviceHandles,
+    m: usize,
+    n: usize,
     a_ptr: *const f32,
     x_ptr: *const f32,
     y_ptr: *mut f32,
-    batch_size: c_int,
+    batch_size: usize,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let batch_size = batch_size as c_int;
 
     unsafe {
         bindings::cublasSgemm_v2(
@@ -56,16 +60,20 @@ pub unsafe fn splat_mul_matrix_vector(
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrixt_vector(
-    handle: CublasHandle,
-    m: c_int,
-    n: c_int,
+    handle: DeviceHandles,
+    m: usize,
+    n: usize,
     a_ptr: *const f32,
     y_ptr: *const f32,
     x_ptr: *mut f32,
-    batch_size: c_int,
+    batch_size: usize,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let batch_size = batch_size as c_int;
 
     unsafe {
         bindings::cublasSgemm_v2(
@@ -91,16 +99,20 @@ pub unsafe fn splat_mul_matrixt_vector(
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn reduce_add_mul_vector_vectort(
-    handle: CublasHandle,
-    m: c_int,
-    n: c_int,
+    handle: DeviceHandles,
+    m: usize,
+    n: usize,
     y_ptr: *const f32,
     x_ptr: *const f32,
     a_ptr: *mut f32,
-    batch_size: c_int,
+    batch_size: usize,
 ) {
     let alpha = 1.0;
     let beta = 0.0;
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let batch_size = batch_size as c_int;
 
     unsafe {
         bindings::cublasSgemm_v2(
@@ -125,7 +137,7 @@ pub unsafe fn reduce_add_mul_vector_vectort(
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn reduce_add(
-    handle: CublasHandle,
+    handle: DeviceHandles,
     ones: *const f32,
     batch_size: usize,
     out_size: usize,
