@@ -9,26 +9,6 @@ use std::{
     time::Instant,
 };
 
-static CBCS: AtomicBool = AtomicBool::new(false);
-
-pub fn ansi<T, U>(x: T, y: U) -> String
-where T: std::fmt::Display, U: std::fmt::Display
-{
-    format!("\x1b[{}m{}\x1b[0m{}", y, x, esc())
-}
-
-pub fn set_cbcs(val: bool) {
-    CBCS.store(val, SeqCst)
-}
-
-fn num_cs() -> i32 {
-    if CBCS.load(SeqCst) { 35 } else { 36 }
-}
-
-fn esc() -> &'static str {
-    if CBCS.load(SeqCst) { "\x1b[38;5;225m" } else { "" }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn run<T: InputType>(
     trainer: &mut Trainer<T>,
@@ -117,6 +97,26 @@ pub fn run<T: InputType>(
             println!("Saved [{name}]");
         }
     }
+}
+
+static CBCS: AtomicBool = AtomicBool::new(false);
+
+pub fn ansi<T, U>(x: T, y: U) -> String
+where T: std::fmt::Display, U: std::fmt::Display
+{
+    format!("\x1b[{}m{}\x1b[0m{}", y, x, esc())
+}
+
+pub fn set_cbcs(val: bool) {
+    CBCS.store(val, SeqCst)
+}
+
+fn num_cs() -> i32 {
+    if CBCS.load(SeqCst) { 35 } else { 36 }
+}
+
+fn esc() -> &'static str {
+    if CBCS.load(SeqCst) { "\x1b[38;5;225m" } else { "" }
 }
 
 fn report_epoch_progress(
