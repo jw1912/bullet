@@ -113,7 +113,7 @@ impl<T: InputType> Trainer<T> {
 
         self.optimiser.write_weights_to_host(&mut buf);
 
-        let mut qbuf = vec![0i32; size];
+        let mut qbuf = vec![0i16; size];
         let mut qiter = self.quantiser.iter().peekable();
         while let Some(&QuantiseInfo { val, start }) = qiter.next() {
             let end = if let Some(QuantiseInfo {
@@ -127,7 +127,7 @@ impl<T: InputType> Trainer<T> {
 
             for i in start..end {
                 let qf = (f64::from(val) * f64::from(buf[i])).trunc();
-                let q = qf as i32;
+                let q = qf as i16;
                 if f64::from(q) != qf {
                     println!("================= WARNING ================");
                     println!("   An error occured during quantisation:  ");
