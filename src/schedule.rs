@@ -53,7 +53,7 @@ impl LrScheduler {
 
     pub fn colourful(&self, esc: &str) -> String {
         match *self {
-            Self::Constant { value } => format!("{value}"),
+            Self::Constant { value } => format!("constant {}", ansi!(value, 31, esc)),
             Self::Drop { start, gamma, drop } => {
                 format!(
                     "start {} gamma {} drop at {} epochs",
@@ -93,7 +93,7 @@ impl WdlScheduler {
 
     pub fn colourful(&self, esc: &str) -> String {
         match *self {
-            Self::Constant { value } => format!("{value}"),
+            Self::Constant { value } => format!("constant {}", ansi!(value, 31, esc)),
             Self::Linear { start, end } => {
                 format!(
                     "linear taper start {} end {}",

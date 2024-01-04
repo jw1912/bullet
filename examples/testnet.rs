@@ -21,7 +21,7 @@ fn main() {
         start_epoch: 1,
         end_epoch: 5,
         wdl_scheduler: WdlScheduler::Constant { value: 0.2 },
-        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 8 },
+        lr_scheduler: LrScheduler::Constant { value: 0.001 },
         save_rate: 10,
     };
 
