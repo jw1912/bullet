@@ -11,7 +11,7 @@ mod tests;
 
 use bullet_cuda as backend;
 
-pub use backend::{util::{device_synchronise, panic_if_device_error}, DeviceHandles};
+pub use backend::{util::{device_name, device_synchronise, panic_if_device_error}, DeviceHandles};
 pub use buffer::DeviceBuffer;
 pub use optimiser::Optimiser;
 pub use shape::Shape;
