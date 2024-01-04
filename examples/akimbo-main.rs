@@ -1,6 +1,5 @@
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, TrainerBuilder,
-    TrainingSchedule, WdlScheduler,
+    inputs, run_training, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 768;
@@ -23,8 +22,15 @@ fn main() {
         net_id: "net-01.01.24".to_string(),
         start_epoch: 1,
         end_epoch: 17,
-        wdl_scheduler: WdlScheduler::Linear { start: 0.2, end: 0.5 },
-        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 8 },
+        wdl_scheduler: WdlScheduler::Linear {
+            start: 0.2,
+            end: 0.5,
+        },
+        lr_scheduler: LrScheduler::Step {
+            start: 0.001,
+            gamma: 0.1,
+            step: 8,
+        },
         save_rate: 1,
     };
 
@@ -122,14 +128,22 @@ impl Accumulator {
 
     /// Add a feature to an accumulator.
     pub fn add_feature(&mut self, feature_idx: usize, net: &Network) {
-        for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
+        for (i, d) in self
+            .vals
+            .iter_mut()
+            .zip(&net.feature_weights[feature_idx].vals)
+        {
             *i += *d
         }
     }
 
     /// Remove a feature from an accumulator.
     pub fn remove_feature(&mut self, feature_idx: usize, net: &Network) {
-        for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
+        for (i, d) in self
+            .vals
+            .iter_mut()
+            .zip(&net.feature_weights[feature_idx].vals)
+        {
             *i -= *d
         }
     }

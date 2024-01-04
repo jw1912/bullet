@@ -68,8 +68,6 @@ pub fn run_training<T: InputType>(
     println!("End Epoch      : {}", ansi!(schedule.end_epoch, 31, esc));
     println!("Save Rate      : {}", ansi!(schedule.save_rate, 31, esc));
     println!("WDL Scheduler  : {}", schedule.wdl_scheduler.colourful(esc));
-        //ansi!(schedule.wdl_scheduler.start(), 31, esc),
-        //ansi!(schedule.wdl_scheduler.end(), 31, esc),
 
     println!("LR Scheduler   : {}", schedule.lr_scheduler.colourful(esc));
     println!("Threads        : {}", ansi!(threads, 31, esc));

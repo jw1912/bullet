@@ -1,6 +1,5 @@
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, TrainerBuilder,
-    TrainingSchedule, WdlScheduler,
+    inputs, run_training, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -20,8 +19,15 @@ fn main() {
         net_id: "morelayers".to_string(),
         start_epoch: 1,
         end_epoch: 20,
-        wdl_scheduler: WdlScheduler::Linear { start: 0.2, end: 0.5 },
-        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 8 },
+        wdl_scheduler: WdlScheduler::Linear {
+            start: 0.2,
+            end: 0.5,
+        },
+        lr_scheduler: LrScheduler::Step {
+            start: 0.001,
+            gamma: 0.1,
+            step: 8,
+        },
         save_rate: 1,
     };
 

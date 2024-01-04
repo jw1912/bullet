@@ -42,7 +42,11 @@ impl LrScheduler {
         match *self {
             Self::Constant { value } => value,
             Self::Drop { start, gamma, drop } => {
-                if epoch > drop { start * gamma } else { start }
+                if epoch > drop {
+                    start * gamma
+                } else {
+                    start
+                }
             }
             Self::Step { start, gamma, step } => {
                 let steps = epoch.saturating_sub(1) / step;
@@ -69,7 +73,7 @@ impl LrScheduler {
                     ansi!(gamma, 31, esc),
                     ansi!(step, 31, esc),
                 )
-            },
+            }
         }
     }
 }
@@ -77,7 +81,7 @@ impl LrScheduler {
 #[derive(Clone, Copy)]
 pub enum WdlScheduler {
     Constant { value: f32 },
-    Linear {start: f32, end: f32 },
+    Linear { start: f32, end: f32 },
 }
 
 impl WdlScheduler {
