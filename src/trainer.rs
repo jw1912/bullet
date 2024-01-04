@@ -133,32 +133,37 @@ impl<T: InputType> Trainer<T> {
         util::write_to_bin(&qbuf, size, out_path, true).unwrap();
     }
 
-    pub fn load_from_checkpoint(&self, path: &str) {
-        let load_from_bin = |name: &str| {
-            use std::fs::File;
-            use std::io::{BufReader, Read};
-            let file = File::open(format!("{path}/{name}.bin")).unwrap();
-            let reader = BufReader::new(file);
-            let mut res = vec![0.0; self.net_size()];
+    fn load_from_bin(&self, path: &str) -> Vec<f32> {
+        use std::fs::File;
+        use std::io::{BufReader, Read};
+        let file = File::open(path).unwrap();
+        let reader = BufReader::new(file);
+        let mut res = vec![0.0; self.net_size()];
 
-            let mut buf = [0u8; 4];
+        let mut buf = [0u8; 4];
 
-            for (i, byte) in reader.bytes().enumerate() {
-                let idx = i % 4;
+        for (i, byte) in reader.bytes().enumerate() {
+            let idx = i % 4;
 
-                buf[idx] = byte.unwrap();
+            buf[idx] = byte.unwrap();
 
-                if idx == 3 {
-                    res[i / 4] = f32::from_ne_bytes(buf);
-                }
+            if idx == 3 {
+                res[i / 4] = f32::from_ne_bytes(buf);
             }
+        }
 
-            res
-        };
+        res
+    }
 
-        let network = load_from_bin("params");
-        let momentum = load_from_bin("momentum");
-        let velocity = load_from_bin("velocity");
+    pub fn load_weights_from_file(&self, path: &str) {
+        let network = self.load_from_bin(path);
+        self.optimiser.load_weights_from_host(&network);
+    }
+
+    pub fn load_from_checkpoint(&self, path: &str) {
+        let network = self.load_from_bin(format!("{path}/params.bin").as_str());
+        let momentum = self.load_from_bin(format!("{path}/momentum.bin").as_str());
+        let velocity = self.load_from_bin(format!("{path}/velocity.bin").as_str());
 
         self.optimiser.load_from_cpu(&network, &momentum, &velocity)
     }
