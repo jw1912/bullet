@@ -45,8 +45,6 @@ fn main() {
 
 /*
 Inference Example Notes:
-- For speed, you would want to convert these weights to i16s, as for
-    this specific architecture they won't cause any overflow issues.
 - ReLU and CReLU do not introduce the additional quantisation factor
     that SCReLU does.
 - `QA = 181` to utilise an additional trick with manual SIMD, not included
@@ -55,13 +53,13 @@ Inference Example Notes:
 This is how you would load the network in rust.
 Commented out because it will error if it can't find the file.
 static NNUE: Network =
-    unsafe { std::mem::transmute(*include_bytes!("../resources/net-epoch30.bin")) };
+    unsafe { std::mem::transmute(*include_bytes!("../checkpoints/net-01.01.24-epoch17.bin")) };
 */
 
 #[inline]
-/// Squared Clipped ReLU - Activation Function
-fn screlu(x: i32) -> i32 {
-    x.clamp(0, QA).pow(2)
+/// Squared Clipped ReLU - Activation Function.
+fn screlu(x: i16) -> i32 {
+    i32::from(x).clamp(0, QA).pow(2)
 }
 
 /// This is the quantised format that bullet outputs.
@@ -75,7 +73,8 @@ pub struct Network {
     /// matrix, we use it like this to make the
     /// code nicer in `Network::evaluate`.
     output_weights: [Accumulator; 2],
-    output_bias: i32,
+    /// Scalar output bias.
+    output_bias: i16,
 }
 
 impl Network {
@@ -84,27 +83,27 @@ impl Network {
     pub fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         let mut output = 0;
 
-        // Side-To-Move Accumulator -> Output
+        // Side-To-Move Accumulator -> Output.
         for (&input, &weight) in us.vals.iter().zip(&self.output_weights[0].vals) {
-            output += screlu(input) * weight;
+            output += screlu(input) * i32::from(weight);
         }
 
-        // Not-Side-To-Move Accumulator -> Output
+        // Not-Side-To-Move Accumulator -> Output.
         for (&input, &weight) in them.vals.iter().zip(&self.output_weights[1].vals) {
-            output += screlu(input) * weight;
+            output += screlu(input) * i32::from(weight);
         }
 
         // SCReLU introduces an additional factor of `QA`,
-        // which must be removed before adding the bias
+        // which must be removed before adding the bias.
         output /= QA;
 
-        // Add the bias
-        output += self.output_bias;
+        // Add the bias.
+        output += i32::from(self.output_bias);
 
-        // Apply eval scale
+        // Apply eval scale.
         output *= SCALE;
 
-        // Remove quantisation
+        // Remove quantisation.
         output /= QA * QB;
 
         output
@@ -116,7 +115,7 @@ impl Network {
 #[derive(Clone, Copy)]
 #[repr(C, align(64))]
 pub struct Accumulator {
-    vals: [i32; HIDDEN_SIZE],
+    vals: [i16; HIDDEN_SIZE],
 }
 
 impl Accumulator {
