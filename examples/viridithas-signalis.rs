@@ -1,6 +1,6 @@
 /// Network codenamed `signalis`, from Viridithas.
 use bullet::{
-    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, LocalSettings,
+    inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
