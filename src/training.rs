@@ -1,4 +1,4 @@
-use crate::{Trainer, TrainingSchedule};
+use crate::{Trainer, TrainingSchedule, LocalSettings};
 
 use bullet_core::{inputs::InputType, GpuDataLoader};
 use bullet_tensor::{device_name, device_synchronise};
@@ -29,10 +29,14 @@ pub fn set_cbcs(val: bool) {
 pub fn run<T: InputType>(
     trainer: &mut Trainer<T>,
     schedule: &TrainingSchedule,
-    threads: usize,
-    file: &str,
-    out_dir: &str,
+    settings: &LocalSettings,
 ) {
+    let LocalSettings {
+        threads,
+        data_file_path: file,
+        output_directory: out_dir,
+    } = *settings;
+
     std::fs::create_dir(out_dir).unwrap_or(());
 
     device_synchronise();
@@ -51,23 +55,10 @@ pub fn run<T: InputType>(
     let batches = (num + batch_size - 1) / batch_size;
 
     println!("Net Name       : {}", ansi!(schedule.net_id, "32;1", esc));
-    println!("Arch           : {}", ansi!(format!("{trainer}"), 31, esc));
-    println!("Batch Size     : {}", ansi!(trainer.batch_size(), 31, esc));
-    println!(
-        "Scale          : {}",
-        ansi!(format!("{:.0}", trainer.eval_scale()), 31, esc)
-    );
-
-    println!("Start Epoch    : {}", ansi!(schedule.start_epoch, 31, esc));
-    println!("End Epoch      : {}", ansi!(schedule.end_epoch, 31, esc));
-    println!("Save Rate      : {}", ansi!(schedule.save_rate, 31, esc));
-    println!("WDL Scheduler  : {}", schedule.wdl_scheduler.colourful(esc));
-    println!("LR Scheduler   : {}", schedule.lr_scheduler.colourful(esc));
-
+    trainer.display(esc);
+    schedule.display(esc);
     println!("Device         : {}", ansi!(device_name(), 31, esc));
-    println!("Threads        : {}", ansi!(threads, 31, esc));
-    println!("Data File Path : {}", ansi!(file, "32;1", esc));
-    println!("Positions      : {}", ansi!(num, 31, esc));
+    settings.display(esc);
 
     let timer = Instant::now();
 

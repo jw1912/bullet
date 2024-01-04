@@ -25,6 +25,14 @@ impl TrainingSchedule {
     pub fn wdl(&self, epoch: usize) -> f32 {
         self.wdl_scheduler.blend(epoch, self.end_epoch)
     }
+
+    pub fn display(&self, esc: &str) {
+        println!("Start Epoch    : {}", ansi!(self.start_epoch, 31, esc));
+        println!("End Epoch      : {}", ansi!(self.end_epoch, 31, esc));
+        println!("Save Rate      : {}", ansi!(self.save_rate, 31, esc));
+        println!("WDL Scheduler  : {}", self.wdl_scheduler.colourful(esc));
+        println!("LR Scheduler   : {}", self.lr_scheduler.colourful(esc));
+    }
 }
 
 #[derive(Clone, Copy)]

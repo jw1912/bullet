@@ -14,14 +14,20 @@ pub struct LocalSettings<'a> {
     pub output_directory: &'a str,
 }
 
+impl<'a> LocalSettings<'a> {
+    pub fn display(&self, esc: &str) {
+        println!("Threads        : {}", ansi!(self.threads, 31, esc));
+        println!("Data File Path : {}", ansi!(self.data_file_path, "32;1", esc));
+        println!("Positions      : {}", ansi!(self.output_directory, 31, esc));
+    }
+}
+
 impl<T: inputs::InputType> Trainer<T> {
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
         training::run::<T>(
             self,
             schedule,
-            settings.threads,
-            settings.data_file_path,
-            settings.output_directory,
+            settings,
         );
     }
 }
