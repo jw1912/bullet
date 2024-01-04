@@ -1,5 +1,5 @@
 use bullet::{
-    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, LocalSettings,
 };
 
 fn main() {
@@ -24,10 +24,11 @@ fn main() {
         save_rate: 10,
     };
 
-    trainer.run(
-        &schedule,
-        4,
-        "../../data/batch.data",
-        "checkpoints",
-    );
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_path: "../../data/batch.data",
+        output_directory: "checkpoints",
+    };
+
+    trainer.run(&schedule, &settings);
 }

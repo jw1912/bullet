@@ -1,5 +1,5 @@
 use bullet::{
-    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, LocalSettings
 };
 
 fn main() {
@@ -31,10 +31,11 @@ fn main() {
         save_rate: 1,
     };
 
-    trainer.run(
-        &schedule,
-        4,
-        "../../data/akimbo3-9.data",
-        "checkpoints",
-    );
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_path: "../../data/akimbo3-9.data",
+        output_directory: "checkpoints",
+    };
+
+    trainer.run(&schedule, &settings);
 }

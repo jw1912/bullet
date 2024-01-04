@@ -1,6 +1,6 @@
 /// Network codenamed `signalis`, from Viridithas.
 use bullet::{
-    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, Activation, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, LocalSettings,
 };
 
 fn main() {
@@ -41,21 +41,17 @@ fn main() {
         save_rate: 1,
     };
 
-    trainer.run(
-        &schedule,
-        8,
-        "../../thepile.data",
-        "checkpoints",
-    );
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_path: "thepile.data",
+        output_directory: "checkpoints",
+    };
+
+    trainer.run(&schedule, &settings);
 
     schedule.start_epoch = 16;
     schedule.end_epoch = 16;
     schedule.wdl_scheduler = WdlScheduler::Constant { value: 1.0 };
 
-    trainer.run(
-        &schedule,
-        8,
-        "../../thepile.data",
-        "checkpoints",
-    );
+    trainer.run(&schedule, &settings);
 }
