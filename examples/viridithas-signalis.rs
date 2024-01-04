@@ -1,7 +1,6 @@
 /// Network codenamed `signalis`, from Viridithas.
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, LrSchedulerType, TrainerBuilder,
-    TrainingSchedule, WdlScheduler,
+    inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -32,34 +31,27 @@ fn main() {
     let mut schedule = TrainingSchedule {
         net_id: "signalis".to_string(),
         start_epoch: 1,
-        num_epochs: 15,
-        wdl_scheduler: WdlScheduler::new(0.4, 0.4),
-        lr_scheduler: LrScheduler::new(0.001, 0.3, LrSchedulerType::Step(4)),
+        end_epoch: 15,
+        wdl_scheduler: WdlScheduler::Constant { value: 0.4 },
+        lr_scheduler: LrScheduler::Step {
+            start: 0.001,
+            gamma: 0.3,
+            step: 4,
+        },
         save_rate: 1,
     };
 
-    run_training(
-        &mut trainer,
-        &mut schedule,
-        8,
-        "../../thepile.data",
-        "checkpoints",
-    );
-
-    let mut schedule2 = TrainingSchedule {
-        net_id: "signalis".to_string(),
-        start_epoch: 16,
-        num_epochs: 16,
-        wdl_scheduler: WdlScheduler::new(1.0, 1.0),
-        lr_scheduler: LrScheduler::new(0.001, 0.3, LrSchedulerType::Step(4)),
-        save_rate: 1,
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_path: "thepile.data",
+        output_directory: "checkpoints",
     };
 
-    run_training(
-        &mut trainer,
-        &mut schedule2,
-        8,
-        "../../thepile.data",
-        "checkpoints",
-    );
+    trainer.run(&schedule, &settings);
+
+    schedule.start_epoch = 16;
+    schedule.end_epoch = 16;
+    schedule.wdl_scheduler = WdlScheduler::Constant { value: 1.0 };
+
+    trainer.run(&schedule, &settings);
 }

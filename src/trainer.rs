@@ -205,7 +205,8 @@ impl<T: InputType> Trainer<T> {
     }
 
     pub fn eval(&mut self, fen: &str)
-    where T::RequiredDataType: std::str::FromStr<Err = String>
+    where
+        T::RequiredDataType: std::str::FromStr<Err = String>,
     {
         self.prep_for_epoch();
         self.clear_data();

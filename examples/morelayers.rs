@@ -1,6 +1,5 @@
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, LrSchedulerType, TrainerBuilder,
-    TrainingSchedule, WdlScheduler,
+    inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -16,20 +15,27 @@ fn main() {
         .add_layer(1)
         .build();
 
-    let mut schedule = TrainingSchedule {
+    let schedule = TrainingSchedule {
         net_id: "morelayers".to_string(),
         start_epoch: 1,
-        num_epochs: 20,
-        wdl_scheduler: WdlScheduler::new(0.2, 0.5),
-        lr_scheduler: LrScheduler::new(0.001, 0.1, LrSchedulerType::Step(8)),
+        end_epoch: 20,
+        wdl_scheduler: WdlScheduler::Linear {
+            start: 0.2,
+            end: 0.5,
+        },
+        lr_scheduler: LrScheduler::Step {
+            start: 0.001,
+            gamma: 0.1,
+            step: 8,
+        },
         save_rate: 1,
     };
 
-    run_training(
-        &mut trainer,
-        &mut schedule,
-        4,
-        "../../data/akimbo3-9.data",
-        "checkpoints",
-    );
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_path: "../../data/akimbo3-9.data",
+        output_directory: "checkpoints",
+    };
+
+    trainer.run(&schedule, &settings);
 }

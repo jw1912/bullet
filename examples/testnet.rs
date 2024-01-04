@@ -1,6 +1,5 @@
 use bullet::{
-    inputs, run_training, Activation, LrScheduler, LrSchedulerType, TrainerBuilder,
-    TrainingSchedule, WdlScheduler,
+    inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -16,20 +15,20 @@ fn main() {
 
     trainer.load_from_checkpoint("checkpoints/testnet");
 
-    let mut schedule = TrainingSchedule {
+    let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),
         start_epoch: 1,
-        num_epochs: 5,
-        wdl_scheduler: WdlScheduler::new(0.2, 0.2),
-        lr_scheduler: LrScheduler::new(0.001, 0.1, LrSchedulerType::Step(8)),
+        end_epoch: 5,
+        wdl_scheduler: WdlScheduler::Constant { value: 0.2 },
+        lr_scheduler: LrScheduler::Constant { value: 0.001 },
         save_rate: 10,
     };
 
-    run_training(
-        &mut trainer,
-        &mut schedule,
-        4,
-        "../../data/batch.data",
-        "checkpoints",
-    );
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_path: "../../data/batch.data",
+        output_directory: "checkpoints",
+    };
+
+    trainer.run(&schedule, &settings);
 }
