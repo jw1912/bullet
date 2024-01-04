@@ -3,7 +3,7 @@ mod trainer;
 
 pub use bullet_core::inputs;
 pub use bullet_tensor::Activation;
-pub use schedule::{LrScheduler, LrSchedulerType, TrainingSchedule, WdlScheduler};
+pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 
 use bullet_core::{inputs::InputType, GpuDataLoader};
@@ -34,7 +34,7 @@ macro_rules! ansi {
 #[allow(clippy::too_many_arguments)]
 pub fn run_training<T: InputType>(
     trainer: &mut Trainer<T>,
-    schedule: &mut TrainingSchedule,
+    schedule: &TrainingSchedule,
     threads: usize,
     file: &str,
     out_dir: &str,
@@ -64,7 +64,8 @@ pub fn run_training<T: InputType>(
         ansi!(schedule.wdl_scheduler.start(), 31, esc),
         ansi!(schedule.wdl_scheduler.end(), 31, esc),
     );
-    println!("Max Epochs     : {}", ansi!(schedule.num_epochs, 31, esc));
+    println!("Start Epoch    : {}", ansi!(schedule.start_epoch, 31, esc));
+    println!("End Epoch      : {}", ansi!(schedule.end_epoch, 31, esc));
     println!("Save Rate      : {}", ansi!(schedule.save_rate, 31, esc));
     println!("Batch Size     : {}", ansi!(trainer.batch_size(), 31, esc));
     println!("Net Name       : {}", ansi!(schedule.net_id, "32;1", esc));
@@ -75,23 +76,19 @@ pub fn run_training<T: InputType>(
     );
     println!("Positions      : {}", ansi!(num, 31, esc));
 
-    for i in 1..schedule.start_epoch {
-        schedule.update(i, num_cs, esc)
-    }
-
     let timer = Instant::now();
 
     let mut gpu_loader = GpuDataLoader::<T>::new(trainer.input_getter());
 
     device_synchronise();
 
-    for epoch in schedule.start_epoch..=schedule.num_epochs() {
+    for epoch in schedule.start_epoch..=schedule.end_epoch {
         trainer.prep_for_epoch();
         let epoch_timer = Instant::now();
         let mut finished_batches = 0;
         let loader = DataLoader::new(file, 1_024).unwrap();
         let blend = schedule.wdl(epoch);
-        let lrate = schedule.lr();
+        let lrate = schedule.lr(epoch);
 
         loader.map_batches_threaded_loading(batch_size, |batch| {
             let batch_size = batch.len();
@@ -141,8 +138,6 @@ pub fn run_training<T: InputType>(
             ),
             ansi!(format!("{:.2}", timer.elapsed().as_secs_f32()), num_cs, esc),
         );
-
-        schedule.update(epoch, num_cs, esc);
 
         if schedule.should_save(epoch) {
             trainer.save(out_dir, schedule.net_id(), epoch);
