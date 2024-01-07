@@ -1,4 +1,8 @@
-/// Network codenamed `signalis`, from Viridithas.
+/*
+Network codenamed `signalis`, from Viridithas.
+Ended up needing some tricks to compensate for speed loss over a non-bucketed
+network, but after that passed nicely.
+*/
 use bullet::{
     inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
@@ -28,7 +32,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    let mut schedule = TrainingSchedule {
+    let schedule = TrainingSchedule {
         net_id: "signalis".to_string(),
         start_epoch: 1,
         end_epoch: 15,
@@ -46,12 +50,6 @@ fn main() {
         data_file_path: "thepile.data",
         output_directory: "checkpoints",
     };
-
-    trainer.run(&schedule, &settings);
-
-    schedule.start_epoch = 16;
-    schedule.end_epoch = 16;
-    schedule.wdl_scheduler = WdlScheduler::Constant { value: 1.0 };
 
     trainer.run(&schedule, &settings);
 }
