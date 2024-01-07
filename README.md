@@ -32,7 +32,8 @@ Raise an issue for support of a new game.
 Check out the [examples](/examples) to see how to use the crate - and if you don't want to use bullet
 as a crate, you can edit one of them and run with `cargo r -r --example <example name (without .rs)>`.
 
-A basic inference example is included in [examples/akimbo-main](/examples/akimbo-main.rs).
+A basic inference example is included in [examples/simple](/examples/simple.rs), and if you've never
+trained an NNUE before it is recommended to start with an architecture and training schedule like this.
 
 ### Saved Networks
 

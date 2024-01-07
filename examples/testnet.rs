@@ -1,3 +1,6 @@
+/*
+This is used to confirm non-functional changes for bullet.
+*/
 use bullet::{
     inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
