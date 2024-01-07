@@ -2,7 +2,7 @@ use bullet::{
     inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
-const HIDDEN_SIZE: usize = 256;
+const HIDDEN_SIZE: usize = 16;
 const SCALE: i32 = 400;
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -11,6 +11,7 @@ fn main() {
     let mut trainer = TrainerBuilder::default()
         .set_batch_size(16_384)
         .set_eval_scale(SCALE as f32)
+        .set_quantisations(&[QA, QB])
         .set_input(inputs::Chess768)
         .ft(HIDDEN_SIZE)
         .activate(Activation::CReLU)
@@ -20,19 +21,19 @@ fn main() {
     let schedule = TrainingSchedule {
         net_id: "simple".to_string(),
         start_epoch: 1,
-        end_epoch: 20,
-        wdl_scheduler: WdlScheduler::Constant { value: 0.5 },
+        end_epoch: 30,
+        wdl_scheduler: WdlScheduler::Constant { value: 0.75 },
         lr_scheduler: LrScheduler::Step {
             start: 0.001,
             gamma: 0.1,
-            step: 8,
+            step: 15,
         },
         save_rate: 1,
     };
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_path: "../../data/akimbo3-9.data",
+        data_file_path: "../../data/30m.data",
         output_directory: "checkpoints",
     };
 
