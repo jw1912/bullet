@@ -14,7 +14,7 @@ pub struct SparseTensor {
 impl Drop for SparseTensor {
     fn drop(&mut self) {
         unsafe {
-            util::free(self.ptr.cast());
+            util::free(self.ptr.cast(), self.num_elements());
         }
     }
 }
@@ -33,6 +33,10 @@ impl SparseTensor {
             max_num_inputs,
             ptr: util::malloc(max_num_inputs * cap),
         }
+    }
+
+    pub fn num_elements(&self) -> usize {
+        self.cap * self.max_num_inputs
     }
 
     pub fn clear(&mut self) {

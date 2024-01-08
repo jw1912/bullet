@@ -33,7 +33,7 @@ impl Tensor {
     /// # Safety
     /// Don't double free.
     pub unsafe fn free(&mut self) {
-        util::free(self.ptr.cast());
+        util::free(self.ptr.cast(), self.num_elements());
     }
 
     pub fn shape(&self) -> Shape {
@@ -63,7 +63,9 @@ impl Tensor {
             "Must be exactly the same size!"
         );
 
-        util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
+        unsafe {
+            util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
+        }
     }
 
     pub fn write_to_host(&self, buf: &mut [f32]) {
@@ -77,6 +79,8 @@ impl Tensor {
             "Must be exactly the same size!"
         );
 
-        util::copy_from_device(buf.as_mut_ptr(), self.ptr, buf.len());
+        unsafe {
+            util::copy_from_device(buf.as_mut_ptr(), self.ptr, buf.len());
+        }
     }
 }
