@@ -1,6 +1,6 @@
-use bullet_core::{inputs::InputType, util, GpuDataLoader, Rand};
+use bullet_core::{Activation, inputs::InputType, util, GpuDataLoader, Rand};
 use bullet_tensor::{
-    device_synchronise, Activation, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
+    device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
     Tensor, TensorBatch,
 };
 use bulletformat::BulletFormat;

@@ -1,8 +1,8 @@
-use bullet_core::Feat;
+use bullet_core::{Activation, Feat};
 
 use crate::{
     backend::{DeviceHandles, util},
-    Activation, Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer,
+    Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer,
 };
 
 #[test]

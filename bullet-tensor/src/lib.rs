@@ -18,10 +18,3 @@ pub use shape::Shape;
 pub use sparse::SparseTensor;
 pub use tensor::Tensor;
 pub use tensor_batch::TensorBatch;
-
-#[derive(Clone, Copy, Debug)]
-pub enum Activation {
-    ReLU,
-    CReLU,
-    SCReLU,
-}
