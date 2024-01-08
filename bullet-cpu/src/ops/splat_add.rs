@@ -1,6 +1,7 @@
-/// # Safety
-/// Pass valid pointers and sizes.
+use crate::DeviceHandles;
+
 pub unsafe fn splat_add(
+    handle: DeviceHandles,
     batch_size: usize,
     tensor_size: usize,
     inp: *const f32,

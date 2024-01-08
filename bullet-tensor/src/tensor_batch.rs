@@ -134,14 +134,15 @@ impl TensorBatch {
 
     /// # Safety
     /// `inp` must be pointing to valid allocated memory.
-    pub unsafe fn splat_add(batch_size: usize, inp: &Tensor, out: &TensorBatch) {
+    pub unsafe fn splat_add(handle: DeviceHandles, batch_size: usize, inp: &Tensor, out: &TensorBatch) {
         assert_eq!(inp.shape(), out.shape());
-        ops::splat_add(batch_size, out.element_size(), inp.ptr(), out.ptr());
+        ops::splat_add(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
 
     /// Modifies a batch of tensors.
     fn map(
-        f: unsafe fn(usize, *const f32, *mut f32),
+        f: unsafe fn(DeviceHandles, usize, *const f32, *mut f32),
+        handle: DeviceHandles,
         batch_size: usize,
         inp: &TensorBatch,
         out: &TensorBatch,
@@ -150,30 +151,37 @@ impl TensorBatch {
         assert_eq!(inp.cap(), out.cap(), "Mismatched cap sizes!");
         assert!(batch_size <= inp.cap(), "Overflow!");
         unsafe {
-            f(batch_size * inp.element_size(), inp.ptr(), out.ptr());
+            f(handle, batch_size * inp.element_size(), inp.ptr(), out.ptr());
         }
     }
 
     /// This calulates `out[i] = op(inp[i])` for a batch of input.
-    pub fn activate(batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
-        match op {
-            Activation::ReLU => Self::map(ops::activate_relu, batch_size, inp, out),
-            Activation::CReLU => Self::map(ops::activate_crelu, batch_size, inp, out),
-            Activation::SCReLU => Self::map(ops::activate_screlu, batch_size, inp, out),
-        }
-    }
-
-    /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
-    pub fn backprop_activation(
+    pub fn activate(
+        handle: DeviceHandles,
         batch_size: usize,
         op: Activation,
         inp: &TensorBatch,
         out: &TensorBatch,
     ) {
         match op {
-            Activation::ReLU => Self::map(ops::backprop_relu, batch_size, inp, out),
-            Activation::CReLU => Self::map(ops::backprop_crelu, batch_size, inp, out),
-            Activation::SCReLU => Self::map(ops::backprop_screlu, batch_size, inp, out),
+            Activation::ReLU => Self::map(ops::activate_relu, handle, batch_size, inp, out),
+            Activation::CReLU => Self::map(ops::activate_crelu,handle,  batch_size, inp, out),
+            Activation::SCReLU => Self::map(ops::activate_screlu, handle, batch_size, inp, out),
+        }
+    }
+
+    /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
+    pub fn backprop_activation(
+        handle: DeviceHandles,
+        batch_size: usize,
+        op: Activation,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+    ) {
+        match op {
+            Activation::ReLU => Self::map(ops::backprop_relu, handle, batch_size, inp, out),
+            Activation::CReLU => Self::map(ops::backprop_crelu, handle, batch_size, inp, out),
+            Activation::SCReLU => Self::map(ops::backprop_screlu, handle, batch_size, inp, out),
         }
     }
 
@@ -188,7 +196,7 @@ impl TensorBatch {
         outputs: &TensorBatch,
     ) {
         TensorBatch::splat_mul_matrix_vector(handle, batch_size, weights, inputs, outputs);
-        TensorBatch::splat_add(batch_size, biases, outputs);
+        TensorBatch::splat_add(handle, batch_size, biases, outputs);
     }
 
     /// # Safety
@@ -215,13 +223,13 @@ impl TensorBatch {
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn sigmoid_mse(&self, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
+    pub fn sigmoid_mse(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
         assert_eq!(error.size(), 1);
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 
         unsafe {
-            ops::sigmoid_mse(batch_size, self.ptr(), results.ptr(), error.ptr());
+            ops::sigmoid_mse(handle, batch_size, self.ptr(), results.ptr(), error.ptr());
         }
     }
 }

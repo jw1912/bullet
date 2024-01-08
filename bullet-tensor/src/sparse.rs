@@ -1,6 +1,6 @@
 use bullet_core::Feat;
 
-use crate::{backend::{ops, util}, Shape, Tensor, TensorBatch};
+use crate::{backend::{ops, util, DeviceHandles}, Shape, Tensor, TensorBatch};
 
 /// A sparse representation of a tensor with dimensions `(1, input_dim)`.
 pub struct SparseTensor {
@@ -67,6 +67,7 @@ impl SparseTensor {
     /// # Safety
     /// `weights`, `biases` and `inputs` must be initialised properly.
     pub unsafe fn affine(
+        handle: DeviceHandles,
         weights: &Tensor,
         inputs: &SparseTensor,
         biases: &Tensor,
@@ -80,6 +81,7 @@ impl SparseTensor {
         assert_eq!(biases.shape(), Shape::new(1, output_dim));
 
         ops::sparse_affine_forward(
+            handle,
             inputs.used,
             inputs.max_num_inputs,
             output_dim,
@@ -97,6 +99,7 @@ impl SparseTensor {
     /// # Safety
     /// `weights`, `biases` and `errors` must be initialised properly.
     pub unsafe fn affine_backprop(
+        handle: DeviceHandles,
         weights_grad: &Tensor,
         inputs: &SparseTensor,
         biases_grad: &Tensor,
@@ -110,6 +113,7 @@ impl SparseTensor {
         assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
 
         ops::sparse_affine_backward(
+            handle,
             inputs.used,
             inputs.max_num_inputs,
             output_dim,

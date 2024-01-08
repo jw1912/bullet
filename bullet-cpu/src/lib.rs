@@ -3,5 +3,12 @@ pub mod util;
 
 #[derive(Clone, Copy, Default)]
 pub struct DeviceHandles {
-    _field_to_remove_clippy_warning: i16,
+    pub(crate) threads: usize,
 }
+
+impl DeviceHandles {
+    pub fn set_thread_info(&mut self, threads: usize) {
+        self.threads = threads;
+    }
+}
+

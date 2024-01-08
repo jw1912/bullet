@@ -1,7 +1,7 @@
-/// # Safety
-/// Pass valid pointers and sizes.
-#[allow(clippy::too_many_arguments)]
+use crate::DeviceHandles;
+
 pub unsafe fn update_weights(
+    handle: DeviceHandles,
     network_size: usize,
     decay: f32,
     adj: f32,

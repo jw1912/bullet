@@ -1,4 +1,4 @@
-#![allow(unused_variables)]
+#![allow(unused_variables, clippy::missing_safety_doc, clippy::too_many_arguments)]
 mod bufops;
 mod backprops;
 mod mse;
@@ -15,8 +15,6 @@ pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrix_vector(
     handle: DeviceHandles,
     m: usize,
@@ -29,8 +27,6 @@ pub unsafe fn splat_mul_matrix_vector(
     unimplemented!();
 }
 
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrixt_vector(
     handle: DeviceHandles,
     m: usize,
@@ -43,8 +39,6 @@ pub unsafe fn splat_mul_matrixt_vector(
     unimplemented!();
 }
 
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn reduce_add_mul_vector_vectort(
     handle: DeviceHandles,
     m: usize,
@@ -57,8 +51,6 @@ pub unsafe fn reduce_add_mul_vector_vectort(
     unimplemented!();
 }
 
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn reduce_add(
     handle: DeviceHandles,
     ones: *const f32,

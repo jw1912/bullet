@@ -1,8 +1,6 @@
+use crate::DeviceHandles;
 
-
-/// # Safety
-/// Pass valid pointers and sizes.
-unsafe fn buffer_operation<T: Operation>(size: usize, inp: *const f32, out: *mut f32) {
+unsafe fn buffer_operation<T: Operation>(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     unimplemented!();
 }
 
@@ -45,20 +43,14 @@ impl Operation for SCReLU {
     }
 }
 
-/// # Safety
-/// Pass valid pointers and sizes.
-pub unsafe fn activate_relu(size: usize, inp: *const f32, out: *mut f32) {
-    buffer_operation::<ReLU>(size, inp, out);
+pub unsafe fn activate_relu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    buffer_operation::<ReLU>(handle, size, inp, out);
 }
 
-/// # Safety
-/// Pass valid pointers and sizes.
-pub unsafe fn activate_crelu(size: usize, inp: *const f32, out: *mut f32) {
-    buffer_operation::<CReLU>(size, inp, out);
+pub unsafe fn activate_crelu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    buffer_operation::<CReLU>(handle, size, inp, out);
 }
 
-/// # Safety
-/// Pass valid pointers and sizes.
-pub unsafe fn activate_screlu(size: usize, inp: *const f32, out: *mut f32) {
-    buffer_operation::<SCReLU>(size, inp, out);
+pub unsafe fn activate_screlu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    buffer_operation::<SCReLU>(handle, size, inp, out);
 }

@@ -26,3 +26,7 @@ impl Default for DeviceHandles {
         Self(handle)
     }
 }
+
+impl DeviceHandles {
+    pub fn set_thread_info(&mut self, _: usize) {}
+}

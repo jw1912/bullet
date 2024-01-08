@@ -1,25 +1,19 @@
+use crate::DeviceHandles;
+
 use super::bufops::{Operation, ReLU, CReLU, SCReLU};
 
-/// # Safety
-/// Pass valid pointers and sizes.
-unsafe fn backprop_operation<T: Operation>(size: usize, inp: *const f32, out: *mut f32) {
+unsafe fn backprop_operation<T: Operation>(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     unimplemented!();
 }
 
-/// # Safety
-/// Pass valid pointers and sizes.
-pub unsafe fn backprop_relu(size: usize, inp: *const f32, out: *mut f32) {
-    backprop_operation::<ReLU>(size, inp, out);
+pub unsafe fn backprop_relu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    backprop_operation::<ReLU>(handle, size, inp, out);
 }
 
-/// # Safety
-/// Pass valid pointers and sizes.
-pub unsafe fn backprop_crelu(size: usize, inp: *const f32, out: *mut f32) {
-    backprop_operation::<CReLU>(size, inp, out);
+pub unsafe fn backprop_crelu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    backprop_operation::<CReLU>(handle, size, inp, out);
 }
 
-/// # Safety
-/// Pass valid pointers and sizes.
-pub unsafe fn backprop_screlu(size: usize, inp: *const f32, out: *mut f32) {
-    backprop_operation::<SCReLU>(size, inp, out);
+pub unsafe fn backprop_screlu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    backprop_operation::<SCReLU>(handle, size, inp, out);
 }
