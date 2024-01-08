@@ -141,7 +141,7 @@ impl TensorBatch {
 
     /// Modifies a batch of tensors.
     fn map(
-        f: unsafe extern "C" fn(usize, *const f32, *mut f32),
+        f: unsafe fn(usize, *const f32, *mut f32),
         batch_size: usize,
         inp: &TensorBatch,
         out: &TensorBatch,

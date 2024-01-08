@@ -9,6 +9,10 @@ mod tensor_batch;
 #[rustfmt::skip]
 mod tests;
 
+#[cfg(not(feature = "cuda"))]
+use bullet_cpu as backend;
+
+#[cfg(feature = "cuda")]
 use bullet_cuda as backend;
 
 pub use backend::{util::{device_name, device_synchronise, panic_if_device_error}, DeviceHandles};

@@ -5,6 +5,10 @@ edition = "2021"
 license.workspace = true
 authors.workspace = true
 
+[features]
+cuda = ["bullet-cuda"]
+
 [dependencies]
 bullet-core = { path = "../bullet-core" }
-bullet-cuda = { path = "../bullet-cuda" }
+bullet-cpu = { path = "../bullet-cpu" }
+bullet-cuda = { path = "../bullet-cuda", optional = true }

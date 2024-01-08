@@ -10,7 +10,7 @@ pub fn device_name() -> String {
 
 pub fn device_synchronise() {}
 
-pub fn panic_if_device_error() {}
+pub fn panic_if_device_error(_: &str) {}
 
 pub fn malloc<T>(num: usize) -> *mut T {
     let size = std::mem::size_of::<T>() * num;

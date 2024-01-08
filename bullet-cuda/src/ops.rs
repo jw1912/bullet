@@ -5,19 +5,12 @@ use crate::{
 
 use std::ffi::c_int;
 
-pub use bindings::activateCReLU as activate_crelu;
-pub use bindings::activateReLU as activate_relu;
-pub use bindings::activateSCReLU as activate_screlu;
-pub use bindings::backpropCReLU as backprop_crelu;
-pub use bindings::backpropReLU as backprop_relu;
-pub use bindings::backpropSCReLU as backprop_screlu;
 pub use bindings::sigmoidMSE as sigmoid_mse;
 pub use bindings::sparseAffineBackward as sparse_affine_backward;
 pub use bindings::sparseAffineForward as sparse_affine_forward;
 pub use bindings::splatAdd as splat_add;
 pub use bindings::updateWeights as update_weights;
 
-#[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrix_vector(
@@ -56,7 +49,6 @@ pub unsafe fn splat_mul_matrix_vector(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrixt_vector(
@@ -95,7 +87,6 @@ pub unsafe fn splat_mul_matrixt_vector(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 /// # Safety
 /// This should only be used and exposed internally.
 pub unsafe fn reduce_add_mul_vector_vectort(
@@ -164,4 +155,40 @@ pub unsafe fn reduce_add(
         out,
         1,
     );
+}
+
+/// # Safety
+/// Pass valid pointers and sizes.
+pub unsafe fn activate_relu(size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateReLU(size, inp, out);
+}
+
+/// # Safety
+/// Pass valid pointers and sizes.
+pub unsafe fn activate_crelu(size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateCReLU(size, inp, out);
+}
+
+/// # Safety
+/// Pass valid pointers and sizes.
+pub unsafe fn activate_screlu(size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateSCReLU(size, inp, out);
+}
+
+/// # Safety
+/// Pass valid pointers and sizes.
+pub unsafe fn backprop_relu(size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropReLU(size, inp, out);
+}
+
+/// # Safety
+/// Pass valid pointers and sizes.
+pub unsafe fn backprop_crelu(size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropCReLU(size, inp, out);
+}
+
+/// # Safety
+/// Pass valid pointers and sizes.
+pub unsafe fn backprop_screlu(size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropSCReLU(size, inp, out);
 }
