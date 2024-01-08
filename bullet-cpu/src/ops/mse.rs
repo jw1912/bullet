@@ -7,5 +7,18 @@ pub unsafe fn sigmoid_mse(
     results: *const f32,
     error: *mut f32,
 ) {
-    unimplemented!();
+    let results = results as usize;
+    let outputs = outputs as usize;
+
+    handle.split_workload(buffer_size, |idx| {
+        let this_result = (results as *const f32).add(idx);
+        let this_output = (outputs as *mut f32).add(idx);
+
+        let result = *this_result;
+        let output = *this_output;
+
+        let sigmoid = 1.0 / (1.0 + (-output).exp());
+        let diff = sigmoid - result;
+        *this_output = diff * sigmoid * (1.0 - sigmoid);
+    })
 }
