@@ -1,7 +1,7 @@
 /*
 This file calculates in-place backprops for activation functions.
 Given a batch of inputs `x[i]` and destinations `y[i]`, the
-function for a given `op` calculates `y[i] *= op'(op_inv(x[i]))`.
+function for a given `op` calculates `y[i] = x[i] * op'(y[i])`.
 */
 #include <cuda.h>
 #include <cuda_runtime.h>
