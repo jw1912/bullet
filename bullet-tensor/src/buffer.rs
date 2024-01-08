@@ -49,6 +49,10 @@ impl DeviceBuffer {
         self.ptr
     }
 
+    pub fn set_zero(&self) {
+        util::set_zero(self.ptr, self.size)
+    }
+
     pub fn load_from_host(&self, buf: &[f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
         unsafe {

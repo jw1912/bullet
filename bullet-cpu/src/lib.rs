@@ -19,7 +19,7 @@ impl DeviceHandles {
         self.threads = threads;
     }
 
-    pub fn split_workload<F: Fn(usize) + Copy + Send>(
+    pub fn split_workload<F: Fn(usize, usize) + Copy + Send>(
         &self,
         size: usize,
         single_workload: F,
@@ -30,7 +30,7 @@ impl DeviceHandles {
         let mut covered = 0;
 
         std::thread::scope(|s| {
-            for _ in 0..threads {
+            for thread in 0..threads {
                 let this_chunk_size = if covered + chunk_size > size {
                     size - covered
                 } else {
@@ -43,7 +43,7 @@ impl DeviceHandles {
 
                 s.spawn(move || {
                     for idx in start_idx..start_idx + this_chunk_size {
-                        single_workload(idx);
+                        single_workload(thread, idx);
                     }
                 });
             }

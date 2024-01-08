@@ -172,6 +172,11 @@ impl<T: InputType> Trainer<T> {
         res
     }
 
+    pub fn set_threads(&mut self, threads: usize) {
+        self.handle.set_threads(threads);
+        self.error = DeviceBuffer::new(threads);
+    }
+
     pub fn load_weights_from_file(&self, path: &str) {
         let network = self.load_from_bin(path);
         self.optimiser.load_weights_from_host(&network);
@@ -186,15 +191,15 @@ impl<T: InputType> Trainer<T> {
     }
 
     pub fn prep_for_epoch(&mut self) {
-        self.error.load_from_host(&[0.0]);
+        self.error.set_zero();
         device_synchronise();
     }
 
     pub fn error(&self) -> f32 {
         device_synchronise();
-        let mut buf = [0.0];
+        let mut buf = vec![0.0; self.error.size()];
         self.error.write_to_host(&mut buf);
-        buf[0]
+        buf.iter().sum()
     }
 
     pub fn input_getter(&self) -> T {

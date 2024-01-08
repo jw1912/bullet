@@ -4,11 +4,11 @@ unsafe fn buffer_operation<T: Operation>(handle: DeviceHandles, size: usize, inp
     let inp = inp as usize;
     let out = out as usize;
 
-    handle.split_workload(size, |idx| {
+    handle.split_workload(size, |_, idx| {
         let this_inp = (inp as *const f32).add(idx);
         let this_out = (out as *mut f32).add(idx);
         *this_out = T::activate(*this_inp);
-    })
+    });
 }
 
 pub(super) trait Operation {

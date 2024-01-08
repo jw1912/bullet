@@ -23,7 +23,7 @@ pub unsafe fn update_weights(
     let velocity = velocity as usize;
     let gradients = gradients as usize;
 
-    handle.split_workload(network_size, |idx| {
+    handle.split_workload(network_size, |_, idx| {
         let grad = adj * *(gradients as *const f32).add(idx);
         let p = (network as *mut f32).add(idx);
         let m = (momentum as *mut f32).add(idx);
