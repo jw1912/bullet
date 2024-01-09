@@ -34,7 +34,6 @@ pub unsafe fn sparse_affine_forward(
 
         for i in 0..max_input_size {
             let feat = *this_inp.add(i);
-            println!("{idx}: {}, {}", feat.our(), feat.opp());
 
             if feat.our() == 65_535 {
                 break;

@@ -19,7 +19,7 @@ impl DeviceHandles {
         self.threads = threads;
     }
 
-    pub fn split_workload<F: Fn(usize, usize) + Copy + Send>(
+    pub(crate) fn split_workload<F: Fn(usize, usize) + Copy + Send>(
         &self,
         size: usize,
         single_workload: F,
