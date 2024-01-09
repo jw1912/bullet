@@ -1,24 +1,25 @@
-use bullet_core::Feat;
+use bullet_core::{Activation, Feat};
 
 use crate::{
     backend::{DeviceHandles, util},
-    Activation, Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer,
+    Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer,
 };
 
 #[test]
 fn tensor_activate() {
+    let handle = DeviceHandles::default();
     let mut xs = [1.0, -1.0, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0];
 
     let x = TensorBatch::new(Shape::new(1, 3), 3);
     let y = TensorBatch::new(Shape::new(1, 3), 3);
 
     x.load_from_host(&xs);
-    TensorBatch::activate(3, Activation::ReLU, &x, &y);
+    TensorBatch::activate(handle, 3, Activation::ReLU, &x, &y);
     y.write_to_host(&mut xs);
 
     assert_eq!(xs, [1.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0]);
 
-    TensorBatch::backprop_activation(3, Activation::CReLU, &y, &x);
+    TensorBatch::backprop_activation(handle, 3, Activation::CReLU, &y, &x);
     x.write_to_host(&mut xs);
 
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
@@ -92,6 +93,8 @@ fn tensor_lt() {
 
 #[test]
 fn tensor_sparse_affine() {
+    let handle = DeviceHandles::default();
+
     const M: usize = 3;
     const N: usize = 2;
     const B: usize = 3;
@@ -122,7 +125,7 @@ fn tensor_sparse_affine() {
 
         inputs.append(&xs);
 
-        SparseTensor::affine(&weights, &inputs, &biases, &outputs);
+        SparseTensor::affine(handle, &weights, &inputs, &biases, &outputs);
 
         let mut ys = [0.0; N * B * 2];
         outputs.write_to_host(&mut ys);
@@ -136,7 +139,7 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(&wg, &inputs, &bg, &outputs);
+        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);
@@ -239,6 +242,7 @@ fn tensor_reduce_add() {
 
 #[test]
 fn tensor_splat_add() {
+    let handle = DeviceHandles::default();
     let splat = [0.5, -1.0, 1.0];
     let vecs = [1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.5, 1.0, 1.0];
 
@@ -250,7 +254,7 @@ fn tensor_splat_add() {
     out.load_from_host(&vecs);
 
     unsafe {
-        TensorBatch::splat_add(4, &inp, &out);
+        TensorBatch::splat_add(handle, 4, &inp, &out);
     }
 
     let mut buf = [0.0; 12];
@@ -330,6 +334,7 @@ fn affine() {
 
 #[test]
 fn mse() {
+    let handle = DeviceHandles::default();
     let out = [1.5, 0.0, 1.0];
     let res = [0.5, 0.5, 0.5];
 
@@ -341,7 +346,7 @@ fn mse() {
     let r = TensorBatch::new(Shape::new(1, 1), 9);
     r.load_from_host(&res);
 
-    x.sigmoid_mse(3, &r, &error);
+    x.sigmoid_mse(handle, 3, &r, &error);
 
     let mut buf = [0.0; 3];
     x.write_to_host(&mut buf);

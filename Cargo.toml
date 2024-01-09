@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "bullet-backends/cpu",
+    "bullet-backends/cuda",
     "bullet-core",
-    "bullet-cuda",
     "bullet-tensor",
     "bullet-utils",
 ]
@@ -20,6 +21,9 @@ authors.workspace = true
 
 [workspace.dependencies]
 bulletformat = "0.1.0"
+
+[features]
+cuda = ["bullet-tensor/cuda"]
 
 [dependencies]
 bulletformat = { workspace = true }

@@ -21,7 +21,7 @@ Used exclusively to train architectures of the form `(SparseInput -> N)x2 -> Mor
 
 If you need to train on CPU, you can use the [legacy branch](https://github.com/jw1912/bullet/tree/legacy).
 
-Currently Supported Games:
+### Currently Supported Games:
 - Chess
 - Ataxx
 
@@ -30,10 +30,31 @@ Raise an issue for support of a new game.
 ### Usage
 
 Check out the [examples](/examples) to see how to use the crate - and if you don't want to use bullet
-as a crate, you can edit one of them and run with `cargo r -r --example <example name (without .rs)>`.
+as a crate, you can edit one of them and run with
+```
+cargo r -r --example <example name (without .rs)> [--features cuda]
+```
 
 A basic inference example is included in [examples/simple](/examples/simple.rs), and if you've never
 trained an NNUE before it is recommended to start with an architecture and training schedule like this.
+
+### Currently Supported Backends:
+#### Default
+CPU backend **not intended for serious training use**, it is currently mostly unoptimised,
+and is suitable for training small networks or various utilities, such as loading nets to requantise them
+or test their output on specific positions.
+
+#### CUDA
+The "first class" supported backend, to compile to target CUDA you need to enable the `cuda` feature,
+either by editing your `Cargo.toml`:
+```toml
+bullet = { git = "https://github.com/jw1912/bullet", features = ["cuda"] }
+```
+if using bullet as a crate, or by
+```
+cargo r -r --example <example name> --features cuda
+```
+if using one of the examples.
 
 ### Saved Networks
 
@@ -56,8 +77,8 @@ The trainer uses its own binary data format for each game.
 
 The specifications for the data formats are found in the [bulletformat](https://github.com/jw1912/bulletformat) crate.
 
-Additionally, each type implements `from_raw` which is recommended for use if your engine is written in Rust (or you don't
-mind FFI).
+Additionally, each type implements `from_raw` which is recommended for use in datagen if your engine is written in Rust
+(or you don't mind FFI).
 
 All data types at present are 32 bytes, so you can use [marlinflow-utils](https://github.com/jnlt3/marlinflow) to shuffle
 and interleave files.

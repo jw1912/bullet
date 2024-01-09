@@ -10,4 +10,4 @@ bindgen = "0.68.1"
 cc = "1.0.83"
 
 [dependencies]
-bullet-core = { path = "../bullet-core" }
+bullet-core = { path = "../../bullet-core" }

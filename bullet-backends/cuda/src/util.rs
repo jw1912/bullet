@@ -1,7 +1,7 @@
 use std::ffi::c_void;
 
 use crate::bindings::{
-    cublasCreate_v2, cublasHandle_t, cudaDeviceSynchronize, cudaError, cudaFree, cudaGetLastError,
+    cudaDeviceSynchronize, cudaError, cudaFree, cudaGetLastError,
     cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset, cudaGetDeviceCount, cudaGetDeviceProperties_v2,
 };
 
@@ -37,14 +37,6 @@ pub fn device_name() -> String {
     my_str.to_string()
 }
 
-pub fn create_cublas_handle() -> cublasHandle_t {
-    let mut handle: cublasHandle_t = std::ptr::null_mut();
-    unsafe {
-        cublasCreate_v2((&mut handle) as *mut cublasHandle_t);
-    }
-    handle
-}
-
 pub fn device_synchronise() {
     catch!(cudaDeviceSynchronize());
 }
@@ -68,8 +60,8 @@ pub fn malloc<T>(num: usize) -> *mut T {
 
 /// # Safety
 /// Need to make sure not to double free.
-pub unsafe fn free(ptr: *mut c_void) {
-    catch!(cudaFree(ptr));
+pub unsafe fn free(ptr: *mut f32, _: usize) {
+    catch!(cudaFree(ptr.cast()));
 }
 
 pub fn calloc<T>(num: usize) -> *mut T {
@@ -89,7 +81,9 @@ pub fn set_zero<T>(ptr: *mut T, num: usize) {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
+/// # Safety
+/// Pointers need to be valid and `amt` need to be valid.
+pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
         cudaMemcpy(
             dest.cast(),
@@ -102,7 +96,9 @@ pub fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(cudaDeviceSynchronize());
 }
 
-pub fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
+/// # Safety
+/// Pointers need to be valid and `amt` need to be valid.
+pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
         cudaMemcpy(
             dest.cast(),

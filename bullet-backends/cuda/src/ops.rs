@@ -1,3 +1,8 @@
+// Every operation has the same safety criteria, pass valid pointers
+#![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
+
+use bullet_core::Feat;
+
 use crate::{
     bindings::{self, cublasOperation_t},
     DeviceHandles,
@@ -5,21 +10,6 @@ use crate::{
 
 use std::ffi::c_int;
 
-pub use bindings::activateCReLU as activate_crelu;
-pub use bindings::activateReLU as activate_relu;
-pub use bindings::activateSCReLU as activate_screlu;
-pub use bindings::backpropCReLU as backprop_crelu;
-pub use bindings::backpropReLU as backprop_relu;
-pub use bindings::backpropSCReLU as backprop_screlu;
-pub use bindings::sigmoidMSE as sigmoid_mse;
-pub use bindings::sparseAffineBackward as sparse_affine_backward;
-pub use bindings::sparseAffineForward as sparse_affine_forward;
-pub use bindings::splatAdd as splat_add;
-pub use bindings::updateWeights as update_weights;
-
-#[allow(clippy::too_many_arguments)]
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrix_vector(
     handle: DeviceHandles,
     m: usize,
@@ -56,9 +46,6 @@ pub unsafe fn splat_mul_matrix_vector(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn splat_mul_matrixt_vector(
     handle: DeviceHandles,
     m: usize,
@@ -95,9 +82,6 @@ pub unsafe fn splat_mul_matrixt_vector(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn reduce_add_mul_vector_vectort(
     handle: DeviceHandles,
     m: usize,
@@ -134,8 +118,6 @@ pub unsafe fn reduce_add_mul_vector_vectort(
     }
 }
 
-/// # Safety
-/// This should only be used and exposed internally.
 pub unsafe fn reduce_add(
     handle: DeviceHandles,
     ones: *const f32,
@@ -163,5 +145,114 @@ pub unsafe fn reduce_add(
         &beta,
         out,
         1,
+    );
+}
+
+pub unsafe fn activate_relu(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateReLU(size, inp, out);
+}
+
+pub unsafe fn activate_crelu(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateCReLU(size, inp, out);
+}
+
+pub unsafe fn activate_screlu(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateSCReLU(size, inp, out);
+}
+
+pub unsafe fn backprop_relu(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropReLU(size, inp, out);
+}
+
+pub unsafe fn backprop_crelu(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropCReLU(size, inp, out);
+}
+
+pub unsafe fn backprop_screlu(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropSCReLU(size, inp, out);
+}
+
+pub unsafe fn sigmoid_mse(
+    _: DeviceHandles,
+    buffer_size: usize,
+    outputs: *mut f32,
+    results: *const f32,
+    error: *mut f32,
+) {
+    bindings::sigmoidMSE(buffer_size, outputs, results, error);
+}
+
+pub unsafe fn sparse_affine_backward(
+    _: DeviceHandles,
+    batch_size: usize,
+    max_input_size: usize,
+    output_size: usize,
+    weights_grad: *mut f32,
+    biases_grad: *mut f32,
+    inputs: *const Feat,
+    errors: *const f32,
+) {
+    bindings::sparseAffineBackward(
+        batch_size,
+        max_input_size,
+        output_size,
+        weights_grad,
+        biases_grad,
+        inputs,
+        errors,
+    );
+}
+
+pub unsafe fn sparse_affine_forward(
+    _: DeviceHandles,
+    batch_size: usize,
+    max_input_size: usize,
+    output_size: usize,
+    weights: *const f32,
+    biases: *const f32,
+    inputs: *const Feat,
+    outputs: *mut f32,
+) {
+    bindings::sparseAffineForward(
+        batch_size,
+        max_input_size,
+        output_size,
+        weights,
+        biases,
+        inputs,
+        outputs,
+    );
+}
+
+pub unsafe fn splat_add(
+    _: DeviceHandles,
+    batch_size: usize,
+    tensor_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    bindings::splatAdd(batch_size, tensor_size, inp, out);
+}
+
+pub unsafe fn update_weights(
+    _: DeviceHandles,
+    network_size: usize,
+    decay: f32,
+    adj: f32,
+    rate: f32,
+    network: *mut f32,
+    momentum: *mut f32,
+    velocity: *mut f32,
+    gradients: *const f32,
+) {
+    bindings::updateWeights(
+        network_size,
+        decay,
+        adj,
+        rate,
+        network,
+        momentum,
+        velocity,
+        gradients,
     );
 }

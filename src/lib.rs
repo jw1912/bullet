@@ -4,8 +4,7 @@ mod training;
 
 use training::ansi;
 
-pub use bullet_core::inputs;
-pub use bullet_tensor::Activation;
+pub use bullet_core::{inputs, Activation};
 pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 pub use training::set_cbcs;

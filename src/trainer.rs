@@ -1,6 +1,6 @@
-use bullet_core::{inputs::InputType, util, GpuDataLoader, Rand};
+use bullet_core::{Activation, inputs::InputType, util, GpuDataLoader, Rand};
 use bullet_tensor::{
-    device_synchronise, Activation, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
+    device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
     Tensor, TensorBatch,
 };
 use bulletformat::BulletFormat;
@@ -172,6 +172,11 @@ impl<T: InputType> Trainer<T> {
         res
     }
 
+    pub fn set_threads(&mut self, threads: usize) {
+        self.handle.set_threads(threads);
+        self.error = DeviceBuffer::new(threads);
+    }
+
     pub fn load_weights_from_file(&self, path: &str) {
         let network = self.load_from_bin(path);
         self.optimiser.load_weights_from_host(&network);
@@ -186,15 +191,15 @@ impl<T: InputType> Trainer<T> {
     }
 
     pub fn prep_for_epoch(&mut self) {
-        self.error.load_from_host(&[0.0]);
+        self.error.set_zero();
         device_synchronise();
     }
 
     pub fn error(&self) -> f32 {
         device_synchronise();
-        let mut buf = [0.0];
+        let mut buf = vec![0.0; self.error.size()];
         self.error.write_to_host(&mut buf);
-        buf[0]
+        buf.iter().sum()
     }
 
     pub fn input_getter(&self) -> T {
@@ -269,7 +274,7 @@ impl<T: InputType> Trainer<T> {
         }
 
         let adj = 2. / self.inputs.used() as f32;
-        self.optimiser.update(decay, adj, rate);
+        self.optimiser.update(self.handle, decay, adj, rate);
         device_synchronise();
     }
 
@@ -280,6 +285,7 @@ impl<T: InputType> Trainer<T> {
         let batch_size = self.inputs.used();
 
         SparseTensor::affine(
+            self.handle,
             &self.ft.weights,
             &self.inputs,
             &self.ft.biases,
@@ -291,7 +297,7 @@ impl<T: InputType> Trainer<T> {
         for node in &self.nodes {
             match &node.op {
                 Operation::Activate(activation) => {
-                    TensorBatch::activate(batch_size, *activation, inputs, &node.outputs);
+                    TensorBatch::activate(self.handle, batch_size, *activation, inputs, &node.outputs);
                 }
                 Operation::Affine(Affine {
                     weights, biases, ..
@@ -322,7 +328,7 @@ impl<T: InputType> Trainer<T> {
 
         output_layer
             .outputs
-            .sigmoid_mse(batch_size, &self.results, &self.error);
+            .sigmoid_mse(self.handle, batch_size, &self.results, &self.error);
     }
 
     /// # Safety
@@ -346,6 +352,7 @@ impl<T: InputType> Trainer<T> {
         backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs);
 
         SparseTensor::affine_backprop(
+            self.handle,
             &self.ft.weights_grad,
             &self.inputs,
             &self.ft.biases_grad,
@@ -364,7 +371,7 @@ fn backprop_single(
 
     match &this_node.op {
         Operation::Activate(activation) => {
-            TensorBatch::backprop_activation(batch_size, *activation, errors, inputs);
+            TensorBatch::backprop_activation(handle, batch_size, *activation, errors, inputs);
         }
         Operation::Affine(Affine {
             weights: w,

@@ -1,4 +1,4 @@
-use crate::{backend::{ops, util}, DeviceBuffer};
+use crate::{backend::{ops, util, DeviceHandles}, DeviceBuffer};
 
 /// A struct intended to hold all network weights and biases
 /// needed for training.
@@ -49,10 +49,11 @@ impl Optimiser {
         unsafe { self.gradients.ptr().add(index) }
     }
 
-    pub fn update(&self, decay: f32, adj: f32, rate: f32) {
+    pub fn update(&self, handle: DeviceHandles, decay: f32, adj: f32, rate: f32) {
         let decay_gamma = 1.0 - decay * rate;
         unsafe {
             ops::update_weights(
+                handle,
                 self.size,
                 decay_gamma,
                 adj,

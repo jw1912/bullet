@@ -13,6 +13,14 @@ impl Feat {
     pub fn new(our: u16, opp: u16) -> Self {
         Self { our, opp }
     }
+
+    pub fn our(&self) -> usize {
+        usize::from(self.our)
+    }
+
+    pub fn opp(&self) -> usize {
+        usize::from(self.opp)
+    }
 }
 
 pub struct GpuDataLoader<I: InputType> {

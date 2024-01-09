@@ -16,7 +16,7 @@ impl Drop for DeviceBuffer {
     fn drop(&mut self) {
         self.report("Freed");
         unsafe {
-            util::free(self.ptr.cast());
+            util::free(self.ptr, self.size);
         }
     }
 }
@@ -49,9 +49,15 @@ impl DeviceBuffer {
         self.ptr
     }
 
+    pub fn set_zero(&self) {
+        util::set_zero(self.ptr, self.size)
+    }
+
     pub fn load_from_host(&self, buf: &[f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
-        util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
+        unsafe {
+            util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
+        }
         util::device_synchronise();
     }
 
@@ -65,7 +71,9 @@ impl DeviceBuffer {
 
     pub fn write_to_host(&self, buf: &mut [f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
-        util::copy_from_device(buf.as_mut_ptr(), self.ptr, self.size);
+        unsafe {
+            util::copy_from_device(buf.as_mut_ptr(), self.ptr, self.size);
+        }
         util::device_synchronise();
     }
 
