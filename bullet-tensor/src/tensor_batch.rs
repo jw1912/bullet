@@ -224,7 +224,6 @@ impl TensorBatch {
     }
 
     pub fn sigmoid_mse(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
-        assert_eq!(error.size(), 1);
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 

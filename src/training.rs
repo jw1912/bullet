@@ -44,6 +44,7 @@ pub fn run<T: InputType>(
     let timer = Instant::now();
 
     let mut gpu_loader = GpuDataLoader::<T>::new(trainer.input_getter());
+    trainer.set_threads(threads);
 
     device_synchronise();
 
