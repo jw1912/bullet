@@ -6,4 +6,4 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-bullet-core = { path = "../bullet-core" }
+bullet-core = { path = "../../bullet-core" }

@@ -10,5 +10,5 @@ cuda = ["bullet-cuda"]
 
 [dependencies]
 bullet-core = { path = "../bullet-core" }
-bullet-cpu = { path = "../bullet-cpu" }
-bullet-cuda = { path = "../bullet-cuda", optional = true }
+bullet-cpu = { path = "../bullet-backends/cpu" }
+bullet-cuda = { path = "../bullet-backends/cuda", optional = true }
