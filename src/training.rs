@@ -32,6 +32,16 @@ pub fn run<T: InputType>(
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
 
+    if device_name() == "CPU" {
+        println!("{}", ansi("========== WARNING ==========", 31));
+        println!("This backend is not currently");
+        println!("   intended to be used for   ");
+        println!("  serious training, you may  ");
+        println!("  have meant to enable the   ");
+        println!("      `cuda` feature.        ");
+        println!("{}", ansi("=============================", 31));
+    }
+
     print!("{esc}");
     println!("{}", ansi("Beginning Training", "34;1"));
     println!("Net Name       : {}", ansi(schedule.net_id.clone(), "32;1"));
