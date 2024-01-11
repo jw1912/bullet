@@ -61,6 +61,7 @@ pub fn run<T: InputType>(
     let mut prev_lr = schedule.lr(schedule.start_epoch);
 
     for epoch in schedule.start_epoch..=schedule.end_epoch {
+        trainer.set_error_zero();
         let epoch_timer = Instant::now();
         let loader = DataLoader::new(file, 1_024).unwrap();
         let blend = schedule.wdl(epoch);
@@ -95,7 +96,7 @@ pub fn run<T: InputType>(
             finished += 1;
         });
 
-        let error = trainer.error() / num as f32;
+        let error = trainer.error() / batches as f32;
 
         report_epoch_finished(schedule, epoch, error, &epoch_timer, &timer, num);
 
