@@ -58,4 +58,8 @@ extern "C" {
     pub fn sigmoidMSE(bufferSize: usize, outputs: *mut f32, results: *const f32, error: *mut f32);
 
     pub fn splatAdd(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
+
+    pub fn activateDual(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
+
+    pub fn backpropDual(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
 }

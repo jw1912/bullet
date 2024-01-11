@@ -37,3 +37,38 @@ extern "C" void activateSCReLU(const size_t size, const float* in, float* out)
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
     bufferOperation<SCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
+
+__global__ void activateDualKernel(
+    const size_t batchSize,
+    const size_t tensorSize,
+    const float* inp,
+    float* out)
+{
+    const size_t tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (tid >= tensorSize)
+        return;
+
+    const float thisInp = inp[tensorSize * blockIdx.y + tid];
+    float* thisOut = out + 2 * tensorSize * blockIdx.y + tid;
+
+    thisOut[0] = CReLU(thisInp);
+    thisOut[tensorSize] = SCReLU(thisInp);
+}
+
+extern "C" void activateDual(
+    const size_t batchSize,
+    const size_t tensorSize,
+    const float* inp,
+    float* out)
+{
+    const size_t grid_x = (tensorSize + threadsPerBlock - 1) / threadsPerBlock;
+    const dim3 grid(grid_x, batchSize);
+
+    activateDualKernel<<<grid, threadsPerBlock>>>(
+        batchSize,
+        tensorSize,
+        inp,
+        out
+    );
+}

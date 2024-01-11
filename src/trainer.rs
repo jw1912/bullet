@@ -26,6 +26,7 @@ struct Affine {
 enum Operation {
     Activate(Activation),
     Affine(Affine),
+    DualActivate,
 }
 
 struct Node {
@@ -84,6 +85,10 @@ impl<T: InputType> Trainer<T> {
         println!("Arch           : {}", ansi(format!("{self}"), 31));
         println!("Batch Size     : {}", ansi(self.batch_size(), 31));
         println!("Scale          : {}", ansi(format!("{:.0}", self.eval_scale()), 31));
+    }
+
+    pub fn set_error_zero(&mut self) {
+        self.error = 0.0;
     }
 
     pub fn save(&self, out_dir: &str, name: String, epoch: usize) {
@@ -309,6 +314,9 @@ impl<T: InputType> Trainer<T> {
                         &node.outputs,
                     );
                 }
+                Operation::DualActivate => {
+                    TensorBatch::activate_dual(self.handle, batch_size, inputs, &node.outputs)
+                }
             }
 
             inputs = &node.outputs;
@@ -379,13 +387,17 @@ fn backprop_single(
             ..
         }) => unsafe {
             TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
-        },
+        }
+        Operation::DualActivate => {
+            TensorBatch::backprop_dual(handle, batch_size, errors, inputs)
+        }
     }
 }
 
 enum OpType {
     Activate(Activation),
     Affine,
+    DualActivate,
 }
 
 struct NodeType {
@@ -466,6 +478,12 @@ impl<T: InputType> TrainerBuilder<T> {
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
         self.add(size, OpType::Activate(activation))
+    }
+
+    /// Apply both CReLU and SCReLU, concat results
+    pub fn dual_activate(self) -> Self {
+        let size = 2 * self.get_last_layer_size();
+        self.add(size, OpType::DualActivate)
     }
 }
 
@@ -561,6 +579,7 @@ impl<T: InputType> TrainerBuilder<T> {
                         Operation::Affine(affine)
                     }
                     OpType::Activate(activation) => Operation::Activate(*activation),
+                    OpType::DualActivate => Operation::DualActivate,
                 };
 
                 let outputs = TensorBatch::new(bsh, batch_size);
