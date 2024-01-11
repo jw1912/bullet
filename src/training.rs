@@ -61,8 +61,6 @@ pub fn run<T: InputType>(
     let mut prev_lr = schedule.lr(schedule.start_epoch);
 
     for epoch in schedule.start_epoch..=schedule.end_epoch {
-        trainer.prep_for_epoch();
-
         let epoch_timer = Instant::now();
         let loader = DataLoader::new(file, 1_024).unwrap();
         let blend = schedule.wdl(epoch);

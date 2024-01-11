@@ -46,7 +46,8 @@ pub struct Trainer<T> {
     nodes: Vec<Node>,
     inputs: SparseTensor,
     results: TensorBatch,
-    error: DeviceBuffer,
+    error_device: DeviceBuffer,
+    error: f32,
     used: usize,
     scale: f32,
     quantiser: Vec<QuantiseInfo>,
@@ -174,7 +175,7 @@ impl<T: InputType> Trainer<T> {
 
     pub fn set_threads(&mut self, threads: usize) {
         self.handle.set_threads(threads);
-        self.error = DeviceBuffer::new(threads);
+        self.error_device = DeviceBuffer::new(threads);
     }
 
     pub fn load_weights_from_file(&self, path: &str) {
@@ -190,16 +191,8 @@ impl<T: InputType> Trainer<T> {
         self.optimiser.load_from_cpu(&network, &momentum, &velocity)
     }
 
-    pub fn prep_for_epoch(&mut self) {
-        self.error.set_zero();
-        device_synchronise();
-    }
-
     pub fn error(&self) -> f32 {
-        device_synchronise();
-        let mut buf = vec![0.0; self.error.size()];
-        self.error.write_to_host(&mut buf);
-        buf.iter().sum()
+        self.error
     }
 
     pub fn input_getter(&self) -> T {
@@ -243,7 +236,6 @@ impl<T: InputType> Trainer<T> {
     where
         T::RequiredDataType: std::str::FromStr<Err = String>,
     {
-        self.prep_for_epoch();
         self.clear_data();
         let board = fen.parse::<T::RequiredDataType>().unwrap();
         let mut loader = GpuDataLoader::new(self.input_getter);
@@ -264,8 +256,9 @@ impl<T: InputType> Trainer<T> {
         self.clear_data();
     }
 
-    pub fn train_on_batch(&self, decay: f32, rate: f32) {
+    pub fn train_on_batch(&mut self, decay: f32, rate: f32) {
         self.optimiser.zero_gradient();
+        self.error_device.set_zero();
 
         unsafe {
             self.forward();
@@ -275,6 +268,11 @@ impl<T: InputType> Trainer<T> {
 
         let adj = 2. / self.inputs.used() as f32;
         self.optimiser.update(self.handle, decay, adj, rate);
+
+        let mut errors = vec![0.0; self.error_device.size()];
+        self.error_device.write_to_host(&mut errors);
+        self.error += errors.iter().sum::<f32>() / self.inputs.used() as f32;
+
         device_synchronise();
     }
 
@@ -328,7 +326,7 @@ impl<T: InputType> Trainer<T> {
 
         output_layer
             .outputs
-            .sigmoid_mse(self.handle, batch_size, &self.results, &self.error);
+            .sigmoid_mse(self.handle, batch_size, &self.results, &self.error_device);
     }
 
     /// # Safety
@@ -586,7 +584,7 @@ impl<T: InputType> TrainerBuilder<T> {
             );
 
             let results = TensorBatch::new(Shape::new(1, 1), batch_size);
-            let error = DeviceBuffer::new(1);
+            let error_device = DeviceBuffer::new(1);
 
             let mut net = vec![0.0; net_size];
             let mut rng = Rand::default();
@@ -605,7 +603,8 @@ impl<T: InputType> TrainerBuilder<T> {
                 nodes,
                 inputs,
                 results,
-                error,
+                error_device,
+                error: 0.0,
                 used: 0,
                 scale: self.scale,
                 quantiser,
