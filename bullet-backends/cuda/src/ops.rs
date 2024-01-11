@@ -186,6 +186,7 @@ pub unsafe fn sparse_affine_backward(
     _: DeviceHandles,
     batch_size: usize,
     max_input_size: usize,
+    _: usize,
     output_size: usize,
     weights_grad: *mut f32,
     biases_grad: *mut f32,

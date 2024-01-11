@@ -116,6 +116,7 @@ impl SparseTensor {
             handle,
             inputs.used,
             inputs.max_num_inputs,
+            input_dim,
             output_dim,
             weights_grad.ptr(),
             biases_grad.ptr(),

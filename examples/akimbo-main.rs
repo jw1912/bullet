@@ -10,18 +10,7 @@ fn main() {
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_quantisations(&[181, 64])
-        .set_input(
-            inputs::ChessBucketsMirrored::new([
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-            ])
-        )
+        .set_input(inputs::Chess768)
         .ft(768)
         .activate(Activation::SCReLU)
         .add_layer(1)
