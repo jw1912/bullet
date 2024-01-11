@@ -131,3 +131,23 @@ pub unsafe fn reduce_add(
         *(out as *mut f32).add(idx) = sum;
     });
 }
+
+pub unsafe fn activate_dual(
+    _: DeviceHandles,
+    batch_size: usize,
+    tensor_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!();
+}
+
+pub unsafe fn backprop_dual(
+    _: DeviceHandles,
+    batch_size: usize,
+    tensor_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!();
+}
