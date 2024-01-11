@@ -64,8 +64,10 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
         }
         write!(f, " -> {})x2", self.nodes[0].outputs.shape().rows() / 2)?;
         for (i, node) in self.nodes.iter().enumerate() {
-            if let Operation::Activate(_) = node.op {
-                continue;
+            match node.op {
+                Operation::DualActivate => continue,
+                Operation::Activate(_) => continue,
+                Operation::Affine(_) => {}
             }
 
             let rows = node.outputs.shape().rows();
