@@ -17,7 +17,7 @@ fn main() {
         .build();
 
     let schedule = TrainingSchedule {
-        net_id: "net-12.01.24".to_string(),
+        net_id: "net-01.01.24".to_string(),
         start_epoch: 1,
         end_epoch: 17,
         wdl_scheduler: WdlScheduler::Linear {
