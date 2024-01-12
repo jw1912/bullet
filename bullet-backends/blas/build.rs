@@ -36,7 +36,6 @@ fn main() {
         .expect("Couldn't write bindings!");
 }
 
-#[cfg(target_family = "windows")]
 fn get_var_path(name: &str) -> PathBuf {
     println!("rerun-if-env-changed={}", name);
 
@@ -58,7 +57,6 @@ fn get_var_path(name: &str) -> PathBuf {
     path
 }
 
-#[cfg(target_family = "windows")]
 fn link_blas() -> Vec<PathBuf> {
     let path = get_var_path("BULLET_BLAS_PATH");
     println!(
@@ -66,12 +64,6 @@ fn link_blas() -> Vec<PathBuf> {
         path.join("lib").to_str().unwrap()
     );
     vec![path.join("include")]
-}
-
-#[cfg(target_family = "unix")]
-fn link_blas() -> Vec<PathBuf> {
-    println!("cargo:rustc-link-search=native=/usr/local/openblas/lib");
-    vec![PathBuf::from("/usr/local/openblas/include/")]
 }
 
 const IGNORED_MACROS: &[&str] = &[

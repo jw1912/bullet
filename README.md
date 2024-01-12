@@ -40,7 +40,7 @@ trained an NNUE before it is recommended to start with an architecture and train
 
 ### Currently Supported Backends:
 #### Default
-CPU backend **not intended for serious training use**, it is currently mostly unoptimised,
+CPU backend **not intended for serious training use** (use BLAS instead for CPU training), it is currently mostly unoptimised,
 and is suitable for training small networks or various utilities, such as loading nets to requantise them
 or test their output on specific positions.
 
@@ -55,6 +55,11 @@ if using bullet as a crate, or by
 cargo r -r --example <example name> --features cuda
 ```
 if using one of the examples.
+
+#### BLAS
+Use as above but replace `cuda` with `blas`. This requires setting the `BULLET_BLAS_PATH` environment variable,
+also make sure that your BLAS library file is called `libopenblas.lib`, not `openblas.lib`. Currently tested on
+windows with [OpenBLAS precompiled packages](https://github.com/OpenMathLib/OpenBLAS/releases).
 
 ### Saved Networks
 
