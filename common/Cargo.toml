@@ -5,4 +5,4 @@ edition = "2021"
 authors = ["Jamie Whiting"]
 
 [dependencies]
-bulletformat = "0.1.0"
+bulletformat = "=0.1.0"
