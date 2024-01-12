@@ -10,14 +10,14 @@ fn main() {
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_quantisations(&[181, 64])
-        .set_input(inputs::Chess768)
+        .set_input(inputs::ChessBucketsMirrored::new([0; 32]))
         .ft(768)
         .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
 
     let schedule = TrainingSchedule {
-        net_id: "net-01.01.24".to_string(),
+        net_id: "net-12.01.24".to_string(),
         start_epoch: 1,
         end_epoch: 17,
         wdl_scheduler: WdlScheduler::Linear {
