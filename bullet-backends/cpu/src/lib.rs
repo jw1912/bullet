@@ -19,10 +19,10 @@ impl DeviceHandles {
         self.threads = threads;
     }
 
-    pub(crate) fn split_workload<F: Fn(usize, usize) + Copy + Send>(
+    pub(crate) fn workload_chunks<F: Fn(usize, usize, usize) + Copy + Send>(
         &self,
         size: usize,
-        single_workload: F,
+        workload_chunk: F,
     ) {
         let threads = self.threads;
         let chunk_size = (size + threads - 1) / threads;
@@ -42,10 +42,20 @@ impl DeviceHandles {
                 assert!(covered <= size);
 
                 s.spawn(move || {
-                    for idx in start_idx..start_idx + this_chunk_size {
-                        single_workload(thread, idx);
-                    }
+                    workload_chunk(thread, start_idx, this_chunk_size);
                 });
+            }
+        });
+    }
+
+    pub(crate) fn split_workload<F: Fn(usize, usize) + Copy + Send + Sync>(
+        &self,
+        size: usize,
+        single_workload: F,
+    ) {
+        self.workload_chunks(size, |thread, start_idx, this_chunk_size| {
+            for idx in start_idx..start_idx + this_chunk_size {
+                single_workload(thread, idx);
             }
         });
     }
