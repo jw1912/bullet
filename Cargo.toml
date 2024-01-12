@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "bullet-backends/blas",
     "bullet-backends/cpu",
     "bullet-backends/cuda",
     "bullet-core",

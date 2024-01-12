@@ -6,7 +6,7 @@ mod sparse_affine;
 mod splat_add;
 mod update;
 
-use crate::{DeviceHandles, util};
+use crate::DeviceHandles;
 
 pub use bufops::*;
 pub use backprops::*;
@@ -15,6 +15,50 @@ pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
+#[cfg(not(feature = "blas"))]
+use crate::util;
+
+#[cfg(feature = "blas")]
+use bullet_blas::{cblas_sgemm, blasint, CBLAS_LAYOUT, CBLAS_TRANSPOSE};
+
+#[cfg(feature = "blas")]
+pub unsafe fn splat_mul_matrix_vector(
+    handle: DeviceHandles,
+    m: usize,
+    n: usize,
+    a_ptr: *const f32,
+    x_ptr: *const f32,
+    y_ptr: *mut f32,
+    batch_size: usize,
+) {
+    let alpha = 1.0;
+    let beta = 0.0;
+
+    let m = m as blasint;
+    let n = n as blasint;
+    let batch_size = batch_size as blasint;
+
+    unsafe {
+        cblas_sgemm(
+            CBLAS_LAYOUT::CblasColMajor,
+            CBLAS_TRANSPOSE::CblasConjNoTrans,
+            CBLAS_TRANSPOSE::CblasConjNoTrans,
+            n,
+            batch_size,
+            m,
+            alpha,
+            a_ptr,
+            n,
+            x_ptr,
+            m,
+            beta,
+            y_ptr,
+            n,
+        );
+    }
+}
+
+#[cfg(not(feature = "blas"))]
 pub unsafe fn splat_mul_matrix_vector(
     handle: DeviceHandles,
     m: usize,
@@ -45,6 +89,43 @@ pub unsafe fn splat_mul_matrix_vector(
     });
 }
 
+#[cfg(feature = "blas")]
+pub unsafe fn splat_mul_matrixt_vector(
+    handle: DeviceHandles,
+    m: usize,
+    n: usize,
+    a_ptr: *const f32,
+    y_ptr: *const f32,
+    x_ptr: *mut f32,
+    batch_size: usize,
+) {
+    let alpha = 1.0;
+    let beta = 0.0;
+
+    let m = m as blasint;
+    let n = n as blasint;
+    let batch_size = batch_size as blasint;
+    unsafe {
+        cblas_sgemm(
+            CBLAS_LAYOUT::CblasColMajor,
+            CBLAS_TRANSPOSE::CblasConjTrans,
+            CBLAS_TRANSPOSE::CblasConjNoTrans,
+            m,
+            batch_size,
+            n,
+            alpha,
+            a_ptr,
+            n,
+            y_ptr,
+            n,
+            beta,
+            x_ptr,
+            m,
+        );
+    }
+}
+
+#[cfg(not(feature = "blas"))]
 pub unsafe fn splat_mul_matrixt_vector(
     handle: DeviceHandles,
     m: usize,
@@ -76,6 +157,44 @@ pub unsafe fn splat_mul_matrixt_vector(
     });
 }
 
+#[cfg(feature = "blas")]
+pub unsafe fn reduce_add_mul_vector_vectort(
+    handle: DeviceHandles,
+    m: usize,
+    n: usize,
+    y_ptr: *const f32,
+    x_ptr: *const f32,
+    a_ptr: *mut f32,
+    batch_size: usize,
+) {
+    let alpha = 1.0;
+    let beta = 0.0;
+
+    let m = m as blasint;
+    let n = n as blasint;
+    let batch_size = batch_size as blasint;
+
+    unsafe {
+        cblas_sgemm(
+            CBLAS_LAYOUT::CblasColMajor,
+            CBLAS_TRANSPOSE::CblasConjNoTrans,
+            CBLAS_TRANSPOSE::CblasConjTrans,
+            n,
+            m,
+            batch_size,
+            alpha,
+            y_ptr,
+            n,
+            x_ptr,
+            m,
+            beta,
+            a_ptr,
+            n,
+        );
+    }
+}
+
+#[cfg(not(feature = "blas"))]
 pub unsafe fn reduce_add_mul_vector_vectort(
     handle: DeviceHandles,
     m: usize,

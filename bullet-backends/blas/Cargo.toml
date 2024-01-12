@@ -1,14 +1,12 @@
 [package]
-name = "bullet-cpu"
+name = "bullet-blas"
 version = "0.1.0"
 edition = "2021"
 license.workspace = true
 authors.workspace = true
 
-[dependencies]
-bullet-blas = { path = "../blas", optional = true }
-bullet-core = { path = "../../bullet-core" }
+[build-dependencies]
+bindgen = "0.68.1"
 
-[features]
-default = ["blas"]
-blas = ["bullet-blas"]
+[dependencies]
+bullet-core = { path = "../../bullet-core" }
