@@ -10,5 +10,4 @@ bullet-blas = { path = "../blas", optional = true }
 bullet-core = { path = "../../bullet-core" }
 
 [features]
-default = ["blas"]
 blas = ["bullet-blas"]

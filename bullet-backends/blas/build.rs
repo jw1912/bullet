@@ -8,7 +8,7 @@ fn main() {
     let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let builder = Builder::default();
 
-    println!("cargo:rustc-link-lib=dylib=libopenblas");
+    println!("cargo:rustc-link-lib=static=libopenblas");
 
     let include_paths = link_blas();
     let builder = include_paths.iter().fold(builder, |builder, path| {
