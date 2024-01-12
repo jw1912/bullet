@@ -33,16 +33,14 @@ pub unsafe fn splat_mul_matrix_vector(
         let x_ptr = (x_ptr as *const f32).add(m * idx);
         let y_ptr = (y_ptr as *mut f32).add(n * idx);
 
-        for i in 0..n {
-            *y_ptr.add(i) = 0.0;
-        }
-
-        for i in 0..m {
-            let x = *x_ptr.add(i);
-            let a = a_ptr.add(n * i);
-            for j in 0..n {
-                *y_ptr.add(j) += *a.add(j) * x;
+        for j in 0..n {
+            let mut y = 0.0;
+            let a = a_ptr.add(j);
+            for i in 0..m {
+                y += *a.add(n * i) * *x_ptr.add(i);
             }
+
+            *y_ptr.add(j) = y;
         }
     });
 }
