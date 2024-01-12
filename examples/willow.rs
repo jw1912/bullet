@@ -3,7 +3,7 @@ This shows how to define your own input type, note that I plan to rework
 this in the near future to make it more flexible.
 */
 
-use bulletformat::ChessBoard;
+use bulletformat::{ChessBoard, chess::BoardIter};
 use bullet::{
     inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
@@ -12,6 +12,7 @@ use bullet::{
 pub struct ChessBucketsWillow;
 impl inputs::InputType for ChessBucketsWillow {
     type RequiredDataType = ChessBoard;
+    type FeatureIter = WillowIter;
 
     // The number of inputs per bucket.
     fn inputs(&self) -> usize {
@@ -23,28 +24,42 @@ impl inputs::InputType for ChessBucketsWillow {
         4
     }
 
-    // By default the `ChessBoard` type yields `(u8, u8, u8, u8)`
-    // as an iterator, I plan to change it so you can implement
-    // a custom iterator instead, if you, say, need to collect the
-    // whole board into bitboards before extracting features.
-    fn get_feature_indices(
-        &self,
-        (piece, square, our_ksq, opp_ksq): (u8, u8, u8, u8),
-    ) -> (usize, usize) {
-        let c = usize::from(piece & 8 > 0);
-        let pc = 64 * usize::from(piece & 7);
-        let sq = usize::from(square);
+    fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
+        WillowIter {
+            kingsides: [
+                usize::from(pos.our_ksq() & 7 > 3),
+                usize::from(pos.opp_ksq() & 7 > 3),
+            ],
+            board_iter: pos.into_iter(),
+        }
+    }
+}
 
-        let wks = usize::from(our_ksq & 7 > 3);
-        let bks = usize::from(opp_ksq & 7 > 3);
+pub struct WillowIter {
+    kingsides: [usize; 2],
+    board_iter: BoardIter,
+}
 
-        let wbucket = 2 * wks + bks;
-        let bbucket = 2 * bks + wks;
+impl Iterator for WillowIter {
+    type Item = (usize, usize);
 
-        let wfeat = 768 * wbucket + [0, 384][c] + pc + sq;
-        let bfeat = 768 * bbucket + [384, 0][c] + pc + (sq ^ 56);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.board_iter.next().map(|(piece, square)| {
+            let c = usize::from(piece & 8 > 0);
+            let pc = 64 * usize::from(piece & 7);
+            let sq = usize::from(square);
 
-        (wfeat, bfeat)
+            let wks = self.kingsides[0];
+            let bks = self.kingsides[1];
+
+            let wbucket = 2 * wks + bks;
+            let bbucket = 2 * bks + wks;
+
+            let wfeat = 768 * wbucket + [0, 384][c] + pc + sq;
+            let bfeat = 768 * bbucket + [384, 0][c] + pc + (sq ^ 56);
+
+            (wfeat, bfeat)
+        })
     }
 }
 
