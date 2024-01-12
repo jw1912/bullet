@@ -1,6 +1,6 @@
 use bullet_core::Feat;
 
-use crate::DeviceHandles;
+use crate::{DeviceHandles, util};
 
 pub unsafe fn sparse_affine_forward(
     handle: DeviceHandles,
@@ -72,8 +72,8 @@ pub unsafe fn sparse_affine_backward(
     let mut biases_grads = vec![0; handle.threads];
 
     for (w, b) in weights_grads.iter_mut().zip(biases_grads.iter_mut()) {
-        *w = crate::util::calloc::<f32>(weights_size) as usize;
-        *b = crate::util::calloc::<f32>(output_size) as usize;
+        *w = util::calloc::<f32>(weights_size) as usize;
+        *b = util::calloc::<f32>(output_size) as usize;
     }
 
     handle.split_workload(batch_size, |thread, idx| {
@@ -129,8 +129,8 @@ pub unsafe fn sparse_affine_backward(
 
     for (&w, &b) in weights_grads.iter().zip(biases_grads.iter()) {
         unsafe {
-            crate::util::free(w as *mut f32, weights_size);
-            crate::util::free(b as *mut f32, output_size);
+            util::free(w as *mut f32, weights_size);
+            util::free(b as *mut f32, output_size);
         }
     }
 }
