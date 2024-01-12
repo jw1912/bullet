@@ -72,8 +72,7 @@ where
                             let mut j = 0;
                             let offset = max_features * i;
 
-                            for feat in pos.into_iter() {
-                                let (our, opp) = inp.get_feature_indices(feat);
+                            for (our, opp) in inp.feature_iter(pos) {
                                 input_chunk[offset + j] = Feat::new(our as u16, opp as u16);
                                 j += 1;
                             }
