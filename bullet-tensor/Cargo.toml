@@ -7,6 +7,7 @@ authors.workspace = true
 
 [features]
 cuda = ["bullet-cuda"]
+blas = ["bullet-cpu/blas"]
 
 [dependencies]
 bullet-core = { path = "../bullet-core" }

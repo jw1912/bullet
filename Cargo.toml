@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "bullet-backends/blas",
     "bullet-backends/cpu",
     "bullet-backends/cuda",
     "bullet-core",
@@ -24,6 +25,7 @@ bulletformat = "0.1.0"
 
 [features]
 cuda = ["bullet-tensor/cuda"]
+blas = ["bullet-tensor/blas"]
 
 [dependencies]
 bulletformat = { workspace = true }
