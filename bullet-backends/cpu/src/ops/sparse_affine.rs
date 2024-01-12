@@ -115,15 +115,22 @@ pub unsafe fn sparse_affine_backward(
         }
     });
 
-    for w in weights_grads {
+    for &w in weights_grads.iter() {
         for i in 0..weights_size {
             *weights_grad.add(i) += *(w as *const f32).add(i);
         }
     }
 
-    for b in biases_grads {
+    for &b in biases_grads.iter() {
         for i in 0..output_size {
             *biases_grad.add(i) += *(b as *const f32).add(i);
+        }
+    }
+
+    for (&w, &b) in weights_grads.iter().zip(biases_grads.iter()) {
+        unsafe {
+            crate::util::free(w as *mut f32, weights_size);
+            crate::util::free(b as *mut f32, output_size);
         }
     }
 }
