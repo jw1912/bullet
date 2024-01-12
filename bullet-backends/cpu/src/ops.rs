@@ -6,7 +6,7 @@ mod sparse_affine;
 mod splat_add;
 mod update;
 
-use crate::DeviceHandles;
+use crate::{DeviceHandles, util};
 
 pub use bufops::*;
 pub use backprops::*;
@@ -87,25 +87,40 @@ pub unsafe fn reduce_add_mul_vector_vectort(
     a_ptr: *mut f32,
     batch_size: usize,
 ) {
-    let a_ptr = a_ptr as usize;
+    let size = m * n;
     let x_ptr = x_ptr as usize;
     let y_ptr = y_ptr as usize;
 
-    handle.split_workload(m * n, |_, idx| {
-        let j = idx / n;
-        let i = idx - j * n;
+    let mut a_ptrs = vec![0; handle.threads];
+    for a in a_ptrs.iter_mut() {
+        *a = util::calloc::<f32>(size) as usize;
+    }
 
-        let y_ptr = (y_ptr as *const f32).add(i);
-        let x_ptr = (x_ptr as *const f32).add(j);
+    handle.split_workload(batch_size, |thread, idx| {
+        let a = a_ptrs[thread] as *mut f32;
+        let x = (x_ptr as *const f32).add(idx * m);
+        let y = (y_ptr as *const f32).add(idx * n);
 
-        let mut a = 0.0;
-
-        for k in 0..batch_size {
-            a += *y_ptr.add(n * k) * *x_ptr.add(m * k);
+        for i in 0..m {
+            let col = a.add(i * n);
+            let xi = *x.add(i);
+            for j in 0..n {
+                *col.add(j) += xi * *y.add(j);
+            }
         }
-
-        *(a_ptr as *mut f32).add(idx) = a;
     });
+
+    for &a in a_ptrs.iter() {
+        for i in 0..size {
+            *a_ptr.add(i) += *(a as *const f32).add(i);
+        }
+    }
+
+    for &a in a_ptrs.iter() {
+        unsafe {
+            util::free(a as *mut f32, size);
+        }
+    }
 }
 
 pub unsafe fn reduce_add(
