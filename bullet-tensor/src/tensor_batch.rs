@@ -195,9 +195,7 @@ impl TensorBatch {
         biases: &Tensor,
         outputs: &TensorBatch,
     ) {
-        let t = std::time::Instant::now();
         TensorBatch::splat_mul_matrix_vector(handle, batch_size, weights, inputs, outputs);
-        println!("splat_mul_matrix_vector {}", t.elapsed().as_micros());
         TensorBatch::splat_add(handle, batch_size, biases, outputs);
     }
 
@@ -214,7 +212,6 @@ impl TensorBatch {
         weights_grad: &Tensor,
         biases_grad: &Tensor,
     ) {
-        let t = std::time::Instant::now();
         TensorBatch::reduce_add_mul_vector_vectort(
             handle,
             batch_size,
@@ -222,11 +219,8 @@ impl TensorBatch {
             inputs,
             weights_grad,
         );
-        println!("reduce_add_mul_vector_vectort {}", t.elapsed().as_micros());
         TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
-        let t = std::time::Instant::now();
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
-        println!("splat_mul_matrixt_vector {}", t.elapsed().as_micros());
     }
 
     pub fn activate_dual(
