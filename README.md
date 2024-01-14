@@ -19,7 +19,10 @@ Also used by a number of other engines, including:
 
 Used exclusively to train architectures of the form `(SparseInput -> N)x2 -> MoreHiddenLayers -> 1`.
 
-If you need to train on CPU, you can use the [legacy branch](https://github.com/jw1912/bullet/tree/legacy).
+Whilst CPU training is supported, its support is second class and the trainer is not
+optimised for it, if you only need to train a network with a single hidden layer, it
+is strongly recommended to use the [legacy branch](https://github.com/jw1912/bullet/tree/legacy),
+as it will be much faster.
 
 ### Currently Supported Games:
 - Chess
@@ -40,9 +43,8 @@ trained an NNUE before it is recommended to start with an architecture and train
 
 ### Currently Supported Backends:
 #### Default
-CPU backend **not intended for serious training use** (use BLAS instead for CPU training), it is currently mostly unoptimised,
-and is suitable for training small networks or various utilities, such as loading nets to requantise them
-or test their output on specific positions.
+CPU backend **not intended for serious training use**. It is suitable for training small networks or various utilities,
+such as loading nets to requantise them or test their output on specific positions.
 
 #### CUDA
 The "first class" supported backend, to compile to target CUDA you need to enable the `cuda` feature,
@@ -57,9 +59,10 @@ cargo r -r --example <example name> --features cuda
 if using one of the examples.
 
 #### BLAS
+A minor speedup for CPU training.
 Use as above but replace `cuda` with `blas`. This requires setting the `BULLET_BLAS_PATH` environment variable,
-also make sure that your BLAS library file is called `libopenblas.lib`, not `openblas.lib`. Currently tested on
-windows with [OpenBLAS precompiled packages](https://github.com/OpenMathLib/OpenBLAS/releases).
+also make sure that your BLAS library file is called `libopenblas.lib`. Currently tested on
+Windows with [OpenBLAS precompiled packages](https://github.com/OpenMathLib/OpenBLAS/releases).
 
 ### Saved Networks
 
