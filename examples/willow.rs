@@ -14,6 +14,10 @@ impl inputs::InputType for ChessBucketsWillow {
     type RequiredDataType = ChessBoard;
     type FeatureIter = WillowIter;
 
+    fn max_active_inputs(&self) -> usize {
+        32
+    }
+
     // The number of inputs per bucket.
     fn inputs(&self) -> usize {
         768

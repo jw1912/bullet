@@ -8,6 +8,10 @@ impl InputType for Chess768 {
     type RequiredDataType = ChessBoard;
     type FeatureIter = Chess768Iter;
 
+    fn max_active_inputs(&self) -> usize {
+        32
+    }
+
     fn inputs(&self) -> usize {
         768
     }
