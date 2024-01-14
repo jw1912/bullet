@@ -52,7 +52,7 @@ where
 
     pub fn load(&mut self, data: &[I::RequiredDataType], threads: usize, blend: f32, rscale: f32) {
         let batch_size = data.len();
-        let max_features = I::RequiredDataType::MAX_FEATURES;
+        let max_features = self.input_getter.max_active_inputs();
         let chunk_size = (batch_size + threads - 1) / threads;
 
         self.inputs = vec![Feat { our: 0, opp: 0 }; max_features * batch_size];

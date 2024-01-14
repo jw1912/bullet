@@ -8,6 +8,10 @@ impl InputType for Ataxx147 {
     type RequiredDataType = AtaxxBoard;
     type FeatureIter = Ataxx147Iter;
 
+    fn max_active_inputs(&self) -> usize {
+        49
+    }
+
     fn inputs(&self) -> usize {
         147
     }

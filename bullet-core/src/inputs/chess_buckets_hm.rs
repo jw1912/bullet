@@ -42,6 +42,10 @@ impl InputType for ChessBucketsMirrored {
     type RequiredDataType = ChessBoard;
     type FeatureIter = ChessBucketsMirroredIter;
 
+    fn max_active_inputs(&self) -> usize {
+        32
+    }
+
     fn inputs(&self) -> usize {
         768
     }

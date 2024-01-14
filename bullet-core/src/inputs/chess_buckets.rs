@@ -41,6 +41,10 @@ impl InputType for ChessBuckets {
     type RequiredDataType = ChessBoard;
     type FeatureIter = ChessBucketsIter;
 
+    fn max_active_inputs(&self) -> usize {
+        32
+    }
+
     fn inputs(&self) -> usize {
         768
     }

@@ -3,7 +3,6 @@ use bullet_tensor::{
     device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
     Tensor, TensorBatch,
 };
-use bulletformat::BulletFormat;
 
 use crate::ansi;
 
@@ -492,6 +491,7 @@ impl<T: InputType> TrainerBuilder<T> {
 impl<T: InputType> TrainerBuilder<T> {
     pub fn build(self) -> Trainer<T> {
         let inp_getter_size = self.input_getter.size();
+        let max_active_inputs = self.input_getter.max_active_inputs();
 
         let ft_size = (inp_getter_size + 1) * self.ft_out_size;
         let net_size = self.size + ft_size;
@@ -601,7 +601,7 @@ impl<T: InputType> TrainerBuilder<T> {
             let inputs = SparseTensor::uninit(
                 batch_size,
                 inp_getter_size,
-                T::RequiredDataType::MAX_FEATURES,
+                max_active_inputs,
             );
 
             let results = TensorBatch::new(Shape::new(1, 1), batch_size);

@@ -14,6 +14,8 @@ pub trait InputType: Send + Sync + Copy + Default {
     type RequiredDataType: BulletFormat + Copy + Send + Sync;
     type FeatureIter: Iterator<Item = (usize, usize)>;
 
+    fn max_active_inputs(&self) -> usize;
+
     fn inputs(&self) -> usize;
 
     fn buckets(&self) -> usize;
