@@ -11,6 +11,7 @@ struct FeatureTransformer {
     biases: Tensor,
     weights_grad: Tensor,
     biases_grad: Tensor,
+    single_perspective: bool,
     outputs: TensorBatch,
 }
 
@@ -288,13 +289,23 @@ impl<T: InputType> Trainer<T> {
     unsafe fn forward(&self) {
         let batch_size = self.inputs.used();
 
-        SparseTensor::affine(
-            self.handle,
-            &self.ft.weights,
-            &self.inputs,
-            &self.ft.biases,
-            &self.ft.outputs,
-        );
+        if self.ft.single_perspective {
+            SparseTensor::single_affine(
+                self.handle,
+                &self.ft.weights,
+                &self.inputs,
+                &self.ft.biases,
+                &self.ft.outputs,
+            );
+        } else {
+            SparseTensor::affine(
+                self.handle,
+                &self.ft.weights,
+                &self.inputs,
+                &self.ft.biases,
+                &self.ft.outputs,
+            );
+        }
 
         let mut inputs = &self.ft.outputs;
 
@@ -358,13 +369,23 @@ impl<T: InputType> Trainer<T> {
 
         backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs);
 
-        SparseTensor::affine_backprop(
-            self.handle,
-            &self.ft.weights_grad,
-            &self.inputs,
-            &self.ft.biases_grad,
-            &self.ft.outputs,
-        );
+        if self.ft.single_perspective {
+            SparseTensor::single_affine_backprop(
+                self.handle,
+                &self.ft.weights_grad,
+                &self.inputs,
+                &self.ft.biases_grad,
+                &self.ft.outputs,
+            );
+        } else {
+            SparseTensor::affine_backprop(
+                self.handle,
+                &self.ft.weights_grad,
+                &self.inputs,
+                &self.ft.biases_grad,
+                &self.ft.outputs,
+            );
+        }
     }
 }
 
@@ -412,6 +433,7 @@ pub struct TrainerBuilder<T> {
     ft_out_size: usize,
     nodes: Vec<NodeType>,
     quantisations: Vec<i32>,
+    single_perspective: bool,
     size: usize,
     scale: f32,
 }
@@ -424,6 +446,7 @@ impl<T: InputType> Default for TrainerBuilder<T> {
             ft_out_size: 0,
             nodes: Vec::new(),
             quantisations: Vec::new(),
+            single_perspective: false,
             size: 0,
             scale: 400.0,
         }
@@ -435,8 +458,13 @@ impl<T: InputType> TrainerBuilder<T> {
         if let Some(node) = self.nodes.last() {
             node.size
         } else {
-            2 * self.ft_out_size
+            self.ft_out_size * if self.single_perspective {1} else {2}
         }
+    }
+
+    pub fn single_perspective(mut self) -> Self {
+        self.single_perspective = true;
+        self
     }
 
     pub fn set_input(mut self, input_getter: T) -> Self {
@@ -498,6 +526,7 @@ impl<T: InputType> TrainerBuilder<T> {
 
         let opt = Optimiser::new(net_size);
         let batch_size = self.batch_size;
+        let mul = if self.single_perspective {1} else {2};
 
         unsafe {
             let ftw_shape = Shape::new(self.ft_out_size, inp_getter_size);
@@ -508,7 +537,8 @@ impl<T: InputType> TrainerBuilder<T> {
                 biases: Tensor::uninit(ftb_shape),
                 weights_grad: Tensor::uninit(ftw_shape),
                 biases_grad: Tensor::uninit(ftb_shape),
-                outputs: TensorBatch::new(Shape::new(1, 2 * self.ft_out_size), batch_size),
+                single_perspective: self.single_perspective,
+                outputs: TensorBatch::new(Shape::new(1, mul * self.ft_out_size), batch_size),
             };
 
             let mut offset = 0;
@@ -521,7 +551,7 @@ impl<T: InputType> TrainerBuilder<T> {
             offset += self.ft_out_size;
 
             let mut nodes = Vec::new();
-            let mut inp_size = 2 * self.ft_out_size;
+            let mut inp_size = mul * self.ft_out_size;
 
             let mut quantiser = Vec::new();
             let mut qi = 0;
