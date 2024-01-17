@@ -654,8 +654,8 @@ impl<T: InputType> TrainerBuilder<T> {
             let mut net = vec![0.0; net_size];
             let mut rng = Rand::default();
 
-            for val in net.iter_mut() {
-                *val = rng.rand(0.01);
+            for (i, val) in net.iter_mut().enumerate() {
+                *val = rng.rand(if i < ft_size {0.01} else {0.1});
             }
 
             opt.load_weights_from_host(&net);

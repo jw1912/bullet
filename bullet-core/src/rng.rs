@@ -20,6 +20,6 @@ impl Rand {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 17;
         self.0 ^= self.0 << 5;
-        ((1. - f64::from(self.0) / f64::from(u32::MAX)) * max) as f32
+        ((0.5 - f64::from(self.0) / f64::from(u32::MAX)) * max * 2.0) as f32
     }
 }
