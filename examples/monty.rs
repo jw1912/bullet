@@ -22,15 +22,15 @@ fn main() {
     let schedule = TrainingSchedule {
         net_id: "monty-17.01.24".to_string(),
         start_epoch: 1,
-        end_epoch: 12,
+        end_epoch: 5,
         wdl_scheduler: WdlScheduler::Linear {
             start: 0.0,
             end: 0.3,
         },
         lr_scheduler: LrScheduler::Step {
             start: 0.001,
-            gamma: 0.2,
-            step: 4,
+            gamma: 0.1,
+            step: 3,
         },
         save_rate: 1,
     };
