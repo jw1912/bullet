@@ -43,6 +43,26 @@ extern "C" {
         errors: *const f32,
     );
 
+    pub fn singleSparseAffineForward(
+        batchSize: usize,
+        maxInputSize: usize,
+        outputSize: usize,
+        weights: *const f32,
+        biases: *const f32,
+        inputs: *const Feat,
+        outputs: *mut f32,
+    );
+
+    pub fn singleSparseAffineBackward(
+        batchSize: usize,
+        maxInputSize: usize,
+        outputSize: usize,
+        weightsGrad: *mut f32,
+        biasesGrad: *mut f32,
+        inputs: *const Feat,
+        errors: *const f32,
+    );
+
     pub fn activateReLU(size: usize, inp: *const f32, out: *mut f32);
 
     pub fn activateCReLU(size: usize, inp: *const f32, out: *mut f32);
