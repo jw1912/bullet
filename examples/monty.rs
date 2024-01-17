@@ -7,12 +7,15 @@ use bullet::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
+        .single_perspective()
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_input(inputs::ChessBucketsMirrored::new([0; 32]))
         .ft(256)
         .activate(Activation::SCReLU)
-        .add_layer(64)
+        .add_layer(32)
+        .activate(Activation::CReLU)
+        .add_layer(32)
         .activate(Activation::CReLU)
         .add_layer(1)
         .build();

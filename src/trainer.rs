@@ -58,11 +58,22 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inp_size = self.input_getter.inputs();
         let buckets = self.input_getter.buckets();
-        write!(f, "({inp_size}")?;
+
+        if !self.ft.single_perspective {
+            write!(f, "(")?;
+        }
+        write!(f, "{inp_size}")?;
+
         if buckets > 1 {
             write!(f, "x{buckets}")?;
         }
-        write!(f, " -> {})x2", self.nodes[0].outputs.shape().rows() / 2)?;
+
+        if !self.ft.single_perspective {
+            write!(f, " -> {})x2", self.nodes[0].outputs.shape().rows() / 2)?;
+        } else {
+            write!(f, " -> {}", self.nodes[0].outputs.shape().rows())?;
+        }
+
         for (i, node) in self.nodes.iter().enumerate() {
             match node.op {
                 Operation::DualActivate => continue,
@@ -463,6 +474,9 @@ impl<T: InputType> TrainerBuilder<T> {
     }
 
     pub fn single_perspective(mut self) -> Self {
+        if !self.nodes.is_empty() {
+            panic!("You need to set 'single_perspective' before adding any layers!");
+        }
         self.single_perspective = true;
         self
     }

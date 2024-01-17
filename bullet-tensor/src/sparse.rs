@@ -136,7 +136,7 @@ impl SparseTensor {
     ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
-        let output_dim = outputs.element_size() / 2;
+        let output_dim = outputs.element_size();
 
         assert_eq!(weights.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases.shape(), Shape::new(1, output_dim));
@@ -164,7 +164,7 @@ impl SparseTensor {
     ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
-        let output_dim = errors.element_size() / 2;
+        let output_dim = errors.element_size();
 
         assert_eq!(weights_grad.shape(), Shape::new(output_dim, input_dim));
         assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
