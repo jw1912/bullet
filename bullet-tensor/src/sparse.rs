@@ -124,4 +124,61 @@ impl SparseTensor {
             errors.ptr(),
         );
     }
+
+    /// # Safety
+    /// `weights`, `biases` and `inputs` must be initialised properly.
+    pub unsafe fn single_affine(
+        handle: DeviceHandles,
+        weights: &Tensor,
+        inputs: &SparseTensor,
+        biases: &Tensor,
+        outputs: &TensorBatch,
+    ) {
+        assert!(inputs.used > 0);
+        let input_dim = inputs.input_dim;
+        let output_dim = outputs.element_size() / 2;
+
+        assert_eq!(weights.shape(), Shape::new(output_dim, input_dim));
+        assert_eq!(biases.shape(), Shape::new(1, output_dim));
+
+        ops::single_sparse_affine_forward(
+            handle,
+            inputs.used,
+            inputs.max_num_inputs,
+            output_dim,
+            weights.ptr(),
+            biases.ptr(),
+            inputs.ptr,
+            outputs.ptr(),
+        );
+    }
+
+    /// # Safety
+    /// `weights`, `biases` and `errors` must be initialised properly.
+    pub unsafe fn single_affine_backprop(
+        handle: DeviceHandles,
+        weights_grad: &Tensor,
+        inputs: &SparseTensor,
+        biases_grad: &Tensor,
+        errors: &TensorBatch,
+    ) {
+        assert!(inputs.used > 0);
+        let input_dim = inputs.input_dim;
+        let output_dim = errors.element_size() / 2;
+
+        assert_eq!(weights_grad.shape(), Shape::new(output_dim, input_dim));
+        assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
+
+        ops::single_sparse_affine_backward(
+            handle,
+            inputs.used,
+            inputs.max_num_inputs,
+            input_dim,
+            output_dim,
+            weights_grad.ptr(),
+            biases_grad.ptr(),
+            inputs.ptr,
+            errors.ptr(),
+        );
+    }
 }

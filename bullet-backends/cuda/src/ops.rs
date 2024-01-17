@@ -225,6 +225,49 @@ pub unsafe fn sparse_affine_forward(
     );
 }
 
+pub unsafe fn single_sparse_affine_backward(
+    _: DeviceHandles,
+    batch_size: usize,
+    max_input_size: usize,
+    _: usize,
+    output_size: usize,
+    weights_grad: *mut f32,
+    biases_grad: *mut f32,
+    inputs: *const Feat,
+    errors: *const f32,
+) {
+    bindings::singleSparseAffineBackward(
+        batch_size,
+        max_input_size,
+        output_size,
+        weights_grad,
+        biases_grad,
+        inputs,
+        errors,
+    );
+}
+
+pub unsafe fn single_sparse_affine_forward(
+    _: DeviceHandles,
+    batch_size: usize,
+    max_input_size: usize,
+    output_size: usize,
+    weights: *const f32,
+    biases: *const f32,
+    inputs: *const Feat,
+    outputs: *mut f32,
+) {
+    bindings::singleSparseAffineForward(
+        batch_size,
+        max_input_size,
+        output_size,
+        weights,
+        biases,
+        inputs,
+        outputs,
+    );
+}
+
 pub unsafe fn splat_add(
     _: DeviceHandles,
     batch_size: usize,
