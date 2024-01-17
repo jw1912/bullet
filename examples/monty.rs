@@ -10,27 +10,22 @@ fn main() {
         .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_input(inputs::ChessBucketsMirrored::new([0; 32]))
-        .ft(1024)
+        .ft(256)
         .activate(Activation::SCReLU)
         .add_layer(64)
         .activate(Activation::CReLU)
-        .add_layer(32)
-        .activate(Activation::ReLU)
         .add_layer(1)
         .build();
 
     let schedule = TrainingSchedule {
         net_id: "monty-17.01.24".to_string(),
         start_epoch: 1,
-        end_epoch: 12,
-        wdl_scheduler: WdlScheduler::Linear {
-            start: 0.0,
-            end: 0.3,
-        },
+        end_epoch: 5,
+        wdl_scheduler: WdlScheduler::Constant { value: 1.0 },
         lr_scheduler: LrScheduler::Step {
             start: 0.001,
             gamma: 0.1,
-            step: 6,
+            step: 3,
         },
         save_rate: 1,
     };
