@@ -10,7 +10,7 @@ pub use chess_buckets_hm::ChessBucketsMirrored;
 pub use chess_buckets::ChessBuckets;
 pub use chess768::Chess768;
 
-pub trait InputType: Send + Sync + Copy + Default {
+pub trait InputType: Send + Sync + Copy + Default + 'static {
     type RequiredDataType: BulletFormat + Copy + Send + Sync;
     type FeatureIter: Iterator<Item = (usize, usize)>;
 

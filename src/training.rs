@@ -2,11 +2,10 @@ use crate::{Trainer, TrainingSchedule, LocalSettings};
 
 use bullet_core::{inputs::InputType, GpuDataLoader};
 use bullet_tensor::{device_name, device_synchronise};
-use bulletformat::DataLoader;
 use std::{
-    io::{stdout, Write},
-    sync::atomic::{AtomicBool, Ordering::SeqCst},
-    time::Instant,
+    io::{stdout, Write, BufReader, BufRead},
+    sync::{atomic::{AtomicBool, Ordering::SeqCst}, mpsc::sync_channel},
+    time::Instant, fs::File,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -53,9 +52,7 @@ pub fn run<T: InputType>(
 
     let timer = Instant::now();
 
-    let mut gpu_loader = GpuDataLoader::<T>::new(trainer.input_getter());
     trainer.set_threads(threads);
-
     device_synchronise();
 
     let mut prev_lr = schedule.lr(schedule.start_epoch);
@@ -63,7 +60,8 @@ pub fn run<T: InputType>(
     for epoch in schedule.start_epoch..=schedule.end_epoch {
         trainer.set_error_zero();
         let epoch_timer = Instant::now();
-        let loader = DataLoader::new(file, 1_024).unwrap();
+        let buffer_size_mb = 1024;
+        let buffer_size = buffer_size_mb * 1024 * 1024;
         let blend = schedule.wdl(epoch);
         let lrate = schedule.lr(epoch);
 
@@ -75,18 +73,42 @@ pub fn run<T: InputType>(
 
         let mut finished = 0;
 
-        loader.map_batches_threaded_loading(batch_size, |batch| {
-            let batch_size = batch.len();
+        let data_size: usize = std::mem::size_of::<T::RequiredDataType>();
+        let batches_per_load = buffer_size / data_size / batch_size;
+        let cap = data_size * batch_size * batches_per_load;
+        let loader_file = File::open(file).unwrap();
 
+        let (sender, reciever) = sync_channel::<GpuDataLoader<T>>(2);
+        let x = trainer.input_getter();
+
+        let dataloader = std::thread::spawn(move || {
+            let mut file = BufReader::with_capacity(cap, loader_file);
+            while let Ok(buf) = file.fill_buf() {
+                if buf.is_empty() {
+                    break;
+                }
+
+                let data: &[T::RequiredDataType] = bullet_core::util::to_slice_with_lifetime(buf);
+
+                for batch in data.chunks(batch_size) {
+                    let mut gpu_loader = GpuDataLoader::<T>::new(x);
+                    gpu_loader.load(batch, threads, blend, rscale);
+                    sender.send(gpu_loader).unwrap();
+                }
+
+                let consumed = buf.len();
+                file.consume(consumed);
+            }
+        });
+
+        while let Ok(gpu_loader) = reciever.recv() {
             trainer.clear_data();
             device_synchronise();
 
-            gpu_loader.load(batch, threads, blend, rscale);
             trainer.load_data(&gpu_loader);
             device_synchronise();
 
             trainer.train_on_batch(0.01, lrate);
-
             device_synchronise();
 
             if finished % 128 == 0 {
@@ -94,7 +116,9 @@ pub fn run<T: InputType>(
             }
 
             finished += 1;
-        });
+        }
+
+        dataloader.join().unwrap();
 
         let error = trainer.error() / batches as f32;
 
