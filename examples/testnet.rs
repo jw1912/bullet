@@ -7,7 +7,6 @@ use bullet::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_quantisations(&[181, 64])
         .set_input(inputs::Chess768)
@@ -16,6 +15,7 @@ fn main() {
         .add_layer(1)
         .build();
 
+    trainer.set_batch_size(8192);
     trainer.load_from_checkpoint("checkpoints/testnet");
 
     let schedule = TrainingSchedule {

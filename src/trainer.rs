@@ -209,6 +209,22 @@ impl<T: InputType> Trainer<T> {
         self.optimiser.load_from_cpu(&network, &momentum, &velocity)
     }
 
+    pub fn set_batch_size(&mut self, batch_size: usize) {
+        let inp_dim = self.input_getter.size();
+        let max_active_inputs = self.input_getter.max_active_inputs();
+
+        unsafe {
+            self.inputs = SparseTensor::uninit(batch_size, inp_dim, max_active_inputs);
+        }
+
+        self.results = TensorBatch::new(self.results.shape(), batch_size);
+        self.ft.outputs = TensorBatch::new(self.ft.outputs.shape(), batch_size);
+
+        for node in &mut self.nodes {
+            node.outputs = TensorBatch::new(node.outputs.shape(), batch_size);
+        }
+    }
+
     pub fn error(&self) -> f32 {
         self.error
     }
@@ -440,7 +456,6 @@ struct NodeType {
 
 pub struct TrainerBuilder<T> {
     input_getter: T,
-    batch_size: usize,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
     quantisations: Vec<i32>,
@@ -453,7 +468,6 @@ impl<T: InputType> Default for TrainerBuilder<T> {
     fn default() -> Self {
         Self {
             input_getter: T::default(),
-            batch_size: 0,
             ft_out_size: 0,
             nodes: Vec::new(),
             quantisations: Vec::new(),
@@ -483,11 +497,6 @@ impl<T: InputType> TrainerBuilder<T> {
 
     pub fn set_input(mut self, input_getter: T) -> Self {
         self.input_getter = input_getter;
-        self
-    }
-
-    pub fn set_batch_size(mut self, batch_size: usize) -> Self {
-        self.batch_size = batch_size;
         self
     }
 
@@ -539,7 +548,7 @@ impl<T: InputType> TrainerBuilder<T> {
         let net_size = self.size + ft_size;
 
         let opt = Optimiser::new(net_size);
-        let batch_size = self.batch_size;
+        let batch_size = 1;
         let mul = if self.single_perspective {1} else {2};
 
         unsafe {

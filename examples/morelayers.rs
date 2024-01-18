@@ -10,7 +10,6 @@ use bullet::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_batch_size(16_384)
         .set_eval_scale(400.0)
         .set_input(inputs::Chess768)
         .ft(768)

@@ -16,7 +16,6 @@ const QB: i32 = 64;
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_batch_size(16_384)
         .set_eval_scale(SCALE as f32)
         .set_quantisations(&[QA, QB])
         .set_input(inputs::Chess768)
