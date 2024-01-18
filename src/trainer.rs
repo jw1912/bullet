@@ -4,8 +4,6 @@ use bullet_tensor::{
     Tensor, TensorBatch,
 };
 
-use crate::ansi;
-
 struct FeatureTransformer {
     weights: Tensor,
     biases: Tensor,
@@ -50,7 +48,6 @@ pub struct Trainer<T> {
     error_device: DeviceBuffer,
     error: f32,
     used: usize,
-    scale: f32,
     quantiser: Vec<QuantiseInfo>,
 }
 
@@ -94,12 +91,6 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 }
 
 impl<T: InputType> Trainer<T> {
-    pub fn display(&self) {
-        println!("Arch           : {}", ansi(format!("{self}"), 31));
-        println!("Batch Size     : {}", ansi(self.batch_size(), 31));
-        println!("Scale          : {}", ansi(format!("{:.0}", self.eval_scale()), 31));
-    }
-
     pub fn set_error_zero(&mut self) {
         self.error = 0.0;
     }
@@ -237,10 +228,6 @@ impl<T: InputType> Trainer<T> {
         self.optimiser.size()
     }
 
-    pub fn eval_scale(&self) -> f32 {
-        self.scale
-    }
-
     pub fn write_weights_to_cpu(&self, buf: &mut [f32]) {
         self.optimiser.write_weights_to_host(buf);
     }
@@ -266,14 +253,14 @@ impl<T: InputType> Trainer<T> {
         self.ft.outputs.cap()
     }
 
-    pub fn eval(&mut self, fen: &str)
+    pub fn eval(&mut self, fen: &str) -> f32
     where
         T::RequiredDataType: std::str::FromStr<Err = String>,
     {
         self.clear_data();
-        let board = fen.parse::<T::RequiredDataType>().unwrap();
+        let board = format!("{fen} | 0 | 0.0").parse::<T::RequiredDataType>().unwrap();
         let mut loader = GpuDataLoader::new(self.input_getter);
-        loader.load(&[board], 1, 0.0, self.scale);
+        loader.load(&[board], 1, 0.0, 1.0);
         self.load_data(&loader);
 
         unsafe {
@@ -284,10 +271,9 @@ impl<T: InputType> Trainer<T> {
 
         let mut eval = vec![0.0; self.batch_size()];
         self.nodes.last().unwrap().outputs.write_to_host(&mut eval);
-        println!("FEN: {fen}");
-        println!("EVAL: {}", self.scale * eval[0]);
 
         self.clear_data();
+        eval[0]
     }
 
     pub fn train_on_batch(&mut self, decay: f32, rate: f32) {
@@ -461,7 +447,6 @@ pub struct TrainerBuilder<T> {
     quantisations: Vec<i32>,
     single_perspective: bool,
     size: usize,
-    scale: f32,
 }
 
 impl<T: InputType> Default for TrainerBuilder<T> {
@@ -473,7 +458,6 @@ impl<T: InputType> Default for TrainerBuilder<T> {
             quantisations: Vec::new(),
             single_perspective: false,
             size: 0,
-            scale: 400.0,
         }
     }
 }
@@ -495,22 +479,17 @@ impl<T: InputType> TrainerBuilder<T> {
         self
     }
 
-    pub fn set_input(mut self, input_getter: T) -> Self {
+    pub fn input(mut self, input_getter: T) -> Self {
         self.input_getter = input_getter;
         self
     }
 
-    pub fn set_eval_scale(mut self, scale: f32) -> Self {
-        self.scale = scale;
-        self
-    }
-
-    pub fn set_quantisations(mut self, quants: &[i32]) -> Self {
+    pub fn quantisations(mut self, quants: &[i32]) -> Self {
         self.quantisations = quants.to_vec();
         self
     }
 
-    pub fn ft(mut self, size: usize) -> Self {
+    pub fn feature_transformer(mut self, size: usize) -> Self {
         assert!(self.nodes.is_empty());
         self.ft_out_size = size;
         self
@@ -680,7 +659,6 @@ impl<T: InputType> TrainerBuilder<T> {
                 error_device,
                 error: 0.0,
                 used: 0,
-                scale: self.scale,
                 quantiser,
             }
         }

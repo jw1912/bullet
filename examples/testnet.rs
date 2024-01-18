@@ -7,19 +7,19 @@ use bullet::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_eval_scale(400.0)
-        .set_quantisations(&[181, 64])
-        .set_input(inputs::Chess768)
-        .ft(32)
+        .quantisations(&[181, 64])
+        .input(inputs::Chess768)
+        .feature_transformer(32)
         .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
 
-    trainer.set_batch_size(8192);
     trainer.load_from_checkpoint("checkpoints/testnet");
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),
+        batch_size: 16_384,
+        eval_scale: 400.0,
         start_epoch: 1,
         end_epoch: 5,
         wdl_scheduler: WdlScheduler::Constant { value: 0.2 },

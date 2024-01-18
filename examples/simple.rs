@@ -16,16 +16,17 @@ const QB: i32 = 64;
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_eval_scale(SCALE as f32)
-        .set_quantisations(&[QA, QB])
-        .set_input(inputs::Chess768)
-        .ft(HIDDEN_SIZE)
+        .quantisations(&[QA, QB])
+        .input(inputs::Chess768)
+        .feature_transformer(HIDDEN_SIZE)
         .activate(Activation::CReLU)
         .add_layer(1)
         .build();
 
     let schedule = TrainingSchedule {
         net_id: "simple".to_string(),
+        batch_size: 16_384,
+        eval_scale: 400.0,
         start_epoch: 1,
         end_epoch: 30,
         wdl_scheduler: WdlScheduler::Constant { value: 0.75 },

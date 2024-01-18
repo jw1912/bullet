@@ -7,16 +7,17 @@ use bullet::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_eval_scale(400.0)
-        .set_quantisations(&[181, 64])
-        .set_input(inputs::ChessBucketsMirrored::new([0; 32]))
-        .ft(768)
+        .quantisations(&[181, 64])
+        .input(inputs::ChessBucketsMirrored::new([0; 32]))
+        .feature_transformer(768)
         .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
 
     let schedule = TrainingSchedule {
         net_id: "net-12.01.24".to_string(),
+        batch_size: 16_384,
+        eval_scale: 400.0,
         start_epoch: 1,
         end_epoch: 17,
         wdl_scheduler: WdlScheduler::Linear {
@@ -38,9 +39,16 @@ fn main() {
     };
 
     trainer.run(&schedule, &settings);
-    trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
-    trainer.eval("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 | 0 | 0.0");
-    trainer.eval("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 | 0 | 0.0");
-    trainer.eval("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 | 0 | 0.0");
-    trainer.eval("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1 | 0 | 0.0");
+
+    for fen in [
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1 | 0 | 0.0",
+    ] {
+        let eval = trainer.eval(fen);
+        println!("FEN: {fen}");
+        println!("EVAL: {}", 400.0 * eval);
+    }
 }
