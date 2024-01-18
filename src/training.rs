@@ -24,8 +24,10 @@ pub fn run<T: InputType>(
 
     device_synchronise();
 
+    trainer.set_batch_size(schedule.batch_size);
+
     let esc = esc();
-    let rscale = 1.0 / trainer.eval_scale();
+    let rscale = 1.0 / schedule.eval_scale;
     let file_size = std::fs::metadata(file).unwrap().len();
     let num = (file_size / 32) as usize;
     let batch_size = trainer.batch_size();
@@ -44,7 +46,7 @@ pub fn run<T: InputType>(
     print!("{esc}");
     println!("{}", ansi("Beginning Training", "34;1"));
     println!("Net Name       : {}", ansi(schedule.net_id.clone(), "32;1"));
-    trainer.display();
+    println!("Arch           : {}", ansi(format!("{trainer}"), 31));
     schedule.display();
     println!("Device         : {}", ansi(device_name(), 31));
     settings.display();

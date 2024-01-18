@@ -2,6 +2,8 @@ use crate::ansi;
 
 pub struct TrainingSchedule {
     pub net_id: String,
+    pub batch_size: usize,
+    pub eval_scale: f32,
     pub start_epoch: usize,
     pub end_epoch: usize,
     pub wdl_scheduler: WdlScheduler,
@@ -27,6 +29,8 @@ impl TrainingSchedule {
     }
 
     pub fn display(&self) {
+        println!("Batch Size     : {}", ansi(self.batch_size, 31));
+        println!("Scale          : {}", ansi(format!("{:.0}", self.eval_scale), 31));
         println!("Start Epoch    : {}", ansi(self.start_epoch, 31));
         println!("End Epoch      : {}", ansi(self.end_epoch, 31));
         println!("Save Rate      : {}", ansi(self.save_rate, 31));
