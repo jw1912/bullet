@@ -62,7 +62,7 @@ pub fn run<T: InputType>(
     for epoch in schedule.start_epoch..=schedule.end_epoch {
         trainer.set_error_zero();
         let epoch_timer = Instant::now();
-        let buffer_size_mb = 1024;
+        let buffer_size_mb = 256;
         let buffer_size = buffer_size_mb * 1024 * 1024;
         let blend = schedule.wdl(epoch);
         let lrate = schedule.lr(epoch);
@@ -80,7 +80,7 @@ pub fn run<T: InputType>(
         let cap = data_size * batch_size * batches_per_load;
         let loader_file = File::open(file).unwrap();
 
-        let (sender, reciever) = sync_channel::<GpuDataLoader<T>>(2);
+        let (sender, reciever) = sync_channel::<GpuDataLoader<T>>(512);
         let x = trainer.input_getter();
 
         let dataloader = std::thread::spawn(move || {
