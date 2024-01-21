@@ -34,7 +34,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_path: "../../data/akimbo3-9.data",
+        data_file_paths: vec!["../../data/akimbo3-9.data"],
         output_directory: "checkpoints",
     };
 

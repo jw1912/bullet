@@ -29,7 +29,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_path: "../../data/batch.data",
+        data_file_paths: vec!["../../data/batch.data"],
         output_directory: "checkpoints",
     };
 
