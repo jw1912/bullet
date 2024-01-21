@@ -15,10 +15,13 @@ pub fn run<T: InputType>(
     settings: &LocalSettings,
 ) {
     let LocalSettings {
-        threads,
-        data_file_path: file,
+        threads: _threads,
+        data_file_paths: _files,
         output_directory: out_dir,
-    } = *settings;
+    } = settings;
+
+    let threads = settings.threads.clone();
+    let files = settings.data_file_paths.clone();
 
     std::fs::create_dir(out_dir).unwrap_or(());
 
@@ -28,7 +31,11 @@ pub fn run<T: InputType>(
 
     let esc = esc();
     let rscale = 1.0 / schedule.eval_scale;
-    let file_size = std::fs::metadata(file).unwrap().len();
+    let mut file_size = 0;
+    for file in files.iter() {
+        file_size += std::fs::metadata(file).unwrap().len();
+    }
+    
     let num = (file_size / 32) as usize;
     let batch_size = trainer.batch_size();
     let batches = (num + batch_size - 1) / batch_size;
@@ -78,28 +85,33 @@ pub fn run<T: InputType>(
         let data_size: usize = std::mem::size_of::<T::RequiredDataType>();
         let batches_per_load = buffer_size / data_size / batch_size;
         let cap = data_size * batch_size * batches_per_load;
-        let loader_file = File::open(file).unwrap();
+        let mut loader_files = vec![];
+        for file in files.iter() {
+            loader_files.push(File::open(file).unwrap());
+        }
 
         let (sender, reciever) = sync_channel::<GpuDataLoader<T>>(512);
         let x = trainer.input_getter();
 
         let dataloader = std::thread::spawn(move || {
-            let mut file = BufReader::with_capacity(cap, loader_file);
-            while let Ok(buf) = file.fill_buf() {
-                if buf.is_empty() {
-                    break;
+            for loader_file in loader_files.iter() {
+                let mut file = BufReader::with_capacity(cap, loader_file);
+                while let Ok(buf) = file.fill_buf() {
+                    if buf.is_empty() {
+                        break;
+                    }
+
+                    let data: &[T::RequiredDataType] = bullet_core::util::to_slice_with_lifetime(buf);
+    
+                    for batch in data.chunks(batch_size) {
+                        let mut gpu_loader = GpuDataLoader::<T>::new(x);
+                        gpu_loader.load(batch, threads, blend, rscale);
+                        sender.send(gpu_loader).unwrap();
+                    }
+    
+                    let consumed = buf.len();
+                    file.consume(consumed);
                 }
-
-                let data: &[T::RequiredDataType] = bullet_core::util::to_slice_with_lifetime(buf);
-
-                for batch in data.chunks(batch_size) {
-                    let mut gpu_loader = GpuDataLoader::<T>::new(x);
-                    gpu_loader.load(batch, threads, blend, rscale);
-                    sender.send(gpu_loader).unwrap();
-                }
-
-                let consumed = buf.len();
-                file.consume(consumed);
             }
         });
 
