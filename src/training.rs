@@ -32,7 +32,7 @@ pub fn run<T: InputType>(
     let rscale = 1.0 / schedule.eval_scale;
     let mut file_size = 0;
     for file in data_file_paths.iter() {
-        file_size += std::fs::metadata(file).unwrap().len();
+        file_size += std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
     }
 
     let num = (file_size / 32) as usize;
@@ -86,7 +86,7 @@ pub fn run<T: InputType>(
         let cap = data_size * batch_size * batches_per_load;
         let mut loader_files = vec![];
         for file in data_file_paths.iter() {
-            loader_files.push(File::open(file).unwrap());
+            loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
         }
 
         let (sender, reciever) = sync_channel::<GpuDataLoader<T>>(512);

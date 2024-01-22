@@ -108,9 +108,12 @@ impl<T: InputType> Trainer<T> {
 
         std::fs::create_dir(path.as_str()).unwrap_or(());
 
-        util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false).unwrap();
-        util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false).unwrap();
-        util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false).unwrap();
+        util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false)
+            .unwrap_or_else(|_| panic!("Writing to [{path}/params.bin] failed!"));
+        util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false)
+            .unwrap_or_else(|_| panic!("Writing to [{path}/momentum.bin] failed!"));
+        util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false)
+            .unwrap_or_else(|_| panic!("Writing to [{path}/velocity.bin] failed!"));
 
         if !self.quantiser.is_empty() {
             self.save_quantised(&format!("{path}/{name}-epoch{epoch}.bin"));
@@ -150,13 +153,13 @@ impl<T: InputType> Trainer<T> {
             }
         }
 
-        util::write_to_bin(&qbuf, size, out_path, true).unwrap();
+        util::write_to_bin(&qbuf, size, out_path, true).unwrap_or_else(|_| panic!("Writing to [{out_path}] failed!"));
     }
 
     fn load_from_bin(&self, path: &str) -> Vec<f32> {
         use std::fs::File;
         use std::io::{BufReader, Read};
-        let file = File::open(path).unwrap();
+        let file = File::open(path).unwrap_or_else(|_| panic!("Invalid File Path: {path}"));
 
         assert_eq!(
             file.metadata().unwrap().len() as usize,
@@ -258,7 +261,7 @@ impl<T: InputType> Trainer<T> {
         T::RequiredDataType: std::str::FromStr<Err = String>,
     {
         self.clear_data();
-        let board = format!("{fen} | 0 | 0.0").parse::<T::RequiredDataType>().unwrap();
+        let board = format!("{fen} | 0 | 0.0").parse::<T::RequiredDataType>().expect("Failed to parse position!");
         let mut loader = GpuDataLoader::new(self.input_getter);
         loader.load(&[board], 1, 0.0, 1.0);
         self.load_data(&loader);
@@ -270,7 +273,7 @@ impl<T: InputType> Trainer<T> {
         bullet_tensor::panic_if_device_error("Something went wrong!");
 
         let mut eval = vec![0.0; self.batch_size()];
-        self.nodes.last().unwrap().outputs.write_to_host(&mut eval);
+        self.nodes.last().expect("Nodes is empty!").outputs.write_to_host(&mut eval);
 
         self.clear_data();
         eval[0]
@@ -353,7 +356,7 @@ impl<T: InputType> Trainer<T> {
     /// `self.forward`.
     unsafe fn calc_errors(&self) {
         let batch_size = self.inputs.used();
-        let output_layer = self.nodes.last().unwrap();
+        let output_layer = self.nodes.last().expect("Nodes is empty!");
 
         assert_eq!(self.results.shape(), output_layer.outputs.shape());
 
