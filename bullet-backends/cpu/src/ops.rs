@@ -208,3 +208,27 @@ pub unsafe fn backprop_dual(
 ) {
     unimplemented!();
 }
+
+pub unsafe fn select(
+    _: DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    buckets: *const u8,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!();
+}
+
+pub unsafe fn select_backprop(
+    _: DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    buckets: *const u8,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!();
+}

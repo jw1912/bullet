@@ -1,6 +1,6 @@
 use crate::{Trainer, TrainingSchedule, LocalSettings};
 
-use bullet_core::{inputs::InputType, GpuDataLoader};
+use bullet_core::{inputs::InputType, outputs::OutputBuckets, GpuDataLoader};
 use bullet_tensor::{device_name, device_synchronise};
 use std::{
     io::{stdout, Write, BufReader, BufRead},
@@ -9,8 +9,8 @@ use std::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub fn run<T: InputType>(
-    trainer: &mut Trainer<T>,
+pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
+    trainer: &mut Trainer<T, U>,
     schedule: &TrainingSchedule,
     settings: &LocalSettings,
 ) {
@@ -89,8 +89,9 @@ pub fn run<T: InputType>(
             loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
         }
 
-        let (sender, reciever) = sync_channel::<GpuDataLoader<T>>(512);
+        let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
         let x = trainer.input_getter();
+        let y = trainer.bucket_getter();
 
         let dataloader = std::thread::spawn(move || {
             for loader_file in loader_files.iter() {
@@ -103,7 +104,7 @@ pub fn run<T: InputType>(
                     let data: &[T::RequiredDataType] = bullet_core::util::to_slice_with_lifetime(buf);
 
                     for batch in data.chunks(batch_size) {
-                        let mut gpu_loader = GpuDataLoader::<T>::new(x);
+                        let mut gpu_loader = GpuDataLoader::<T, U>::new(x, y);
                         gpu_loader.load(batch, threads, blend, rscale);
                         sender.send(gpu_loader).unwrap();
                     }

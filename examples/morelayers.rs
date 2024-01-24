@@ -5,12 +5,13 @@ fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
 use bullet::{
-    inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .input(inputs::Chess768)
+        .output_buckets(outputs::Single)
         .feature_transformer(768)
         .activate(Activation::SCReLU)
         .add_layer(8)

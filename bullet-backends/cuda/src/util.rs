@@ -64,6 +64,12 @@ pub unsafe fn free(ptr: *mut f32, _: usize) {
     catch!(cudaFree(ptr.cast()));
 }
 
+/// # Safety
+/// Need to make sure not to double free.
+pub unsafe fn free_raw_bytes(ptr: *mut u8, _: usize) {
+    catch!(cudaFree(ptr.cast()));
+}
+
 pub fn calloc<T>(num: usize) -> *mut T {
     let size = num * std::mem::size_of::<T>();
     let grad = malloc(num);
