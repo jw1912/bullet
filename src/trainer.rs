@@ -1,4 +1,4 @@
-use bullet_core::{Activation, inputs::InputType, util, GpuDataLoader, Rand};
+use bullet_core::{Activation, inputs::InputType, outputs::OutputBuckets, util, GpuDataLoader, Rand};
 use bullet_tensor::{
     device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
     Tensor, TensorBatch,
@@ -24,6 +24,7 @@ struct Affine {
 enum Operation {
     Activate(Activation),
     Affine(Affine),
+    Select,
     DualActivate,
 }
 
@@ -37,8 +38,9 @@ struct QuantiseInfo {
     start: usize,
 }
 
-pub struct Trainer<T> {
+pub struct Trainer<T, U> {
     input_getter: T,
+    bucket_getter: U,
     handle: DeviceHandles,
     optimiser: Optimiser,
     ft: FeatureTransformer,
@@ -49,9 +51,10 @@ pub struct Trainer<T> {
     error: f32,
     used: usize,
     quantiser: Vec<QuantiseInfo>,
+    buckets: *mut u8,
 }
 
-impl<T: InputType> std::fmt::Display for Trainer<T> {
+impl<T: InputType, U> std::fmt::Display for Trainer<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inp_size = self.input_getter.inputs();
         let buckets = self.input_getter.buckets();
@@ -73,9 +76,8 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
 
         for (i, node) in self.nodes.iter().enumerate() {
             match node.op {
-                Operation::DualActivate => continue,
-                Operation::Activate(_) => continue,
                 Operation::Affine(_) => {}
+                _ => continue,
             }
 
             let rows = node.outputs.shape().rows();
@@ -90,7 +92,7 @@ impl<T: InputType> std::fmt::Display for Trainer<T> {
     }
 }
 
-impl<T: InputType> Trainer<T> {
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn set_error_zero(&mut self) {
         self.error = 0.0;
     }
@@ -204,6 +206,13 @@ impl<T: InputType> Trainer<T> {
     }
 
     pub fn set_batch_size(&mut self, batch_size: usize) {
+        if !self.buckets.is_null() {
+            unsafe {
+                bullet_tensor::util::free_raw_bytes(self.buckets, self.batch_size())
+            }
+        }
+        self.buckets = bullet_tensor::util::calloc(batch_size);
+
         let inp_dim = self.input_getter.size();
         let max_active_inputs = self.input_getter.max_active_inputs();
 
@@ -227,6 +236,10 @@ impl<T: InputType> Trainer<T> {
         self.input_getter
     }
 
+    pub fn bucket_getter(&self) -> U {
+        self.bucket_getter
+    }
+
     pub fn net_size(&self) -> usize {
         self.optimiser.size()
     }
@@ -240,14 +253,22 @@ impl<T: InputType> Trainer<T> {
         self.inputs.clear();
     }
 
-    pub fn load_data(&mut self, loader: &GpuDataLoader<T>) {
+    pub fn load_data(&mut self, loader: &GpuDataLoader<T, U>) {
         let inputs = loader.inputs();
         let results = loader.results();
+        let buckets = loader.buckets();
 
         unsafe {
             let our = std::slice::from_raw_parts(inputs.as_ptr().cast(), inputs.len());
             self.inputs.append(our);
             self.results.load_from_host(results);
+
+            if U::BUCKETS > 1 {
+                let ptr = buckets.as_ptr();
+                let amt = buckets.len();
+                bullet_tensor::util::copy_to_device(self.buckets, ptr, amt);
+            }
+
             self.used += results.len();
         }
     }
@@ -262,7 +283,7 @@ impl<T: InputType> Trainer<T> {
     {
         self.clear_data();
         let board = format!("{fen} | 0 | 0.0").parse::<T::RequiredDataType>().expect("Failed to parse position!");
-        let mut loader = GpuDataLoader::new(self.input_getter);
+        let mut loader = GpuDataLoader::new(self.input_getter, self.bucket_getter);
         loader.load(&[board], 1, 0.0, 1.0);
         self.load_data(&loader);
 
@@ -345,6 +366,15 @@ impl<T: InputType> Trainer<T> {
                 Operation::DualActivate => {
                     TensorBatch::activate_dual(self.handle, batch_size, inputs, &node.outputs)
                 }
+                Operation::Select => {
+                    TensorBatch::select(
+                        self.handle,
+                        batch_size,
+                        self.buckets,
+                        inputs,
+                        &node.outputs,
+                    )
+                }
             }
 
             inputs = &node.outputs;
@@ -380,10 +410,17 @@ impl<T: InputType> Trainer<T> {
                 batch_size,
                 &self.nodes[node],
                 &self.nodes[node - 1].outputs,
+                self.buckets,
             );
         }
 
-        backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs);
+        backprop_single(
+            self.handle,
+            batch_size,
+            &self.nodes[0],
+            &self.ft.outputs,
+            self.buckets,
+        );
 
         if self.ft.single_perspective {
             SparseTensor::single_affine_backprop(
@@ -405,11 +442,12 @@ impl<T: InputType> Trainer<T> {
     }
 }
 
-fn backprop_single(
+unsafe fn backprop_single(
     handle: DeviceHandles,
     batch_size: usize,
     this_node: &Node,
     inputs: &TensorBatch,
+    buckets: *const u8,
 ) {
     let errors = &this_node.outputs;
 
@@ -423,11 +461,14 @@ fn backprop_single(
             biases_grad: bg,
             ones,
             ..
-        }) => unsafe {
+        }) => {
             TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
         }
         Operation::DualActivate => {
             TensorBatch::backprop_dual(handle, batch_size, errors, inputs)
+        }
+        Operation::Select => {
+            TensorBatch::select_backprop(handle, batch_size, buckets, errors, inputs)
         }
     }
 }
@@ -443,8 +484,9 @@ struct NodeType {
     op: OpType,
 }
 
-pub struct TrainerBuilder<T> {
+pub struct TrainerBuilder<T, U> {
     input_getter: T,
+    bucket_getter: U,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
     quantisations: Vec<i32>,
@@ -452,10 +494,11 @@ pub struct TrainerBuilder<T> {
     size: usize,
 }
 
-impl<T: InputType> Default for TrainerBuilder<T> {
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Default for TrainerBuilder<T, U> {
     fn default() -> Self {
         Self {
             input_getter: T::default(),
+            bucket_getter: U::default(),
             ft_out_size: 0,
             nodes: Vec::new(),
             quantisations: Vec::new(),
@@ -465,7 +508,7 @@ impl<T: InputType> Default for TrainerBuilder<T> {
     }
 }
 
-impl<T: InputType> TrainerBuilder<T> {
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
     fn get_last_layer_size(&self) -> usize {
         if let Some(node) = self.nodes.last() {
             node.size
@@ -484,6 +527,11 @@ impl<T: InputType> TrainerBuilder<T> {
 
     pub fn input(mut self, input_getter: T) -> Self {
         self.input_getter = input_getter;
+        self
+    }
+
+    pub fn output_buckets(mut self, bucket_getter: U) -> Self {
+        self.bucket_getter = bucket_getter;
         self
     }
 
@@ -519,12 +567,12 @@ impl<T: InputType> TrainerBuilder<T> {
         let size = 2 * self.get_last_layer_size();
         self.add(size, OpType::DualActivate)
     }
-}
 
-impl<T: InputType> TrainerBuilder<T> {
-    pub fn build(self) -> Trainer<T> {
+    pub fn build(self) -> Trainer<T, U> {
         let inp_getter_size = self.input_getter.size();
         let max_active_inputs = self.input_getter.max_active_inputs();
+
+        let buckets = U::BUCKETS;
 
         let ft_size = (inp_getter_size + 1) * self.ft_out_size;
         let net_size = self.size + ft_size;
@@ -572,11 +620,13 @@ impl<T: InputType> TrainerBuilder<T> {
 
             for NodeType { size, op } in &self.nodes {
                 let size = *size;
-                let bsh = Shape::new(1, size);
 
-                let op = match op {
+                match op {
                     OpType::Affine => {
-                        let wsh = Shape::new(inp_size, size);
+                        let raw_size = size * buckets;
+                        let wsh = Shape::new(inp_size, raw_size);
+                        let bsh = Shape::new(1, raw_size);
+
                         let ones = DeviceBuffer::new(1);
                         ones.load_from_host(&[1.0]);
                         let mut affine = Affine {
@@ -597,7 +647,7 @@ impl<T: InputType> TrainerBuilder<T> {
                             });
                         }
 
-                        offset += inp_size * size;
+                        offset += inp_size * raw_size;
 
                         affine.biases.set_ptr(opt.weights_offset(offset));
                         affine.biases_grad.set_ptr(opt.gradients_offset(offset));
@@ -611,17 +661,30 @@ impl<T: InputType> TrainerBuilder<T> {
                             qi += 1;
                         }
 
-                        offset += size;
+                        offset += raw_size;
 
-                        Operation::Affine(affine)
+                        let outputs = TensorBatch::new(bsh, batch_size);
+                        nodes.push(Node { outputs, op: Operation::Affine(affine) });
+
+                        if buckets > 1 {
+                            nodes.push(Node {
+                                outputs: TensorBatch::new(Shape::new(1, size), batch_size),
+                                op: Operation::Select,
+                            });
+                        }
+
                     }
-                    OpType::Activate(activation) => Operation::Activate(*activation),
-                    OpType::DualActivate => Operation::DualActivate,
+                    OpType::Activate(activation) => {
+                        let bsh = Shape::new(1, size);
+                        let outputs = TensorBatch::new(bsh, batch_size);
+                        nodes.push(Node { outputs, op: Operation::Activate(*activation) });
+                    },
+                    OpType::DualActivate => {
+                        let bsh = Shape::new(1, size);
+                        let outputs = TensorBatch::new(bsh, batch_size);
+                        nodes.push(Node { outputs, op: Operation::DualActivate });
+                    }
                 };
-
-                let outputs = TensorBatch::new(bsh, batch_size);
-
-                nodes.push(Node { outputs, op });
 
                 inp_size = size;
             }
@@ -653,6 +716,7 @@ impl<T: InputType> TrainerBuilder<T> {
 
             Trainer {
                 input_getter: self.input_getter,
+                bucket_getter: self.bucket_getter,
                 handle: DeviceHandles::default(),
                 optimiser: opt,
                 ft,
@@ -663,6 +727,7 @@ impl<T: InputType> TrainerBuilder<T> {
                 error: 0.0,
                 used: 0,
                 quantiser,
+                buckets: bullet_tensor::util::calloc(batch_size),
             }
         }
     }

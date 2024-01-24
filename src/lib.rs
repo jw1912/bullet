@@ -4,7 +4,7 @@ mod training;
 
 use training::ansi;
 
-pub use bullet_core::{inputs, Activation};
+pub use bullet_core::{inputs, outputs, Activation};
 pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 pub use training::set_cbcs;
@@ -25,9 +25,9 @@ impl<'a> LocalSettings<'a> {
     }
 }
 
-impl<T: inputs::InputType> Trainer<T> {
+impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
-        training::run::<T>(
+        training::run::<T, U>(
             self,
             schedule,
             settings,

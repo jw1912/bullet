@@ -2,13 +2,14 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet::{
-    inputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[181, 64])
         .input(inputs::Chess768)
+        .output_buckets(outputs::Single)
         .feature_transformer(32)
         .activate(Activation::SCReLU)
         .add_layer(1)

@@ -1,5 +1,6 @@
 pub mod inputs;
 mod load;
+pub mod outputs;
 mod rng;
 pub mod util;
 

@@ -36,6 +36,15 @@ pub unsafe fn free(ptr: *mut f32, num: usize) {
     dealloc(ptr.cast(), layout);
 }
 
+/// # Safety
+/// Need to make sure not to double free.
+pub unsafe fn free_raw_bytes(ptr: *mut u8, num: usize) {
+    let size = std::mem::size_of::<u8>() * num;
+    let align = std::mem::align_of::<u8>();
+    let layout = Layout::from_size_align(size, align).unwrap();
+    dealloc(ptr.cast(), layout);
+}
+
 pub fn calloc<T>(num: usize) -> *mut T {
     malloc(num)
 }
