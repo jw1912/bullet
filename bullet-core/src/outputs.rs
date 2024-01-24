@@ -1,4 +1,4 @@
-use bulletformat::BulletFormat;
+use bulletformat::{BulletFormat, ChessBoard};
 
 pub trait OutputBuckets<T: BulletFormat>: Send + Sync + Copy + Default + 'static {
     const BUCKETS: usize;
@@ -13,5 +13,16 @@ impl<T: BulletFormat + 'static> OutputBuckets<T> for Single {
 
     fn bucket(&self, _: &T) -> u8 {
         0
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct MaterialCount<const N: usize>;
+impl<const N: usize> OutputBuckets<ChessBoard> for MaterialCount<N> {
+    const BUCKETS: usize = N;
+
+    fn bucket(&self, pos: &ChessBoard) -> u8 {
+        let divisor = (32 + N - 1) / N;
+        (pos.occ().count_ones() as u8 - 2) / divisor as u8
     }
 }

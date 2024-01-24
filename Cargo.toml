@@ -21,7 +21,7 @@ license.workspace = true
 authors.workspace = true
 
 [workspace.dependencies]
-bulletformat = "0.2.0"
+bulletformat = "0.3.0"
 
 [features]
 cuda = ["bullet-tensor/cuda"]

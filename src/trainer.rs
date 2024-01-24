@@ -553,7 +553,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
     }
 
     pub fn add_layer(mut self, size: usize) -> Self {
-        self.size += (self.get_last_layer_size() + 1) * size;
+        self.size += (self.get_last_layer_size() + 1) * size * U::BUCKETS;
         self.add(size, OpType::Affine)
     }
 
