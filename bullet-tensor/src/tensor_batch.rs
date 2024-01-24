@@ -259,6 +259,52 @@ impl TensorBatch {
             ops::sigmoid_mse(handle, batch_size, self.ptr(), results.ptr(), error.ptr());
         }
     }
+
+    /// # Safety
+    /// `buckets` must be valid.
+    pub unsafe fn select(
+        handle: DeviceHandles,
+        batch_size: usize,
+        buckets: *const u8,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+    ) {
+        assert_eq!(inp.element_size() % out.element_size(), 0);
+
+        ops::select(
+            handle,
+            batch_size,
+            inp.element_size(),
+            out.element_size(),
+            buckets,
+            inp.ptr(),
+            out.ptr(),
+        );
+    }
+
+    /// # Safety
+    /// `buckets` must be valid.
+    pub unsafe fn select_backprop(
+        handle: DeviceHandles,
+        batch_size: usize,
+        buckets: *const u8,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+    ) {
+        assert_eq!(out.element_size() % inp.element_size(), 0);
+
+        out.buf.set_zero();
+
+        ops::select_backprop(
+            handle,
+            batch_size,
+            inp.element_size(),
+            out.element_size(),
+            buckets,
+            inp.ptr(),
+            out.ptr(),
+        );
+    }
 }
 
 fn validate_dims(a_shape: Shape, x: &TensorBatch, y: &TensorBatch) -> (usize, usize) {

@@ -383,3 +383,52 @@ fn activate_dual() {
     x.write_to_host(&mut xs);
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.75, 0.0, 0.28125]);
 }
+
+#[test]
+fn select() {
+    let handle = DeviceHandles::default();
+    let buckets = [0, 1, 2, 1];
+
+    let input = [
+        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
+        8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0,
+        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
+        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
+    ];
+
+    let output = [
+        0.0, 1.0, 2.0,
+        5.0, 4.0, 3.0,
+        6.0, 7.0, 8.0,
+        3.0, 4.0, 5.0,
+    ];
+
+    let input_gpu = TensorBatch::new(Shape::new(1, 9), 4);
+    let output_gpu = TensorBatch::new(Shape::new(1, 3), 4);
+    let buckets_gpu = util::calloc::<u8>(4);
+
+    input_gpu.load_from_host(&input);
+    unsafe {
+        util::copy_to_device(buckets_gpu, buckets.as_ptr(), 4);
+        TensorBatch::select(handle, 4, buckets_gpu, &input_gpu, &output_gpu);
+    }
+
+    let mut buf = [0.0; 12];
+    output_gpu.write_to_host(&mut buf);
+    assert_eq!(buf, output);
+
+    unsafe {
+        TensorBatch::select_backprop(handle, 4, buckets_gpu, &output_gpu, &input_gpu);
+    }
+
+    let expected = [
+        0.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 5.0, 4.0, 3.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 7.0, 8.0,
+        0.0, 0.0, 0.0, 3.0, 4.0, 5.0, 0.0, 0.0, 0.0,
+    ];
+
+    let mut buf = [0.0; 36];
+    input_gpu.write_to_host(&mut buf);
+    assert_eq!(buf, expected);
+}

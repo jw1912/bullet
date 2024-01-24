@@ -82,4 +82,22 @@ extern "C" {
     pub fn activateDual(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
 
     pub fn backpropDual(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
+
+    pub fn selectForward(
+        batchSize: usize,
+        inputSize: usize,
+        outputSize: usize,
+        buckets: *const u8,
+        inp: *const f32,
+        out: *mut f32,
+    );
+
+    pub fn selectBackprop(
+        batchSize: usize,
+        inputSize: usize,
+        outputSize: usize,
+        buckets: *const u8,
+        inp: *const f32,
+        out: *mut f32,
+    );
 }

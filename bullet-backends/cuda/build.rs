@@ -45,6 +45,7 @@ fn main() {
         "backprops",
         "bufops",
         "mse",
+        "select",
         "sparse_affine",
         "splat_add",
         "update",
