@@ -4,6 +4,7 @@ mod training;
 
 use training::ansi;
 
+pub use bulletformat as format;
 pub use bullet_core::{inputs, outputs, Activation};
 pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
