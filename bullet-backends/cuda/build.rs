@@ -65,19 +65,16 @@ fn main() {
         .compile("libkernels.a");
 }
 
-#[cfg(target_family = "windows")]
 fn get_var_path(name: &str) -> PathBuf {
     println!("rerun-if-env-changed={}", name);
 
     use std::env::VarError;
     let path = std::env::var(name).unwrap_or_else(|e| match e {
-        VarError::NotPresent => panic!("Environment variable {} is not defined", name),
-        VarError::NotUnicode(_) => {
-            panic!("Environment variable {} contains non-unicode path", name)
-        }
+        VarError::NotPresent => panic!("Env Var {name} is not defined"),
+        VarError::NotUnicode(_) => panic!("Env Var {name} contains non-unicode path!"),
     });
 
-    println!("Using {}={:?}", name, path);
+    println!("Path {}={:?}", name, path);
 
     let path = PathBuf::from(path);
     if !path.exists() {
@@ -90,21 +87,16 @@ fn get_var_path(name: &str) -> PathBuf {
 #[cfg(target_family = "windows")]
 fn link_cuda() -> Vec<PathBuf> {
     let path = get_var_path("CUDA_PATH");
-    println!(
-        "cargo:rustc-link-search=native={}",
-        path.join("lib/x64").to_str().unwrap()
-    );
-    println!(
-        "cargo:rustc-link-search=native={}",
-        path.join("lib").to_str().unwrap()
-    );
+    println!("cargo:rustc-link-search=native={}", path.join("lib/x64").to_str().unwrap());
+    println!("cargo:rustc-link-search=native={}", path.join("lib").to_str().unwrap());
     vec![path.join("include")]
 }
 
 #[cfg(target_family = "unix")]
 fn link_cuda() -> Vec<PathBuf> {
-    println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
-    vec![PathBuf::from("/usr/local/cuda/include/")]
+    let path = get_var_path("CUDA_PATH");
+    println!("cargo:rustc-link-search=native={}", path.join("lib64").to_str().unwrap());
+    vec![path.join("include")]
 }
 
 const IGNORED_MACROS: &[&str] = &[
