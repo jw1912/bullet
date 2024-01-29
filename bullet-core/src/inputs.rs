@@ -6,7 +6,7 @@ mod chess_buckets;
 mod chess768;
 
 pub use ataxx147::Ataxx147;
-pub use chess_buckets_hm::ChessBucketsMirrored;
+pub use chess_buckets_hm::{ChessBucketsMirrored, ChessBucketsMirroredFactorised};
 pub use chess_buckets::ChessBuckets;
 pub use chess768::Chess768;
 
