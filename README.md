@@ -4,10 +4,9 @@
 
 </div>
 
-A CUDA-powered Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo)
-and more interesting networks for [monty](https://github.com/jw1912/monty).
+A CUDA-powered Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
 
-Also used by a number of other engines, including:
+Also used by many other engines, including but not limited to:
 - [Alexandria](https://github.com/PGG106/Alexandria)
 - [Altair](https://github.com/Alex2262/AltairChessEngine)
 - [Carp](https://github.com/dede1751/carp)
@@ -28,7 +27,7 @@ Raise an issue for support of a new game.
 
 ### Currently Supported Backends:
 #### Default
-CPU backend **not intended for serious training use**. It is suitable for training small networks or various utilities, 
+CPU backend **not intended for serious training use**. It is suitable for training small networks or various utilities,
 such as loading nets to requantise them or test their output on specific positions.
 
 #### CUDA
