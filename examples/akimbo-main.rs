@@ -8,7 +8,16 @@ use bullet::{
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[181, 64])
-        .input(inputs::ChessBucketsMirrored::new([0; 32]))
+        .input(inputs::ChessBucketsMirrored::new([
+            0, 0, 1, 1,
+            2, 2, 2, 2,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+        ]))
         .output_buckets(outputs::Single)
         .feature_transformer(768)
         .activate(Activation::SCReLU)
@@ -16,7 +25,7 @@ fn main() {
         .build();
 
     let schedule = TrainingSchedule {
-        net_id: "net-12.01.24".to_string(),
+        net_id: "net-07.02.24".to_string(),
         batch_size: 16_384,
         eval_scale: 400.0,
         start_epoch: 1,
@@ -35,7 +44,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["../../data/akimbo3-9.data"],
+        data_file_paths: vec!["../../data/akimbo3-8.data"],
         output_directory: "checkpoints",
     };
 
