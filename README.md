@@ -17,7 +17,7 @@ Also used by many other engines, including but not limited to:
 
 ### Usage
 
-Check out the [wiki](https://github.com/jw1912/bullet/wiki/1.-Getting-Started) and [examples](/examples) to see how to use the crate.
+Check out the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet) and [examples](/examples) to see how to use the crate.
 
 ### Currently Supported Games:
 - Chess
@@ -32,7 +32,7 @@ such as loading nets to requantise them or test their output on specific positio
 
 #### CUDA
 The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
-as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/1.-Getting-Started).
+as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
 
 #### BLAS
 A (very) minor speedup for CPU training. Currently tested on Windows with [OpenBLAS precompiled packages](https://github.com/OpenMathLib/OpenBLAS/releases).
