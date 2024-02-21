@@ -300,7 +300,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         eval[0]
     }
 
-    pub fn train_on_batch(&mut self, decay: f32, rate: f32) {
+    pub fn train_on_batch(&mut self, decay: f32, rate: f32) -> bool {
         self.optimiser.zero_gradient();
         self.error_device.set_zero();
 
@@ -310,14 +310,19 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             self.backprop();
         }
 
-        let adj = 2. / self.inputs.used() as f32;
-        self.optimiser.update(self.handle, decay, adj, rate);
-
         let mut errors = vec![0.0; self.error_device.size()];
         self.error_device.write_to_host(&mut errors);
         self.error += errors.iter().sum::<f32>() / self.inputs.used() as f32;
 
+        if self.error.is_nan() {
+            return false;
+        }
+
+        let adj = 2. / self.inputs.used() as f32;
+        self.optimiser.update(self.handle, decay, adj, rate);
+
         device_synchronise();
+        true
     }
 
     /// # Safety

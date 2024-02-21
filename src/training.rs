@@ -122,8 +122,13 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
             trainer.load_data(&gpu_loader);
             device_synchronise();
 
-            trainer.train_on_batch(0.01, lrate);
+            let valid = trainer.train_on_batch(0.01, lrate);
             device_synchronise();
+
+            if !valid {
+                trainer.save(out_dir, "error-nan-batch{finished}".to_string(), epoch);
+                panic!("Batch {finished} NaN!");
+            }
 
             if finished % 128 == 0 {
                 report_epoch_progress(epoch, batch_size, batches, finished, &epoch_timer);
