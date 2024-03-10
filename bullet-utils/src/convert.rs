@@ -1,21 +1,44 @@
 use std::{
-    env::args,
     fs::File,
     io::{BufRead, BufReader, BufWriter},
     time::Instant,
+    path::{Path, PathBuf},
 };
 
-use bulletformat::{BulletFormat, ChessBoard};
+use bulletformat::{BulletFormat, chess::MarlinFormat, convert_from_bin, ChessBoard, AtaxxBoard, convert_from_text};
+use structopt::StructOpt;
 
-fn main() {
+#[derive(StructOpt)]
+pub struct ConvertOptions {
+    #[structopt(required = true, short, long)]
+    from: String,
+    #[structopt(required = true, short, long)]
+    input: PathBuf,
+    #[structopt(required = true, short, long)]
+    output: PathBuf,
+    #[structopt(short, long)]
+    threads: usize,
+}
+
+impl ConvertOptions {
+    pub fn run(&self) {
+        match self.from.as_str() {
+            "marlinformat" => convert_from_bin::<MarlinFormat, ChessBoard>(
+                &self.input,
+                &self.output,
+                self.threads,
+            ).unwrap(),
+            "text" => convert_text(&self.input, &self.output),
+            "ataxx" => convert_from_text::<AtaxxBoard>(&self.input, &self.output).unwrap(),
+            _ => println!("Unrecognised Source Type! Supported: 'marlinformat', 'text', 'ataxx'."),
+        }
+    }
+}
+
+fn convert_text(inp_path: impl AsRef<Path>, out_path: impl AsRef<Path>) {
     let timer = Instant::now();
 
-    let inp_path = args().nth(1).expect("Expected a file name!");
-    let out_path = args().nth(2).expect("Expected a file name!");
-
     let file = BufReader::new(File::open(&inp_path).expect("Provide a correct path!"));
-
-    println!("Loaded [{inp_path}]");
 
     let mut data = Vec::new();
 
@@ -50,6 +73,4 @@ fn main() {
         "Wins: {}, Draws: {}, Losses: {}",
         results[2], results[1], results[0]
     );
-
-    println!("Written to [{out_path}]");
 }
