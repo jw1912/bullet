@@ -1,4 +1,4 @@
-use crate::DeviceHandles;
+use super::DeviceHandles;
 
 unsafe fn buffer_operation<T: Operation>(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     let inp = inp as usize;

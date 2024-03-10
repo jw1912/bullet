@@ -1,4 +1,4 @@
-use crate::DeviceHandles;
+use super::DeviceHandles;
 
 pub unsafe fn sigmoid_mse(
     handle: DeviceHandles,

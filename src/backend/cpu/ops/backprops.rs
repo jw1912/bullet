@@ -1,4 +1,4 @@
-use crate::DeviceHandles;
+use super::DeviceHandles;
 
 use super::bufops::{Operation, ReLU, CReLU, SCReLU};
 

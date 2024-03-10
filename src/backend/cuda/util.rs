@@ -1,6 +1,6 @@
 use std::ffi::c_void;
-
-use crate::bindings::{
+use crate::util;
+use super::bindings::{
     cudaDeviceSynchronize, cudaError, cudaFree, cudaGetLastError,
     cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset, cudaGetDeviceCount, cudaGetDeviceProperties_v2,
 };
@@ -23,7 +23,7 @@ pub fn device_name() -> String {
     let mut num = 0;
     catch!(cudaGetDeviceCount(&mut num));
     assert!(num >= 1);
-    let mut props = bullet_core::util::boxed_and_zeroed();
+    let mut props = util::boxed_and_zeroed();
     catch!(cudaGetDeviceProperties_v2(&mut *props, 0));
 
     let mut buf = [0u8; 256];

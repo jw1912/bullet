@@ -1,4 +1,4 @@
-use crate::DeviceHandles;
+use super::DeviceHandles;
 
 pub unsafe fn splat_add(
     handle: DeviceHandles,

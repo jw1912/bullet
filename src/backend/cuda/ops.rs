@@ -1,9 +1,8 @@
 // Every operation has the same safety criteria, pass valid pointers
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
-use bullet_core::Feat;
-
-use crate::{
+use crate::core::Feat;
+use super::{
     bindings::{self, cublasOperation_t},
     DeviceHandles,
 };

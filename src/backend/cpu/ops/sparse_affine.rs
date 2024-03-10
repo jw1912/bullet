@@ -1,6 +1,5 @@
-use bullet_core::Feat;
-
-use crate::{DeviceHandles, util};
+use crate::core::Feat;
+use super::{DeviceHandles, util};
 
 pub unsafe fn sparse_affine_forward(
     handle: DeviceHandles,

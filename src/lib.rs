@@ -1,11 +1,17 @@
+mod backend;
+mod core;
+mod rng;
 mod schedule;
+pub mod tensor;
 mod trainer;
 mod training;
+pub mod util;
 
 use training::ansi;
 
 pub use bulletformat as format;
-pub use bullet_core::{inputs, outputs, Activation};
+pub use core::{inputs, outputs, Activation};
+pub use rng::Rand;
 pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 pub use training::set_cbcs;

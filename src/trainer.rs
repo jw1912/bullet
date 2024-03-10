@@ -1,7 +1,12 @@
-use bullet_core::{Activation, inputs::InputType, outputs::OutputBuckets, util, GpuDataLoader, Rand};
-use bullet_tensor::{
-    device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
-    Tensor, TensorBatch,
+use crate::{
+    core::{Activation, inputs::InputType, outputs::OutputBuckets, GpuDataLoader},
+    tensor::{
+        self,
+        device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,
+        Tensor, TensorBatch,
+    },
+    Rand,
+    util,
 };
 
 struct FeatureTransformer {
@@ -208,10 +213,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn set_batch_size(&mut self, batch_size: usize) {
         if !self.buckets.is_null() {
             unsafe {
-                bullet_tensor::util::free_raw_bytes(self.buckets, self.batch_size())
+                tensor::util::free_raw_bytes(self.buckets, self.batch_size())
             }
         }
-        self.buckets = bullet_tensor::util::calloc(batch_size);
+        self.buckets = tensor::util::calloc(batch_size);
 
         let inp_dim = self.input_getter.size();
         let max_active_inputs = self.input_getter.max_active_inputs();
@@ -266,7 +271,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             if U::BUCKETS > 1 {
                 let ptr = buckets.as_ptr();
                 let amt = buckets.len();
-                bullet_tensor::util::copy_to_device(self.buckets, ptr, amt);
+                tensor::util::copy_to_device(self.buckets, ptr, amt);
             }
 
             self.used += results.len();
@@ -291,7 +296,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             self.forward();
         }
 
-        bullet_tensor::panic_if_device_error("Something went wrong!");
+        tensor::panic_if_device_error("Something went wrong!");
 
         let mut eval = vec![0.0; self.batch_size()];
         self.nodes.last().expect("Nodes is empty!").outputs.write_to_host(&mut eval);
@@ -732,7 +737,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                 error: 0.0,
                 used: 0,
                 quantiser,
-                buckets: bullet_tensor::util::calloc(batch_size),
+                buckets: tensor::util::calloc(batch_size),
             }
         }
     }

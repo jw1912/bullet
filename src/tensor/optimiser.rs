@@ -1,4 +1,5 @@
-use crate::{backend::{ops, util, DeviceHandles}, DeviceBuffer};
+use crate::backend::{ops, util, DeviceHandles};
+use super::DeviceBuffer;
 
 /// A struct intended to hold all network weights and biases
 /// needed for training.

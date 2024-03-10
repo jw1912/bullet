@@ -1,13 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "bullet-backends/blas",
-    "bullet-backends/cpu",
-    "bullet-backends/cuda",
-    "bullet-core",
-    "bullet-tensor",
-    "bullet-utils",
-]
+members = ["bullet-utils"]
 
 [workspace.package]
 license = "MIT"
@@ -24,13 +17,14 @@ authors.workspace = true
 bulletformat = "0.3.0"
 
 [features]
-cuda = ["bullet-tensor/cuda"]
-blas = ["bullet-tensor/blas"]
+cuda = []
 
 [dependencies]
 bulletformat = { workspace = true }
-bullet-core = { path = "bullet-core" }
-bullet-tensor = { path = "bullet-tensor" }
+
+[build-dependencies]
+bindgen = "0.68.1"
+cc = "1.0.83"
 
 [profile.release]
 panic = 'abort'

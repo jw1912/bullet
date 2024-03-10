@@ -1,5 +1,5 @@
-use bullet_core::Activation;
-use crate::{backend::{ops, DeviceHandles}, DeviceBuffer, Shape, Tensor};
+use crate::{backend::{ops, DeviceHandles}, core::Activation};
+use super::{DeviceBuffer, Shape, Tensor};
 
 pub struct TensorBatch {
     shape: Shape,

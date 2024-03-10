@@ -6,7 +6,7 @@ mod sparse_affine;
 mod splat_add;
 mod update;
 
-use crate::DeviceHandles;
+use super::{DeviceHandles, util};
 
 pub use bufops::*;
 pub use backprops::*;
@@ -15,8 +15,7 @@ pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
-#[cfg(not(feature = "blas"))]
-use crate::util;
+
 
 #[cfg(feature = "blas")]
 use bullet_blas::{cblas_sgemm, blasint, CBLAS_LAYOUT, CBLAS_TRANSPOSE};

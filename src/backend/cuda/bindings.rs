@@ -6,7 +6,7 @@
 #![allow(improper_ctypes)]
 #![allow(unused)]
 
-use bullet_core::Feat;
+use crate::core::Feat;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

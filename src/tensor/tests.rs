@@ -1,9 +1,5 @@
-use bullet_core::{Activation, Feat};
-
-use crate::{
-    backend::{DeviceHandles, util},
-    Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer,
-};
+use crate::{backend::{DeviceHandles, util}, core::{Activation, Feat}};
+use super::{Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer};
 
 #[test]
 fn tensor_activate() {

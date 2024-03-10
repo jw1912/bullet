@@ -1,4 +1,5 @@
-use crate::{backend::util, Shape};
+use crate::backend::util;
+use super::Shape;
 
 /// Single Rank-2 Tensor on the GPU.
 /// This data type does not own the memory it points to,

@@ -1,7 +1,4 @@
-use crate::{Trainer, TrainingSchedule, LocalSettings};
-
-use bullet_core::{inputs::InputType, outputs::OutputBuckets, GpuDataLoader};
-use bullet_tensor::{device_name, device_synchronise};
+use crate::{core::{inputs::InputType, outputs::OutputBuckets, GpuDataLoader}, Trainer, TrainingSchedule, LocalSettings, tensor::{device_name, device_synchronise}, util};
 use std::{
     io::{stdout, Write, BufReader, BufRead},
     sync::{atomic::{AtomicBool, Ordering::SeqCst}, mpsc::sync_channel},
@@ -101,7 +98,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
                         break;
                     }
 
-                    let data: &[T::RequiredDataType] = bullet_core::util::to_slice_with_lifetime(buf);
+                    let data: &[T::RequiredDataType] = util::to_slice_with_lifetime(buf);
 
                     for batch in data.chunks(batch_size) {
                         let mut gpu_loader = GpuDataLoader::<T, U>::new(x, y);
