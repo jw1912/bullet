@@ -6,7 +6,7 @@
 
 A CUDA-powered Neural Network Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
 
-Also used by many other engines, including but not limited to:
+Also used by many other engines, including:
 - [Alexandria](https://github.com/PGG106/Alexandria)
 - [Altair](https://github.com/Alex2262/AltairChessEngine)
 - [Carp](https://github.com/dede1751/carp)
@@ -14,6 +14,7 @@ Also used by many other engines, including but not limited to:
 - [Obsidian](https://github.com/gab8192/Obsidian)
 - [Stormphrax](https://github.com/Ciekce/Stormphrax)
 - [Willow](https://github.com/Adam-Kulju/Willow)
+- [Viridithas](https://github.com/cosmobobak/viridithas)
 
 ### Usage
 
