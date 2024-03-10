@@ -1,5 +1,8 @@
 use crate::{
-    core::{Activation, inputs::InputType, outputs::OutputBuckets, GpuDataLoader},
+    Activation,
+    inputs::InputType,
+    outputs::OutputBuckets,
+    loader::GpuDataLoader,
     tensor::{
         self,
         device_synchronise, DeviceHandles, DeviceBuffer, Optimiser, Shape, SparseTensor,

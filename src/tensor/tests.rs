@@ -1,4 +1,4 @@
-use crate::{backend::{DeviceHandles, util}, core::{Activation, Feat}};
+use crate::{backend::{DeviceHandles, util}, Activation, loader::Feat};
 use super::{Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer};
 
 #[test]

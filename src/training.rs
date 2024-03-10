@@ -1,4 +1,4 @@
-use crate::{core::{inputs::InputType, outputs::OutputBuckets, GpuDataLoader}, Trainer, TrainingSchedule, LocalSettings, tensor::{device_name, device_synchronise}, util};
+use crate::{outputs::OutputBuckets, loader::GpuDataLoader, inputs::InputType, Trainer, TrainingSchedule, LocalSettings, tensor::{device_name, device_synchronise}, util};
 use std::{
     io::{stdout, Write, BufReader, BufRead},
     sync::{atomic::{AtomicBool, Ordering::SeqCst}, mpsc::sync_channel},

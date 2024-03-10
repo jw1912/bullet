@@ -1,4 +1,4 @@
-use crate::{backend::{ops, DeviceHandles}, core::Activation};
+use crate::{backend::{ops, DeviceHandles}, Activation};
 use super::{DeviceBuffer, Shape, Tensor};
 
 pub struct TensorBatch {

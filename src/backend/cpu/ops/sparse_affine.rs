@@ -1,4 +1,4 @@
-use crate::core::Feat;
+use crate::loader::Feat;
 use super::{DeviceHandles, util};
 
 pub unsafe fn sparse_affine_forward(

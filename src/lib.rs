@@ -1,5 +1,7 @@
 mod backend;
-mod core;
+pub mod inputs;
+pub mod loader;
+pub mod outputs;
 mod rng;
 mod schedule;
 pub mod tensor;
@@ -10,11 +12,17 @@ pub mod util;
 use training::ansi;
 
 pub use bulletformat as format;
-pub use core::{inputs, outputs, Activation};
 pub use rng::Rand;
 pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 pub use training::set_cbcs;
+
+#[derive(Clone, Copy, Debug)]
+pub enum Activation {
+    ReLU,
+    CReLU,
+    SCReLU,
+}
 
 pub struct LocalSettings<'a> {
     pub threads: usize,
