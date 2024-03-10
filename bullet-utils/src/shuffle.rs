@@ -1,6 +1,6 @@
 use std::{fs::File, io::{BufWriter, Write}, path::PathBuf, time::Instant};
 
-use bullet_core::Rand;
+use bullet_core::{Rand, util};
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 
@@ -15,7 +15,7 @@ pub struct ShuffleOptions {
 impl ShuffleOptions {
     pub fn run(&self) {
         let mut raw_bytes = std::fs::read(&self.input).unwrap();
-        let data = to_slice_with_lifetime_mut(&mut raw_bytes);
+        let data = util::to_slice_with_lifetime_mut(&mut raw_bytes);
 
         let mut output =
             BufWriter::new(File::create(&self.output).expect("Provide a correct path!"));
@@ -29,26 +29,12 @@ impl ShuffleOptions {
     }
 }
 
-
-fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
-    let src_size = std::mem::size_of_val(slice);
-    let tgt_size = std::mem::size_of::<U>();
-
-    assert!(
-        src_size % tgt_size == 0,
-        "Target type size does not divide slice size!"
-    );
-
-    let len = src_size / tgt_size;
-    unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr().cast(), len) }
-}
-
-fn write_data(data: &mut [ChessBoard], output: &mut BufWriter<File>) {
+fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
     if data.is_empty() {
         return;
     }
 
-    let data_slice = to_slice_with_lifetime_mut(data);
+    let data_slice = util::to_slice_with_lifetime(data);
 
     output
         .write_all(data_slice)
