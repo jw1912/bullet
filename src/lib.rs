@@ -1,6 +1,6 @@
 mod backend;
 pub mod inputs;
-pub mod loader;
+mod loader;
 pub mod outputs;
 mod rng;
 mod schedule;

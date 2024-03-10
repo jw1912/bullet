@@ -51,10 +51,6 @@ impl TensorBatch {
         self.buf.load_from_host(buf);
     }
 
-    pub fn offset_load_from_host(&self, buf: &[f32], offset: usize) {
-        self.buf.offset_load_from_host(buf, offset);
-    }
-
     pub fn write_to_host(&self, buf: &mut [f32]) {
         self.buf.write_to_host(buf);
     }
