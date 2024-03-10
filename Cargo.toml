@@ -17,14 +17,14 @@ authors.workspace = true
 bulletformat = "0.3.0"
 
 [features]
-cuda = []
+cuda = ["bindgen", "cc"]
 
 [dependencies]
 bulletformat = { workspace = true }
 
 [build-dependencies]
-bindgen = "0.68.1"
-cc = "1.0.83"
+bindgen = { version = "0.68.1", optional = true }
+cc = { version = "1.0.83", optional = true }
 
 [profile.release]
 panic = 'abort'
