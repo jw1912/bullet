@@ -19,6 +19,16 @@ Also used by many other engines, including but not limited to:
 
 Check out the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet) and [examples](/examples) to see how to use the crate.
 
+### Utilities
+
+You can build `bullet-utils` with `cargo b -r --package bullet-utils`, to do the following:
+- Convert Data
+- Interleave Multiple Data Files
+- Shuffle Data Files
+- Validate Data Files
+
+Use `./target/release/bullet-utils[.exe] help` to see specific usage.
+
 ### Currently Supported Games:
 - Chess
 - Ataxx
