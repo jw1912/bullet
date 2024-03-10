@@ -1,11 +1,13 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter},
-    time::Instant,
     path::{Path, PathBuf},
+    time::Instant,
 };
 
-use bulletformat::{BulletFormat, chess::MarlinFormat, convert_from_bin, ChessBoard, AtaxxBoard, convert_from_text};
+use bulletformat::{
+    chess::MarlinFormat, convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard,
+};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -27,7 +29,8 @@ impl ConvertOptions {
                 &self.input,
                 &self.output,
                 self.threads,
-            ).unwrap(),
+            )
+            .unwrap(),
             "text" => convert_text(&self.input, &self.output),
             "ataxx" => convert_from_text::<AtaxxBoard>(&self.input, &self.output).unwrap(),
             _ => println!("Unrecognised Source Type! Supported: 'marlinformat', 'text', 'ataxx'."),

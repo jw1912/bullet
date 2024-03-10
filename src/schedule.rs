@@ -30,7 +30,10 @@ impl TrainingSchedule {
 
     pub fn display(&self) {
         println!("Batch Size     : {}", ansi(self.batch_size, 31));
-        println!("Scale          : {}", ansi(format!("{:.0}", self.eval_scale), 31));
+        println!(
+            "Scale          : {}",
+            ansi(format!("{:.0}", self.eval_scale), 31)
+        );
         println!("Start Epoch    : {}", ansi(self.start_epoch, 31));
         println!("End Epoch      : {}", ansi(self.end_epoch, 31));
         println!("Save Rate      : {}", ansi(self.save_rate, 31));
@@ -111,7 +114,11 @@ impl WdlScheduler {
         match *self {
             Self::Constant { value } => format!("constant {}", ansi(value, 31)),
             Self::Linear { start, end } => {
-                format!("linear taper start {} end {}", ansi(start, 31), ansi(end, 31))
+                format!(
+                    "linear taper start {} end {}",
+                    ansi(start, 31),
+                    ansi(end, 31)
+                )
             }
         }
     }

@@ -7,5 +7,5 @@ authors.workspace = true
 
 [dependencies]
 bulletformat = { workspace = true }
-bullet-core = { path = "../bullet-core" }
+bullet = { path = "../" }
 structopt = "0.3.26"

@@ -1,6 +1,11 @@
-use std::{fs::File, io::{BufWriter, Write}, path::PathBuf, time::Instant};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
-use bullet_core::{Rand, util};
+use bullet::{util, Rand};
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 

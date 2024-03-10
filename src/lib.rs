@@ -1,14 +1,28 @@
+mod backend;
+pub mod inputs;
+mod loader;
+pub mod outputs;
+mod rng;
 mod schedule;
+pub mod tensor;
 mod trainer;
 mod training;
+pub mod util;
 
 use training::ansi;
 
 pub use bulletformat as format;
-pub use bullet_core::{inputs, outputs, Activation};
+pub use rng::Rand;
 pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
 pub use trainer::{Trainer, TrainerBuilder};
 pub use training::set_cbcs;
+
+#[derive(Clone, Copy, Debug)]
+pub enum Activation {
+    ReLU,
+    CReLU,
+    SCReLU,
+}
 
 pub struct LocalSettings<'a> {
     pub threads: usize,
@@ -28,10 +42,6 @@ impl<'a> LocalSettings<'a> {
 
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
-        training::run::<T, U>(
-            self,
-            schedule,
-            settings,
-        );
+        training::run::<T, U>(self, schedule, settings);
     }
 }
