@@ -1,5 +1,8 @@
-use crate::{backend::{ops, util, DeviceHandles}, loader::Feat};
 use super::{Shape, Tensor, TensorBatch};
+use crate::{
+    backend::{ops, util, DeviceHandles},
+    loader::Feat,
+};
 
 /// A sparse representation of a tensor with dimensions `(1, input_dim)`.
 pub struct SparseTensor {

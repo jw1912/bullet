@@ -2,21 +2,16 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
+    WdlScheduler,
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[255, 64])
         .input(inputs::ChessBucketsMirrored::new([
-            0, 0, 1, 1,
-            2, 2, 2, 2,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
+            0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+            3, 3, 3,
         ]))
         .output_buckets(outputs::Single)
         .feature_transformer(768)

@@ -1,11 +1,11 @@
 // Every operation has the same safety criteria, pass valid pointers
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
-use crate::loader::Feat;
 use super::{
     bindings::{self, cublasOperation_t},
     DeviceHandles,
 };
+use crate::loader::Feat;
 
 use std::ffi::c_int;
 

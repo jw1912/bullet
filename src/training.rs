@@ -1,8 +1,18 @@
-use crate::{outputs::OutputBuckets, loader::GpuDataLoader, inputs::InputType, Trainer, TrainingSchedule, LocalSettings, tensor::{device_name, device_synchronise}, util};
+use crate::{
+    inputs::InputType,
+    loader::GpuDataLoader,
+    outputs::OutputBuckets,
+    tensor::{device_name, device_synchronise},
+    util, LocalSettings, Trainer, TrainingSchedule,
+};
 use std::{
-    io::{stdout, Write, BufReader, BufRead},
-    sync::{atomic::{AtomicBool, Ordering::SeqCst}, mpsc::sync_channel},
-    time::Instant, fs::File,
+    fs::File,
+    io::{stdout, BufRead, BufReader, Write},
+    sync::{
+        atomic::{AtomicBool, Ordering::SeqCst},
+        mpsc::sync_channel,
+    },
+    time::Instant,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -29,7 +39,9 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     let rscale = 1.0 / schedule.eval_scale;
     let mut file_size = 0;
     for file in data_file_paths.iter() {
-        file_size += std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
+        file_size += std::fs::metadata(file)
+            .unwrap_or_else(|_| panic!("Invalid File Metadata: {file}"))
+            .len();
     }
 
     let num = (file_size / 32) as usize;
@@ -83,7 +95,8 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
         let cap = data_size * batch_size * batches_per_load;
         let mut loader_files = vec![];
         for file in data_file_paths.iter() {
-            loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
+            loader_files
+                .push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
         }
 
         let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
@@ -152,7 +165,9 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
 static CBCS: AtomicBool = AtomicBool::new(false);
 
 pub fn ansi<T, U>(x: T, y: U) -> String
-where T: std::fmt::Display, U: std::fmt::Display
+where
+    T: std::fmt::Display,
+    U: std::fmt::Display,
 {
     format!("\x1b[{}m{}\x1b[0m{}", y, x, esc())
 }
@@ -162,11 +177,19 @@ pub fn set_cbcs(val: bool) {
 }
 
 fn num_cs() -> i32 {
-    if CBCS.load(SeqCst) { 35 } else { 36 }
+    if CBCS.load(SeqCst) {
+        35
+    } else {
+        36
+    }
 }
 
 fn esc() -> &'static str {
-    if CBCS.load(SeqCst) { "\x1b[38;5;225m" } else { "" }
+    if CBCS.load(SeqCst) {
+        "\x1b[38;5;225m"
+    } else {
+        ""
+    }
 }
 
 fn report_epoch_progress(

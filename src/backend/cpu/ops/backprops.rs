@@ -1,8 +1,13 @@
 use super::DeviceHandles;
 
-use super::bufops::{Operation, ReLU, CReLU, SCReLU};
+use super::bufops::{CReLU, Operation, ReLU, SCReLU};
 
-unsafe fn backprop_operation<T: Operation>(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+unsafe fn backprop_operation<T: Operation>(
+    handle: DeviceHandles,
+    size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
     let inp = inp as usize;
     let out = out as usize;
 

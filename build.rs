@@ -94,15 +94,24 @@ mod cuda {
     #[cfg(target_family = "windows")]
     fn link_cuda() -> Vec<PathBuf> {
         let path = get_var_path("CUDA_PATH");
-        println!("cargo:rustc-link-search=native={}", path.join("lib/x64").to_str().unwrap());
-        println!("cargo:rustc-link-search=native={}", path.join("lib").to_str().unwrap());
+        println!(
+            "cargo:rustc-link-search=native={}",
+            path.join("lib/x64").to_str().unwrap()
+        );
+        println!(
+            "cargo:rustc-link-search=native={}",
+            path.join("lib").to_str().unwrap()
+        );
         vec![path.join("include")]
     }
 
     #[cfg(target_family = "unix")]
     fn link_cuda() -> Vec<PathBuf> {
         let path = get_var_path("CUDA_PATH");
-        println!("cargo:rustc-link-search=native={}", path.join("lib64").to_str().unwrap());
+        println!(
+            "cargo:rustc-link-search=native={}",
+            path.join("lib64").to_str().unwrap()
+        );
         vec![path.join("include")]
     }
 

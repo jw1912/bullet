@@ -1,6 +1,11 @@
 use super::DeviceHandles;
 
-unsafe fn buffer_operation<T: Operation>(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+unsafe fn buffer_operation<T: Operation>(
+    handle: DeviceHandles,
+    size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
     let inp = inp as usize;
     let out = out as usize;
 
@@ -24,7 +29,11 @@ impl Operation for ReLU {
     }
 
     fn prime(x: f32) -> f32 {
-        if x > 0.0 {1.0} else {0.0}
+        if x > 0.0 {
+            1.0
+        } else {
+            0.0
+        }
     }
 }
 
@@ -35,7 +44,11 @@ impl Operation for CReLU {
     }
 
     fn prime(x: f32) -> f32 {
-        if x > 0.0 && x < 1.0 {1.0} else {0.0}
+        if x > 0.0 && x < 1.0 {
+            1.0
+        } else {
+            0.0
+        }
     }
 }
 
@@ -46,7 +59,11 @@ impl Operation for SCReLU {
     }
 
     fn prime(x: f32) -> f32 {
-        if x > 0.0 && x < 1.0 {2.0 * x} else {0.0}
+        if x > 0.0 && x < 1.0 {
+            2.0 * x
+        } else {
+            0.0
+        }
     }
 }
 

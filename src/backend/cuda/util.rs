@@ -1,9 +1,9 @@
-use std::ffi::c_void;
-use crate::util;
 use super::bindings::{
-    cudaDeviceSynchronize, cudaError, cudaFree, cudaGetLastError,
-    cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset, cudaGetDeviceCount, cudaGetDeviceProperties_v2,
+    cudaDeviceSynchronize, cudaError, cudaFree, cudaGetDeviceCount, cudaGetDeviceProperties_v2,
+    cudaGetLastError, cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset,
 };
+use crate::util;
+use std::ffi::c_void;
 
 #[macro_export]
 macro_rules! catch {

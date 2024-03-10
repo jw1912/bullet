@@ -1,5 +1,6 @@
 use bullet::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
+    WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 2;

@@ -23,6 +23,5 @@ pub unsafe fn sigmoid_mse(
         let diff = sigmoid - result;
         *this_output = diff * sigmoid * (1.0 - sigmoid);
         *this_error += diff * diff
-
     });
 }

@@ -8,9 +8,7 @@ pub struct DeviceHandles {
 
 impl Default for DeviceHandles {
     fn default() -> Self {
-        Self {
-            threads: 1,
-        }
+        Self { threads: 1 }
     }
 }
 
@@ -60,4 +58,3 @@ impl DeviceHandles {
         });
     }
 }
-

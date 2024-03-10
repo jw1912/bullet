@@ -1,24 +1,26 @@
-#![allow(unused_variables, clippy::missing_safety_doc, clippy::too_many_arguments)]
-mod bufops;
+#![allow(
+    unused_variables,
+    clippy::missing_safety_doc,
+    clippy::too_many_arguments
+)]
 mod backprops;
+mod bufops;
 mod mse;
 mod sparse_affine;
 mod splat_add;
 mod update;
 
-use super::{DeviceHandles, util};
+use super::{util, DeviceHandles};
 
-pub use bufops::*;
 pub use backprops::*;
+pub use bufops::*;
 pub use mse::*;
 pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
-
-
 #[cfg(feature = "blas")]
-use bullet_blas::{cblas_sgemm, blasint, CBLAS_LAYOUT, CBLAS_TRANSPOSE};
+use bullet_blas::{blasint, cblas_sgemm, CBLAS_LAYOUT, CBLAS_TRANSPOSE};
 
 pub unsafe fn splat_mul_matrix_vector(
     handle: DeviceHandles,

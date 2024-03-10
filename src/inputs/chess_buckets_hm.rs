@@ -1,6 +1,6 @@
-use bulletformat::{ChessBoard, chess::BoardIter};
+use bulletformat::{chess::BoardIter, ChessBoard};
 
-use super::{InputType, get_num_buckets};
+use super::{get_num_buckets, InputType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ChessBucketsMirrored {
@@ -60,8 +60,8 @@ impl InputType for ChessBucketsMirrored {
 
         ChessBucketsMirroredIter {
             flip: [
-                if our_ksq % 8 > 3 {7} else {0},
-                if opp_ksq % 8 > 3 {7} else {0},
+                if our_ksq % 8 > 3 { 7 } else { 0 },
+                if opp_ksq % 8 > 3 { 7 } else { 0 },
             ],
             buckets: [self.buckets[our_ksq], self.buckets[opp_ksq]],
             board_iter: pos.into_iter(),
@@ -152,8 +152,8 @@ impl InputType for ChessBucketsMirroredFactorised {
 
         ChessBucketsMirroredFactorisedIter {
             flip: [
-                if our_ksq % 8 > 3 {7} else {0},
-                if opp_ksq % 8 > 3 {7} else {0},
+                if our_ksq % 8 > 3 { 7 } else { 0 },
+                if opp_ksq % 8 > 3 { 7 } else { 0 },
             ],
             buckets: [self.buckets[our_ksq], self.buckets[opp_ksq]],
             board_iter: pos.into_iter(),

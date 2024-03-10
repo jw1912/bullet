@@ -1,5 +1,8 @@
-use crate::{backend::{ops, DeviceHandles}, Activation};
 use super::{DeviceBuffer, Shape, Tensor};
+use crate::{
+    backend::{ops, DeviceHandles},
+    Activation,
+};
 
 pub struct TensorBatch {
     shape: Shape,
@@ -134,7 +137,12 @@ impl TensorBatch {
 
     /// # Safety
     /// `inp` must be pointing to valid allocated memory.
-    pub unsafe fn splat_add(handle: DeviceHandles, batch_size: usize, inp: &Tensor, out: &TensorBatch) {
+    pub unsafe fn splat_add(
+        handle: DeviceHandles,
+        batch_size: usize,
+        inp: &Tensor,
+        out: &TensorBatch,
+    ) {
         assert_eq!(inp.shape(), out.shape());
         ops::splat_add(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
@@ -151,7 +159,12 @@ impl TensorBatch {
         assert_eq!(inp.cap(), out.cap(), "Mismatched cap sizes!");
         assert!(batch_size <= inp.cap(), "Overflow!");
         unsafe {
-            f(handle, batch_size * inp.element_size(), inp.ptr(), out.ptr());
+            f(
+                handle,
+                batch_size * inp.element_size(),
+                inp.ptr(),
+                out.ptr(),
+            );
         }
     }
 
@@ -165,7 +178,7 @@ impl TensorBatch {
     ) {
         match op {
             Activation::ReLU => Self::map(ops::activate_relu, handle, batch_size, inp, out),
-            Activation::CReLU => Self::map(ops::activate_crelu,handle,  batch_size, inp, out),
+            Activation::CReLU => Self::map(ops::activate_crelu, handle, batch_size, inp, out),
             Activation::SCReLU => Self::map(ops::activate_screlu, handle, batch_size, inp, out),
         }
     }
@@ -251,7 +264,13 @@ impl TensorBatch {
         }
     }
 
-    pub fn sigmoid_mse(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
+    pub fn sigmoid_mse(
+        &self,
+        handle: DeviceHandles,
+        batch_size: usize,
+        results: &TensorBatch,
+        error: &DeviceBuffer,
+    ) {
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 

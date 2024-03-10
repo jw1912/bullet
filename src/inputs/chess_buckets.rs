@@ -1,6 +1,6 @@
-use bulletformat::{ChessBoard, chess::BoardIter};
+use bulletformat::{chess::BoardIter, ChessBoard};
 
-use super::{InputType, get_num_buckets};
+use super::{get_num_buckets, InputType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ChessBuckets {
@@ -56,7 +56,7 @@ impl InputType for ChessBuckets {
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
         let buckets = [
             self.buckets[usize::from(pos.our_ksq())],
-            self.buckets[usize::from(pos.opp_ksq())]
+            self.buckets[usize::from(pos.opp_ksq())],
         ];
 
         ChessBucketsIter {

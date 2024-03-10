@@ -1,4 +1,4 @@
-use bulletformat::{ChessBoard, chess::BoardIter};
+use bulletformat::{chess::BoardIter, ChessBoard};
 
 use super::InputType;
 
@@ -21,7 +21,9 @@ impl InputType for Chess768 {
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        Chess768Iter { board_iter: pos.into_iter() }
+        Chess768Iter {
+            board_iter: pos.into_iter(),
+        }
     }
 }
 

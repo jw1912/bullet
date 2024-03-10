@@ -1,14 +1,14 @@
 use bulletformat::BulletFormat;
 
 mod ataxx147;
-mod chess_buckets_hm;
-mod chess_buckets;
 mod chess768;
+mod chess_buckets;
+mod chess_buckets_hm;
 
 pub use ataxx147::Ataxx147;
-pub use chess_buckets_hm::{ChessBucketsMirrored, ChessBucketsMirroredFactorised};
-pub use chess_buckets::ChessBuckets;
 pub use chess768::Chess768;
+pub use chess_buckets::ChessBuckets;
+pub use chess_buckets_hm::{ChessBucketsMirrored, ChessBucketsMirroredFactorised};
 
 pub trait InputType: Send + Sync + Copy + Default + 'static {
     type RequiredDataType: BulletFormat + Copy + Send + Sync;

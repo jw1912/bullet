@@ -42,10 +42,6 @@ impl<'a> LocalSettings<'a> {
 
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
-        training::run::<T, U>(
-            self,
-            schedule,
-            settings,
-        );
+        training::run::<T, U>(self, schedule, settings);
     }
 }

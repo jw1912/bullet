@@ -21,7 +21,9 @@ impl InputType for Ataxx147 {
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        Ataxx147Iter { board_iter: pos.into_iter() }
+        Ataxx147Iter {
+            board_iter: pos.into_iter(),
+        }
     }
 }
 
