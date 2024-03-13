@@ -22,7 +22,11 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     settings: &LocalSettings,
 ) {
     let threads = settings.threads;
-    let data_file_paths: Vec<_> = settings.data_file_paths.iter().map(|s| s.to_string()).collect();
+    let data_file_paths: Vec<_> = settings
+        .data_file_paths
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     let out_dir = settings.output_directory.to_string();
     let out_dir = out_dir.as_str();
 
@@ -56,8 +60,14 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
 
     print!("{esc}");
     println!("{}", ansi("Beginning Training", "34;1"));
-    println!("Net Name               : {}", ansi(schedule.net_id.clone(), "32;1"));
-    println!("Arch                   : {}", ansi(format!("{trainer}"), 31));
+    println!(
+        "Net Name               : {}",
+        ansi(schedule.net_id.clone(), "32;1")
+    );
+    println!(
+        "Arch                   : {}",
+        ansi(format!("{trainer}"), 31)
+    );
     schedule.display();
     println!("Device                 : {}", ansi(device_name(), 31));
     settings.display();
@@ -135,7 +145,6 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
             println!("LR Dropped to {}", ansi(lrate, num_cs()));
         }
         prev_lr = lrate;
-
 
         trainer.clear_data();
         device_synchronise();

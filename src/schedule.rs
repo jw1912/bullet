@@ -31,14 +31,29 @@ impl TrainingSchedule {
     }
 
     pub fn display(&self) {
-        println!("Scale                  : {}", ansi(format!("{:.0}", self.eval_scale), 31));
+        println!(
+            "Scale                  : {}",
+            ansi(format!("{:.0}", self.eval_scale), 31)
+        );
         println!("Batch Size             : {}", ansi(self.batch_size, 31));
-        println!("Batches / Superbatch   : {}", ansi(self.batches_per_superbatch, 31));
-        println!("Positions / Superbatch : {}", ansi(self.batches_per_superbatch * self.batch_size, 31));
-        println!("Start Superbatch       : {}", ansi(self.start_superbatch, 31));
+        println!(
+            "Batches / Superbatch   : {}",
+            ansi(self.batches_per_superbatch, 31)
+        );
+        println!(
+            "Positions / Superbatch : {}",
+            ansi(self.batches_per_superbatch * self.batch_size, 31)
+        );
+        println!(
+            "Start Superbatch       : {}",
+            ansi(self.start_superbatch, 31)
+        );
         println!("End Superbatch         : {}", ansi(self.end_superbatch, 31));
         println!("Save Rate              : {}", ansi(self.save_rate, 31));
-        println!("WDL Scheduler          : {}", self.wdl_scheduler.colourful());
+        println!(
+            "WDL Scheduler          : {}",
+            self.wdl_scheduler.colourful()
+        );
         println!("LR Scheduler           : {}", self.lr_scheduler.colourful());
     }
 }

@@ -36,7 +36,10 @@ impl<'a> LocalSettings<'a> {
         for file_path in self.data_file_paths.iter() {
             println!("Data File Path         : {}", ansi(file_path, "32;1"));
         }
-        println!("Output Path            : {}", ansi(self.output_directory, "32;1"));
+        println!(
+            "Output Path            : {}",
+            ansi(self.output_directory, "32;1")
+        );
     }
 }
 
