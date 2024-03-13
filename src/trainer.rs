@@ -102,7 +102,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         self.error = 0.0;
     }
 
-    pub fn save(&self, out_dir: &str, name: String, epoch: usize) {
+    pub fn save(&self, out_dir: &str, name: String) {
         let size = self.optimiser.size();
 
         let mut buf1 = vec![0.0; size];
@@ -112,7 +112,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         self.optimiser
             .write_to_host(&mut buf1, &mut buf2, &mut buf3);
 
-        let path = format!("{out_dir}/{name}-epoch{epoch}");
+        let path = format!("{out_dir}/{name}");
 
         std::fs::create_dir(path.as_str()).unwrap_or(());
 
@@ -124,7 +124,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             .unwrap_or_else(|_| panic!("Writing to [{path}/velocity.bin] failed!"));
 
         if !self.quantiser.is_empty() {
-            self.save_quantised(&format!("{path}/{name}-epoch{epoch}.bin"));
+            self.save_quantised(&format!("{path}/{name}.bin"));
         }
     }
 

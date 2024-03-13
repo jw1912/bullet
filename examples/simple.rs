@@ -29,13 +29,14 @@ fn main() {
         net_id: "simple".to_string(),
         batch_size: 16_384,
         eval_scale: 400.0,
-        start_epoch: 1,
-        end_epoch: 30,
+        batches_per_superbatch: 6104,
+        start_superbatch: 1,
+        end_superbatch: 10,
         wdl_scheduler: WdlScheduler::Constant { value: 0.75 },
         lr_scheduler: LrScheduler::Step {
             start: 0.001,
             gamma: 0.1,
-            step: 15,
+            step: 4,
         },
         save_rate: 1,
     };
@@ -53,7 +54,7 @@ fn main() {
 This is how you would load the network in rust.
 Commented out because it will error if it can't find the file.
 static NNUE: Network =
-    unsafe { std::mem::transmute(*include_bytes!("../checkpoints/simple-epoch20/simple-epoch20.bin")) };
+    unsafe { std::mem::transmute(*include_bytes!("../checkpoints/simple-10/simple-10.bin")) };
 */
 
 #[inline]

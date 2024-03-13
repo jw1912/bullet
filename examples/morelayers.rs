@@ -26,8 +26,9 @@ fn main() {
         net_id: "morelayers".to_string(),
         batch_size: 16_384,
         eval_scale: 400.0,
-        start_epoch: 1,
-        end_epoch: 17,
+        batches_per_superbatch: 6104,
+        start_superbatch: 1,
+        end_superbatch: 255,
         wdl_scheduler: WdlScheduler::Linear {
             start: 0.2,
             end: 0.5,
@@ -35,7 +36,7 @@ fn main() {
         lr_scheduler: LrScheduler::Step {
             start: 0.001,
             gamma: 0.1,
-            step: 8,
+            step: 120,
         },
         save_rate: 1,
     };
