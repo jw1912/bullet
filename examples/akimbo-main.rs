@@ -7,11 +7,18 @@ use bullet::{
 };
 
 fn main() {
+    #[rustfmt::skip]
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[255, 64])
         .input(inputs::ChessBucketsMirrored::new([
-            0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-            3, 3, 3,
+            0, 0, 1, 1,
+            2, 2, 2, 2,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
+            3, 3, 3, 3,
         ]))
         .output_buckets(outputs::Single)
         .feature_transformer(768)
