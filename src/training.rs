@@ -73,6 +73,11 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     settings.display();
     println!("Positions              : {}", ansi(num, 31));
 
+    let pos_per_sb = schedule.batch_size * schedule.batches_per_superbatch;
+    let total_pos = pos_per_sb * (schedule.end_superbatch - schedule.start_superbatch);
+    let iters = total_pos as f64 / num as f64;
+    println!("Total Epochs           : {}", ansi(format!("{iters:.2}"), 31));
+
     let timer = Instant::now();
 
     trainer.set_threads(threads);
