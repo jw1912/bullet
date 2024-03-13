@@ -19,8 +19,9 @@ fn main() {
         net_id: "net001".to_string(),
         batch_size: 16_384,
         eval_scale: 400.0,
-        start_epoch: 1,
-        end_epoch: 10,
+        batches_per_superbatch: 6104,
+        start_superbatch: 1,
+        end_superbatch: 10,
         wdl_scheduler: WdlScheduler::Constant { value: 1.0 },
         lr_scheduler: LrScheduler::Step {
             start: 0.001,

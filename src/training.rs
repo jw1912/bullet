@@ -21,13 +21,14 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     schedule: &TrainingSchedule,
     settings: &LocalSettings,
 ) {
-    let LocalSettings {
-        threads,
-        data_file_paths,
-        output_directory: out_dir,
-    } = settings;
-
-    let threads = *threads;
+    let threads = settings.threads;
+    let data_file_paths: Vec<_> = settings
+        .data_file_paths
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let out_dir = settings.output_directory.to_string();
+    let out_dir = out_dir.as_str();
 
     std::fs::create_dir(out_dir).unwrap_or(());
 
@@ -46,7 +47,6 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
 
     let num = (file_size / 32) as usize;
     let batch_size = trainer.batch_size();
-    let batches = (num + batch_size - 1) / batch_size;
 
     if device_name() == "CPU" {
         println!("{}", ansi("========== WARNING ==========", 31));
@@ -60,50 +60,55 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
 
     print!("{esc}");
     println!("{}", ansi("Beginning Training", "34;1"));
-    println!("Net Name       : {}", ansi(schedule.net_id.clone(), "32;1"));
-    println!("Arch           : {}", ansi(format!("{trainer}"), 31));
+    println!(
+        "Net Name               : {}",
+        ansi(schedule.net_id.clone(), "32;1")
+    );
+    println!(
+        "Arch                   : {}",
+        ansi(format!("{trainer}"), 31)
+    );
     schedule.display();
-    println!("Device         : {}", ansi(device_name(), 31));
+    println!("Device                 : {}", ansi(device_name(), 31));
     settings.display();
-    println!("Positions      : {}", ansi(num, 31));
+    println!("Positions              : {}", ansi(num, 31));
+
+    let pos_per_sb = schedule.batch_size * schedule.batches_per_superbatch;
+    let total_pos = pos_per_sb * (schedule.end_superbatch - schedule.start_superbatch);
+    let iters = total_pos as f64 / num as f64;
+    println!(
+        "Total Epochs           : {}",
+        ansi(format!("{iters:.2}"), 31)
+    );
 
     let timer = Instant::now();
 
     trainer.set_threads(threads);
     device_synchronise();
 
-    let mut prev_lr = schedule.lr(schedule.start_epoch);
+    let x = trainer.input_getter();
+    let y = trainer.bucket_getter();
+    let sch = schedule.clone();
+    let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
 
-    for epoch in schedule.start_epoch..=schedule.end_epoch {
-        trainer.set_error_zero();
-        let epoch_timer = Instant::now();
-        let buffer_size_mb = 256;
-        let buffer_size = buffer_size_mb * 1024 * 1024;
-        let blend = schedule.wdl(epoch);
-        let lrate = schedule.lr(epoch);
+    let buffer_size_mb = 256;
+    let buffer_size = buffer_size_mb * 1024 * 1024;
+    let data_size: usize = std::mem::size_of::<T::RequiredDataType>();
+    let batches_per_load = buffer_size / data_size / batch_size;
+    let cap = data_size * batch_size * batches_per_load;
 
-        if lrate != prev_lr {
-            println!("LR Dropped to {}", ansi(lrate, num_cs()));
-        }
+    let dataloader = std::thread::spawn(move || {
+        let mut sb = sch.start_superbatch;
+        let mut cb = 0;
+        let mut blend = sch.wdl_scheduler.blend(sb, sch.end_superbatch);
 
-        prev_lr = lrate;
+        'dataloading: loop {
+            let mut loader_files = vec![];
+            for file in data_file_paths.iter() {
+                loader_files
+                    .push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
+            }
 
-        let mut finished = 0;
-
-        let data_size: usize = std::mem::size_of::<T::RequiredDataType>();
-        let batches_per_load = buffer_size / data_size / batch_size;
-        let cap = data_size * batch_size * batches_per_load;
-        let mut loader_files = vec![];
-        for file in data_file_paths.iter() {
-            loader_files
-                .push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
-        }
-
-        let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
-        let x = trainer.input_getter();
-        let y = trainer.bucket_getter();
-
-        let dataloader = std::thread::spawn(move || {
             for loader_file in loader_files.iter() {
                 let mut file = BufReader::with_capacity(cap, loader_file);
                 while let Ok(buf) = file.fill_buf() {
@@ -117,49 +122,83 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
                         let mut gpu_loader = GpuDataLoader::<T, U>::new(x, y);
                         gpu_loader.load(batch, threads, blend, rscale);
                         sender.send(gpu_loader).unwrap();
+                        cb += 1;
+                        if cb % sch.batches_per_superbatch == 0 {
+                            if sb == sch.end_superbatch {
+                                break 'dataloading;
+                            }
+
+                            cb = 0;
+                            sb += 1;
+                            blend = sch.wdl_scheduler.blend(sb, sch.end_superbatch);
+                        }
                     }
 
                     let consumed = buf.len();
                     file.consume(consumed);
                 }
             }
-        });
+        }
+    });
 
-        while let Ok(gpu_loader) = reciever.recv() {
-            trainer.clear_data();
-            device_synchronise();
+    let mut prev_lr = schedule.lr(1);
+    let mut superbatch = schedule.start_superbatch;
+    let mut curr_batch = 0;
+    let mut superbatch_timer = Instant::now();
+    trainer.set_error_zero();
 
-            trainer.load_data(&gpu_loader);
-            device_synchronise();
+    while let Ok(gpu_loader) = reciever.recv() {
+        let lrate = schedule.lr(superbatch);
+        if lrate != prev_lr {
+            println!("LR Dropped to {}", ansi(lrate, num_cs()));
+        }
+        prev_lr = lrate;
 
-            let valid = trainer.train_on_batch(0.01, lrate);
-            device_synchronise();
+        trainer.clear_data();
+        device_synchronise();
 
-            if !valid {
-                trainer.save(out_dir, "error-nan-batch{finished}".to_string(), epoch);
-                panic!("Batch {finished} NaN!");
-            }
+        trainer.load_data(&gpu_loader);
+        device_synchronise();
 
-            if finished % 128 == 0 {
-                report_epoch_progress(epoch, batch_size, batches, finished, &epoch_timer);
-            }
+        let valid = trainer.train_on_batch(0.01, lrate);
+        device_synchronise();
 
-            finished += 1;
+        if !valid {
+            trainer.save(out_dir, format!("error-nan-batch-{curr_batch}"));
+            panic!("Batch {curr_batch} NaN!");
         }
 
-        dataloader.join().unwrap();
+        if curr_batch % 128 == 0 {
+            report_superbatch_progress(
+                superbatch,
+                batch_size,
+                schedule.batches_per_superbatch,
+                curr_batch,
+                &superbatch_timer,
+            );
+        }
 
-        let error = trainer.error() / batches as f32;
+        curr_batch += 1;
 
-        report_epoch_finished(schedule, epoch, error, &epoch_timer, &timer, num);
+        if curr_batch % schedule.batches_per_superbatch == 0 {
+            let error = trainer.error() / schedule.batches_per_superbatch as f32;
 
-        if schedule.should_save(epoch) {
-            trainer.save(out_dir, schedule.net_id(), epoch);
+            report_superbatch_finished(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
 
-            let name = ansi(format!("{}-epoch{epoch}", schedule.net_id()), "32;1");
-            println!("Saved [{name}]");
+            if schedule.should_save(superbatch) {
+                let name = format!("{}-{superbatch}", schedule.net_id());
+                trainer.save(out_dir, name.clone());
+                println!("Saved [{}]", ansi(name, 31));
+            }
+
+            superbatch += 1;
+            curr_batch = 0;
+            superbatch_timer = Instant::now();
+            trainer.set_error_zero();
         }
     }
+
+    dataloader.join().unwrap();
 }
 
 static CBCS: AtomicBool = AtomicBool::new(false);
@@ -192,25 +231,25 @@ fn esc() -> &'static str {
     }
 }
 
-fn report_epoch_progress(
-    epoch: usize,
+fn report_superbatch_progress(
+    superbatch: usize,
     batch_size: usize,
     batches: usize,
     finished_batches: usize,
-    epoch_timer: &Instant,
+    superbatch_timer: &Instant,
 ) {
     let num_cs = num_cs();
-    let epoch_time = epoch_timer.elapsed().as_secs_f32();
+    let superbatch_time = superbatch_timer.elapsed().as_secs_f32();
     let pct = finished_batches as f32 / batches as f32;
     let positions = finished_batches * batch_size;
-    let pos_per_sec = positions as f32 / epoch_time;
+    let pos_per_sec = positions as f32 / superbatch_time;
 
-    let seconds = epoch_time / pct - epoch_time;
+    let seconds = superbatch_time / pct - superbatch_time;
 
     print!(
-        "epoch {} [{}% ({}/{} batches, {} pos/sec)]\n\
-        Estimated time to end of epoch: {}s     \x1b[F",
-        ansi(epoch, num_cs),
+        "superbatch {} [{}% ({}/{} batches, {} pos/sec)]\n\
+        Estimated time to end of superbatch: {}s     \x1b[F",
+        ansi(superbatch, num_cs),
         ansi(format!("{:.1}", pct * 100.0), 35),
         ansi(finished_batches, num_cs),
         ansi(batches, num_cs),
@@ -220,31 +259,31 @@ fn report_epoch_progress(
     let _ = stdout().flush();
 }
 
-fn report_epoch_finished(
+fn report_superbatch_finished(
     schedule: &TrainingSchedule,
-    epoch: usize,
+    superbatch: usize,
     error: f32,
-    epoch_timer: &Instant,
+    superbatch_timer: &Instant,
     timer: &Instant,
     positions: usize,
 ) {
     let num_cs = num_cs();
-    let epoch_time = epoch_timer.elapsed().as_secs_f32();
+    let superbatch_time = superbatch_timer.elapsed().as_secs_f32();
     let total_time = timer.elapsed().as_secs_f32();
-    let pos_per_sec = positions as f32 / epoch_time;
+    let pos_per_sec = positions as f32 / superbatch_time;
 
     println!(
-        "epoch {} | time {}s | running loss {} | {} pos/sec | total time {}s",
-        ansi(epoch, num_cs),
-        ansi(format!("{epoch_time:.1}"), num_cs),
+        "superbatch {} | time {}s | running loss {} | {} pos/sec | total time {}s",
+        ansi(superbatch, num_cs),
+        ansi(format!("{superbatch_time:.1}"), num_cs),
         ansi(format!("{error:.6}"), num_cs),
         ansi(format!("{:.0}", pos_per_sec), num_cs),
         ansi(format!("{total_time:.1}"), num_cs),
     );
 
-    let finished_epochs = epoch - schedule.start_epoch + 1;
-    let total_epochs = schedule.end_epoch - schedule.start_epoch + 1;
-    let pct = finished_epochs as f32 / total_epochs as f32;
+    let finished_superbatches = superbatch - schedule.start_superbatch + 1;
+    let total_superbatches = schedule.end_superbatch - schedule.start_superbatch + 1;
+    let pct = finished_superbatches as f32 / total_superbatches as f32;
     let mut seconds = (total_time / pct - total_time) as u32;
     let mut minutes = seconds / 60;
     let hours = minutes / 60;
