@@ -34,7 +34,7 @@ impl ShuffleOptions {
 
         let temp_dir = env::temp_dir();
 
-        let mut temp_files = (0..num_tmp_files)
+        let temp_files = (0..num_tmp_files)
             .map(|idx| {
                 let output_file = format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
                 // File::create(output_file).unwrap()
@@ -44,7 +44,7 @@ impl ShuffleOptions {
 
         println!("# [Shuffling Data]");
         let time = Instant::now();
-        assert!(self.split_file(&mut temp_files, input_size).is_ok());
+        assert!(self.split_file(&temp_files, input_size).is_ok());
 
         println!("# [Finished splitting data. Shuffling...]");
         let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
@@ -53,7 +53,7 @@ impl ShuffleOptions {
         println!("> Took {:.2} seconds.", time.elapsed().as_secs_f32());
     }
 
-    fn split_file(&self, temp_files: &mut [PathBuf], input_size: usize) -> Result<()> {
+    fn split_file(&self, temp_files: &[PathBuf], input_size: usize) -> Result<()> {
         let mut input = File::open(self.input.clone()).unwrap();
         let mut temp_files = temp_files
             .iter()
