@@ -70,7 +70,7 @@ impl InterleaveOptions {
         }
     }
 
-    pub fn new(&self, inputs: Vec<PathBuf>, outputs: PathBuf) -> Self {
+    pub fn new(inputs: Vec<PathBuf>, output: PathBuf) -> Self {
         Self { inputs, output }
     }
 }

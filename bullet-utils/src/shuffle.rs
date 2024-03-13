@@ -1,16 +1,16 @@
 use std::{
     env,
-    fs::{self, create_dir, File},
+    fs::{self, File},
     io::{BufWriter, Read, Result, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Instant,
 };
 
-use bullet_core::{util, Rand};
+use bullet::{util, Rand};
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 
-use crate::interleave::{self, InterleaveOptions};
+use crate::interleave::InterleaveOptions;
 
 #[derive(StructOpt)]
 pub struct ShuffleOptions {
@@ -37,24 +37,28 @@ impl ShuffleOptions {
         let mut temp_files = (0..num_tmp_files)
             .map(|idx| {
                 let output_file = format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
-                File::create(output_file).unwrap()
+                // File::create(output_file).unwrap()
+                PathBuf::from(output_file)
             })
             .collect::<Vec<_>>();
 
         println!("# [Shuffling Data]");
         let time = Instant::now();
         assert!(self.split_file(&mut temp_files, input_size).is_ok());
-        let mut temp_files = temp_files.iter().collect::<Vec<PathBuf>>();
 
         println!("# [Finished splitting data. Shuffling...]");
-        let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output);
+        let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
         interleave.run();
 
         println!("> Took {:.2} seconds.", time.elapsed().as_secs_f32());
     }
 
-    fn split_file(&self, temp_files: &mut [File], input_size: usize) -> Result<()> {
+    fn split_file(&self, temp_files: &mut [PathBuf], input_size: usize) -> Result<()> {
         let mut input = File::open(self.input.clone()).unwrap();
+        let mut temp_files = temp_files
+            .iter()
+            .map(|f| File::create(f).expect("Tmp file could not be created."))
+            .collect::<Vec<_>>();
 
         let buff_size = self.actual_buffer_size(temp_files.len(), input_size);
 
