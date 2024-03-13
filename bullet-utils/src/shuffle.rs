@@ -49,6 +49,11 @@ impl ShuffleOptions {
         println!("# [Finished splitting data. Shuffling...]");
         let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
         interleave.run();
+        for file in temp_files {
+            if fs::remove_file(file).is_err() {
+                println!("Error automatically removing temp files");
+            }
+        }
 
         println!("> Took {:.2} seconds.", time.elapsed().as_secs_f32());
     }
