@@ -30,28 +30,41 @@ impl ShuffleOptions {
         let input_size = fs::metadata(self.input.clone())
             .expect("Input file is valid")
             .len() as usize;
-        let num_tmp_files = (input_size / (self.mem_used_mb * 1000) + 1).max(MIN_TMP_FILES);
-
-        let temp_dir = env::temp_dir();
-
-        let temp_files = (0..num_tmp_files)
-            .map(|idx| {
-                let output_file = format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
-                // File::create(output_file).unwrap()
-                PathBuf::from(output_file)
-            })
-            .collect::<Vec<_>>();
 
         println!("# [Shuffling Data]");
         let time = Instant::now();
-        assert!(self.split_file(&temp_files, input_size).is_ok());
 
-        println!("# [Finished splitting data. Shuffling...]");
-        let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
-        interleave.run();
-        for file in temp_files {
-            if fs::remove_file(file).is_err() {
-                println!("Error automatically removing temp files");
+        if input_size < self.mem_used_mb * 1000 {
+            let mut raw_bytes = std::fs::read(&self.input).unwrap();
+            let data = util::to_slice_with_lifetime_mut(&mut raw_bytes);
+
+            shuffle_positions(data);
+
+            let mut output =
+                BufWriter::new(File::create(&self.output).expect("Provide a correct path!"));
+
+            write_data(data, &mut output);
+        } else {
+            let num_tmp_files = (input_size / (self.mem_used_mb * 1000) + 1).max(MIN_TMP_FILES);
+            let temp_dir = env::temp_dir();
+            let temp_files = (0..num_tmp_files)
+                .map(|idx| {
+                    let output_file =
+                        format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
+                    // File::create(output_file).unwrap()
+                    PathBuf::from(output_file)
+                })
+                .collect::<Vec<_>>();
+
+            assert!(self.split_file(&temp_files, input_size).is_ok());
+
+            println!("# [Finished splitting data. Shuffling...]");
+            let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
+            interleave.run();
+            for file in temp_files {
+                if fs::remove_file(file).is_err() {
+                    println!("Error automatically removing temp files");
+                }
             }
         }
 
@@ -96,4 +109,16 @@ fn shuffle_positions(data: &mut [ChessBoard]) {
         let idx = rng.rand_int() as usize % (i + 1);
         data.swap(idx, i);
     }
+}
+
+fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
+    if data.is_empty() {
+        return;
+    }
+
+    let data_slice = util::to_slice_with_lifetime(data);
+
+    output
+        .write_all(data_slice)
+        .expect("Nothing can go wrong in unsafe code!");
 }
