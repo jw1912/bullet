@@ -24,6 +24,7 @@ pub struct ShuffleOptions {
 
 const CHESS_BOARD_SIZE: usize = std::mem::size_of::<ChessBoard>();
 const MIN_TMP_FILES: usize = 4;
+const BYTES_PER_MB: usize = 1_048_576;
 
 impl ShuffleOptions {
     pub fn run(&self) {
@@ -34,7 +35,7 @@ impl ShuffleOptions {
         println!("# [Shuffling Data]");
         let time = Instant::now();
 
-        if input_size < self.mem_used_mb * 1000 {
+        if input_size < self.mem_used_mb * BYTES_PER_MB {
             let mut raw_bytes = std::fs::read(&self.input).unwrap();
             let data = util::to_slice_with_lifetime_mut(&mut raw_bytes);
 
@@ -45,7 +46,8 @@ impl ShuffleOptions {
 
             write_data(data, &mut output);
         } else {
-            let num_tmp_files = (input_size / (self.mem_used_mb * 1000) + 1).max(MIN_TMP_FILES);
+            let num_tmp_files =
+                (input_size / (self.mem_used_mb * BYTES_PER_MB) + 1).max(MIN_TMP_FILES);
             let temp_dir = env::temp_dir();
             let temp_files = (0..num_tmp_files)
                 .map(|idx| {
