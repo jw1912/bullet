@@ -3,7 +3,7 @@ use bullet::{
     WdlScheduler,
 };
 
-const HIDDEN_SIZE: usize = 2;
+const HIDDEN_SIZE: usize = 128;
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
@@ -16,24 +16,24 @@ fn main() {
         .build();
 
     let schedule = TrainingSchedule {
-        net_id: "net001".to_string(),
+        net_id: "net003".to_string(),
         batch_size: 16_384,
         eval_scale: 400.0,
         batches_per_superbatch: 6104,
         start_superbatch: 1,
         end_superbatch: 10,
-        wdl_scheduler: WdlScheduler::Constant { value: 1.0 },
+        wdl_scheduler: WdlScheduler::Constant { value: 0.5 },
         lr_scheduler: LrScheduler::Step {
             start: 0.001,
             gamma: 0.1,
-            step: 6,
+            step: 5,
         },
         save_rate: 1,
     };
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["../../data/ataxx/1.data"],
+        data_file_paths: vec!["../../data/ataxx/003.data"],
         output_directory: "checkpoints",
     };
 
