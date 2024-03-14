@@ -36,7 +36,7 @@ impl ShuffleOptions {
         println!("# [Shuffling Data]");
         let time = Instant::now();
 
-        if input_size < self.mem_used_mb * BYTES_PER_MB {
+        if input_size <= self.mem_used_mb * BYTES_PER_MB {
             let mut raw_bytes = std::fs::read(&self.input).unwrap();
             let data = util::to_slice_with_lifetime_mut(&mut raw_bytes);
 
@@ -51,8 +51,8 @@ impl ShuffleOptions {
             if !Path::exists(temp_dir) {
                 fs::create_dir(temp_dir).expect("Temp dir could not be created.");
             }
-            let num_tmp_files =
-                (input_size / (self.mem_used_mb * BYTES_PER_MB) + 1).max(MIN_TMP_FILES);
+            let bytes_used = self.mem_used_mb * BYTES_PER_MB;
+            let num_tmp_files = ((input_size + bytes_used - 1) / bytes_used).max(MIN_TMP_FILES);
             let temp_files = (0..num_tmp_files)
                 .map(|idx| {
                     let output_file =
@@ -66,10 +66,9 @@ impl ShuffleOptions {
             println!("# [Finished splitting data. Interleaving...]");
             let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
             interleave.run();
-            for file in temp_files {
-                if fs::remove_file(file).is_err() {
-                    println!("Error automatically removing temp files");
-                }
+
+            if fs::remove_dir_all(temp_dir).is_err() {
+                println!("Error automatically removing temp files");
             }
         }
 
@@ -107,7 +106,6 @@ impl ShuffleOptions {
             println!("    -> Writing to temp file");
             let mut writer = BufWriter::new(file);
             writer.write_all(data_slice)?;
-            drop(buffer);
         }
 
         Ok(())
