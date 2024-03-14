@@ -10,9 +10,9 @@ use structopt::StructOpt;
 #[derive(StructOpt)]
 pub struct InterleaveOptions {
     #[structopt(required = true, min_values = 2)]
-    inputs: Vec<PathBuf>,
+    pub inputs: Vec<PathBuf>,
     #[structopt(required = true, short, long)]
-    output: PathBuf,
+    pub output: PathBuf,
 }
 
 impl InterleaveOptions {
@@ -68,5 +68,9 @@ impl InterleaveOptions {
                 let _ = std::io::stdout().flush();
             }
         }
+    }
+
+    pub fn new(inputs: Vec<PathBuf>, output: PathBuf) -> Self {
+        Self { inputs, output }
     }
 }
