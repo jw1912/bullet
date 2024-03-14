@@ -46,3 +46,54 @@ impl Iterator for Ataxx147Iter {
         })
     }
 }
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Ataxx98;
+impl InputType for Ataxx98 {
+    type RequiredDataType = AtaxxBoard;
+    type FeatureIter = Ataxx98Iter;
+
+    fn max_active_inputs(&self) -> usize {
+        49
+    }
+
+    fn inputs(&self) -> usize {
+        98
+    }
+
+    fn buckets(&self) -> usize {
+        1
+    }
+
+    fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
+        Ataxx98Iter {
+            board_iter: pos.into_iter(),
+        }
+    }
+}
+
+pub struct Ataxx98Iter {
+    board_iter: <AtaxxBoard as std::iter::IntoIterator>::IntoIter,
+}
+
+impl Iterator for Ataxx98Iter {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((piece, square)) = self.board_iter.next() {
+            if piece == 2 {
+                return None;
+            }
+
+            let pc = usize::from(piece);
+            let sq = usize::from(square);
+
+            let stm_idx = 49 * pc + sq;
+            let nstm_idx = 49 * (1 - pc) + sq;
+
+            return Some((stm_idx, nstm_idx));
+        }
+
+        None
+    }
+}
