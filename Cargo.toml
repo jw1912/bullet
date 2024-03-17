@@ -1,5 +1,5 @@
 [package]
-name = "bullet"
+name = "bullet_lib"
 version = "1.0.0"
 edition = "2021"
 description = "Neural Network Trainer for 2-Player Games."
