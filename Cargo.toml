@@ -1,20 +1,12 @@
-[workspace]
-resolver = "2"
-members = ["bullet-utils"]
-
-[workspace.package]
-license = "MIT"
-authors = ["Jamie Whiting"]
-
 [package]
 name = "bullet"
 version = "1.0.0"
 edition = "2021"
-license.workspace = true
-authors.workspace = true
-
-[workspace.dependencies]
-bulletformat = "1.0.0"
+description = "Neural Network Trainer for 2-Player Games."
+authors = ["Jamie Whiting"]
+license = "MIT"
+repository = "https://github.com/jw1912/bullet"
+readme = "README.md"
 
 [features]
 cuda = ["bindgen", "cc"]
@@ -25,6 +17,17 @@ bulletformat = { workspace = true }
 [build-dependencies]
 bindgen = { version = "0.68.1", optional = true }
 cc = { version = "1.0.83", optional = true }
+
+[workspace]
+resolver = "2"
+members = ["bullet-utils"]
+
+[workspace.package]
+license = "MIT"
+authors = ["Jamie Whiting"]
+
+[workspace.dependencies]
+bulletformat = "1.0.0"
 
 [profile.release]
 panic = 'abort'
