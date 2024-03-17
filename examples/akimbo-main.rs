@@ -1,7 +1,7 @@
 /*
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
-use bullet::{
+use bullet_lib::{
     inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
     WdlScheduler,
 };

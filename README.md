@@ -26,7 +26,7 @@ Raise an issue for support of a new game.
 
 Import the crate with
 ```toml
-bullet = { package = "bullet_lib", features=["cuda"] }
+bullet = { package = "bullet_lib", features = ["cuda"] }
 ```
 
 Check out the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet) and [examples](/examples) to see how to use the crate.

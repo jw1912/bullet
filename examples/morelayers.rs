@@ -4,7 +4,7 @@ for akimbo with more layers, it ended up being significantly stronger at
 fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
-use bullet::{
+use bullet_lib::{
     inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
     WdlScheduler,
 };

@@ -1,7 +1,7 @@
 /*
 This is used to confirm non-functional changes for bullet.
 */
-use bullet::{
+use bullet_lib::{
     inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
     WdlScheduler,
 };

@@ -1,4 +1,4 @@
-use bullet::{
+use bullet_lib::{
     inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
     WdlScheduler,
 };

@@ -5,7 +5,7 @@ and the training schedule is pretty sensible.
 There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
-use bullet::{
+use bullet_lib::{
     inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
     WdlScheduler,
 };
