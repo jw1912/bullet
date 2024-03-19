@@ -6,6 +6,7 @@ use bullet_lib::{
 
 const HIDDEN_SIZE: usize = 128;
 const PER_TUPLE: usize = 3usize.pow(4);
+const NUM_TUPLES: usize = 36;
 
 #[derive(Clone, Copy, Default)]
 pub struct Ataxx2Tuples;
@@ -14,7 +15,7 @@ impl InputType for Ataxx2Tuples {
     type FeatureIter = ThisIterator;
 
     fn max_active_inputs(&self) -> usize {
-        36
+        NUM_TUPLES
     }
 
     fn buckets(&self) -> usize {
@@ -26,7 +27,7 @@ impl InputType for Ataxx2Tuples {
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        let mut res = [(0, 0); 36];
+        let mut res = [(0, 0); NUM_TUPLES];
 
         let [boys, opps, _] = pos.bbs();
 
@@ -76,7 +77,7 @@ impl InputType for Ataxx2Tuples {
 }
 
 pub struct ThisIterator {
-    inner: [(usize, usize); 36],
+    inner: [(usize, usize); NUM_TUPLES],
     index: usize,
 }
 
@@ -84,7 +85,7 @@ impl Iterator for ThisIterator {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= 25 {
+        if self.index >= NUM_TUPLES {
             return None;
         }
 
@@ -106,7 +107,7 @@ fn main() {
         .build();
 
     let schedule = TrainingSchedule {
-        net_id: "net005".to_string(),
+        net_id: "net006".to_string(),
         batch_size: 16_384,
         eval_scale: 400.0,
         batches_per_superbatch: 6104,
@@ -129,6 +130,6 @@ fn main() {
 
     trainer.run(&schedule, &settings);
 
-    println!("{}", trainer.eval("x5o/7/7/7/7/7/o5x x 0 1"));
-    println!("{}", trainer.eval("5oo/7/x6/x6/7/7/o5x o 0 2"));
+    println!("{}", 400.0 * trainer.eval("x5o/7/7/7/7/7/o5x x 0 1"));
+    println!("{}", 400.0 * trainer.eval("5oo/7/x6/x6/7/7/o5x o 0 2"));
 }
