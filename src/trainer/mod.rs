@@ -1,47 +1,21 @@
+mod builder;
+mod components;
+mod run;
+pub mod schedule;
+
+pub use builder::TrainerBuilder;
+use components::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo};
+pub use run::{ansi, run, set_cbcs};
+
 use crate::{
     inputs::InputType,
     loader::GpuDataLoader,
     outputs::OutputBuckets,
     tensor::{
-        self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor,
-        Tensor, TensorBatch,
+        self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor, TensorBatch,
     },
-    util, Activation, Rand,
+    util,
 };
-
-struct FeatureTransformer {
-    weights: Tensor,
-    biases: Tensor,
-    weights_grad: Tensor,
-    biases_grad: Tensor,
-    single_perspective: bool,
-    outputs: TensorBatch,
-}
-
-struct Affine {
-    weights: Tensor,
-    biases: Tensor,
-    weights_grad: Tensor,
-    biases_grad: Tensor,
-    ones: DeviceBuffer,
-}
-
-enum Operation {
-    Activate(Activation),
-    Affine(Affine),
-    Select,
-    DualActivate,
-}
-
-struct Node {
-    outputs: TensorBatch,
-    op: Operation,
-}
-
-struct QuantiseInfo {
-    val: i32,
-    start: usize,
-}
 
 pub struct Trainer<T, U> {
     input_getter: T,
@@ -49,6 +23,7 @@ pub struct Trainer<T, U> {
     handle: DeviceHandles,
     optimiser: Optimiser,
     ft: FeatureTransformer,
+    ft_reg: f32,
     nodes: Vec<Node>,
     inputs: SparseTensor,
     results: TensorBatch,
@@ -227,10 +202,15 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
 
         self.results = TensorBatch::new(self.results.shape(), batch_size);
         self.ft.outputs = TensorBatch::new(self.ft.outputs.shape(), batch_size);
+        self.ft.copy = TensorBatch::new(self.ft.copy.shape(), batch_size);
 
         for node in &mut self.nodes {
             node.outputs = TensorBatch::new(node.outputs.shape(), batch_size);
         }
+    }
+
+    pub fn set_ft_reg(&mut self, val: f32) {
+        self.ft_reg = val;
     }
 
     pub fn error(&self) -> f32 {
@@ -385,9 +365,6 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                         &node.outputs,
                     );
                 }
-                Operation::DualActivate => {
-                    TensorBatch::activate_dual(self.handle, batch_size, inputs, &node.outputs)
-                }
                 Operation::Select => TensorBatch::select(
                     self.handle,
                     batch_size,
@@ -437,6 +414,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             );
         }
 
+        if self.ft_reg != 0.0 {
+            self.ft.copy.copy_from(&self.ft.outputs);
+        }
+
         backprop_single(
             self.handle,
             batch_size,
@@ -452,6 +433,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 &self.inputs,
                 &self.ft.biases_grad,
                 &self.ft.outputs,
+                &self.ft.copy,
+                self.ft_reg,
             );
         } else {
             SparseTensor::affine_backprop(
@@ -460,6 +443,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 &self.inputs,
                 &self.ft.biases_grad,
                 &self.ft.outputs,
+                &self.ft.copy,
+                self.ft_reg,
             );
         }
     }
@@ -487,273 +472,8 @@ unsafe fn backprop_single(
         }) => {
             TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
         }
-        Operation::DualActivate => TensorBatch::backprop_dual(handle, batch_size, errors, inputs),
         Operation::Select => {
             TensorBatch::select_backprop(handle, batch_size, buckets, errors, inputs)
-        }
-    }
-}
-
-enum OpType {
-    Activate(Activation),
-    Affine,
-    DualActivate,
-}
-
-struct NodeType {
-    size: usize,
-    op: OpType,
-}
-
-pub struct TrainerBuilder<T, U> {
-    input_getter: T,
-    bucket_getter: U,
-    ft_out_size: usize,
-    nodes: Vec<NodeType>,
-    quantisations: Vec<i32>,
-    single_perspective: bool,
-    size: usize,
-}
-
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Default for TrainerBuilder<T, U> {
-    fn default() -> Self {
-        Self {
-            input_getter: T::default(),
-            bucket_getter: U::default(),
-            ft_out_size: 0,
-            nodes: Vec::new(),
-            quantisations: Vec::new(),
-            single_perspective: false,
-            size: 0,
-        }
-    }
-}
-
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
-    fn get_last_layer_size(&self) -> usize {
-        if let Some(node) = self.nodes.last() {
-            node.size
-        } else {
-            self.ft_out_size * if self.single_perspective { 1 } else { 2 }
-        }
-    }
-
-    pub fn single_perspective(mut self) -> Self {
-        if !self.nodes.is_empty() {
-            panic!("You need to set 'single_perspective' before adding any layers!");
-        }
-        self.single_perspective = true;
-        self
-    }
-
-    pub fn input(mut self, input_getter: T) -> Self {
-        self.input_getter = input_getter;
-        self
-    }
-
-    pub fn output_buckets(mut self, bucket_getter: U) -> Self {
-        self.bucket_getter = bucket_getter;
-        self
-    }
-
-    pub fn quantisations(mut self, quants: &[i32]) -> Self {
-        self.quantisations = quants.to_vec();
-        self
-    }
-
-    pub fn feature_transformer(mut self, size: usize) -> Self {
-        assert!(self.nodes.is_empty());
-        self.ft_out_size = size;
-        self
-    }
-
-    fn add(mut self, size: usize, op: OpType) -> Self {
-        self.nodes.push(NodeType { size, op });
-
-        self
-    }
-
-    pub fn add_layer(mut self, size: usize) -> Self {
-        self.size += (self.get_last_layer_size() + 1) * size * U::BUCKETS;
-        self.add(size, OpType::Affine)
-    }
-
-    pub fn activate(self, activation: Activation) -> Self {
-        let size = self.get_last_layer_size();
-        self.add(size, OpType::Activate(activation))
-    }
-
-    /// Apply both CReLU and SCReLU, concat results
-    pub fn dual_activate(self) -> Self {
-        let size = 2 * self.get_last_layer_size();
-        self.add(size, OpType::DualActivate)
-    }
-
-    pub fn build(self) -> Trainer<T, U> {
-        let inp_getter_size = self.input_getter.size();
-        let max_active_inputs = self.input_getter.max_active_inputs();
-
-        let buckets = U::BUCKETS;
-
-        let ft_size = (inp_getter_size + 1) * self.ft_out_size;
-        let net_size = self.size + ft_size;
-
-        let opt = Optimiser::new(net_size);
-        let batch_size = 1;
-        let mul = if self.single_perspective { 1 } else { 2 };
-
-        unsafe {
-            let ftw_shape = Shape::new(self.ft_out_size, inp_getter_size);
-            let ftb_shape = Shape::new(1, self.ft_out_size);
-
-            let mut ft = FeatureTransformer {
-                weights: Tensor::uninit(ftw_shape),
-                biases: Tensor::uninit(ftb_shape),
-                weights_grad: Tensor::uninit(ftw_shape),
-                biases_grad: Tensor::uninit(ftb_shape),
-                single_perspective: self.single_perspective,
-                outputs: TensorBatch::new(Shape::new(1, mul * self.ft_out_size), batch_size),
-            };
-
-            let mut offset = 0;
-            ft.weights.set_ptr(opt.weights_offset(offset));
-            ft.weights_grad.set_ptr(opt.gradients_offset(offset));
-            offset += self.ft_out_size * inp_getter_size;
-
-            ft.biases.set_ptr(opt.weights_offset(offset));
-            ft.biases_grad.set_ptr(opt.gradients_offset(offset));
-            offset += self.ft_out_size;
-
-            let mut nodes = Vec::new();
-            let mut inp_size = mul * self.ft_out_size;
-
-            let mut quantiser = Vec::new();
-            let mut qi = 0;
-            let mut accq = 1;
-            if !self.quantisations.is_empty() {
-                quantiser.push(QuantiseInfo {
-                    val: self.quantisations[qi],
-                    start: 0,
-                });
-                accq *= self.quantisations[qi];
-                qi += 1;
-            }
-
-            for NodeType { size, op } in &self.nodes {
-                let size = *size;
-
-                match op {
-                    OpType::Affine => {
-                        let raw_size = size * buckets;
-                        let wsh = Shape::new(inp_size, raw_size);
-                        let bsh = Shape::new(1, raw_size);
-
-                        let ones = DeviceBuffer::new(1);
-                        ones.load_from_host(&[1.0]);
-                        let mut affine = Affine {
-                            weights: Tensor::uninit(wsh),
-                            biases: Tensor::uninit(bsh),
-                            weights_grad: Tensor::uninit(wsh),
-                            biases_grad: Tensor::uninit(bsh),
-                            ones,
-                        };
-
-                        affine.weights.set_ptr(opt.weights_offset(offset));
-                        affine.weights_grad.set_ptr(opt.gradients_offset(offset));
-
-                        if !self.quantisations.is_empty() {
-                            quantiser.push(QuantiseInfo {
-                                val: self.quantisations[qi],
-                                start: offset,
-                            });
-                        }
-
-                        offset += inp_size * raw_size;
-
-                        affine.biases.set_ptr(opt.weights_offset(offset));
-                        affine.biases_grad.set_ptr(opt.gradients_offset(offset));
-
-                        if !self.quantisations.is_empty() {
-                            accq *= self.quantisations[qi];
-                            quantiser.push(QuantiseInfo {
-                                val: accq,
-                                start: offset,
-                            });
-                            qi += 1;
-                        }
-
-                        offset += raw_size;
-
-                        let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node {
-                            outputs,
-                            op: Operation::Affine(affine),
-                        });
-
-                        if buckets > 1 {
-                            nodes.push(Node {
-                                outputs: TensorBatch::new(Shape::new(1, size), batch_size),
-                                op: Operation::Select,
-                            });
-                        }
-                    }
-                    OpType::Activate(activation) => {
-                        let bsh = Shape::new(1, size);
-                        let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node {
-                            outputs,
-                            op: Operation::Activate(*activation),
-                        });
-                    }
-                    OpType::DualActivate => {
-                        let bsh = Shape::new(1, size);
-                        let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node {
-                            outputs,
-                            op: Operation::DualActivate,
-                        });
-                    }
-                };
-
-                inp_size = size;
-            }
-
-            assert_eq!(
-                qi,
-                self.quantisations.len(),
-                "Incorrectly specified number of quantisations!"
-            );
-            assert_eq!(offset, net_size);
-
-            let inputs = SparseTensor::uninit(batch_size, inp_getter_size, max_active_inputs);
-
-            let results = TensorBatch::new(Shape::new(1, 1), batch_size);
-            let error_device = DeviceBuffer::new(1);
-
-            let mut net = vec![0.0; net_size];
-            let mut rng = Rand::default();
-
-            for (i, val) in net.iter_mut().enumerate() {
-                *val = rng.rand(if i < ft_size { 0.01 } else { 0.1 });
-            }
-
-            opt.load_weights_from_host(&net);
-
-            Trainer {
-                input_getter: self.input_getter,
-                bucket_getter: self.bucket_getter,
-                handle: DeviceHandles::default(),
-                optimiser: opt,
-                ft,
-                nodes,
-                inputs,
-                results,
-                error_device,
-                error: 0.0,
-                used: 0,
-                quantiser,
-                buckets: tensor::util::calloc(batch_size),
-            }
         }
     }
 }

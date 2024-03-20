@@ -112,6 +112,9 @@ fn tensor_sparse_affine() {
         let mut biases = Tensor::uninit(Shape::new(1, N));
         let mut inputs = SparseTensor::uninit(B, M, 1);
         let outputs = TensorBatch::new(Shape::new(1, 2 * N), B);
+        let zeros = TensorBatch::new(Shape::new(1, 2 * N), B);
+
+        zeros.load_from_host(&[0.0; 2 * N * B]);
 
         weights.calloc();
         biases.calloc();
@@ -135,7 +138,7 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs);
+        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);
@@ -353,31 +356,6 @@ fn mse() {
         let diff = e - (sig - r) * sig * (1.0 - sig);
         assert!(diff.abs() < 0.00001);
     }
-}
-
-#[test]
-fn activate_dual() {
-    let handle = DeviceHandles::default();
-    let mut xs = [1.0, -1.0, -0.5, 0.5, 1.0, 0.25];
-
-    let x = TensorBatch::new(Shape::new(1, 2), 3);
-    let y = TensorBatch::new(Shape::new(1, 4), 3);
-
-    x.load_from_host(&xs);
-    TensorBatch::activate_dual(handle, 3, &x, &y);
-
-    let mut ys = [0.0; 12];
-    y.write_to_host(&mut ys);
-
-    assert_eq!(ys, [
-        1.0, 0.0, 1.0, 0.0,
-        0.0, 0.5, 0.0, 0.25,
-        1.0, 0.25, 1.0, 0.0625,
-    ]);
-
-    TensorBatch::backprop_dual(handle, 3, &y, &x);
-    x.write_to_host(&mut xs);
-    assert_eq!(xs, [0.0, 0.0, 0.0, 0.75, 0.0, 0.28125]);
 }
 
 #[test]

@@ -5,6 +5,7 @@ use crate::{
     tensor::{device_name, device_synchronise},
     util, LocalSettings, Trainer, TrainingSchedule,
 };
+
 use std::{
     fs::File,
     io::{stdout, BufRead, BufReader, Write},
@@ -35,6 +36,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     device_synchronise();
 
     trainer.set_batch_size(schedule.batch_size);
+    trainer.set_ft_reg(schedule.ft_regularisation);
 
     let esc = esc();
     let rscale = 1.0 / schedule.eval_scale;
@@ -183,7 +185,14 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
         if curr_batch % schedule.batches_per_superbatch == 0 {
             let error = trainer.error() / schedule.batches_per_superbatch as f32;
 
-            report_superbatch_finished(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
+            report_superbatch_finished(
+                schedule,
+                superbatch,
+                error,
+                &superbatch_timer,
+                &timer,
+                pos_per_sb,
+            );
 
             if schedule.should_save(superbatch) {
                 let name = format!("{}-{superbatch}", schedule.net_id());

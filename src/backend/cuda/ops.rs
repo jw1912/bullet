@@ -191,6 +191,8 @@ pub unsafe fn sparse_affine_backward(
     biases_grad: *mut f32,
     inputs: *const Feat,
     errors: *const f32,
+    output: *const f32,
+    ft_reg: f32,
 ) {
     bindings::sparseAffineBackward(
         batch_size,
@@ -200,6 +202,8 @@ pub unsafe fn sparse_affine_backward(
         biases_grad,
         inputs,
         errors,
+        output,
+        ft_reg,
     );
 }
 
@@ -234,6 +238,8 @@ pub unsafe fn single_sparse_affine_backward(
     biases_grad: *mut f32,
     inputs: *const Feat,
     errors: *const f32,
+    output: *const f32,
+    ft_reg: f32,
 ) {
     bindings::singleSparseAffineBackward(
         batch_size,
@@ -243,6 +249,8 @@ pub unsafe fn single_sparse_affine_backward(
         biases_grad,
         inputs,
         errors,
+        output,
+        ft_reg,
     );
 }
 
@@ -298,26 +306,6 @@ pub unsafe fn update_weights(
         velocity,
         gradients,
     );
-}
-
-pub unsafe fn activate_dual(
-    _: DeviceHandles,
-    batch_size: usize,
-    tensor_size: usize,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    bindings::activateDual(batch_size, tensor_size, inp, out);
-}
-
-pub unsafe fn backprop_dual(
-    _: DeviceHandles,
-    batch_size: usize,
-    tensor_size: usize,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    bindings::backpropDual(batch_size, tensor_size, inp, out);
 }
 
 pub unsafe fn select(

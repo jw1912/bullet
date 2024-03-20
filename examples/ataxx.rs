@@ -1,7 +1,6 @@
 use bullet_lib::{
-    format::AtaxxBoard,
-    inputs::InputType, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
-    WdlScheduler,
+    format::AtaxxBoard, inputs::InputType, outputs, Activation, LocalSettings, LrScheduler,
+    TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -108,8 +107,9 @@ fn main() {
 
     let schedule = TrainingSchedule {
         net_id: "net006".to_string(),
-        batch_size: 16_384,
         eval_scale: 400.0,
+        ft_regularisation: 0.0,
+        batch_size: 16_384,
         batches_per_superbatch: 6104,
         start_superbatch: 1,
         end_superbatch: 40,

@@ -55,6 +55,12 @@ impl TensorBatch {
         self.buf.write_to_host(buf);
     }
 
+    pub fn copy_from(&self, other: &Self) {
+        assert_eq!(self.shape(), other.shape());
+        assert_eq!(self.cap(), other.cap());
+        self.buf.load_from_device(&other.buf);
+    }
+
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
@@ -230,34 +236,6 @@ impl TensorBatch {
         );
         TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
-    }
-
-    pub fn activate_dual(
-        handle: DeviceHandles,
-        batch_size: usize,
-        inp: &TensorBatch,
-        out: &TensorBatch,
-    ) {
-        assert_eq!(inp.shape().cols(), 1);
-        assert_eq!(out.shape().cols(), 1);
-        assert_eq!(2 * inp.shape().rows(), out.shape().rows());
-        unsafe {
-            ops::activate_dual(handle, batch_size, inp.element_size(), inp.ptr(), out.ptr());
-        }
-    }
-
-    pub fn backprop_dual(
-        handle: DeviceHandles,
-        batch_size: usize,
-        inp: &TensorBatch,
-        out: &TensorBatch,
-    ) {
-        assert_eq!(inp.shape().cols(), 1);
-        assert_eq!(out.shape().cols(), 1);
-        assert_eq!(inp.shape().rows(), 2 * out.shape().rows());
-        unsafe {
-            ops::backprop_dual(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
-        }
     }
 
     pub fn sigmoid_mse(

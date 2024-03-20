@@ -45,39 +45,3 @@ extern "C" void backpropSCReLU(const size_t size, const float* in, float* out)
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
     bufferBackprop<primeSCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
-
-__global__ void backpropDualKernel(
-    const size_t batchSize,
-    const size_t tensorSize,
-    const float* inp,
-    float* out)
-{
-    const size_t tid = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (tid >= tensorSize)
-        return;
-
-    const float* thisInp = inp + 2 * tensorSize * blockIdx.y + tid;
-    float* thisOut = out + tensorSize * blockIdx.y;
-
-    const float preOut = thisOut[tid];
-    thisOut[tid] = thisInp[0] * primeCReLU(preOut) + thisInp[tensorSize] * primeSCReLU(preOut);
-}
-
-extern "C" void backpropDual(
-    const size_t batchSize,
-    const size_t tensorSize,
-    const float* inp,
-    float* out)
-{
-    const size_t grid_x = (tensorSize + threadsPerBlock - 1) / threadsPerBlock;
-    const dim3 grid(grid_x, batchSize);
-
-    backpropDualKernel<<<grid, threadsPerBlock>>>(
-        batchSize,
-        tensorSize,
-        inp,
-        out
-    );
-}
-

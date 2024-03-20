@@ -116,3 +116,18 @@ pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
     );
     catch!(cudaDeviceSynchronize());
 }
+
+/// # Safety
+/// Pointers need to be valid and `amt` need to be valid.
+pub unsafe fn copy_on_device<T>(dest: *mut T, src: *const T, amt: usize) {
+    catch!(
+        cudaMemcpy(
+            dest.cast(),
+            src.cast(),
+            amt * std::mem::size_of::<T>(),
+            cudaMemcpyKind::cudaMemcpyDeviceToDevice
+        ),
+        "memcpy"
+    );
+    catch!(cudaDeviceSynchronize());
+}
