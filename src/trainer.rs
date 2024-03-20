@@ -440,12 +440,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             );
         }
 
-        device_synchronise();
-        let t = std::time::Instant::now();
-
         self.ft.copy.copy_from(&self.ft.outputs);
-        device_synchronise();
-        println!("{}", t.elapsed().as_micros());
 
         backprop_single(
             self.handle,
