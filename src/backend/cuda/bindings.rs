@@ -41,6 +41,7 @@ extern "C" {
         biasesGrad: *mut f32,
         inputs: *const Feat,
         errors: *const f32,
+        output: *const f32,
         ft_reg: f32,
     );
 
@@ -62,6 +63,7 @@ extern "C" {
         biasesGrad: *mut f32,
         inputs: *const Feat,
         errors: *const f32,
+        output: *const f32,
         ft_reg: f32,
     );
 

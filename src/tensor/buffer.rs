@@ -53,6 +53,14 @@ impl DeviceBuffer {
         util::set_zero(self.ptr, self.size)
     }
 
+    pub fn load_from_device(&self, buf: &Self) {
+        assert!(buf.size <= self.size, "Overflow: {} > {}!", buf.size, self.size);
+        unsafe {
+            util::copy_on_device(self.ptr, buf.ptr, buf.size);
+        }
+        util::device_synchronise();
+    }
+
     pub fn load_from_host(&self, buf: &[f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
         unsafe {

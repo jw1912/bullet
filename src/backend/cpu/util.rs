@@ -72,3 +72,9 @@ pub unsafe fn copy_to_device<T: Copy>(dest: *mut T, src: *const T, amt: usize) {
 pub unsafe fn copy_from_device<T: Copy>(dest: *mut T, src: *const T, amt: usize) {
     copy_to_device(dest, src, amt);
 }
+
+/// # Safety
+/// Pointers need to be valid and `amt` need to be valid.
+pub unsafe fn copy_on_device<T: Copy>(dest: *mut T, src: *const T, amt: usize) {
+    copy_to_device(dest, src, amt);
+}

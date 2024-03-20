@@ -55,6 +55,12 @@ impl TensorBatch {
         self.buf.write_to_host(buf);
     }
 
+    pub fn copy_from(&self, other: &Self) {
+        assert_eq!(self.shape(), other.shape());
+        assert_eq!(self.cap(), other.cap());
+        self.buf.load_from_device(&other.buf);
+    }
+
     /// # Safety
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.

@@ -191,6 +191,7 @@ pub unsafe fn sparse_affine_backward(
     biases_grad: *mut f32,
     inputs: *const Feat,
     errors: *const f32,
+    output: *const f32,
     ft_reg: f32,
 ) {
     bindings::sparseAffineBackward(
@@ -201,6 +202,7 @@ pub unsafe fn sparse_affine_backward(
         biases_grad,
         inputs,
         errors,
+        output,
         ft_reg,
     );
 }
@@ -236,6 +238,7 @@ pub unsafe fn single_sparse_affine_backward(
     biases_grad: *mut f32,
     inputs: *const Feat,
     errors: *const f32,
+    output: *const f32,
     ft_reg: f32,
 ) {
     bindings::singleSparseAffineBackward(
@@ -246,6 +249,7 @@ pub unsafe fn single_sparse_affine_backward(
         biases_grad,
         inputs,
         errors,
+        output,
         ft_reg,
     );
 }

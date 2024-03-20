@@ -16,6 +16,7 @@ struct FeatureTransformer {
     biases_grad: Tensor,
     single_perspective: bool,
     outputs: TensorBatch,
+    copy: TensorBatch,
 }
 
 struct Affine {
@@ -228,6 +229,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
 
         self.results = TensorBatch::new(self.results.shape(), batch_size);
         self.ft.outputs = TensorBatch::new(self.ft.outputs.shape(), batch_size);
+        self.ft.copy = TensorBatch::new(self.ft.copy.shape(), batch_size);
 
         for node in &mut self.nodes {
             node.outputs = TensorBatch::new(node.outputs.shape(), batch_size);
@@ -438,6 +440,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             );
         }
 
+        device_synchronise();
+        let t = std::time::Instant::now();
+
+        self.ft.copy.copy_from(&self.ft.outputs);
+        device_synchronise();
+        println!("{}", t.elapsed().as_micros());
+
         backprop_single(
             self.handle,
             batch_size,
@@ -453,6 +462,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 &self.inputs,
                 &self.ft.biases_grad,
                 &self.ft.outputs,
+                &self.ft.copy,
                 self.ft_reg,
             );
         } else {
@@ -462,6 +472,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 &self.inputs,
                 &self.ft.biases_grad,
                 &self.ft.outputs,
+                &self.ft.copy,
                 self.ft_reg,
             );
         }
@@ -608,6 +619,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
         unsafe {
             let ftw_shape = Shape::new(self.ft_out_size, inp_getter_size);
             let ftb_shape = Shape::new(1, self.ft_out_size);
+            let fto_shape = Shape::new(1, mul * self.ft_out_size);
 
             let mut ft = FeatureTransformer {
                 weights: Tensor::uninit(ftw_shape),
@@ -615,7 +627,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                 weights_grad: Tensor::uninit(ftw_shape),
                 biases_grad: Tensor::uninit(ftb_shape),
                 single_perspective: self.single_perspective,
-                outputs: TensorBatch::new(Shape::new(1, mul * self.ft_out_size), batch_size),
+                outputs: TensorBatch::new(fto_shape, batch_size),
+                copy: TensorBatch::new(fto_shape, batch_size),
             };
 
             let mut offset = 0;

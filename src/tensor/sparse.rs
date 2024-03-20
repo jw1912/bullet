@@ -106,6 +106,7 @@ impl SparseTensor {
         inputs: &SparseTensor,
         biases_grad: &Tensor,
         errors: &TensorBatch,
+        output: &TensorBatch,
         ft_reg: f32,
     ) {
         assert!(inputs.used > 0);
@@ -125,6 +126,7 @@ impl SparseTensor {
             biases_grad.ptr(),
             inputs.ptr,
             errors.ptr(),
+            output.ptr(),
             ft_reg,
         );
     }
@@ -165,6 +167,7 @@ impl SparseTensor {
         inputs: &SparseTensor,
         biases_grad: &Tensor,
         errors: &TensorBatch,
+        output: &TensorBatch,
         ft_reg: f32,
     ) {
         assert!(inputs.used > 0);
@@ -184,6 +187,7 @@ impl SparseTensor {
             biases_grad.ptr(),
             inputs.ptr,
             errors.ptr(),
+            output.ptr(),
             ft_reg,
         );
     }

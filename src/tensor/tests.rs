@@ -112,6 +112,9 @@ fn tensor_sparse_affine() {
         let mut biases = Tensor::uninit(Shape::new(1, N));
         let mut inputs = SparseTensor::uninit(B, M, 1);
         let outputs = TensorBatch::new(Shape::new(1, 2 * N), B);
+        let zeros = TensorBatch::new(Shape::new(1, 2 * N), B);
+
+        zeros.load_from_host(&[0.0; 2 * N * B]);
 
         weights.calloc();
         biases.calloc();
@@ -135,7 +138,7 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs, 0.0);
+        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);
