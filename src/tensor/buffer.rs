@@ -54,7 +54,12 @@ impl DeviceBuffer {
     }
 
     pub fn load_from_device(&self, buf: &Self) {
-        assert!(buf.size <= self.size, "Overflow: {} > {}!", buf.size, self.size);
+        assert!(
+            buf.size <= self.size,
+            "Overflow: {} > {}!",
+            buf.size,
+            self.size
+        );
         unsafe {
             util::copy_on_device(self.ptr, buf.ptr, buf.size);
         }

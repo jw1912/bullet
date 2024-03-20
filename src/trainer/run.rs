@@ -185,7 +185,14 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
         if curr_batch % schedule.batches_per_superbatch == 0 {
             let error = trainer.error() / schedule.batches_per_superbatch as f32;
 
-            report_superbatch_finished(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
+            report_superbatch_finished(
+                schedule,
+                superbatch,
+                error,
+                &superbatch_timer,
+                &timer,
+                pos_per_sb,
+            );
 
             if schedule.should_save(superbatch) {
                 let name = format!("{}-{superbatch}", schedule.net_id());

@@ -4,16 +4,15 @@ mod run;
 pub mod schedule;
 
 pub use builder::TrainerBuilder;
-use components::{FeatureTransformer, Node, Operation, QuantiseInfo, Affine};
-pub use run::{ansi, set_cbcs, run};
+use components::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo};
+pub use run::{ansi, run, set_cbcs};
 
 use crate::{
     inputs::InputType,
     loader::GpuDataLoader,
     outputs::OutputBuckets,
     tensor::{
-        self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor,
-        TensorBatch,
+        self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor, TensorBatch,
     },
     util,
 };

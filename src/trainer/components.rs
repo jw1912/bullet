@@ -1,4 +1,7 @@
-use crate::{Activation, tensor::{DeviceBuffer, Tensor, TensorBatch}};
+use crate::{
+    tensor::{DeviceBuffer, Tensor, TensorBatch},
+    Activation,
+};
 
 pub(super) struct FeatureTransformer {
     pub weights: Tensor,

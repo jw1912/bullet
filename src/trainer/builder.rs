@@ -1,15 +1,14 @@
 use crate::{
     inputs::InputType,
     outputs::OutputBuckets,
-    tensor::{
-        self, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor,
-        Tensor, TensorBatch, Shape
-    },
     rng::Rand,
+    tensor::{
+        self, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor, Tensor, TensorBatch,
+    },
     Activation,
 };
 
-use super::{Trainer, FeatureTransformer, Node, Operation, QuantiseInfo, Affine};
+use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};
 
 enum OpType {
     Activate(Activation),

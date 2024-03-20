@@ -11,7 +11,10 @@ use trainer::ansi;
 
 pub use bulletformat as format;
 pub use rng::Rand;
-pub use trainer::{Trainer, TrainerBuilder, set_cbcs, schedule::{LrScheduler, TrainingSchedule, WdlScheduler}};
+pub use trainer::{
+    schedule::{LrScheduler, TrainingSchedule, WdlScheduler},
+    set_cbcs, Trainer, TrainerBuilder,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Activation {
