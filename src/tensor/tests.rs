@@ -359,31 +359,6 @@ fn mse() {
 }
 
 #[test]
-fn activate_dual() {
-    let handle = DeviceHandles::default();
-    let mut xs = [1.0, -1.0, -0.5, 0.5, 1.0, 0.25];
-
-    let x = TensorBatch::new(Shape::new(1, 2), 3);
-    let y = TensorBatch::new(Shape::new(1, 4), 3);
-
-    x.load_from_host(&xs);
-    TensorBatch::activate_dual(handle, 3, &x, &y);
-
-    let mut ys = [0.0; 12];
-    y.write_to_host(&mut ys);
-
-    assert_eq!(ys, [
-        1.0, 0.0, 1.0, 0.0,
-        0.0, 0.5, 0.0, 0.25,
-        1.0, 0.25, 1.0, 0.0625,
-    ]);
-
-    TensorBatch::backprop_dual(handle, 3, &y, &x);
-    x.write_to_host(&mut xs);
-    assert_eq!(xs, [0.0, 0.0, 0.0, 0.75, 0.0, 0.28125]);
-}
-
-#[test]
 fn select() {
     let handle = DeviceHandles::default();
     let buckets = [0, 1, 2, 1];

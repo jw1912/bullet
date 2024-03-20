@@ -308,26 +308,6 @@ pub unsafe fn update_weights(
     );
 }
 
-pub unsafe fn activate_dual(
-    _: DeviceHandles,
-    batch_size: usize,
-    tensor_size: usize,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    bindings::activateDual(batch_size, tensor_size, inp, out);
-}
-
-pub unsafe fn backprop_dual(
-    _: DeviceHandles,
-    batch_size: usize,
-    tensor_size: usize,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    bindings::backpropDual(batch_size, tensor_size, inp, out);
-}
-
 pub unsafe fn select(
     _: DeviceHandles,
     batch_size: usize,

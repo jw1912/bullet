@@ -238,34 +238,6 @@ impl TensorBatch {
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn activate_dual(
-        handle: DeviceHandles,
-        batch_size: usize,
-        inp: &TensorBatch,
-        out: &TensorBatch,
-    ) {
-        assert_eq!(inp.shape().cols(), 1);
-        assert_eq!(out.shape().cols(), 1);
-        assert_eq!(2 * inp.shape().rows(), out.shape().rows());
-        unsafe {
-            ops::activate_dual(handle, batch_size, inp.element_size(), inp.ptr(), out.ptr());
-        }
-    }
-
-    pub fn backprop_dual(
-        handle: DeviceHandles,
-        batch_size: usize,
-        inp: &TensorBatch,
-        out: &TensorBatch,
-    ) {
-        assert_eq!(inp.shape().cols(), 1);
-        assert_eq!(out.shape().cols(), 1);
-        assert_eq!(inp.shape().rows(), 2 * out.shape().rows());
-        unsafe {
-            ops::backprop_dual(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
-        }
-    }
-
     pub fn sigmoid_mse(
         &self,
         handle: DeviceHandles,

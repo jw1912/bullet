@@ -19,9 +19,6 @@ pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
-#[cfg(feature = "blas")]
-use bullet_blas::{blasint, cblas_sgemm, CBLAS_LAYOUT, CBLAS_TRANSPOSE};
-
 pub unsafe fn splat_mul_matrix_vector(
     handle: DeviceHandles,
     m: usize,
@@ -83,44 +80,6 @@ pub unsafe fn splat_mul_matrixt_vector(
     });
 }
 
-#[cfg(feature = "blas")]
-pub unsafe fn reduce_add_mul_vector_vectort(
-    handle: DeviceHandles,
-    m: usize,
-    n: usize,
-    y_ptr: *const f32,
-    x_ptr: *const f32,
-    a_ptr: *mut f32,
-    batch_size: usize,
-) {
-    let alpha = 1.0;
-    let beta = 0.0;
-
-    let m = m as blasint;
-    let n = n as blasint;
-    let batch_size = batch_size as blasint;
-
-    unsafe {
-        cblas_sgemm(
-            CBLAS_LAYOUT::CblasColMajor,
-            CBLAS_TRANSPOSE::CblasConjNoTrans,
-            CBLAS_TRANSPOSE::CblasConjTrans,
-            n,
-            m,
-            batch_size,
-            alpha,
-            y_ptr,
-            n,
-            x_ptr,
-            m,
-            beta,
-            a_ptr,
-            n,
-        );
-    }
-}
-
-#[cfg(not(feature = "blas"))]
 pub unsafe fn reduce_add_mul_vector_vectort(
     handle: DeviceHandles,
     m: usize,
@@ -188,26 +147,6 @@ pub unsafe fn reduce_add(
 
         *(out as *mut f32).add(idx) = sum;
     });
-}
-
-pub unsafe fn activate_dual(
-    _: DeviceHandles,
-    batch_size: usize,
-    tensor_size: usize,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    unimplemented!();
-}
-
-pub unsafe fn backprop_dual(
-    _: DeviceHandles,
-    batch_size: usize,
-    tensor_size: usize,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    unimplemented!();
 }
 
 pub unsafe fn select(
