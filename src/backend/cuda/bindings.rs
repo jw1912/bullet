@@ -41,6 +41,7 @@ extern "C" {
         biasesGrad: *mut f32,
         inputs: *const Feat,
         errors: *const f32,
+        ft_reg: f32,
     );
 
     pub fn singleSparseAffineForward(
@@ -61,6 +62,7 @@ extern "C" {
         biasesGrad: *mut f32,
         inputs: *const Feat,
         errors: *const f32,
+        ft_reg: f32,
     );
 
     pub fn activateReLU(size: usize, inp: *const f32, out: *mut f32);

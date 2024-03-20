@@ -106,6 +106,7 @@ impl SparseTensor {
         inputs: &SparseTensor,
         biases_grad: &Tensor,
         errors: &TensorBatch,
+        ft_reg: f32,
     ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
@@ -124,6 +125,7 @@ impl SparseTensor {
             biases_grad.ptr(),
             inputs.ptr,
             errors.ptr(),
+            ft_reg,
         );
     }
 
@@ -163,6 +165,7 @@ impl SparseTensor {
         inputs: &SparseTensor,
         biases_grad: &Tensor,
         errors: &TensorBatch,
+        ft_reg: f32,
     ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
@@ -181,6 +184,7 @@ impl SparseTensor {
             biases_grad.ptr(),
             inputs.ptr,
             errors.ptr(),
+            ft_reg,
         );
     }
 }

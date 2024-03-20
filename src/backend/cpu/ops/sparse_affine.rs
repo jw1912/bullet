@@ -61,6 +61,7 @@ pub unsafe fn sparse_affine_backward(
     biases_grad: *mut f32,
     inputs: *const Feat,
     errors: *const f32,
+    ft_reg: f32,
 ) {
     let inputs = inputs as usize;
     let errors = errors as usize;
@@ -88,11 +89,13 @@ pub unsafe fn sparse_affine_backward(
         let opp_err = this_err.add(output_size);
 
         for i in 0..output_size {
-            *biases.add(i) += *our_err.add(i);
+            let err = *our_err.add(i);
+            *biases.add(i) += err + ft_reg * f32::from(err > 0.0);
         }
 
         for i in 0..output_size {
-            *biases.add(i) += *opp_err.add(i);
+            let err = *opp_err.add(i);
+            *biases.add(i) += err + ft_reg * f32::from(err > 0.0);
         }
 
         for i in 0..max_active_inputs {
@@ -104,12 +107,14 @@ pub unsafe fn sparse_affine_backward(
 
             let our_weights = weights.add(output_size * feat.our());
             for j in 0..output_size {
-                *our_weights.add(j) += *our_err.add(j);
+                let err = *our_err.add(j);
+                *our_weights.add(j) += err + ft_reg * f32::from(err > 0.0);
             }
 
             let opp_weights = weights.add(output_size * feat.opp());
             for j in 0..output_size {
-                *opp_weights.add(j) += *opp_err.add(j);
+                let err = *opp_err.add(j);
+                *opp_weights.add(j) += err + ft_reg * f32::from(err > 0.0);
             }
         }
     });
@@ -144,6 +149,7 @@ pub unsafe fn single_sparse_affine_backward(
     biases_grad: *mut f32,
     inputs: *const Feat,
     errors: *const f32,
+    ft_reg: f32,
 ) {
     unimplemented!();
 }

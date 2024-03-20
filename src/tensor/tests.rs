@@ -135,7 +135,7 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs);
+        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs, 0.0);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);

@@ -46,7 +46,8 @@ __global__ void SingleSparseAffineBackwardKernel(
     float* weightsGrad,
     float* biasesGrad,
     const Feat* inputs,
-    const float* errors)
+    const float* errors,
+    const float ftRegularisation)
 {
     const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -56,7 +57,11 @@ __global__ void SingleSparseAffineBackwardKernel(
     const Feat* thisInput = inputs + inputSize * blockIdx.y;
     const float* thisErrors = errors + outputSize * blockIdx.y;
 
-    const float ourError = thisErrors[elem];
+    float ourError = thisErrors[elem];
+
+    // Slightly modified idea from Jay (Beserk author).
+    // Modification: Using `ourError` instead of `ourOutput` (for convenience).
+    ourError += ftRegularisation * (ourError > 0.0F);
 
     atomicAdd(&biasesGrad[elem], ourError);
 
@@ -113,7 +118,8 @@ __global__ void sparseAffineBackwardKernel(
     float* weightsGrad,
     float* biasesGrad,
     const Feat* inputs,
-    const float* errors)
+    const float* errors,
+    const float ftRegularisation)
 {
     const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -123,8 +129,12 @@ __global__ void sparseAffineBackwardKernel(
     const Feat* thisInput = inputs + inputSize * blockIdx.y;
     const float* thisErrors = errors + 2 * outputSize * blockIdx.y;
 
-    const float ourError = thisErrors[elem];
-    const float oppError = thisErrors[elem + outputSize];
+    float ourError = thisErrors[elem];
+    float oppError = thisErrors[elem + outputSize];
+
+    // Slightly modified idea from Jay (Beserk author).
+    ourError += ftRegularisation * (ourError > 0.0F);
+    oppError += ftRegularisation * (oppError > 0.0F);
 
     atomicAdd(&biasesGrad[elem], ourError + oppError);
 
@@ -173,7 +183,8 @@ extern "C" void singleSparseAffineBackward(
     float* weightsGrad,
     float* biasesGrad,
     const Feat* inputs,
-    const float* errors)
+    const float* errors,
+    const float ftRegularisation)
 {
     const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
@@ -187,7 +198,8 @@ extern "C" void singleSparseAffineBackward(
         weightsGrad,
         biasesGrad,
         inputs,
-        errors
+        errors,
+        ftRegularisation
     );
 }
 
@@ -223,7 +235,8 @@ extern "C" void sparseAffineBackward(
     float* weightsGrad,
     float* biasesGrad,
     const Feat* inputs,
-    const float* errors)
+    const float* errors,
+    const float ftRegularisation)
 {
     const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
@@ -237,6 +250,7 @@ extern "C" void sparseAffineBackward(
         weightsGrad,
         biasesGrad,
         inputs,
-        errors
+        errors,
+        ftRegularisation
     );
 }

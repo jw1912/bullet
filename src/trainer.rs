@@ -49,6 +49,7 @@ pub struct Trainer<T, U> {
     handle: DeviceHandles,
     optimiser: Optimiser,
     ft: FeatureTransformer,
+    ft_reg: f32,
     nodes: Vec<Node>,
     inputs: SparseTensor,
     results: TensorBatch,
@@ -452,6 +453,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 &self.inputs,
                 &self.ft.biases_grad,
                 &self.ft.outputs,
+                self.ft_reg,
             );
         } else {
             SparseTensor::affine_backprop(
@@ -460,6 +462,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 &self.inputs,
                 &self.ft.biases_grad,
                 &self.ft.outputs,
+                self.ft_reg,
             );
         }
     }
@@ -745,6 +748,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                 handle: DeviceHandles::default(),
                 optimiser: opt,
                 ft,
+                ft_reg: 1.0 / 4194304.0,
                 nodes,
                 inputs,
                 results,
