@@ -235,6 +235,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         }
     }
 
+    pub fn set_ft_reg(&mut self, val: f32) {
+        self.ft_reg = val;
+    }
+
     pub fn error(&self) -> f32 {
         self.error
     }
@@ -436,7 +440,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             );
         }
 
-        self.ft.copy.copy_from(&self.ft.outputs);
+        if self.ft_reg != 0.0 {
+            self.ft.copy.copy_from(&self.ft.outputs);
+        }
 
         backprop_single(
             self.handle,
@@ -736,12 +742,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                 handle: DeviceHandles::default(),
                 optimiser: opt,
                 ft,
-                ft_reg: 1.0 / 4194304.0,
                 nodes,
                 inputs,
                 results,
                 error_device,
                 error: 0.0,
+                ft_reg: 0.0,
                 used: 0,
                 quantiser,
                 buckets: tensor::util::calloc(batch_size),

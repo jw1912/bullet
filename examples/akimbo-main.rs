@@ -28,8 +28,9 @@ fn main() {
 
     let schedule = TrainingSchedule {
         net_id: "net-20.02.24".to_string(),
-        batch_size: 16_384,
         eval_scale: 400.0,
+        ft_regularisation: 1.0 / 4194304.0,
+        batch_size: 16_384,
         batches_per_superbatch: 6104,
         start_superbatch: 1,
         end_superbatch: 250,

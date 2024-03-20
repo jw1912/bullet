@@ -35,6 +35,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     device_synchronise();
 
     trainer.set_batch_size(schedule.batch_size);
+    trainer.set_ft_reg(schedule.ft_regularisation);
 
     let esc = esc();
     let rscale = 1.0 / schedule.eval_scale;

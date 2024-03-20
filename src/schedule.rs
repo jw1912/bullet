@@ -3,8 +3,9 @@ use crate::ansi;
 #[derive(Clone)]
 pub struct TrainingSchedule {
     pub net_id: String,
-    pub batch_size: usize,
     pub eval_scale: f32,
+    pub ft_regularisation: f32,
+    pub batch_size: usize,
     pub batches_per_superbatch: usize,
     pub start_superbatch: usize,
     pub end_superbatch: usize,
@@ -34,6 +35,10 @@ impl TrainingSchedule {
         println!(
             "Scale                  : {}",
             ansi(format!("{:.0}", self.eval_scale), 31)
+        );
+        println!(
+            "1 / FT Regularisation  : {}",
+            ansi(format!("{:.0}", 1.0 / self.ft_regularisation), 31)
         );
         println!("Batch Size             : {}", ansi(self.batch_size, 31));
         println!(

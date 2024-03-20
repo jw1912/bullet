@@ -60,11 +60,13 @@ __global__ void SingleSparseAffineBackwardKernel(
     const float* thisOutput = output + 2 * outputSize * blockIdx.y;
 
     float ourError = thisErrors[elem];
-    float ourOutput = thisOutput[elem];
 
-    // Slightly modified idea from Jay (Beserk author).
-    // Modification: Using `ourError` instead of `ourOutput` (for convenience).
-    ourError += ftRegularisation * (ourOutput > 0.0F);
+    // Idea from Jay (Beserk author).
+    if (ftRegularisation != 0.0F)
+    {
+            const float* thisOutput = output + 2 * outputSize * blockIdx.y;
+            ourError += ftRegularisation * (thisOutput[elem] > 0.0F);
+    }
 
     atomicAdd(&biasesGrad[elem], ourError);
 
@@ -132,17 +134,17 @@ __global__ void sparseAffineBackwardKernel(
 
     const Feat* thisInput = inputs + inputSize * blockIdx.y;
     const float* thisErrors = errors + 2 * outputSize * blockIdx.y;
-    const float* thisOutput = output + 2 * outputSize * blockIdx.y;
 
     float ourError = thisErrors[elem];
     float oppError = thisErrors[elem + outputSize];
 
-    float ourOutput = thisOutput[elem];
-    float oppOutput = thisOutput[elem + outputSize];
-
-    // Slightly modified idea from Jay (Beserk author).
-    ourError += ftRegularisation * (ourOutput > 0.0F);
-    oppError += ftRegularisation * (oppOutput > 0.0F);
+    // Idea from Jay (Beserk author).
+    if (ftRegularisation != 0.0F)
+    {
+            const float* thisOutput = output + 2 * outputSize * blockIdx.y;
+            ourError += ftRegularisation * (thisOutput[elem] > 0.0F);
+            oppError += ftRegularisation * (thisOutput[elem + outputSize] > 0.0F);
+    }
 
     atomicAdd(&biasesGrad[elem], ourError + oppError);
 
