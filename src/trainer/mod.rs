@@ -1,8 +1,11 @@
 mod builder;
 mod components;
+mod run;
+pub mod schedule;
 
 pub use builder::TrainerBuilder;
 use components::{FeatureTransformer, Node, Operation, QuantiseInfo, Affine};
+pub use run::{ansi, set_cbcs, run};
 
 use crate::{
     inputs::InputType,

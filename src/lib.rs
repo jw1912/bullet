@@ -3,19 +3,15 @@ pub mod inputs;
 mod loader;
 pub mod outputs;
 mod rng;
-mod schedule;
 pub mod tensor;
 mod trainer;
-mod training;
 pub mod util;
 
-use training::ansi;
+use trainer::ansi;
 
 pub use bulletformat as format;
 pub use rng::Rand;
-pub use schedule::{LrScheduler, TrainingSchedule, WdlScheduler};
-pub use trainer::{Trainer, TrainerBuilder};
-pub use training::set_cbcs;
+pub use trainer::{Trainer, TrainerBuilder, set_cbcs, schedule::{LrScheduler, TrainingSchedule, WdlScheduler}};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Activation {
@@ -45,6 +41,6 @@ impl<'a> LocalSettings<'a> {
 
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
-        training::run::<T, U>(self, schedule, settings);
+        trainer::run::<T, U>(self, schedule, settings);
     }
 }
