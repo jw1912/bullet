@@ -73,7 +73,7 @@ fn main() {
         uci_options: vec![UciOption("Hash", "16")],
     };
 
-    let out_dir = concat!("../../nets", net_id!());
+    let out_dir = concat!("../../nets/", net_id!());
 
     let testing = TestSettings {
         test_rate: schedule.save_rate,

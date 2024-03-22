@@ -7,7 +7,7 @@ pub mod tensor;
 mod trainer;
 pub mod util;
 
-use std::{process::Command, fs::{self, File}, io::Write};
+use std::{process::{Command, Stdio}, fs::{self, File}, io::Write};
 
 use trainer::ansi;
 
@@ -162,9 +162,12 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
 
         clone(base_engine, base_path);
 
+        println!("# [Building {}/{}]", base_engine.repo, base_engine.branch);
         build(base_engine, base_path, "../base_engine_exe", None);
 
+        println!("# [Running Bench]");
         bench(base_engine, base_exe_path.as_str(), true);
+        println!("# [Bench Successful]");
 
         clone(dev_engine, dev_path);
 
@@ -176,8 +179,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             |superbatch, trainer, schedule, settings| {
                 if schedule.should_save(superbatch) {
                     let name = format!("{}-{superbatch}", schedule.net_id());
-                    let out_dir = settings.output_directory;
-                    trainer.save(out_dir, name.clone());
+                    trainer.save(settings.output_directory, name.clone());
                     println!("Saved [{}]", ansi(name.as_str(), 31));
 
                     // run test
@@ -237,7 +239,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
 
                             cc.arg("-concurrency").arg(concurrency.to_string());
 
-                            cc.args(["openings", "policy=round", "order=random"]);
+                            cc.args(["-openings", "policy=round", "order=random"]);
 
                             match book_path {
                                 OpeningBook::Epd(path) => {
@@ -249,9 +251,13 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
                             }
 
                             cc.args(["-resign", "movecount=3", "score=400", "twosided=true"]);
-                            cc.args(["draw", "movenumber=40", "movecount=8", "score=10"]);
+                            cc.args(["-draw", "movenumber=40", "movecount=8", "score=10"]);
 
-                            let output = cc.output().expect("Couldn't launch cutechess games!");
+                            cc.stdout(Stdio::piped());
+
+                            let output = cc.spawn().expect("Couldn't launch cutechess games!");
+
+                            let output = output.wait_with_output().expect("Couldn't wait on output!");
 
                             let stdout = String::from_utf8(output.stdout)
                                 .expect("Couldn't parse stdout!");
@@ -287,6 +293,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             },
         );
 
+        println!("# [Waiting for Tests]");
         for handle in handles {
             if let Err(err) = handle.join() {
                 println!("{err:?}");
@@ -312,8 +319,6 @@ fn clone(engine: &Engine, out_dir: &str) {
 }
 
 fn build(engine: &Engine, inp_path: &str, out_path: &str, override_net: Option<&str>) {
-    println!("# [Building {}/{}]", engine.repo, engine.branch);
-
     let mut build_base = Command::new("make");
 
     build_base
@@ -334,8 +339,6 @@ fn build(engine: &Engine, inp_path: &str, out_path: &str, override_net: Option<&
 }
 
 fn bench(engine: &Engine, path: &str, check_match: bool) {
-    println!("# [Running Bench]");
-
     let mut bench = Command::new(path);
 
     let output = bench.arg("bench")
@@ -372,6 +375,4 @@ fn bench(engine: &Engine, path: &str, check_match: bool) {
             assert!(found, "Could not find bench!");
         }
     }
-
-    println!("# [Bench Successful]");
 }
