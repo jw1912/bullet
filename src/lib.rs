@@ -192,15 +192,15 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
 
                         let mut cc = Command::new(cc_path);
 
-                        cc.arg("-engine").arg(format!("cmd={base_exe_path}"));
-
-                        for UciOption(name, value) in base.uci_options {
-                            cc.arg(format!("option.{name}={value}"));
-                        }
-
                         cc.arg("-engine").arg(format!("cmd={dev_exe_path}"));
 
                         for UciOption(name, value) in dev.uci_options {
+                            cc.arg(format!("option.{name}={value}"));
+                        }
+
+                        cc.arg("-engine").arg(format!("cmd={base_exe_path}"));
+
+                        for UciOption(name, value) in base.uci_options {
                             cc.arg(format!("option.{name}={value}"));
                         }
 
