@@ -22,7 +22,9 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     schedule: &TrainingSchedule,
     settings: &LocalSettings,
     mut callback: F,
-)  where F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings) {
+) where
+    F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
+{
     let threads = settings.threads;
     let data_file_paths: Vec<_> = settings
         .data_file_paths
