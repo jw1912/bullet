@@ -5,9 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bulletformat::{
-    chess::MarlinFormat, convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard,
-};
+use bulletformat::{chess::MarlinFormat, convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -25,12 +23,9 @@ pub struct ConvertOptions {
 impl ConvertOptions {
     pub fn run(&self) {
         match self.from.as_str() {
-            "marlinformat" => convert_from_bin::<MarlinFormat, ChessBoard>(
-                &self.input,
-                &self.output,
-                self.threads,
-            )
-            .unwrap(),
+            "marlinformat" => {
+                convert_from_bin::<MarlinFormat, ChessBoard>(&self.input, &self.output, self.threads).unwrap()
+            }
             "text" => convert_text(&self.input, &self.output),
             "ataxx" => convert_from_text::<AtaxxBoard>(&self.input, &self.output).unwrap(),
             _ => println!("Unrecognised Source Type! Supported: 'marlinformat', 'text', 'ataxx'."),
@@ -67,13 +62,6 @@ fn convert_text(inp_path: impl AsRef<Path>, out_path: impl AsRef<Path>) {
     BulletFormat::write_to_bin(&mut output, &data).unwrap();
 
     println!("Parsed to Position");
-    println!(
-        "Summary: {} Positions in {:.2} seconds",
-        results.iter().sum::<u64>(),
-        timer.elapsed().as_secs_f32()
-    );
-    println!(
-        "Wins: {}, Draws: {}, Losses: {}",
-        results[2], results[1], results[0]
-    );
+    println!("Summary: {} Positions in {:.2} seconds", results.iter().sum::<u64>(), timer.elapsed().as_secs_f32());
+    println!("Wins: {}, Draws: {}, Losses: {}", results[2], results[1], results[0]);
 }

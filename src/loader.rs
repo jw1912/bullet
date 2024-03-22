@@ -37,13 +37,7 @@ where
     I::RequiredDataType: Send + Sync + Copy,
 {
     pub fn new(input_getter: I, output_getter: O) -> Self {
-        Self {
-            inputs: Vec::new(),
-            results: Vec::new(),
-            buckets: Vec::new(),
-            input_getter,
-            output_getter,
-        }
+        Self { inputs: Vec::new(), results: Vec::new(), buckets: Vec::new(), input_getter, output_getter }
     }
 
     pub fn inputs(&self) -> &Vec<Feat> {
@@ -72,33 +66,31 @@ where
                 .zip(self.inputs.chunks_mut(max_features * chunk_size))
                 .zip(self.results.chunks_mut(chunk_size))
                 .zip(self.buckets.chunks_mut(chunk_size))
-                .for_each(
-                    |(((data_chunk, input_chunk), results_chunk), buckets_chunk)| {
-                        let inp = &self.input_getter;
-                        let out = &self.output_getter;
-                        s.spawn(move || {
-                            let chunk_len = data_chunk.len();
+                .for_each(|(((data_chunk, input_chunk), results_chunk), buckets_chunk)| {
+                    let inp = &self.input_getter;
+                    let out = &self.output_getter;
+                    s.spawn(move || {
+                        let chunk_len = data_chunk.len();
 
-                            for i in 0..chunk_len {
-                                let pos = &data_chunk[i];
-                                let mut j = 0;
-                                let offset = max_features * i;
+                        for i in 0..chunk_len {
+                            let pos = &data_chunk[i];
+                            let mut j = 0;
+                            let offset = max_features * i;
 
-                                for (our, opp) in inp.feature_iter(pos) {
-                                    input_chunk[offset + j] = Feat::new(our as u16, opp as u16);
-                                    j += 1;
-                                }
-
-                                if j < max_features {
-                                    input_chunk[offset + j] = Feat::new(u16::MAX, u16::MAX);
-                                }
-
-                                results_chunk[i] = pos.blended_result(blend, rscale);
-                                buckets_chunk[i] = out.bucket(pos);
+                            for (our, opp) in inp.feature_iter(pos) {
+                                input_chunk[offset + j] = Feat::new(our as u16, opp as u16);
+                                j += 1;
                             }
-                        });
-                    },
-                );
+
+                            if j < max_features {
+                                input_chunk[offset + j] = Feat::new(u16::MAX, u16::MAX);
+                            }
+
+                            results_chunk[i] = pos.blended_result(blend, rscale);
+                            buckets_chunk[i] = out.bucket(pos);
+                        }
+                    });
+                });
         });
     }
 }

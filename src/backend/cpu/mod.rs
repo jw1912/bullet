@@ -17,11 +17,7 @@ impl DeviceHandles {
         self.threads = threads;
     }
 
-    pub(crate) fn workload_chunks<F: Fn(usize, usize, usize) + Copy + Send>(
-        &self,
-        size: usize,
-        workload_chunk: F,
-    ) {
+    pub(crate) fn workload_chunks<F: Fn(usize, usize, usize) + Copy + Send>(&self, size: usize, workload_chunk: F) {
         let threads = self.threads;
         let chunk_size = (size + threads - 1) / threads;
 
@@ -29,11 +25,7 @@ impl DeviceHandles {
 
         std::thread::scope(|s| {
             for thread in 0..threads {
-                let this_chunk_size = if covered + chunk_size > size {
-                    size - covered
-                } else {
-                    chunk_size
-                };
+                let this_chunk_size = if covered + chunk_size > size { size - covered } else { chunk_size };
 
                 let start_idx = covered;
                 covered += this_chunk_size;
@@ -46,11 +38,7 @@ impl DeviceHandles {
         });
     }
 
-    pub(crate) fn split_workload<F: Fn(usize, usize) + Copy + Send + Sync>(
-        &self,
-        size: usize,
-        single_workload: F,
-    ) {
+    pub(crate) fn split_workload<F: Fn(usize, usize) + Copy + Send + Sync>(&self, size: usize, single_workload: F) {
         self.workload_chunks(size, |thread, start_idx, this_chunk_size| {
             for idx in start_idx..start_idx + this_chunk_size {
                 single_workload(thread, idx);

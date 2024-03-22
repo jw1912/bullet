@@ -2,8 +2,7 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
-    WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
@@ -31,11 +30,8 @@ fn main() {
         save_rate: 10,
     };
 
-    let settings = LocalSettings {
-        threads: 4,
-        data_file_paths: vec!["../../data/batch1.data"],
-        output_directory: "checkpoints",
-    };
+    let settings =
+        LocalSettings { threads: 4, data_file_paths: vec!["../../data/batch1.data"], output_directory: "checkpoints" };
 
     trainer.run(&schedule, &settings);
 }

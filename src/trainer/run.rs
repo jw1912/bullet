@@ -26,11 +26,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
 {
     let threads = settings.threads;
-    let data_file_paths: Vec<_> = settings
-        .data_file_paths
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let data_file_paths: Vec<_> = settings.data_file_paths.iter().map(|s| s.to_string()).collect();
     let out_dir = settings.output_directory.to_string();
     let out_dir = out_dir.as_str();
 
@@ -45,9 +41,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     let rscale = 1.0 / schedule.eval_scale;
     let mut file_size = 0;
     for file in data_file_paths.iter() {
-        file_size += std::fs::metadata(file)
-            .unwrap_or_else(|_| panic!("Invalid File Metadata: {file}"))
-            .len();
+        file_size += std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
     }
 
     let num = (file_size / 32) as usize;
@@ -65,14 +59,8 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
 
     print!("{esc}");
     println!("{}", ansi("Beginning Training", "34;1"));
-    println!(
-        "Net Name               : {}",
-        ansi(schedule.net_id.clone(), "32;1")
-    );
-    println!(
-        "Arch                   : {}",
-        ansi(format!("{trainer}"), 31)
-    );
+    println!("Net Name               : {}", ansi(schedule.net_id.clone(), "32;1"));
+    println!("Arch                   : {}", ansi(format!("{trainer}"), 31));
     schedule.display();
     println!("Device                 : {}", ansi(device_name(), 31));
     settings.display();
@@ -81,10 +69,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     let pos_per_sb = schedule.batch_size * schedule.batches_per_superbatch;
     let total_pos = pos_per_sb * (schedule.end_superbatch - schedule.start_superbatch);
     let iters = total_pos as f64 / num as f64;
-    println!(
-        "Total Epochs           : {}",
-        ansi(format!("{iters:.2}"), 31)
-    );
+    println!("Total Epochs           : {}", ansi(format!("{iters:.2}"), 31));
 
     let timer = Instant::now();
 
@@ -110,8 +95,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
         'dataloading: loop {
             let mut loader_files = vec![];
             for file in data_file_paths.iter() {
-                loader_files
-                    .push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
+                loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
             }
 
             for loader_file in loader_files.iter() {
@@ -188,14 +172,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
         if curr_batch % schedule.batches_per_superbatch == 0 {
             let error = trainer.error() / schedule.batches_per_superbatch as f32;
 
-            report_superbatch_finished(
-                schedule,
-                superbatch,
-                error,
-                &superbatch_timer,
-                &timer,
-                pos_per_sb,
-            );
+            report_superbatch_finished(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
 
             callback(superbatch, trainer, schedule, settings);
 

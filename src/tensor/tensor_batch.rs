@@ -16,11 +16,7 @@ impl TensorBatch {
     pub fn new(shape: Shape, cap: usize) -> Self {
         assert!(cap > 0, "Cannot have a 0 sized batch!");
 
-        Self {
-            shape,
-            cap,
-            buf: DeviceBuffer::new(cap * shape.size()),
-        }
+        Self { shape, cap, buf: DeviceBuffer::new(cap * shape.size()) }
     }
 
     pub fn shape(&self) -> Shape {
@@ -127,24 +123,12 @@ impl TensorBatch {
         out: &Tensor,
     ) {
         assert_eq!(inp.shape(), out.shape());
-        ops::reduce_add(
-            handle,
-            ones.ptr(),
-            batch_size,
-            out.num_elements(),
-            inp.ptr(),
-            out.ptr(),
-        );
+        ops::reduce_add(handle, ones.ptr(), batch_size, out.num_elements(), inp.ptr(), out.ptr());
     }
 
     /// # Safety
     /// `inp` must be pointing to valid allocated memory.
-    pub unsafe fn splat_add(
-        handle: DeviceHandles,
-        batch_size: usize,
-        inp: &Tensor,
-        out: &TensorBatch,
-    ) {
+    pub unsafe fn splat_add(handle: DeviceHandles, batch_size: usize, inp: &Tensor, out: &TensorBatch) {
         assert_eq!(inp.shape(), out.shape());
         ops::splat_add(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
@@ -161,23 +145,12 @@ impl TensorBatch {
         assert_eq!(inp.cap(), out.cap(), "Mismatched cap sizes!");
         assert!(batch_size <= inp.cap(), "Overflow!");
         unsafe {
-            f(
-                handle,
-                batch_size * inp.element_size(),
-                inp.ptr(),
-                out.ptr(),
-            );
+            f(handle, batch_size * inp.element_size(), inp.ptr(), out.ptr());
         }
     }
 
     /// This calulates `out[i] = op(inp[i])` for a batch of input.
-    pub fn activate(
-        handle: DeviceHandles,
-        batch_size: usize,
-        op: Activation,
-        inp: &TensorBatch,
-        out: &TensorBatch,
-    ) {
+    pub fn activate(handle: DeviceHandles, batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
         match op {
             Activation::ReLU => Self::map(ops::activate_relu, handle, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::activate_crelu, handle, batch_size, inp, out),
@@ -227,24 +200,12 @@ impl TensorBatch {
         weights_grad: &Tensor,
         biases_grad: &Tensor,
     ) {
-        TensorBatch::reduce_add_mul_vector_vectort(
-            handle,
-            batch_size,
-            errors,
-            inputs,
-            weights_grad,
-        );
+        TensorBatch::reduce_add_mul_vector_vectort(handle, batch_size, errors, inputs, weights_grad);
         TensorBatch::reduce_add(handle, ones, batch_size, errors, biases_grad);
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn sigmoid_mse(
-        &self,
-        handle: DeviceHandles,
-        batch_size: usize,
-        results: &TensorBatch,
-        error: &DeviceBuffer,
-    ) {
+    pub fn sigmoid_mse(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 
@@ -264,15 +225,7 @@ impl TensorBatch {
     ) {
         assert_eq!(inp.element_size() % out.element_size(), 0);
 
-        ops::select(
-            handle,
-            batch_size,
-            inp.element_size(),
-            out.element_size(),
-            buckets,
-            inp.ptr(),
-            out.ptr(),
-        );
+        ops::select(handle, batch_size, inp.element_size(), out.element_size(), buckets, inp.ptr(), out.ptr());
     }
 
     /// # Safety
@@ -288,15 +241,7 @@ impl TensorBatch {
 
         out.buf.set_zero();
 
-        ops::select_backprop(
-            handle,
-            batch_size,
-            inp.element_size(),
-            out.element_size(),
-            buckets,
-            inp.ptr(),
-            out.ptr(),
-        );
+        ops::select_backprop(handle, batch_size, inp.element_size(), out.element_size(), buckets, inp.ptr(), out.ptr());
     }
 }
 

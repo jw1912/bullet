@@ -2,10 +2,7 @@ pub struct Rand(u32);
 impl Default for Rand {
     fn default() -> Self {
         Self(
-            (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("valid")
-                .as_nanos()
+            (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("valid").as_nanos()
                 & 0xFFFF_FFFF) as u32,
         )
     }

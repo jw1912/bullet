@@ -7,7 +7,11 @@ pub mod tensor;
 mod trainer;
 pub mod util;
 
-use std::{process::{Command, Stdio}, fs::{self, File}, io::Write};
+use std::{
+    fs::{self, File},
+    io::Write,
+    process::{Command, Stdio},
+};
 
 use trainer::ansi;
 
@@ -37,10 +41,7 @@ impl<'a> LocalSettings<'a> {
         for file_path in self.data_file_paths.iter() {
             println!("Data File Path         : {}", ansi(file_path, "32;1"));
         }
-        println!(
-            "Output Path            : {}",
-            ansi(self.output_directory, "32;1")
-        );
+        println!("Output Path            : {}", ansi(self.output_directory, "32;1"));
     }
 }
 
@@ -81,30 +82,22 @@ pub struct TestSettings<'a> {
 }
 
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
-    pub fn run_custom<F>(
-        &mut self,
-        schedule: &TrainingSchedule,
-        settings: &LocalSettings,
-        callback: F,
-    ) where
+    pub fn run_custom<F>(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings, callback: F)
+    where
         F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
     {
         trainer::run::<T, U, F>(self, schedule, settings, callback);
     }
 
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
-        self.run_custom(
-            schedule,
-            settings,
-            |superbatch, trainer, schedule, settings| {
-                if schedule.should_save(superbatch) {
-                    let name = format!("{}-{superbatch}", schedule.net_id());
-                    let out_dir = settings.output_directory;
-                    trainer.save(out_dir, name.clone());
-                    println!("Saved [{}]", ansi(name, 31));
-                }
-            },
-        );
+        self.run_custom(schedule, settings, |superbatch, trainer, schedule, settings| {
+            if schedule.should_save(superbatch) {
+                let name = format!("{}-{superbatch}", schedule.net_id());
+                let out_dir = settings.output_directory;
+                trainer.save(out_dir, name.clone());
+                println!("Saved [{}]", ansi(name, 31));
+            }
+        });
     }
 
     pub fn run_and_test(
@@ -127,10 +120,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
 
         assert_eq!(test_rate % schedule.save_rate, 0, "Save Rate should divide Test Rate!");
 
-        let output = Command::new(cutechess_path)
-            .arg("--version")
-            .output()
-            .expect("Could not start cutechess!");
+        let output = Command::new(cutechess_path).arg("--version").output().expect("Could not start cutechess!");
 
         assert!(output.status.success(), "Could not start cutechess!");
 
@@ -139,14 +129,11 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             OpeningBook::Pgn(path) => path,
         };
 
-        File::open(bpath)
-            .expect("Could not find opening book!");
+        File::open(bpath).expect("Could not find opening book!");
 
-        fs::create_dir(out_dir)
-            .expect("The output directory already exists!");
+        fs::create_dir(out_dir).expect("The output directory already exists!");
 
-        fs::create_dir(format!("{out_dir}/nets"))
-            .expect("Something went very wrong!");
+        fs::create_dir(format!("{out_dir}/nets")).expect("Something went very wrong!");
 
         let stats_path = format!("{out_dir}/stats.txt");
 
@@ -173,125 +160,114 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
 
         let mut handles = Vec::new();
 
-        self.run_custom(
-            schedule,
-            settings,
-            |superbatch, trainer, schedule, settings| {
-                if schedule.should_save(superbatch) {
-                    let name = format!("{}-{superbatch}", schedule.net_id());
-                    trainer.save(settings.output_directory, name.clone());
-                    println!("Saved [{}]", ansi(name.as_str(), 31));
+        self.run_custom(schedule, settings, |superbatch, trainer, schedule, settings| {
+            if schedule.should_save(superbatch) {
+                let name = format!("{}-{superbatch}", schedule.net_id());
+                trainer.save(settings.output_directory, name.clone());
+                println!("Saved [{}]", ansi(name.as_str(), 31));
 
-                    // run test
-                    if superbatch % test_rate == 0 || superbatch == schedule.end_superbatch {
-                        let net_path = format!("{out_dir}/nets/{name}.bin");
-                        trainer.save_quantised(net_path.as_str());
+                // run test
+                if superbatch % test_rate == 0 || superbatch == schedule.end_superbatch {
+                    let net_path = format!("{out_dir}/nets/{name}.bin");
+                    trainer.save_quantised(net_path.as_str());
 
-                        let base = base_engine.clone();
-                        let dev = dev_engine.clone();
-                        let dpath = dev_path_string.clone();
-                        let rel_dev_path = format!("../dev-{superbatch}");
-                        let rel_net_path = format!("../nets/{name}.bin");
-                        let dev_exe_path = format!("{out_dir}/dev-{superbatch}");
-                        let base_exe_path = base_exe_path.clone();
-                        let cc_path = cutechess_path.to_string();
-                        let num_game_pairs = *num_game_pairs;
-                        let concurrency = *concurrency;
-                        let time_control = *time_control;
-                        let book_path = *book_path;
-                        let stats_path = stats_path.clone();
+                    let base = base_engine.clone();
+                    let dev = dev_engine.clone();
+                    let dpath = dev_path_string.clone();
+                    let rel_dev_path = format!("../dev-{superbatch}");
+                    let rel_net_path = format!("../nets/{name}.bin");
+                    let dev_exe_path = format!("{out_dir}/dev-{superbatch}");
+                    let base_exe_path = base_exe_path.clone();
+                    let cc_path = cutechess_path.to_string();
+                    let num_game_pairs = *num_game_pairs;
+                    let concurrency = *concurrency;
+                    let time_control = *time_control;
+                    let book_path = *book_path;
+                    let stats_path = stats_path.clone();
 
-                        let handle = std::thread::spawn(move || {
-                            build(&dev, dpath.as_str(), rel_dev_path.as_str(), Some(rel_net_path.as_str()));
+                    let handle = std::thread::spawn(move || {
+                        build(&dev, dpath.as_str(), rel_dev_path.as_str(), Some(rel_net_path.as_str()));
 
-                            bench(&dev, dev_exe_path.as_str(), false);
+                        bench(&dev, dev_exe_path.as_str(), false);
 
-                            let mut cc = Command::new(cc_path);
+                        let mut cc = Command::new(cc_path);
 
-                            cc.arg("-engine").arg(format!("cmd={base_exe_path}"));
+                        cc.arg("-engine").arg(format!("cmd={base_exe_path}"));
 
-                            for UciOption(name, value) in base.uci_options {
-                                cc.arg(format!("option.{name}={value}"));
+                        for UciOption(name, value) in base.uci_options {
+                            cc.arg(format!("option.{name}={value}"));
+                        }
+
+                        cc.arg("-engine").arg(format!("cmd={dev_exe_path}"));
+
+                        for UciOption(name, value) in dev.uci_options {
+                            cc.arg(format!("option.{name}={value}"));
+                        }
+
+                        cc.args(["-each", "proto=uci", "timemargin=20"]);
+
+                        match time_control {
+                            TimeControl::FixedNodes(nodes) => {
+                                cc.arg("tc=inf").arg(format!("nodes={nodes}"));
                             }
-
-                            cc.arg("-engine").arg(format!("cmd={dev_exe_path}"));
-
-                            for UciOption(name, value) in dev.uci_options {
-                                cc.arg(format!("option.{name}={value}"));
+                            TimeControl::Increment { time, inc } => {
+                                cc.arg(format!("tc={time}+{inc}"));
                             }
+                        }
 
-                            cc.args(["-each", "proto=uci", "timemargin=20"]);
+                        cc.args(["-games", "2"]);
 
-                            match time_control {
-                                TimeControl::FixedNodes(nodes) => {
-                                    cc.arg("tc=inf").arg(format!("nodes={nodes}"));
-                                },
-                                TimeControl::Increment { time, inc } => {
-                                    cc.arg(format!("tc={time}+{inc}"));
-                                },
+                        cc.arg("-rounds").arg(num_game_pairs.to_string());
+
+                        cc.args(["-repeat", "2"]);
+
+                        cc.arg("-concurrency").arg(concurrency.to_string());
+
+                        cc.args(["-openings", "policy=round", "order=random"]);
+
+                        match book_path {
+                            OpeningBook::Epd(path) => {
+                                cc.arg(format!("file={path}")).arg("format=epd");
                             }
-
-                            cc.args(["-games", "2"]);
-
-                            cc.arg("-rounds").arg(num_game_pairs.to_string());
-
-                            cc.args(["-repeat", "2"]);
-
-                            cc.arg("-concurrency").arg(concurrency.to_string());
-
-                            cc.args(["-openings", "policy=round", "order=random"]);
-
-                            match book_path {
-                                OpeningBook::Epd(path) => {
-                                    cc.arg(format!("file={path}")).arg("format=epd");
-                                }
-                                OpeningBook::Pgn(path) => {
-                                    cc.arg(format!("file={path}")).arg("format=pgn");
-                                }
+                            OpeningBook::Pgn(path) => {
+                                cc.arg(format!("file={path}")).arg("format=pgn");
                             }
+                        }
 
-                            cc.args(["-resign", "movecount=3", "score=400", "twosided=true"]);
-                            cc.args(["-draw", "movenumber=40", "movecount=8", "score=10"]);
+                        cc.args(["-resign", "movecount=3", "score=400", "twosided=true"]);
+                        cc.args(["-draw", "movenumber=40", "movecount=8", "score=10"]);
 
-                            cc.stdout(Stdio::piped());
+                        cc.stdout(Stdio::piped());
 
-                            let output = cc.spawn().expect("Couldn't launch cutechess games!");
+                        let output = cc.spawn().expect("Couldn't launch cutechess games!");
 
-                            let output = output.wait_with_output().expect("Couldn't wait on output!");
+                        let output = output.wait_with_output().expect("Couldn't wait on output!");
 
-                            let stdout = String::from_utf8(output.stdout)
-                                .expect("Couldn't parse stdout!");
+                        let stdout = String::from_utf8(output.stdout).expect("Couldn't parse stdout!");
 
-                            let mut split = stdout.split("Elo difference: ");
+                        let mut split = stdout.split("Elo difference: ");
 
-                            let line = split.nth(1).unwrap();
+                        let line = split.nth(1).unwrap();
 
-                            let mut split_line = line.split(',');
-                            let elo_segment = split_line
-                                .next()
-                                .unwrap()
-                                .split_whitespace()
-                                .collect::<Vec<_>>();
+                        let mut split_line = line.split(',');
+                        let elo_segment = split_line.next().unwrap().split_whitespace().collect::<Vec<_>>();
 
+                        if let [elo, "+/-", err] = elo_segment[..] {
+                            let mut file = fs::OpenOptions::new()
+                                .append(true)
+                                .open(stats_path.as_str())
+                                .expect("Couldn't open stats path!");
 
-                            if let [elo, "+/-", err] = elo_segment[..] {
-                                let mut file = fs::OpenOptions::new()
-                                    .append(true)
-                                    .open(stats_path.as_str())
-                                    .expect("Couldn't open stats path!");
+                            writeln!(file, "{superbatch}, {elo}, {err}").expect("Couldn't write to file!");
+                        } else {
+                            panic!("Couldn't find elo line!");
+                        }
+                    });
 
-                                writeln!(file, "{superbatch}, {elo}, {err}")
-                                    .expect("Couldn't write to file!");
-                            } else {
-                                panic!("Couldn't find elo line!");
-                            }
-                        });
-
-                        handles.push(handle);
-                    }
+                    handles.push(handle);
                 }
-            },
-        );
+            }
+        });
 
         println!("# [Waiting for Tests]");
         for handle in handles {
@@ -321,19 +297,15 @@ fn clone(engine: &Engine, out_dir: &str) {
 fn build(engine: &Engine, inp_path: &str, out_path: &str, override_net: Option<&str>) {
     let mut build_base = Command::new("make");
 
-    build_base
-        .current_dir(inp_path)
-        .arg(format!("EXE={out_path}"));
+    build_base.current_dir(inp_path).arg(format!("EXE={out_path}"));
 
     if let Some(net_path) = override_net {
         build_base.arg(format!("EVALFILE={}", net_path));
     } else if let Some(net_path) = engine.net_path {
-            build_base.arg(format!("EVALFILE={}", net_path));
+        build_base.arg(format!("EVALFILE={}", net_path));
     }
 
-    let output = build_base
-        .output()
-        .expect("Failed to build engine!");
+    let output = build_base.output().expect("Failed to build engine!");
 
     assert!(output.status.success(), "Failed to build engine!");
 }
@@ -341,16 +313,13 @@ fn build(engine: &Engine, inp_path: &str, out_path: &str, override_net: Option<&
 fn bench(engine: &Engine, path: &str, check_match: bool) {
     let mut bench = Command::new(path);
 
-    let output = bench.arg("bench")
-        .output()
-        .expect("Failed to run bench on engine!");
+    let output = bench.arg("bench").output().expect("Failed to run bench on engine!");
 
     assert!(output.status.success(), "Failed to run bench on engine!");
 
     if check_match {
         if let Some(bench) = engine.bench {
-            let out = String::from_utf8(output.stdout)
-                .expect("Could not parse bench output!");
+            let out = String::from_utf8(output.stdout).expect("Could not parse bench output!");
 
             let split = out.split_whitespace();
 
@@ -360,11 +329,7 @@ fn bench(engine: &Engine, path: &str, check_match: bool) {
             for word in split {
                 if word == "nodes" {
                     found = true;
-                    assert_eq!(
-                        bench,
-                        prev.parse().expect("Could not parse bench output!"),
-                        "Bench did not match!"
-                    );
+                    assert_eq!(bench, prev.parse().expect("Could not parse bench output!"), "Bench did not match!");
 
                     break;
                 }

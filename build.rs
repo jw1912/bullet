@@ -34,9 +34,7 @@ mod cuda {
             .header(WRAPPER_PATH)
             .parse_callbacks(Box::new(CustomParseCallBacks))
             .size_t_is_usize(true)
-            .default_enum_style(EnumVariation::Rust {
-                non_exhaustive: true,
-            })
+            .default_enum_style(EnumVariation::Rust { non_exhaustive: true })
             .must_use_type("cudaError")
             .must_use_type("CUresult")
             .must_use_type("cudaError_enum")
@@ -48,18 +46,10 @@ mod cuda {
 
         println!("cargo:rerun-if-changed=./src/backend/kernels");
 
-        let files: Vec<String> = [
-            "backprops",
-            "bufops",
-            "mse",
-            "select",
-            "sparse_affine",
-            "splat_add",
-            "update",
-        ]
-        .iter()
-        .map(|s| format!("./src/backend/kernels/{s}.cu"))
-        .collect();
+        let files: Vec<String> = ["backprops", "bufops", "mse", "select", "sparse_affine", "splat_add", "update"]
+            .iter()
+            .map(|s| format!("./src/backend/kernels/{s}.cu"))
+            .collect();
 
         cc::Build::new()
             .cuda(true)
@@ -94,35 +84,20 @@ mod cuda {
     #[cfg(target_family = "windows")]
     fn link_cuda() -> Vec<PathBuf> {
         let path = get_var_path("CUDA_PATH");
-        println!(
-            "cargo:rustc-link-search=native={}",
-            path.join("lib/x64").to_str().unwrap()
-        );
-        println!(
-            "cargo:rustc-link-search=native={}",
-            path.join("lib").to_str().unwrap()
-        );
+        println!("cargo:rustc-link-search=native={}", path.join("lib/x64").to_str().unwrap());
+        println!("cargo:rustc-link-search=native={}", path.join("lib").to_str().unwrap());
         vec![path.join("include")]
     }
 
     #[cfg(target_family = "unix")]
     fn link_cuda() -> Vec<PathBuf> {
         let path = get_var_path("CUDA_PATH");
-        println!(
-            "cargo:rustc-link-search=native={}",
-            path.join("lib64").to_str().unwrap()
-        );
+        println!("cargo:rustc-link-search=native={}", path.join("lib64").to_str().unwrap());
         vec![path.join("include")]
     }
 
-    const IGNORED_MACROS: &[&str] = &[
-        "FP_INFINITE",
-        "FP_NAN",
-        "FP_NORMAL",
-        "FP_SUBNORMAL",
-        "FP_ZERO",
-        "IPPORT_RESERVED",
-    ];
+    const IGNORED_MACROS: &[&str] =
+        &["FP_INFINITE", "FP_NAN", "FP_NORMAL", "FP_SUBNORMAL", "FP_ZERO", "IPPORT_RESERVED"];
 
     #[derive(Debug)]
     struct CustomParseCallBacks;

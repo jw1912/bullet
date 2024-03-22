@@ -61,10 +61,7 @@ impl InterleaveOptions {
 
             if remaining % 1_048_576 == 0 {
                 let written = total - remaining;
-                print!(
-                    "Written {written} / {total} ({:.2})\r",
-                    written as f32 / total as f32 * 100.0
-                );
+                print!("Written {written} / {total} ({:.2})\r", written as f32 / total as f32 * 100.0);
                 let _ = std::io::stdout().flush();
             }
         }

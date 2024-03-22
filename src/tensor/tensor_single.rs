@@ -15,10 +15,7 @@ impl Tensor {
     /// This creates an uninitialised instance, it is up to the
     /// user to perform an operation which initialises it.
     pub unsafe fn uninit(shape: Shape) -> Self {
-        Self {
-            shape,
-            ptr: std::ptr::null_mut(),
-        }
+        Self { shape, ptr: std::ptr::null_mut() }
     }
 
     /// # Safety
@@ -54,15 +51,9 @@ impl Tensor {
     }
 
     pub fn load_from_host(&self, buf: &[f32]) {
-        assert!(
-            !self.ptr.is_null(),
-            "Attempting to dereference null pointer!"
-        );
+        assert!(!self.ptr.is_null(), "Attempting to dereference null pointer!");
 
-        assert!(
-            buf.len() == self.num_elements(),
-            "Must be exactly the same size!"
-        );
+        assert!(buf.len() == self.num_elements(), "Must be exactly the same size!");
 
         unsafe {
             util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
@@ -70,15 +61,9 @@ impl Tensor {
     }
 
     pub fn write_to_host(&self, buf: &mut [f32]) {
-        assert!(
-            !self.ptr.is_null(),
-            "Attempting to dereference null pointer!"
-        );
+        assert!(!self.ptr.is_null(), "Attempting to dereference null pointer!");
 
-        assert!(
-            buf.len() == self.num_elements(),
-            "Must be exactly the same size!"
-        );
+        assert!(buf.len() == self.num_elements(), "Must be exactly the same size!");
 
         unsafe {
             util::copy_from_device(buf.as_mut_ptr(), self.ptr, buf.len());

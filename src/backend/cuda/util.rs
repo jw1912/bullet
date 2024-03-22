@@ -1,6 +1,6 @@
 use super::bindings::{
-    cudaDeviceSynchronize, cudaError, cudaFree, cudaGetDeviceCount, cudaGetDeviceProperties_v2,
-    cudaGetLastError, cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset,
+    cudaDeviceSynchronize, cudaError, cudaFree, cudaGetDeviceCount, cudaGetDeviceProperties_v2, cudaGetLastError,
+    cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset,
 };
 use crate::util;
 use std::ffi::c_void;
@@ -80,10 +80,7 @@ pub fn calloc<T>(num: usize) -> *mut T {
 }
 
 pub fn set_zero<T>(ptr: *mut T, num: usize) {
-    catch!(
-        cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()),
-        "memset"
-    );
+    catch!(cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()), "memset");
     catch!(cudaDeviceSynchronize());
 }
 
@@ -91,12 +88,7 @@ pub fn set_zero<T>(ptr: *mut T, num: usize) {
 /// Pointers need to be valid and `amt` need to be valid.
 pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
-        cudaMemcpy(
-            dest.cast(),
-            src.cast(),
-            amt * std::mem::size_of::<T>(),
-            cudaMemcpyKind::cudaMemcpyHostToDevice
-        ),
+        cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), cudaMemcpyKind::cudaMemcpyHostToDevice),
         "memcpy"
     );
     catch!(cudaDeviceSynchronize());
@@ -106,12 +98,7 @@ pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
 /// Pointers need to be valid and `amt` need to be valid.
 pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
-        cudaMemcpy(
-            dest.cast(),
-            src.cast(),
-            amt * std::mem::size_of::<T>(),
-            cudaMemcpyKind::cudaMemcpyDeviceToHost
-        ),
+        cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), cudaMemcpyKind::cudaMemcpyDeviceToHost),
         "memcpy"
     );
     catch!(cudaDeviceSynchronize());
@@ -121,12 +108,7 @@ pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
 /// Pointers need to be valid and `amt` need to be valid.
 pub unsafe fn copy_on_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
-        cudaMemcpy(
-            dest.cast(),
-            src.cast(),
-            amt * std::mem::size_of::<T>(),
-            cudaMemcpyKind::cudaMemcpyDeviceToDevice
-        ),
+        cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), cudaMemcpyKind::cudaMemcpyDeviceToDevice),
         "memcpy"
     );
     catch!(cudaDeviceSynchronize());

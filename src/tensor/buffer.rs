@@ -26,11 +26,7 @@ impl DeviceBuffer {
         ALLOC_ID.fetch_add(1, Ordering::SeqCst);
         let id = ALLOC_ID.load(Ordering::SeqCst);
 
-        let res = Self {
-            size,
-            ptr: util::calloc(size),
-            id,
-        };
+        let res = Self { size, ptr: util::calloc(size), id };
 
         res.report("Allocated");
 
@@ -54,12 +50,7 @@ impl DeviceBuffer {
     }
 
     pub fn load_from_device(&self, buf: &Self) {
-        assert!(
-            buf.size <= self.size,
-            "Overflow: {} > {}!",
-            buf.size,
-            self.size
-        );
+        assert!(buf.size <= self.size, "Overflow: {} > {}!", buf.size, self.size);
         unsafe {
             util::copy_on_device(self.ptr, buf.ptr, buf.size);
         }

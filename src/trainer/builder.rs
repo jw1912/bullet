@@ -2,9 +2,7 @@ use crate::{
     inputs::InputType,
     outputs::OutputBuckets,
     rng::Rand,
-    tensor::{
-        self, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor, Tensor, TensorBatch,
-    },
+    tensor::{self, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor, Tensor, TensorBatch},
     Activation,
 };
 
@@ -142,10 +140,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
             let mut qi = 0;
             let mut accq = 1;
             if !self.quantisations.is_empty() {
-                quantiser.push(QuantiseInfo {
-                    val: self.quantisations[qi],
-                    start: 0,
-                });
+                quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: 0 });
                 accq *= self.quantisations[qi];
                 qi += 1;
             }
@@ -173,10 +168,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                         affine.weights_grad.set_ptr(opt.gradients_offset(offset));
 
                         if !self.quantisations.is_empty() {
-                            quantiser.push(QuantiseInfo {
-                                val: self.quantisations[qi],
-                                start: offset,
-                            });
+                            quantiser.push(QuantiseInfo { val: self.quantisations[qi], start: offset });
                         }
 
                         offset += inp_size * raw_size;
@@ -186,20 +178,14 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
 
                         if !self.quantisations.is_empty() {
                             accq *= self.quantisations[qi];
-                            quantiser.push(QuantiseInfo {
-                                val: accq,
-                                start: offset,
-                            });
+                            quantiser.push(QuantiseInfo { val: accq, start: offset });
                             qi += 1;
                         }
 
                         offset += raw_size;
 
                         let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node {
-                            outputs,
-                            op: Operation::Affine(affine),
-                        });
+                        nodes.push(Node { outputs, op: Operation::Affine(affine) });
 
                         if buckets > 1 {
                             nodes.push(Node {
@@ -211,21 +197,14 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                     OpType::Activate(activation) => {
                         let bsh = Shape::new(1, size);
                         let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node {
-                            outputs,
-                            op: Operation::Activate(*activation),
-                        });
+                        nodes.push(Node { outputs, op: Operation::Activate(*activation) });
                     }
                 };
 
                 inp_size = size;
             }
 
-            assert_eq!(
-                qi,
-                self.quantisations.len(),
-                "Incorrectly specified number of quantisations!"
-            );
+            assert_eq!(qi, self.quantisations.len(), "Incorrectly specified number of quantisations!");
             assert_eq!(offset, net_size);
 
             let inputs = SparseTensor::uninit(batch_size, inp_getter_size, max_active_inputs);

@@ -15,10 +15,7 @@ impl std::ops::Mul<Shape> for Shape {
     fn mul(self, rhs: Shape) -> Self::Output {
         assert_eq!(self.cols, rhs.rows);
 
-        Self {
-            cols: rhs.cols,
-            rows: self.rows,
-        }
+        Self { cols: rhs.cols, rows: self.rows }
     }
 }
 

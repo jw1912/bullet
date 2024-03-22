@@ -32,33 +32,15 @@ impl TrainingSchedule {
     }
 
     pub fn display(&self) {
-        println!(
-            "Scale                  : {}",
-            ansi(format!("{:.0}", self.eval_scale), 31)
-        );
-        println!(
-            "1 / FT Regularisation  : {}",
-            ansi(format!("{:.0}", 1.0 / self.ft_regularisation), 31)
-        );
+        println!("Scale                  : {}", ansi(format!("{:.0}", self.eval_scale), 31));
+        println!("1 / FT Regularisation  : {}", ansi(format!("{:.0}", 1.0 / self.ft_regularisation), 31));
         println!("Batch Size             : {}", ansi(self.batch_size, 31));
-        println!(
-            "Batches / Superbatch   : {}",
-            ansi(self.batches_per_superbatch, 31)
-        );
-        println!(
-            "Positions / Superbatch : {}",
-            ansi(self.batches_per_superbatch * self.batch_size, 31)
-        );
-        println!(
-            "Start Superbatch       : {}",
-            ansi(self.start_superbatch, 31)
-        );
+        println!("Batches / Superbatch   : {}", ansi(self.batches_per_superbatch, 31));
+        println!("Positions / Superbatch : {}", ansi(self.batches_per_superbatch * self.batch_size, 31));
+        println!("Start Superbatch       : {}", ansi(self.start_superbatch, 31));
         println!("End Superbatch         : {}", ansi(self.end_superbatch, 31));
         println!("Save Rate              : {}", ansi(self.save_rate, 31));
-        println!(
-            "WDL Scheduler          : {}",
-            self.wdl_scheduler.colourful()
-        );
+        println!("WDL Scheduler          : {}", self.wdl_scheduler.colourful());
         println!("LR Scheduler           : {}", self.lr_scheduler.colourful());
     }
 }
@@ -95,12 +77,7 @@ impl LrScheduler {
         match *self {
             Self::Constant { value } => format!("constant {}", ansi(value, 31)),
             Self::Drop { start, gamma, drop } => {
-                format!(
-                    "start {} gamma {} drop at {} superbatches",
-                    ansi(start, 31),
-                    ansi(gamma, 31),
-                    ansi(drop, 31),
-                )
+                format!("start {} gamma {} drop at {} superbatches", ansi(start, 31), ansi(gamma, 31), ansi(drop, 31),)
             }
             Self::Step { start, gamma, step } => {
                 format!(
@@ -135,11 +112,7 @@ impl WdlScheduler {
         match *self {
             Self::Constant { value } => format!("constant {}", ansi(value, 31)),
             Self::Linear { start, end } => {
-                format!(
-                    "linear taper start {} end {}",
-                    ansi(start, 31),
-                    ansi(end, 31)
-                )
+                format!("linear taper start {} end {}", ansi(start, 31), ansi(end, 31))
             }
         }
     }

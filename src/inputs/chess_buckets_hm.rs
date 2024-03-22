@@ -10,10 +10,7 @@ pub struct ChessBucketsMirrored {
 
 impl Default for ChessBucketsMirrored {
     fn default() -> Self {
-        Self {
-            buckets: [0; 64],
-            num_buckets: 1,
-        }
+        Self { buckets: [0; 64], num_buckets: 1 }
     }
 }
 
@@ -31,10 +28,7 @@ impl ChessBucketsMirrored {
             ret
         };
 
-        Self {
-            buckets,
-            num_buckets,
-        }
+        Self { buckets, num_buckets }
     }
 }
 
@@ -59,10 +53,7 @@ impl InputType for ChessBucketsMirrored {
         let opp_ksq = usize::from(pos.opp_ksq());
 
         ChessBucketsMirroredIter {
-            flip: [
-                if our_ksq % 8 > 3 { 7 } else { 0 },
-                if opp_ksq % 8 > 3 { 7 } else { 0 },
-            ],
+            flip: [if our_ksq % 8 > 3 { 7 } else { 0 }, if opp_ksq % 8 > 3 { 7 } else { 0 }],
             buckets: [self.buckets[our_ksq], self.buckets[opp_ksq]],
             board_iter: pos.into_iter(),
         }
@@ -102,10 +93,7 @@ pub struct ChessBucketsMirroredFactorised {
 
 impl Default for ChessBucketsMirroredFactorised {
     fn default() -> Self {
-        Self {
-            buckets: [0; 64],
-            num_buckets: 1,
-        }
+        Self { buckets: [0; 64], num_buckets: 1 }
     }
 }
 
@@ -123,10 +111,7 @@ impl ChessBucketsMirroredFactorised {
             ret
         };
 
-        Self {
-            buckets,
-            num_buckets,
-        }
+        Self { buckets, num_buckets }
     }
 }
 
@@ -151,10 +136,7 @@ impl InputType for ChessBucketsMirroredFactorised {
         let opp_ksq = usize::from(pos.opp_ksq());
 
         ChessBucketsMirroredFactorisedIter {
-            flip: [
-                if our_ksq % 8 > 3 { 7 } else { 0 },
-                if opp_ksq % 8 > 3 { 7 } else { 0 },
-            ],
+            flip: [if our_ksq % 8 > 3 { 7 } else { 0 }, if opp_ksq % 8 > 3 { 7 } else { 0 }],
             buckets: [self.buckets[our_ksq], self.buckets[opp_ksq]],
             board_iter: pos.into_iter(),
             queued: None,

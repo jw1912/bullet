@@ -10,10 +10,7 @@ pub struct ChessBuckets {
 
 impl Default for ChessBuckets {
     fn default() -> Self {
-        Self {
-            buckets: [0; 64],
-            num_buckets: 1,
-        }
+        Self { buckets: [0; 64], num_buckets: 1 }
     }
 }
 
@@ -30,10 +27,7 @@ impl ChessBuckets {
             ret
         };
 
-        Self {
-            buckets,
-            num_buckets,
-        }
+        Self { buckets, num_buckets }
     }
 }
 
@@ -54,15 +48,9 @@ impl InputType for ChessBuckets {
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        let buckets = [
-            self.buckets[usize::from(pos.our_ksq())],
-            self.buckets[usize::from(pos.opp_ksq())],
-        ];
+        let buckets = [self.buckets[usize::from(pos.our_ksq())], self.buckets[usize::from(pos.opp_ksq())]];
 
-        ChessBucketsIter {
-            buckets,
-            board_iter: pos.into_iter(),
-        }
+        ChessBucketsIter { buckets, board_iter: pos.into_iter() }
     }
 }
 

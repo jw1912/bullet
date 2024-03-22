@@ -1,6 +1,6 @@
 use bullet_lib::{
-    format::AtaxxBoard, inputs::InputType, outputs, Activation, LocalSettings, LrScheduler,
-    TrainerBuilder, TrainingSchedule, WdlScheduler,
+    format::AtaxxBoard, inputs::InputType, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder,
+    TrainingSchedule, WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -68,10 +68,7 @@ impl InputType for Ataxx2Tuples {
             }
         }
 
-        ThisIterator {
-            inner: res,
-            index: 0,
-        }
+        ThisIterator { inner: res, index: 0 }
     }
 }
 
@@ -114,11 +111,7 @@ fn main() {
         start_superbatch: 1,
         end_superbatch: 40,
         wdl_scheduler: WdlScheduler::Constant { value: 0.5 },
-        lr_scheduler: LrScheduler::Step {
-            start: 0.001,
-            gamma: 0.1,
-            step: 15,
-        },
+        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 15 },
         save_rate: 10,
     };
 

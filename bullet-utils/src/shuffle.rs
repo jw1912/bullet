@@ -28,9 +28,7 @@ const TMP_DIR: &str = "./tmp";
 
 impl ShuffleOptions {
     pub fn run(&self) {
-        let input_size = fs::metadata(self.input.clone())
-            .expect("Input file is valid")
-            .len() as usize;
+        let input_size = fs::metadata(self.input.clone()).expect("Input file is valid").len() as usize;
         assert_eq!(0, input_size % CHESS_BOARD_SIZE);
 
         println!("# [Shuffling Data]");
@@ -42,8 +40,7 @@ impl ShuffleOptions {
 
             shuffle_positions(data);
 
-            let mut output =
-                BufWriter::new(File::create(&self.output).expect("Provide a correct path!"));
+            let mut output = BufWriter::new(File::create(&self.output).expect("Provide a correct path!"));
 
             write_data(data, &mut output);
         } else {
@@ -55,8 +52,7 @@ impl ShuffleOptions {
             let num_tmp_files = ((input_size + bytes_used - 1) / bytes_used).max(MIN_TMP_FILES);
             let temp_files = (0..num_tmp_files)
                 .map(|idx| {
-                    let output_file =
-                        format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
+                    let output_file = format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
                     PathBuf::from(output_file)
                 })
                 .collect::<Vec<_>>();
@@ -77,10 +73,8 @@ impl ShuffleOptions {
 
     fn split_file(&self, temp_files: &[PathBuf], input_size: usize) -> Result<()> {
         let mut input = BufReader::new(File::open(self.input.clone()).unwrap());
-        let temp_files = temp_files
-            .iter()
-            .map(|f| File::create(f).expect("Tmp file could not be created."))
-            .collect::<Vec<_>>();
+        let temp_files =
+            temp_files.iter().map(|f| File::create(f).expect("Tmp file could not be created.")).collect::<Vec<_>>();
 
         let total_positions = input_size / CHESS_BOARD_SIZE;
         let ideal_positions_per_file = total_positions / temp_files.len();
@@ -128,7 +122,5 @@ fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
 
     let data_slice = util::to_slice_with_lifetime(data);
 
-    output
-        .write_all(data_slice)
-        .expect("Nothing can go wrong in unsafe code!");
+    output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
 }

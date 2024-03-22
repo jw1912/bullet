@@ -1,8 +1,4 @@
-#![allow(
-    unused_variables,
-    clippy::missing_safety_doc,
-    clippy::too_many_arguments
-)]
+#![allow(unused_variables, clippy::missing_safety_doc, clippy::too_many_arguments)]
 mod backprops;
 mod bufops;
 mod mse;

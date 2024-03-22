@@ -11,9 +11,7 @@ use crate::{
     inputs::InputType,
     loader::GpuDataLoader,
     outputs::OutputBuckets,
-    tensor::{
-        self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor, TensorBatch,
-    },
+    tensor::{self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor, TensorBatch},
     util,
 };
 
@@ -84,8 +82,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         let mut buf2 = vec![0.0; size];
         let mut buf3 = vec![0.0; size];
 
-        self.optimiser
-            .write_to_host(&mut buf1, &mut buf2, &mut buf3);
+        self.optimiser.write_to_host(&mut buf1, &mut buf2, &mut buf3);
 
         let path = format!("{out_dir}/{name}");
 
@@ -112,14 +109,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         let mut qbuf = vec![0i16; size];
         let mut qiter = self.quantiser.iter().peekable();
         while let Some(&QuantiseInfo { val, start }) = qiter.next() {
-            let end = if let Some(QuantiseInfo {
-                start: next_start, ..
-            }) = qiter.peek()
-            {
-                *next_start
-            } else {
-                size
-            };
+            let end = if let Some(QuantiseInfo { start: next_start, .. }) = qiter.peek() { *next_start } else { size };
 
             for i in start..end {
                 let qf = (f64::from(val) * f64::from(buf[i])).trunc();
@@ -136,8 +126,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             }
         }
 
-        util::write_to_bin(&qbuf, size, out_path, true)
-            .unwrap_or_else(|_| panic!("Writing to [{out_path}] failed!"));
+        util::write_to_bin(&qbuf, size, out_path, true).unwrap_or_else(|_| panic!("Writing to [{out_path}] failed!"));
     }
 
     fn load_from_bin(&self, path: &str) -> Vec<f32> {
@@ -267,9 +256,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         T::RequiredDataType: std::str::FromStr<Err = String>,
     {
         self.clear_data();
-        let board = format!("{fen} | 0 | 0.0")
-            .parse::<T::RequiredDataType>()
-            .expect("Failed to parse position!");
+        let board = format!("{fen} | 0 | 0.0").parse::<T::RequiredDataType>().expect("Failed to parse position!");
         let mut loader = GpuDataLoader::new(self.input_getter, self.bucket_getter);
         loader.load(&[board], 1, 0.0, 1.0);
         self.load_data(&loader);
@@ -281,11 +268,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         tensor::panic_if_device_error("Something went wrong!");
 
         let mut eval = vec![0.0; self.batch_size()];
-        self.nodes
-            .last()
-            .expect("Nodes is empty!")
-            .outputs
-            .write_to_host(&mut eval);
+        self.nodes.last().expect("Nodes is empty!").outputs.write_to_host(&mut eval);
 
         self.clear_data();
         eval[0]
@@ -323,21 +306,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         let batch_size = self.inputs.used();
 
         if self.ft.single_perspective {
-            SparseTensor::single_affine(
-                self.handle,
-                &self.ft.weights,
-                &self.inputs,
-                &self.ft.biases,
-                &self.ft.outputs,
-            );
+            SparseTensor::single_affine(self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
         } else {
-            SparseTensor::affine(
-                self.handle,
-                &self.ft.weights,
-                &self.inputs,
-                &self.ft.biases,
-                &self.ft.outputs,
-            );
+            SparseTensor::affine(self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
         }
 
         let mut inputs = &self.ft.outputs;
@@ -345,33 +316,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         for node in &self.nodes {
             match &node.op {
                 Operation::Activate(activation) => {
-                    TensorBatch::activate(
-                        self.handle,
-                        batch_size,
-                        *activation,
-                        inputs,
-                        &node.outputs,
-                    );
+                    TensorBatch::activate(self.handle, batch_size, *activation, inputs, &node.outputs);
                 }
-                Operation::Affine(Affine {
-                    weights, biases, ..
-                }) => {
-                    TensorBatch::affine(
-                        self.handle,
-                        batch_size,
-                        weights,
-                        inputs,
-                        biases,
-                        &node.outputs,
-                    );
+                Operation::Affine(Affine { weights, biases, .. }) => {
+                    TensorBatch::affine(self.handle, batch_size, weights, inputs, biases, &node.outputs);
                 }
-                Operation::Select => TensorBatch::select(
-                    self.handle,
-                    batch_size,
-                    self.buckets,
-                    inputs,
-                    &node.outputs,
-                ),
+                Operation::Select => TensorBatch::select(self.handle, batch_size, self.buckets, inputs, &node.outputs),
             }
 
             inputs = &node.outputs;
@@ -387,12 +337,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
 
         assert_eq!(self.results.shape(), output_layer.outputs.shape());
 
-        output_layer.outputs.sigmoid_mse(
-            self.handle,
-            batch_size,
-            &self.results,
-            &self.error_device,
-        );
+        output_layer.outputs.sigmoid_mse(self.handle, batch_size, &self.results, &self.error_device);
     }
 
     /// # Safety
@@ -405,26 +350,14 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         device_synchronise();
 
         for node in (1..num_nodes).rev() {
-            backprop_single(
-                self.handle,
-                batch_size,
-                &self.nodes[node],
-                &self.nodes[node - 1].outputs,
-                self.buckets,
-            );
+            backprop_single(self.handle, batch_size, &self.nodes[node], &self.nodes[node - 1].outputs, self.buckets);
         }
 
         if self.ft_reg != 0.0 {
             self.ft.copy.copy_from(&self.ft.outputs);
         }
 
-        backprop_single(
-            self.handle,
-            batch_size,
-            &self.nodes[0],
-            &self.ft.outputs,
-            self.buckets,
-        );
+        backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs, self.buckets);
 
         if self.ft.single_perspective {
             SparseTensor::single_affine_backprop(
@@ -463,17 +396,9 @@ unsafe fn backprop_single(
         Operation::Activate(activation) => {
             TensorBatch::backprop_activation(handle, batch_size, *activation, errors, inputs);
         }
-        Operation::Affine(Affine {
-            weights: w,
-            weights_grad: wg,
-            biases_grad: bg,
-            ones,
-            ..
-        }) => {
+        Operation::Affine(Affine { weights: w, weights_grad: wg, biases_grad: bg, ones, .. }) => {
             TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
         }
-        Operation::Select => {
-            TensorBatch::select_backprop(handle, batch_size, buckets, errors, inputs)
-        }
+        Operation::Select => TensorBatch::select_backprop(handle, batch_size, buckets, errors, inputs),
     }
 }

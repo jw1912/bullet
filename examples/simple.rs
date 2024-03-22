@@ -6,8 +6,7 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
-    WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 16;
@@ -34,19 +33,12 @@ fn main() {
         start_superbatch: 1,
         end_superbatch: 10,
         wdl_scheduler: WdlScheduler::Constant { value: 0.75 },
-        lr_scheduler: LrScheduler::Step {
-            start: 0.001,
-            gamma: 0.1,
-            step: 4,
-        },
+        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 4 },
         save_rate: 1,
     };
 
-    let settings = LocalSettings {
-        threads: 4,
-        data_file_paths: vec!["../../data/30m.data"],
-        output_directory: "checkpoints",
-    };
+    let settings =
+        LocalSettings { threads: 4, data_file_paths: vec!["../../data/30m.data"], output_directory: "checkpoints" };
 
     trainer.run(&schedule, &settings);
 }
@@ -124,22 +116,14 @@ impl Accumulator {
 
     /// Add a feature to an accumulator.
     pub fn add_feature(&mut self, feature_idx: usize, net: &Network) {
-        for (i, d) in self
-            .vals
-            .iter_mut()
-            .zip(&net.feature_weights[feature_idx].vals)
-        {
+        for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
             *i += *d
         }
     }
 
     /// Remove a feature from an accumulator.
     pub fn remove_feature(&mut self, feature_idx: usize, net: &Network) {
-        for (i, d) in self
-            .vals
-            .iter_mut()
-            .zip(&net.feature_weights[feature_idx].vals)
-        {
+        for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
             *i -= *d
         }
     }
