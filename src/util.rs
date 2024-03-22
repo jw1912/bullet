@@ -21,7 +21,14 @@ pub fn write_to_bin<T>(
     }
 
     if pad {
-        let padding = vec![0u8; (64 - size % 64) % 64];
+        let mut padding = vec![0u8; (64 - size % 64) % 64];
+
+        let chs = [b'b', b'u', b'l', b'l', b'e', b't'];
+
+        for (i, p) in padding.iter_mut().enumerate() {
+            *p = chs[i % chs.len()];
+        }
+
         file.write_all(&padding)?;
     }
 
