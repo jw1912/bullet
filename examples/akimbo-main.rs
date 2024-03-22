@@ -70,6 +70,7 @@ fn main() {
     let out_dir = format!("../../nets/{NET_ID}");
 
     let testing = TestSettings {
+        test_rate: schedule.save_rate,
         out_dir: out_dir.as_str(),
         cutechess_path: "../../nets/cutechess-cli.exe",
         book_path: "../../nets/Pohl.epd",

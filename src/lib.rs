@@ -7,6 +7,8 @@ pub mod tensor;
 mod trainer;
 pub mod util;
 
+use std::{process::Command, fs::{self, File}};
+
 use trainer::ansi;
 
 pub use bulletformat as format;
@@ -58,6 +60,7 @@ pub struct Engine<'a> {
 }
 
 pub struct TestSettings<'a> {
+    pub test_rate: usize,
     pub out_dir: &'a str,
     pub cutechess_path: &'a str,
     pub book_path: &'a str,
@@ -102,6 +105,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         testing: &TestSettings,
     ) {
         let TestSettings {
+            test_rate,
             out_dir,
             cutechess_path,
             book_path,
@@ -111,6 +115,37 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             base_engine,
             dev_engine,
         } = testing;
+
+        assert_eq!(schedule.save_rate % test_rate, 0, "Save Rate should divide Test Rate!");
+
+        let output = Command::new(cutechess_path)
+            .arg("--help")
+            .output()
+            .expect("Could not start cutechess!");
+
+        assert!(output.status.success(), "Could not start cutechess!");
+
+        File::open(book_path)
+            .expect("Could not find opening book!");
+
+        fs::create_dir(out_dir)
+            .expect("The output directory already exists!");
+
+        let base_path = format!("{out_dir}/base_engine");
+        let dev_path = format!("{out_dir}/dev_engine");
+
+        let base_path = base_path.as_str();
+        let dev_path = dev_path.as_str();
+
+        let base_exe_path = format!("{out_dir}/base_engine_exe.exe");
+
+        clone(base_engine, base_path);
+
+        build(base_engine, base_path, "../base_engine_exe", None);
+
+        bench(base_engine, base_exe_path, true);
+
+        clone(dev_engine, dev_path);
 
         self.run_custom(
             schedule,
@@ -127,4 +162,85 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             },
         );
     }
+}
+
+fn clone(engine: &Engine, out_dir: &str) {
+    println!("# [Cloning {}/{}]", engine.repo, engine.branch);
+
+    let status = Command::new("git")
+        .arg("clone")
+        .arg(engine.repo)
+        .arg(out_dir)
+        .arg("--branch")
+        .arg(engine.branch)
+        .arg("--depth=1")
+        .status()
+        .expect("Failed to clone engine!");
+
+    assert!(status.success(), "Failed to clone engine!")
+}
+
+fn build(engine: &Engine, inp_path: &str, out_path: &str, override_net: Option<&str>) {
+    println!("# [Building {}/{}]", engine.repo, engine.branch);
+
+    let mut build_base = Command::new("make");
+
+    build_base
+        .current_dir(inp_path)
+        .arg(format!("EXE={out_path}"));
+
+    if let Some(net_path) = override_net {
+        build_base.arg(format!("EVALFILE={}", net_path));
+    } else if let Some(net_path) = engine.net_path {
+            build_base.arg(format!("EVALFILE={}", net_path));
+    }
+
+    let output = build_base
+        .output()
+        .expect("Failed to build engine!");
+
+    assert!(output.status.success(), "Failed to build engine!");
+}
+
+fn bench(engine: &Engine, path: String, check_match: bool) {
+    println!("# [Running Bench]");
+
+    let mut bench = Command::new(path);
+
+    let output = bench.arg("bench")
+        .output()
+        .expect("Failed to run bench on engine!");
+
+    assert!(output.status.success(), "Failed to run bench on engine!");
+
+    if check_match {
+        if let Some(bench) = engine.bench {
+            let out = String::from_utf8(output.stdout)
+                .expect("Could not parse bench output!");
+
+            let split = out.split_whitespace();
+
+            let mut found = false;
+
+            let mut prev = "what";
+            for word in split {
+                if word == "nodes" {
+                    found = true;
+                    assert_eq!(
+                        bench,
+                        prev.parse().expect("Could not parse bench output!"),
+                        "Bench did not match!"
+                    );
+
+                    break;
+                }
+
+                prev = word;
+            }
+
+            assert!(found, "Could not find bench!");
+        }
+    }
+
+    println!("# [Bench Successful]");
 }
