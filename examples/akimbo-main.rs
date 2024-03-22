@@ -3,8 +3,10 @@ The exact training used for akimbo's current network, updated as I merge new net
 */
 use bullet_lib::{
     inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
-    WdlScheduler,
+    WdlScheduler, Engine, TestSettings, UciOption, TimeControl,
 };
+
+const NET_ID: &str = "net-20.02.24";
 
 fn main() {
     #[rustfmt::skip]
@@ -27,7 +29,7 @@ fn main() {
         .build();
 
     let schedule = TrainingSchedule {
-        net_id: "net-20.02.24".to_string(),
+        net_id: NET_ID.to_string(),
         eval_scale: 400.0,
         ft_regularisation: 0.0,
         batch_size: 16_384,
@@ -49,7 +51,36 @@ fn main() {
         output_directory: "checkpoints",
     };
 
-    trainer.run(&schedule, &settings);
+    let base_engine = Engine {
+        repo: "https://github.com/jw1912/akimbo",
+        branch: "main",
+        bench: Some(2353001),
+        net_path: None,
+        uci_options: vec![UciOption { name: "Hash", value: "16" },],
+    };
+
+    let dev_engine = Engine {
+        repo: "https://github.com/jw1912/akimbo",
+        branch: "main",
+        bench: None,
+        net_path: None,
+        uci_options: vec![UciOption { name: "Hash", value: "16" },],
+    };
+
+    let out_dir = format!("../../nets/{NET_ID}");
+
+    let testing = TestSettings {
+        out_dir: out_dir.as_str(),
+        cutechess_path: "../../nets/cutechess-cli.exe",
+        book_path: "../../nets/Pohl.epd",
+        num_game_pairs: 500,
+        concurrency: 6,
+        time_control: TimeControl::FixedNodes(25_000),
+        base_engine,
+        dev_engine,
+    };
+
+    trainer.run_and_test(&schedule, &settings, &testing);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

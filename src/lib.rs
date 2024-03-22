@@ -42,6 +42,38 @@ impl<'a> LocalSettings<'a> {
     }
 }
 
+pub enum TimeControl {
+    Increment {
+        time: usize,
+        inc: usize,
+    },
+    FixedNodes(usize),
+}
+
+pub struct UciOption<'a> {
+    pub name: &'a str,
+    pub value: &'a str,
+}
+
+pub struct Engine<'a> {
+    pub repo: &'a str,
+    pub branch: &'a str,
+    pub bench: Option<usize>,
+    pub net_path: Option<&'a str>,
+    pub uci_options: Vec<UciOption<'a>>,
+}
+
+pub struct TestSettings<'a> {
+    pub out_dir: &'a str,
+    pub cutechess_path: &'a str,
+    pub book_path: &'a str,
+    pub num_game_pairs: usize,
+    pub concurrency: usize,
+    pub time_control: TimeControl,
+    pub base_engine: Engine<'a>,
+    pub dev_engine: Engine<'a>,
+}
+
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     pub fn run_custom<F>(
         &mut self,
@@ -55,6 +87,26 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
     }
 
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
+        self.run_custom(
+            schedule,
+            settings,
+            |superbatch, trainer, schedule, settings| {
+                if schedule.should_save(superbatch) {
+                    let name = format!("{}-{superbatch}", schedule.net_id());
+                    let out_dir = settings.output_directory;
+                    trainer.save(out_dir, name.clone());
+                    println!("Saved [{}]", ansi(name, 31));
+                }
+            },
+        );
+    }
+
+    pub fn run_and_test(
+        &mut self,
+        schedule: &TrainingSchedule,
+        settings: &LocalSettings,
+        testing: &TestSettings,
+    ) {
         self.run_custom(
             schedule,
             settings,
