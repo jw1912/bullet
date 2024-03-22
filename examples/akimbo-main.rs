@@ -2,8 +2,8 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule,
-    WdlScheduler, Engine, TestSettings, UciOption, TimeControl,
+    inputs, outputs, Activation, Engine, LocalSettings, LrScheduler, TestSettings, TimeControl,
+    TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler,
 };
 
 const NET_ID: &str = "net-20.02.24";
@@ -56,7 +56,7 @@ fn main() {
         branch: "main",
         bench: Some(2353001),
         net_path: None,
-        uci_options: vec![UciOption { name: "Hash", value: "16" },],
+        uci_options: vec![UciOption("Hash", "16")],
     };
 
     let dev_engine = Engine {
@@ -64,7 +64,7 @@ fn main() {
         branch: "main",
         bench: None,
         net_path: None,
-        uci_options: vec![UciOption { name: "Hash", value: "16" },],
+        uci_options: vec![UciOption("Hash", "16")],
     };
 
     let out_dir = format!("../../nets/{NET_ID}");

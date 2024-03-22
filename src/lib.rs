@@ -43,17 +43,11 @@ impl<'a> LocalSettings<'a> {
 }
 
 pub enum TimeControl {
-    Increment {
-        time: usize,
-        inc: usize,
-    },
+    Increment { time: usize, inc: usize },
     FixedNodes(usize),
 }
 
-pub struct UciOption<'a> {
-    pub name: &'a str,
-    pub value: &'a str,
-}
+pub struct UciOption<'a>(pub &'a str, pub &'a str);
 
 pub struct Engine<'a> {
     pub repo: &'a str,
@@ -107,6 +101,17 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         settings: &LocalSettings,
         testing: &TestSettings,
     ) {
+        let TestSettings {
+            out_dir,
+            cutechess_path,
+            book_path,
+            num_game_pairs,
+            concurrency,
+            time_control,
+            base_engine,
+            dev_engine,
+        } = testing;
+
         self.run_custom(
             schedule,
             settings,
@@ -116,6 +121,8 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
                     let out_dir = settings.output_directory;
                     trainer.save(out_dir, name.clone());
                     println!("Saved [{}]", ansi(name, 31));
+
+
                 }
             },
         );
