@@ -21,6 +21,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
     trainer: &mut Trainer<T, U>,
     schedule: &TrainingSchedule,
     settings: &LocalSettings,
+    callback: fn(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
 ) {
     let threads = settings.threads;
     let data_file_paths: Vec<_> = settings
@@ -194,11 +195,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
                 pos_per_sb,
             );
 
-            if schedule.should_save(superbatch) {
-                let name = format!("{}-{superbatch}", schedule.net_id());
-                trainer.save(out_dir, name.clone());
-                println!("Saved [{}]", ansi(name, 31));
-            }
+            callback(superbatch, trainer, schedule, settings);
 
             superbatch += 1;
             curr_batch = 0;

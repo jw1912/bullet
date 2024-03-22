@@ -43,7 +43,28 @@ impl<'a> LocalSettings<'a> {
 }
 
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
+    pub fn run_custom(
+        &mut self,
+        schedule: &TrainingSchedule,
+        settings: &LocalSettings,
+        callback: fn(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
+    ) {
+        trainer::run::<T, U>(self, schedule, settings, callback);
+    }
+
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
-        trainer::run::<T, U>(self, schedule, settings);
+        self.run_custom(
+            schedule,
+            settings,
+            |superbatch, trainer, schedule, settings|
+            {
+                if schedule.should_save(superbatch) {
+                    let name = format!("{}-{superbatch}", schedule.net_id());
+                    let out_dir = settings.output_directory;
+                    trainer.save(out_dir, name.clone());
+                    println!("Saved [{}]", ansi(name, 31));
+                }
+            }
+        );
     }
 }
