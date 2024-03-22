@@ -48,7 +48,9 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         schedule: &TrainingSchedule,
         settings: &LocalSettings,
         callback: F,
-    ) where F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings) {
+    ) where
+        F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
+    {
         trainer::run::<T, U, F>(self, schedule, settings, callback);
     }
 
@@ -56,15 +58,14 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         self.run_custom(
             schedule,
             settings,
-            |superbatch, trainer, schedule, settings|
-            {
+            |superbatch, trainer, schedule, settings| {
                 if schedule.should_save(superbatch) {
                     let name = format!("{}-{superbatch}", schedule.net_id());
                     let out_dir = settings.output_directory;
                     trainer.save(out_dir, name.clone());
                     println!("Saved [{}]", ansi(name, 31));
                 }
-            }
+            },
         );
     }
 }
