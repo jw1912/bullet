@@ -125,7 +125,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             dev_engine,
         } = testing;
 
-        assert_eq!(schedule.save_rate % test_rate, 0, "Save Rate should divide Test Rate!");
+        assert_eq!(test_rate % schedule.save_rate, 0, "Save Rate should divide Test Rate!");
 
         let output = Command::new(cutechess_path)
             .arg("--version")
