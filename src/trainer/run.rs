@@ -17,12 +17,12 @@ use std::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>>(
+pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     trainer: &mut Trainer<T, U>,
     schedule: &TrainingSchedule,
     settings: &LocalSettings,
-    callback: fn(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
-) {
+    mut callback: F,
+)  where F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings) {
     let threads = settings.threads;
     let data_file_paths: Vec<_> = settings
         .data_file_paths

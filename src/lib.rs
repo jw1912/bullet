@@ -43,13 +43,13 @@ impl<'a> LocalSettings<'a> {
 }
 
 impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
-    pub fn run_custom(
+    pub fn run_custom<F>(
         &mut self,
         schedule: &TrainingSchedule,
         settings: &LocalSettings,
-        callback: fn(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
-    ) {
-        trainer::run::<T, U>(self, schedule, settings, callback);
+        callback: F,
+    ) where F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings) {
+        trainer::run::<T, U, F>(self, schedule, settings, callback);
     }
 
     pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
