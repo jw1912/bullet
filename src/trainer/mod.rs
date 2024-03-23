@@ -226,7 +226,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
 
                 let normal = Normal::new(0.0, (2.0 / input_size as f32).sqrt()).unwrap();
 
-                for weight in network.iter_mut().skip(offset).take(ft_size) {
+                for weight in network.iter_mut().skip(offset).take(wsize) {
                     *weight = normal.sample(&mut rng);
                 }
 
