@@ -199,22 +199,56 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         }
     }
 
-    pub fn randomise_weights_gaussian(&self) {
-        use rand::thread_rng;
-        use rand_distr::Normal;
+    pub fn randomise_weights(&self, init_biases: bool, use_gaussian: bool) {
+        use rand::{rngs::ThreadRng, thread_rng};
+        use rand_distr::{Normal, Uniform};
+
+        enum Dist {
+            Normal(Normal<f32>),
+            Uniform(Uniform<f32>),
+        }
+
+        impl Dist {
+            fn new(stdev: f32, use_gaussian: bool) -> Self {
+                if use_gaussian {
+                    Self::Normal(Normal::new(0.0, stdev).unwrap())
+                } else {
+                    Self::Uniform(Uniform::new(-stdev, stdev))
+                }
+            }
+
+            fn sample(&self, rng: &mut ThreadRng) -> f32 {
+                match self {
+                    Dist::Normal(x) => x.sample(rng),
+                    Dist::Uniform(x) => x.sample(rng),
+                }
+            }
+        }
 
         let mut network = vec![0.0; self.net_size()];
 
         let mut rng = thread_rng();
 
+        let ft_wsize = self.ft.weights.num_elements();
+        let ft_bsize = self.ft.biases.num_elements();
         let input_size = self.ft.weights.shape().cols();
-        let normal = Normal::new(0.0, (1.0 / input_size as f32).sqrt()).unwrap();
-        let ft_size = self.ft.weights.num_elements();
-        for weight in network.iter_mut().take(ft_size) {
-            *weight = normal.sample(&mut rng);
+
+        let stdev = (1.0 / input_size as f32).sqrt();
+        let dist = Dist::new(stdev, use_gaussian);
+
+        for weight in network.iter_mut().take(ft_wsize) {
+            *weight = dist.sample(&mut rng);
         }
 
-        let mut offset = ft_size + self.ft.biases.num_elements();
+        let mut offset = ft_wsize;
+
+        if init_biases {
+            for weight in network.iter_mut().skip(offset).take(ft_bsize) {
+                *weight = dist.sample(&mut rng);
+            }
+        }
+
+        offset += ft_bsize;
 
         for Node { op, .. } in &self.nodes {
             if let Operation::Affine(
@@ -224,13 +258,22 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
                 let bsize = biases.num_elements();
                 let input_size = weights.shape().cols();
 
-                let normal = Normal::new(0.0, (2.0 / input_size as f32).sqrt()).unwrap();
+                let stdev = (1.0 / input_size as f32).sqrt();
+                let dist = Dist::new(stdev, use_gaussian);
 
                 for weight in network.iter_mut().skip(offset).take(wsize) {
-                    *weight = normal.sample(&mut rng);
+                    *weight = dist.sample(&mut rng);
                 }
 
-                offset += wsize + bsize;
+                offset += wsize;
+
+                if init_biases {
+                    for weight in network.iter_mut().skip(offset).take(bsize) {
+                        *weight = dist.sample(&mut rng);
+                    }
+                }
+
+                offset += bsize;
             }
         }
 
