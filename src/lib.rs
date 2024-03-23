@@ -118,8 +118,6 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
             dev_engine,
         } = testing;
 
-        assert_eq!(test_rate % schedule.save_rate, 0, "Save Rate should divide Test Rate!");
-
         let output = Command::new(cutechess_path).arg("--version").output().expect("Could not start cutechess!");
 
         assert!(output.status.success(), "Could not start cutechess!");
@@ -136,8 +134,16 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         fs::create_dir(format!("{out_dir}/nets")).expect("Something went very wrong!");
 
         let stats_path = format!("{out_dir}/stats.txt");
+        let sched_path = format!("{out_dir}/schedule.txt");
 
         File::create(stats_path.as_str()).expect("Couldn't create stats file!");
+        File::create(sched_path.as_str()).expect("Couldn't create schedule file!");
+
+        let mut sched = fs::OpenOptions::new()
+            .write(true)
+            .open(sched_path.as_str())
+            .expect("Couldn't open sschedule file!");
+        writeln!(&mut sched, "{schedule:#?}").expect("Couldn't write schedule to file!");
 
         let base_path_string = format!("{out_dir}/base_engine");
         let dev_path_string = format!("{out_dir}/dev_engine");
@@ -145,12 +151,12 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         let base_path = base_path_string.as_str();
         let dev_path = dev_path_string.as_str();
 
-        let base_exe_path = format!("{out_dir}/base_engine_exe.exe");
+        let base_exe_path = format!("{base_path_string}/base_engine.exe");
 
         clone(base_engine, base_path);
 
         println!("# [Building {}/{}]", base_engine.repo, base_engine.branch);
-        build(base_engine, base_path, "../base_engine_exe", None);
+        build(base_engine, base_path, "../base_engine/base_engine", None);
 
         println!("# [Running Bench]");
         bench(base_engine, base_exe_path.as_str(), true);
@@ -165,107 +171,109 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
                 let name = format!("{}-{superbatch}", schedule.net_id());
                 trainer.save(settings.output_directory, name.clone());
                 println!("Saved [{}]", ansi(name.as_str(), 31));
+            }
 
-                // run test
-                if superbatch % test_rate == 0 || superbatch == schedule.end_superbatch {
-                    let net_path = format!("{out_dir}/nets/{name}.bin");
-                    trainer.save_quantised(net_path.as_str());
+            // run test
+            if superbatch % test_rate == 0 || superbatch == schedule.end_superbatch {
+                let name = format!("{}-{superbatch}", schedule.net_id());
+                trainer.save(format!("{out_dir}/nets").as_str(), name.clone());
 
-                    let base = base_engine.clone();
-                    let dev = dev_engine.clone();
-                    let dpath = dev_path_string.clone();
-                    let rel_dev_path = format!("../dev-{superbatch}");
-                    let rel_net_path = format!("../nets/{name}.bin");
-                    let dev_exe_path = format!("{out_dir}/dev-{superbatch}");
-                    let base_exe_path = base_exe_path.clone();
-                    let cc_path = cutechess_path.to_string();
-                    let num_game_pairs = *num_game_pairs;
-                    let concurrency = *concurrency;
-                    let time_control = *time_control;
-                    let book_path = *book_path;
-                    let stats_path = stats_path.clone();
+                println!("Testing [{}]", ansi(name.as_str(), 31));
 
-                    let handle = std::thread::spawn(move || {
-                        build(&dev, dpath.as_str(), rel_dev_path.as_str(), Some(rel_net_path.as_str()));
+                let base = base_engine.clone();
+                let dev = dev_engine.clone();
+                let dpath = dev_path_string.clone();
+                let rel_dev_path = format!("../nets/{name}/{name}");
+                let rel_net_path = format!("../nets/{name}/{name}.bin");
+                let dev_exe_path = format!("{out_dir}/nets/{name}/{name}");
+                let base_exe_path = base_exe_path.clone();
+                let cc_path = cutechess_path.to_string();
+                let num_game_pairs = *num_game_pairs;
+                let concurrency = *concurrency;
+                let time_control = *time_control;
+                let book_path = *book_path;
+                let stats_path = stats_path.clone();
 
-                        bench(&dev, dev_exe_path.as_str(), false);
+                let handle = std::thread::spawn(move || {
+                    build(&dev, dpath.as_str(), rel_dev_path.as_str(), Some(rel_net_path.as_str()));
 
-                        let mut cc = Command::new(cc_path);
+                    bench(&dev, dev_exe_path.as_str(), false);
 
-                        cc.arg("-engine").arg(format!("cmd={dev_exe_path}"));
+                    let mut cc = Command::new(cc_path);
 
-                        for UciOption(name, value) in dev.uci_options {
-                            cc.arg(format!("option.{name}={value}"));
+                    cc.arg("-engine").arg(format!("cmd={dev_exe_path}"));
+
+                    for UciOption(name, value) in dev.uci_options {
+                        cc.arg(format!("option.{name}={value}"));
+                    }
+
+                    cc.arg("-engine").arg(format!("cmd={base_exe_path}"));
+
+                    for UciOption(name, value) in base.uci_options {
+                        cc.arg(format!("option.{name}={value}"));
+                    }
+
+                    cc.args(["-each", "proto=uci", "timemargin=20"]);
+
+                    match time_control {
+                        TimeControl::FixedNodes(nodes) => {
+                            cc.arg("tc=inf").arg(format!("nodes={nodes}"));
                         }
-
-                        cc.arg("-engine").arg(format!("cmd={base_exe_path}"));
-
-                        for UciOption(name, value) in base.uci_options {
-                            cc.arg(format!("option.{name}={value}"));
+                        TimeControl::Increment { time, inc } => {
+                            cc.arg(format!("tc={time}+{inc}"));
                         }
+                    }
 
-                        cc.args(["-each", "proto=uci", "timemargin=20"]);
+                    cc.args(["-games", "2"]);
 
-                        match time_control {
-                            TimeControl::FixedNodes(nodes) => {
-                                cc.arg("tc=inf").arg(format!("nodes={nodes}"));
-                            }
-                            TimeControl::Increment { time, inc } => {
-                                cc.arg(format!("tc={time}+{inc}"));
-                            }
+                    cc.arg("-rounds").arg(num_game_pairs.to_string());
+
+                    cc.args(["-repeat", "2"]);
+
+                    cc.arg("-concurrency").arg(concurrency.to_string());
+
+                    cc.args(["-openings", "policy=round", "order=random"]);
+
+                    match book_path {
+                        OpeningBook::Epd(path) => {
+                            cc.arg(format!("file={path}")).arg("format=epd");
                         }
-
-                        cc.args(["-games", "2"]);
-
-                        cc.arg("-rounds").arg(num_game_pairs.to_string());
-
-                        cc.args(["-repeat", "2"]);
-
-                        cc.arg("-concurrency").arg(concurrency.to_string());
-
-                        cc.args(["-openings", "policy=round", "order=random"]);
-
-                        match book_path {
-                            OpeningBook::Epd(path) => {
-                                cc.arg(format!("file={path}")).arg("format=epd");
-                            }
-                            OpeningBook::Pgn(path) => {
-                                cc.arg(format!("file={path}")).arg("format=pgn");
-                            }
+                        OpeningBook::Pgn(path) => {
+                            cc.arg(format!("file={path}")).arg("format=pgn");
                         }
+                    }
 
-                        cc.args(["-resign", "movecount=3", "score=400", "twosided=true"]);
-                        cc.args(["-draw", "movenumber=40", "movecount=8", "score=10"]);
+                    cc.args(["-resign", "movecount=3", "score=400", "twosided=true"]);
+                    cc.args(["-draw", "movenumber=40", "movecount=8", "score=10"]);
 
-                        cc.stdout(Stdio::piped());
+                    cc.stdout(Stdio::piped());
 
-                        let output = cc.spawn().expect("Couldn't launch cutechess games!");
+                    let output = cc.spawn().expect("Couldn't launch cutechess games!");
 
-                        let output = output.wait_with_output().expect("Couldn't wait on output!");
+                    let output = output.wait_with_output().expect("Couldn't wait on output!");
 
-                        let stdout = String::from_utf8(output.stdout).expect("Couldn't parse stdout!");
+                    let stdout = String::from_utf8(output.stdout).expect("Couldn't parse stdout!");
 
-                        let mut split = stdout.split("Elo difference: ");
+                    let mut split = stdout.split("Elo difference: ");
 
-                        let line = split.nth(1).unwrap();
+                    let line = split.nth(1).unwrap();
 
-                        let mut split_line = line.split(',');
-                        let elo_segment = split_line.next().unwrap().split_whitespace().collect::<Vec<_>>();
+                    let mut split_line = line.split(',');
+                    let elo_segment = split_line.next().unwrap().split_whitespace().collect::<Vec<_>>();
 
-                        if let [elo, "+/-", err] = elo_segment[..] {
-                            let mut file = fs::OpenOptions::new()
-                                .append(true)
-                                .open(stats_path.as_str())
-                                .expect("Couldn't open stats path!");
+                    if let [elo, "+/-", err] = elo_segment[..] {
+                        let mut file = fs::OpenOptions::new()
+                            .append(true)
+                            .open(stats_path.as_str())
+                            .expect("Couldn't open stats path!");
 
-                            writeln!(file, "{superbatch}, {elo}, {err}").expect("Couldn't write to file!");
-                        } else {
-                            panic!("Couldn't find elo line!");
-                        }
-                    });
+                        writeln!(file, "{superbatch}, {elo}, {err}").expect("Couldn't write to file!");
+                    } else {
+                        panic!("Couldn't find elo line!");
+                    }
+                });
 
-                    handles.push(handle);
-                }
+                handles.push(handle);
             }
         });
 

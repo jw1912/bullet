@@ -1,6 +1,6 @@
 use crate::ansi;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TrainingSchedule {
     pub net_id: String,
     pub eval_scale: f32,
@@ -45,7 +45,7 @@ impl TrainingSchedule {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum LrScheduler {
     /// Constant Rate
     Constant { value: f32 },
@@ -91,7 +91,7 @@ impl LrScheduler {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum WdlScheduler {
     Constant { value: f32 },
     Linear { start: f32, end: f32 },
