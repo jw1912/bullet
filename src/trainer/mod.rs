@@ -5,6 +5,7 @@ pub mod schedule;
 
 pub use builder::TrainerBuilder;
 use components::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo};
+use rand_distr::Distribution;
 pub use run::{ansi, run, set_cbcs};
 
 use crate::{
@@ -196,6 +197,44 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         for node in &mut self.nodes {
             node.outputs = TensorBatch::new(node.outputs.shape(), batch_size);
         }
+    }
+
+    pub fn randomise_weights_gaussian(&self) {
+        use rand::thread_rng;
+        use rand_distr::Normal;
+
+        let mut network = vec![0.0; self.net_size()];
+
+        let mut rng = thread_rng();
+
+        let input_size = self.ft.weights.shape().cols();
+        let normal = Normal::new(0.0, (1.0 / input_size as f32).sqrt()).unwrap();
+        let ft_size = self.ft.weights.num_elements();
+        for weight in network.iter_mut().take(ft_size) {
+            *weight = normal.sample(&mut rng);
+        }
+
+        let mut offset = ft_size + self.ft.biases.num_elements();
+
+        for Node { op, .. } in &self.nodes {
+            if let Operation::Affine(
+                Affine { weights, biases, .. }
+            ) = op {
+                let wsize = weights.num_elements();
+                let bsize = biases.num_elements();
+                let input_size = weights.shape().cols();
+
+                let normal = Normal::new(0.0, (2.0 / input_size as f32).sqrt()).unwrap();
+
+                for weight in network.iter_mut().skip(offset).take(ft_size) {
+                    *weight = normal.sample(&mut rng);
+                }
+
+                offset += wsize + bsize;
+            }
+        }
+
+        self.optimiser.load_weights_from_host(&network);
     }
 
     pub fn set_ft_reg(&mut self, val: f32) {
