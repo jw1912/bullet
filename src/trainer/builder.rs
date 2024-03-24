@@ -1,7 +1,6 @@
 use crate::{
     inputs::InputType,
     outputs::OutputBuckets,
-    rng::Rand,
     tensor::{self, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor, Tensor, TensorBatch},
     Activation,
 };
@@ -212,16 +211,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
             let results = TensorBatch::new(Shape::new(1, 1), batch_size);
             let error_device = DeviceBuffer::new(1);
 
-            let mut net = vec![0.0; net_size];
-            let mut rng = Rand::default();
-
-            for (i, val) in net.iter_mut().enumerate() {
-                *val = rng.rand(if i < ft_size { 0.01 } else { 0.1 });
-            }
-
-            opt.load_weights_from_host(&net);
-
-            Trainer {
+            let trainer = Trainer {
                 input_getter: self.input_getter,
                 bucket_getter: self.bucket_getter,
                 handle: DeviceHandles::default(),
@@ -236,7 +226,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                 used: 0,
                 quantiser,
                 buckets: tensor::util::calloc(batch_size),
-            }
+            };
+
+            trainer.randomise_weights(true, true);
+
+            trainer
         }
     }
 }

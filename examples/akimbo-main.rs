@@ -56,7 +56,7 @@ fn main() {
     let base_engine = Engine {
         repo: "https://github.com/jw1912/akimbo",
         branch: "main",
-        bench: Some(2353001),
+        bench: Some(2369789),
         net_path: None,
         uci_options: vec![UciOption("Hash", "16")],
     };
@@ -69,11 +69,9 @@ fn main() {
         uci_options: vec![UciOption("Hash", "16")],
     };
 
-    let out_dir = concat!("../../nets/", net_id!());
-
     let testing = TestSettings {
         test_rate: schedule.save_rate,
-        out_dir,
+        out_dir: concat!("../../nets/", net_id!()),
         cutechess_path: "../../nets/cutechess-cli.exe",
         book_path: OpeningBook::Epd("../../nets/Pohl.epd"),
         num_game_pairs: 500,

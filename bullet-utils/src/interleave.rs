@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use bullet::Rand;
+use crate::Rand;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]

@@ -5,7 +5,8 @@ use std::{
     time::Instant,
 };
 
-use bullet::{util, Rand};
+use crate::Rand;
+use bullet::util;
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 

@@ -2,7 +2,6 @@ mod backend;
 pub mod inputs;
 mod loader;
 pub mod outputs;
-mod rng;
 pub mod tensor;
 mod trainer;
 pub mod util;
@@ -16,7 +15,6 @@ use std::{
 use trainer::ansi;
 
 pub use bulletformat as format;
-pub use rng::Rand;
 pub use trainer::{
     schedule::{LrScheduler, TrainingSchedule, WdlScheduler},
     set_cbcs, Trainer, TrainerBuilder,
