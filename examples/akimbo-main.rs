@@ -43,8 +43,8 @@ fn main() {
         start_superbatch: 1,
         end_superbatch: 250,
         wdl_scheduler: WdlScheduler::Constant { value: 0.25 },
-        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 120 },
-        save_rate: 25,
+        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.3, step: 60 },
+        save_rate: 150,
     };
 
     let settings = LocalSettings {
@@ -74,7 +74,7 @@ fn main() {
         out_dir: concat!("../../nets/", net_id!()),
         cutechess_path: "../../nets/cutechess-cli.exe",
         book_path: OpeningBook::Epd("../../nets/Pohl.epd"),
-        num_game_pairs: 500,
+        num_game_pairs: 2000,
         concurrency: 6,
         time_control: TimeControl::FixedNodes(25_000),
         base_engine,
