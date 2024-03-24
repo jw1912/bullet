@@ -70,7 +70,7 @@ fn main() {
     };
 
     let testing = TestSettings {
-        test_rate: schedule.save_rate,
+        test_rate: 20,
         out_dir: concat!("../../nets/", net_id!()),
         cutechess_path: "../../nets/cutechess-cli.exe",
         book_path: OpeningBook::Epd("../../nets/Pohl.epd"),
