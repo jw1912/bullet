@@ -8,7 +8,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "net-26.03.24"
+        "lnet002"
     };
 }
 
@@ -42,21 +42,21 @@ fn main() {
         batches_per_superbatch: 6104,
         start_superbatch: 1,
         end_superbatch: 240,
-        wdl_scheduler: WdlScheduler::Constant { value: 0.25 },
+        wdl_scheduler: WdlScheduler::Constant { value: 0.0 },
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.3, step: 60 },
         save_rate: 150,
     };
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["../../data/akimbo3-9+dfrc.data"],
+        data_file_paths: vec!["../../data/test80-sep2022.data"],
         output_directory: "checkpoints",
     };
 
     let base_engine = Engine {
         repo: "https://github.com/jw1912/akimbo",
         branch: "main",
-        bench: Some(2380732),
+        bench: Some(2430757),
         net_path: None,
         uci_options: vec![UciOption("Hash", "16")],
     };
