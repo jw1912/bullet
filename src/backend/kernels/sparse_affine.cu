@@ -4,8 +4,8 @@
 #include <cstdint>
 
 struct Feat {
-    uint16_t our;
-    uint16_t opp;
+    int32_t our;
+    int32_t opp;
 };
 
 __global__ void SingleSparseAffineForwardKernel(
