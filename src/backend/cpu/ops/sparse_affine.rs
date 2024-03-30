@@ -34,16 +34,16 @@ pub unsafe fn sparse_affine_forward(
         for i in 0..max_input_size {
             let feat = *this_inp.add(i);
 
-            if feat.our() == 65_535 {
+            if feat.our() == -1 {
                 break;
             }
 
-            let our_weights = weights.add(output_size * feat.our());
+            let our_weights = weights.add(output_size * feat.our() as usize);
             for j in 0..output_size {
                 *our_out.add(j) += *our_weights.add(j);
             }
 
-            let opp_weights = weights.add(output_size * feat.opp());
+            let opp_weights = weights.add(output_size * feat.opp() as usize);
             for j in 0..output_size {
                 *opp_out.add(j) += *opp_weights.add(j);
             }
@@ -107,16 +107,16 @@ pub unsafe fn sparse_affine_backward(
         for i in 0..max_active_inputs {
             let feat = *this_inp.add(i);
 
-            if feat.our() == 65_535 {
+            if feat.our() == -1 {
                 break;
             }
 
-            let our_weights = weights.add(output_size * feat.our());
+            let our_weights = weights.add(output_size * feat.our() as usize);
             for j in 0..output_size {
                 *our_weights.add(j) += *our_err.add(j) + ft_reg * f32::from(*our_out.add(j) > 0.0);
             }
 
-            let opp_weights = weights.add(output_size * feat.opp());
+            let opp_weights = weights.add(output_size * feat.opp() as usize);
             for j in 0..output_size {
                 *opp_weights.add(j) += *opp_err.add(j) + ft_reg * f32::from(*opp_out.add(j) > 0.0);
             }

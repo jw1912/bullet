@@ -14,12 +14,12 @@ impl Feat {
         Self { our, opp }
     }
 
-    pub fn our(&self) -> usize {
-        self.our as usize
+    pub fn our(&self) -> i32 {
+        self.our
     }
 
-    pub fn opp(&self) -> usize {
-        self.opp as usize
+    pub fn opp(&self) -> i32 {
+        self.opp
     }
 }
 

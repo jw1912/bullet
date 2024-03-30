@@ -30,7 +30,7 @@ __global__ void SingleSparseAffineForwardKernel(
     for (size_t i = 0; i < inputSize; i++) {
         const Feat inp = thisInput[i];
 
-        if (static_cast<size_t>(inp.our) == static_cast<size_t>(65535))
+        if (inp.our == -1)
             break;
 
         const size_t ourIdx = static_cast<size_t>(inp.our) * outputSize + elem;
@@ -73,7 +73,7 @@ __global__ void SingleSparseAffineBackwardKernel(
     for (size_t i = 0; i < inputSize; i++) {
         const Feat inp = thisInput[i];
 
-        if (static_cast<size_t>(inp.our) == static_cast<size_t>(65535))
+        if (inp.our == -1)
             break;
 
         const size_t ourIdx = static_cast<size_t>(inp.our) * outputSize + elem;
@@ -104,7 +104,7 @@ __global__ void sparseAffineForwardKernel(
     for (size_t i = 0; i < inputSize; i++) {
         const Feat inp = thisInput[i];
 
-        if (static_cast<size_t>(inp.our) == static_cast<size_t>(65535))
+        if (inp.our == -1)
             break;
 
         const size_t ourIdx = static_cast<size_t>(inp.our) * outputSize + elem;
@@ -151,7 +151,7 @@ __global__ void sparseAffineBackwardKernel(
     for (size_t i = 0; i < inputSize; i++) {
         const Feat inp = thisInput[i];
 
-        if (static_cast<size_t>(inp.our) == static_cast<size_t>(65535))
+        if (inp.our == -1)
             break;
 
         const size_t ourIdx = static_cast<size_t>(inp.our) * outputSize + elem;
