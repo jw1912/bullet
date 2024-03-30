@@ -11,6 +11,7 @@ pub struct TrainingSchedule {
     pub end_superbatch: usize,
     pub wdl_scheduler: WdlScheduler,
     pub lr_scheduler: LrScheduler,
+    pub loss_function: Loss,
     pub save_rate: usize,
 }
 
@@ -43,6 +44,19 @@ impl TrainingSchedule {
         println!("WDL Scheduler          : {}", self.wdl_scheduler.colourful());
         println!("LR Scheduler           : {}", self.lr_scheduler.colourful());
     }
+
+    pub fn power(&self) -> f32 {
+        match self.loss_function {
+            Loss::SigmoidMSE => 2.0,
+            Loss::SigmoidMPE(x) => x,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Loss {
+    SigmoidMSE,
+    SigmoidMPE(f32),
 }
 
 #[derive(Clone, Copy, Debug)]

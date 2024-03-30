@@ -345,7 +345,7 @@ fn mse() {
     let r = TensorBatch::new(Shape::new(1, 1), 9);
     r.load_from_host(&res);
 
-    x.sigmoid_mse(handle, 3, &r, &error);
+    x.sigmoid_mpe(handle, 3, &r, &error, 2.0);
 
     let mut buf = [0.0; 3];
     x.write_to_host(&mut buf);

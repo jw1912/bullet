@@ -5,7 +5,7 @@ fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, Loss
 };
 
 fn main() {
@@ -31,6 +31,7 @@ fn main() {
         end_superbatch: 255,
         wdl_scheduler: WdlScheduler::Linear { start: 0.2, end: 0.5 },
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 120 },
+        loss_function: Loss::SigmoidMSE,
         save_rate: 1,
     };
 

@@ -3,7 +3,7 @@ The exact training used for akimbo's current network, updated as I merge new net
 */
 use bullet_lib::{
     inputs, outputs, Activation, Engine, LocalSettings, LrScheduler, OpeningBook, TestSettings, TimeControl,
-    TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler,
+    TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler, Loss
 };
 
 macro_rules! net_id {
@@ -44,6 +44,7 @@ fn main() {
         end_superbatch: 240,
         wdl_scheduler: WdlScheduler::Constant { value: 0.0 },
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.3, step: 60 },
+        loss_function: Loss::SigmoidMSE,
         save_rate: 150,
     };
 

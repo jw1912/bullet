@@ -1,11 +1,12 @@
 use super::DeviceHandles;
 
-pub unsafe fn sigmoid_mse(
+pub unsafe fn sigmoid_mpe(
     handle: DeviceHandles,
     buffer_size: usize,
     outputs: *mut f32,
     results: *const f32,
     errors: *mut f32,
+    power: f32,
 ) {
     let results = results as usize;
     let outputs = outputs as usize;
@@ -21,7 +22,9 @@ pub unsafe fn sigmoid_mse(
 
         let sigmoid = 1.0 / (1.0 + (-output).exp());
         let diff = sigmoid - result;
-        *this_output = diff * sigmoid * (1.0 - sigmoid);
-        *this_error += diff * diff
+        let absd = diff.abs();
+
+        *this_output = diff.signum() * absd.powf(power - 1.0) * sigmoid * (1.0 - sigmoid);
+        *this_error += absd.powf(power);
     });
 }

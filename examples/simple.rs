@@ -6,7 +6,7 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, Loss
 };
 
 const HIDDEN_SIZE: usize = 16;
@@ -34,6 +34,7 @@ fn main() {
         end_superbatch: 10,
         wdl_scheduler: WdlScheduler::Constant { value: 0.75 },
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 4 },
+        loss_function: Loss::SigmoidMSE,
         save_rate: 1,
     };
 

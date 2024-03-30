@@ -158,14 +158,15 @@ pub unsafe fn backprop_screlu(_: DeviceHandles, size: usize, inp: *const f32, ou
     bindings::backpropSCReLU(size, inp, out);
 }
 
-pub unsafe fn sigmoid_mse(
+pub unsafe fn sigmoid_mpe(
     _: DeviceHandles,
     buffer_size: usize,
     outputs: *mut f32,
     results: *const f32,
     error: *mut f32,
+    power: f32,
 ) {
-    bindings::sigmoidMSE(buffer_size, outputs, results, error);
+    bindings::sigmoidMPE(buffer_size, outputs, results, error, power);
 }
 
 pub unsafe fn sparse_affine_backward(

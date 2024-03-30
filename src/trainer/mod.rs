@@ -356,13 +356,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         eval[0]
     }
 
-    pub fn train_on_batch(&mut self, decay: f32, rate: f32) -> bool {
+    pub fn train_on_batch(&mut self, decay: f32, rate: f32, power: f32) -> bool {
         self.optimiser.zero_gradient();
         self.error_device.set_zero();
 
         unsafe {
             self.forward();
-            self.calc_errors();
+            self.calc_errors(power);
             self.backprop();
         }
 
@@ -413,13 +413,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     /// # Safety
     /// It is undefined behaviour to call this without previously calling
     /// `self.forward`.
-    unsafe fn calc_errors(&self) {
+    unsafe fn calc_errors(&self, power: f32) {
         let batch_size = self.inputs.used();
         let output_layer = self.nodes.last().expect("Nodes is empty!");
 
         assert_eq!(self.results.shape(), output_layer.outputs.shape());
 
-        output_layer.outputs.sigmoid_mse(self.handle, batch_size, &self.results, &self.error_device);
+        output_layer.outputs.sigmoid_mpe(self.handle, batch_size, &self.results, &self.error_device, power);
     }
 
     /// # Safety

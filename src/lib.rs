@@ -16,7 +16,7 @@ use trainer::ansi;
 
 pub use bulletformat as format;
 pub use trainer::{
-    schedule::{LrScheduler, TrainingSchedule, WdlScheduler},
+    schedule::{LrScheduler, TrainingSchedule, WdlScheduler, Loss},
     set_cbcs, Trainer, TrainerBuilder,
 };
 

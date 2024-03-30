@@ -205,12 +205,12 @@ impl TensorBatch {
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn sigmoid_mse(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer) {
+    pub fn sigmoid_mpe(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer, power: f32) {
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 
         unsafe {
-            ops::sigmoid_mse(handle, batch_size, self.ptr(), results.ptr(), error.ptr());
+            ops::sigmoid_mpe(handle, batch_size, self.ptr(), results.ptr(), error.ptr(), power);
         }
     }
 

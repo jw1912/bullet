@@ -1,7 +1,7 @@
 #![allow(unused_variables, clippy::missing_safety_doc, clippy::too_many_arguments)]
 mod backprops;
 mod bufops;
-mod mse;
+mod mpe;
 mod sparse_affine;
 mod splat_add;
 mod update;
@@ -10,7 +10,7 @@ use super::{util, DeviceHandles};
 
 pub use backprops::*;
 pub use bufops::*;
-pub use mse::*;
+pub use mpe::*;
 pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
