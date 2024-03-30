@@ -26,7 +26,7 @@ impl SparseTensor {
     /// This creates an uninitialised instance, it is up to the
     /// user to perform an operation which initialises it.
     pub unsafe fn uninit(cap: usize, input_dim: usize, max_num_inputs: usize) -> Self {
-        assert!(input_dim < 65_535, "Unsupported dimension {input_dim}!");
+        assert!(input_dim < 2_147_483_647, "Unsupported dimension {input_dim}!");
 
         Self { cap, used: 0, input_dim, max_num_inputs, ptr: util::malloc(max_num_inputs * cap) }
     }
