@@ -5,21 +5,21 @@ use crate::{inputs::InputType, outputs::OutputBuckets};
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Feat {
-    our: u16,
-    opp: u16,
+    our: i32,
+    opp: i32,
 }
 
 impl Feat {
-    pub fn new(our: u16, opp: u16) -> Self {
+    pub fn new(our: i32, opp: i32) -> Self {
         Self { our, opp }
     }
 
-    pub fn our(&self) -> usize {
-        usize::from(self.our)
+    pub fn our(&self) -> i32 {
+        self.our
     }
 
-    pub fn opp(&self) -> usize {
-        usize::from(self.opp)
+    pub fn opp(&self) -> i32 {
+        self.opp
     }
 }
 
@@ -78,12 +78,12 @@ where
                             let offset = max_features * i;
 
                             for (our, opp) in inp.feature_iter(pos) {
-                                input_chunk[offset + j] = Feat::new(our as u16, opp as u16);
+                                input_chunk[offset + j] = Feat::new(our as i32, opp as i32);
                                 j += 1;
                             }
 
                             if j < max_features {
-                                input_chunk[offset + j] = Feat::new(u16::MAX, u16::MAX);
+                                input_chunk[offset + j] = Feat::new(-1, -1);
                             }
 
                             results_chunk[i] = pos.blended_result(blend, rscale);
