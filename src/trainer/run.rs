@@ -37,14 +37,21 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     trainer.set_batch_size(schedule.batch_size);
     trainer.set_ft_reg(schedule.ft_regularisation);
 
+    let data_size = std::mem::size_of::<T::RequiredDataType>() as u64;
     let esc = esc();
     let rscale = 1.0 / schedule.eval_scale;
     let mut file_size = 0;
     for file in data_file_paths.iter() {
-        file_size += std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
+        let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
+
+        if this_size % data_size != 0 {
+            panic!("File [{file}] does not have a multiple of {data_size} size!");
+        }
+
+        file_size += this_size;
     }
 
-    let num = (file_size / 32) as usize;
+    let num = (file_size / data_size) as usize;
     let batch_size = trainer.batch_size();
 
     if device_name() == "CPU" {
