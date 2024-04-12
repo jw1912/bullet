@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bulletformat::{chess::MarlinFormat, convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard};
+use bulletformat::{chess::{CudADFormat, MarlinFormat}, convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -25,6 +25,9 @@ impl ConvertOptions {
         match self.from.as_str() {
             "marlinformat" => {
                 convert_from_bin::<MarlinFormat, ChessBoard>(&self.input, &self.output, self.threads).unwrap()
+            }
+            "cudadformat" => {
+                convert_from_bin::<CudADFormat, ChessBoard>(&self.input, &self.output, self.threads).unwrap()
             }
             "text" => convert_text(&self.input, &self.output),
             "ataxx" => convert_from_text::<AtaxxBoard>(&self.input, &self.output).unwrap(),
