@@ -68,7 +68,7 @@ impl DeviceBuffer {
     pub fn write_to_host(&self, buf: &mut [f32]) {
         assert!(buf.len() <= self.size, "Overflow!");
         unsafe {
-            util::copy_from_device(buf.as_mut_ptr(), self.ptr, self.size);
+            util::copy_from_device(buf.as_mut_ptr(), self.ptr, buf.len());
         }
         util::device_synchronise();
     }

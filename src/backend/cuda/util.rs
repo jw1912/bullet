@@ -60,13 +60,7 @@ pub fn malloc<T>(num: usize) -> *mut T {
 
 /// # Safety
 /// Need to make sure not to double free.
-pub unsafe fn free(ptr: *mut f32, _: usize) {
-    catch!(cudaFree(ptr.cast()));
-}
-
-/// # Safety
-/// Need to make sure not to double free.
-pub unsafe fn free_raw_bytes(ptr: *mut u8, _: usize) {
+pub unsafe fn free<T>(ptr: *mut T, _: usize) {
     catch!(cudaFree(ptr.cast()));
 }
 

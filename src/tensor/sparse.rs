@@ -16,7 +16,7 @@ pub struct SparseTensor {
 impl Drop for SparseTensor {
     fn drop(&mut self) {
         unsafe {
-            util::free(self.ptr.cast(), self.num_elements());
+            util::free(self.ptr, self.num_elements());
         }
     }
 }

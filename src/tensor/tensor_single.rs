@@ -31,7 +31,7 @@ impl Tensor {
     /// # Safety
     /// Don't double free.
     pub unsafe fn free(&mut self) {
-        util::free(self.ptr.cast(), self.num_elements());
+        util::free(self.ptr, self.num_elements());
     }
 
     pub fn shape(&self) -> Shape {

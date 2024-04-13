@@ -179,7 +179,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
 
     pub fn set_batch_size(&mut self, batch_size: usize) {
         if !self.buckets.is_null() {
-            unsafe { tensor::util::free_raw_bytes(self.buckets, self.batch_size()) }
+            unsafe { tensor::util::free(self.buckets, self.batch_size()) }
         }
         self.buckets = tensor::util::calloc(batch_size);
 
