@@ -29,7 +29,7 @@ license = "MIT"
 authors = ["Jamie Whiting"]
 
 [workspace.dependencies]
-bulletformat = "1.5.0"
+bulletformat = "1.6.0"
 
 [profile.release]
 panic = 'abort'
