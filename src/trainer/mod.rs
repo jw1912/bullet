@@ -374,7 +374,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             return false;
         }
 
-        let adj = 2. / self.inputs.used() as f32;
+        let adj = power / self.inputs.used() as f32;
         self.optimiser.update(self.handle, decay, adj, rate);
 
         device_synchronise();
