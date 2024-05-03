@@ -133,6 +133,12 @@ impl TensorBatch {
         ops::splat_add(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
 
+    /// # Safety
+    /// `inp` must be pointing to valid allocated memory.
+    pub unsafe fn add_to(handle: DeviceHandles, batch_size: usize, inp: &TensorBatch, out: &TensorBatch) {
+        Self::map(ops::add_to, handle, batch_size, inp, out);
+    }
+
     /// Modifies a batch of tensors.
     fn map(
         f: unsafe fn(DeviceHandles, usize, *const f32, *mut f32),

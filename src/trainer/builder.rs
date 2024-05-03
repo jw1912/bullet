@@ -15,6 +15,7 @@ enum OpType {
 struct NodeType {
     size: usize,
     op: OpType,
+    in_res_block: bool,
 }
 
 pub struct TrainerBuilder<T, U> {
@@ -24,6 +25,7 @@ pub struct TrainerBuilder<T, U> {
     nodes: Vec<NodeType>,
     quantisations: Vec<i32>,
     single_perspective: bool,
+    in_res_block: bool,
     size: usize,
 }
 
@@ -36,6 +38,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Default for TrainerBui
             nodes: Vec::new(),
             quantisations: Vec::new(),
             single_perspective: false,
+            in_res_block: false,
             size: 0,
         }
     }
@@ -80,7 +83,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
     }
 
     fn add(mut self, size: usize, op: OpType) -> Self {
-        self.nodes.push(NodeType { size, op });
+        self.nodes.push(NodeType { size, op, in_res_block: self.in_res_block });
 
         self
     }
@@ -93,6 +96,18 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
         self.add(size, OpType::Activate(activation))
+    }
+
+    pub fn start_residual_block(mut self) -> Self {
+        assert!(!self.in_res_block, "Already in residual block!");
+        self.in_res_block = true;
+        self
+    }
+
+    pub fn end_residual_block(mut self) -> Self {
+        assert!(self.in_res_block, "Not in residual block!");
+        self.in_res_block = false;
+        self
     }
 
     pub fn build(self) -> Trainer<T, U> {
@@ -144,8 +159,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                 qi += 1;
             }
 
-            for NodeType { size, op } in &self.nodes {
+            for NodeType { size, op, in_res_block } in &self.nodes {
                 let size = *size;
+                let in_res_block = *in_res_block;
 
                 match op {
                     OpType::Affine => {
@@ -184,19 +200,20 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
                         offset += raw_size;
 
                         let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node { outputs, op: Operation::Affine(affine) });
+                        nodes.push(Node { outputs, op: Operation::Affine(affine), in_res_block });
 
                         if buckets > 1 {
                             nodes.push(Node {
                                 outputs: TensorBatch::new(Shape::new(1, size), batch_size),
                                 op: Operation::Select,
+                                in_res_block,
                             });
                         }
                     }
                     OpType::Activate(activation) => {
                         let bsh = Shape::new(1, size);
                         let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node { outputs, op: Operation::Activate(*activation) });
+                        nodes.push(Node { outputs, op: Operation::Activate(*activation), in_res_block });
                     }
                 };
 

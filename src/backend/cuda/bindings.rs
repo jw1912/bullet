@@ -104,4 +104,6 @@ extern "C" {
         inp: *const f32,
         out: *mut f32,
     );
+
+    pub fn addTo(size: usize, inp: *const f32, out: *mut f32);
 }
