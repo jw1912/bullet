@@ -288,3 +288,7 @@ pub unsafe fn select_backprop(
 ) {
     bindings::selectBackprop(batch_size, input_size, output_size, buckets, inp, out);
 }
+
+pub unsafe fn add_to(_: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::addTo(size, inp, out);
+}

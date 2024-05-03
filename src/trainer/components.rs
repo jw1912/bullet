@@ -30,6 +30,7 @@ pub(super) enum Operation {
 pub(super) struct Node {
     pub outputs: TensorBatch,
     pub op: Operation,
+    pub in_res_block: bool,
 }
 
 pub(super) struct QuantiseInfo {

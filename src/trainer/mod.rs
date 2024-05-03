@@ -394,8 +394,22 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         }
 
         let mut inputs = &self.ft.outputs;
+        let mut res_inputs = inputs;
+        let mut in_res_block = false;
 
         for node in &self.nodes {
+            // entering residual block
+            if !in_res_block && node.in_res_block {
+                in_res_block = true;
+                res_inputs = inputs;
+            }
+
+            // exiting residual block
+            if in_res_block && !node.in_res_block {
+                in_res_block = false;
+                TensorBatch::add_to(self.handle, batch_size, res_inputs, inputs);
+            }
+
             match &node.op {
                 Operation::Activate(activation) => {
                     TensorBatch::activate(self.handle, batch_size, *activation, inputs, &node.outputs);
@@ -431,15 +445,36 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         let num_nodes = self.nodes.len();
         device_synchronise();
 
+        let mut res_errors = &self.nodes[num_nodes - 1].outputs;
+        let mut in_res_block = false;
+
         for node in (1..num_nodes).rev() {
-            backprop_single(self.handle, batch_size, &self.nodes[node], &self.nodes[node - 1].outputs, self.buckets);
+            backprop_single(
+                self.handle,
+                batch_size,
+                &self.nodes[node],
+                &self.nodes[node - 1].outputs,
+                self.nodes[node - 1].in_res_block,
+                self.buckets,
+                &mut res_errors,
+                &mut in_res_block,
+            );
         }
 
         if self.ft_reg != 0.0 {
             self.ft.copy.copy_from(&self.ft.outputs);
         }
 
-        backprop_single(self.handle, batch_size, &self.nodes[0], &self.ft.outputs, self.buckets);
+        backprop_single(
+            self.handle,
+            batch_size,
+            &self.nodes[0],
+            &self.ft.outputs,
+            false,
+            self.buckets,
+            &mut res_errors,
+            &mut in_res_block,
+        );
 
         if self.ft.single_perspective {
             SparseTensor::single_affine_backprop(
@@ -465,12 +500,16 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     }
 }
 
-unsafe fn backprop_single(
+#[allow(clippy::too_many_arguments)]
+unsafe fn backprop_single<'a>(
     handle: DeviceHandles,
     batch_size: usize,
     this_node: &Node,
-    inputs: &TensorBatch,
+    inputs: &'a TensorBatch,
+    in_res: bool,
     buckets: *const u8,
+    res_errors: &mut &'a TensorBatch,
+    in_res_block: &mut bool,
 ) {
     let errors = &this_node.outputs;
 
@@ -482,5 +521,17 @@ unsafe fn backprop_single(
             TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
         }
         Operation::Select => TensorBatch::select_backprop(handle, batch_size, buckets, errors, inputs),
+    }
+
+    // entering residual block
+    if !*in_res_block && in_res {
+        *in_res_block = true;
+        *res_errors = inputs;
+    }
+
+    // exiting residual block
+    if *in_res_block && !in_res {
+        *in_res_block = false;
+        TensorBatch::add_to(handle, batch_size, res_errors, inputs);
     }
 }

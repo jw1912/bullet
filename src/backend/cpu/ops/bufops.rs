@@ -73,3 +73,14 @@ pub unsafe fn activate_crelu(handle: DeviceHandles, size: usize, inp: *const f32
 pub unsafe fn activate_screlu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     buffer_operation::<SCReLU>(handle, size, inp, out);
 }
+
+pub unsafe fn add_to(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    let inp = inp as usize;
+    let out = out as usize;
+
+    handle.split_workload(size, |_, idx| {
+        let this_inp = (inp as *const f32).add(idx);
+        let this_out = (out as *mut f32).add(idx);
+        *this_out += *this_inp;
+    });
+}
