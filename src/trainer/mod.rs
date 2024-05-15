@@ -370,6 +370,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         self.error_device.write_to_host(&mut errors);
         self.error += errors.iter().sum::<f32>() / self.inputs.used() as f32;
 
+        tensor::panic_if_device_error("Something went wrong!");
+
         if self.error.is_nan() {
             return false;
         }
