@@ -2,6 +2,7 @@ mod convert;
 mod interleave;
 mod shuffle;
 mod validate;
+mod count_buckets;
 
 use structopt::StructOpt;
 
@@ -11,6 +12,7 @@ pub enum Options {
     Interleave(interleave::InterleaveOptions),
     Shuffle(shuffle::ShuffleOptions),
     Validate(validate::ValidateOptions),
+    BucketCount(count_buckets::ValidateOptions)
 }
 
 fn main() {
@@ -19,6 +21,7 @@ fn main() {
         Options::Interleave(options) => options.run(),
         Options::Shuffle(options) => options.run(),
         Options::Validate(options) => options.run(),
+        Options::BucketCount(options) => options.run(),
     }
 }
 
