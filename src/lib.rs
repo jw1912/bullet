@@ -16,7 +16,7 @@ use trainer::ansi;
 
 pub use bulletformat as format;
 pub use trainer::{
-    schedule::{LrScheduler, TrainingSchedule, WdlScheduler, Loss},
+    schedule::{Loss, LrScheduler, TrainingSchedule, WdlScheduler},
     set_cbcs, Trainer, TrainerBuilder,
 };
 
@@ -137,10 +137,8 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
         File::create(stats_path.as_str()).expect("Couldn't create stats file!");
         File::create(sched_path.as_str()).expect("Couldn't create schedule file!");
 
-        let mut sched = fs::OpenOptions::new()
-            .write(true)
-            .open(sched_path.as_str())
-            .expect("Couldn't open sschedule file!");
+        let mut sched =
+            fs::OpenOptions::new().write(true).open(sched_path.as_str()).expect("Couldn't open sschedule file!");
         writeln!(&mut sched, "{schedule:#?}").expect("Couldn't write schedule to file!");
 
         let base_path_string = format!("{out_dir}/base_engine");

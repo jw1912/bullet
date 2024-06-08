@@ -2,8 +2,8 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, Engine, LocalSettings, LrScheduler, OpeningBook, TestSettings, TimeControl,
-    TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler, Loss
+    inputs, outputs, Activation, Engine, LocalSettings, Loss, LrScheduler, OpeningBook, TestSettings, TimeControl,
+    TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler,
 };
 
 macro_rules! net_id {

@@ -5,7 +5,10 @@ use std::{
     time::Instant,
 };
 
-use bulletformat::{chess::{CudADFormat, MarlinFormat}, convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard};
+use bulletformat::{
+    chess::{CudADFormat, MarlinFormat},
+    convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard,
+};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]

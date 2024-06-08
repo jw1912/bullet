@@ -251,9 +251,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         offset += ft_bsize;
 
         for Node { op, .. } in &self.nodes {
-            if let Operation::Affine(
-                Affine { weights, biases, .. }
-            ) = op {
+            if let Operation::Affine(Affine { weights, biases, .. }) = op {
                 let wsize = weights.num_elements();
                 let bsize = biases.num_elements();
                 let input_size = weights.shape().cols();

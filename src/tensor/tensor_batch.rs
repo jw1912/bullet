@@ -211,7 +211,14 @@ impl TensorBatch {
         TensorBatch::splat_mul_matrixt_vector(handle, batch_size, weights, errors, inputs);
     }
 
-    pub fn sigmoid_mpe(&self, handle: DeviceHandles, batch_size: usize, results: &TensorBatch, error: &DeviceBuffer, power: f32) {
+    pub fn sigmoid_mpe(
+        &self,
+        handle: DeviceHandles,
+        batch_size: usize,
+        results: &TensorBatch,
+        error: &DeviceBuffer,
+        power: f32,
+    ) {
         assert_eq!(self.shape(), results.shape());
         assert_eq!(self.element_size(), results.element_size());
 
