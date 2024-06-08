@@ -10,3 +10,5 @@
 *.epd
 *.txt
 *.bin
+
+!requirements.txt
