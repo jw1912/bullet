@@ -7,6 +7,7 @@ pub use builder::TrainerBuilder;
 use components::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo};
 use rand_distr::Distribution;
 pub use run::{ansi, run, set_cbcs};
+use std::io::Write;
 
 use crate::{
     inputs::InputType,
@@ -28,6 +29,7 @@ pub struct Trainer<T, U> {
     results: TensorBatch,
     error_device: DeviceBuffer,
     error: f32,
+    error_record: Vec<f32>,
     used: usize,
     quantiser: Vec<QuantiseInfo>,
     buckets: *mut u8,
@@ -95,6 +97,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
             .unwrap_or_else(|_| panic!("Writing to [{path}/momentum.bin] failed!"));
         util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false)
             .unwrap_or_else(|_| panic!("Writing to [{path}/velocity.bin] failed!"));
+
+        let mut writer = std::io::BufWriter::new(
+            std::fs::File::create(format!("{path}/log.txt")).expect("Opening log file failed!"),
+        );
+        for loss in &self.error_record {
+            writeln!(writer, "loss: {loss}").expect("Writing to log file failed!");
+        }
 
         if !self.quantiser.is_empty() {
             self.save_quantised(&format!("{path}/{name}.bin"));
@@ -251,9 +260,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         offset += ft_bsize;
 
         for Node { op, .. } in &self.nodes {
-            if let Operation::Affine(
-                Affine { weights, biases, .. }
-            ) = op {
+            if let Operation::Affine(Affine { weights, biases, .. }) = op {
                 let wsize = weights.num_elements();
                 let bsize = biases.num_elements();
                 let input_size = weights.shape().cols();
@@ -368,7 +375,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
 
         let mut errors = vec![0.0; self.error_device.size()];
         self.error_device.write_to_host(&mut errors);
-        self.error += errors.iter().sum::<f32>() / self.inputs.used() as f32;
+        let error = errors.iter().sum::<f32>() / self.inputs.used() as f32;
+        self.error += error;
+        self.error_record.push(error);
 
         tensor::panic_if_device_error("Something went wrong!");
 
