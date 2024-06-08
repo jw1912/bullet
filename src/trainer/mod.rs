@@ -29,7 +29,7 @@ pub struct Trainer<T, U> {
     results: TensorBatch,
     error_device: DeviceBuffer,
     error: f32,
-    error_record: Vec<f32>,
+    error_record: Vec<(usize, usize, f32)>,
     used: usize,
     quantiser: Vec<QuantiseInfo>,
     buckets: *mut u8,
@@ -101,8 +101,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         let mut writer = std::io::BufWriter::new(
             std::fs::File::create(format!("{path}/log.txt")).expect("Opening log file failed!"),
         );
-        for loss in &self.error_record {
-            writeln!(writer, "loss: {loss}").expect("Writing to log file failed!");
+        for (superbatch, batch, loss) in &self.error_record {
+            writeln!(writer, "superbatch: {superbatch},batch: {batch},loss: {loss}",).expect("Writing to log file failed!");
         }
 
         if !self.quantiser.is_empty() {
@@ -363,7 +363,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         eval[0]
     }
 
-    pub fn train_on_batch(&mut self, decay: f32, rate: f32, power: f32) -> bool {
+    pub fn train_on_batch(&mut self, decay: f32, rate: f32, power: f32, superbatch: usize, curr_batch: usize) -> bool {
         self.optimiser.zero_gradient();
         self.error_device.set_zero();
 
@@ -377,7 +377,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         self.error_device.write_to_host(&mut errors);
         let error = errors.iter().sum::<f32>() / self.inputs.used() as f32;
         self.error += error;
-        self.error_record.push(error);
+        self.error_record.push((superbatch, curr_batch, error));
 
         tensor::panic_if_device_error("Something went wrong!");
 
