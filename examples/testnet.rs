@@ -2,7 +2,7 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler, Loss
+    inputs, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
