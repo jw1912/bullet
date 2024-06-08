@@ -25,13 +25,18 @@ colors = ['blue', 'red', 'orange', 'purple', 'cyan', 'green', 'brown']
 def moving_average(data, window_size=10):
     return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
 
+# Read the files in.
+data_sequences = []
+for lf in log_files:
+    with open(lf) as f:
+        data = f.readlines()
+        run_name = lf.split("/")[-2].rstrip("-0123456789")
+        data_sequences.append((run_name, data))
+
 # Plotting the full loss sequences
 plt.figure(figsize=(12, 6))
 
-for i, log_file in enumerate(log_files):
-    with open(log_file) as f:
-        data = f.readlines()
-
+for i, (run_name, data) in enumerate(data_sequences):
     # Parse the loss values
     loss_sequence = [float(l.split()[1]) for l in data]
 
@@ -40,12 +45,11 @@ for i, log_file in enumerate(log_files):
     smoothed_loss = moving_average(loss_sequence, window_size)
 
     # Plot raw and smoothed loss
-    run_name = log_file.split("/")[-2].rstrip("-0123456789")
-    plt.plot(loss_sequence, label=f'Raw Loss {run_name}', alpha=0.3, color=colors[i % len(colors)])
-    plt.plot(range(window_size - 1, len(smoothed_loss) + window_size - 1), smoothed_loss, label=f'Smoothed Loss {run_name}', color=colors[i % len(colors)], linewidth=2)
+    plt.plot(loss_sequence, label=None, alpha=0.3, color=colors[i % len(colors)])
+    plt.plot(range(window_size - 1, len(smoothed_loss) + window_size - 1), smoothed_loss, label=run_name, color=colors[i % len(colors)], linewidth=2)
 
-plt.title('Training Loss Over Time (Full)')
-plt.xlabel('Epoch')
+plt.title('Training loss over time (full)')
+plt.xlabel('Batch')
 plt.ylabel('Loss')
 plt.legend()
 plt.grid(True)
@@ -60,9 +64,7 @@ plt.figure(figsize=(12, 6))
 
 # determine cutoff guard
 guard = 0
-for i, log_file in enumerate(log_files):
-    with open(log_file) as f:
-        data = f.readlines()
+for i, (run_name, data) in enumerate(data_sequences):
     # dynamically determine the cutoff using a heuristic:
     max_tail = max(loss_sequence[len(loss_sequence)//4:])
     min_tail = min(loss_sequence[len(loss_sequence)//4:])
@@ -70,10 +72,7 @@ for i, log_file in enumerate(log_files):
     this_guard = min_tail + diff * 2
     guard = max(guard, this_guard)
 
-for i, log_file in enumerate(log_files):
-    with open(log_file) as f:
-        data = f.readlines()
-
+for i, (run_name, data) in enumerate(data_sequences):
     # Parse the loss values
     loss_sequence = [float(l.split()[1]) for l in data]
 
@@ -86,12 +85,11 @@ for i, log_file in enumerate(log_files):
     cutoff = last_exceeding_instance + 1
 
     # Plot raw and smoothed loss excluding initial epochs
-    run_name = log_file.split("/")[-2].rstrip("-0123456789")
-    plt.plot(range(cutoff, len(loss_sequence)), loss_sequence[cutoff:], label=f'Raw Loss {run_name}', alpha=0.3, color=colors[i % len(colors)])
-    plt.plot(range(cutoff + window_size - 1, len(smoothed_loss) + window_size - 1), smoothed_loss[cutoff:], label=f'Smoothed Loss {run_name}', color=colors[i % len(colors)], linewidth=2)
+    plt.plot(range(cutoff, len(loss_sequence)), loss_sequence[cutoff:], label=None, alpha=0.3, color=colors[i % len(colors)])
+    plt.plot(range(cutoff + window_size - 1, len(smoothed_loss) + window_size - 1), smoothed_loss[cutoff:], label=run_name, color=colors[i % len(colors)], linewidth=2)
 
-plt.title(f'Training Loss Over Time (Dynamically Excluding Initial Epochs)')
-plt.xlabel('Epoch')
+plt.title(f'Training loss over time (clipped)')
+plt.xlabel('Batch')
 plt.ylabel('Loss')
 plt.legend()
 plt.grid(True)

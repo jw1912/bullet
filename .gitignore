@@ -5,6 +5,7 @@
 /.vscode
 /venv
 /visualisation/plots/*
+/data
 
 *.epd
 *.txt
