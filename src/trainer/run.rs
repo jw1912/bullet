@@ -156,7 +156,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
         trainer.load_data(&gpu_loader);
         device_synchronise();
 
-        let valid = trainer.train_on_batch(0.01, lrate, schedule.power());
+        let valid = trainer.train_on_batch(0.01, lrate, schedule.power(), superbatch, curr_batch);
         device_synchronise();
 
         if !valid {
