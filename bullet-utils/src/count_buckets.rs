@@ -29,7 +29,7 @@ impl ValidateOptions {
                 }
             };
 
-            for token in line.replace(",", "").split(" ") {
+            for token in line.replace(',', "").split(' ') {
                 match token.trim().parse::<usize>() {
                     Ok(num) => numbers.push(num),
                     Err(e) => {
@@ -43,7 +43,7 @@ impl ValidateOptions {
         let mut num_buckets: usize = 0;
         let mut buckets: [usize; 64] = [0; 64];
         for n in 0..numbers.len() {
-            buckets[n] = numbers[n] as usize;
+            buckets[n] = numbers[n];
             num_buckets = num_buckets.max(numbers[n]);
         }
 
@@ -91,8 +91,8 @@ impl ValidateOptions {
 }
 
 pub fn print_buckets(arr: [usize; 64], num_buckets: usize) {
-    for bucket in 0..num_buckets + 1 {
-        println!("Bucket {}: {}", bucket, arr[bucket as usize]);
+    for (bucket, item) in arr.iter().enumerate().take(num_buckets + 1) {
+        println!("Bucket {}: {}", bucket, item);
     }
 }
 
@@ -102,7 +102,7 @@ pub fn print_board(arr: [usize; 64]) {
         print!("| ");
         for x in 0..8 {
             let cnt = arr[(y * 8) + x];
-            print!("{} |", format!("{: >11}", cnt.to_string()))
+            print!("{: >11} |", cnt.to_string())
         }
         println!("\n+-------------+------------+------------+------------+------------+------------+------------+------------+");
     }
