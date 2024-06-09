@@ -319,7 +319,14 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         eval[0]
     }
 
-    pub fn train_on_batch(&mut self, rate: f32, power: f32, superbatch: usize, curr_batch: usize, params: &O::AdditionalOptimiserParams) -> bool {
+    pub fn train_on_batch(
+        &mut self,
+        rate: f32,
+        power: f32,
+        superbatch: usize,
+        curr_batch: usize,
+        params: &O::AdditionalOptimiserParams,
+    ) -> bool {
         self.optimiser.zero_gradient();
         self.error_device.set_zero();
 

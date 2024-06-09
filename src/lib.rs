@@ -84,8 +84,12 @@ pub struct TestSettings<'a> {
 }
 
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
-    pub fn run_custom<F>(&mut self, schedule: &TrainingSchedule<O::AdditionalOptimiserParams>, settings: &LocalSettings, callback: F)
-    where
+    pub fn run_custom<F>(
+        &mut self,
+        schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
+        settings: &LocalSettings,
+        callback: F,
+    ) where
         F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams>, &LocalSettings),
     {
         trainer::run::<T, U, O, F>(self, schedule, settings, callback);

@@ -1,5 +1,10 @@
 use crate::{
-    inputs::InputType, loader::GpuDataLoader, optimiser::Optimiser, outputs::OutputBuckets, tensor::{device_name, device_synchronise}, util, LocalSettings, Trainer, TrainingSchedule
+    inputs::InputType,
+    loader::GpuDataLoader,
+    optimiser::Optimiser,
+    outputs::OutputBuckets,
+    tensor::{device_name, device_synchronise},
+    util, LocalSettings, Trainer, TrainingSchedule,
 };
 
 use std::{
