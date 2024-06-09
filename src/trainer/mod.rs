@@ -12,8 +12,9 @@ use std::io::Write;
 use crate::{
     inputs::InputType,
     loader::GpuDataLoader,
+    optimiser::{AdamW, Optimiser},
     outputs::OutputBuckets,
-    tensor::{self, device_synchronise, DeviceBuffer, DeviceHandles, Optimiser, SparseTensor, TensorBatch},
+    tensor::{self, device_synchronise, DeviceBuffer, DeviceHandles, SparseTensor, TensorBatch},
     util,
 };
 
@@ -21,7 +22,7 @@ pub struct Trainer<T, U> {
     input_getter: T,
     bucket_getter: U,
     handle: DeviceHandles,
-    optimiser: Optimiser,
+    optimiser: AdamW,
     ft: FeatureTransformer,
     ft_reg: f32,
     nodes: Vec<Node>,
@@ -79,24 +80,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
     }
 
     pub fn save(&self, out_dir: &str, name: String) {
-        let size = self.optimiser.size();
-
-        let mut buf1 = vec![0.0; size];
-        let mut buf2 = vec![0.0; size];
-        let mut buf3 = vec![0.0; size];
-
-        self.optimiser.write_to_host(&mut buf1, &mut buf2, &mut buf3);
-
         let path = format!("{out_dir}/{name}");
 
         std::fs::create_dir(path.as_str()).unwrap_or(());
 
-        util::write_to_bin(&buf1, size, &format!("{path}/params.bin"), false)
-            .unwrap_or_else(|_| panic!("Writing to [{path}/params.bin] failed!"));
-        util::write_to_bin(&buf2, size, &format!("{path}/momentum.bin"), false)
-            .unwrap_or_else(|_| panic!("Writing to [{path}/momentum.bin] failed!"));
-        util::write_to_bin(&buf3, size, &format!("{path}/velocity.bin"), false)
-            .unwrap_or_else(|_| panic!("Writing to [{path}/velocity.bin] failed!"));
+        self.optimiser.write_to_checkpoint(path.as_str());
 
         let mut writer = std::io::BufWriter::new(
             std::fs::File::create(format!("{path}/log.txt")).expect("Opening log file failed!"),
@@ -139,51 +127,18 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         util::write_to_bin(&qbuf, size, out_path, true).unwrap_or_else(|_| panic!("Writing to [{out_path}] failed!"));
     }
 
-    fn load_from_bin(&self, path: &str) -> Vec<f32> {
-        use std::fs::File;
-        use std::io::{BufReader, Read};
-        let file = File::open(path).unwrap_or_else(|_| panic!("Invalid File Path: {path}"));
-
-        assert_eq!(
-            file.metadata().unwrap().len() as usize,
-            self.net_size() * std::mem::size_of::<f32>(),
-            "Incorrect File Size!"
-        );
-
-        let reader = BufReader::new(file);
-        let mut res = vec![0.0; self.net_size()];
-
-        let mut buf = [0u8; 4];
-
-        for (i, byte) in reader.bytes().enumerate() {
-            let idx = i % 4;
-
-            buf[idx] = byte.unwrap();
-
-            if idx == 3 {
-                res[i / 4] = f32::from_ne_bytes(buf);
-            }
-        }
-
-        res
-    }
-
     pub fn set_threads(&mut self, threads: usize) {
         self.handle.set_threads(threads);
         self.error_device = DeviceBuffer::new(threads);
     }
 
     pub fn load_weights_from_file(&self, path: &str) {
-        let network = self.load_from_bin(path);
+        let network = util::load_from_bin_f32_slice(self.net_size(), path);
         self.optimiser.load_weights_from_host(&network);
     }
 
     pub fn load_from_checkpoint(&self, path: &str) {
-        let network = self.load_from_bin(format!("{path}/params.bin").as_str());
-        let momentum = self.load_from_bin(format!("{path}/momentum.bin").as_str());
-        let velocity = self.load_from_bin(format!("{path}/velocity.bin").as_str());
-
-        self.optimiser.load_from_cpu(&network, &momentum, &velocity)
+        self.optimiser.load_from_checkpoint(path);
     }
 
     pub fn set_batch_size(&mut self, batch_size: usize) {

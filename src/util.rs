@@ -60,3 +60,32 @@ pub fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     let len = src_size / tgt_size;
     unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr().cast(), len) }
 }
+
+pub fn load_from_bin_f32_slice(size: usize, path: &str) -> Vec<f32> {
+    use std::fs::File;
+    use std::io::{BufReader, Read};
+    let file = File::open(path).unwrap_or_else(|_| panic!("Invalid File Path: {path}"));
+
+    assert_eq!(
+        file.metadata().unwrap().len() as usize,
+        size * std::mem::size_of::<f32>(),
+        "Incorrect File Size!"
+    );
+
+    let reader = BufReader::new(file);
+    let mut res = vec![0.0; size];
+
+    let mut buf = [0u8; 4];
+
+    for (i, byte) in reader.bytes().enumerate() {
+        let idx = i % 4;
+
+        buf[idx] = byte.unwrap();
+
+        if idx == 3 {
+            res[i / 4] = f32::from_ne_bytes(buf);
+        }
+    }
+
+    res
+}

@@ -1,6 +1,7 @@
 mod backend;
 pub mod inputs;
 mod loader;
+pub mod optimiser;
 pub mod outputs;
 pub mod tensor;
 mod trainer;

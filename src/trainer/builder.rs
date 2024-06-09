@@ -1,8 +1,5 @@
 use crate::{
-    inputs::InputType,
-    outputs::OutputBuckets,
-    tensor::{self, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor, Tensor, TensorBatch},
-    Activation,
+    inputs::InputType, optimiser::{AdamW, Optimiser}, outputs::OutputBuckets, tensor::{self, DeviceBuffer, DeviceHandles, Shape, SparseTensor, Tensor, TensorBatch}, Activation
 };
 
 use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};
@@ -119,7 +116,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
         let ft_size = (inp_getter_size + 1) * self.ft_out_size;
         let net_size = self.size + ft_size;
 
-        let opt = Optimiser::new(net_size);
+        let opt = AdamW::new(net_size);
         let batch_size = 1;
         let mul = if self.single_perspective { 1 } else { 2 };
 
