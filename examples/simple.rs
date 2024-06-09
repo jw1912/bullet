@@ -6,7 +6,8 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, optimiser, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule,
+    WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 16;
@@ -17,6 +18,7 @@ const QB: i32 = 64;
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[QA, QB])
+        .optimiser(optimiser::AdamW)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
@@ -36,6 +38,7 @@ fn main() {
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 4 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 1,
+        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
     };
 
     let settings =

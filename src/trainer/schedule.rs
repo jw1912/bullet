@@ -1,7 +1,7 @@
 use crate::ansi;
 
 #[derive(Clone, Debug)]
-pub struct TrainingSchedule {
+pub struct TrainingSchedule<O: Clone + std::fmt::Debug + Sync + Send> {
     pub net_id: String,
     pub eval_scale: f32,
     pub ft_regularisation: f32,
@@ -13,9 +13,10 @@ pub struct TrainingSchedule {
     pub lr_scheduler: LrScheduler,
     pub loss_function: Loss,
     pub save_rate: usize,
+    pub optimiser_settings: O,
 }
 
-impl TrainingSchedule {
+impl<O: Clone + std::fmt::Debug + Sync + Send> TrainingSchedule<O> {
     pub fn net_id(&self) -> String {
         self.net_id.clone()
     }

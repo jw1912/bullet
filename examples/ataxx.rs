@@ -1,6 +1,6 @@
 use bullet_lib::{
-    format::AtaxxBoard, inputs::InputType, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder,
-    TrainingSchedule, WdlScheduler,
+    format::AtaxxBoard, inputs::InputType, optimiser, outputs, Activation, LocalSettings, Loss, LrScheduler,
+    TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -95,6 +95,7 @@ fn main() {
     let mut trainer = TrainerBuilder::default()
         .single_perspective()
         .quantisations(&[255, 64])
+        .optimiser(optimiser::AdamW)
         .input(Ataxx2Tuples)
         .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
@@ -114,6 +115,7 @@ fn main() {
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 15 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
+        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
     };
 
     let settings = LocalSettings {
