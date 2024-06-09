@@ -13,6 +13,9 @@ use std::{
     process::{Command, Stdio},
 };
 
+use inputs::InputType;
+use optimiser::Optimiser;
+use outputs::OutputBuckets;
 use trainer::ansi;
 
 pub use bulletformat as format;
@@ -80,15 +83,15 @@ pub struct TestSettings<'a> {
     pub dev_engine: Engine<'a>,
 }
 
-impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
-    pub fn run_custom<F>(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings, callback: F)
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
+    pub fn run_custom<F>(&mut self, schedule: &TrainingSchedule<O::AdditionalOptimiserParams>, settings: &LocalSettings, callback: F)
     where
-        F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
+        F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams>, &LocalSettings),
     {
-        trainer::run::<T, U, F>(self, schedule, settings, callback);
+        trainer::run::<T, U, O, F>(self, schedule, settings, callback);
     }
 
-    pub fn run(&mut self, schedule: &TrainingSchedule, settings: &LocalSettings) {
+    pub fn run(&mut self, schedule: &TrainingSchedule<O::AdditionalOptimiserParams>, settings: &LocalSettings) {
         self.run_custom(schedule, settings, |superbatch, trainer, schedule, settings| {
             if schedule.should_save(superbatch) {
                 let name = format!("{}-{superbatch}", schedule.net_id());
@@ -101,7 +104,7 @@ impl<T: inputs::InputType, U: outputs::OutputBuckets<T::RequiredDataType>> Train
 
     pub fn run_and_test(
         &mut self,
-        schedule: &TrainingSchedule,
+        schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
         settings: &LocalSettings,
         testing: &TestSettings<'static>,
     ) {

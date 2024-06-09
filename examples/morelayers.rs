@@ -5,11 +5,12 @@ fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, optimiser, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
+        .optimiser(optimiser::AdamW)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
         .feature_transformer(768)
@@ -33,6 +34,7 @@ fn main() {
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 120 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 1,
+        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
     };
 
     let settings = LocalSettings {

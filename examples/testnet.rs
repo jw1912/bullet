@@ -2,12 +2,13 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler,
+    inputs, optimiser, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule, WdlScheduler
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[181, 64])
+        .optimiser(optimiser::AdamW)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
         .feature_transformer(32)
@@ -29,6 +30,7 @@ fn main() {
         lr_scheduler: LrScheduler::Constant { value: 0.001 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
+        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
     };
 
     let settings =

@@ -1,9 +1,5 @@
 use crate::{
-    inputs::InputType,
-    loader::GpuDataLoader,
-    outputs::OutputBuckets,
-    tensor::{device_name, device_synchronise},
-    util, LocalSettings, Trainer, TrainingSchedule,
+    inputs::InputType, loader::GpuDataLoader, optimiser::Optimiser, outputs::OutputBuckets, tensor::{device_name, device_synchronise}, util, LocalSettings, Trainer, TrainingSchedule
 };
 
 use std::{
@@ -17,13 +13,13 @@ use std::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
-    trainer: &mut Trainer<T, U>,
-    schedule: &TrainingSchedule,
+pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>(
+    trainer: &mut Trainer<T, U, O>,
+    schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
     settings: &LocalSettings,
     mut callback: F,
 ) where
-    F: FnMut(usize, &Trainer<T, U>, &TrainingSchedule, &LocalSettings),
+    F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams>, &LocalSettings),
 {
     let threads = settings.threads;
     let data_file_paths: Vec<_> = settings.data_file_paths.iter().map(|s| s.to_string()).collect();
@@ -141,6 +137,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
     let mut superbatch = schedule.start_superbatch;
     let mut curr_batch = 0;
     let mut superbatch_timer = Instant::now();
+    let optimiser_settings = schedule.optimiser_settings.clone();
     trainer.set_error_zero();
 
     while let Ok(gpu_loader) = reciever.recv() {
@@ -156,7 +153,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
         trainer.load_data(&gpu_loader);
         device_synchronise();
 
-        let valid = trainer.train_on_batch(0.01, lrate, schedule.power(), superbatch, curr_batch);
+        let valid = trainer.train_on_batch(lrate, schedule.power(), superbatch, curr_batch, &optimiser_settings);
         device_synchronise();
 
         if !valid {
@@ -179,7 +176,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, F>(
         if curr_batch % schedule.batches_per_superbatch == 0 {
             let error = trainer.error() / schedule.batches_per_superbatch as f32;
 
-            report_superbatch_finished(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
+            report_superbatch_finished::<O>(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
 
             callback(superbatch, trainer, schedule, settings);
 
@@ -251,8 +248,8 @@ fn report_superbatch_progress(
     let _ = stdout().flush();
 }
 
-fn report_superbatch_finished(
-    schedule: &TrainingSchedule,
+fn report_superbatch_finished<O: Optimiser>(
+    schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
     superbatch: usize,
     error: f32,
     superbatch_timer: &Instant,

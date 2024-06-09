@@ -1,15 +1,29 @@
-use super::{Optimiser, OptimiserBase};
+use super::{Optimiser, OptimiserBase, OptimiserType};
 use crate::backend::{ops, DeviceHandles};
 use crate::tensor::DeviceBuffer;
 use crate::util;
 
-pub struct AdamW {
+#[derive(Default)]
+pub struct AdamW;
+
+impl OptimiserType for AdamW {
+    type Optimiser = AdamWOptimiser;
+}
+
+#[derive(Clone, Debug)]
+pub struct AdamWParams {
+    pub decay: f32,
+}
+
+pub struct AdamWOptimiser {
     base: OptimiserBase,
     momentum: DeviceBuffer,
     velocity: DeviceBuffer,
 }
 
-impl Optimiser for AdamW {
+impl Optimiser for AdamWOptimiser {
+    type AdditionalOptimiserParams = AdamWParams;
+
     fn new(size: usize) -> Self {
         Self { base: OptimiserBase::new(size), momentum: DeviceBuffer::new(size), velocity: DeviceBuffer::new(size) }
     }
@@ -38,15 +52,15 @@ impl Optimiser for AdamW {
         self.base.write_weights_to_host(buf);
     }
 
-    fn update(&self, handle: DeviceHandles, decay: f32, adj: f32, rate: f32) {
-        let decay_gamma = 1.0 - decay * rate;
+    fn update(&self, handle: DeviceHandles, grad_adj: f32, lr: f32, params: &AdamWParams) {
+        let decay_gamma = 1.0 - params.decay * lr;
         unsafe {
             ops::update_weights(
                 handle,
                 self.base.size(),
                 decay_gamma,
-                adj,
-                rate,
+                grad_adj,
+                lr,
                 self.base.network.ptr(),
                 self.momentum.ptr(),
                 self.velocity.ptr(),

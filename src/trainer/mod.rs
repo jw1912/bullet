@@ -12,17 +12,17 @@ use std::io::Write;
 use crate::{
     inputs::InputType,
     loader::GpuDataLoader,
-    optimiser::{AdamW, Optimiser},
+    optimiser::Optimiser,
     outputs::OutputBuckets,
     tensor::{self, device_synchronise, DeviceBuffer, DeviceHandles, SparseTensor, TensorBatch},
     util,
 };
 
-pub struct Trainer<T, U> {
+pub struct Trainer<T, U, O> {
     input_getter: T,
     bucket_getter: U,
     handle: DeviceHandles,
-    optimiser: AdamW,
+    optimiser: O,
     ft: FeatureTransformer,
     ft_reg: f32,
     nodes: Vec<Node>,
@@ -36,7 +36,7 @@ pub struct Trainer<T, U> {
     buckets: *mut u8,
 }
 
-impl<T: InputType, U> std::fmt::Display for Trainer<T, U> {
+impl<T: InputType, U, O: Optimiser> std::fmt::Display for Trainer<T, U, O> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inp_size = self.input_getter.inputs();
         let buckets = self.input_getter.buckets();
@@ -74,7 +74,7 @@ impl<T: InputType, U> std::fmt::Display for Trainer<T, U> {
     }
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
     pub fn set_error_zero(&mut self) {
         self.error = 0.0;
     }
@@ -319,7 +319,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         eval[0]
     }
 
-    pub fn train_on_batch(&mut self, decay: f32, rate: f32, power: f32, superbatch: usize, curr_batch: usize) -> bool {
+    pub fn train_on_batch(&mut self, rate: f32, power: f32, superbatch: usize, curr_batch: usize, params: &O::AdditionalOptimiserParams) -> bool {
         self.optimiser.zero_gradient();
         self.error_device.set_zero();
 
@@ -342,7 +342,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Trainer<T, U> {
         }
 
         let adj = power / self.inputs.used() as f32;
-        self.optimiser.update(self.handle, decay, adj, rate);
+        self.optimiser.update(self.handle, adj, rate, params);
 
         device_synchronise();
         true

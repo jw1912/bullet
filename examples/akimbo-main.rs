@@ -2,7 +2,7 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, outputs, Activation, Engine, LocalSettings, Loss, LrScheduler, OpeningBook, TestSettings, TimeControl,
+    inputs, optimiser, outputs, Activation, Engine, LocalSettings, Loss, LrScheduler, OpeningBook, TestSettings, TimeControl,
     TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler,
 };
 
@@ -18,6 +18,7 @@ fn main() {
     #[rustfmt::skip]
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[255, 64])
+        .optimiser(optimiser::AdamW)
         .input(inputs::ChessBucketsMirrored::new([
             0, 0, 1, 1,
             2, 2, 2, 2,
@@ -46,6 +47,7 @@ fn main() {
         lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.3, step: 60 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 150,
+        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
     };
 
     let settings = LocalSettings {

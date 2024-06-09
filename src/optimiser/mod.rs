@@ -1,6 +1,6 @@
 mod adamw;
 
-pub use adamw::AdamW;
+pub use adamw::{AdamW, AdamWParams};
 
 use crate::{
     backend::{util, DeviceHandles},
@@ -47,7 +47,13 @@ impl OptimiserBase {
     }
 }
 
+pub trait OptimiserType: Default {
+    type Optimiser: Optimiser;
+}
+
 pub trait Optimiser {
+    type AdditionalOptimiserParams: Clone + std::fmt::Debug + Send + Sync;
+
     fn new(size: usize) -> Self;
 
     fn size(&self) -> usize;
@@ -60,7 +66,7 @@ pub trait Optimiser {
     /// Pointer to gradient buffer starting at `gradient.ptr() + index`.
     fn gradients_offset(&self, index: usize) -> *mut f32;
 
-    fn update(&self, handle: DeviceHandles, decay: f32, adj: f32, rate: f32);
+    fn update(&self, handle: DeviceHandles, grad_adj: f32, lr: f32, params: &Self::AdditionalOptimiserParams);
 
     fn load_weights_from_host(&self, network: &[f32]);
 
