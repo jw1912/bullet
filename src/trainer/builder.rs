@@ -1,5 +1,9 @@
 use crate::{
-    inputs::InputType, optimiser::{AdamW, Optimiser}, outputs::OutputBuckets, tensor::{self, DeviceBuffer, DeviceHandles, Shape, SparseTensor, Tensor, TensorBatch}, Activation
+    inputs::InputType,
+    optimiser::{AdamW, Optimiser},
+    outputs::OutputBuckets,
+    tensor::{self, DeviceBuffer, DeviceHandles, Shape, SparseTensor, Tensor, TensorBatch},
+    Activation,
 };
 
 use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};

@@ -2,7 +2,10 @@ mod adamw;
 
 pub use adamw::AdamW;
 
-use crate::{backend::{util, DeviceHandles}, tensor::DeviceBuffer};
+use crate::{
+    backend::{util, DeviceHandles},
+    tensor::DeviceBuffer,
+};
 
 pub struct OptimiserBase {
     size: usize,
@@ -12,11 +15,7 @@ pub struct OptimiserBase {
 
 impl OptimiserBase {
     pub fn new(size: usize) -> Self {
-        Self {
-            size,
-            network: DeviceBuffer::new(size),
-            gradients: DeviceBuffer::new(size),
-        }
+        Self { size, network: DeviceBuffer::new(size), gradients: DeviceBuffer::new(size) }
     }
 
     pub fn size(&self) -> usize {

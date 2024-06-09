@@ -11,11 +11,7 @@ pub struct AdamW {
 
 impl Optimiser for AdamW {
     fn new(size: usize) -> Self {
-        Self {
-            base: OptimiserBase::new(size),
-            momentum: DeviceBuffer::new(size),
-            velocity: DeviceBuffer::new(size),
-        }
+        Self { base: OptimiserBase::new(size), momentum: DeviceBuffer::new(size), velocity: DeviceBuffer::new(size) }
     }
 
     fn size(&self) -> usize {

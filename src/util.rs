@@ -66,11 +66,7 @@ pub fn load_from_bin_f32_slice(size: usize, path: &str) -> Vec<f32> {
     use std::io::{BufReader, Read};
     let file = File::open(path).unwrap_or_else(|_| panic!("Invalid File Path: {path}"));
 
-    assert_eq!(
-        file.metadata().unwrap().len() as usize,
-        size * std::mem::size_of::<f32>(),
-        "Incorrect File Size!"
-    );
+    assert_eq!(file.metadata().unwrap().len() as usize, size * std::mem::size_of::<f32>(), "Incorrect File Size!");
 
     let reader = BufReader::new(file);
     let mut res = vec![0.0; size];
