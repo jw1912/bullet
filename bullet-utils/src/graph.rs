@@ -117,8 +117,10 @@ impl GraphOptions {
         let mut y_max = f64::MIN;
         let mut guard = 0.0f64;
         for (_, data) in data_sequences.iter() {
-            y_min = y_min.min(data.iter().copied().reduce(f64::min).with_context(|| "Empty data sequence encountered!")?);
-            y_max = y_max.max(data.iter().copied().reduce(f64::max).with_context(|| "Empty data sequence encountered!")?);
+            y_min =
+                y_min.min(data.iter().copied().reduce(f64::min).with_context(|| "Empty data sequence encountered!")?);
+            y_max =
+                y_max.max(data.iter().copied().reduce(f64::max).with_context(|| "Empty data sequence encountered!")?);
             let tail = &data[data.len() / 4..];
             let max_tail = tail.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let min_tail = tail.iter().cloned().fold(f64::INFINITY, f64::min);
