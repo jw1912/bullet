@@ -52,8 +52,8 @@ impl InterleaveOptions {
 
             let (count, reader) = &mut streams[idx];
             let mut value = [0; SIZE];
-            reader.read_exact(&mut value).unwrap();
-            writer.write_all(&value).unwrap();
+            reader.read_exact(&mut value)?;
+            writer.write_all(&value)?;
 
             remaining -= 1;
             *count -= 1;
