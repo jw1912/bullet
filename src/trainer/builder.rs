@@ -1,7 +1,8 @@
 use crate::{
     inputs::InputType,
+    optimiser::{Optimiser, OptimiserType},
     outputs::OutputBuckets,
-    tensor::{self, DeviceBuffer, DeviceHandles, Optimiser, Shape, SparseTensor, Tensor, TensorBatch},
+    tensor::{self, DeviceBuffer, DeviceHandles, Shape, SparseTensor, Tensor, TensorBatch},
     Activation,
 };
 
@@ -18,7 +19,7 @@ struct NodeType {
     in_res_block: bool,
 }
 
-pub struct TrainerBuilder<T, U> {
+pub struct TrainerBuilder<T, U, O> {
     input_getter: T,
     bucket_getter: U,
     ft_out_size: usize,
@@ -27,9 +28,10 @@ pub struct TrainerBuilder<T, U> {
     single_perspective: bool,
     in_res_block: bool,
     size: usize,
+    optimiser: O,
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Default for TrainerBuilder<T, U> {
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
     fn default() -> Self {
         Self {
             input_getter: T::default(),
@@ -40,11 +42,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> Default for TrainerBui
             single_perspective: false,
             in_res_block: false,
             size: 0,
+            optimiser: O::default(),
         }
     }
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
+impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> TrainerBuilder<T, U, O> {
     fn get_last_layer_size(&self) -> usize {
         if let Some(node) = self.nodes.last() {
             node.size
@@ -58,6 +61,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
             panic!("You need to set 'single_perspective' before adding any layers!");
         }
         self.single_perspective = true;
+        self
+    }
+
+    pub fn optimiser(mut self, optimiser: O) -> Self {
+        self.optimiser = optimiser;
         self
     }
 
@@ -110,7 +118,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
         self
     }
 
-    pub fn build(self) -> Trainer<T, U> {
+    pub fn build(self) -> Trainer<T, U, O::Optimiser> {
         let inp_getter_size = self.input_getter.size();
         let max_active_inputs = self.input_getter.max_active_inputs();
 
@@ -119,7 +127,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>> TrainerBuilder<T, U> {
         let ft_size = (inp_getter_size + 1) * self.ft_out_size;
         let net_size = self.size + ft_size;
 
-        let opt = Optimiser::new(net_size);
+        let opt = O::Optimiser::new(net_size);
         let batch_size = 1;
         let mul = if self.single_perspective { 1 } else { 2 };
 

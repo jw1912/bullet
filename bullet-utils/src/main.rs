@@ -3,6 +3,7 @@ mod count_buckets;
 mod interleave;
 mod shuffle;
 mod validate;
+mod graph;
 
 use structopt::StructOpt;
 
@@ -13,6 +14,7 @@ pub enum Options {
     Shuffle(shuffle::ShuffleOptions),
     Validate(validate::ValidateOptions),
     BucketCount(count_buckets::ValidateOptions),
+    Graph(graph::GraphOptions),
 }
 
 fn main() {
@@ -22,6 +24,7 @@ fn main() {
         Options::Shuffle(options) => options.run(),
         Options::Validate(options) => options.run(),
         Options::BucketCount(options) => options.run(),
+        Options::Graph(options) => options.run(),
     }
 }
 

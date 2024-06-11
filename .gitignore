@@ -3,7 +3,12 @@
 /checkpoints
 /.idea
 /.vscode
+/venv
+/visualisation/plots/*
+/data
 
 *.epd
 *.txt
 *.bin
+
+!requirements.txt

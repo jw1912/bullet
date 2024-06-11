@@ -1,5 +1,4 @@
 mod buffer;
-mod optimiser;
 mod shape;
 mod sparse;
 mod tensor_batch;
@@ -14,7 +13,6 @@ pub use crate::backend::{
     DeviceHandles,
 };
 pub use buffer::DeviceBuffer;
-pub use optimiser::Optimiser;
 pub use shape::Shape;
 pub use sparse::SparseTensor;
 pub use tensor_batch::TensorBatch;
