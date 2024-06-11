@@ -1,24 +1,16 @@
+use anyhow::{bail, Context};
 use structopt::StructOpt;
 
-use std::io::BufRead;
+use std::{ffi::OsStr, io::BufRead, path::PathBuf};
 
 use plotters::prelude::*;
 
 #[derive(StructOpt)]
 pub struct GraphOptions {
-    // #[structopt(required = true, short, long)]
-    // input_folder: PathBuf,
+    /// Files to process
+    #[structopt(name = "FILE", parse(from_os_str))]
+    files: Vec<PathBuf>,
 }
-
-const LOG_FILES: &[&str] = &[
-    "checkpoints/optimiser-benchmark-screlu-64n-10/log.txt",
-    "checkpoints/optimiser-benchmark-64n-10/log.txt",
-    "checkpoints/optimiser-benchmark-32n-10/log.txt",
-    "checkpoints/optimiser-benchmark-16n-10/log.txt",
-    "checkpoints/optimiser-benchmark-8n-10/log.txt",
-    "checkpoints/optimiser-benchmark-4n-10/log.txt",
-    // Add more log files as needed
-];
 
 const COLOURS: &[RGBColor] = &[
     RGBColor(31, 119, 180),
@@ -64,30 +56,57 @@ fn moving_average(data: &[f64], window_size: usize) -> Vec<f64> {
 }
 
 impl GraphOptions {
-    pub fn run(&self) {
+    pub fn run(&self) -> anyhow::Result<()> {
+        // If there weren't any paths passed, do nothing.
+        if self.files.is_empty() {
+            bail!("No log files provided! \nUsage: \n $ bullet-utils graph log1.txt log2.txt...");
+        }
+
         // Create the output directory if it doesn't exist
         let plot_dir = "visualisation/plots";
-        std::fs::create_dir_all(plot_dir).expect("Failed to create plots directory.");
+        std::fs::create_dir_all(plot_dir).with_context(|| "Failed to create plots directory.")?;
 
         let mut data_sequences = Vec::new();
 
-        for &log_file in LOG_FILES {
-            let file = std::fs::File::open(log_file).expect("Failed to open log file!");
+        for (i, log_file) in self.files.iter().enumerate() {
+            let file = std::fs::File::open(log_file)
+                .with_context(|| format!("Failed to open log file {}.", log_file.to_string_lossy()))?;
+            if file
+                .metadata()
+                .with_context(|| format!("Failed to get file metadata of {}.", log_file.to_string_lossy()))?
+                .is_dir()
+            {
+                bail!("Cannot read a directory as a log file! You should only pass correctly-formatted text files to this utility.\n    Problematic file: {}", log_file.to_string_lossy());
+            }
             let reader = std::io::BufReader::new(file);
-            let run_name = std::path::Path::new(log_file)
+            let run_name = log_file
                 .parent()
-                .unwrap()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .trim_end_matches(|c| "-0123456789".contains(c))
-                .to_string();
-            let data: Vec<f64> = reader
+                .and_then(std::path::Path::file_name)
+                .and_then(OsStr::to_str)
+                .map(|s| s.trim_end_matches(|c| "-0123456789".contains(c)).to_string())
+                .unwrap_or_else(|| format!("log-{}", i + 1));
+            let data = reader
                 .lines()
-                .map(|line| line.unwrap())
-                .map(|line| line.split_whitespace().rev().nth(0).unwrap().parse().unwrap())
-                .collect();
+                .enumerate()
+                .map(|(line_no, res)| {
+                    let line = res?;
+                    let loss_text = line
+                        .split(',')
+                        .find_map(|f| match f.split_once(':') {
+                            Some(("loss", v)) => Some(v),
+                            _ => None,
+                        })
+                        .with_context(|| {
+                            format!("No loss found in line {line_no} of file {}.", log_file.to_string_lossy())
+                        })?;
+                    let loss =
+                        loss_text.trim().parse().with_context(|| format!("Failed to parse \"{loss_text}\" as f64."))?;
+                    Ok(loss)
+                })
+                .collect::<anyhow::Result<Vec<f64>>>()?;
+            if data.is_empty() {
+                bail!("{} contains no data.", log_file.to_string_lossy());
+            }
             data_sequences.push((run_name, data));
         }
 
@@ -111,26 +130,25 @@ impl GraphOptions {
         // Plot the full loss sequences
         let output_path_full = format!("{}/rs-training_loss_full.png", plot_dir);
         let root = BitMapBackend::new(&output_path_full, IMG_DIMS).into_drawing_area();
-        root.fill(&WHITE).unwrap();
+        root.fill(&WHITE)?;
 
         let mut chart = ChartBuilder::on(&root)
             .caption("Training loss over time (full)", (FONT, TITLE_FONT_SIZE))
             .margin(MARGIN)
             .x_label_area_size(X_LABEL_AREA_SIZE)
             .y_label_area_size(Y_LABEL_AREA_SIZE)
-            .build_cartesian_2d(x_min..x_max, y_min..y_max)
-            .unwrap();
+            .build_cartesian_2d(x_min..x_max, y_min..y_max)?;
 
-        chart.plotting_area().fill(&CHART_BG_COLOUR).unwrap();
+        chart.plotting_area().fill(&CHART_BG_COLOUR)?;
 
-        chart.configure_mesh()
+        chart
+            .configure_mesh()
             .x_label_style((FONT, TICKS_FONT_SIZE).into_font())
             .y_label_style((FONT, TICKS_FONT_SIZE).into_font())
             .axis_desc_style((FONT, LABEL_FONT_SIZE).into_font())
             .x_desc("Batch")
             .y_desc("Loss")
-            .draw()
-            .unwrap();
+            .draw()?;
 
         for (i, (run_name, data)) in data_sequences.iter().enumerate() {
             let window_size = 10;
@@ -142,8 +160,7 @@ impl GraphOptions {
                     x_vals.iter().zip(data.iter()).map(|(&x, &y)| (x as i32, y)),
                     ShapeStyle::from(COLOURS[i % COLOURS.len()].mix(NOISY_PLOT_OPACITY))
                         .stroke_width(RAW_LINE_STROKE_WIDTH),
-                ))
-                .unwrap()
+                ))?
                 .label(run_name)
                 .legend(move |(x, y)| {
                     PathElement::new(
@@ -153,12 +170,10 @@ impl GraphOptions {
                 });
 
             let smoothed_x_vals: Vec<_> = (window_size - 1..data.len()).collect();
-            chart
-                .draw_series(LineSeries::new(
-                    smoothed_x_vals.iter().zip(smoothed_loss.iter()).map(|(&x, &y)| (x as i32, y)),
-                    ShapeStyle::from(COLOURS[i % COLOURS.len()]).stroke_width(SMOOTH_LINE_STROKE_WIDTH),
-                ))
-                .unwrap();
+            chart.draw_series(LineSeries::new(
+                smoothed_x_vals.iter().zip(smoothed_loss.iter()).map(|(&x, &y)| (x as i32, y)),
+                ShapeStyle::from(COLOURS[i % COLOURS.len()]).stroke_width(SMOOTH_LINE_STROKE_WIDTH),
+            ))?;
 
             // chart.configure_series_labels().position(SeriesLabelPosition::UpperRight);
         }
@@ -169,14 +184,13 @@ impl GraphOptions {
             .background_style(WHITE.mix(0.8))
             .position(SeriesLabelPosition::UpperRight)
             .legend_area_size(LEGEND_AREA_SIZE)
-            .draw()
-            .unwrap();
-        root.present().unwrap();
+            .draw()?;
+        root.present()?;
 
         // Plot the loss sequences excluding the initial few epochs
         let output_path_trimmed = format!("{}/rs-training_loss_trimmed.png", plot_dir);
         let root = BitMapBackend::new(&output_path_trimmed, IMG_DIMS).into_drawing_area();
-        root.fill(&WHITE).unwrap();
+        root.fill(&WHITE)?;
 
         y_max = y_max.min(guard);
 
@@ -185,24 +199,23 @@ impl GraphOptions {
             .margin(MARGIN)
             .x_label_area_size(X_LABEL_AREA_SIZE)
             .y_label_area_size(Y_LABEL_AREA_SIZE)
-            .build_cartesian_2d(x_min..x_max, y_min..y_max)
-            .unwrap();
+            .build_cartesian_2d(x_min..x_max, y_min..y_max)?;
 
-        chart.plotting_area().fill(&CHART_BG_COLOUR).unwrap();
+        chart.plotting_area().fill(&CHART_BG_COLOUR)?;
 
-        chart.configure_mesh()
+        chart
+            .configure_mesh()
             .x_label_style((FONT, TICKS_FONT_SIZE).into_font())
             .y_label_style((FONT, TICKS_FONT_SIZE).into_font())
             .axis_desc_style((FONT, LABEL_FONT_SIZE).into_font())
             .x_desc("Batch")
             .y_desc("Loss")
-            .draw()
-            .unwrap();
+            .draw()?;
 
         for (i, (run_name, data)) in data_sequences.iter().enumerate() {
             let window_size = 200;
             let smoothed_loss = moving_average(data, window_size);
-            let last_exceeding_instance = data.iter().rposition(|&loss| loss > guard).unwrap();
+            let last_exceeding_instance = data.iter().rposition(|&loss| loss > guard).expect("No data!");
             let cutoff = last_exceeding_instance + 1;
 
             let x_vals: Vec<_> = (cutoff..data.len()).collect();
@@ -211,8 +224,7 @@ impl GraphOptions {
                     x_vals.iter().zip(data[cutoff..].iter()).map(|(&x, &y)| (x as i32, y)),
                     ShapeStyle::from(COLOURS[i % COLOURS.len()].mix(NOISY_PLOT_OPACITY))
                         .stroke_width(RAW_LINE_STROKE_WIDTH),
-                ))
-                .unwrap()
+                ))?
                 .label(run_name)
                 .legend(move |(x, y)| {
                     PathElement::new(
@@ -222,12 +234,10 @@ impl GraphOptions {
                 });
 
             let smoothed_x_vals: Vec<_> = (cutoff + window_size - 1..data.len()).collect();
-            chart
-                .draw_series(LineSeries::new(
-                    smoothed_x_vals.iter().zip(smoothed_loss[cutoff..].iter()).map(|(&x, &y)| (x as i32, y)),
-                    ShapeStyle::from(COLOURS[i % COLOURS.len()]).stroke_width(SMOOTH_LINE_STROKE_WIDTH),
-                ))
-                .unwrap();
+            chart.draw_series(LineSeries::new(
+                smoothed_x_vals.iter().zip(smoothed_loss[cutoff..].iter()).map(|(&x, &y)| (x as i32, y)),
+                ShapeStyle::from(COLOURS[i % COLOURS.len()]).stroke_width(SMOOTH_LINE_STROKE_WIDTH),
+            ))?;
         }
 
         chart
@@ -237,11 +247,12 @@ impl GraphOptions {
             .position(SeriesLabelPosition::UpperRight)
             .legend_area_size(LEGEND_AREA_SIZE)
             .label_font((FONT, LEGEND_FONT_SIZE).into_font())
-            .draw()
-            .unwrap();
-        root.present().unwrap();
+            .draw()?;
+        root.present()?;
 
         println!("Full plot saved to {}", output_path_full);
         println!("Trimmed plot saved to {}", output_path_trimmed);
+
+        Ok(())
     }
 }

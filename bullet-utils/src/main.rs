@@ -1,9 +1,9 @@
 mod convert;
 mod count_buckets;
+mod graph;
 mod interleave;
 mod shuffle;
 mod validate;
-mod graph;
 
 use structopt::StructOpt;
 
@@ -17,7 +17,7 @@ pub enum Options {
     Graph(graph::GraphOptions),
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     match Options::from_args() {
         Options::Convert(options) => options.run(),
         Options::Interleave(options) => options.run(),

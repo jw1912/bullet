@@ -1,3 +1,4 @@
+use anyhow::Context;
 use bulletformat::{ChessBoard, DataLoader};
 use structopt::StructOpt;
 
@@ -15,8 +16,8 @@ pub struct ValidateOptions {
 }
 
 impl ValidateOptions {
-    pub fn run(&self) {
-        let file = File::open(&self.bucket_file).expect("Couldn't find the bucket file!");
+    pub fn run(&self) -> anyhow::Result<()> {
+        let file = File::open(&self.bucket_file).with_context(|| "Couldn't find the bucket file!")?;
         let reader = BufReader::new(file);
 
         let mut numbers: Vec<usize> = Vec::new();
@@ -56,7 +57,7 @@ impl ValidateOptions {
 
         for path in &self.inputs {
             println!("\nFile {}", path.display());
-            let loader = DataLoader::<ChessBoard>::new(path, 256).unwrap();
+            let loader = DataLoader::<ChessBoard>::new(path, 256).with_context(|| "Failed to create dataloader.")?;
 
             let mut position_count: usize = 0;
             let mut king_squares: [usize; 64] = [0; 64];
@@ -86,6 +87,8 @@ impl ValidateOptions {
 
         println!("\nTotal king square counts:");
         print_board(total_king_squares);
+
+        Ok(())
     }
 }
 

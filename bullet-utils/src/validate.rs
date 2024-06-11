@@ -1,3 +1,4 @@
+use anyhow::Context;
 use bulletformat::{ChessBoard, DataLoader};
 use structopt::StructOpt;
 
@@ -10,8 +11,8 @@ pub struct ValidateOptions {
 }
 
 impl ValidateOptions {
-    pub fn run(&self) {
-        let loader = DataLoader::<ChessBoard>::new(&self.input, 256).unwrap();
+    pub fn run(&self) -> anyhow::Result<()> {
+        let loader = DataLoader::<ChessBoard>::new(&self.input, 256).with_context(|| "Failed to create dataloader.")?;
 
         let mut done = 0;
 
@@ -41,5 +42,7 @@ impl ValidateOptions {
                 println!("Checked {done} positions.")
             }
         });
+
+        Ok(())
     }
 }
