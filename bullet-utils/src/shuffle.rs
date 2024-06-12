@@ -1,11 +1,12 @@
 use std::{
     fs::{self, File},
-    io::{BufReader, BufWriter, Read, Result, Write},
+    io::{BufReader, BufWriter, Read, Write},
     path::{Path, PathBuf},
     time::Instant,
 };
 
 use crate::Rand;
+use anyhow::Context;
 use bullet::util;
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
@@ -28,41 +29,45 @@ const BYTES_PER_MB: usize = 1_048_576;
 const TMP_DIR: &str = "./tmp";
 
 impl ShuffleOptions {
-    pub fn run(&self) {
-        let input_size = fs::metadata(self.input.clone()).expect("Input file is valid").len() as usize;
+    pub fn run(&self) -> anyhow::Result<()> {
+        let input_size = fs::metadata(self.input.clone()).with_context(|| "Input file is invalid.")?.len() as usize;
         assert_eq!(0, input_size % CHESS_BOARD_SIZE);
 
         println!("# [Shuffling Data]");
         let time = Instant::now();
 
         if input_size <= self.mem_used_mb * BYTES_PER_MB {
-            let mut raw_bytes = std::fs::read(&self.input).unwrap();
+            let mut raw_bytes = std::fs::read(&self.input).with_context(|| "Failed to read input.")?;
             let data = util::to_slice_with_lifetime_mut(&mut raw_bytes);
 
             shuffle_positions(data);
 
-            let mut output = BufWriter::new(File::create(&self.output).expect("Provide a correct path!"));
+            let mut output = BufWriter::new(File::create(&self.output).with_context(|| "Provide a correct path!")?);
 
             write_data(data, &mut output);
         } else {
             let temp_dir = Path::new(TMP_DIR);
             if !Path::exists(temp_dir) {
-                fs::create_dir(temp_dir).expect("Temp dir could not be created.");
+                fs::create_dir(temp_dir).with_context(|| "Temp dir could not be created.")?;
             }
             let bytes_used = self.mem_used_mb * BYTES_PER_MB;
             let num_tmp_files = ((input_size + bytes_used - 1) / bytes_used).max(MIN_TMP_FILES);
             let temp_files = (0..num_tmp_files)
                 .map(|idx| {
-                    let output_file = format!("{}/part_{}.bin", temp_dir.to_str().unwrap(), idx + 1);
-                    PathBuf::from(output_file)
+                    let output_file = format!(
+                        "{}/part_{}.bin",
+                        temp_dir.to_str().with_context(|| "Failed to convert path to string.")?,
+                        idx + 1
+                    );
+                    Ok(PathBuf::from(output_file))
                 })
-                .collect::<Vec<_>>();
+                .collect::<anyhow::Result<Vec<_>>>()?;
 
             assert!(self.split_file(&temp_files, input_size).is_ok());
 
             println!("# [Finished splitting data. Interleaving...]");
             let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
-            interleave.run();
+            interleave.run()?;
 
             if fs::remove_dir_all(temp_dir).is_err() {
                 println!("Error automatically removing temp files");
@@ -70,12 +75,16 @@ impl ShuffleOptions {
         }
 
         println!("> Took {:.2} seconds.", time.elapsed().as_secs_f32());
+
+        Ok(())
     }
 
-    fn split_file(&self, temp_files: &[PathBuf], input_size: usize) -> Result<()> {
-        let mut input = BufReader::new(File::open(self.input.clone()).unwrap());
-        let temp_files =
-            temp_files.iter().map(|f| File::create(f).expect("Tmp file could not be created.")).collect::<Vec<_>>();
+    fn split_file(&self, temp_files: &[PathBuf], input_size: usize) -> anyhow::Result<()> {
+        let mut input = BufReader::new(File::open(self.input.clone()).with_context(|| "Failed to open file.")?);
+        let temp_files = temp_files
+            .iter()
+            .map(|f| File::create(f).with_context(|| "Tmp file could not be created."))
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
         let total_positions = input_size / CHESS_BOARD_SIZE;
         let ideal_positions_per_file = total_positions / temp_files.len();

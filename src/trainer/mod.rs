@@ -90,7 +90,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
             std::fs::File::create(format!("{path}/log.txt")).expect("Opening log file failed!"),
         );
         for (superbatch, batch, loss) in &self.error_record {
-            writeln!(writer, "superbatch: {superbatch},batch: {batch},loss: {loss}",)
+            writeln!(writer, "superbatch:{superbatch},batch:{batch},loss:{loss}",)
                 .expect("Writing to log file failed!");
         }
 

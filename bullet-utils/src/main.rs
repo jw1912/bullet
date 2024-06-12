@@ -1,5 +1,6 @@
 mod convert;
 mod count_buckets;
+mod graph;
 mod interleave;
 mod shuffle;
 mod validate;
@@ -13,15 +14,17 @@ pub enum Options {
     Shuffle(shuffle::ShuffleOptions),
     Validate(validate::ValidateOptions),
     BucketCount(count_buckets::ValidateOptions),
+    Graph(graph::GraphOptions),
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     match Options::from_args() {
         Options::Convert(options) => options.run(),
         Options::Interleave(options) => options.run(),
         Options::Shuffle(options) => options.run(),
         Options::Validate(options) => options.run(),
         Options::BucketCount(options) => options.run(),
+        Options::Graph(options) => options.run(),
     }
 }
 
