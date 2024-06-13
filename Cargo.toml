@@ -10,6 +10,7 @@ readme = "README.md"
 
 [features]
 cuda = ["bindgen", "cc"]
+metal = []
 
 [dependencies]
 bulletformat = { workspace = true }
