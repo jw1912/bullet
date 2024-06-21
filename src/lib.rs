@@ -20,7 +20,7 @@ use trainer::ansi;
 
 pub use bulletformat as format;
 pub use trainer::{
-    schedule::{Loss, LrScheduler, TrainingSchedule, WdlScheduler},
+    schedule::{lr, wdl, Loss, TrainingSchedule},
     set_cbcs, Trainer, TrainerBuilder,
 };
 
@@ -84,18 +84,27 @@ pub struct TestSettings<'a> {
 }
 
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
-    pub fn run_custom<F>(
+    pub fn run_custom<F, LR, WDL>(
         &mut self,
-        schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
+        schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
         settings: &LocalSettings,
         callback: F,
     ) where
-        F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams>, &LocalSettings),
+        F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>, &LocalSettings),
+        LR: lr::LrScheduler,
+        WDL: wdl::WdlScheduler,
     {
-        trainer::run::<T, U, O, F>(self, schedule, settings, callback);
+        trainer::run::<T, U, O, F, LR, WDL>(self, schedule, settings, callback);
     }
 
-    pub fn run(&mut self, schedule: &TrainingSchedule<O::AdditionalOptimiserParams>, settings: &LocalSettings) {
+    pub fn run<LR, WDL>(
+        &mut self,
+        schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
+        settings: &LocalSettings,
+    ) where
+        LR: lr::LrScheduler,
+        WDL: wdl::WdlScheduler,
+    {
         self.run_custom(schedule, settings, |superbatch, trainer, schedule, settings| {
             if schedule.should_save(superbatch) {
                 let name = format!("{}-{superbatch}", schedule.net_id());
@@ -106,12 +115,15 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         });
     }
 
-    pub fn run_and_test(
+    pub fn run_and_test<LR, WDL>(
         &mut self,
-        schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
+        schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
         settings: &LocalSettings,
         testing: &TestSettings<'static>,
-    ) {
+    ) where
+        LR: lr::LrScheduler,
+        WDL: wdl::WdlScheduler,
+    {
         let TestSettings {
             test_rate,
             out_dir,

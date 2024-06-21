@@ -1,6 +1,6 @@
 use bullet_lib::{
-    format::AtaxxBoard, inputs::InputType, optimiser, outputs, Activation, LocalSettings, Loss, LrScheduler,
-    TrainerBuilder, TrainingSchedule, WdlScheduler,
+    format::AtaxxBoard, inputs::InputType, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss,
+    TrainerBuilder, TrainingSchedule,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -111,8 +111,8 @@ fn main() {
         batches_per_superbatch: 6104,
         start_superbatch: 1,
         end_superbatch: 40,
-        wdl_scheduler: WdlScheduler::Constant { value: 0.5 },
-        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.1, step: 15 },
+        wdl_scheduler: wdl::ConstantWDL { value: 0.5 },
+        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 15 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
         optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
