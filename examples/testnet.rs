@@ -2,8 +2,7 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    inputs, optimiser, outputs, Activation, LocalSettings, Loss, LrScheduler, TrainerBuilder, TrainingSchedule,
-    WdlScheduler,
+    inputs, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
 };
 
 fn main() {
@@ -27,8 +26,8 @@ fn main() {
         batches_per_superbatch: 1,
         start_superbatch: 1,
         end_superbatch: 5,
-        wdl_scheduler: WdlScheduler::Constant { value: 0.2 },
-        lr_scheduler: LrScheduler::Constant { value: 0.001 },
+        wdl_scheduler: wdl::ConstantWDL { value: 0.2 },
+        lr_scheduler: lr::ConstantLR { value: 0.001 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
         optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
