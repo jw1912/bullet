@@ -2,8 +2,8 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, optimiser, outputs, Activation, Engine, LocalSettings, Loss, LrScheduler, OpeningBook, TestSettings,
-    TimeControl, TrainerBuilder, TrainingSchedule, UciOption, WdlScheduler,
+    inputs, lr, optimiser, outputs, wdl, Activation, Engine, LocalSettings, Loss, OpeningBook, TestSettings,
+    TimeControl, TrainerBuilder, TrainingSchedule, UciOption,
 };
 
 macro_rules! net_id {
@@ -43,8 +43,8 @@ fn main() {
         batches_per_superbatch: 6104,
         start_superbatch: 1,
         end_superbatch: 240,
-        wdl_scheduler: WdlScheduler::Constant { value: 0.0 },
-        lr_scheduler: LrScheduler::Step { start: 0.001, gamma: 0.3, step: 60 },
+        wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
+        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 150,
         optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
