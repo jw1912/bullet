@@ -14,7 +14,7 @@ mod cuda {
     use bindgen::{Builder, CargoCallbacks, EnumVariation};
     use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
 
-    const WRAPPER_PATH: &str = "./src/backend/cuda/kernels/wrapper.h";
+    const WRAPPER_PATH: &str = "./src/backend/kernels/wrapper.h";
 
     pub fn build() {
         let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -51,7 +51,7 @@ mod cuda {
 
         let files: Vec<String> = ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"]
             .iter()
-            .map(|s| format!("./src/backend/cuda/kernels/{s}.cu"))
+            .map(|s| format!("./src/backend/kernels/{s}.cu"))
             .collect();
 
         cc::Build::new()
