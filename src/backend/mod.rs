@@ -1,11 +1,14 @@
+#[cfg(not(any(feature = "cuda", feature = "metal")))]
+pub use cpu::*;
+#[cfg(feature = "cuda")]
+pub use cuda::*;
+#[cfg(feature = "metal")]
+pub use metal::*;
+
+pub mod cpu;
+
 #[cfg(feature = "cuda")]
 mod cuda;
 
-#[cfg(feature = "cuda")]
-pub use cuda::*;
-
-#[cfg(not(feature = "cuda"))]
-mod cpu;
-
-#[cfg(not(feature = "cuda"))]
-pub use cpu::*;
+#[cfg(feature = "metal")]
+mod metal;

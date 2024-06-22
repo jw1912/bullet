@@ -11,8 +11,8 @@ mod cuda {
     use std::fmt::Debug;
     use std::path::PathBuf;
 
-    use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
     use bindgen::{Builder, CargoCallbacks, EnumVariation};
+    use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
 
     const WRAPPER_PATH: &str = "./src/backend/cuda/kernels/wrapper.h";
 
@@ -126,7 +126,7 @@ mod metal {
     use std::process::Command;
 
     pub fn build() {
-        let files = ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"].as_slice();
+        let files = ["backprops", "bufops", "mpe"].as_slice();
 
         compile_sources(files);
         compile_library(files);

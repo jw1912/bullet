@@ -10,12 +10,13 @@ readme = "README.md"
 
 [features]
 cuda = ["bindgen", "cc"]
-metal = []
+metal = ["metal_rs"]
 
 [dependencies]
 bulletformat = { workspace = true }
 rand = "0.8.5"
 rand_distr = "0.4.3"
+metal_rs = { version = "0.28.0", optional = true, package = "metal" }
 
 [build-dependencies]
 bindgen = { version = "0.68.1", optional = true }
