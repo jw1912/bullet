@@ -12,13 +12,14 @@ pub struct DeviceHandles {
     pub(crate) kernels: Kernels,
 }
 
+// Raw metal library file which is loaded at runtime.
 const LIBRARY_SRC: &[u8] = include_bytes!("./kernels/metal.metallib");
 
 impl Default for DeviceHandles {
     fn default() -> Self {
-        let device = Device::system_default().unwrap();
-        let library = device.new_library_with_data(LIBRARY_SRC).unwrap();
-        let kernels = Kernels::new(&library);
+        let device = Device::system_default().unwrap(); // Find a device.
+        let library = device.new_library_with_data(LIBRARY_SRC).unwrap(); // Load the library.
+        let kernels = Kernels::new(&library); // Load the kernels.
         Self { device, library, kernels }
     }
 }
