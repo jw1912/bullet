@@ -14,7 +14,7 @@ mod cuda {
     use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
     use bindgen::{Builder, CargoCallbacks, EnumVariation};
 
-    const WRAPPER_PATH: &str = "./src/backend/kernels/wrapper.h";
+    const WRAPPER_PATH: &str = "./src/backend/cuda/kernels/wrapper.h";
 
     pub fn build() {
         let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -47,11 +47,11 @@ mod cuda {
             .write_to_file(out_path.join("bindings.rs"))
             .expect("Couldn't write bindings!");
 
-        println!("cargo:rerun-if-changed=./src/backend/kernels");
+        println!("cargo:rerun-if-changed=./src/backend/cuda/kernels");
 
         let files: Vec<String> = ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"]
             .iter()
-            .map(|s| format!("./src/backend/kernels/{s}.cu"))
+            .map(|s| format!("./src/backend/cuda/kernels/{s}.cu"))
             .collect();
 
         cc::Build::new()
@@ -126,7 +126,7 @@ mod metal {
     use std::process::Command;
 
     pub fn build() {
-        let files = ["add", "mul"].as_slice();
+        let files = ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"].as_slice();
 
         compile_sources(files);
         compile_library(files);
