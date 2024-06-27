@@ -1,8 +1,7 @@
+use super::bufops::{CReLU, Operation, ReLU, SCReLU};
 use super::DeviceHandles;
 
-use super::bufops::{CReLU, Operation, ReLU, SCReLU};
-
-unsafe fn backprop_operation<T: Operation>(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+unsafe fn backprop_operation<T: Operation>(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     let inp = inp as usize;
     let out = out as usize;
 
@@ -13,14 +12,14 @@ unsafe fn backprop_operation<T: Operation>(handle: DeviceHandles, size: usize, i
     });
 }
 
-pub unsafe fn backprop_relu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+pub unsafe fn backprop_relu(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     backprop_operation::<ReLU>(handle, size, inp, out);
 }
 
-pub unsafe fn backprop_crelu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+pub unsafe fn backprop_crelu(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     backprop_operation::<CReLU>(handle, size, inp, out);
 }
 
-pub unsafe fn backprop_screlu(handle: DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+pub unsafe fn backprop_screlu(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     backprop_operation::<SCReLU>(handle, size, inp, out);
 }
