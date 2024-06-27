@@ -1,6 +1,7 @@
 use crate::{
     inputs::InputType,
     loader::GpuDataLoader,
+    lr::LrScheduler,
     optimiser::Optimiser,
     outputs::OutputBuckets,
     tensor::{device_name, device_synchronise},
@@ -17,14 +18,16 @@ use std::{
     time::Instant,
 };
 
+use super::schedule::wdl::WdlScheduler;
+
 #[allow(clippy::too_many_arguments)]
-pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>(
+pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F, LR: LrScheduler, WDL: WdlScheduler>(
     trainer: &mut Trainer<T, U, O>,
-    schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
+    schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
     settings: &LocalSettings,
     mut callback: F,
 ) where
-    F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams>, &LocalSettings),
+    F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>, &LocalSettings),
 {
     let threads = settings.threads;
     let data_file_paths: Vec<_> = settings.data_file_paths.iter().map(|s| s.to_string()).collect();
@@ -96,9 +99,8 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>
     let cap = data_size * batch_size * batches_per_load;
 
     let dataloader = std::thread::spawn(move || {
-        let mut sb = sch.start_superbatch;
-        let mut cb = 0;
-        let mut blend = sch.wdl_scheduler.blend(sb, sch.end_superbatch);
+        let mut curr_superbatch = sch.start_superbatch;
+        let mut curr_batch = 0;
 
         'dataloading: loop {
             let mut loader_files = vec![];
@@ -116,18 +118,19 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>
                     let data: &[T::RequiredDataType] = util::to_slice_with_lifetime(buf);
 
                     for batch in data.chunks(batch_size) {
+                        // get wdl blend from the scheduler.
+                        let blend = sch.wdl_scheduler.blend(curr_batch, curr_superbatch, sch.end_superbatch);
                         let mut gpu_loader = GpuDataLoader::<T, U>::new(x, y);
                         gpu_loader.load(batch, threads, blend, rscale);
                         sender.send(gpu_loader).unwrap();
-                        cb += 1;
-                        if cb % sch.batches_per_superbatch == 0 {
-                            if sb == sch.end_superbatch {
+                        curr_batch += 1;
+                        if curr_batch % sch.batches_per_superbatch == 0 {
+                            if curr_superbatch == sch.end_superbatch {
                                 break 'dataloading;
                             }
 
-                            cb = 0;
-                            sb += 1;
-                            blend = sch.wdl_scheduler.blend(sb, sch.end_superbatch);
+                            curr_batch = 0;
+                            curr_superbatch += 1;
                         }
                     }
 
@@ -138,7 +141,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>
         }
     });
 
-    let mut prev_lr = schedule.lr(1);
+    let mut prev_lr = schedule.lr(0, 1);
     let mut superbatch = schedule.start_superbatch;
     let mut curr_batch = 0;
     let mut superbatch_timer = Instant::now();
@@ -146,7 +149,7 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>
     trainer.set_error_zero();
 
     while let Ok(gpu_loader) = reciever.recv() {
-        let lrate = schedule.lr(superbatch);
+        let lrate = schedule.lr(curr_batch, superbatch);
         if lrate != prev_lr {
             println!("LR Dropped to {}", ansi(lrate, num_cs()));
         }
@@ -181,7 +184,14 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F>
         if curr_batch % schedule.batches_per_superbatch == 0 {
             let error = trainer.error() / schedule.batches_per_superbatch as f32;
 
-            report_superbatch_finished::<O>(schedule, superbatch, error, &superbatch_timer, &timer, pos_per_sb);
+            report_superbatch_finished::<O, LR, WDL>(
+                schedule,
+                superbatch,
+                error,
+                &superbatch_timer,
+                &timer,
+                pos_per_sb,
+            );
 
             callback(superbatch, trainer, schedule, settings);
 
@@ -253,8 +263,8 @@ fn report_superbatch_progress(
     let _ = stdout().flush();
 }
 
-fn report_superbatch_finished<O: Optimiser>(
-    schedule: &TrainingSchedule<O::AdditionalOptimiserParams>,
+fn report_superbatch_finished<O: Optimiser, LR: LrScheduler, WDL: WdlScheduler>(
+    schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
     superbatch: usize,
     error: f32,
     superbatch_timer: &Instant,
