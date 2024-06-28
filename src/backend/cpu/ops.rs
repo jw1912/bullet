@@ -1,12 +1,8 @@
-#![allow(unused_variables, clippy::missing_safety_doc, clippy::too_many_arguments)]
-mod backprops;
-mod bufops;
-mod mpe;
-mod sparse_affine;
-mod splat_add;
-mod update;
-
-use super::{util, DeviceHandles};
+#![allow(
+    unused_variables,
+    clippy::missing_safety_doc,
+    clippy::too_many_arguments
+)]
 
 pub use backprops::*;
 pub use bufops::*;
@@ -15,8 +11,17 @@ pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
+use super::{DeviceHandles, util};
+
+mod backprops;
+mod bufops;
+mod mpe;
+mod sparse_affine;
+mod splat_add;
+mod update;
+
 pub unsafe fn splat_mul_matrix_vector(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     m: usize,
     n: usize,
     a_ptr: *const f32,
@@ -46,7 +51,7 @@ pub unsafe fn splat_mul_matrix_vector(
 }
 
 pub unsafe fn splat_mul_matrixt_vector(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     m: usize,
     n: usize,
     a_ptr: *const f32,
@@ -77,7 +82,7 @@ pub unsafe fn splat_mul_matrixt_vector(
 }
 
 pub unsafe fn reduce_add_mul_vector_vectort(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     m: usize,
     n: usize,
     y_ptr: *const f32,
@@ -122,7 +127,7 @@ pub unsafe fn reduce_add_mul_vector_vectort(
 }
 
 pub unsafe fn reduce_add(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     _: *const f32,
     batch_size: usize,
     out_size: usize,
@@ -146,7 +151,7 @@ pub unsafe fn reduce_add(
 }
 
 pub unsafe fn select(
-    _: DeviceHandles,
+    _: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,
@@ -158,7 +163,7 @@ pub unsafe fn select(
 }
 
 pub unsafe fn select_backprop(
-    _: DeviceHandles,
+    _: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,

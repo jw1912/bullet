@@ -1,8 +1,9 @@
-use super::{DeviceBuffer, Shape, Tensor};
 use crate::{
-    backend::{ops, DeviceHandles},
     Activation,
+    backend::{DeviceHandles, ops},
 };
+
+use super::{DeviceBuffer, Shape, Tensor};
 
 pub struct TensorBatch {
     shape: Shape,
@@ -61,7 +62,7 @@ impl TensorBatch {
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
     pub unsafe fn splat_mul_matrix_vector(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         a: &Tensor,
         x: &TensorBatch,
@@ -76,7 +77,7 @@ impl TensorBatch {
     /// `a` must be initialised, all other sources of unsafety
     /// should trip an assert.
     pub unsafe fn splat_mul_matrixt_vector(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         a: &Tensor,
         y: &TensorBatch,
@@ -88,7 +89,7 @@ impl TensorBatch {
     }
 
     pub fn reduce_add_mul_vector_vectort(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         y: &TensorBatch,
         x: &TensorBatch,
@@ -116,7 +117,7 @@ impl TensorBatch {
     /// # Safety
     /// `out` must be pointing to valid allocated memory.
     pub unsafe fn reduce_add(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         ones: &DeviceBuffer,
         batch_size: usize,
         inp: &TensorBatch,
@@ -128,21 +129,21 @@ impl TensorBatch {
 
     /// # Safety
     /// `inp` must be pointing to valid allocated memory.
-    pub unsafe fn splat_add(handle: DeviceHandles, batch_size: usize, inp: &Tensor, out: &TensorBatch) {
+    pub unsafe fn splat_add(handle: &DeviceHandles, batch_size: usize, inp: &Tensor, out: &TensorBatch) {
         assert_eq!(inp.shape(), out.shape());
         ops::splat_add(handle, batch_size, out.element_size(), inp.ptr(), out.ptr());
     }
 
     /// # Safety
     /// `inp` must be pointing to valid allocated memory.
-    pub unsafe fn add_to(handle: DeviceHandles, batch_size: usize, inp: &TensorBatch, out: &TensorBatch) {
+    pub unsafe fn add_to(handle: &DeviceHandles, batch_size: usize, inp: &TensorBatch, out: &TensorBatch) {
         Self::map(ops::add_to, handle, batch_size, inp, out);
     }
 
     /// Modifies a batch of tensors.
     fn map(
-        f: unsafe fn(DeviceHandles, usize, *const f32, *mut f32),
-        handle: DeviceHandles,
+        f: unsafe fn(&DeviceHandles, usize, *const f32, *mut f32),
+        handle: &DeviceHandles,
         batch_size: usize,
         inp: &TensorBatch,
         out: &TensorBatch,
@@ -156,7 +157,7 @@ impl TensorBatch {
     }
 
     /// This calulates `out[i] = op(inp[i])` for a batch of input.
-    pub fn activate(handle: DeviceHandles, batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
+    pub fn activate(handle: &DeviceHandles, batch_size: usize, op: Activation, inp: &TensorBatch, out: &TensorBatch) {
         match op {
             Activation::ReLU => Self::map(ops::activate_relu, handle, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::activate_crelu, handle, batch_size, inp, out),
@@ -166,7 +167,7 @@ impl TensorBatch {
 
     /// This calulates `out[i] = inp[i] * op'(out[i])` for a batch of input.
     pub fn backprop_activation(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         op: Activation,
         inp: &TensorBatch,
@@ -182,7 +183,7 @@ impl TensorBatch {
     /// # Safety
     /// `weights` and `biases` must be initialised.
     pub unsafe fn affine(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         weights: &Tensor,
         inputs: &TensorBatch,
@@ -197,7 +198,7 @@ impl TensorBatch {
     /// `weights` must be initialised.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn backprop_affine(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         ones: &DeviceBuffer,
         batch_size: usize,
         weights: &Tensor,
@@ -213,7 +214,7 @@ impl TensorBatch {
 
     pub fn sigmoid_mpe(
         &self,
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         results: &TensorBatch,
         error: &DeviceBuffer,
@@ -230,7 +231,7 @@ impl TensorBatch {
     /// # Safety
     /// `buckets` must be valid.
     pub unsafe fn select(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         buckets: *const u8,
         inp: &TensorBatch,
@@ -244,7 +245,7 @@ impl TensorBatch {
     /// # Safety
     /// `buckets` must be valid.
     pub unsafe fn select_backprop(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         batch_size: usize,
         buckets: *const u8,
         inp: &TensorBatch,

@@ -8,7 +8,7 @@ const EPSILON: f32 = 0.00000001;
 const MAX: f32 = 1.98;
 
 pub unsafe fn update_weights(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     network_size: usize,
     decay: f32,
     adj: f32,

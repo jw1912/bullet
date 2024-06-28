@@ -1,8 +1,9 @@
-use super::{Shape, Tensor, TensorBatch};
 use crate::{
-    backend::{ops, util, DeviceHandles},
+    backend::{DeviceHandles, ops, util},
     loader::Feat,
 };
+
+use super::{Shape, Tensor, TensorBatch};
 
 /// A sparse representation of a tensor with dimensions `(1, input_dim)`.
 pub struct SparseTensor {
@@ -63,7 +64,7 @@ impl SparseTensor {
     /// # Safety
     /// `weights`, `biases` and `inputs` must be initialised properly.
     pub unsafe fn affine(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         weights: &Tensor,
         inputs: &SparseTensor,
         biases: &Tensor,
@@ -95,7 +96,7 @@ impl SparseTensor {
     /// # Safety
     /// `weights`, `biases` and `errors` must be initialised properly.
     pub unsafe fn affine_backprop(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         weights_grad: &Tensor,
         inputs: &SparseTensor,
         biases_grad: &Tensor,
@@ -128,7 +129,7 @@ impl SparseTensor {
     /// # Safety
     /// `weights`, `biases` and `inputs` must be initialised properly.
     pub unsafe fn single_affine(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         weights: &Tensor,
         inputs: &SparseTensor,
         biases: &Tensor,
@@ -156,7 +157,7 @@ impl SparseTensor {
     /// # Safety
     /// `weights`, `biases` and `errors` must be initialised properly.
     pub unsafe fn single_affine_backprop(
-        handle: DeviceHandles,
+        handle: &DeviceHandles,
         weights_grad: &Tensor,
         inputs: &SparseTensor,
         biases_grad: &Tensor,
