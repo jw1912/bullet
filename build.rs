@@ -1,6 +1,9 @@
 fn main() {
     #[cfg(feature = "cuda")]
     cuda::build();
+
+    #[cfg(feature = "metal")]
+    metal::build();
 }
 
 #[cfg(feature = "cuda")]
@@ -8,8 +11,8 @@ mod cuda {
     use std::fmt::Debug;
     use std::path::PathBuf;
 
-    use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
     use bindgen::{Builder, CargoCallbacks, EnumVariation};
+    use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
 
     const WRAPPER_PATH: &str = "./src/backend/kernels/wrapper.h";
 
@@ -44,7 +47,7 @@ mod cuda {
             .write_to_file(out_path.join("bindings.rs"))
             .expect("Couldn't write bindings!");
 
-        println!("cargo:rerun-if-changed=./src/backend/kernels");
+        println!("cargo:rerun-if-changed=./src/backend/cuda/kernels");
 
         let files: Vec<String> = ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"]
             .iter()
@@ -115,5 +118,42 @@ mod cuda {
         fn include_file(&self, filename: &str) {
             CargoCallbacks.include_file(filename)
         }
+    }
+}
+
+#[cfg(feature = "metal")]
+mod metal {
+    use std::process::Command;
+
+    pub fn build() {
+        let files = ["backprops", "bufops", "mpe"].as_slice();
+
+        compile_sources(files);
+        compile_library(files);
+
+        println!("cargo::rerun-if-changed=build.rs");
+        println!("cargo::rerun-if-changed=./src/backend/metal/kernels");
+    }
+
+    pub fn compile_sources(files: &[&str]) {
+        for file in files {
+            let src_path = format!("./src/backend/metal/kernels/{file}.metal");
+            let dst_path = format!("./src/backend/metal/kernels/{file}.ir");
+            Command::new("xcrun")
+                .args(["-sdk", "macosx", "metal", "-o", &dst_path, "-c", &src_path])
+                .output()
+                .expect("failed to compile metal file");
+        }
+    }
+
+    pub fn compile_library(files: &[&str]) {
+        let args = ["-sdk", "macosx", "metallib", "-o", "./src/backend/metal/kernels/metal.metallib"];
+        let files = files.iter().map(|s| format!("./src/backend/metal/kernels/{s}.ir")).collect::<Vec<_>>();
+        let files = files.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+        Command::new("xcrun")
+            .args([args.as_slice(), files.as_slice()].concat())
+            .output()
+            .expect("failed to compile metal library");
     }
 }
