@@ -41,7 +41,7 @@ fn main() {
     };
 
     let settings =
-        LocalSettings { threads: 12, data_file_paths: vec!["data/test3.bin"], output_directory: "checkpoints" };
+        LocalSettings { threads: 4, data_file_paths: vec!["../../data/30m.data"], output_directory: "checkpoints" };
 
     trainer.run(&schedule, &settings);
 }
