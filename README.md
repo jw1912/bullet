@@ -58,4 +58,4 @@ as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-S
 > If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
 
 > [!WARNING]  
-> Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context, as the trainer only calls kernels from one thread. This should not be an issue in training, as all kernels are called from the same single thread.
+> Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context. As the trainer only calls kernels from one thread, this should not be an issue in training.
