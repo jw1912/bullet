@@ -131,7 +131,7 @@ pub unsafe fn reduce_add(
     let m = batch_size as c_int;
     let n = out_size as c_int;
 
-    bindings::cublasSgemv_v2(**handle, cublasOperation_t::CUBLAS_OP_N, n, m, &alpha, inp, n, ones, 0, &beta, out, 1);
+    bindings::cublasSgemv_v2(**handle, cublasOperation_t::CUBLAS_OP_N, n, m, &alpha, inp, n, ones, 1, &beta, out, 1);
 }
 
 pub unsafe fn activate_relu(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {

@@ -161,6 +161,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         for node in &mut self.nodes {
             node.outputs = TensorBatch::new(node.outputs.shape(), batch_size);
+
+            if let Operation::Affine(Affine { ones, .. }) = &mut node.op {
+                *ones = DeviceBuffer::new(batch_size);
+                ones.load_from_host(&vec![1.0; batch_size]);
+            }
         }
     }
 

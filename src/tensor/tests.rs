@@ -222,8 +222,8 @@ fn tensor_reduce_add() {
     let mut out = unsafe { Tensor::uninit(Shape::new(1, 3)) };
     out.calloc();
 
-    let ones = DeviceBuffer::new(1);
-    let ones_cpu = [1.0];
+    let ones = DeviceBuffer::new(4);
+    let ones_cpu = [1.0; 4];
     ones.load_from_host(&ones_cpu);
 
     unsafe {

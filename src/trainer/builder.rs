@@ -177,8 +177,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                         let wsh = Shape::new(inp_size, raw_size);
                         let bsh = Shape::new(1, raw_size);
 
-                        let ones = DeviceBuffer::new(1);
-                        ones.load_from_host(&[1.0]);
+                        let ones = DeviceBuffer::new(batch_size);
+                        ones.load_from_host(&vec![1.0; batch_size]);
                         let mut affine = Affine {
                             weights: Tensor::uninit(wsh),
                             biases: Tensor::uninit(bsh),
