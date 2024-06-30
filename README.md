@@ -52,9 +52,10 @@ as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-S
 
 #### HIP
 Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
-as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [HIP SDK](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
 
-Additionally, you will need to install the [HIP SDK](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
+> [!NOTE]
+> If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
 
 > [!WARNING]  
-> Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context, as the trainer only calls kernels from one thread. This should not be an issue in training.
+> Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context, as the trainer only calls kernels from one thread. This should not be an issue in training, as all kernels are called from the same single thread.
