@@ -10,12 +10,12 @@ fn tensor_activate() {
     let y = TensorBatch::new(Shape::new(1, 3), 3);
 
     x.load_from_host(&xs);
-    TensorBatch::activate(handle, 3, Activation::ReLU, &x, &y);
+    TensorBatch::activate(&handle, 3, Activation::ReLU, &x, &y);
     y.write_to_host(&mut xs);
 
     assert_eq!(xs, [1.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0]);
 
-    TensorBatch::backprop_activation(handle, 3, Activation::CReLU, &y, &x);
+    TensorBatch::backprop_activation(&handle, 3, Activation::CReLU, &y, &x);
     x.write_to_host(&mut xs);
 
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
@@ -49,7 +49,7 @@ fn tensor_lt() {
         a_gpu.calloc();
         a_gpu.load_from_host(&a);
         xs_gpu.load_from_host(&xs);
-        TensorBatch::splat_mul_matrix_vector(handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
+        TensorBatch::splat_mul_matrix_vector(&handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
 
         a_gpu.free();
 
@@ -72,7 +72,7 @@ fn tensor_lt() {
         a_gpu.load_from_host(&a);
         ys_gpu.load_from_host(&ys);
 
-        TensorBatch::splat_mul_matrixt_vector(handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
+        TensorBatch::splat_mul_matrixt_vector(&handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
 
         a_gpu.free();
 
@@ -124,7 +124,7 @@ fn tensor_sparse_affine() {
 
         inputs.append(&xs);
 
-        SparseTensor::affine(handle, &weights, &inputs, &biases, &outputs);
+        SparseTensor::affine(&handle, &weights, &inputs, &biases, &outputs);
 
         let mut ys = [0.0; N * B * 2];
         outputs.write_to_host(&mut ys);
@@ -138,7 +138,7 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
+        SparseTensor::affine_backprop(&handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);
@@ -186,7 +186,7 @@ fn reduce_add_mul_vector_vectort() {
         x_gpu.load_from_host(&x);
         y_gpu.load_from_host(&y);
 
-        TensorBatch::reduce_add_mul_vector_vectort(handle, B, &y_gpu, &x_gpu, &a_gpu);
+        TensorBatch::reduce_add_mul_vector_vectort(&handle, B, &y_gpu, &x_gpu, &a_gpu);
 
         let mut a = [0.0; M * N];
         a_gpu.write_to_host(&mut a);
@@ -227,7 +227,7 @@ fn tensor_reduce_add() {
     ones.load_from_host(&ones_cpu);
 
     unsafe {
-        TensorBatch::reduce_add(handle, &ones, 4, &inp, &out);
+        TensorBatch::reduce_add(&handle, &ones, 4, &inp, &out);
     }
 
     let mut buf = [0.0; 3];
@@ -253,7 +253,7 @@ fn tensor_splat_add() {
     out.load_from_host(&vecs);
 
     unsafe {
-        TensorBatch::splat_add(handle, 4, &inp, &out);
+        TensorBatch::splat_add(&handle, 4, &inp, &out);
     }
 
     let mut buf = [0.0; 12];
@@ -292,7 +292,7 @@ fn affine() {
 
         x.load_from_host(&inps);
 
-        TensorBatch::affine(handle, 1, &w, &x, &b, &y);
+        TensorBatch::affine(&handle, 1, &w, &x, &b, &y);
 
         let mut buf = [0.0; 3];
         y.write_to_host(&mut buf);
@@ -304,7 +304,7 @@ fn affine() {
         wg.calloc();
         bg.calloc();
 
-        TensorBatch::backprop_affine(handle, &ones, 1, &w, &y, &x, &wg, &bg);
+        TensorBatch::backprop_affine(&handle, &ones, 1, &w, &y, &x, &wg, &bg);
 
         x.write_to_host(&mut buf);
         assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);
@@ -345,7 +345,7 @@ fn mse() {
     let r = TensorBatch::new(Shape::new(1, 1), 9);
     r.load_from_host(&res);
 
-    x.sigmoid_mpe(handle, 3, &r, &error, 2.0);
+    x.sigmoid_mpe(&handle, 3, &r, &error, 2.0);
 
     let mut buf = [0.0; 3];
     x.write_to_host(&mut buf);
@@ -384,7 +384,7 @@ fn select() {
     input_gpu.load_from_host(&input);
     unsafe {
         util::copy_to_device(buckets_gpu, buckets.as_ptr(), 4);
-        TensorBatch::select(handle, 4, buckets_gpu, &input_gpu, &output_gpu);
+        TensorBatch::select(&handle, 4, buckets_gpu, &input_gpu, &output_gpu);
     }
 
     let mut buf = [0.0; 12];
@@ -392,7 +392,7 @@ fn select() {
     assert_eq!(buf, output);
 
     unsafe {
-        TensorBatch::select_backprop(handle, 4, buckets_gpu, &output_gpu, &input_gpu);
+        TensorBatch::select_backprop(&handle, 4, buckets_gpu, &output_gpu, &input_gpu);
     }
 
     let expected = [

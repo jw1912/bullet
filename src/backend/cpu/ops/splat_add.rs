@@ -1,6 +1,6 @@
 use super::DeviceHandles;
 
-pub unsafe fn splat_add(handle: DeviceHandles, batch_size: usize, tensor_size: usize, inp: *const f32, out: *mut f32) {
+pub unsafe fn splat_add(handle: &DeviceHandles, batch_size: usize, tensor_size: usize, inp: *const f32, out: *mut f32) {
     let inp = inp as usize;
     let out = out as usize;
 
