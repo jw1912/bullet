@@ -1,10 +1,11 @@
+#include <hip/hip_runtime.h>
 /*
 This file calculates in-place backprops for activation functions.
 Given a batch of inputs `x[i]` and destinations `y[i]`, the
 function for a given `op` calculates `y[i] = x[i] * op'(y[i])`.
 */
 #include <hip/hip_runtime.h>
-
+#include <hip/hip_runtime.h>
 
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 

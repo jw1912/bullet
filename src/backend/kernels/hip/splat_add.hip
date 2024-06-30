@@ -1,5 +1,5 @@
-#include <hip/hip_runtime.h>
-
+#include "hip/hip_runtime.h"
+#include <iostream>
 
 constexpr size_t threads = 1024;
 

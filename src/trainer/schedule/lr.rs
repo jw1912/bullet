@@ -1,5 +1,5 @@
 use crate::trainer::ansi;
-use std::fmt::Debug;
+use std::{f32::consts::PI, fmt::Debug};
 
 /// Learning rate scheduling. Types implementing this trait output a learning rate
 /// at each point in training, indexed by batch and superbatch.
@@ -74,6 +74,59 @@ impl LrScheduler for StepLR {
             ansi(self.start, 31),
             ansi(self.gamma, 31),
             ansi(self.step, 31),
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LinearDecayLR {
+    pub initial_lr: f32,
+    pub final_lr: f32,
+    pub final_superbatch: usize,
+}
+
+impl LrScheduler for LinearDecayLR {
+    fn lr(&self, _batch: usize, superbatch: usize) -> f32 {
+        // scales from 0 to 1, ish
+        let linear_decay = superbatch as f32 / self.final_superbatch as f32;
+        let diff = self.final_lr - self.initial_lr;
+        let diff_to_apply = linear_decay * diff;
+        self.initial_lr + diff_to_apply
+    }
+
+    fn colourful(&self) -> String {
+        format!(
+            "start at {} and linearly decay to {} at superbatch {}",
+            ansi(self.initial_lr, 31),
+            ansi(self.final_lr, 31),
+            ansi(self.final_superbatch, 31),
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CosineDecayLR {
+    pub initial_lr: f32,
+    pub final_lr: f32,
+    pub final_superbatch: usize,
+}
+
+impl LrScheduler for CosineDecayLR {
+    fn lr(&self, _batch: usize, superbatch: usize) -> f32 {
+        // scales from 0 to 1, ish
+        let progress = superbatch as f32 / self.final_superbatch as f32;
+        let cosine_decay = 1.0 - 0.5 * (1.0 + (PI * progress).cos());
+        let diff = self.final_lr - self.initial_lr;
+        let diff_to_apply = cosine_decay * diff;
+        self.initial_lr + diff_to_apply
+    }
+
+    fn colourful(&self) -> String {
+        format!(
+            "start at {} and cosine decay to {} at superbatch {}",
+            ansi(self.initial_lr, 31),
+            ansi(self.final_lr, 31),
+            ansi(self.final_superbatch, 31),
         )
     }
 }

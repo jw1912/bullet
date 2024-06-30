@@ -161,6 +161,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         for node in &mut self.nodes {
             node.outputs = TensorBatch::new(node.outputs.shape(), batch_size);
+
+            if let Operation::Affine(Affine { ones, .. }) = &mut node.op {
+                *ones = DeviceBuffer::new(batch_size);
+                ones.load_from_host(&vec![1.0; batch_size]);
+            }
         }
     }
 
@@ -349,7 +354,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         }
 
         let adj = power / self.inputs.used() as f32;
-        self.optimiser.update(self.handle, adj, rate, params);
+        self.optimiser.update(&self.handle, adj, rate, params);
 
         device_synchronise();
         true
@@ -362,9 +367,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         let batch_size = self.inputs.used();
 
         if self.ft.single_perspective {
-            SparseTensor::single_affine(self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
+            SparseTensor::single_affine(&self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
         } else {
-            SparseTensor::affine(self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
+            SparseTensor::affine(&self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
         }
 
         let mut inputs = &self.ft.outputs;
@@ -381,17 +386,17 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
             // exiting residual block
             if in_res_block && !node.in_res_block {
                 in_res_block = false;
-                TensorBatch::add_to(self.handle, batch_size, res_inputs, inputs);
+                TensorBatch::add_to(&self.handle, batch_size, res_inputs, inputs);
             }
 
             match &node.op {
                 Operation::Activate(activation) => {
-                    TensorBatch::activate(self.handle, batch_size, *activation, inputs, &node.outputs);
+                    TensorBatch::activate(&self.handle, batch_size, *activation, inputs, &node.outputs);
                 }
                 Operation::Affine(Affine { weights, biases, .. }) => {
-                    TensorBatch::affine(self.handle, batch_size, weights, inputs, biases, &node.outputs);
+                    TensorBatch::affine(&self.handle, batch_size, weights, inputs, biases, &node.outputs);
                 }
-                Operation::Select => TensorBatch::select(self.handle, batch_size, self.buckets, inputs, &node.outputs),
+                Operation::Select => TensorBatch::select(&self.handle, batch_size, self.buckets, inputs, &node.outputs),
             }
 
             inputs = &node.outputs;
@@ -407,7 +412,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         assert_eq!(self.results.shape(), output_layer.outputs.shape());
 
-        output_layer.outputs.sigmoid_mpe(self.handle, batch_size, &self.results, &self.error_device, power);
+        output_layer.outputs.sigmoid_mpe(&self.handle, batch_size, &self.results, &self.error_device, power);
     }
 
     /// # Safety
@@ -424,7 +429,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         for node in (1..num_nodes).rev() {
             backprop_single(
-                self.handle,
+                &self.handle,
                 batch_size,
                 &self.nodes[node],
                 &self.nodes[node - 1].outputs,
@@ -440,7 +445,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         }
 
         backprop_single(
-            self.handle,
+            &self.handle,
             batch_size,
             &self.nodes[0],
             &self.ft.outputs,
@@ -452,7 +457,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         if self.ft.single_perspective {
             SparseTensor::single_affine_backprop(
-                self.handle,
+                &self.handle,
                 &self.ft.weights_grad,
                 &self.inputs,
                 &self.ft.biases_grad,
@@ -462,7 +467,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
             );
         } else {
             SparseTensor::affine_backprop(
-                self.handle,
+                &self.handle,
                 &self.ft.weights_grad,
                 &self.inputs,
                 &self.ft.biases_grad,
@@ -476,7 +481,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
 #[allow(clippy::too_many_arguments)]
 unsafe fn backprop_single<'a>(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     this_node: &Node,
     inputs: &'a TensorBatch,

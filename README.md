@@ -49,3 +49,9 @@ such as loading nets to requantise them or test their output on specific positio
 #### CUDA
 The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
 as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+
+#### HIP
+Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
+as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+
+Additionally, you will need to install the [HIP SDK](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). If you are on Windows, you must also add HIP_PATH\bin to PATH in your system environment variables.

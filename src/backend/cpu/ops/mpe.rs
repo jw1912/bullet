@@ -1,7 +1,7 @@
 use super::DeviceHandles;
 
 pub unsafe fn sigmoid_mpe(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     buffer_size: usize,
     outputs: *mut f32,
     results: *const f32,

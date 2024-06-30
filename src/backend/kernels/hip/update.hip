@@ -50,7 +50,7 @@ extern "C" void updateWeights(
     const float* gradients)
 {
     const size_t numBlocks = (networkSize + threadsPerBlock - 1) / threadsPerBlock;
-    hipLaunchKernelGGL(updateWeight, dim3(numBlocks), dim3(threadsPerBlock), 0, 0,
+    updateWeight<<<numBlocks, threadsPerBlock>>>(
         networkSize,
         decay,
         adj,

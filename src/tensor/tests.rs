@@ -10,12 +10,15 @@ fn tensor_activate() {
     let y = TensorBatch::new(Shape::new(1, 3), 3);
 
     x.load_from_host(&xs);
-    TensorBatch::activate(handle, 3, Activation::ReLU, &x, &y);
+    util::panic_if_device_error("Error");
+    TensorBatch::activate(&handle, 3, Activation::ReLU, &x, &y);
+    util::panic_if_device_error("Error");
     y.write_to_host(&mut xs);
 
     assert_eq!(xs, [1.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0]);
 
-    TensorBatch::backprop_activation(handle, 3, Activation::CReLU, &y, &x);
+    TensorBatch::backprop_activation(&handle, 3, Activation::CReLU, &y, &x);
+    util::panic_if_device_error("Error");
     x.write_to_host(&mut xs);
 
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
@@ -49,7 +52,10 @@ fn tensor_lt() {
         a_gpu.calloc();
         a_gpu.load_from_host(&a);
         xs_gpu.load_from_host(&xs);
-        TensorBatch::splat_mul_matrix_vector(handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
+
+        util::panic_if_device_error("Error");
+        TensorBatch::splat_mul_matrix_vector(&handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
+        util::panic_if_device_error("Error");
 
         a_gpu.free();
 
@@ -72,7 +78,9 @@ fn tensor_lt() {
         a_gpu.load_from_host(&a);
         ys_gpu.load_from_host(&ys);
 
-        TensorBatch::splat_mul_matrixt_vector(handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
+        util::panic_if_device_error("Error");
+        TensorBatch::splat_mul_matrixt_vector(&handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
+        util::panic_if_device_error("Error");
 
         a_gpu.free();
 
@@ -124,7 +132,9 @@ fn tensor_sparse_affine() {
 
         inputs.append(&xs);
 
-        SparseTensor::affine(handle, &weights, &inputs, &biases, &outputs);
+        util::panic_if_device_error("Error");
+        SparseTensor::affine(&handle, &weights, &inputs, &biases, &outputs);
+        util::panic_if_device_error("Error");
 
         let mut ys = [0.0; N * B * 2];
         outputs.write_to_host(&mut ys);
@@ -138,7 +148,9 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
-        SparseTensor::affine_backprop(handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
+        util::panic_if_device_error("Error");
+        SparseTensor::affine_backprop(&handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
+        util::panic_if_device_error("Error");
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);
@@ -186,7 +198,9 @@ fn reduce_add_mul_vector_vectort() {
         x_gpu.load_from_host(&x);
         y_gpu.load_from_host(&y);
 
-        TensorBatch::reduce_add_mul_vector_vectort(handle, B, &y_gpu, &x_gpu, &a_gpu);
+        util::panic_if_device_error("Error");
+        TensorBatch::reduce_add_mul_vector_vectort(&handle, B, &y_gpu, &x_gpu, &a_gpu);
+        util::panic_if_device_error("Error");
 
         let mut a = [0.0; M * N];
         a_gpu.write_to_host(&mut a);
@@ -222,13 +236,15 @@ fn tensor_reduce_add() {
     let mut out = unsafe { Tensor::uninit(Shape::new(1, 3)) };
     out.calloc();
 
-    let ones = DeviceBuffer::new(1);
-    let ones_cpu = [1.0];
+    let ones = DeviceBuffer::new(4);
+    let ones_cpu = [1.0; 4];
     ones.load_from_host(&ones_cpu);
 
+    util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::reduce_add(handle, &ones, 4, &inp, &out);
+        TensorBatch::reduce_add(&handle, &ones, 4, &inp, &out);
     }
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 3];
     out.write_to_host(&mut buf);
@@ -252,9 +268,11 @@ fn tensor_splat_add() {
     let out = TensorBatch::new(Shape::new(1, 3), 7);
     out.load_from_host(&vecs);
 
+    util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::splat_add(handle, 4, &inp, &out);
+        TensorBatch::splat_add(&handle, 4, &inp, &out);
     }
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 12];
     out.write_to_host(&mut buf);
@@ -292,7 +310,9 @@ fn affine() {
 
         x.load_from_host(&inps);
 
-        TensorBatch::affine(handle, 1, &w, &x, &b, &y);
+        util::panic_if_device_error("Error");
+        TensorBatch::affine(&handle, 1, &w, &x, &b, &y);
+        util::panic_if_device_error("Error");
 
         let mut buf = [0.0; 3];
         y.write_to_host(&mut buf);
@@ -304,7 +324,9 @@ fn affine() {
         wg.calloc();
         bg.calloc();
 
-        TensorBatch::backprop_affine(handle, &ones, 1, &w, &y, &x, &wg, &bg);
+        util::panic_if_device_error("Error");
+        TensorBatch::backprop_affine(&handle, &ones, 1, &w, &y, &x, &wg, &bg);
+        util::panic_if_device_error("Error");
 
         x.write_to_host(&mut buf);
         assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);
@@ -345,7 +367,9 @@ fn mse() {
     let r = TensorBatch::new(Shape::new(1, 1), 9);
     r.load_from_host(&res);
 
-    x.sigmoid_mpe(handle, 3, &r, &error, 2.0);
+    util::panic_if_device_error("Error");
+    x.sigmoid_mpe(&handle, 3, &r, &error, 2.0);
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 3];
     x.write_to_host(&mut buf);
@@ -382,18 +406,23 @@ fn select() {
     let buckets_gpu = util::calloc::<u8>(4);
 
     input_gpu.load_from_host(&input);
+
+    util::panic_if_device_error("Error");
     unsafe {
         util::copy_to_device(buckets_gpu, buckets.as_ptr(), 4);
-        TensorBatch::select(handle, 4, buckets_gpu, &input_gpu, &output_gpu);
+        TensorBatch::select(&handle, 4, buckets_gpu, &input_gpu, &output_gpu);
     }
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 12];
     output_gpu.write_to_host(&mut buf);
     assert_eq!(buf, output);
 
+    util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::select_backprop(handle, 4, buckets_gpu, &output_gpu, &input_gpu);
+        TensorBatch::select_backprop(&handle, 4, buckets_gpu, &output_gpu, &input_gpu);
     }
+    util::panic_if_device_error("Error");
 
     let expected = [
         0.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,

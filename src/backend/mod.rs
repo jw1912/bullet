@@ -4,8 +4,14 @@ mod cuda;
 #[cfg(feature = "cuda")]
 pub use cuda::*;
 
-#[cfg(not(feature = "cuda"))]
+#[cfg(feature = "hip")]
+mod hip;
+
+#[cfg(feature = "hip")]
+pub use hip::*;
+
+#[cfg(not(any(feature = "cuda", feature = "hip")))]
 mod cpu;
 
-#[cfg(not(feature = "cuda"))]
+#[cfg(not(any(feature = "cuda", feature = "hip")))]
 pub use cpu::*;

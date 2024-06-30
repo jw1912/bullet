@@ -60,7 +60,7 @@ extern "C" void selectForward(
     const size_t numChunks = (batchSize + Threads - 1) / Threads;
     const size_t threads = (numChunks == 1) ? batchSize : Threads;
 
-    hipLaunchKernelGGL(selectKernel, dim3(numChunks), dim3(threads), 0, 0,
+    selectKernel<<<numChunks, threads>>>(
         batchSize,
         inputSize,
         outputSize,
@@ -81,7 +81,7 @@ extern "C" void selectBackprop(
     const size_t numChunks = (batchSize + Threads - 1) / Threads;
     const size_t threads = (numChunks == 1) ? batchSize : Threads;
 
-    hipLaunchKernelGGL(selectBackpropKernel, dim3(numChunks), dim3(threads), 0, 0,
+    selectBackpropKernel<<<numChunks, threads>>>(
         batchSize,
         inputSize,
         outputSize,

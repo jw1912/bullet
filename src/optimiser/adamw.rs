@@ -52,7 +52,7 @@ impl Optimiser for AdamWOptimiser {
         self.base.write_weights_to_host(buf);
     }
 
-    fn update(&self, handle: DeviceHandles, grad_adj: f32, lr: f32, params: &AdamWParams) {
+    fn update(&self, handle: &DeviceHandles, grad_adj: f32, lr: f32, params: &AdamWParams) {
         let decay_gamma = 1.0 - params.decay * lr;
         unsafe {
             ops::update_weights(

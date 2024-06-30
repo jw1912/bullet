@@ -1,4 +1,4 @@
-#include <hip/hip_runtime.h>
+#include "hip/hip_runtime.h"
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime.h>
 
@@ -24,19 +24,19 @@ __global__ void bufferOperation(const size_t size, const float* in, float* out)
 extern "C" void activateReLU(const size_t size, const float* in, float* out)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    hipLaunchKernelGGL(bufferOperation<ReLU>, dim3(numBlocks), dim3(threadsPerBlock), 0, 0, size, in, out);
+    bufferOperation<ReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
 
 extern "C" void activateCReLU(const size_t size, const float* in, float* out)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    hipLaunchKernelGGL(bufferOperation<CReLU>, dim3(numBlocks), dim3(threadsPerBlock), 0, 0, size, in, out);
+    bufferOperation<CReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
 
 extern "C" void activateSCReLU(const size_t size, const float* in, float* out)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    hipLaunchKernelGGL(bufferOperation<SCReLU>, dim3(numBlocks), dim3(threadsPerBlock), 0, 0, size, in, out);
+    bufferOperation<SCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
 
 __global__ void activateDualKernel(
@@ -66,7 +66,12 @@ extern "C" void activateDual(
     const size_t grid_x = (tensorSize + threadsPerBlock - 1) / threadsPerBlock;
     const dim3 grid(grid_x, batchSize);
 
-    hipLaunchKernelGGL(activateDualKernel, dim3(grid), dim3(threadsPerBlock), 0, 0, batchSize, tensorSize, inp, out);
+    activateDualKernel<<<grid, threadsPerBlock>>>(
+        batchSize,
+        tensorSize,
+        inp,
+        out
+    );
 }
 
 __global__ void addToKernel(const size_t size, const float* in, float* out)
@@ -82,5 +87,5 @@ __global__ void addToKernel(const size_t size, const float* in, float* out)
 extern "C" void addTo(const size_t size, const float* in, float* out)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    hipLaunchKernelGGL(addToKernel, dim3(numBlocks), dim3(threadsPerBlock), 0, 0, size, in, out);
+    addToKernel<<<numBlocks, threadsPerBlock>>>(size, in, out);
 }

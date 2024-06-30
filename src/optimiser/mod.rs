@@ -66,7 +66,7 @@ pub trait Optimiser {
     /// Pointer to gradient buffer starting at `gradient.ptr() + index`.
     fn gradients_offset(&self, index: usize) -> *mut f32;
 
-    fn update(&self, handle: DeviceHandles, grad_adj: f32, lr: f32, params: &Self::AdditionalOptimiserParams);
+    fn update(&self, handle: &DeviceHandles, grad_adj: f32, lr: f32, params: &Self::AdditionalOptimiserParams);
 
     fn load_weights_from_host(&self, network: &[f32]);
 

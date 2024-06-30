@@ -1,6 +1,6 @@
+#include "hip/hip_runtime.h"
 #include <hip/hip_runtime.h>
-
-#include <iostream>
+#include <hip/hip_runtime.h>
 #include <cstdint>
 
 struct Feat {

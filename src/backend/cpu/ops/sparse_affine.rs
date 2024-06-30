@@ -2,7 +2,7 @@ use super::{util, DeviceHandles};
 use crate::loader::Feat;
 
 pub unsafe fn sparse_affine_forward(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     max_input_size: usize,
     output_size: usize,
@@ -52,7 +52,7 @@ pub unsafe fn sparse_affine_forward(
 }
 
 pub unsafe fn sparse_affine_backward(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     max_active_inputs: usize,
     input_size: usize,
@@ -144,7 +144,7 @@ pub unsafe fn sparse_affine_backward(
 }
 
 pub unsafe fn single_sparse_affine_forward(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     max_active_inputs: usize,
     output_size: usize,
@@ -184,7 +184,7 @@ pub unsafe fn single_sparse_affine_forward(
 }
 
 pub unsafe fn single_sparse_affine_backward(
-    handle: DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     max_active_inputs: usize,
     input_size: usize,

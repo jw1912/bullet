@@ -1,3 +1,4 @@
+#[cfg(feature = "hip")]
 mod bindings;
 pub mod ops;
 pub mod util;

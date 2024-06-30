@@ -1,3 +1,4 @@
+#[cfg(feature = "cuda")]
 mod bindings;
 pub mod ops;
 pub mod util;
