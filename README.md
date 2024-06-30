@@ -49,3 +49,13 @@ such as loading nets to requantise them or test their output on specific positio
 #### CUDA
 The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
 as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+
+#### HIP
+Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
+as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html).
+
+> [!NOTE]
+> If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
+
+> [!WARNING]  
+> Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context. As the trainer only calls kernels from one thread, this should not be an issue in training.
