@@ -52,7 +52,7 @@ as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-S
 
 #### HIP
 Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
-as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [HIP SDK](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html).
 
 > [!NOTE]
 > If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
