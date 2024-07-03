@@ -123,7 +123,7 @@ impl TensorBatch {
         out: &Tensor,
     ) {
         assert_eq!(inp.shape(), out.shape());
-        assert_eq!(ones.size(), batch_size);
+        assert!(ones.size() >= batch_size);
         ops::reduce_add(handle, ones.ptr(), batch_size, out.num_elements(), inp.ptr(), out.ptr());
     }
 
