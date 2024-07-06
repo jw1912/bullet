@@ -106,7 +106,7 @@ pub fn print_board(arr: [usize; 64]) {
         print!("| ");
         for x in 0..8 {
             let cnt = arr[(y * 8) + x];
-            print!("{} |", format!("{: >11}", cnt.to_string()))
+            print!("{: >11} |", cnt.to_string())
         }
         println!("\n+-------------+------------+------------+------------+------------+------------+------------+------------+");
     }
