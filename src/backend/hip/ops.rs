@@ -134,18 +134,18 @@ pub unsafe fn reduce_add(
     let n = out_size as c_int;
 
     let status = bindings::hipblasSgemv(
-        **handle, 
-        hipblasOperation_t::HIPBLAS_OP_N, 
-        n, 
-        m, 
-        &alpha, 
-        inp, 
-        n, 
-        ones, 
-        1, 
-        &beta, 
-        out, 
-        1
+        **handle,
+        hipblasOperation_t::HIPBLAS_OP_N,
+        n,
+        m,
+        &alpha,
+        inp,
+        n,
+        ones,
+        1,
+        &beta,
+        out,
+        1,
     );
     check_status(status);
 }

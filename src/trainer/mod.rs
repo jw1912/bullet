@@ -367,7 +367,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         let batch_size = self.inputs.used();
 
         if self.ft.single_perspective {
-            SparseTensor::single_affine(&self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
+            SparseTensor::single_affine(
+                &self.handle,
+                &self.ft.weights,
+                &self.inputs,
+                &self.ft.biases,
+                &self.ft.outputs,
+            );
         } else {
             SparseTensor::affine(&self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
         }

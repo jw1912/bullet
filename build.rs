@@ -1,7 +1,7 @@
 fn main() {
     #[cfg(feature = "cuda")]
     cuda::build();
-    
+
     #[cfg(feature = "hip")]
     hip::build();
 }
@@ -123,12 +123,12 @@ mod cuda {
 
 #[cfg(feature = "hip")]
 mod hip {
-    use std::fmt::Debug;
-    use std::path::PathBuf;
-    use std::env;
-    use std::process::Command;
     use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
     use bindgen::{Builder, CargoCallbacks, EnumVariation};
+    use std::env;
+    use std::fmt::Debug;
+    use std::path::PathBuf;
+    use std::process::Command;
 
     const WRAPPER_PATH: &str = "./src/backend/kernels/hip/wrapper.h";
 
@@ -182,10 +182,10 @@ mod hip {
 
         #[cfg(target_family = "windows")]
         let compiler_name = "hipcc.bin.exe";
-            
+
         #[cfg(not(target_family = "windows"))]
         let compiler_name = "hipcc.bin";
- 
+
         cc::Build::new()
             .compiler(compiler_name)
             .debug(false)
@@ -197,9 +197,7 @@ mod hip {
     }
 
     fn get_gcn_arch_name() -> Option<String> {
-        let output = Command::new("hipInfo")
-            .output()
-            .expect("Failed to execute hipInfo.exe");
+        let output = Command::new("hipInfo").output().expect("Failed to execute hipInfo.exe");
 
         if output.status.success() {
             let output_str = String::from_utf8_lossy(&output.stdout);

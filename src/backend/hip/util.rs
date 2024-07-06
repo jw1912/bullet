@@ -1,6 +1,6 @@
 use super::bindings::{
-    hipDeviceSynchronize, hipError_t, hipFree, hipGetDeviceCount, hipGetDeviceProperties, hipGetLastError,
-    hipMalloc, hipMemcpy, hipMemcpyKind, hipMemset,
+    hipDeviceSynchronize, hipError_t, hipFree, hipGetDeviceCount, hipGetDeviceProperties, hipGetLastError, hipMalloc,
+    hipMemcpy, hipMemcpyKind, hipMemset,
 };
 use crate::util;
 use std::ffi::c_void;
