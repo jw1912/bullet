@@ -31,6 +31,7 @@ pub struct Trainer<T, U, O> {
     error_device: DeviceBuffer,
     error: f32,
     error_record: Vec<(usize, usize, f32)>,
+    validation_record: Vec<(usize, usize, f32)>,
     used: usize,
     quantiser: Vec<QuantiseInfo>,
     buckets: *mut u8,
@@ -79,19 +80,25 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         self.error = 0.0;
     }
 
+    /// Save a checkpoint.
     pub fn save(&self, out_dir: &str, name: String) {
+        /// Helper for dumping the logs.
+        fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
+            let mut writer = std::io::BufWriter::new(std::fs::File::create(path).expect("Opening log file failed!"));
+            for (superbatch, batch, loss) in error_record {
+                writeln!(writer, "superbatch:{superbatch},batch:{batch},loss:{loss}",).expect("Writing to log file failed!");
+            }
+        }
+
         let path = format!("{out_dir}/{name}");
 
         std::fs::create_dir(path.as_str()).unwrap_or(());
 
         self.optimiser.write_to_checkpoint(path.as_str());
 
-        let mut writer = std::io::BufWriter::new(
-            std::fs::File::create(format!("{path}/log.txt")).expect("Opening log file failed!"),
-        );
-        for (superbatch, batch, loss) in &self.error_record {
-            writeln!(writer, "superbatch:{superbatch},batch:{batch},loss:{loss}",)
-                .expect("Writing to log file failed!");
+        write_losses(&format!("{path}/log.txt"), &self.error_record);
+        if !self.validation_record.is_empty() {
+            write_losses(&format!("{path}/validation-log.txt"), &self.validation_record);
         }
 
         if !self.quantiser.is_empty() {
@@ -324,6 +331,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         eval[0]
     }
 
+    /// Execute the forward pass,
+    /// calculate errors,
+    /// backpropagate gradients,
+    /// and then apply an optimiser update.
     pub fn train_on_batch(
         &mut self,
         rate: f32,
@@ -355,6 +366,32 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         let adj = power / self.inputs.used() as f32;
         self.optimiser.update(&self.handle, adj, rate, params);
+
+        device_synchronise();
+        true
+    }
+
+    /// Execute the forward pass and record error.
+    pub fn evaluate_on_batch(&mut self, power: f32, superbatch: usize, curr_batch: usize) -> bool {
+        self.optimiser.zero_gradient();
+        self.error_device.set_zero();
+
+        unsafe {
+            self.forward();
+            self.calc_errors(power);
+        }
+
+        let mut errors = vec![0.0; self.error_device.size()];
+        self.error_device.write_to_host(&mut errors);
+        let error = errors.iter().sum::<f32>() / self.inputs.used() as f32;
+        self.error += error;
+        self.validation_record.push((superbatch, curr_batch, error));
+
+        tensor::panic_if_device_error("Something went wrong!");
+
+        if self.error.is_nan() {
+            return false;
+        }
 
         device_synchronise();
         true

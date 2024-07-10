@@ -93,6 +93,24 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
     let dataloader =
         create_dataloader::<T, U, O, LR, WDL>(schedule.clone(), data_file_paths, batch_size, x, y, threads, sender);
 
+    let (test_dataloader, test_reciever) = settings
+        .test_file_path
+        .map(|test_file_path| {
+            let file_paths = vec![test_file_path.to_string()];
+            let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
+            let dataloader = create_dataloader::<T, U, O, LR, WDL>(
+                schedule.for_validation(),
+                file_paths,
+                batch_size,
+                x,
+                y,
+                threads,
+                sender,
+            );
+            (dataloader, reciever)
+        })
+        .unzip();
+
     let mut prev_lr = schedule.lr(0, 1);
     let mut superbatch = schedule.start_superbatch;
     let mut curr_batch = 0;
@@ -119,6 +137,27 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
         if !valid {
             trainer.save(out_dir, format!("error-nan-batch-{curr_batch}"));
             panic!("Batch {curr_batch} NaN!");
+        }
+
+        // Track test loss every 32 batches.
+        if curr_batch % 32 == 0 {
+            test_reciever.as_ref().map(|r| {
+                if let Ok(test_batch) = r.recv() {
+                    trainer.clear_data();
+                    device_synchronise();
+
+                    trainer.load_data(&test_batch);
+                    device_synchronise();
+
+                    let valid = trainer.evaluate_on_batch(schedule.power(), superbatch, curr_batch);
+                    device_synchronise();
+
+                    if !valid {
+                        trainer.save(out_dir, format!("test-error-nan-batch-{curr_batch}"));
+                        panic!("Test-set NaN at Batch {curr_batch}!");
+                    }
+                }
+            });
         }
 
         if curr_batch % 128 == 0 {
@@ -155,6 +194,12 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
     }
 
     dataloader.join().unwrap();
+    test_dataloader.map(|h| {
+        if !h.is_finished() {
+            println!("Warning: Training set exhausted but test set is not!");
+        }
+        h.join().unwrap();
+    });
 }
 
 fn create_dataloader<

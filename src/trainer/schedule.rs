@@ -60,6 +60,12 @@ impl<O: Clone + std::fmt::Debug + Sync + Send, LR: LrScheduler, WDL: WdlSchedule
             Loss::SigmoidMPE(x) => x,
         }
     }
+
+    /// For evaluation passes, in order to ensure that we exhaust the test set at the
+    /// same time as we exhaust the training set.
+    pub fn for_validation(&self) -> Self {
+        Self { batches_per_superbatch: self.batches_per_superbatch / 32, ..self.clone() }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
