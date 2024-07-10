@@ -121,6 +121,7 @@ fn main() {
     let settings = LocalSettings {
         threads: 4,
         data_file_paths: vec!["../../data/ataxx/005.data"],
+        test_file_path: None,
         output_directory: "checkpoints",
     };
 

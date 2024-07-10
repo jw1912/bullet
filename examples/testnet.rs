@@ -33,8 +33,12 @@ fn main() {
         optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
     };
 
-    let settings =
-        LocalSettings { threads: 4, data_file_paths: vec!["../../data/batch1.data"], output_directory: "checkpoints" };
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_paths: vec!["../../data/batch1.data"],
+        test_file_path: None,
+        output_directory: "checkpoints",
+    };
 
     trainer.run(&schedule, &settings);
 }
