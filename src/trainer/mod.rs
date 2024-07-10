@@ -30,6 +30,7 @@ pub struct Trainer<T, U, O> {
     results: TensorBatch,
     error_device: DeviceBuffer,
     error: f32,
+    validation_error: f32,
     error_record: Vec<(usize, usize, f32)>,
     validation_record: Vec<(usize, usize, f32)>,
     used: usize,
@@ -78,6 +79,7 @@ impl<T: InputType, U, O: Optimiser> std::fmt::Display for Trainer<T, U, O> {
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
     pub fn set_error_zero(&mut self) {
         self.error = 0.0;
+        self.validation_error = 0.0;
     }
 
     /// Save a checkpoint.
@@ -263,6 +265,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         self.error
     }
 
+    pub fn validation_error(&self) -> f32 {
+        self.validation_error
+    }
+
     pub fn input_getter(&self) -> T {
         self.input_getter
     }
@@ -384,12 +390,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         let mut errors = vec![0.0; self.error_device.size()];
         self.error_device.write_to_host(&mut errors);
         let error = errors.iter().sum::<f32>() / self.inputs.used() as f32;
-        self.error += error;
+        self.validation_error += error;
         self.validation_record.push((superbatch, curr_batch, error));
 
         tensor::panic_if_device_error("Something went wrong!");
 
-        if self.error.is_nan() {
+        if self.validation_error.is_nan() {
             return false;
         }
 
