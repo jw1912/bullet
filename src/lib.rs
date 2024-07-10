@@ -34,6 +34,7 @@ pub enum Activation {
 pub struct LocalSettings<'a> {
     pub threads: usize,
     pub data_file_paths: Vec<&'a str>,
+    pub test_file_path: Option<&'a str>,
     pub output_directory: &'a str,
 }
 
