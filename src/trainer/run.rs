@@ -43,7 +43,6 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
 
     let data_size = std::mem::size_of::<T::RequiredDataType>() as u64;
     let esc = esc();
-    let rscale = 1.0 / schedule.eval_scale;
     let mut file_size = 0;
     for file in data_file_paths.iter() {
         let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
@@ -89,57 +88,10 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
 
     let x = trainer.input_getter();
     let y = trainer.bucket_getter();
-    let sch = schedule.clone();
     let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
 
-    let buffer_size_mb = 256;
-    let buffer_size = buffer_size_mb * 1024 * 1024;
-    let data_size: usize = std::mem::size_of::<T::RequiredDataType>();
-    let batches_per_load = buffer_size / data_size / batch_size;
-    let cap = data_size * batch_size * batches_per_load;
-
-    let dataloader = std::thread::spawn(move || {
-        let mut curr_superbatch = sch.start_superbatch;
-        let mut curr_batch = 0;
-
-        'dataloading: loop {
-            let mut loader_files = vec![];
-            for file in data_file_paths.iter() {
-                loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
-            }
-
-            for loader_file in loader_files.iter() {
-                let mut file = BufReader::with_capacity(cap, loader_file);
-                while let Ok(buf) = file.fill_buf() {
-                    if buf.is_empty() {
-                        break;
-                    }
-
-                    let data: &[T::RequiredDataType] = util::to_slice_with_lifetime(buf);
-
-                    for batch in data.chunks(batch_size) {
-                        // get wdl blend from the scheduler.
-                        let blend = sch.wdl_scheduler.blend(curr_batch, curr_superbatch, sch.end_superbatch);
-                        let mut gpu_loader = GpuDataLoader::<T, U>::new(x, y);
-                        gpu_loader.load(batch, threads, blend, rscale);
-                        sender.send(gpu_loader).unwrap();
-                        curr_batch += 1;
-                        if curr_batch % sch.batches_per_superbatch == 0 {
-                            if curr_superbatch == sch.end_superbatch {
-                                break 'dataloading;
-                            }
-
-                            curr_batch = 0;
-                            curr_superbatch += 1;
-                        }
-                    }
-
-                    let consumed = buf.len();
-                    file.consume(consumed);
-                }
-            }
-        }
-    });
+    let dataloader =
+        create_dataloader::<T, U, O, LR, WDL>(schedule.clone(), data_file_paths, batch_size, x, y, threads, sender);
 
     let mut prev_lr = schedule.lr(0, 1);
     let mut superbatch = schedule.start_superbatch;
@@ -203,6 +155,72 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
     }
 
     dataloader.join().unwrap();
+}
+
+fn create_dataloader<
+    T: InputType,
+    U: OutputBuckets<T::RequiredDataType>,
+    O: Optimiser,
+    LR: LrScheduler,
+    WDL: WdlScheduler,
+>(
+    schedule: TrainingSchedule<<O as Optimiser>::AdditionalOptimiserParams, LR, WDL>,
+    data_file_paths: Vec<String>,
+    batch_size: usize,
+    x: T,
+    y: U,
+    threads: usize,
+    sender: std::sync::mpsc::SyncSender<GpuDataLoader<T, U>>,
+) -> std::thread::JoinHandle<()> {
+    let buffer_size_mb = 256;
+    let buffer_size = buffer_size_mb * 1024 * 1024;
+    let data_size: usize = std::mem::size_of::<T::RequiredDataType>();
+    let batches_per_load = buffer_size / data_size / batch_size;
+    let cap = data_size * batch_size * batches_per_load;
+    let rscale = 1.0 / schedule.eval_scale;
+
+    std::thread::spawn(move || {
+        let mut curr_superbatch = schedule.start_superbatch;
+        let mut curr_batch = 0;
+
+        'dataloading: loop {
+            let mut loader_files = vec![];
+            for file in data_file_paths.iter() {
+                loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
+            }
+
+            for loader_file in loader_files.iter() {
+                let mut file = BufReader::with_capacity(cap, loader_file);
+                while let Ok(buf) = file.fill_buf() {
+                    if buf.is_empty() {
+                        break;
+                    }
+
+                    let data: &[T::RequiredDataType] = util::to_slice_with_lifetime(buf);
+
+                    for batch in data.chunks(batch_size) {
+                        // get wdl blend from the scheduler.
+                        let blend = schedule.wdl_scheduler.blend(curr_batch, curr_superbatch, schedule.end_superbatch);
+                        let mut gpu_loader = GpuDataLoader::<T, U>::new(x, y);
+                        gpu_loader.load(batch, threads, blend, rscale);
+                        sender.send(gpu_loader).unwrap();
+                        curr_batch += 1;
+                        if curr_batch % schedule.batches_per_superbatch == 0 {
+                            if curr_superbatch == schedule.end_superbatch {
+                                break 'dataloading;
+                            }
+
+                            curr_batch = 0;
+                            curr_superbatch += 1;
+                        }
+                    }
+
+                    let consumed = buf.len();
+                    file.consume(consumed);
+                }
+            }
+        }
+    })
 }
 
 static CBCS: AtomicBool = AtomicBool::new(false);
