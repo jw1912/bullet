@@ -143,7 +143,7 @@ impl GraphOptions {
             // sort out batches
             let batches_per_superbatch = data.iter().map(|p| p.1).max().unwrap();
             let data = data.into_iter()
-                .map(|(sb, b, l)| (sb * batches_per_superbatch + b, l))
+                .map(|(sb, b, l)| ((sb - 1) * batches_per_superbatch + b, l))
                 .collect::<Vec<_>>();
 
             data_sequences.push((run_name, data));
