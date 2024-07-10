@@ -31,10 +31,22 @@ pub enum Activation {
     SCReLU,
 }
 
+#[derive(Clone, Copy)]
+pub struct TestDataset<'a> {
+    pub path: &'a str,
+    pub freq: usize,
+}
+
+impl<'a> TestDataset<'a> {
+    pub fn at(path: &'a str) -> TestDataset<'a> {
+        Self { path, freq: 32 }
+    }
+}
+
 pub struct LocalSettings<'a> {
     pub threads: usize,
     pub data_file_paths: Vec<&'a str>,
-    pub test_file_path: Option<&'a str>,
+    pub test_set: Option<TestDataset<'a>>,
     pub output_directory: &'a str,
 }
 

@@ -93,13 +93,14 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
     let dataloader =
         create_dataloader::<T, U, O, LR, WDL>(schedule.clone(), data_file_paths, batch_size, x, y, threads, sender);
 
+    let validation_freq = settings.test_set.map_or(1, |test| test.freq);
     let (test_dataloader, test_reciever) = settings
-        .test_file_path
-        .map(|test_file_path| {
-            let file_paths = vec![test_file_path.to_string()];
+        .test_set
+        .map(|test| {
+            let file_paths = vec![test.path.to_string()];
             let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
             let dataloader = create_dataloader::<T, U, O, LR, WDL>(
-                schedule.for_validation(),
+                schedule.for_validation(validation_freq),
                 file_paths,
                 batch_size,
                 x,
@@ -139,8 +140,8 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
             panic!("Batch {curr_batch} NaN!");
         }
 
-        // Track test loss every 32 batches.
-        if curr_batch % 32 == 0 {
+        // Track test loss every freq batches.
+        if curr_batch % validation_freq == 0 {
             if let Some(Ok(test_batch)) = test_reciever.as_ref().map(Receiver::recv) {
                 trainer.clear_data();
                 device_synchronise();

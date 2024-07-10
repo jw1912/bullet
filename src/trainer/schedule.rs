@@ -63,8 +63,8 @@ impl<O: Clone + std::fmt::Debug + Sync + Send, LR: LrScheduler, WDL: WdlSchedule
 
     /// For evaluation passes, in order to ensure that we exhaust the test set at the
     /// same time as we exhaust the training set.
-    pub fn for_validation(&self) -> Self {
-        Self { batches_per_superbatch: self.batches_per_superbatch / 32, ..self.clone() }
+    pub fn for_validation(&self, validation_freq: usize) -> Self {
+        Self { batches_per_superbatch: self.batches_per_superbatch / validation_freq, ..self.clone() }
     }
 }
 
