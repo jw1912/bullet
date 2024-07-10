@@ -13,7 +13,7 @@ use std::{
     io::{stdout, BufRead, BufReader, Write},
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
-        mpsc::sync_channel,
+        mpsc::{sync_channel, Receiver},
     },
     time::Instant,
 };
@@ -141,23 +141,21 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
 
         // Track test loss every 32 batches.
         if curr_batch % 32 == 0 {
-            test_reciever.as_ref().map(|r| {
-                if let Ok(test_batch) = r.recv() {
-                    trainer.clear_data();
-                    device_synchronise();
+            if let Some(Ok(test_batch)) = test_reciever.as_ref().map(Receiver::recv) {
+                trainer.clear_data();
+                device_synchronise();
 
-                    trainer.load_data(&test_batch);
-                    device_synchronise();
+                trainer.load_data(&test_batch);
+                device_synchronise();
 
-                    let valid = trainer.evaluate_on_batch(schedule.power(), superbatch, curr_batch);
-                    device_synchronise();
+                let valid = trainer.evaluate_on_batch(schedule.power(), superbatch, curr_batch);
+                device_synchronise();
 
-                    if !valid {
-                        trainer.save(out_dir, format!("test-error-nan-batch-{curr_batch}"));
-                        panic!("Test-set NaN at Batch {curr_batch}!");
-                    }
+                if !valid {
+                    trainer.save(out_dir, format!("test-error-nan-batch-{curr_batch}"));
+                    panic!("Test-set NaN at Batch {curr_batch}!");
                 }
-            });
+            }
         }
 
         if curr_batch % 128 == 0 {
@@ -194,12 +192,12 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
     }
 
     dataloader.join().unwrap();
-    test_dataloader.map(|h| {
+    if let Some(h) = test_dataloader {
         if !h.is_finished() {
             println!("Warning: Training set exhausted but test set is not!");
         }
         h.join().unwrap();
-    });
+    };
 }
 
 fn create_dataloader<

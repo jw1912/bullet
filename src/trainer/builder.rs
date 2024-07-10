@@ -248,6 +248,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 error_device,
                 error: 0.0,
                 error_record: Vec::new(),
+                validation_record: Vec::new(),
                 ft_reg: 0.0,
                 used: 0,
                 quantiser,
