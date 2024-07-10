@@ -88,7 +88,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
             let mut writer = std::io::BufWriter::new(std::fs::File::create(path).expect("Opening log file failed!"));
             for (superbatch, batch, loss) in error_record {
-                writeln!(writer, "superbatch:{superbatch},batch:{batch},loss:{loss}",).expect("Writing to log file failed!");
+                writeln!(writer, "superbatch:{superbatch},batch:{batch},loss:{loss}",)
+                    .expect("Writing to log file failed!");
             }
         }
 

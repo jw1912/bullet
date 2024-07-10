@@ -52,11 +52,13 @@ const NOISY_PLOT_OPACITY: f64 = 0.06;
 
 /// Calculates the simple moving average
 fn moving_average(data: &[(usize, f64)], window_size: usize) -> Vec<(usize, f64)> {
-    data.windows(window_size).map(|window| {
-        let mean = window.iter().map(|p| p.1).sum::<f64>() / window_size as f64;
-        let idx = window[window_size / 2].0;
-        (idx, mean)
-    }).collect()
+    data.windows(window_size)
+        .map(|window| {
+            let mean = window.iter().map(|p| p.1).sum::<f64>() / window_size as f64;
+            let idx = window[window_size / 2].0;
+            (idx, mean)
+        })
+        .collect()
 }
 
 impl GraphOptions {
@@ -74,13 +76,9 @@ impl GraphOptions {
 
         for (i, log_file) in self.files.iter().enumerate() {
             let lf_string = log_file.to_string_lossy();
-            let file = std::fs::File::open(log_file)
-                .with_context(|| format!("Failed to open log file {lf_string}."))?;
-            if file
-                .metadata()
-                .with_context(|| format!("Failed to get file metadata of {lf_string}."))?
-                .is_dir()
-            {
+            let file =
+                std::fs::File::open(log_file).with_context(|| format!("Failed to open log file {lf_string}."))?;
+            if file.metadata().with_context(|| format!("Failed to get file metadata of {lf_string}."))?.is_dir() {
                 bail!("Cannot read a directory as a log file! You should only pass correctly-formatted text files to this utility.\n    Problematic file: {lf_string}");
             }
             let reader = std::io::BufReader::new(file);
@@ -108,7 +106,10 @@ impl GraphOptions {
                         .with_context(|| {
                             format!("No superbatch found in line {line_no} of file {}.", log_file.to_string_lossy())
                         })?;
-                    let sbatch = sbatch_text.trim().parse().with_context(|| format!("Failed to parse \"{sbatch_text}\" as usize."))?;
+                    let sbatch = sbatch_text
+                        .trim()
+                        .parse()
+                        .with_context(|| format!("Failed to parse \"{sbatch_text}\" as usize."))?;
 
                     let batch_text = line
                         .split(',')
@@ -119,7 +120,10 @@ impl GraphOptions {
                         .with_context(|| {
                             format!("No batch found in line {line_no} of file {}.", log_file.to_string_lossy())
                         })?;
-                    let batch = batch_text.trim().parse().with_context(|| format!("Failed to parse \"{batch_text}\" as usize."))?;
+                    let batch = batch_text
+                        .trim()
+                        .parse()
+                        .with_context(|| format!("Failed to parse \"{batch_text}\" as usize."))?;
 
                     let loss_text = line
                         .split(',')
@@ -132,7 +136,7 @@ impl GraphOptions {
                         })?;
                     let loss =
                         loss_text.trim().parse().with_context(|| format!("Failed to parse \"{loss_text}\" as f64."))?;
-                    
+
                     Ok((sbatch, batch, loss))
                 })
                 .collect::<anyhow::Result<Vec<(usize, usize, f64)>>>()?;
@@ -142,9 +146,8 @@ impl GraphOptions {
 
             // sort out batches
             let batches_per_superbatch = data.iter().map(|p| p.1).max().unwrap() + 1;
-            let data = data.into_iter()
-                .map(|(sb, b, l)| ((sb - 1) * batches_per_superbatch + b, l))
-                .collect::<Vec<_>>();
+            let data =
+                data.into_iter().map(|(sb, b, l)| ((sb - 1) * batches_per_superbatch + b, l)).collect::<Vec<_>>();
 
             data_sequences.push((run_name, data));
         }
@@ -156,10 +159,10 @@ impl GraphOptions {
         let mut y_max = f64::MIN;
         let mut guard = 0.0f64;
         for (_, data) in data_sequences.iter() {
-            y_min =
-                y_min.min(data.iter().map(|p| p.1).reduce(f64::min).with_context(|| "Empty data sequence encountered!")?);
-            y_max =
-                y_max.max(data.iter().map(|p| p.1).reduce(f64::max).with_context(|| "Empty data sequence encountered!")?);
+            y_min = y_min
+                .min(data.iter().map(|p| p.1).reduce(f64::min).with_context(|| "Empty data sequence encountered!")?);
+            y_max = y_max
+                .max(data.iter().map(|p| p.1).reduce(f64::max).with_context(|| "Empty data sequence encountered!")?);
             let tail = &data[data.len() / 4..];
             let max_tail = tail.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
             let min_tail = tail.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
