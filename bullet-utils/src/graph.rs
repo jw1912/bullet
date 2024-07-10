@@ -141,7 +141,7 @@ impl GraphOptions {
             }
 
             // sort out batches
-            let batches_per_superbatch = data.iter().map(|p| p.1).max().unwrap();
+            let batches_per_superbatch = data.iter().map(|p| p.1).max().unwrap() + 1;
             let data = data.into_iter()
                 .map(|(sb, b, l)| ((sb - 1) * batches_per_superbatch + b, l))
                 .collect::<Vec<_>>();
@@ -254,7 +254,7 @@ impl GraphOptions {
         for (i, (run_name, data)) in data_sequences.iter().enumerate() {
             let window_size = 200;
             let smoothed_loss = moving_average(data, window_size);
-            let last_exceeding_instance = data.iter().map(|p| p.1).rposition(|loss| loss > guard).with_context(|| "No data!")?;
+            let last_exceeding_instance = data.iter().map(|p| p.1).rposition(|loss| loss > guard).unwrap_or(0);
             let cutoff = last_exceeding_instance + 1;
 
             chart
