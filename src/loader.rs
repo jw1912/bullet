@@ -23,6 +23,7 @@ impl Feat {
     }
 }
 
+/// A batch of data, in the correct format for the GPU.
 pub struct GpuDataLoader<I: InputType, O: OutputBuckets<I::RequiredDataType>> {
     inputs: Vec<Feat>,
     results: Vec<f32>,
