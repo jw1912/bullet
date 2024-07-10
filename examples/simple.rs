@@ -43,7 +43,7 @@ fn main() {
     let settings = LocalSettings {
         threads: 4,
         data_file_paths: vec!["../../data/30m.data"],
-        test_file_path: None,
+        test_set: None,
         output_directory: "checkpoints",
     };
 
