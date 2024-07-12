@@ -271,6 +271,10 @@ pub unsafe fn update_weights(
     _: &DeviceHandles,
     network_size: usize,
     decay: f32,
+    beta1: f32,
+    beta2: f32,
+    min_weight: f32,
+    max_weight: f32,
     adj: f32,
     rate: f32,
     network: *mut f32,
@@ -278,7 +282,20 @@ pub unsafe fn update_weights(
     velocity: *mut f32,
     gradients: *const f32,
 ) {
-    bindings::updateWeights(network_size, decay, adj, rate, network, momentum, velocity, gradients);
+    bindings::updateWeights(
+        network_size,
+        decay,
+        beta1,
+        beta2,
+        min_weight,
+        max_weight,
+        adj,
+        rate,
+        network,
+        momentum,
+        velocity,
+        gradients,
+    );
 }
 
 pub unsafe fn select(

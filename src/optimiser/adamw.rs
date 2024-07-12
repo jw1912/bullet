@@ -13,6 +13,10 @@ impl OptimiserType for AdamW {
 #[derive(Clone, Debug)]
 pub struct AdamWParams {
     pub decay: f32,
+    pub beta1: f32,
+    pub beta2: f32,
+    pub min_weight: f32,
+    pub max_weight: f32,
 }
 
 pub struct AdamWOptimiser {
@@ -59,6 +63,10 @@ impl Optimiser for AdamWOptimiser {
                 handle,
                 self.base.size(),
                 decay_gamma,
+                params.beta1,
+                params.beta2,
+                params.min_weight,
+                params.max_weight,
                 grad_adj,
                 lr,
                 self.base.network.ptr(),

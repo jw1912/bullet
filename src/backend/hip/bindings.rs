@@ -15,6 +15,10 @@ extern "C" {
     pub fn updateWeights(
         networkSize: usize,
         decay: f32,
+        beta1: f32,
+        beta2: f32,
+        minWeight: f32,
+        maxWeight: f32,
         adj: f32,
         rate: f32,
         network: *mut f32,
