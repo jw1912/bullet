@@ -34,12 +34,7 @@ fn main() {
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 120 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 1,
-        optimiser_settings: optimiser::AdamWParams {
-            decay: 0.01,
-            beta1: 0.9,
-            beta2: 0.999,
-            max_weight: 1.98,
-        },
+        optimiser_settings: optimiser::AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, max_weight: 1.98 },
     };
 
     let settings = LocalSettings {

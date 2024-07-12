@@ -265,7 +265,19 @@ pub unsafe fn update_weights(
     velocity: *mut f32,
     gradients: *const f32,
 ) {
-    bindings::updateWeights(network_size, decay, beta1, beta2, max_weight, adj, rate, network, momentum, velocity, gradients);
+    bindings::updateWeights(
+        network_size,
+        decay,
+        beta1,
+        beta2,
+        max_weight,
+        adj,
+        rate,
+        network,
+        momentum,
+        velocity,
+        gradients,
+    );
 }
 
 pub unsafe fn select(
