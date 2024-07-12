@@ -2,16 +2,14 @@
 #include <cuda_runtime.h>
 
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
-constexpr float B1 = 0.9F;
-constexpr float B2 = 0.999F;
-constexpr float B1P = 1.0F - B1;
-constexpr float B2P = 1.0F - B2;
 constexpr float Epsilon = 0.00000001F;
-constexpr float MaxWeight = 1.98F;
 
 __global__ void updateWeight(
     const size_t networkSize,
     const float decay,
+    const float beta1,
+    const float beta2,
+    const float maxWeight,
     const float adj,
     const float rate,
     float* network,
@@ -29,11 +27,11 @@ __global__ void updateWeight(
     float param = network[i];
     param *= decay;
 
-    momentum[i] = B1 * momentum[i] + B1P * grad;
-    velocity[i] = B2 * velocity[i] + B2P * grad * grad;
+    momentum[i] = beta1 * momentum[i] + (1.0F - beta1) * grad;
+    velocity[i] = beta2 * velocity[i] + (1.0F - beta2) * grad * grad;
 
     param -= rate * momentum[i] / (sqrt(velocity[i]) + Epsilon);
-    param = min(max(param, -MaxWeight), MaxWeight);
+    param = min(max(param, -maxWeight), maxWeight);
 
     network[i] = param;
 }
@@ -41,6 +39,9 @@ __global__ void updateWeight(
 extern "C" void updateWeights(
     const size_t networkSize,
     const float decay,
+    const float beta1,
+    const float beta2,
+    const float maxWeight,
     const float adj,
     const float rate,
     float* network,
@@ -52,6 +53,9 @@ extern "C" void updateWeights(
     updateWeight<<<numBlocks, threadsPerBlock>>>(
         networkSize,
         decay,
+        beta1,
+        beta2,
+        maxWeight,
         adj,
         rate,
         network,

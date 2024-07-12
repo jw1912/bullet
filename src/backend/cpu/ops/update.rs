@@ -1,16 +1,14 @@
 use super::DeviceHandles;
 
-const B1: f32 = 0.9;
-const B2: f32 = 0.999;
-const B1P: f32 = 1.0 - B1;
-const B2P: f32 = 1.0 - B2;
 const EPSILON: f32 = 0.00000001;
-const MAX: f32 = 1.98;
 
 pub unsafe fn update_weights(
     handle: &DeviceHandles,
     network_size: usize,
     decay: f32,
+    beta1: f32,
+    beta2: f32,
+    max_weight: f32,
     adj: f32,
     rate: f32,
     network: *mut f32,
@@ -31,11 +29,11 @@ pub unsafe fn update_weights(
 
         let mut param = *p * decay;
 
-        *m = B1 * *m + B1P * grad;
-        *v = B2 * *v + B2P * grad * grad;
+        *m = beta1 * *m + (1.0 - beta1) * grad;
+        *v = beta2 * *v + (1.0 - beta2) * grad * grad;
 
         param -= rate * *m / ((*v).sqrt() + EPSILON);
-        param = param.clamp(-MAX, MAX);
+        param = param.clamp(-max_weight, max_weight);
 
         *p = param;
     });
