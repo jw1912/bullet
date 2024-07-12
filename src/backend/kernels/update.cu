@@ -9,6 +9,7 @@ __global__ void updateWeight(
     const float decay,
     const float beta1,
     const float beta2,
+    const float minWeight,
     const float maxWeight,
     const float adj,
     const float rate,
@@ -31,7 +32,7 @@ __global__ void updateWeight(
     velocity[i] = beta2 * velocity[i] + (1.0F - beta2) * grad * grad;
 
     param -= rate * momentum[i] / (sqrt(velocity[i]) + Epsilon);
-    param = min(max(param, -maxWeight), maxWeight);
+    param = min(max(param, minWeight), maxWeight);
 
     network[i] = param;
 }
@@ -41,6 +42,7 @@ extern "C" void updateWeights(
     const float decay,
     const float beta1,
     const float beta2,
+    const float minWeight,
     const float maxWeight,
     const float adj,
     const float rate,
@@ -55,6 +57,7 @@ extern "C" void updateWeights(
         decay,
         beta1,
         beta2,
+        minWeight,
         maxWeight,
         adj,
         rate,

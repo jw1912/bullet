@@ -8,6 +8,7 @@ pub unsafe fn update_weights(
     decay: f32,
     beta1: f32,
     beta2: f32,
+    min_weight: f32,
     max_weight: f32,
     adj: f32,
     rate: f32,
@@ -33,7 +34,7 @@ pub unsafe fn update_weights(
         *v = beta2 * *v + (1.0 - beta2) * grad * grad;
 
         param -= rate * *m / ((*v).sqrt() + EPSILON);
-        param = param.clamp(-max_weight, max_weight);
+        param = param.clamp(min_weight, max_weight);
 
         *p = param;
     });
