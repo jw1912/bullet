@@ -7,11 +7,11 @@ use bullet_lib::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .quantisations(&[181, 64])
+        .quantisations(&[255, 64])
         .optimiser(optimiser::AdamW)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
-        .feature_transformer(32)
+        .feature_transformer(128)
         .activate(Activation::CReLU)
         .add_pairwise_mul()
         .add_layer(1)

@@ -270,7 +270,6 @@ impl TensorBatch {
         assert_eq!(out.element_size() * 2, inp.element_size());
 
         if !prev_is_perspective {
-            panic!();
             ops::pairwise_mul(handle, batch_size, inp.element_size(), out.element_size(), inp.ptr(), out.ptr());
         } else {
             // do it twice
@@ -309,7 +308,6 @@ impl TensorBatch {
         out.buf.set_zero();
 
         if !prev_is_perspective {
-            panic!();
             ops::backprop_pairwise_mul(
                 handle,
                 batch_size,
