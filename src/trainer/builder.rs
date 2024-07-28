@@ -103,7 +103,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     }
 
     pub fn add_pairwise_mul(self) -> Self {
-        let size = self.get_last_layer_size();
+        let size = self.get_last_layer_size() / 2;
         self.add(size, OpType::PairwiseMul)
     }
 
@@ -236,8 +236,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                         nodes.push(Node { outputs, op: Operation::Activate(*activation), in_res_block });
                     }
                     OpType::PairwiseMul => {
-                        assert!(size % 2 == 0, "Can't apply a pairwise shrink layer to an odd number of neurons!");
-                        let bsh = Shape::new(1, size / 2);
+                        let bsh = Shape::new(1, size);
                         let outputs = TensorBatch::new(bsh, batch_size);
                         nodes.push(Node { outputs, op: Operation::PairwiseMul { split_input }, in_res_block });
                     }

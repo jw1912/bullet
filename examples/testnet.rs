@@ -17,7 +17,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    trainer.load_from_checkpoint("checkpoints/testnet");
+    // trainer.load_from_checkpoint("checkpoints/testnet");
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),
@@ -42,7 +42,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["../../data/batch1.data"],
+        data_file_paths: vec!["data/input.bin"],
         test_set: None,
         output_directory: "checkpoints",
     };
