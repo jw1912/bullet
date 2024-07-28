@@ -12,7 +12,8 @@ fn main() {
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
         .feature_transformer(32)
-        .activate(Activation::SCReLU)
+        .activate(Activation::CReLU)
+        .add_pairwise_mul()
         .add_layer(1)
         .build();
 

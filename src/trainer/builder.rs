@@ -11,7 +11,7 @@ use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};
 enum OpType {
     Activate(Activation),
     Affine,
-    PairwiseShrink,
+    PairwiseMul,
 }
 
 struct NodeType {
@@ -102,6 +102,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self.add(size, OpType::Affine)
     }
 
+    pub fn add_pairwise_mul(self) -> Self {
+        let size = self.get_last_layer_size();
+        self.add(size, OpType::PairwiseMul)
+    }
+
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
         self.add(size, OpType::Activate(activation))
@@ -168,7 +173,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 qi += 1;
             }
 
-            for NodeType { size, op, in_res_block } in &self.nodes {
+            let mut split_input = true;
+
+            for (i, NodeType { size, op, in_res_block }) in self.nodes.iter().enumerate() {
                 let size = *size;
                 let in_res_block = *in_res_block;
 
@@ -218,17 +225,21 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                                 in_res_block,
                             });
                         }
+
+                        if i != 0 {
+                            split_input = false;
+                        }
                     }
                     OpType::Activate(activation) => {
                         let bsh = Shape::new(1, size);
                         let outputs = TensorBatch::new(bsh, batch_size);
                         nodes.push(Node { outputs, op: Operation::Activate(*activation), in_res_block });
                     }
-                    OpType::PairwiseShrink => {
+                    OpType::PairwiseMul => {
                         assert!(size % 2 == 0, "Can't apply a pairwise shrink layer to an odd number of neurons!");
                         let bsh = Shape::new(1, size / 2);
                         let outputs = TensorBatch::new(bsh, batch_size);
-                        nodes.push(Node { outputs, op: Operation::PairwiseShrink, in_res_block });
+                        nodes.push(Node { outputs, op: Operation::PairwiseMul { split_input }, in_res_block });
                     }
                 };
 

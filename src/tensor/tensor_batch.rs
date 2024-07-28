@@ -260,30 +260,73 @@ impl TensorBatch {
 
     /// # Safety
     /// This function shall not be used for evil.
-    pub unsafe fn pairwise_shrink(
+    pub unsafe fn pairwise_mul(
         handle: &DeviceHandles,
         batch_size: usize,
         inp: &TensorBatch,
         out: &TensorBatch,
+        prev_is_perspective: bool,
     ) {
         assert_eq!(out.element_size() * 2, inp.element_size());
 
-        ops::pairwise_shrink(handle, batch_size, inp.element_size(), inp.ptr(), out.ptr());
+        if !prev_is_perspective {
+            
+            ops::pairwise_mul(handle, batch_size, inp.element_size(), out.element_size(), inp.ptr(), out.ptr());
+        } else {
+            // do it twice
+            ops::pairwise_mul(handle, batch_size, inp.element_size() / 2, out.element_size() / 2, inp.ptr(), out.ptr());
+            ops::pairwise_mul(
+                handle,
+                batch_size,
+                inp.element_size() / 2,
+                out.element_size() / 2,
+                inp.ptr().add(inp.element_size() / 2),
+                out.ptr().add(out.element_size() / 2),
+            );
+        }
     }
 
     /// # Safety
     /// This function shall not be used for evil.
-    pub unsafe fn backprop_pairwise_shrink(
+    pub unsafe fn backprop_pairwise_mul(
         handle: &DeviceHandles,
         batch_size: usize,
         inp: &TensorBatch,
         out: &TensorBatch,
+        prev_is_perspective: bool,
     ) {
-        assert_eq!(out.element_size() * 2, inp.element_size());
+        assert_eq!(inp.element_size() * 2, out.element_size());
 
         out.buf.set_zero();
 
-        ops::backprop_pairwise_shrink(handle, batch_size, inp.element_size(), inp.ptr(), out.ptr());
+        if !prev_is_perspective {
+            ops::backprop_pairwise_mul(
+                handle,
+                batch_size,
+                inp.element_size(),
+                out.element_size(),
+                inp.ptr(),
+                out.ptr(),
+            );
+        } else {
+            // do it twice
+            ops::backprop_pairwise_mul(
+                handle,
+                batch_size,
+                inp.element_size() / 2,
+                out.element_size() / 2,
+                inp.ptr(),
+                out.ptr(),
+            );
+            ops::backprop_pairwise_mul(
+                handle,
+                batch_size,
+                inp.element_size() / 2,
+                out.element_size() / 2,
+                inp.ptr().add(inp.element_size() / 2),
+                out.ptr().add(out.element_size() / 2),
+            );
+        }
     }
 }
 

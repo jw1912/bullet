@@ -449,8 +449,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
                 Operation::Select => {
                     TensorBatch::select(&self.handle, batch_size, self.buckets, inputs, &node.outputs);
                 },
-                Operation::PairwiseShrink => {
-                    TensorBatch::pairwise_shrink(&self.handle, batch_size, inputs, &node.outputs);
+                Operation::PairwiseMul { split_input } => {
+                    TensorBatch::pairwise_mul(&self.handle, batch_size, inputs, &node.outputs, *split_input);
                 }
             }
 
@@ -557,8 +557,8 @@ unsafe fn backprop_single<'a>(
         Operation::Select => {
             TensorBatch::backprop_select(handle, batch_size, buckets, errors, inputs);
         }
-        Operation::PairwiseShrink => {
-            TensorBatch::backprop_pairwise_shrink(handle, batch_size, errors, inputs);
+        Operation::PairwiseMul { split_input } => {
+            TensorBatch::backprop_pairwise_mul(handle, batch_size, errors, inputs, *split_input);
         }
     }
 

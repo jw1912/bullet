@@ -310,24 +310,24 @@ pub unsafe fn add_to(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut 
     bindings::addTo(size, inp, out);
 }
 
-pub unsafe fn pairwise_shrink(
+pub unsafe fn pairwise_mul(
     handle: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,
-    inp: *const f32,
-    out: *mut f32,
+    inputs: *const f32,
+    outputs: *mut f32,
 ) {
-    bindings::pairwiseShrink(batch_size, input_size, output_size, inp, out);
+    bindings::pairwiseMul(batch_size, input_size, output_size, inputs, outputs);
 }
 
-pub unsafe fn backprop_pairwise_shrink(
+pub unsafe fn backprop_pairwise_mul(
     handle: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,
-    inp: *const f32,
-    out: *mut f32,
+    inputs: *const f32,
+    outputs: *mut f32,
 ) {
-    bindings::backpropPairwiseShrink(batch_size, input_size, output_size, inp, out);
+    bindings::backpropPairwiseMul(batch_size, input_size, output_size, inputs, outputs);
 }
