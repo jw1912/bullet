@@ -49,7 +49,7 @@ mod cuda {
 
         println!("cargo:rerun-if-changed=./src/backend/kernels");
 
-        let files: Vec<String> = ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"]
+        let files: Vec<String> = ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse_affine", "splat_add", "update"]
             .iter()
             .map(|s| format!("./src/backend/kernels/{s}.cu"))
             .collect();
