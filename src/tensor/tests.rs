@@ -420,7 +420,7 @@ fn select() {
 
     util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::select_backprop(&handle, 4, buckets_gpu, &output_gpu, &input_gpu);
+        TensorBatch::backprop_select(&handle, 4, buckets_gpu, &output_gpu, &input_gpu);
     }
     util::panic_if_device_error("Error");
 

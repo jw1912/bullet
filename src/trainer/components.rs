@@ -25,6 +25,7 @@ pub(super) enum Operation {
     Activate(Activation),
     Affine(Affine),
     Select,
+    PairwiseShrink,
 }
 
 pub(super) struct Node {

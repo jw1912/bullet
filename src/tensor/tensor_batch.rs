@@ -244,7 +244,7 @@ impl TensorBatch {
 
     /// # Safety
     /// `buckets` must be valid.
-    pub unsafe fn select_backprop(
+    pub unsafe fn backprop_select(
         handle: &DeviceHandles,
         batch_size: usize,
         buckets: *const u8,
@@ -256,6 +256,34 @@ impl TensorBatch {
         out.buf.set_zero();
 
         ops::select_backprop(handle, batch_size, inp.element_size(), out.element_size(), buckets, inp.ptr(), out.ptr());
+    }
+
+    /// # Safety
+    /// This function shall not be used for evil.
+    pub unsafe fn pairwise_shrink(
+        handle: &DeviceHandles,
+        batch_size: usize,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+    ) {
+        assert_eq!(out.element_size() * 2, inp.element_size());
+
+        ops::pairwise_shrink(handle, batch_size, inp.element_size(), inp.ptr(), out.ptr());
+    }
+
+    /// # Safety
+    /// This function shall not be used for evil.
+    pub unsafe fn backprop_pairwise_shrink(
+        handle: &DeviceHandles,
+        batch_size: usize,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+    ) {
+        assert_eq!(out.element_size() * 2, inp.element_size());
+
+        out.buf.set_zero();
+
+        ops::backprop_pairwise_shrink(handle, batch_size, inp.element_size(), inp.ptr(), out.ptr());
     }
 }
 

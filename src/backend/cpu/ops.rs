@@ -168,3 +168,23 @@ pub unsafe fn select_backprop(
 ) {
     unimplemented!();
 }
+
+pub unsafe fn pairwise_shrink(
+    _: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!();
+}
+
+pub unsafe fn backprop_pairwise_shrink(
+    _: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!();
+}

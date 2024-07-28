@@ -11,6 +11,7 @@ use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};
 enum OpType {
     Activate(Activation),
     Affine,
+    PairwiseShrink,
 }
 
 struct NodeType {
@@ -222,6 +223,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                         let bsh = Shape::new(1, size);
                         let outputs = TensorBatch::new(bsh, batch_size);
                         nodes.push(Node { outputs, op: Operation::Activate(*activation), in_res_block });
+                    }
+                    OpType::PairwiseShrink => {
+                        assert!(size % 2 == 0, "Can't apply a pairwise shrink layer to an odd number of neurons!");
+                        let bsh = Shape::new(1, size / 2);
+                        let outputs = TensorBatch::new(bsh, batch_size);
+                        nodes.push(Node { outputs, op: Operation::PairwiseShrink, in_res_block });
                     }
                 };
 
