@@ -180,8 +180,8 @@ pub unsafe fn pairwise_mul(
     let inp_addr = inp as usize;
     let out_addr = out as usize;
     handle.split_workload(output_size, |_, idx| {
-        let a = *(inp_addr as *const f32).add(idx * 2);
-        let b = *(inp_addr as *const f32).add(idx * 2).add(output_size);
+        let a = *(inp_addr as *const f32).add(idx);
+        let b = *(inp_addr as *const f32).add(idx).add(output_size);
 
         *(out_addr as *mut f32).add(idx) = a * b;
     });
@@ -200,8 +200,8 @@ pub unsafe fn backprop_pairwise_mul(
     handle.split_workload(input_size, |_, idx| {
         // move by twice the index because these are the input neurons
         // (but the *output* gradients)
-        let val_left = *(out_addr as *const f32).add(idx * 2);
-        let val_right = *(out_addr as *const f32).add(idx * 2).add(input_size);
+        let val_left = *(out_addr as *const f32).add(idx);
+        let val_right = *(out_addr as *const f32).add(idx).add(input_size);
 
         // get the value of the incoming gradient on the output neuron
         let grad_in = *(inp_addr as *const f32).add(idx);
@@ -209,7 +209,7 @@ pub unsafe fn backprop_pairwise_mul(
         let grad_left = grad_in * val_right;
         let grad_right = grad_in * val_left;
 
-        *(out_addr as *mut f32).add(idx * 2) = grad_left;
-        *(out_addr as *mut f32).add(idx * 2).add(input_size) = grad_right;
+        *(out_addr as *mut f32).add(idx) = grad_left;
+        *(out_addr as *mut f32).add(idx).add(input_size) = grad_right;
     });
 }
