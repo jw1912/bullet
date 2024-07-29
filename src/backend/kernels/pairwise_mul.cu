@@ -40,8 +40,8 @@ extern "C" void pairwiseMul(
     pairwiseMulKernel<<<grid, threadsPerBlock>>>(
         batchSize,
         outputSize,
-        inp,
-        out);
+        input,
+        output);
 }
 
 __global__ void pairwiseMulBackwardKernel(
