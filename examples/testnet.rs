@@ -11,7 +11,7 @@ fn main() {
         .optimiser(optimiser::AdamW)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
-        .feature_transformer(128)
+        .feature_transformer(1536)
         .activate(Activation::CReLU)
         .add_pairwise_mul()
         .add_layer(1)

@@ -435,3 +435,46 @@ fn select() {
     input_gpu.write_to_host(&mut buf);
     assert_eq!(buf, expected);
 }
+
+#[test]
+fn tensor_pairwise_mul() {
+    let handle = DeviceHandles::default();
+    let xs = [
+        0.671, -0.501, -0.006, 0.873, 0.978, -0.311, -0.833, 0.363,
+        -0.672, -0.888, -0.025, 0.195, -0.523, 0.779, -0.308, 0.481
+    ];
+    let expected = xs[..8].iter().zip(&xs[8..]).map(|(a, b)| a * b).collect::<Vec<_>>();
+    let mut actual = [0.0; 8];
+
+    let x = TensorBatch::new(Shape::new(1, 16), 1);
+    let y = TensorBatch::new(Shape::new(1, 8), 1);
+
+    // forward pass
+    x.load_from_host(&xs);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::pairwise_mul(&handle, 1, &x, &y, false);
+    }
+    util::panic_if_device_error("Error");
+    y.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+
+    let gradients: [f32; 8] = std::array::from_fn(|idx| idx as f32 + 1.0);
+    let expected = gradients.iter().cycle().enumerate().take(16).map(|(i, grad)| {
+        let inputs_idx = i % 8 + (1 - i / 8) * 8;
+        grad * xs[inputs_idx]
+    }).collect::<Vec<_>>();
+    let mut actual = [0.0; 16];
+
+    // backprop
+    y.load_from_host(&gradients);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::backprop_pairwise_mul(&handle, 1, &y, &x, false);
+    }
+    util::panic_if_device_error("Error");
+    x.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+}

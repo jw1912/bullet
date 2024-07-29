@@ -273,11 +273,6 @@ impl TensorBatch {
             ops::pairwise_mul(handle, batch_size, inp.element_size(), out.element_size(), inp.ptr(), out.ptr());
         } else {
             // do it twice
-            let res = unsafe {
-                let a = inp.ptr().read();
-                let b = inp.ptr().add(out.element_size() / 2).read();
-                a * b
-            };
             ops::pairwise_mul(handle, batch_size, inp.element_size() / 2, out.element_size() / 2, inp.ptr(), out.ptr());
             ops::pairwise_mul(
                 handle,
@@ -287,10 +282,6 @@ impl TensorBatch {
                 inp.ptr().add(inp.element_size() / 2),
                 out.ptr().add(out.element_size() / 2),
             );
-            unsafe {
-                let actual = out.ptr().read();
-                assert_eq!(res, actual);
-            }
         }
     }
 
@@ -305,7 +296,8 @@ impl TensorBatch {
     ) {
         assert_eq!(inp.element_size() * 2, out.element_size());
 
-        out.buf.set_zero();
+        // commented out because we need the previous values
+        // out.buf.set_zero();
 
         if !prev_is_perspective {
             ops::backprop_pairwise_mul(
@@ -318,14 +310,6 @@ impl TensorBatch {
             );
         } else {
             // do it twice
-            let (grad_l, grad_r) = unsafe {
-                let l = out.ptr().read();
-                let r = out.ptr().add(inp.element_size() / 2).read();
-                let o = inp.ptr().read();
-                let gl = o * r;
-                let gr = o * l;
-                (gl, gr)
-            };
             ops::backprop_pairwise_mul(
                 handle,
                 batch_size,
@@ -342,12 +326,6 @@ impl TensorBatch {
                 inp.ptr().add(inp.element_size() / 2),
                 out.ptr().add(out.element_size() / 2),
             );
-            unsafe {
-                let actual_grad_l = out.ptr().read();
-                let actual_grad_r = out.ptr().add(inp.element_size() / 2).read();
-                assert_eq!(grad_l, actual_grad_l);
-                assert_eq!(grad_r, actual_grad_r);
-            }
         }
     }
 }

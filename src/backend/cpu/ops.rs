@@ -198,8 +198,6 @@ pub unsafe fn backprop_pairwise_mul(
     let inp_addr = inp as usize;
     let out_addr = out as usize;
     handle.split_workload(input_size, |_, idx| {
-        // move by twice the index because these are the input neurons
-        // (but the *output* gradients)
         let val_left = *(out_addr as *const f32).add(idx);
         let val_right = *(out_addr as *const f32).add(idx).add(input_size);
 
