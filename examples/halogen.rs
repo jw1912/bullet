@@ -4,7 +4,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r21_768x4x2-512x2-1x8"
+        "bullet_r23_768x4x2-768x2-1x8"
     };
 }
 
@@ -26,7 +26,7 @@ fn main() {
             3, 3, 3, 3,
         ]))
         .output_buckets(outputs::MaterialCount::<8>)
-        .feature_transformer(512)
+        .feature_transformer(768)
         .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
@@ -38,7 +38,7 @@ fn main() {
         batch_size: 16_384,
         batches_per_superbatch: 68128,
         start_superbatch: 1,
-        end_superbatch: 100,
+        end_superbatch: 50,
         wdl_scheduler: wdl::ConstantWDL { value: 0.3 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.95, step: 1 },
         loss_function: Loss::SigmoidMSE,
