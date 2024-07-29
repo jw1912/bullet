@@ -505,45 +505,46 @@ fn pairwise_manual(xs: &[f32]) -> Vec<f32> {
 fn tensor_pairwise_mul_perspective() {
     let handle = DeviceHandles::default();
     let xs = [
+        // batch 1
         0.671, -0.501, -0.006, 0.873, 0.978, -0.311, -0.833, 0.363,
-        -0.672, -0.888, -0.025, 0.195, -0.523, 0.779, -0.308, 0.481
+        -0.672, -0.888, -0.025, 0.195, -0.523, 0.779, -0.308, 0.481,
+        // batch 2
+        0.704, 0.1, -0.861, -0.284, -0.869, 0.633, -0.869, 0.51,
+        0.671, 0.053, 0.314, -0.664, 0.314, 0.707, -0.504, -0.426,
+        // batch 3
+        0.163, 0.353, -0.974, 0.791, 0.118, 0.078, 0.243, 0.24,
+        -0.586, -0.838, 0.155, -0.455, -0.182, 0.327, 0.412, 0.844
     ];
-    let expected1 = xs[..4].iter().zip(&xs[4..8]).map(|(a, b)| a * b).collect::<Vec<_>>();
-    let expected2 = xs[8..12].iter().zip(&xs[12..]).map(|(a, b)| a * b).collect::<Vec<_>>();
-    let expected = [expected1, expected2].concat();
-    let mut actual = [0.0; 8];
+    let expected = xs.chunks_exact(8).map(pairwise_manual).collect::<Vec<_>>().concat();
+    let mut actual = [0.0; 8 * 3];
 
-    let x = TensorBatch::new(Shape::new(1, 16), 1);
-    let y = TensorBatch::new(Shape::new(1, 8), 1);
+    let x = TensorBatch::new(Shape::new(1, 16), 3);
+    let y = TensorBatch::new(Shape::new(1, 8), 3);
 
     // forward pass
     x.load_from_host(&xs);
     util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::pairwise_mul(&handle, 1, &x, &y, true);
+        TensorBatch::pairwise_mul(&handle, 3, &x, &y, true);
     }
     util::panic_if_device_error("Error");
     y.write_to_host(&mut actual);
 
     assert_eq!(&actual[..], &expected[..]);
 
-    let gradients: [f32; 8] = std::array::from_fn(|idx| idx as f32 + 1.0);
-    let expected1 = gradients[..4].iter().cycle().enumerate().take(8).map(|(i, grad)| {
-        let inputs_idx = i % 4 + (1 - i / 4) * 4;
-        grad * xs[inputs_idx]
-    }).collect::<Vec<_>>();
-    let expected2 = gradients[4..].iter().cycle().enumerate().take(8).map(|(i, grad)| {
-        let inputs_idx = i % 4 + (1 - i / 4) * 4;
-        grad * xs[inputs_idx + 8]
-    }).collect::<Vec<_>>();
-    let expected = [expected1, expected2].concat();
-    let mut actual = [0.0; 16];
+    let gradients: [f32; 8 * 3] = std::array::from_fn(|idx| idx as f32 + 1.0);
+    let expected = xs.chunks_exact(8)
+        .zip(gradients.chunks_exact(4))
+        .map(|(x, grad)| backward_pairwise_manual(grad, x))
+        .collect::<Vec<_>>()
+        .concat();
+    let mut actual = [0.0; 16 * 3];
 
     // backprop
     y.load_from_host(&gradients);
     util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::backprop_pairwise_mul(&handle, 1, &y, &x, true);
+        TensorBatch::backprop_pairwise_mul(&handle, 3, &y, &x, true);
     }
     util::panic_if_device_error("Error");
     x.write_to_host(&mut actual);

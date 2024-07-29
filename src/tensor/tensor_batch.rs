@@ -273,14 +273,13 @@ impl TensorBatch {
             ops::pairwise_mul(handle, batch_size, inp.element_size(), out.element_size(), inp.ptr(), out.ptr());
         } else {
             // do it twice
-            ops::pairwise_mul(handle, batch_size, inp.element_size() / 2, out.element_size() / 2, inp.ptr(), out.ptr());
             ops::pairwise_mul(
                 handle,
-                batch_size,
+                batch_size * 2,
                 inp.element_size() / 2,
                 out.element_size() / 2,
-                inp.ptr().add(inp.element_size() / 2),
-                out.ptr().add(out.element_size() / 2),
+                inp.ptr(),
+                out.ptr(),
             );
         }
     }
@@ -312,19 +311,11 @@ impl TensorBatch {
             // do it twice
             ops::backprop_pairwise_mul(
                 handle,
-                batch_size,
+                batch_size * 2,
                 inp.element_size() / 2,
                 out.element_size() / 2,
                 inp.ptr(),
                 out.ptr(),
-            );
-            ops::backprop_pairwise_mul(
-                handle,
-                batch_size,
-                inp.element_size() / 2,
-                out.element_size() / 2,
-                inp.ptr().add(inp.element_size() / 2),
-                out.ptr().add(out.element_size() / 2),
             );
         }
     }
