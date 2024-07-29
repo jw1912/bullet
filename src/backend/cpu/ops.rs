@@ -180,10 +180,17 @@ pub unsafe fn pairwise_mul(
     let inp_addr = inp as usize;
     let out_addr = out as usize;
     handle.split_workload(output_size, |_, idx| {
-        let a = *(inp_addr as *const f32).add(idx);
-        let b = *(inp_addr as *const f32).add(idx).add(output_size);
+        let inp = (inp_addr as *const f32).add(idx);
+        let out = (out_addr as *mut f32).add(idx);
+        for i in 0..batch_size {
+            let ia = inp.add(i * input_size);
+            let oa = out.add(i * output_size);
 
-        *(out_addr as *mut f32).add(idx) = a * b;
+            let a = *ia;
+            let b = *ia.add(output_size);
+
+            *oa = a * b;
+        }
     });
 }
 
@@ -198,16 +205,23 @@ pub unsafe fn backprop_pairwise_mul(
     let inp_addr = inp as usize;
     let out_addr = out as usize;
     handle.split_workload(input_size, |_, idx| {
-        let val_left = *(out_addr as *const f32).add(idx);
-        let val_right = *(out_addr as *const f32).add(idx).add(input_size);
+        let inp = (inp_addr as *const f32).add(idx);
+        let out = (out_addr as *mut f32).add(idx);
+        for i in 0..batch_size {
+            let ia = inp.add(i * input_size);
+            let oa = out.add(i * output_size);
 
-        // get the value of the incoming gradient on the output neuron
-        let grad_in = *(inp_addr as *const f32).add(idx);
+            let val_left = *oa;
+            let val_right = *oa.add(input_size);
 
-        let grad_left = grad_in * val_right;
-        let grad_right = grad_in * val_left;
+            // get the value of the incoming gradient on the output neuron
+            let grad_in = *ia;
 
-        *(out_addr as *mut f32).add(idx) = grad_left;
-        *(out_addr as *mut f32).add(idx).add(input_size) = grad_right;
+            let grad_left = grad_in * val_right;
+            let grad_right = grad_in * val_left;
+
+            *oa = grad_left;
+            *oa.add(input_size) = grad_right;
+        }
     });
 }
