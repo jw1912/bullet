@@ -7,17 +7,16 @@ use bullet_lib::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .quantisations(&[255, 64])
+        .quantisations(&[181, 64])
         .optimiser(optimiser::AdamW)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
-        .feature_transformer(1536)
-        .activate(Activation::CReLU)
-        .add_pairwise_mul()
+        .feature_transformer(32)
+        .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
 
-    // trainer.load_from_checkpoint("checkpoints/testnet");
+    trainer.load_from_checkpoint("checkpoints/testnet");
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),
@@ -42,7 +41,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["data/input.bin"],
+        data_file_paths: vec!["../../data/batch1.data"],
         test_set: None,
         output_directory: "checkpoints",
     };
