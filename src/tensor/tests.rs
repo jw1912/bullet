@@ -478,3 +478,53 @@ fn tensor_pairwise_mul() {
 
     assert_eq!(&actual[..], &expected[..]);
 }
+
+#[test]
+fn tensor_pairwise_mul_perspective() {
+    let handle = DeviceHandles::default();
+    let xs = [
+        0.671, -0.501, -0.006, 0.873, 0.978, -0.311, -0.833, 0.363,
+        -0.672, -0.888, -0.025, 0.195, -0.523, 0.779, -0.308, 0.481
+    ];
+    let expected1 = xs[..4].iter().zip(&xs[4..8]).map(|(a, b)| a * b).collect::<Vec<_>>();
+    let expected2 = xs[8..12].iter().zip(&xs[12..]).map(|(a, b)| a * b).collect::<Vec<_>>();
+    let expected = [expected1, expected2].concat();
+    let mut actual = [0.0; 8];
+
+    let x = TensorBatch::new(Shape::new(1, 16), 1);
+    let y = TensorBatch::new(Shape::new(1, 8), 1);
+
+    // forward pass
+    x.load_from_host(&xs);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::pairwise_mul(&handle, 1, &x, &y, true);
+    }
+    util::panic_if_device_error("Error");
+    y.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+
+    let gradients: [f32; 8] = std::array::from_fn(|idx| idx as f32 + 1.0);
+    let expected1 = gradients[..4].iter().cycle().enumerate().take(8).map(|(i, grad)| {
+        let inputs_idx = i % 4 + (1 - i / 4) * 4;
+        grad * xs[inputs_idx]
+    }).collect::<Vec<_>>();
+    let expected2 = gradients[4..].iter().cycle().enumerate().take(8).map(|(i, grad)| {
+        let inputs_idx = i % 4 + (1 - i / 4) * 4;
+        grad * xs[inputs_idx + 8]
+    }).collect::<Vec<_>>();
+    let expected = [expected1, expected2].concat();
+    let mut actual = [0.0; 16];
+
+    // backprop
+    y.load_from_host(&gradients);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::backprop_pairwise_mul(&handle, 1, &y, &x, true);
+    }
+    util::panic_if_device_error("Error");
+    x.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+}
