@@ -244,7 +244,7 @@ impl TensorBatch {
 
     /// # Safety
     /// `buckets` must be valid.
-    pub unsafe fn select_backprop(
+    pub unsafe fn backprop_select(
         handle: &DeviceHandles,
         batch_size: usize,
         buckets: *const u8,
@@ -256,6 +256,63 @@ impl TensorBatch {
         out.buf.set_zero();
 
         ops::select_backprop(handle, batch_size, inp.element_size(), out.element_size(), buckets, inp.ptr(), out.ptr());
+    }
+
+    /// # Safety
+    /// This function shall not be used for evil.
+    pub unsafe fn pairwise_mul(
+        handle: &DeviceHandles,
+        batch_size: usize,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+        prev_is_perspective: bool,
+    ) {
+        assert_eq!(out.element_size() * 2, inp.element_size());
+
+        if !prev_is_perspective {
+            ops::pairwise_mul(handle, batch_size, inp.element_size(), out.element_size(), inp.ptr(), out.ptr());
+        } else {
+            ops::pairwise_mul(
+                handle,
+                batch_size * 2,
+                inp.element_size() / 2,
+                out.element_size() / 2,
+                inp.ptr(),
+                out.ptr(),
+            );
+        }
+    }
+
+    /// # Safety
+    /// This function shall not be used for evil.
+    pub unsafe fn backprop_pairwise_mul(
+        handle: &DeviceHandles,
+        batch_size: usize,
+        inp: &TensorBatch,
+        out: &TensorBatch,
+        prev_is_perspective: bool,
+    ) {
+        assert_eq!(inp.element_size() * 2, out.element_size());
+
+        if !prev_is_perspective {
+            ops::backprop_pairwise_mul(
+                handle,
+                batch_size,
+                inp.element_size(),
+                out.element_size(),
+                inp.ptr(),
+                out.ptr(),
+            );
+        } else {
+            ops::backprop_pairwise_mul(
+                handle,
+                batch_size * 2,
+                inp.element_size() / 2,
+                out.element_size() / 2,
+                inp.ptr(),
+                out.ptr(),
+            );
+        }
     }
 }
 

@@ -309,3 +309,25 @@ pub unsafe fn select_backprop(
 pub unsafe fn add_to(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     bindings::addTo(size, inp, out);
 }
+
+pub unsafe fn pairwise_mul(
+    handle: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inputs: *const f32,
+    outputs: *mut f32,
+) {
+    bindings::pairwiseMul(batch_size, input_size, output_size, inputs, outputs);
+}
+
+pub unsafe fn backprop_pairwise_mul(
+    handle: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inputs: *const f32,
+    outputs: *mut f32,
+) {
+    bindings::backpropPairwiseMul(batch_size, input_size, output_size, inputs, outputs);
+}

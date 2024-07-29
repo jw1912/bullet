@@ -446,7 +446,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
                 Operation::Affine(Affine { weights, biases, .. }) => {
                     TensorBatch::affine(&self.handle, batch_size, weights, inputs, biases, &node.outputs);
                 }
-                Operation::Select => TensorBatch::select(&self.handle, batch_size, self.buckets, inputs, &node.outputs),
+                Operation::Select => {
+                    TensorBatch::select(&self.handle, batch_size, self.buckets, inputs, &node.outputs);
+                }
+                Operation::PairwiseMul { split_input } => {
+                    TensorBatch::pairwise_mul(&self.handle, batch_size, inputs, &node.outputs, *split_input);
+                }
             }
 
             inputs = &node.outputs;
@@ -549,7 +554,12 @@ unsafe fn backprop_single<'a>(
         Operation::Affine(Affine { weights: w, weights_grad: wg, biases_grad: bg, ones, .. }) => {
             TensorBatch::backprop_affine(handle, ones, batch_size, w, errors, inputs, wg, bg);
         }
-        Operation::Select => TensorBatch::select_backprop(handle, batch_size, buckets, errors, inputs),
+        Operation::Select => {
+            TensorBatch::backprop_select(handle, batch_size, buckets, errors, inputs);
+        }
+        Operation::PairwiseMul { split_input } => {
+            TensorBatch::backprop_pairwise_mul(handle, batch_size, errors, inputs, *split_input);
+        }
     }
 
     // entering residual block
