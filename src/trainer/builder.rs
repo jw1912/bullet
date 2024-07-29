@@ -173,7 +173,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 qi += 1;
             }
 
-            let mut split_input = true;
+            let mut split_input = !self.single_perspective;
 
             for (i, NodeType { size, op, in_res_block }) in self.nodes.iter().enumerate() {
                 let size = *size;
