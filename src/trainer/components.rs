@@ -25,9 +25,7 @@ pub(super) enum Operation {
     Activate(Activation),
     Affine(Affine),
     Select,
-    PairwiseMul {
-        split_input: bool,
-    },
+    PairwiseMul { split_input: bool },
 }
 
 pub(super) struct Node {

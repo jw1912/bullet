@@ -448,7 +448,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
                 }
                 Operation::Select => {
                     TensorBatch::select(&self.handle, batch_size, self.buckets, inputs, &node.outputs);
-                },
+                }
                 Operation::PairwiseMul { split_input } => {
                     TensorBatch::pairwise_mul(&self.handle, batch_size, inputs, &node.outputs, *split_input);
                 }

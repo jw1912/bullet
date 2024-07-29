@@ -111,13 +111,7 @@ extern "C" {
 
     pub fn addTo(size: usize, inp: *const f32, out: *mut f32);
 
-    pub fn pairwiseMul(
-        batchSize: usize,
-        inputSize: usize,
-        outputSize: usize,
-        input: *const f32,
-        output: *mut f32,
-    );
+    pub fn pairwiseMul(batchSize: usize, inputSize: usize, outputSize: usize, input: *const f32, output: *mut f32);
 
     pub fn backpropPairwiseMul(
         batchSize: usize,
