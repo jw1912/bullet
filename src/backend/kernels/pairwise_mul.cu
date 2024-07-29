@@ -11,71 +11,21 @@ output_vector = input_vector[:N] * input_vector[N:]
 
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
-__global__ void pairwiseMulForwardKernel(
+__global__ void pairwiseMulKernel(
     const size_t batchSize,
-    // when going FORWARD, input is twice output
-    const size_t inputSize,
-    // when going FORWARD, output is half input
-    const size_t outputSize,
-    const float* input,
-    float* output) {
-    // Calculate the global thread ID
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-    // Calculate the stride for grid-stride loop
-    // This allows handling more elements than available threads
-    const size_t stride = blockDim.x * gridDim.x;
+    const size_t tensorSize,
+    const float* inp,
+    float* out) {
+    const size_t tid = blockDim.x * blockIdx.x + threadIdx.x;
 
-    // Grid-stride loop: process elements with a stride
-    for (size_t i = tid; i < batchSize * outputSize; i += stride) {
-        // Calculate batch index and output index within the batch
-        const size_t batchIdx = i / outputSize;
-        const size_t outputIdx = i % outputSize;
+    if (tid >= tensorSize)
+        return;
 
-        // Calculate pointers for the current batch
-        const float* batchInput = input + batchIdx * inputSize;
-        float* batchOutput = output + batchIdx * outputSize;
+    // input vector is 2x size   vvvvvvvvvvvvvv
+    const float* thisInp = inp + 2 * tensorSize * blockIdx.y + tid;
+    float* thisOut = out + tensorSize * blockIdx.y + tid;
 
-        // Perform pairwise multiplication:
-        // Multiply element from first half with corresponding element from second half
-        // INVARIANT: outputSize is always half of inputSize.
-        batchOutput[outputIdx] = batchInput[outputIdx] * batchInput[outputIdx + outputSize];
-    }
-}
-
-__global__ void pairwiseMulBackwardKernel(
-    const size_t batchSize,
-    // when going BACKWARD, input is half output
-    const size_t inputSize,
-    // when going BACKWARD, output is twice input
-    const size_t outputSize,
-    // gradients on the output neurons
-    const float* input,
-    // buffer to write gradients into
-    float* output) {
-    // Calculate the global thread ID
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-    // Calculate the stride for grid-stride loop
-    const size_t stride = blockDim.x * gridDim.x;
-
-    // Grid-stride loop: process elements with a stride
-    for (size_t i = tid; i < batchSize * inputSize; i += stride) {
-        // Calculate batch index and input index within the batch
-        const size_t batchIdx = i / inputSize;
-        const size_t outputIdx = i % inputSize;
-
-        // Calculate pointers for the current batch
-        const float* batchGradOutput = input + batchIdx * inputSize;
-        float* batchGradInput = output + batchIdx * outputSize;
-
-        // Compute gradients
-        // NOTE: we need to do _both_ of these reads before we do the writes,
-        // because we would corrupt the computations if we interleaved them.
-        const float gradLeft = batchGradOutput[outputIdx] * batchGradInput[outputIdx + inputSize];
-        const float gradRight = batchGradOutput[outputIdx] * batchGradInput[outputIdx];
-
-        batchGradInput[outputIdx] = gradLeft;
-        batchGradInput[outputIdx + inputSize] = gradRight;
-    }
+    thisOut[0] = thisInp[0] * thisInp[tensorSize];
 }
 
 extern "C" void pairwiseMul(
@@ -84,14 +34,38 @@ extern "C" void pairwiseMul(
     const size_t outputSize,
     const float* input,
     float* output) {
-    // Calculate total number of elements to process
-    const size_t totalElements = batchSize * outputSize;
-    // Calculate number of blocks needed
-    const size_t blocks = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+    const size_t grid_x = (outputSize + threadsPerBlock - 1) / threadsPerBlock;
+    const dim3 grid(grid_x, batchSize);
 
-    // Launch the kernel
-    pairwiseMulForwardKernel<<<blocks, threadsPerBlock>>>(
-        batchSize, inputSize, outputSize, input, output);
+    pairwiseMulKernel<<<grid, threadsPerBlock>>>(
+        batchSize,
+        outputSize,
+        inp,
+        out);
+}
+
+__global__ void pairwiseMulBackwardKernel(
+    const size_t batchSize,
+    const size_t tensorSize,
+    const float* inp,
+    float* out) {
+    const size_t tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (tid >= tensorSize)
+        return;
+
+    const float* thisInp = inp + tensorSize * blockIdx.y + tid;
+    float* thisOut = out + 2 * tensorSize * blockIdx.y + tid;
+
+    // thisOut[0] = thisInp[0] * thisInp[tensorSize];
+    const float gradIn = thisInp[0];
+    const float valLeft = thisOut[0];
+    const float valRight = thisOut[tensorSize];
+    const float gradLeft = gradIn * valRight;
+    const float gradRight = gradIn * valLeft;
+
+    thisOut[0] = gradLeft;
+    thisOut[tensorSize] = gradRight;
 }
 
 extern "C" void backpropPairwiseMul(
@@ -102,12 +76,10 @@ extern "C" void backpropPairwiseMul(
     const float* input,
     // buffer to write gradients into
     float* output) {
-    // Calculate total number of elements to process
-    const size_t totalElements = batchSize * inputSize;
-    // Calculate number of blocks needed
-    const size_t blocks = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+    const size_t grid_x = (inputSize + threadsPerBlock - 1) / threadsPerBlock;
+    const dim3 grid(grid_x, batchSize);
 
     // Launch the kernel
-    pairwiseMulBackwardKernel<<<blocks, threadsPerBlock>>>(
-        batchSize, inputSize, outputSize, input, output);
+    pairwiseMulBackwardKernel<<<grid, threadsPerBlock>>>(
+        batchSize, inputSize, input, output);
 }
