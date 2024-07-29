@@ -103,7 +103,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     }
 
     pub fn add_pairwise_mul(self) -> Self {
-        let size = self.get_last_layer_size() / 2;
+        let ll_size = self.get_last_layer_size();
+        assert_eq!(ll_size % 2, 0, "Last layer size must be even.");
+        let size = ll_size / 2;
         self.add(size, OpType::PairwiseMul)
     }
 
