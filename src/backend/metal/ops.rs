@@ -5,6 +5,7 @@ use metal_rs::{Function, Library, MTLResourceOptions, MTLSize, NSUInteger};
 use crate::loader::Feat;
 
 use super::DeviceHandles;
+use crate::backend::cpu;
 
 #[derive(Clone)]
 pub(crate) struct Kernels {
@@ -41,7 +42,7 @@ pub unsafe fn pairwise_mul(
     inp: *const f32,
     out: *mut f32,
 ) {
-    unimplemented!()
+    cpu::ops::pairwise_mul(&handle.cpu, batch_size, input_size, output_size, inp, out)
 }
 
 pub unsafe fn backprop_pairwise_mul(
@@ -52,7 +53,7 @@ pub unsafe fn backprop_pairwise_mul(
     inp: *const f32,
     out: *mut f32,
 ) {
-    unimplemented!()
+    cpu::ops::backprop_pairwise_mul(&handle.cpu, batch_size, input_size, output_size, inp, out)
 }
 
 pub unsafe fn splat_mul_matrix_vector(
@@ -64,7 +65,7 @@ pub unsafe fn splat_mul_matrix_vector(
     y_ptr: *mut f32,
     batch_size: usize,
 ) {
-    unimplemented!()
+    cpu::ops::splat_mul_matrix_vector(&handle.cpu, m, n, a_ptr, x_ptr, y_ptr, batch_size)
 }
 
 pub unsafe fn splat_mul_matrixt_vector(
@@ -76,7 +77,7 @@ pub unsafe fn splat_mul_matrixt_vector(
     x_ptr: *mut f32,
     batch_size: usize,
 ) {
-    unimplemented!()
+    cpu::ops::splat_mul_matrixt_vector(&handle.cpu, m, n, a_ptr, y_ptr, x_ptr, batch_size)
 }
 
 pub unsafe fn reduce_add_mul_vector_vectort(
@@ -88,22 +89,22 @@ pub unsafe fn reduce_add_mul_vector_vectort(
     a_ptr: *mut f32,
     batch_size: usize,
 ) {
-    unimplemented!()
+    cpu::ops::reduce_add_mul_vector_vectort(&handle.cpu, m, n, y_ptr, x_ptr, a_ptr, batch_size)
 }
 
 pub unsafe fn reduce_add(
     handle: &DeviceHandles,
-    _: *const f32,
+    a: *const f32,
     batch_size: usize,
     out_size: usize,
     inp: *const f32,
     out: *mut f32,
 ) {
-    unimplemented!()
+    cpu::ops::reduce_add(&handle.cpu, a, batch_size, out_size, inp, out)
 }
 
 pub unsafe fn select(
-    _: &DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,
@@ -111,11 +112,11 @@ pub unsafe fn select(
     inp: *const f32,
     out: *mut f32,
 ) {
-    unimplemented!();
+    cpu::ops::select(&handle.cpu, batch_size, input_size, output_size, buckets, inp, out)
 }
 
 pub unsafe fn select_backprop(
-    _: &DeviceHandles,
+    handle: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,
@@ -123,7 +124,7 @@ pub unsafe fn select_backprop(
     inp: *const f32,
     out: *mut f32,
 ) {
-    unimplemented!();
+    cpu::ops::select_backprop(&handle.cpu, batch_size, input_size, output_size, buckets, inp, out)
 }
 
 macro_rules! two_buffer_kernel {
@@ -194,7 +195,7 @@ pub unsafe fn sigmoid_mpe(
     errors: *mut f32,
     power: f32,
 ) {
-    unimplemented!()
+    cpu::ops::sigmoid_mpe(&handle.cpu, buffer_size, outputs, results, errors, power)
 }
 
 pub unsafe fn sparse_affine_forward(
@@ -207,7 +208,16 @@ pub unsafe fn sparse_affine_forward(
     inputs: *const Feat,
     outputs: *mut f32,
 ) {
-    unimplemented!()
+    cpu::ops::sparse_affine_forward(
+        &handle.cpu,
+        batch_size,
+        max_input_size,
+        output_size,
+        weights,
+        biases,
+        inputs,
+        outputs,
+    )
 }
 
 pub unsafe fn sparse_affine_backward(
@@ -223,7 +233,19 @@ pub unsafe fn sparse_affine_backward(
     output: *const f32,
     ft_reg: f32,
 ) {
-    unimplemented!()
+    cpu::ops::sparse_affine_backward(
+        &handle.cpu,
+        batch_size,
+        max_active_inputs,
+        input_size,
+        output_size,
+        weights_grad,
+        biases_grad,
+        inputs,
+        errors,
+        output,
+        ft_reg,
+    )
 }
 
 pub unsafe fn single_sparse_affine_forward(
@@ -236,7 +258,16 @@ pub unsafe fn single_sparse_affine_forward(
     inputs: *const Feat,
     outputs: *mut f32,
 ) {
-    unimplemented!()
+    cpu::ops::single_sparse_affine_forward(
+        &handle.cpu,
+        batch_size,
+        max_active_inputs,
+        output_size,
+        weights,
+        biases,
+        inputs,
+        outputs,
+    )
 }
 
 pub unsafe fn single_sparse_affine_backward(
@@ -252,15 +283,27 @@ pub unsafe fn single_sparse_affine_backward(
     output: *const f32,
     ft_reg: f32,
 ) {
-    unimplemented!()
+    cpu::ops::single_sparse_affine_backward(
+        &handle.cpu,
+        batch_size,
+        max_active_inputs,
+        input_size,
+        output_size,
+        weights_grad,
+        biases_grad,
+        inputs,
+        errors,
+        output,
+        ft_reg,
+    )
 }
 
 pub unsafe fn splat_add(handle: &DeviceHandles, batch_size: usize, tensor_size: usize, inp: *const f32, out: *mut f32) {
-    unimplemented!()
+    cpu::ops::splat_add(&handle.cpu, batch_size, tensor_size, inp, out)
 }
 
 pub unsafe fn update_weights(
-    _: &DeviceHandles,
+    handle: &DeviceHandles,
     network_size: usize,
     decay: f32,
     beta1: f32,
@@ -274,5 +317,19 @@ pub unsafe fn update_weights(
     velocity: *mut f32,
     gradients: *const f32,
 ) {
-    unimplemented!()
+    cpu::ops::update_weights(
+        &handle.cpu,
+        network_size,
+        decay,
+        beta1,
+        beta2,
+        min_weight,
+        max_weight,
+        adj,
+        rate,
+        network,
+        momentum,
+        velocity,
+        gradients,
+    )
 }
