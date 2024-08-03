@@ -10,6 +10,7 @@ readme = "README.md"
 
 [features]
 cuda = ["bindgen", "cc"]
+hip = ["bindgen", "cc"]
 metal = ["metal_rs"]
 
 [dependencies]

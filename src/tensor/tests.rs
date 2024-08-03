@@ -1,4 +1,8 @@
-use crate::{Activation, backend::{DeviceHandles, util}, loader::Feat};
+use crate::{
+    backend::{util, DeviceHandles},
+    loader::Feat,
+    Activation,
+};
 
 use super::{DeviceBuffer, Shape, SparseTensor, Tensor, TensorBatch};
 
@@ -11,12 +15,15 @@ fn tensor_activate() {
     let y = TensorBatch::new(Shape::new(1, 3), 3);
 
     x.load_from_host(&xs);
+    util::panic_if_device_error("Error");
     TensorBatch::activate(&handle, 3, Activation::ReLU, &x, &y);
+    util::panic_if_device_error("Error");
     y.write_to_host(&mut xs);
 
     assert_eq!(xs, [1.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0]);
 
     TensorBatch::backprop_activation(&handle, 3, Activation::CReLU, &y, &x);
+    util::panic_if_device_error("Error");
     x.write_to_host(&mut xs);
 
     assert_eq!(xs, [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
@@ -29,16 +36,11 @@ fn tensor_lt() {
     const M: usize = 3;
     const N: usize = 2;
     let a = [
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
+        1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
         //1.0, 1.0, 0.0,
         //0.0, 1.0, 1.0,
     ];
-    let xs = [
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0];
+    let xs = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
 
     let ys_cpu = [1.0, 0.0, 1.0, 1.0];
 
@@ -50,7 +52,10 @@ fn tensor_lt() {
         a_gpu.calloc();
         a_gpu.load_from_host(&a);
         xs_gpu.load_from_host(&xs);
+
+        util::panic_if_device_error("Error");
         TensorBatch::splat_mul_matrix_vector(&handle, 2, &a_gpu, &xs_gpu, &ys_gpu);
+        util::panic_if_device_error("Error");
 
         a_gpu.free();
 
@@ -73,7 +78,9 @@ fn tensor_lt() {
         a_gpu.load_from_host(&a);
         ys_gpu.load_from_host(&ys);
 
+        util::panic_if_device_error("Error");
         TensorBatch::splat_mul_matrixt_vector(&handle, 3, &a_gpu, &ys_gpu, &xs_gpu);
+        util::panic_if_device_error("Error");
 
         a_gpu.free();
 
@@ -99,9 +106,7 @@ fn tensor_sparse_affine() {
     let a_t = [
         //1.0, 1.0, 0.0,
         //0.0, 1.0, 1.0,
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
+        1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
     ];
 
     let b = [0.5, -0.5];
@@ -125,7 +130,9 @@ fn tensor_sparse_affine() {
 
         inputs.append(&xs);
 
+        util::panic_if_device_error("Error");
         SparseTensor::affine(&handle, &weights, &inputs, &biases, &outputs);
+        util::panic_if_device_error("Error");
 
         let mut ys = [0.0; N * B * 2];
         outputs.write_to_host(&mut ys);
@@ -139,7 +146,9 @@ fn tensor_sparse_affine() {
         wg.calloc();
         bg.calloc();
 
+        util::panic_if_device_error("Error");
         SparseTensor::affine_backprop(&handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
+        util::panic_if_device_error("Error");
 
         let mut wbuf = [0.0; 6];
         wg.write_to_host(&mut wbuf);
@@ -165,17 +174,9 @@ fn reduce_add_mul_vector_vectort() {
     const N: usize = 2;
     const B: usize = 3;
 
-    let x = [
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0,
-    ];
+    let x = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
 
-    let y = [
-        1.0, 0.0,
-        0.0, 1.0,
-        1.0, 1.0,
-    ];
+    let y = [1.0, 0.0, 0.0, 1.0, 1.0, 1.0];
 
     let x_gpu = TensorBatch::new(Shape::new(1, M), B);
     let y_gpu = TensorBatch::new(Shape::new(1, N), B);
@@ -187,7 +188,9 @@ fn reduce_add_mul_vector_vectort() {
         x_gpu.load_from_host(&x);
         y_gpu.load_from_host(&y);
 
+        util::panic_if_device_error("Error");
         TensorBatch::reduce_add_mul_vector_vectort(&handle, B, &y_gpu, &x_gpu, &a_gpu);
+        util::panic_if_device_error("Error");
 
         let mut a = [0.0; M * N];
         a_gpu.write_to_host(&mut a);
@@ -195,9 +198,7 @@ fn reduce_add_mul_vector_vectort() {
         assert_eq!(
             a,
             [
-                1.0, 0.0,
-                0.0, 1.0,
-                1.0, 1.0,
+                1.0, 0.0, 0.0, 1.0, 1.0, 1.0,
                 //1.0, 0.0, 1.0,
                 //0.0, 1.0, 1.0,
             ]
@@ -210,12 +211,7 @@ fn reduce_add_mul_vector_vectort() {
 #[test]
 fn tensor_reduce_add() {
     let handle = DeviceHandles::default();
-    let vecs = [
-        1.0, 1.0, 2.0,
-        1.0, 0.0, 1.0,
-        1.0, 1.0, 3.0,
-        1.0, 1.0, 1.0,
-    ];
+    let vecs = [1.0, 1.0, 2.0, 1.0, 0.0, 1.0, 1.0, 1.0, 3.0, 1.0, 1.0, 1.0];
 
     let inp = TensorBatch::new(Shape::new(1, 3), 7);
     inp.load_from_host(&vecs);
@@ -223,13 +219,15 @@ fn tensor_reduce_add() {
     let mut out = unsafe { Tensor::uninit(Shape::new(1, 3)) };
     out.calloc();
 
-    let ones = DeviceBuffer::new(1);
-    let ones_cpu = [1.0];
+    let ones = DeviceBuffer::new(4);
+    let ones_cpu = [1.0; 4];
     ones.load_from_host(&ones_cpu);
 
+    util::panic_if_device_error("Error");
     unsafe {
         TensorBatch::reduce_add(&handle, &ones, 4, &inp, &out);
     }
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 3];
     out.write_to_host(&mut buf);
@@ -253,9 +251,11 @@ fn tensor_splat_add() {
     let out = TensorBatch::new(Shape::new(1, 3), 7);
     out.load_from_host(&vecs);
 
+    util::panic_if_device_error("Error");
     unsafe {
         TensorBatch::splat_add(&handle, 4, &inp, &out);
     }
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 12];
     out.write_to_host(&mut buf);
@@ -270,11 +270,7 @@ fn tensor_splat_add() {
 fn affine() {
     let handle = DeviceHandles::default();
     let inps = [1.0, 2.0, -0.5];
-    let ws = [
-        1.0, 0.0, 1.0,
-        0.0, 1.0, 0.0,
-        1.0, 0.0, 1.0,
-    ];
+    let ws = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0];
     let bs = [0.1, 0.2, 0.3];
 
     unsafe {
@@ -293,7 +289,9 @@ fn affine() {
 
         x.load_from_host(&inps);
 
+        util::panic_if_device_error("Error");
         TensorBatch::affine(&handle, 1, &w, &x, &b, &y);
+        util::panic_if_device_error("Error");
 
         let mut buf = [0.0; 3];
         y.write_to_host(&mut buf);
@@ -305,21 +303,25 @@ fn affine() {
         wg.calloc();
         bg.calloc();
 
+        util::panic_if_device_error("Error");
         TensorBatch::backprop_affine(&handle, &ones, 1, &w, &y, &x, &wg, &bg);
+        util::panic_if_device_error("Error");
 
         x.write_to_host(&mut buf);
         assert_eq!(buf, [1.4000001, 2.2, 1.4000001]);
 
         let mut wbuf = [0.0; 9];
         wg.write_to_host(&mut wbuf);
-        assert_eq!(wbuf, [
-            0.6, 2.2, 0.8,
-            1.2, 4.4, 1.6,
-            -0.3, -1.1, -0.4,
-            //0.6, 1.2, -0.3,
-            //2.2, 4.4, -1.1,
-            //0.8, 1.6, -0.4,
-        ]);
+        assert_eq!(
+            wbuf,
+            [
+                0.6, 2.2, 0.8, 1.2, 4.4, 1.6, -0.3, -1.1,
+                -0.4,
+                //0.6, 1.2, -0.3,
+                //2.2, 4.4, -1.1,
+                //0.8, 1.6, -0.4,
+            ]
+        );
 
         let mut bbuf = [0.0; 3];
         bg.write_to_host(&mut bbuf);
@@ -346,7 +348,9 @@ fn mse() {
     let r = TensorBatch::new(Shape::new(1, 1), 9);
     r.load_from_host(&res);
 
+    util::panic_if_device_error("Error");
     x.sigmoid_mpe(&handle, 3, &r, &error, 2.0);
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 3];
     x.write_to_host(&mut buf);
@@ -365,45 +369,162 @@ fn select() {
     let buckets = [0, 1, 2, 1];
 
     let input = [
-        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
-        8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0,
-        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
-        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
+        0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0, 0.0, 1.0, 2.0, 3.0,
+        4.0, 5.0, 6.0, 7.0, 8.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
     ];
 
-    let output = [
-        0.0, 1.0, 2.0,
-        5.0, 4.0, 3.0,
-        6.0, 7.0, 8.0,
-        3.0, 4.0, 5.0,
-    ];
+    let output = [0.0, 1.0, 2.0, 5.0, 4.0, 3.0, 6.0, 7.0, 8.0, 3.0, 4.0, 5.0];
 
     let input_gpu = TensorBatch::new(Shape::new(1, 9), 4);
     let output_gpu = TensorBatch::new(Shape::new(1, 3), 4);
     let buckets_gpu = util::calloc::<u8>(4);
 
     input_gpu.load_from_host(&input);
+
+    util::panic_if_device_error("Error");
     unsafe {
         util::copy_to_device(buckets_gpu, buckets.as_ptr(), 4);
         TensorBatch::select(&handle, 4, buckets_gpu, &input_gpu, &output_gpu);
+        TensorBatch::select(&handle, 4, buckets_gpu, &input_gpu, &output_gpu);
     }
+    util::panic_if_device_error("Error");
 
     let mut buf = [0.0; 12];
     output_gpu.write_to_host(&mut buf);
     assert_eq!(buf, output);
 
+    util::panic_if_device_error("Error");
     unsafe {
-        TensorBatch::select_backprop(&handle, 4, buckets_gpu, &output_gpu, &input_gpu);
+        TensorBatch::backprop_select(&handle, 4, buckets_gpu, &output_gpu, &input_gpu);
     }
+    util::panic_if_device_error("Error");
 
     let expected = [
-        0.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 5.0, 4.0, 3.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 7.0, 8.0,
-        0.0, 0.0, 0.0, 3.0, 4.0, 5.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 4.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 6.0, 7.0, 8.0, 0.0, 0.0, 0.0, 3.0, 4.0, 5.0, 0.0, 0.0, 0.0,
     ];
 
     let mut buf = [0.0; 36];
     input_gpu.write_to_host(&mut buf);
     assert_eq!(buf, expected);
+}
+
+#[test]
+fn tensor_pairwise_mul() {
+    let handle = DeviceHandles::default();
+    let xs = [
+        // batch 1
+        0.671, -0.501, -0.006, 0.873, 0.978, -0.311, -0.833, 0.363, -0.672, -0.888, -0.025, 0.195, -0.523, 0.779,
+        -0.308, 0.481, // batch 2
+        0.704, 0.1, -0.861, -0.284, -0.869, 0.633, -0.869, 0.51, 0.671, 0.053, 0.314, -0.664, 0.314, 0.707, -0.504,
+        -0.426, // batch 3
+        0.163, 0.353, -0.974, 0.791, 0.118, 0.078, 0.243, 0.24, -0.586, -0.838, 0.155, -0.455, -0.182, 0.327, 0.412,
+        0.844,
+    ];
+    let expected = xs.chunks_exact(16).map(pairwise_manual).collect::<Vec<_>>().concat();
+    let mut actual = [0.0; 8 * 3];
+
+    let x = TensorBatch::new(Shape::new(1, 16), 3);
+    let y = TensorBatch::new(Shape::new(1, 8), 3);
+
+    // forward pass
+    x.load_from_host(&xs);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::pairwise_mul(&handle, 3, &x, &y, false);
+    }
+    util::panic_if_device_error("Error");
+    y.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+
+    let gradients: [f32; 8 * 3] = std::array::from_fn(|idx| idx as f32 + 1.0);
+    let expected = xs
+        .chunks_exact(16)
+        .zip(gradients.chunks_exact(8))
+        .map(|(x, grad)| backward_pairwise_manual(grad, x))
+        .collect::<Vec<_>>()
+        .concat();
+    let mut actual = [0.0; 16 * 3];
+
+    // backprop
+    y.load_from_host(&gradients);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::backprop_pairwise_mul(&handle, 3, &y, &x, false);
+    }
+    util::panic_if_device_error("Error");
+    x.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+}
+
+fn backward_pairwise_manual(gradients: &[f32], xs: &[f32]) -> Vec<f32> {
+    assert_eq!(gradients.len() * 2, xs.len());
+    let m = gradients.len();
+    gradients
+        .iter()
+        .cycle()
+        .enumerate()
+        .take(xs.len())
+        .map(|(i, grad)| {
+            let inputs_idx = i % m + (1 - i / m) * m;
+            grad * xs[inputs_idx]
+        })
+        .collect::<Vec<_>>()
+}
+
+fn pairwise_manual(xs: &[f32]) -> Vec<f32> {
+    let mid = xs.len() / 2;
+    xs[..mid].iter().zip(&xs[mid..]).map(|(a, b)| a * b).collect::<Vec<_>>()
+}
+
+#[test]
+fn tensor_pairwise_mul_perspective() {
+    let handle = DeviceHandles::default();
+    let xs = [
+        // batch 1
+        0.671, -0.501, -0.006, 0.873, 0.978, -0.311, -0.833, 0.363, -0.672, -0.888, -0.025, 0.195, -0.523, 0.779,
+        -0.308, 0.481, // batch 2
+        0.704, 0.1, -0.861, -0.284, -0.869, 0.633, -0.869, 0.51, 0.671, 0.053, 0.314, -0.664, 0.314, 0.707, -0.504,
+        -0.426, // batch 3
+        0.163, 0.353, -0.974, 0.791, 0.118, 0.078, 0.243, 0.24, -0.586, -0.838, 0.155, -0.455, -0.182, 0.327, 0.412,
+        0.844,
+    ];
+    let expected = xs.chunks_exact(8).map(pairwise_manual).collect::<Vec<_>>().concat();
+    let mut actual = [0.0; 8 * 3];
+
+    let x = TensorBatch::new(Shape::new(1, 16), 3);
+    let y = TensorBatch::new(Shape::new(1, 8), 3);
+
+    // forward pass
+    x.load_from_host(&xs);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::pairwise_mul(&handle, 3, &x, &y, true);
+    }
+    util::panic_if_device_error("Error");
+    y.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
+
+    let gradients: [f32; 8 * 3] = std::array::from_fn(|idx| idx as f32 + 1.0);
+    let expected = xs
+        .chunks_exact(8)
+        .zip(gradients.chunks_exact(4))
+        .map(|(x, grad)| backward_pairwise_manual(grad, x))
+        .collect::<Vec<_>>()
+        .concat();
+    let mut actual = [0.0; 16 * 3];
+
+    // backprop
+    y.load_from_host(&gradients);
+    util::panic_if_device_error("Error");
+    unsafe {
+        TensorBatch::backprop_pairwise_mul(&handle, 3, &y, &x, true);
+    }
+    util::panic_if_device_error("Error");
+    x.write_to_host(&mut actual);
+
+    assert_eq!(&actual[..], &expected[..]);
 }

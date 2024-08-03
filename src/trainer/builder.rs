@@ -11,6 +11,7 @@ use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};
 enum OpType {
     Activate(Activation),
     Affine,
+    PairwiseMul,
 }
 
 struct NodeType {
@@ -101,6 +102,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self.add(size, OpType::Affine)
     }
 
+    pub fn add_pairwise_mul(self) -> Self {
+        let ll_size = self.get_last_layer_size();
+        assert_eq!(ll_size % 2, 0, "Last layer size must be even.");
+        let size = ll_size / 2;
+        self.add(size, OpType::PairwiseMul)
+    }
+
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
         self.add(size, OpType::Activate(activation))
@@ -167,7 +175,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 qi += 1;
             }
 
-            for NodeType { size, op, in_res_block } in &self.nodes {
+            let mut split_input = !self.single_perspective;
+
+            for (i, NodeType { size, op, in_res_block }) in self.nodes.iter().enumerate() {
                 let size = *size;
                 let in_res_block = *in_res_block;
 
@@ -177,8 +187,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                         let wsh = Shape::new(inp_size, raw_size);
                         let bsh = Shape::new(1, raw_size);
 
-                        let ones = DeviceBuffer::new(1);
-                        ones.load_from_host(&[1.0]);
+                        let ones = DeviceBuffer::new(batch_size);
+                        ones.load_from_host(&vec![1.0; batch_size]);
                         let mut affine = Affine {
                             weights: Tensor::uninit(wsh),
                             biases: Tensor::uninit(bsh),
@@ -217,11 +227,20 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                                 in_res_block,
                             });
                         }
+
+                        if i != 0 {
+                            split_input = false;
+                        }
                     }
                     OpType::Activate(activation) => {
                         let bsh = Shape::new(1, size);
                         let outputs = TensorBatch::new(bsh, batch_size);
                         nodes.push(Node { outputs, op: Operation::Activate(*activation), in_res_block });
+                    }
+                    OpType::PairwiseMul => {
+                        let bsh = Shape::new(1, size);
+                        let outputs = TensorBatch::new(bsh, batch_size);
+                        nodes.push(Node { outputs, op: Operation::PairwiseMul { split_input }, in_res_block });
                     }
                 };
 
@@ -247,7 +266,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 results,
                 error_device,
                 error: 0.0,
+                validation_error: 0.0,
                 error_record: Vec::new(),
+                validation_record: Vec::new(),
                 ft_reg: 0.0,
                 used: 0,
                 quantiser,

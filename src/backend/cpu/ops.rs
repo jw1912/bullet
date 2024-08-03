@@ -1,8 +1,4 @@
-#![allow(
-    unused_variables,
-    clippy::missing_safety_doc,
-    clippy::too_many_arguments
-)]
+#![allow(unused_variables, clippy::missing_safety_doc, clippy::too_many_arguments)]
 
 pub use backprops::*;
 pub use bufops::*;
@@ -11,7 +7,7 @@ pub use sparse_affine::*;
 pub use splat_add::*;
 pub use update::*;
 
-use super::{DeviceHandles, util};
+use super::{util, DeviceHandles};
 
 mod backprops;
 mod bufops;
@@ -172,4 +168,61 @@ pub unsafe fn select_backprop(
     out: *mut f32,
 ) {
     unimplemented!();
+}
+
+pub unsafe fn pairwise_mul(
+    handle: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    let inp_addr = inp as usize;
+    let out_addr = out as usize;
+    handle.split_workload(output_size, |_, idx| {
+        let inp = (inp_addr as *const f32).add(idx);
+        let out = (out_addr as *mut f32).add(idx);
+        for i in 0..batch_size {
+            let ia = inp.add(i * input_size);
+            let oa = out.add(i * output_size);
+
+            let a = *ia;
+            let b = *ia.add(output_size);
+
+            *oa = a * b;
+        }
+    });
+}
+
+pub unsafe fn backprop_pairwise_mul(
+    handle: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    let inp_addr = inp as usize;
+    let out_addr = out as usize;
+    handle.split_workload(input_size, |_, idx| {
+        let inp = (inp_addr as *const f32).add(idx);
+        let out = (out_addr as *mut f32).add(idx);
+        for i in 0..batch_size {
+            let ia = inp.add(i * input_size);
+            let oa = out.add(i * output_size);
+
+            let val_left = *oa;
+            let val_right = *oa.add(input_size);
+
+            // get the value of the incoming gradient on the output neuron
+            let grad_in = *ia;
+
+            let grad_left = grad_in * val_right;
+            let grad_right = grad_in * val_left;
+
+            *oa = grad_left;
+            *oa.add(input_size) = grad_right;
+        }
+    });
 }

@@ -47,12 +47,19 @@ fn main() {
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 150,
-        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
+        optimiser_settings: optimiser::AdamWParams {
+            decay: 0.01,
+            beta1: 0.9,
+            beta2: 0.999,
+            min_weight: -1.98,
+            max_weight: 1.98,
+        },
     };
 
     let settings = LocalSettings {
         threads: 4,
         data_file_paths: vec!["../../data/test80-sep2022.data"],
+        test_set: None,
         output_directory: "checkpoints",
     };
 

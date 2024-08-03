@@ -30,11 +30,21 @@ fn main() {
         lr_scheduler: lr::ConstantLR { value: 0.001 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
-        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
+        optimiser_settings: optimiser::AdamWParams {
+            decay: 0.01,
+            beta1: 0.9,
+            beta2: 0.999,
+            min_weight: -1.98,
+            max_weight: 1.98,
+        },
     };
 
-    let settings =
-        LocalSettings { threads: 4, data_file_paths: vec!["../../data/batch1.data"], output_directory: "checkpoints" };
+    let settings = LocalSettings {
+        threads: 4,
+        data_file_paths: vec!["../../data/batch1.data"],
+        test_set: None,
+        output_directory: "checkpoints",
+    };
 
     trainer.run(&schedule, &settings);
 }

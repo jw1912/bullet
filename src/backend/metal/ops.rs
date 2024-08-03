@@ -33,6 +33,28 @@ impl Kernels {
     }
 }
 
+pub unsafe fn pairwise_mul(
+    handle: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!()
+}
+
+pub unsafe fn backprop_pairwise_mul(
+    handle: &DeviceHandles,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inp: *const f32,
+    out: *mut f32,
+) {
+    unimplemented!()
+}
+
 pub unsafe fn splat_mul_matrix_vector(
     handle: &DeviceHandles,
     m: usize,
@@ -114,18 +136,17 @@ macro_rules! two_buffer_kernel {
             let siz_buffer = handle.device.new_buffer_with_data(
                 &size as *const _ as *const std::ffi::c_void,
                 mem::size_of::<usize>() as NSUInteger,
-                MTLResourceOptions::CPUCacheModeDefaultCache |
-                MTLResourceOptions::StorageModeShared
+                MTLResourceOptions::CPUCacheModeDefaultCache | MTLResourceOptions::StorageModeShared,
             );
             let inp_buffer = handle.device.new_buffer_with_data(
                 unsafe { mem::transmute(inp) },
                 (size * mem::size_of::<f32>()) as NSUInteger,
-                MTLResourceOptions::StorageModeShared
+                MTLResourceOptions::StorageModeShared,
             );
             let out_buffer = handle.device.new_buffer_with_data(
                 unsafe { mem::transmute(out) },
                 (size * mem::size_of::<f32>()) as NSUInteger,
-                MTLResourceOptions::StorageModeShared
+                MTLResourceOptions::StorageModeShared,
             );
 
             // Create a new command queue with an encoder for the computation.
@@ -133,11 +154,7 @@ macro_rules! two_buffer_kernel {
             let command_buffer = command_queue.new_command_buffer();
             let compute_encoder = command_buffer.new_compute_command_encoder();
             compute_encoder.set_compute_pipeline_state(&pipeline);
-            compute_encoder.set_buffers(
-                0,
-                &[Some(&siz_buffer), Some(&inp_buffer), Some(&out_buffer)],
-                &[0; 3]
-            );
+            compute_encoder.set_buffers(0, &[Some(&siz_buffer), Some(&inp_buffer), Some(&out_buffer)], &[0; 3]);
 
             // Create a simple 1D thread grid for parallel processing.
             // TODO: Possibly improve thread organization? Needs research
@@ -243,9 +260,13 @@ pub unsafe fn splat_add(handle: &DeviceHandles, batch_size: usize, tensor_size: 
 }
 
 pub unsafe fn update_weights(
-    handle: &DeviceHandles,
+    _: &DeviceHandles,
     network_size: usize,
     decay: f32,
+    beta1: f32,
+    beta2: f32,
+    min_weight: f32,
+    max_weight: f32,
     adj: f32,
     rate: f32,
     network: *mut f32,

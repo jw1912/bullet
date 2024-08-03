@@ -1,14 +1,18 @@
-// Every operation has the same safety criteria, pass valid pointers
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
+
+use super::{
+    bindings::{self, hipblasOperation_t, hipblasStatus_t},
+    DeviceHandles,
+};
+use crate::loader::Feat;
 
 use std::ffi::c_int;
 
-use crate::loader::Feat;
-
-use super::{
-    bindings::{self, cublasOperation_t},
-    DeviceHandles,
-};
+fn check_status(status: hipblasStatus_t) {
+    if status != hipblasStatus_t::HIPBLAS_STATUS_SUCCESS {
+        eprintln!("HIPBLAS operation failed with status: {:?}", status);
+    }
+}
 
 pub unsafe fn splat_mul_matrix_vector(
     handle: &DeviceHandles,
@@ -26,24 +30,23 @@ pub unsafe fn splat_mul_matrix_vector(
     let n = n as c_int;
     let batch_size = batch_size as c_int;
 
-    unsafe {
-        bindings::cublasSgemm_v2(
-            **handle,
-            cublasOperation_t::CUBLAS_OP_N,
-            cublasOperation_t::CUBLAS_OP_N,
-            n,
-            batch_size,
-            m,
-            &alpha,
-            a_ptr,
-            n,
-            x_ptr,
-            m,
-            &beta,
-            y_ptr,
-            n,
-        );
-    }
+    let status = bindings::hipblasSgemm(
+        **handle,
+        hipblasOperation_t::HIPBLAS_OP_N,
+        hipblasOperation_t::HIPBLAS_OP_N,
+        n,
+        batch_size,
+        m,
+        &alpha,
+        a_ptr,
+        n,
+        x_ptr,
+        m,
+        &beta,
+        y_ptr,
+        n,
+    );
+    check_status(status);
 }
 
 pub unsafe fn splat_mul_matrixt_vector(
@@ -62,24 +65,23 @@ pub unsafe fn splat_mul_matrixt_vector(
     let n = n as c_int;
     let batch_size = batch_size as c_int;
 
-    unsafe {
-        bindings::cublasSgemm_v2(
-            **handle,
-            cublasOperation_t::CUBLAS_OP_T,
-            cublasOperation_t::CUBLAS_OP_N,
-            m,
-            batch_size,
-            n,
-            &alpha,
-            a_ptr,
-            n,
-            y_ptr,
-            n,
-            &beta,
-            x_ptr,
-            m,
-        );
-    }
+    let status = bindings::hipblasSgemm(
+        **handle,
+        hipblasOperation_t::HIPBLAS_OP_T,
+        hipblasOperation_t::HIPBLAS_OP_N,
+        m,
+        batch_size,
+        n,
+        &alpha,
+        a_ptr,
+        n,
+        y_ptr,
+        n,
+        &beta,
+        x_ptr,
+        m,
+    );
+    check_status(status);
 }
 
 pub unsafe fn reduce_add_mul_vector_vectort(
@@ -98,24 +100,23 @@ pub unsafe fn reduce_add_mul_vector_vectort(
     let n = n as c_int;
     let batch_size = batch_size as c_int;
 
-    unsafe {
-        bindings::cublasSgemm_v2(
-            **handle,
-            cublasOperation_t::CUBLAS_OP_N,
-            cublasOperation_t::CUBLAS_OP_T,
-            n,
-            m,
-            batch_size,
-            &alpha,
-            y_ptr,
-            n,
-            x_ptr,
-            m,
-            &beta,
-            a_ptr,
-            n,
-        );
-    }
+    let status = bindings::hipblasSgemm(
+        **handle,
+        hipblasOperation_t::HIPBLAS_OP_N,
+        hipblasOperation_t::HIPBLAS_OP_T,
+        n,
+        m,
+        batch_size,
+        &alpha,
+        y_ptr,
+        n,
+        x_ptr,
+        m,
+        &beta,
+        a_ptr,
+        n,
+    );
+    check_status(status);
 }
 
 pub unsafe fn reduce_add(
@@ -132,7 +133,21 @@ pub unsafe fn reduce_add(
     let m = batch_size as c_int;
     let n = out_size as c_int;
 
-    bindings::cublasSgemv_v2(**handle, cublasOperation_t::CUBLAS_OP_N, n, m, &alpha, inp, n, ones, 1, &beta, out, 1);
+    let status = bindings::hipblasSgemv(
+        **handle,
+        hipblasOperation_t::HIPBLAS_OP_N,
+        n,
+        m,
+        &alpha,
+        inp,
+        n,
+        ones,
+        1,
+        &beta,
+        out,
+        1,
+    );
+    check_status(status);
 }
 
 pub unsafe fn activate_relu(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
@@ -319,7 +334,7 @@ pub unsafe fn pairwise_mul(
     inputs: *const f32,
     outputs: *mut f32,
 ) {
-    bindings::pairwiseMul(batch_size, input_size, output_size, inputs, outputs);
+    unimplemented!();
 }
 
 pub unsafe fn backprop_pairwise_mul(
@@ -330,5 +345,5 @@ pub unsafe fn backprop_pairwise_mul(
     inputs: *const f32,
     outputs: *mut f32,
 ) {
-    bindings::backpropPairwiseMul(batch_size, input_size, output_size, inputs, outputs);
+    unimplemented!();
 }
