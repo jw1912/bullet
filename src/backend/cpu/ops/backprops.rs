@@ -1,5 +1,6 @@
-use super::bufops::{CReLU, Operation, ReLU, SCReLU};
 use super::DeviceHandles;
+
+use super::bufops::{CReLU, Operation, ReLU, SCReLU};
 
 unsafe fn backprop_operation<T: Operation>(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     let inp = inp as usize;

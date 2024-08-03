@@ -18,7 +18,6 @@ pub(super) trait Operation {
 }
 
 pub(super) struct ReLU;
-
 impl Operation for ReLU {
     fn activate(x: f32) -> f32 {
         x.max(0.0)
@@ -34,7 +33,6 @@ impl Operation for ReLU {
 }
 
 pub(super) struct CReLU;
-
 impl Operation for CReLU {
     fn activate(x: f32) -> f32 {
         x.clamp(0.0, 1.0)
@@ -50,7 +48,6 @@ impl Operation for CReLU {
 }
 
 pub(super) struct SCReLU;
-
 impl Operation for SCReLU {
     fn activate(x: f32) -> f32 {
         x.clamp(0.0, 1.0).powi(2)

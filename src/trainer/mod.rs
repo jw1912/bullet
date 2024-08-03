@@ -1,10 +1,13 @@
-use std::io::Write;
-
-use rand_distr::Distribution;
+mod builder;
+mod components;
+mod run;
+pub mod schedule;
 
 pub use builder::TrainerBuilder;
 use components::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo};
+use rand_distr::Distribution;
 pub use run::{ansi, run, set_cbcs};
+use std::io::Write;
 
 use crate::{
     inputs::InputType,
@@ -14,11 +17,6 @@ use crate::{
     tensor::{self, device_synchronise, DeviceBuffer, DeviceHandles, SparseTensor, TensorBatch},
     util,
 };
-
-mod builder;
-mod components;
-mod run;
-pub mod schedule;
 
 pub struct Trainer<T, U, O> {
     input_getter: T,

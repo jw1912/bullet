@@ -50,7 +50,7 @@ mod cuda {
             .write_to_file(out_path.join("bindings.rs"))
             .expect("Couldn't write bindings!");
 
-        println!("cargo:rerun-if-changed=./src/backend/cuda/kernels");
+        println!("cargo:rerun-if-changed=./src/backend/kernels");
 
         let files: Vec<String> =
             ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse_affine", "splat_add", "update"]

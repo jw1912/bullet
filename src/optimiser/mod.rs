@@ -1,11 +1,11 @@
+mod adamw;
+
 pub use adamw::{AdamW, AdamWParams};
 
 use crate::{
-    backend::{DeviceHandles, util},
+    backend::{util, DeviceHandles},
     tensor::DeviceBuffer,
 };
-
-mod adamw;
 
 pub struct OptimiserBase {
     size: usize,

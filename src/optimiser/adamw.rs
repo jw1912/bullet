@@ -1,8 +1,7 @@
-use crate::backend::{DeviceHandles, ops};
+use super::{Optimiser, OptimiserBase, OptimiserType};
+use crate::backend::{ops, DeviceHandles};
 use crate::tensor::DeviceBuffer;
 use crate::util;
-
-use super::{Optimiser, OptimiserBase, OptimiserType};
 
 #[derive(Default)]
 pub struct AdamW;
