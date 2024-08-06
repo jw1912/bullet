@@ -174,9 +174,6 @@ macro_rules! two_buffer_kernel {
 
                 // Wait till all computations finish.
                 command_buffer.wait_until_completed();
-
-                // Copy the result to the destination.
-                ptr::copy_nonoverlapping(out_buffer.contents() as *mut f32, out, size);
             });
         }
     };
