@@ -6,7 +6,7 @@ Computes MSE(sigmoid(outputs), results)
 using namespace metal;
 
 kernel void sigmoidMPE(
-    continue uint &size     [[ buffer(0) ]],
+    constant uint &size   [[ buffer(0) ]],
     device float* outputs [[ buffer(1) ]],
     device float* results [[ buffer(2) ]],
     device float* error   [[ buffer(3) ]],

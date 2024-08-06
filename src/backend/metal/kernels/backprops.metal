@@ -31,7 +31,7 @@ kernel void backpropCReLU(
 }
 
 kernel void backpropSCReLU(
-    constant uint* size [[ buffer(0) ]],
+    constant uint &size [[ buffer(0) ]],
     device float* in  [[ buffer(1) ]],
     device float* out [[ buffer(2) ]],
     uint i [[thread_position_in_grid]])
