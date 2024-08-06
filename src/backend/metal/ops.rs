@@ -134,20 +134,23 @@ macro_rules! two_buffer_kernel {
 
             // Create three data buffers each holding data to passed to the device.
             // Buffer 0: Size; Buffer 1: Input Buffer; Buffer 2: Output Buffer
-            let siz_buffer = handle.device.new_buffer_with_data(
+            let siz_buffer = handle.device.new_buffer_with_bytes_no_copy(
                 &size as *const _ as *const std::ffi::c_void,
                 mem::size_of::<usize>() as NSUInteger,
                 MTLResourceOptions::CPUCacheModeDefaultCache | MTLResourceOptions::StorageModeShared,
+                None,
             );
-            let inp_buffer = handle.device.new_buffer_with_data(
-                unsafe { mem::transmute(inp) },
+            let inp_buffer = handle.device.new_buffer_with_bytes_no_copy(
+                inp.cast(),
                 (size * mem::size_of::<f32>()) as NSUInteger,
                 MTLResourceOptions::StorageModeShared,
+                None,
             );
-            let out_buffer = handle.device.new_buffer_with_data(
-                unsafe { mem::transmute(out) },
+            let out_buffer = handle.device.new_buffer_with_bytes_no_copy(
+                out.cast(),
                 (size * mem::size_of::<f32>()) as NSUInteger,
                 MTLResourceOptions::StorageModeShared,
+                None,
             );
 
             // Create a new command queue with an encoder for the computation.
