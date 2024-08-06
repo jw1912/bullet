@@ -130,52 +130,54 @@ pub unsafe fn select_backprop(
 macro_rules! two_buffer_kernel {
     ($func:ident) => {
         pub unsafe fn $func(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
-            let pipeline = handle.device.new_compute_pipeline_state_with_function(&handle.kernels.$func).unwrap();
+            objc::rc::autoreleasepool(|| {
+                let pipeline = handle.device.new_compute_pipeline_state_with_function(&handle.kernels.$func).unwrap();
 
-            // Create three data buffers each holding data to passed to the device.
-            // Buffer 0: Size; Buffer 1: Input Buffer; Buffer 2: Output Buffer
-            let siz_buffer = handle.device.new_buffer_with_bytes_no_copy(
-                &size as *const _ as *const std::ffi::c_void,
-                mem::size_of::<usize>() as NSUInteger,
-                MTLResourceOptions::CPUCacheModeDefaultCache | MTLResourceOptions::StorageModeShared,
-                None,
-            );
-            let inp_buffer = handle.device.new_buffer_with_bytes_no_copy(
-                inp.cast(),
-                (size * mem::size_of::<f32>()) as NSUInteger,
-                MTLResourceOptions::StorageModeShared,
-                None,
-            );
-            let out_buffer = handle.device.new_buffer_with_bytes_no_copy(
-                out.cast(),
-                (size * mem::size_of::<f32>()) as NSUInteger,
-                MTLResourceOptions::StorageModeShared,
-                None,
-            );
+                // Create three data buffers each holding data to passed to the device.
+                // Buffer 0: Size; Buffer 1: Input Buffer; Buffer 2: Output Buffer
+                let siz_buffer = handle.device.new_buffer_with_bytes_no_copy(
+                    &size as *const _ as *const std::ffi::c_void,
+                    mem::size_of::<usize>() as NSUInteger,
+                    MTLResourceOptions::CPUCacheModeDefaultCache | MTLResourceOptions::StorageModeShared,
+                    None,
+                );
+                let inp_buffer = handle.device.new_buffer_with_bytes_no_copy(
+                    inp.cast(),
+                    (size * mem::size_of::<f32>()) as NSUInteger,
+                    MTLResourceOptions::StorageModeShared,
+                    None,
+                );
+                let out_buffer = handle.device.new_buffer_with_bytes_no_copy(
+                    out.cast(),
+                    (size * mem::size_of::<f32>()) as NSUInteger,
+                    MTLResourceOptions::StorageModeShared,
+                    None,
+                );
 
-            // Create a new command queue with an encoder for the computation.
-            let command_queue = handle.device.new_command_queue();
-            let command_buffer = command_queue.new_command_buffer();
-            let compute_encoder = command_buffer.new_compute_command_encoder();
-            compute_encoder.set_compute_pipeline_state(&pipeline);
-            compute_encoder.set_buffers(0, &[Some(&siz_buffer), Some(&inp_buffer), Some(&out_buffer)], &[0; 3]);
+                // Create a new command queue with an encoder for the computation.
+                let command_queue = handle.device.new_command_queue();
+                let command_buffer = command_queue.new_command_buffer();
+                let compute_encoder = command_buffer.new_compute_command_encoder();
+                compute_encoder.set_compute_pipeline_state(&pipeline);
+                compute_encoder.set_buffers(0, &[Some(&siz_buffer), Some(&inp_buffer), Some(&out_buffer)], &[0; 3]);
 
-            // Create a simple 1D thread grid for parallel processing.
-            // TODO: Possibly improve thread organization? Needs research
-            let grid_size = MTLSize::new(size as NSUInteger, 1, 1);
-            let threadgroup_size = MTLSize::new(size as NSUInteger, 1, 1);
+                // Create a simple 1D thread grid for parallel processing.
+                // TODO: Possibly improve thread organization? Needs research
+                let grid_size = MTLSize::new(size as NSUInteger, 1, 1);
+                let threadgroup_size = MTLSize::new(size as NSUInteger, 1, 1);
 
-            compute_encoder.dispatch_threads(grid_size, threadgroup_size);
+                compute_encoder.dispatch_threads(grid_size, threadgroup_size);
 
-            // Create the final package and commit it.
-            compute_encoder.end_encoding();
-            command_buffer.commit();
+                // Create the final package and commit it.
+                compute_encoder.end_encoding();
+                command_buffer.commit();
 
-            // Wait till all computations finish.
-            command_buffer.wait_until_completed();
+                // Wait till all computations finish.
+                command_buffer.wait_until_completed();
 
-            // Copy the result to the destination.
-            ptr::copy_nonoverlapping(out_buffer.contents() as *mut f32, out, size);
+                // Copy the result to the destination.
+                ptr::copy_nonoverlapping(out_buffer.contents() as *mut f32, out, size);
+            });
         }
     };
 }

@@ -124,6 +124,7 @@ dependencies = [
  "bulletformat",
  "cc",
  "metal",
+ "objc",
  "rand",
  "rand_distr",
 ]

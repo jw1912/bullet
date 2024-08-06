@@ -11,12 +11,13 @@ readme = "README.md"
 [features]
 cuda = ["bindgen", "cc"]
 hip = ["bindgen", "cc"]
-metal = ["metal_rs"]
+metal = ["metal_rs", "objc"]
 
 [dependencies]
 bulletformat = { workspace = true }
 rand = "0.8.5"
 rand_distr = "0.4.3"
+objc = { version = "0.2.7", optional = true }
 metal_rs = { version = "0.28.0", optional = true, package = "metal" }
 
 [build-dependencies]
