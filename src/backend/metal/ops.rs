@@ -1,6 +1,6 @@
 use std::{mem, ptr};
 
-use metal_rs::{Function, Library, MTLResourceOptions, MTLSize, NSUInteger};
+use metal_rs::{ComputePipelineState, Device, Function, Library, MTLResourceOptions, MTLSize, NSUInteger};
 
 use crate::loader::Feat;
 
@@ -9,27 +9,33 @@ use crate::backend::cpu;
 
 #[derive(Clone)]
 pub(crate) struct Kernels {
-    backprop_relu: Function,
-    backprop_crelu: Function,
-    backprop_screlu: Function,
-    activate_relu: Function,
-    activate_crelu: Function,
-    activate_screlu: Function,
-    add_to: Function,
-    sigmoid_mpe: Function,
+    backprop_relu: ComputePipelineState,
+    backprop_crelu: ComputePipelineState,
+    backprop_screlu: ComputePipelineState,
+    activate_relu: ComputePipelineState,
+    activate_crelu: ComputePipelineState,
+    activate_screlu: ComputePipelineState,
+    add_to: ComputePipelineState,
+    sigmoid_mpe: ComputePipelineState,
 }
 
 impl Kernels {
-    pub(crate) fn new(lib: &Library) -> Kernels {
+    pub(crate) fn new(device: &Device, lib: &Library) -> Kernels {
+        macro_rules! new_kernel {
+            ($device:tt $lib:tt $name:tt) => {
+                $device.new_compute_pipeline_state_with_function(&$lib.get_function($name, None).unwrap()).unwrap()
+                //$lib.get_function($name, None).unwrap()
+            };
+        }
         Self {
-            backprop_relu: lib.get_function("backpropReLU", None).unwrap(),
-            backprop_crelu: lib.get_function("backpropCReLU", None).unwrap(),
-            backprop_screlu: lib.get_function("backpropSCReLU", None).unwrap(),
-            activate_relu: lib.get_function("activateReLU", None).unwrap(),
-            activate_crelu: lib.get_function("activateCReLU", None).unwrap(),
-            activate_screlu: lib.get_function("activateSCReLU", None).unwrap(),
-            add_to: lib.get_function("addTo", None).unwrap(),
-            sigmoid_mpe: lib.get_function("sigmoidMPE", None).unwrap(),
+            backprop_relu: new_kernel!(device lib "backpropReLU"),
+            backprop_crelu: new_kernel!(device lib "backpropCReLU"),
+            backprop_screlu: new_kernel!(device lib "backpropSCReLU"),
+            activate_relu: new_kernel!(device lib "activateReLU"),
+            activate_crelu: new_kernel!(device lib "activateCReLU"),
+            activate_screlu: new_kernel!(device lib "activateSCReLU"),
+            add_to: new_kernel!(device lib "addTo"),
+            sigmoid_mpe: new_kernel!(device lib "sigmoidMPE"),
         }
     }
 }
@@ -131,8 +137,6 @@ macro_rules! two_buffer_kernel {
     ($func:ident) => {
         pub unsafe fn $func(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
             objc::rc::autoreleasepool(|| {
-                let pipeline = handle.device.new_compute_pipeline_state_with_function(&handle.kernels.$func).unwrap();
-
                 // Create three data buffers each holding data to passed to the device.
                 // Buffer 0: Size; Buffer 1: Input Buffer; Buffer 2: Output Buffer
                 let siz_buffer = handle.device.new_buffer_with_bytes_no_copy(
@@ -157,7 +161,7 @@ macro_rules! two_buffer_kernel {
                 // Create a new command queue with an encoder for the computation.
                 let command_buffer = handle.queue.new_command_buffer();
                 let compute_encoder = command_buffer.new_compute_command_encoder();
-                compute_encoder.set_compute_pipeline_state(&pipeline);
+                compute_encoder.set_compute_pipeline_state(&handle.kernels.$func);
                 compute_encoder.set_buffers(0, &[Some(&siz_buffer), Some(&inp_buffer), Some(&out_buffer)], &[0; 3]);
 
                 // Create a simple 1D thread grid for parallel processing.

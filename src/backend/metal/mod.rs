@@ -24,7 +24,7 @@ impl Default for DeviceHandles {
         let device = Device::system_default().unwrap(); // Find a device.
         let queue = device.new_command_queue();
         let library = device.new_library_with_data(LIBRARY_SRC).unwrap(); // Load the library.
-        let kernels = Kernels::new(&library); // Load the kernels.
+        let kernels = Kernels::new(&device, &library); // Load the kernels.
         Self { device, queue, library, kernels, cpu }
     }
 }
