@@ -155,8 +155,7 @@ macro_rules! two_buffer_kernel {
                 );
 
                 // Create a new command queue with an encoder for the computation.
-                let command_queue = handle.device.new_command_queue();
-                let command_buffer = command_queue.new_command_buffer();
+                let command_buffer = handle.queue.new_command_buffer();
                 let compute_encoder = command_buffer.new_compute_command_encoder();
                 compute_encoder.set_compute_pipeline_state(&pipeline);
                 compute_encoder.set_buffers(0, &[Some(&siz_buffer), Some(&inp_buffer), Some(&out_buffer)], &[0; 3]);
