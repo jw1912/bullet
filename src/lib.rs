@@ -29,6 +29,7 @@ pub enum Activation {
     ReLU,
     CReLU,
     SCReLU,
+    SqrReLU,
 }
 
 #[derive(Clone, Copy)]

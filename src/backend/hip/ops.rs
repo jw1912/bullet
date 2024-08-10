@@ -162,6 +162,10 @@ pub unsafe fn activate_screlu(_: &DeviceHandles, size: usize, inp: *const f32, o
     bindings::activateSCReLU(size, inp, out);
 }
 
+pub unsafe fn activate_sqrrelu(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::activateSqrReLU(size, inp, out);
+}
+
 pub unsafe fn backprop_relu(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     bindings::backpropReLU(size, inp, out);
 }
@@ -172,6 +176,10 @@ pub unsafe fn backprop_crelu(_: &DeviceHandles, size: usize, inp: *const f32, ou
 
 pub unsafe fn backprop_screlu(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     bindings::backpropSCReLU(size, inp, out);
+}
+
+pub unsafe fn backprop_sqrrelu(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    bindings::backpropSqrReLU(size, inp, out);
 }
 
 pub unsafe fn sigmoid_mpe(
