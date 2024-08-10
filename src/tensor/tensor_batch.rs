@@ -162,6 +162,7 @@ impl TensorBatch {
             Activation::ReLU => Self::map(ops::activate_relu, handle, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::activate_crelu, handle, batch_size, inp, out),
             Activation::SCReLU => Self::map(ops::activate_screlu, handle, batch_size, inp, out),
+            Activation::SqrReLU => Self::map(ops::activate_sqrrelu, handle, batch_size, inp, out),
         }
     }
 
@@ -177,6 +178,7 @@ impl TensorBatch {
             Activation::ReLU => Self::map(ops::backprop_relu, handle, batch_size, inp, out),
             Activation::CReLU => Self::map(ops::backprop_crelu, handle, batch_size, inp, out),
             Activation::SCReLU => Self::map(ops::backprop_screlu, handle, batch_size, inp, out),
+            Activation::SqrReLU => Self::map(ops::backprop_sqrrelu, handle, batch_size, inp, out),
         }
     }
 

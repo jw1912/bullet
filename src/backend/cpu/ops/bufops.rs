@@ -62,6 +62,21 @@ impl Operation for SCReLU {
     }
 }
 
+pub(super) struct SqrReLU;
+impl Operation for SqrReLU {
+    fn activate(x: f32) -> f32 {
+        x.max(0.0).powi(2)
+    }
+
+    fn prime(x: f32) -> f32 {
+        if x > 0.0 {
+            2.0 * x
+        } else {
+            0.0
+        }
+    }
+}
+
 pub unsafe fn activate_relu(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     buffer_operation::<ReLU>(handle, size, inp, out);
 }
@@ -72,6 +87,10 @@ pub unsafe fn activate_crelu(handle: &DeviceHandles, size: usize, inp: *const f3
 
 pub unsafe fn activate_screlu(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
     buffer_operation::<SCReLU>(handle, size, inp, out);
+}
+
+pub unsafe fn activate_sqrrelu(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
+    buffer_operation::<SqrReLU>(handle, size, inp, out);
 }
 
 pub unsafe fn add_to(handle: &DeviceHandles, size: usize, inp: *const f32, out: *mut f32) {
