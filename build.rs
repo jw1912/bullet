@@ -177,7 +177,7 @@ mod hip {
         let gcn_arch_name = get_gcn_arch_name().expect("Failed to get gcnArchName from hipInfo.exe");
 
         let files: Vec<String> =
-            ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse_affine", "splat_add", "update"]
+            ["backprops", "bufops", "mpe", "select", "sparse_affine", "splat_add", "update"]
                 .iter()
                 .map(|s| format!("./src/backend/kernels/hip/{s}.hip"))
                 .collect();
