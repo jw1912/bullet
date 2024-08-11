@@ -185,7 +185,7 @@ mod hip {
         let compiler_name = "hipcc.bin.exe";
 
         #[cfg(not(target_family = "windows"))]
-        let compiler_name = "hipcc.bin";
+        let compiler_name = "hipcc";
 
         cc::Build::new()
             .compiler(compiler_name)
