@@ -342,7 +342,7 @@ pub unsafe fn pairwise_mul(
     inputs: *const f32,
     outputs: *mut f32,
 ) {
-    unimplemented!();
+    bindings::pairwiseMul(batch_size, input_size, output_size, inputs, outputs);
 }
 
 pub unsafe fn backprop_pairwise_mul(
@@ -353,5 +353,5 @@ pub unsafe fn backprop_pairwise_mul(
     inputs: *const f32,
     outputs: *mut f32,
 ) {
-    unimplemented!();
+    bindings::backpropPairwiseMul(batch_size, input_size, output_size, inputs, outputs);
 }
