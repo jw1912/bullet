@@ -4,7 +4,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r24_768x4x2-1024x2-1x8"
+        "bullet_r26_768x4-1024x2-1x8"
     };
 }
 
