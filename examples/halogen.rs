@@ -4,7 +4,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r28_768x4-1024x2-1x8"
+        "bullet_r30_768x8-1024x2-1x8"
     };
 }
 
@@ -15,15 +15,15 @@ fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[255, 64])
         .optimiser(optimiser::AdamW)
-        .input(inputs::ChessBucketsMirrored::new([
-            0, 0, 1, 1,
-            2, 2, 2, 2,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
+        .input(inputs::ChessBucketsMirroredFactorised::new([
+            0, 1, 2, 3,
+            4, 4, 5, 5,
+            6, 6, 6, 6,
+            6, 6, 6, 6,
+            7, 7, 7, 7,
+            7, 7, 7, 7,
+            7, 7, 7, 7,
+            7, 7, 7, 7,
         ]))
         .output_buckets(outputs::MaterialCount::<8>)
         .feature_transformer(1024)
@@ -43,12 +43,19 @@ fn main() {
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.95, step: 1 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
-        optimiser_settings: optimiser::AdamWParams { decay: 0.01 },
+        optimiser_settings: optimiser::AdamWParams {
+            decay: 0.01,
+            beta1: 0.9,
+            beta2: 0.999,
+            min_weight: -1.98,
+            max_weight: 1.98,
+        },
     };
 
     let settings = LocalSettings {
         threads: 12,
         data_file_paths: vec!["../../chess/data/shuffled.data"],
+        test_set: None,
         output_directory: "checkpoints",
     };
 

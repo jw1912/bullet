@@ -18,14 +18,14 @@ enum class QuantiseMode {
 };
 
 constexpr auto InFile =
-    "../checkpoints/bullet_r24_768x4x2-1024x2-1x8-100/params.bin";
-constexpr auto OutFile = "bullet_r24_768x4x2-1024x2-1x8-100.nn";
+    "../checkpoints/bullet_r30_768x8-1024x2-1x8-100/params.bin";
+constexpr auto OutFile = "bullet_r30_768x8-1024x2-1x8-100.nn";
 
-constexpr bool Factorised = false;
+constexpr bool Factorised = true;
 constexpr bool TransposeOutputWeights = true;
 
 constexpr std::uint32_t InputSize = 768;
-constexpr std::uint32_t InputBuckets = 4;
+constexpr std::uint32_t InputBuckets = 8;
 constexpr std::uint32_t L1 = 1024;
 constexpr std::uint32_t OutputBuckets = 8;
 
