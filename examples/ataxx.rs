@@ -1,5 +1,5 @@
 use bullet_lib::{
-    format::AtaxxBoard, inputs::InputType, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss,
+    format::AtaxxBoard, inputs::InputType, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss,
     TrainerBuilder, TrainingSchedule,
 };
 
@@ -124,14 +124,11 @@ fn main() {
         },
     };
 
-    let settings = LocalSettings {
-        threads: 4,
-        data_file_paths: vec!["../../data/ataxx/005.data"],
-        test_set: None,
-        output_directory: "checkpoints",
-    };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints" };
 
-    trainer.run(&schedule, &settings);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/ataxx/005.data"]);
+
+    trainer.run(&schedule, &settings, &data_loader);
 
     println!("{}", 400.0 * trainer.eval("x5o/7/7/7/7/7/o5x x 0 1"));
     println!("{}", 400.0 * trainer.eval("5oo/7/x6/x6/7/7/o5x o 0 2"));

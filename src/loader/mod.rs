@@ -1,6 +1,10 @@
+mod direct_sequential;
+
 use bulletformat::BulletFormat;
 
 use crate::{inputs::InputType, outputs::OutputBuckets};
+
+pub use direct_sequential::DirectSequentialDataLoader;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -94,4 +98,10 @@ where
                 });
         });
     }
+}
+
+pub trait DataLoader<T>: Clone + Send + Sync + 'static {
+    fn data_file_paths(&self) -> &[String];
+
+    fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, f: F);
 }
