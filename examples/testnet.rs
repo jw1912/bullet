@@ -45,7 +45,7 @@ fn main() {
         output_directory: "checkpoints",
     };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/batch1.data"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["../batch1.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
 }
