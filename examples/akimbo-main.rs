@@ -2,8 +2,7 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, lr, optimiser, outputs, wdl, Activation, Engine, LocalSettings, Loss, OpeningBook, TestSettings,
-    TimeControl, TrainerBuilder, TrainingSchedule, UciOption,
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, Engine, LocalSettings, Loss, OpeningBook, TestSettings, TimeControl, TrainerBuilder, TrainingSchedule, UciOption
 };
 
 macro_rules! net_id {
@@ -58,10 +57,11 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["../../data/test80-sep2022.data"],
         test_set: None,
         output_directory: "checkpoints",
     };
+
+    let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/test80-sep2022.data"]);
 
     let base_engine = Engine {
         repo: "https://github.com/jw1912/akimbo",
@@ -91,7 +91,7 @@ fn main() {
         dev_engine,
     };
 
-    trainer.run_and_test(&schedule, &settings, &testing);
+    trainer.run_and_test(&schedule, &settings, &data_loader, &testing);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

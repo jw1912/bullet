@@ -1,6 +1,6 @@
 mod backend;
 pub mod inputs;
-mod loader;
+pub mod loader;
 pub mod optimiser;
 pub mod outputs;
 pub mod tensor;
@@ -14,6 +14,7 @@ use std::{
 };
 
 use inputs::InputType;
+use loader::DataLoader;
 use optimiser::Optimiser;
 use outputs::OutputBuckets;
 use trainer::ansi;
@@ -46,7 +47,6 @@ impl<'a> TestDataset<'a> {
 
 pub struct LocalSettings<'a> {
     pub threads: usize,
-    pub data_file_paths: Vec<&'a str>,
     pub test_set: Option<TestDataset<'a>>,
     pub output_directory: &'a str,
 }
@@ -54,9 +54,6 @@ pub struct LocalSettings<'a> {
 impl<'a> LocalSettings<'a> {
     pub fn display(&self) {
         println!("Threads                : {}", ansi(self.threads, 31));
-        for file_path in self.data_file_paths.iter() {
-            println!("Data File Path         : {}", ansi(file_path, "32;1"));
-        }
         println!("Output Path            : {}", ansi(self.output_directory, "32;1"));
     }
 }
@@ -98,28 +95,30 @@ pub struct TestSettings<'a> {
 }
 
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
-    pub fn run_custom<F, LR, WDL>(
+    pub fn run_custom<F, LR, WDL, LD: DataLoader<T::RequiredDataType>>(
         &mut self,
         schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
         settings: &LocalSettings,
+        data_loader: &LD,
         callback: F,
     ) where
         F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>, &LocalSettings),
         LR: lr::LrScheduler,
         WDL: wdl::WdlScheduler,
     {
-        trainer::run::<T, U, O, F, LR, WDL>(self, schedule, settings, callback);
+        trainer::run::<T, U, O, F, LR, WDL, LD>(self, schedule, settings, data_loader, callback);
     }
 
-    pub fn run<LR, WDL>(
+    pub fn run<LR, WDL, LD: DataLoader<T::RequiredDataType>>(
         &mut self,
         schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
         settings: &LocalSettings,
+        data_loader: &LD,
     ) where
         LR: lr::LrScheduler,
         WDL: wdl::WdlScheduler,
     {
-        self.run_custom(schedule, settings, |superbatch, trainer, schedule, settings| {
+        self.run_custom(schedule, settings, data_loader, |superbatch, trainer, schedule, settings| {
             if schedule.should_save(superbatch) {
                 let name = format!("{}-{superbatch}", schedule.net_id());
                 let out_dir = settings.output_directory;
@@ -129,10 +128,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         });
     }
 
-    pub fn run_and_test<LR, WDL>(
+    pub fn run_and_test<LR, WDL, LD: DataLoader<T::RequiredDataType>>(
         &mut self,
         schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
         settings: &LocalSettings,
+        data_loader: &LD,
         testing: &TestSettings<'static>,
     ) where
         LR: lr::LrScheduler,
@@ -196,7 +196,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
 
         let mut handles = Vec::new();
 
-        self.run_custom(schedule, settings, |superbatch, trainer, schedule, settings| {
+        self.run_custom(schedule, settings, data_loader, |superbatch, trainer, schedule, settings| {
             if schedule.should_save(superbatch) {
                 let name = format!("{}-{superbatch}", schedule.net_id());
                 trainer.save(settings.output_directory, name.clone());

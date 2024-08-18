@@ -6,7 +6,7 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    inputs, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule
 };
 
 const HIDDEN_SIZE: usize = 16;
@@ -48,12 +48,13 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        data_file_paths: vec!["../../data/30m.data"],
         test_set: None,
         output_directory: "checkpoints",
     };
 
-    trainer.run(&schedule, &settings);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/30m.data"]);
+
+    trainer.run(&schedule, &settings, &data_loader);
 }
 
 /*
