@@ -20,7 +20,15 @@ use std::{
 use super::schedule::wdl::WdlScheduler;
 
 #[allow(clippy::too_many_arguments)]
-pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F, LR: LrScheduler, WDL: WdlScheduler, LD: DataLoader<T::RequiredDataType>>(
+pub fn run<
+    T: InputType,
+    U: OutputBuckets<T::RequiredDataType>,
+    O: Optimiser,
+    F,
+    LR: LrScheduler,
+    WDL: WdlScheduler,
+    LD: DataLoader<T::RequiredDataType>,
+>(
     trainer: &mut Trainer<T, U, O>,
     schedule: &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>,
     settings: &LocalSettings,
@@ -46,11 +54,11 @@ pub fn run<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser, F,
     //let mut file_size = 0;
     //for file in data_file_paths.iter() {
     //    let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
-//
+    //
     //    if this_size % data_size != 0 {
     //        panic!("File [{file}] does not have a multiple of {data_size} size!");
     //    }
-//
+    //
     //    file_size += this_size;
     //}
 

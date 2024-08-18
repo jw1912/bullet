@@ -1,19 +1,23 @@
-use std::{fs::File, io::{BufRead, BufReader}, marker::PhantomData};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+    marker::PhantomData,
+};
 
-use crate::{util, loader::{BulletFormat, DataLoader}};
+use crate::{
+    loader::{BulletFormat, DataLoader},
+    util,
+};
 
 #[derive(Clone)]
 pub struct DirectSequentialDataLoader<T> {
     file_paths: Vec<String>,
-    phantom: PhantomData<T>,  
+    phantom: PhantomData<T>,
 }
 
 impl<T> DirectSequentialDataLoader<T> {
     pub fn new(file_paths: &[&str]) -> Self {
-        Self {
-            file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>(),
-            phantom: PhantomData,
-        }
+        Self { file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>(), phantom: PhantomData }
     }
 }
 

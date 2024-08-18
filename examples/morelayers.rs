@@ -5,7 +5,7 @@ fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
 };
 
 fn main() {
@@ -43,11 +43,7 @@ fn main() {
         },
     };
 
-    let settings = LocalSettings {
-        threads: 4,
-        test_set: None,
-        output_directory: "checkpoints",
-    };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints" };
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/akimbo3-9.data"]);
 

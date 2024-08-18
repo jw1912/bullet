@@ -1,5 +1,6 @@
 use bullet_lib::{
-    format::AtaxxBoard, inputs::InputType, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule
+    format::AtaxxBoard, inputs::InputType, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss,
+    TrainerBuilder, TrainingSchedule,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -123,11 +124,7 @@ fn main() {
         },
     };
 
-    let settings = LocalSettings {
-        threads: 4,
-        test_set: None,
-        output_directory: "checkpoints",
-    };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints" };
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/ataxx/005.data"]);
 

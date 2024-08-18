@@ -2,7 +2,7 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
 };
 
 fn main() {
@@ -39,11 +39,7 @@ fn main() {
         },
     };
 
-    let settings = LocalSettings {
-        threads: 4,
-        test_set: None,
-        output_directory: "checkpoints",
-    };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints" };
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["../batch1.data"]);
 
