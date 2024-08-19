@@ -50,10 +50,10 @@ Reference CPU backend. It is suitable for training small networks or various uti
 
 #### CUDA
 The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
-as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit), and have an available C++ compiler.
 
 > [!NOTE]
-> If you are on Windows, it is recommended to use clang, direct from LLVM github releases.
+> If you are on Windows, it is recommended to use clang, direct from LLVM github releases, for the C++ compiler.
 
 #### HIP
 Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
