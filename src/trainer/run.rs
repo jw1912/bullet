@@ -38,7 +38,6 @@ pub fn run<
     F: FnMut(usize, &Trainer<T, U, O>, &TrainingSchedule<O::AdditionalOptimiserParams, LR, WDL>, &LocalSettings),
 {
     let threads = settings.threads;
-    //let data_file_paths: Vec<_> = settings.data_file_paths.iter().map(|s| s.to_string()).collect();
     let out_dir = settings.output_directory.to_string();
     let out_dir = out_dir.as_str();
 
@@ -49,21 +48,9 @@ pub fn run<
     trainer.set_batch_size(schedule.batch_size);
     trainer.set_ft_reg(schedule.ft_regularisation);
 
-    //let data_size = std::mem::size_of::<T::RequiredDataType>() as u64;
     let esc = esc();
-    //let mut file_size = 0;
-    //for file in data_file_paths.iter() {
-    //    let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
-    //
-    //    if this_size % data_size != 0 {
-    //        panic!("File [{file}] does not have a multiple of {data_size} size!");
-    //    }
-    //
-    //    file_size += this_size;
-    //}
-
-    //slet num = (file_size / data_size) as usize;
     let batch_size = trainer.batch_size();
+    let pos_per_sb = schedule.batch_size * schedule.batches_per_superbatch;
 
     if device_name() == "CPU" {
         println!("{}", ansi("========== WARNING ==========", 31));
@@ -82,12 +69,14 @@ pub fn run<
     schedule.display();
     println!("Device                 : {}", ansi(device_name(), 31));
     settings.display();
-    //println!("Positions              : {}", ansi(num, 31));
 
-    let pos_per_sb = schedule.batch_size * schedule.batches_per_superbatch;
-    //let total_pos = pos_per_sb * (schedule.end_superbatch - schedule.start_superbatch + 1);
-    //let iters = total_pos as f64 / num as f64;
-    //println!("Total Epochs           : {}", ansi(format!("{iters:.2}"), 31));
+    if let Some(num) = data_loader.count_positions() {
+        let total_pos = pos_per_sb * (schedule.end_superbatch - schedule.start_superbatch + 1);
+        let iters = total_pos as f64 / num as f64;
+
+        println!("Positions              : {}", ansi(num, 31));
+        println!("Total Epochs           : {}", ansi(format!("{iters:.2}"), 31));
+    }
 
     let timer = Instant::now();
 
@@ -107,7 +96,7 @@ pub fn run<
         .map(|test| {
             let test_loader = DirectSequentialDataLoader::new(&[test.path]);
             let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
-            let dataloader = create_dataloader::<T, U, O, DirectSequentialDataLoader<T::RequiredDataType>, LR, WDL>(
+            let dataloader = create_dataloader::<T, U, O, DirectSequentialDataLoader, LR, WDL>(
                 schedule.for_validation(validation_freq),
                 &test_loader,
                 batch_size,
