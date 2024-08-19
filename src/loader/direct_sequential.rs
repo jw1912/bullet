@@ -15,7 +15,7 @@ pub struct DirectSequentialDataLoader {
 
 impl DirectSequentialDataLoader {
     pub fn new(file_paths: &[&str]) -> Self {
-        Self { file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>(), }
+        Self { file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>() }
     }
 }
 
@@ -31,11 +31,11 @@ impl<T: BulletFormat + 'static> DataLoader<T> for DirectSequentialDataLoader {
 
         for file in self.file_paths.iter() {
             let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
-        
+
             if this_size % data_size != 0 {
                 panic!("File [{file}] does not have a multiple of {data_size} size!");
             }
-        
+
             file_size += this_size;
         }
 
