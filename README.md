@@ -46,7 +46,7 @@ Use `./target/release/bullet-utils[.exe] help` to see specific usage.
 Reference CPU backend. It is suitable for training small networks or various utilities, such as loading nets to requantise them or test their output on specific positions.
 
 > [!WARNING]
-> **Not intended for serious training use.**
+> Not intended for serious training use.
 
 #### CUDA
 The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
