@@ -1,7 +1,6 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    marker::PhantomData,
 };
 
 use crate::{
@@ -10,20 +9,37 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct DirectSequentialDataLoader<T> {
+pub struct DirectSequentialDataLoader {
     file_paths: Vec<String>,
-    phantom: PhantomData<T>,
 }
 
-impl<T> DirectSequentialDataLoader<T> {
+impl DirectSequentialDataLoader {
     pub fn new(file_paths: &[&str]) -> Self {
-        Self { file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>(), phantom: PhantomData }
+        Self { file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>() }
     }
 }
 
-impl<T: BulletFormat + 'static> DataLoader<T> for DirectSequentialDataLoader<T> {
+impl<T: BulletFormat + 'static> DataLoader<T> for DirectSequentialDataLoader {
     fn data_file_paths(&self) -> &[String] {
         &self.file_paths
+    }
+
+    fn count_positions(&self) -> Option<u64> {
+        let data_size = std::mem::size_of::<T>() as u64;
+
+        let mut file_size = 0;
+
+        for file in self.file_paths.iter() {
+            let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
+
+            if this_size % data_size != 0 {
+                panic!("File [{file}] does not have a multiple of {data_size} size!");
+            }
+
+            file_size += this_size;
+        }
+
+        Some(file_size / data_size)
     }
 
     fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, mut f: F) {

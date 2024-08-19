@@ -319,7 +319,7 @@ pub unsafe fn add_to(_: &DeviceHandles, size: usize, inp: *const f32, out: *mut 
 }
 
 pub unsafe fn pairwise_mul(
-    handle: &DeviceHandles,
+    _: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,
@@ -330,7 +330,7 @@ pub unsafe fn pairwise_mul(
 }
 
 pub unsafe fn backprop_pairwise_mul(
-    handle: &DeviceHandles,
+    _: &DeviceHandles,
     batch_size: usize,
     input_size: usize,
     output_size: usize,

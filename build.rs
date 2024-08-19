@@ -14,7 +14,7 @@ mod cuda {
     use bindgen::callbacks::{MacroParsingBehavior, ParseCallbacks};
     use bindgen::{Builder, CargoCallbacks, EnumVariation};
 
-    const WRAPPER_PATH: &str = "./src/backend/kernels/wrapper.h";
+    const WRAPPER_PATH: &str = "./src/backend/cuda/kernels/wrapper.h";
 
     pub fn build() {
         let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -47,12 +47,12 @@ mod cuda {
             .write_to_file(out_path.join("bindings.rs"))
             .expect("Couldn't write bindings!");
 
-        println!("cargo:rerun-if-changed=./src/backend/kernels");
+        println!("cargo:rerun-if-changed=./src/backend/cuda/kernels");
 
         let files: Vec<String> =
             ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse_affine", "splat_add", "update"]
                 .iter()
-                .map(|s| format!("./src/backend/kernels/{s}.cu"))
+                .map(|s| format!("./src/backend/cuda/kernels/{s}.cu"))
                 .collect();
 
         cc::Build::new()
@@ -131,7 +131,7 @@ mod hip {
     use std::path::PathBuf;
     use std::process::Command;
 
-    const WRAPPER_PATH: &str = "./src/backend/kernels/hip/wrapper.h";
+    const WRAPPER_PATH: &str = "./src/backend/hip/kernels/wrapper.h";
 
     pub fn build() {
         let out_path = PathBuf::from(env::var_os("OUT_DIR").unwrap());
@@ -171,7 +171,7 @@ mod hip {
             .write_to_file(out_path.join("bindings.rs"))
             .expect("Couldn't write bindings!");
 
-        println!("cargo:rerun-if-changed=./src/backend/kernels/hip");
+        println!("cargo:rerun-if-changed=./src/backend/hip/kernels");
 
         // Get the gcnArchName from hipInfo.exe, since hipcc lies about doing it itself
         let gcn_arch_name = get_gcn_arch_name().expect("Failed to get gcnArchName from hipInfo.exe");
@@ -179,7 +179,7 @@ mod hip {
         let files: Vec<String> =
             ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse_affine", "splat_add", "update"]
                 .iter()
-                .map(|s| format!("./src/backend/kernels/hip/{s}.hip"))
+                .map(|s| format!("./src/backend/hip/kernels/{s}.hip"))
                 .collect();
 
         #[cfg(target_family = "windows")]

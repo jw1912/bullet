@@ -10,7 +10,6 @@ output_vector = input_vector[:N] * input_vector[N:]
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __global__ void pairwiseMulKernel(
-    const size_t batchSize,
     const size_t tensorSize,
     const float* inp,
     float* out) {
@@ -34,15 +33,10 @@ extern "C" void pairwiseMul(
     const size_t grid_x = (outputSize + threadsPerBlock - 1) / threadsPerBlock;
     const dim3 grid(grid_x, batchSize);
 
-    pairwiseMulKernel<<<grid, threadsPerBlock>>>(
-        batchSize,
-        outputSize,
-        input,
-        output);
+    pairwiseMulKernel<<<grid, threadsPerBlock>>>(outputSize, input, output);
 }
 
 __global__ void pairwiseMulBackwardKernel(
-    const size_t batchSize,
     const size_t tensorSize,
     const float* inp,
     float* out) {
@@ -73,6 +67,5 @@ extern "C" void backpropPairwiseMul(
     const size_t grid_x = (inputSize + threadsPerBlock - 1) / threadsPerBlock;
     const dim3 grid(grid_x, batchSize);
 
-    pairwiseMulBackwardKernel<<<grid, threadsPerBlock>>>(
-        batchSize, inputSize, input, output);
+    pairwiseMulBackwardKernel<<<grid, threadsPerBlock>>>(inputSize, input, output);
 }
