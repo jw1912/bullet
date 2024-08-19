@@ -43,12 +43,17 @@ Use `./target/release/bullet-utils[.exe] help` to see specific usage.
 
 ### Currently Supported Backends:
 #### Default
-CPU backend **not intended for serious training use**. It is suitable for training small networks or various utilities,
-such as loading nets to requantise them or test their output on specific positions.
+Reference CPU backend. It is suitable for training small networks or various utilities, such as loading nets to requantise them or test their output on specific positions.
+
+> [!WARNING]
+> **Not intended for serious training use.**
 
 #### CUDA
 The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
 as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet).
+
+> [!NOTE]
+> If you are on Windows, it is recommended to use clang, direct from LLVM github releases.
 
 #### HIP
 Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
@@ -59,3 +64,6 @@ as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-S
 
 > [!WARNING]  
 > Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context. As the trainer only calls kernels from one thread, this should not be an issue in training.
+
+> [!WARNING]  
+> The HIP backend is not *officially* supported on Linux (due to unresolved issues with annoying platform dependent stuff), but it has been made to work by a couple of users with some minor edits.
