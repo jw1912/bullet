@@ -4,7 +4,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r30_768x8-1024x2-1x8"
+        "bullet_r36_768x8-1024x2-1x8"
     };
 }
 
@@ -36,11 +36,11 @@ fn main() {
         eval_scale: 160.0,
         ft_regularisation: 0.0,
         batch_size: 16_384,
-        batches_per_superbatch: 68128,
+        batches_per_superbatch: 6104,
         start_superbatch: 1,
-        end_superbatch: 100,
+        end_superbatch: 400,
         wdl_scheduler: wdl::ConstantWDL { value: 0.3 },
-        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.95, step: 1 },
+        lr_scheduler: lr::CosineDecayLR { initial_lr: 0.001, final_lr: 0.0, final_superbatch: 400 },
         loss_function: Loss::SigmoidMSE,
         save_rate: 10,
         optimiser_settings: optimiser::AdamWParams {

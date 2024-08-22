@@ -18,8 +18,8 @@ enum class QuantiseMode {
 };
 
 constexpr auto InFile =
-    "../checkpoints/bullet_r30_768x8-1024x2-1x8-100/params.bin";
-constexpr auto OutFile = "bullet_r30_768x8-1024x2-1x8-100.nn";
+    "../checkpoints/bullet_r36_768x8-1024x2-1x8-400/params.bin";
+constexpr auto OutFile = "bullet_r36_768x8-1024x2-1x8-400.nn";
 
 constexpr bool Factorised = true;
 constexpr bool TransposeOutputWeights = true;
