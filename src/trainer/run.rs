@@ -85,7 +85,7 @@ pub fn run<
 
     let x = trainer.input_getter();
     let y = trainer.bucket_getter();
-    let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
+    let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(settings.batch_queue_size);
 
     let dataloader =
         create_dataloader::<T, U, O, LD, LR, WDL>(schedule.clone(), data_loader, batch_size, x, y, threads, sender);
@@ -95,7 +95,7 @@ pub fn run<
         .test_set
         .map(|test| {
             let test_loader = DirectSequentialDataLoader::new(&[test.path]);
-            let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(512);
+            let (sender, reciever) = sync_channel::<GpuDataLoader<T, U>>(settings.batch_queue_size);
             let dataloader = create_dataloader::<T, U, O, DirectSequentialDataLoader, LR, WDL>(
                 schedule.for_validation(validation_freq),
                 &test_loader,
