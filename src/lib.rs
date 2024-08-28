@@ -49,6 +49,7 @@ pub struct LocalSettings<'a> {
     pub threads: usize,
     pub test_set: Option<TestDataset<'a>>,
     pub output_directory: &'a str,
+    pub batch_queue_size: usize,
 }
 
 impl<'a> LocalSettings<'a> {
