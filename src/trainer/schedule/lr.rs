@@ -131,6 +131,32 @@ impl LrScheduler for CosineDecayLR {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ExponentialDecayLR {
+    pub initial_lr: f32,
+    pub final_lr: f32,
+    pub final_superbatch: usize,
+}
+
+impl LrScheduler for ExponentialDecayLR {
+    fn lr(&self, _batch: usize, superbatch: usize) -> f32 {
+        if superbatch >= self.final_superbatch {
+            return self.final_lr;
+        }
+        let decay_factor = (self.final_lr / self.initial_lr).powf(1.0 / self.final_superbatch as f32);
+        self.initial_lr * decay_factor.powf(superbatch as f32)
+    }
+
+    fn colourful(&self) -> String {
+        format!(
+            "start at {} and exponentially decay to {} at superbatch {}",
+            ansi(self.initial_lr, 31),
+            ansi(self.final_lr, 31),
+            ansi(self.final_superbatch, 31),
+        )
+    }
+}
+
 /// Warm up to a sub-scheduler over `warmup_batches` batches.
 #[derive(Clone, Debug)]
 pub struct Warmup<LR: LrScheduler> {
