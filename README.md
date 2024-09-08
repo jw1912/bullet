@@ -4,27 +4,13 @@
 
 </div>
 
-A CUDA/CPU NN Trainer, used to train NNUE-style networks for [akimbo](https://github.com/jw1912/akimbo).
-
-Also used by many other engines, including:
-- [Alexandria](https://github.com/PGG106/Alexandria)
-- [Altair](https://github.com/Alex2262/AltairChessEngine)
-- [Carp](https://github.com/dede1751/carp)
-- [Midnight](https://github.com/archishou/MidnightChessEngine)
-- [Obsidian](https://github.com/gab8192/Obsidian)
-- [Stormphrax](https://github.com/Ciekce/Stormphrax)
-- [Willow](https://github.com/Adam-Kulju/Willow)
-- [Viridithas](https://github.com/cosmobobak/viridithas)
-
-### Currently Supported Games:
-- Chess
-- Ataxx
-
-Raise an issue for support of a new game.
+NN trainer, generally used for training NNUE-style networks for chess engines.
 
 ### Usage
 
-Import the crate with
+Most people simply clone the repo and edit one of the [examples](/examples) to their taste.
+
+Alternatively, import the crate with
 ```toml
 bullet = { package = "bullet_lib", version = "1.0.0", features = ["cuda"] }
 ```
