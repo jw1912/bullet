@@ -189,7 +189,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
     /// - `init_biases` leaves biases at 0 if set to false
     /// - `use_gaussian` draws weights from a normal distribution rather
     ///     than uniform if set to true
-    /// 
+    ///
     /// The defaults used are true for both.
     pub fn randomise_weights(&self, init_biases: bool, use_gaussian: bool) {
         use rand::{rngs::ThreadRng, thread_rng};

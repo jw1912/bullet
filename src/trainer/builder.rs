@@ -123,7 +123,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         }
 
         if two_in_a_row {
-            panic!("Two affine transforms in a row is equivalent to a single affine transform! This is clearly erronous!");
+            panic!(
+                "Two affine transforms in a row is equivalent to a single affine transform! This is clearly erronous!"
+            );
         }
 
         self.size += (self.get_last_layer_size() + 1) * size * U::BUCKETS;
@@ -134,11 +136,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     /// and performing the elementwise product of the two halves.
     pub fn add_pairwise_mul(self) -> Self {
         let ll_size = self.get_last_layer_size();
-        assert_eq!(
-            ll_size % 2,
-            0,
-            "You can only perform paiwise mul on a layer with an even number of neurons!",
-        );
+        assert_eq!(ll_size % 2, 0, "You can only perform paiwise mul on a layer with an even number of neurons!",);
         let size = ll_size / 2;
         self.add(size, OpType::PairwiseMul)
     }
