@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
+    path::PathBuf,
 };
 
 use crate::{
@@ -15,7 +16,14 @@ pub struct DirectSequentialDataLoader {
 
 impl DirectSequentialDataLoader {
     pub fn new(file_paths: &[&str]) -> Self {
-        Self { file_paths: file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>() }
+        let file_paths = file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>();
+
+        for path in &file_paths {
+            let path_buf: PathBuf = path.parse().unwrap();
+            assert!(path_buf.exists(), "File not found: {path}");
+        }
+
+        Self { file_paths }
     }
 }
 
@@ -30,7 +38,7 @@ impl<T: BulletFormat + 'static> DataLoader<T> for DirectSequentialDataLoader {
         let mut file_size = 0;
 
         for file in self.file_paths.iter() {
-            let this_size = std::fs::metadata(file).unwrap_or_else(|_| panic!("Invalid File Metadata: {file}")).len();
+            let this_size = std::fs::metadata(file).unwrap().len();
 
             if this_size % data_size != 0 {
                 panic!("File [{file}] does not have a multiple of {data_size} size!");
@@ -52,7 +60,7 @@ impl<T: BulletFormat + 'static> DataLoader<T> for DirectSequentialDataLoader {
         'dataloading: loop {
             let mut loader_files = vec![];
             for file in self.file_paths.iter() {
-                loader_files.push(File::open(file).unwrap_or_else(|_| panic!("Invalid File Path: {file}")));
+                loader_files.push(File::open(file).unwrap());
             }
 
             for loader_file in loader_files.iter() {

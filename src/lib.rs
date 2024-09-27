@@ -25,7 +25,7 @@ pub use trainer::{
     set_cbcs, Trainer, TrainerBuilder,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Activation {
     ReLU,
     CReLU,
@@ -35,7 +35,9 @@ pub enum Activation {
 
 #[derive(Clone, Copy)]
 pub struct TestDataset<'a> {
+    /// Path to test dataset.
     pub path: &'a str,
+    /// Frequency of validation loss (run validation every `freq` batches).
     pub freq: usize,
 }
 
@@ -46,9 +48,16 @@ impl<'a> TestDataset<'a> {
 }
 
 pub struct LocalSettings<'a> {
+    /// Number of threads to make available for training, in addition
+    /// to the main trainer thread (used only for loading data if training
+    /// with GPU).
     pub threads: usize,
+    /// Path to a test dataset, will calculate vaidation loss over this dataset.
     pub test_set: Option<TestDataset<'a>>,
+    /// Directory to write checkpoints to.
     pub output_directory: &'a str,
+    /// Number of batches that the dataloader can prepare and put in a queue before
+    /// they are processed in training.
     pub batch_queue_size: usize,
 }
 
@@ -76,22 +85,36 @@ pub struct UciOption<'a>(pub &'a str, pub &'a str);
 
 #[derive(Clone)]
 pub struct Engine<'a> {
+    /// URL of git repository to clone from.
     pub repo: &'a str,
+    /// Branch of git repository to clone.
     pub branch: &'a str,
+    /// Optional expected bench to verify against.
     pub bench: Option<usize>,
+    /// Path to network file to be used.
     pub net_path: Option<&'a str>,
+    /// Any UCI options that should be passed.
     pub uci_options: Vec<UciOption<'a>>,
 }
 
 pub struct TestSettings<'a> {
+    /// Test every `test_rate` superbatches.
     pub test_rate: usize,
+    /// Directory to use for testing (MUST NOT EXIST CURRENTLY).
     pub out_dir: &'a str,
+    /// Path to cutechess executable.
     pub cutechess_path: &'a str,
+    /// Path to opening book.
     pub book_path: OpeningBook<'a>,
+    /// Number of game pairs to play.
     pub num_game_pairs: usize,
+    /// Number of games to run in parallel.
     pub concurrency: usize,
+    /// Time control to run games at.
     pub time_control: TimeControl,
+    /// Base engine, must provide own net.
     pub base_engine: Engine<'a>,
+    /// Dev engine, will be given newly trained nets.
     pub dev_engine: Engine<'a>,
 }
 
