@@ -10,8 +10,11 @@ pub mod wdl;
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<O: Clone + std::fmt::Debug + Sync + Send, LR: LrScheduler, WDL: WdlScheduler> {
+    /// Name of the training run.
     pub net_id: String,
+    /// Scalar to divide evaluations from data by.
     pub eval_scale: f32,
+    /// Regularisation on L1, experiment from Beserk.
     pub ft_regularisation: f32,
     pub batch_size: usize,
     pub batches_per_superbatch: usize,

@@ -77,6 +77,7 @@ impl<T: InputType, U, O: Optimiser> std::fmt::Display for Trainer<T, U, O> {
 }
 
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<T, U, O> {
+    /// Reset error.
     pub fn set_error_zero(&mut self) {
         self.error = 0.0;
         self.validation_error = 0.0;
@@ -109,6 +110,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         }
     }
 
+    /// Save a quantised network.
     pub fn save_quantised(&self, out_path: &str) {
         let size = self.optimiser.size();
         let mut buf = vec![0.0; size];
@@ -138,20 +140,24 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         util::write_to_bin(&qbuf, size, out_path, true).unwrap_or_else(|_| panic!("Writing to [{out_path}] failed!"));
     }
 
+    /// Set number of threads that the trainer is allowed to use.
     pub fn set_threads(&mut self, threads: usize) {
         self.handle.set_threads(threads);
         self.error_device = DeviceBuffer::new(threads);
     }
 
+    /// Load network weights from the file path given.
     pub fn load_weights_from_file(&self, path: &str) {
         let network = util::load_from_bin_f32_slice(self.net_size(), path);
         self.optimiser.load_weights_from_host(&network);
     }
 
+    /// Load a checkpoint from the checkpoint folder path given.
     pub fn load_from_checkpoint(&self, path: &str) {
         self.optimiser.load_from_checkpoint(path);
     }
 
+    /// Set the batch size of the trainer (preallocates buffers for speed).
     pub fn set_batch_size(&mut self, batch_size: usize) {
         if !self.buckets.is_null() {
             unsafe { tensor::util::free(self.buckets, self.batch_size()) }
@@ -179,6 +185,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         }
     }
 
+    /// Randomise the network weights:
+    /// - `init_biases` leaves biases at 0 if set to false
+    /// - `use_gaussian` draws weights from a normal distribution rather
+    ///     than uniform if set to true
+    /// 
+    /// The defaults used are true for both.
     pub fn randomise_weights(&self, init_biases: bool, use_gaussian: bool) {
         use rand::{rngs::ThreadRng, thread_rng};
         use rand_distr::{Normal, Uniform};
@@ -282,15 +294,19 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         self.optimiser.size()
     }
 
+    /// Copy network weights from device to CPU.
     pub fn write_weights_to_cpu(&self, buf: &mut [f32]) {
         self.optimiser.write_weights_to_host(buf);
     }
 
+    /// Clear any existing input data.
     pub fn clear_data(&mut self) {
         self.used = 0;
         self.inputs.clear();
     }
 
+    /// Load data from the data loader onto the device.
+    /// Is appended to any pre-existing data.
     pub fn load_data(&mut self, loader: &GpuDataLoader<T, U>) {
         let inputs = loader.inputs();
         let results = loader.results();
@@ -311,10 +327,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         }
     }
 
+    // Get the batch size.
     pub fn batch_size(&self) -> usize {
         self.ft.outputs.cap()
     }
 
+    /// Evaluate a position that can be parsed from a string.
     pub fn eval(&mut self, fen: &str) -> f32
     where
         T::RequiredDataType: std::str::FromStr<Err = String>,
@@ -338,9 +356,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         eval[0]
     }
 
-    /// Execute the forward pass,
-    /// calculate errors,
-    /// backpropagate gradients,
+    /// Execute the forward pass, calculate errors, backpropagate gradients,
     /// and then apply an optimiser update.
     pub fn train_on_batch(
         &mut self,
@@ -365,6 +381,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
         self.error += error;
         self.error_record.push((superbatch, curr_batch, error));
 
+        // This will generally catch driver-cuda/hip version mismatches.
         tensor::panic_if_device_error("Something went wrong!");
 
         if self.error.is_nan() {

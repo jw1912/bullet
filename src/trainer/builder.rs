@@ -8,6 +8,7 @@ use crate::{
 
 use super::{Affine, FeatureTransformer, Node, Operation, QuantiseInfo, Trainer};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum OpType {
     Activate(Activation),
     Affine,
@@ -57,6 +58,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         }
     }
 
+    /// Makes the first layer single-perspective.
     pub fn single_perspective(mut self) -> Self {
         if !self.nodes.is_empty() {
             panic!("You need to set 'single_perspective' before adding any layers!");
@@ -65,26 +67,32 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self
     }
 
+    /// Sets the optimiser.
     pub fn optimiser(mut self, optimiser: O) -> Self {
         self.optimiser = optimiser;
         self
     }
 
+    /// Sets the input featureset.
     pub fn input(mut self, input_getter: T) -> Self {
         self.input_getter = input_getter;
         self
     }
 
+    /// Sets the output buckets.
     pub fn output_buckets(mut self, bucket_getter: U) -> Self {
         self.bucket_getter = bucket_getter;
         self
     }
 
+    /// Provide a list of quantisations.
     pub fn quantisations(mut self, quants: &[i32]) -> Self {
         self.quantisations = quants.to_vec();
         self
     }
 
+    /// Sets the size of the feature-transformer.
+    /// Must be done before all other layers.
     pub fn feature_transformer(mut self, size: usize) -> Self {
         assert!(self.nodes.is_empty());
         self.ft_out_size = size;
@@ -92,23 +100,50 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     }
 
     fn add(mut self, size: usize, op: OpType) -> Self {
+        assert_ne!(
+            self.ft_out_size,
+            0,
+            "You must start the network with a feature transformer to transform the sparse inputs into a dense embedding!"
+        );
         self.nodes.push(NodeType { size, op, in_res_block: self.in_res_block });
 
         self
     }
 
+    /// Performs an affine transform without output size `size`.
     pub fn add_layer(mut self, size: usize) -> Self {
+        let mut two_in_a_row = false;
+
+        if let Some(layer) = self.nodes.last() {
+            if layer.op == OpType::Affine {
+                two_in_a_row = true;
+            }
+        } else {
+            two_in_a_row = true;
+        }
+
+        if two_in_a_row {
+            panic!("Two affine transforms in a row is equivalent to a single affine transform! This is clearly erronous!");
+        }
+
         self.size += (self.get_last_layer_size() + 1) * size * U::BUCKETS;
         self.add(size, OpType::Affine)
     }
 
+    /// Reduces a layer of size `2N` to one of size `N` by splitting it in half
+    /// and performing the elementwise product of the two halves.
     pub fn add_pairwise_mul(self) -> Self {
         let ll_size = self.get_last_layer_size();
-        assert_eq!(ll_size % 2, 0, "Last layer size must be even.");
+        assert_eq!(
+            ll_size % 2,
+            0,
+            "You can only perform paiwise mul on a layer with an even number of neurons!",
+        );
         let size = ll_size / 2;
         self.add(size, OpType::PairwiseMul)
     }
 
+    /// Applies the given activation function.
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
         self.add(size, OpType::Activate(activation))
@@ -126,6 +161,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self
     }
 
+    /// Takes the currently specified builder and compiles it into an actual trainer.
     pub fn build(self) -> Trainer<T, U, O::Optimiser> {
         let inp_getter_size = self.input_getter.size();
         let max_active_inputs = self.input_getter.max_active_inputs();
