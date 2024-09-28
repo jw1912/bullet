@@ -75,7 +75,7 @@ impl SparseTensor {
         let output_dim = outputs.element_size() / 2;
 
         assert_eq!(weights.shape(), Shape::new(output_dim, input_dim));
-        assert_eq!(biases.shape(), Shape::new(1, output_dim));
+        //assert_eq!(biases.shape(), Shape::new(1, output_dim));
 
         ops::sparse_affine_forward(
             handle,
@@ -112,7 +112,7 @@ impl SparseTensor {
         let output_dim = errors.element_size() / 2;
 
         assert_eq!(weights_grad.shape(), Shape::new(output_dim, input_dim));
-        assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
+        //assert_eq!(biases_grad.shape(), Shape::new(1, output_dim));
 
         ops::sparse_affine_backward(
             handle,

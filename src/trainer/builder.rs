@@ -166,7 +166,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let buckets = U::BUCKETS;
 
-        let ft_size = (inp_getter_size + 1) * self.ft_out_size;
+        let ft_size = (inp_getter_size + U::BUCKETS) * self.ft_out_size;
         let net_size = self.size + ft_size;
 
         let opt = O::Optimiser::new(net_size);
@@ -195,7 +195,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
             ft.biases.set_ptr(opt.weights_offset(offset));
             ft.biases_grad.set_ptr(opt.gradients_offset(offset));
-            offset += self.ft_out_size;
+            offset += self.ft_out_size * U::BUCKETS;
 
             let mut nodes = Vec::new();
             let mut inp_size = mul * self.ft_out_size;

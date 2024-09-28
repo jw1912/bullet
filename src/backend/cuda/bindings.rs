@@ -35,6 +35,7 @@ extern "C" {
         biases: *const f32,
         inputs: *const Feat,
         outputs: *mut f32,
+        buckets: *const u8,
     );
 
     pub fn sparseAffineBackward(
@@ -47,6 +48,7 @@ extern "C" {
         errors: *const f32,
         output: *const f32,
         ft_reg: f32,
+        buckets: *const u8,
     );
 
     pub fn singleSparseAffineForward(
