@@ -68,6 +68,7 @@ impl SparseTensor {
         inputs: &SparseTensor,
         biases: &Tensor,
         outputs: &TensorBatch,
+        buckets: *const u8,
     ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
@@ -85,6 +86,7 @@ impl SparseTensor {
             biases.ptr(),
             inputs.ptr,
             outputs.ptr(),
+            buckets,
         );
     }
 
@@ -94,6 +96,7 @@ impl SparseTensor {
     ///
     /// # Safety
     /// `weights`, `biases` and `errors` must be initialised properly.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn affine_backprop(
         handle: &DeviceHandles,
         weights_grad: &Tensor,
@@ -102,6 +105,7 @@ impl SparseTensor {
         errors: &TensorBatch,
         output: &TensorBatch,
         ft_reg: f32,
+        buckets: *const u8,
     ) {
         assert!(inputs.used > 0);
         let input_dim = inputs.input_dim;
@@ -122,6 +126,7 @@ impl SparseTensor {
             errors.ptr(),
             output.ptr(),
             ft_reg,
+            buckets,
         );
     }
 

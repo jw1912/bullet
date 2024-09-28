@@ -10,6 +10,7 @@ pub unsafe fn sparse_affine_forward(
     biases: *const f32,
     inputs: *const Feat,
     outputs: *mut f32,
+    _: *const u8,
 ) {
     let weights = weights as usize;
     let biases = biases as usize;
@@ -63,6 +64,7 @@ pub unsafe fn sparse_affine_backward(
     errors: *const f32,
     output: *const f32,
     ft_reg: f32,
+    _: *const u8,
 ) {
     let inputs = inputs as usize;
     let errors = errors as usize;

@@ -1,3 +1,5 @@
+use std::ptr;
+
 use crate::{backend::{DeviceHandles, util}, Activation, loader::Feat};
 use super::{Shape, SparseTensor, Tensor, TensorBatch, DeviceBuffer};
 
@@ -133,7 +135,7 @@ fn tensor_sparse_affine() {
         inputs.append(&xs);
 
         util::panic_if_device_error("Error");
-        SparseTensor::affine(&handle, &weights, &inputs, &biases, &outputs);
+        SparseTensor::affine(&handle, &weights, &inputs, &biases, &outputs, ptr::null());
         util::panic_if_device_error("Error");
 
         let mut ys = [0.0; N * B * 2];
@@ -149,7 +151,7 @@ fn tensor_sparse_affine() {
         bg.calloc();
 
         util::panic_if_device_error("Error");
-        SparseTensor::affine_backprop(&handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0);
+        SparseTensor::affine_backprop(&handle, &wg, &inputs, &bg, &outputs, &zeros, 0.0, ptr::null());
         util::panic_if_device_error("Error");
 
         let mut wbuf = [0.0; 6];

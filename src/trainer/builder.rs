@@ -175,7 +175,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         unsafe {
             let ftw_shape = Shape::new(self.ft_out_size, inp_getter_size);
-            let ftb_shape = Shape::new(1, self.ft_out_size);
+            let ftb_shape = Shape::new(1, self.ft_out_size * U::BUCKETS);
             let fto_shape = Shape::new(1, mul * self.ft_out_size);
 
             let mut ft = FeatureTransformer {

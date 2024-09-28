@@ -436,7 +436,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
                 &self.ft.outputs,
             );
         } else {
-            SparseTensor::affine(&self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs);
+            SparseTensor::affine(&self.handle, &self.ft.weights, &self.inputs, &self.ft.biases, &self.ft.outputs, self.buckets);
         }
 
         let mut inputs = &self.ft.outputs;
@@ -546,6 +546,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: Optimiser> Trainer<
                 &self.ft.outputs,
                 &self.ft.copy,
                 self.ft_reg,
+                self.buckets,
             );
         }
     }
