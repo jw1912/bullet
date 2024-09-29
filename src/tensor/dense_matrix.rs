@@ -4,18 +4,18 @@ mod matmul;
 use super::{buffer::Buffer, shape::Shape};
 
 #[derive(Debug)]
-pub struct DenseTensor {
+pub struct DenseMatrix {
     shape: Shape,
     buf: Buffer<f32>,
 }
 
-impl Default for DenseTensor {
+impl Default for DenseMatrix {
     fn default() -> Self {
         Self::zeroed(Shape::new(1, 1))
     }
 }
 
-impl DenseTensor {
+impl DenseMatrix {
     pub fn zeroed(shape: Shape) -> Self {
         Self {
             shape,

@@ -1,8 +1,8 @@
 use crate::backend::{ops, ExecutionContext};
 
-use super::DenseTensor;
+use super::DenseMatrix;
 
-impl DenseTensor {
+impl DenseMatrix {
     pub(super) fn sgemm(
         ctx: &mut ExecutionContext,
         input_a: &Self,
@@ -126,11 +126,11 @@ mod tests {
         let shape1 = Shape::new(2, 3);
         let shape2 = Shape::new(3, 1);
 
-        let mut input1 = DenseTensor::default();
-        let mut input2 = DenseTensor::default();
-        let mut input1_grad = DenseTensor::default();
-        let mut input2_grad = DenseTensor::default();
-        let mut output = DenseTensor::default();
+        let mut input1 = DenseMatrix::default();
+        let mut input2 = DenseMatrix::default();
+        let mut input1_grad = DenseMatrix::default();
+        let mut input2_grad = DenseMatrix::default();
+        let mut output = DenseMatrix::default();
 
         // load tensors from CPU
         {
@@ -155,7 +155,7 @@ mod tests {
 
         // normal matmul
         {
-            DenseTensor::matmul(
+            DenseMatrix::matmul(
                 &mut ctx,
                 &input1,
                 false,
@@ -173,7 +173,7 @@ mod tests {
 
         // backprop normal matmul
         {    
-            DenseTensor::backprop_matmul(
+            DenseMatrix::backprop_matmul(
                 &mut ctx,
                 &input1,
                 Some(&mut input1_grad),
@@ -198,7 +198,7 @@ mod tests {
 
         // transposed matmul
         {
-            DenseTensor::matmul(
+            DenseMatrix::matmul(
                 &mut ctx,
                 &input2,
                 true,
@@ -219,7 +219,7 @@ mod tests {
             input1_grad.set_zero();
             input2_grad.set_zero();
 
-            DenseTensor::backprop_matmul(
+            DenseMatrix::backprop_matmul(
                 &mut ctx,
                 &input2,
                 Some(&mut input2_grad),

@@ -1,8 +1,8 @@
 use crate::backend::{ops, ExecutionContext};
 
-use super::DenseTensor;
+use super::DenseMatrix;
 
-impl DenseTensor {
+impl DenseMatrix {
     pub fn add(
         ctx: &mut ExecutionContext,
         input_a: &Self,
@@ -72,9 +72,9 @@ impl DenseTensor {
 
 fn backprop_add_single(
     ctx: &mut ExecutionContext,
-    input: &DenseTensor, 
-    input_grad: &mut DenseTensor,
-    output_grad: &DenseTensor,
+    input: &DenseMatrix, 
+    input_grad: &mut DenseMatrix,
+    output_grad: &DenseMatrix,
 ) {
     input_grad.reshape_if_needed(input.shape);
     if input.shape.cols() == output_grad.shape.cols() {
@@ -116,11 +116,11 @@ mod tests {
         let shape1 = Shape::new(3, 3);
         let shape2 = Shape::new(3, 1);
 
-        let mut input1 = DenseTensor::default();
-        let mut input2 = DenseTensor::default();
-        let mut input1_grad = DenseTensor::default();
-        let mut input2_grad = DenseTensor::default();
-        let mut output = DenseTensor::default();
+        let mut input1 = DenseMatrix::default();
+        let mut input2 = DenseMatrix::default();
+        let mut input1_grad = DenseMatrix::default();
+        let mut input2_grad = DenseMatrix::default();
+        let mut output = DenseMatrix::default();
 
         // load tensors from CPU
         {
@@ -144,7 +144,7 @@ mod tests {
 
         // add
         {
-            DenseTensor::add(
+            DenseMatrix::add(
                 &mut ctx,
                 &input1,
                 &input2,
@@ -167,7 +167,7 @@ mod tests {
 
         // backprop add
         {    
-            DenseTensor::add_backward(
+            DenseMatrix::add_backward(
                 &mut ctx,
                 &input1,
                 Some(&mut input1_grad),

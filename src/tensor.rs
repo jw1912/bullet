@@ -1,9 +1,9 @@
 pub(crate) mod buffer;
-mod dense_tensor;
+mod dense_matrix;
 mod operations;
 mod shape;
 
-use dense_tensor::DenseTensor;
+use dense_matrix::DenseMatrix;
 pub use operations::Operation;
 pub use shape::Shape;
 
@@ -17,8 +17,8 @@ impl From<Tensor> for Shape {
 
 #[derive(Debug, Default)]
 pub struct Tensor {
-    pub(crate) values: DenseTensor,
-    pub(crate) gradients: Option<DenseTensor>,
+    pub(crate) values: DenseMatrix,
+    pub(crate) gradients: Option<DenseMatrix>,
 }
 
 impl diffable::Tensor for Tensor {
@@ -28,9 +28,9 @@ impl diffable::Tensor for Tensor {
 
     fn new(shape: Shape, requires_grad: bool) -> Self {
         Self {
-            values: DenseTensor::zeroed(shape),
+            values: DenseMatrix::zeroed(shape),
             gradients: if requires_grad {
-                Some(DenseTensor::zeroed(shape))
+                Some(DenseMatrix::zeroed(shape))
             } else {
                 None
             },
