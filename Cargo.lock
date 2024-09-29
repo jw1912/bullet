@@ -117,6 +117,7 @@ dependencies = [
  "bindgen",
  "bulletformat",
  "cc",
+ "diffable",
  "rand",
  "rand_distr",
 ]
@@ -282,6 +283,11 @@ dependencies = [
  "proc-macro2",
  "quote",
 ]
+
+[[package]]
+name = "diffable"
+version = "0.2.0"
+source = "git+https://github.com/jw1912/diffable.git?tag=v0.2.0#3e245796ccc57834b886f14dfdc010fb62975f35"
 
 [[package]]
 name = "dirs-next"

@@ -1,17 +1,31 @@
-#[cfg(feature = "cuda")]
-mod cuda;
+mod bindings;
+pub mod ops;
+pub mod util;
 
-#[cfg(feature = "cuda")]
-pub use cuda::*;
+use bindings::cublasHandle_t;
 
-#[cfg(feature = "hip")]
-mod hip;
+use crate::tensor::buffer::Buffer;
 
-#[cfg(feature = "hip")]
-pub use hip::*;
+#[derive(Debug)]
+pub struct ExecutionContext {
+    handle: cublasHandle_t,
+    ones: Buffer<f32>,
+}
 
-#[cfg(not(any(feature = "cuda", feature = "hip")))]
-mod cpu;
+impl Default for ExecutionContext {
+    fn default() -> Self {
+        let mut handle: cublasHandle_t = std::ptr::null_mut();
 
-#[cfg(not(any(feature = "cuda", feature = "hip")))]
-pub use cpu::*;
+        unsafe {
+            bindings::cublasCreate_v2((&mut handle) as *mut cublasHandle_t);
+        }
+
+        let ones = Buffer::new(1);
+        ones.load_from_slice(&[1.0]);
+
+        Self {
+            handle,
+            ones,
+        }
+    }
+}

@@ -6,8 +6,6 @@
 #![allow(improper_ctypes)]
 #![allow(unused)]
 
-use crate::loader::Feat;
-
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[link(name = "kernels", kind = "static")]
@@ -27,48 +25,23 @@ extern "C" {
         gradients: *const f32,
     );
 
-    pub fn sparseAffineForward(
+    pub fn sparseLinearForward(
         batchSize: usize,
         maxInputSize: usize,
         outputSize: usize,
         weights: *const f32,
-        biases: *const f32,
-        inputs: *const Feat,
+        inputs: *const i32,
         outputs: *mut f32,
     );
 
-    pub fn sparseAffineBackward(
+    pub fn sparseLinearBackward(
         batchSize: usize,
         maxInputSize: usize,
         outputSize: usize,
         weightsGrad: *mut f32,
-        biasesGrad: *mut f32,
-        inputs: *const Feat,
+        inputs: *const i32,
         errors: *const f32,
         output: *const f32,
-        ft_reg: f32,
-    );
-
-    pub fn singleSparseAffineForward(
-        batchSize: usize,
-        maxInputSize: usize,
-        outputSize: usize,
-        weights: *const f32,
-        biases: *const f32,
-        inputs: *const Feat,
-        outputs: *mut f32,
-    );
-
-    pub fn singleSparseAffineBackward(
-        batchSize: usize,
-        maxInputSize: usize,
-        outputSize: usize,
-        weightsGrad: *mut f32,
-        biasesGrad: *mut f32,
-        inputs: *const Feat,
-        errors: *const f32,
-        output: *const f32,
-        ft_reg: f32,
     );
 
     pub fn activateReLU(size: usize, inp: *const f32, out: *mut f32);
@@ -89,7 +62,7 @@ extern "C" {
 
     pub fn sigmoidMPE(bufferSize: usize, outputs: *mut f32, results: *const f32, error: *mut f32, power: f32);
 
-    pub fn splatAdd(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
+    pub fn splatAdd(batchSize: usize, tensorSize: usize, inp_a: *const f32, inp_b: *const f32, out: *mut f32);
 
     pub fn activateDual(batchSize: usize, tensorSize: usize, inp: *const f32, out: *mut f32);
 

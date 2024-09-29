@@ -2,9 +2,12 @@ mod backend;
 pub mod inputs;
 pub mod loader;
 pub mod outputs;
+mod tensor;
 pub mod util;
 
+pub use tensor::{Tensor, Operation};
 pub use bulletformat as format;
+pub use diffable as diffable;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Activation {
