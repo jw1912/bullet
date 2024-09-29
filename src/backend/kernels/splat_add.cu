@@ -6,7 +6,8 @@ constexpr size_t threads = 1024;
 __global__ void splatAddKernel(
     const size_t batchSize,
     const size_t stride,
-    const float* inp,
+    const float* inp_a,
+    const float* inp_b,
     float* out)
 {
     const size_t offset = blockIdx.y;
@@ -16,13 +17,16 @@ __global__ void splatAddKernel(
     if (myId >= batchSize)
         return;
 
-    out[offset + stride * myId] += inp[offset];
+    const size_t idx = offset + stride * myId;
+
+    out[idx] = inp_a[offset] + inp_b[idx];
 }
 
 extern "C" void splatAdd(
     const size_t batchSize,
     const size_t tensorSize,
-    const float* inp,
+    const float* inp_a,
+    const float* inp_b,
     float* out)
 {
     const size_t grid_x = (batchSize + threads - 1) / threads;
@@ -31,7 +35,8 @@ extern "C" void splatAdd(
     splatAddKernel<<<grid, threads>>>(
         batchSize,
         tensorSize,
-        inp,
+        inp_a,
+        inp_b,
         out
     );
 }

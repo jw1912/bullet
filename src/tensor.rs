@@ -1,10 +1,10 @@
 pub(crate) mod buffer;
+mod dense_tensor;
 mod operations;
-mod raw_tensor;
 mod shape;
 
+use dense_tensor::DenseTensor;
 pub use operations::Operation;
-use raw_tensor::RawTensor;
 pub use shape::Shape;
 
 use crate::backend::ExecutionContext;
@@ -17,19 +17,20 @@ impl From<Tensor> for Shape {
 
 #[derive(Debug, Default)]
 pub struct Tensor {
-    pub(crate) values: RawTensor,
-    pub(crate) gradients: Option<RawTensor>,
+    pub(crate) values: DenseTensor,
+    pub(crate) gradients: Option<DenseTensor>,
 }
 
 impl diffable::Tensor for Tensor {
     type ModelOfTensor = Shape;
     type ExecutionContext = ExecutionContext;
+    type DiffableOperation = Operation;
 
-    fn new(desc: Self::ModelOfTensor, requires_grad: bool) -> Self {
+    fn new(shape: Shape, requires_grad: bool) -> Self {
         Self {
-            values: RawTensor::new_empty(desc),
+            values: DenseTensor::zeroed(shape),
             gradients: if requires_grad {
-                Some(RawTensor::new_empty(desc))
+                Some(DenseTensor::zeroed(shape))
             } else {
                 None
             },
@@ -43,13 +44,13 @@ impl diffable::Tensor for Tensor {
     }
 
     fn copy_values_into(&self, dest: &mut Self) {
-        self.values.copy_values_into(&mut dest.values);
+        self.values.copy_into(&mut dest.values);
     }
 
     fn get_scalar(&self) -> Option<f32> {
-        if self.values.is_scalar() {
+        if self.values.shape() == Shape::new(1, 1) {
             let mut buf = [0.0];
-            self.values.write_dense_to_slice(&mut buf);
+            self.values.write_to_slice(&mut buf);
             Some(buf[0])
         } else {
             None
@@ -58,7 +59,6 @@ impl diffable::Tensor for Tensor {
 
     fn set_grad_to_unit(&mut self) {
         let grad = self.gradients.as_mut().unwrap();
-        assert!(grad.is_scalar());
-        grad.load_dense_from_slice(&[1.0]);
+        grad.load_from_slice(Shape::new(1, 1), &[1.0]);
     }
 }

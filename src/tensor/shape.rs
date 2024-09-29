@@ -30,6 +30,10 @@ impl Shape {
         Self { cols: self.rows, rows: self.cols }
     }
 
+    pub fn maybe_transpose(&self, trans: bool) -> Self {
+        if trans { self.transpose() } else { *self }
+    }
+
     pub fn reshape(&mut self, rows: usize, cols: usize) {
         assert_eq!(self.size(), cols * rows, "Invalid reshape!");
         self.cols = cols;

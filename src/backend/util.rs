@@ -1,15 +1,11 @@
-use super::bindings::{
-    cudaDeviceSynchronize, cudaError, cudaFree, cudaGetDeviceCount, cudaGetDeviceProperties_v2, cudaGetLastError,
-    cudaMalloc, cudaMemcpy, cudaMemcpyKind, cudaMemset,
-};
-use crate::util;
+use super::bindings;
 use std::ffi::c_void;
 
 #[macro_export]
 macro_rules! catch {
     ($func:expr, $caller:expr) => {
-        let err = unsafe { $func };
-        if err != cudaError::cudaSuccess {
+        let err = $func;
+        if err != bindings::cudaError::cudaSuccess {
             panic!("{}: {:?}", $caller, err);
         }
     };
@@ -18,13 +14,13 @@ macro_rules! catch {
     };
 }
 
-pub fn device_name() -> String {
+pub unsafe fn device_name() -> String {
     use std::ffi::CStr;
     let mut num = 0;
-    catch!(cudaGetDeviceCount(&mut num));
+    catch!(bindings::cudaGetDeviceCount(&mut num));
     assert!(num >= 1);
-    let mut props = util::boxed_and_zeroed();
-    catch!(cudaGetDeviceProperties_v2(&mut *props, 0));
+    let mut props = crate::util::boxed_and_zeroed();
+    catch!(bindings::cudaGetDeviceProperties_v2(&mut *props, 0));
 
     let mut buf = [0u8; 256];
 
@@ -38,72 +34,86 @@ pub fn device_name() -> String {
 }
 
 pub fn device_synchronise() {
-    catch!(cudaDeviceSynchronize());
+    // # Safety
+    // This function cannot fail.
+    unsafe {
+        catch!(bindings::cudaDeviceSynchronize());
+    }
 }
 
 pub fn panic_if_device_error(msg: &str) {
-    catch!(cudaGetLastError(), msg);
+    // # Safety
+    // This function cannot fail.
+    unsafe {
+        catch!(bindings::cudaGetLastError(), msg);
+    }
 }
 
-pub fn malloc<T>(num: usize) -> *mut T {
+fn malloc<T>(num: usize) -> *mut T {
     let size = num * std::mem::size_of::<T>();
     let mut grad = std::ptr::null_mut::<T>();
     let grad_ptr = (&mut grad) as *mut *mut T;
 
     assert!(!grad_ptr.is_null(), "null pointer");
 
-    catch!(cudaMalloc(grad_ptr.cast(), size), "malloc");
-    catch!(cudaDeviceSynchronize());
+    unsafe {
+        catch!(bindings::cudaMalloc(grad_ptr.cast(), size), "malloc");
+        catch!(bindings::cudaDeviceSynchronize());
+    }
 
     grad
 }
 
-/// # Safety
+/// ### Safety
 /// Need to make sure not to double free.
 pub unsafe fn free<T>(ptr: *mut T, _: usize) {
-    catch!(cudaFree(ptr.cast()));
+    catch!(bindings::cudaFree(ptr.cast()));
 }
 
-pub fn calloc<T>(num: usize) -> *mut T {
+/// ### Safety
+/// Type needs to be zeroable.
+pub unsafe fn calloc<T>(num: usize) -> *mut T {
     let size = num * std::mem::size_of::<T>();
     let grad = malloc(num);
-    catch!(cudaMemset(grad as *mut c_void, 0, size), "memset");
-    catch!(cudaDeviceSynchronize());
+    catch!(bindings::cudaMemset(grad as *mut c_void, 0, size), "memset");
+    catch!(bindings::cudaDeviceSynchronize());
 
     grad
 }
 
-pub fn set_zero<T>(ptr: *mut T, num: usize) {
-    catch!(cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()), "memset");
-    catch!(cudaDeviceSynchronize());
+/// ### Safety
+/// Type needs to be zeroable.
+pub unsafe fn set_zero<T>(ptr: *mut T, num: usize) {
+    catch!(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()), "memset");
+    catch!(bindings::cudaDeviceSynchronize());
 }
 
 /// # Safety
 /// Pointers need to be valid and `amt` need to be valid.
 pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
-        cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), cudaMemcpyKind::cudaMemcpyHostToDevice),
+        bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::cudaMemcpyKind::cudaMemcpyHostToDevice),
         "memcpy"
     );
-    catch!(cudaDeviceSynchronize());
+    catch!(bindings::cudaDeviceSynchronize());
 }
 
 /// # Safety
 /// Pointers need to be valid and `amt` need to be valid.
 pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
-        cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), cudaMemcpyKind::cudaMemcpyDeviceToHost),
+        bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::cudaMemcpyKind::cudaMemcpyDeviceToHost),
         "memcpy"
     );
-    catch!(cudaDeviceSynchronize());
+    catch!(bindings::cudaDeviceSynchronize());
 }
 
 /// # Safety
 /// Pointers need to be valid and `amt` need to be valid.
 pub unsafe fn copy_on_device<T>(dest: *mut T, src: *const T, amt: usize) {
     catch!(
-        cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), cudaMemcpyKind::cudaMemcpyDeviceToDevice),
+        bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::cudaMemcpyKind::cudaMemcpyDeviceToDevice),
         "memcpy"
     );
-    catch!(cudaDeviceSynchronize());
+    catch!(bindings::cudaDeviceSynchronize());
 }

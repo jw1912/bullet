@@ -44,19 +44,3 @@ extern "C" void activateSqrReLU(const size_t size, const float* in, float* out)
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
     bufferOperation<SqrReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }
-
-__global__ void addToKernel(const size_t size, const float* in, float* out)
-{
-    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (i >= size)
-        return;
-
-    out[i] += in[i];
-}
-
-extern "C" void addTo(const size_t size, const float* in, float* out)
-{
-    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    addToKernel<<<numBlocks, threadsPerBlock>>>(size, in, out);
-}

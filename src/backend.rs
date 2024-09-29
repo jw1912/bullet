@@ -12,12 +12,22 @@ pub struct ExecutionContext {
     ones: Buffer<f32>,
 }
 
+impl Drop for ExecutionContext {
+    fn drop(&mut self) {
+        unsafe {
+            let status = bindings::cublasDestroy_v2(self.handle);
+            assert_eq!(status, bindings::cublasStatus_t::CUBLAS_STATUS_SUCCESS);
+        }
+    }
+}
+
 impl Default for ExecutionContext {
     fn default() -> Self {
         let mut handle: cublasHandle_t = std::ptr::null_mut();
 
         unsafe {
-            bindings::cublasCreate_v2((&mut handle) as *mut cublasHandle_t);
+            let status = bindings::cublasCreate_v2((&mut handle) as *mut cublasHandle_t);
+            assert_eq!(status, bindings::cublasStatus_t::CUBLAS_STATUS_SUCCESS);
         }
 
         let ones = Buffer::new(1);
