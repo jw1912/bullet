@@ -3,7 +3,7 @@ mod operations;
 mod shape;
 
 use dense_matrix::DenseMatrix;
-pub use operations::Operation;
+pub use operations::{Activation, Operation};
 pub use shape::Shape;
 
 use crate::backend::ExecutionContext;

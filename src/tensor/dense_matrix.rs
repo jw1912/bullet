@@ -1,3 +1,4 @@
+mod activate;
 mod add;
 mod matmul;
 

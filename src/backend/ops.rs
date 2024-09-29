@@ -154,158 +154,88 @@ pub unsafe fn reduce_add_cols(
     assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
-pub unsafe fn activate_relu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::activateReLU(size, inp, out);
-}
-
-pub unsafe fn activate_crelu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::activateCReLU(size, inp, out);
-}
-
-pub unsafe fn activate_screlu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::activateSCReLU(size, inp, out);
-}
-
-pub unsafe fn activate_sqrrelu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::activateSqrReLU(size, inp, out);
-}
-
-pub unsafe fn backprop_relu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::backpropReLU(size, inp, out);
-}
-
-pub unsafe fn backprop_crelu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::backpropCReLU(size, inp, out);
-}
-
-pub unsafe fn backprop_screlu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::backpropSCReLU(size, inp, out);
-}
-
-pub unsafe fn backprop_sqrrelu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
-    bindings::backpropSqrReLU(size, inp, out);
-}
-
-pub unsafe fn sigmoid_mpe(
-    _: &ExecutionContext,
-    buffer_size: usize,
-    outputs: *mut f32,
-    results: *const f32,
-    error: *mut f32,
-    power: f32,
-) {
-    bindings::sigmoidMPE(buffer_size, outputs, results, error, power);
-}
-
-pub unsafe fn sparse_linear_backward(
-    _: &ExecutionContext,
-    batch_size: usize,
-    max_input_size: usize,
-    output_size: usize,
-    weights_grad: *mut f32,
-    inputs: *const i32,
-    errors: *const f32,
-    output: *const f32,
-) {
-    bindings::sparseLinearBackward(batch_size, max_input_size, output_size, weights_grad, inputs, errors, output);
-}
-
-pub unsafe fn sparse_linear_forward(
-    _: &ExecutionContext,
-    batch_size: usize,
-    max_input_size: usize,
-    output_size: usize,
-    weights: *const f32,
-    inputs: *const i32,
-    outputs: *mut f32,
-) {
-    bindings::sparseLinearForward(batch_size, max_input_size, output_size, weights, inputs, outputs);
-}
-
-pub unsafe fn splat_add(
-    _: &ExecutionContext,
-    batch_size: usize,
-    tensor_size: usize,
-    inp_a: *const f32,
-    inp_b: *const f32,
-    out: *mut f32,
-) {
-    bindings::splatAdd(batch_size, tensor_size, inp_a, inp_b, out);
-}
-
-pub unsafe fn update_weights(
-    _: &ExecutionContext,
-    network_size: usize,
-    decay: f32,
-    beta1: f32,
-    beta2: f32,
-    min_weight: f32,
-    max_weight: f32,
-    adj: f32,
-    rate: f32,
-    network: *mut f32,
-    momentum: *mut f32,
-    velocity: *mut f32,
-    gradients: *const f32,
-) {
-    bindings::updateWeights(
-        network_size,
-        decay,
-        beta1,
-        beta2,
-        min_weight,
-        max_weight,
-        adj,
-        rate,
-        network,
-        momentum,
-        velocity,
-        gradients,
+#[allow(non_camel_case_types)]
+#[link(name = "kernels", kind = "static")]
+extern "C" {
+    pub fn updateWeights(
+        networkSize: usize,
+        decay: f32,
+        beta1: f32,
+        beta2: f32,
+        minWeight: f32,
+        maxWeight: f32,
+        adj: f32,
+        rate: f32,
+        network: *mut f32,
+        momentum: *mut f32,
+        velocity: *mut f32,
+        gradients: *const f32,
     );
-}
 
-pub unsafe fn select(
-    _: &ExecutionContext,
-    batch_size: usize,
-    input_size: usize,
-    output_size: usize,
-    buckets: *const u8,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    bindings::selectForward(batch_size, input_size, output_size, buckets, inp, out);
-}
+    pub fn sparseLinearForward(
+        batchSize: usize,
+        maxInputSize: usize,
+        outputSize: usize,
+        weights: *const f32,
+        inputs: *const i32,
+        outputs: *mut f32,
+    );
 
-pub unsafe fn select_backprop(
-    _: &ExecutionContext,
-    batch_size: usize,
-    input_size: usize,
-    output_size: usize,
-    buckets: *const u8,
-    inp: *const f32,
-    out: *mut f32,
-) {
-    bindings::selectBackprop(batch_size, input_size, output_size, buckets, inp, out);
-}
+    pub fn sparseLinearBackward(
+        batchSize: usize,
+        maxInputSize: usize,
+        outputSize: usize,
+        weightsGrad: *mut f32,
+        inputs: *const i32,
+        errors: *const f32,
+        output: *const f32,
+    );
 
-pub unsafe fn pairwise_mul(
-    _: &ExecutionContext,
-    batch_size: usize,
-    input_size: usize,
-    output_size: usize,
-    inputs: *const f32,
-    outputs: *mut f32,
-) {
-    bindings::pairwiseMul(batch_size, input_size, output_size, inputs, outputs);
-}
+    pub fn activateReLU(size: usize, inp: *const f32, out: *mut f32);
 
-pub unsafe fn backprop_pairwise_mul(
-    _: &ExecutionContext,
-    batch_size: usize,
-    input_size: usize,
-    output_size: usize,
-    inputs: *const f32,
-    outputs: *mut f32,
-) {
-    bindings::backpropPairwiseMul(batch_size, input_size, output_size, inputs, outputs);
+    pub fn activateCReLU(size: usize, inp: *const f32, out: *mut f32);
+
+    pub fn activateSCReLU(size: usize, inp: *const f32, out: *mut f32);
+
+    pub fn activateSqrReLU(size: usize, inp: *const f32, out: *mut f32);
+
+    pub fn backpropReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
+
+    pub fn backpropCReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
+
+    pub fn backpropSCReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
+
+    pub fn backpropSqrReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
+
+    pub fn sigmoidMPE(bufferSize: usize, outputs: *mut f32, results: *const f32, error: *mut f32, power: f32);
+
+    pub fn splatAdd(batchSize: usize, tensorSize: usize, inp_a: *const f32, inp_b: *const f32, out: *mut f32);
+
+    pub fn selectForward(
+        batchSize: usize,
+        inputSize: usize,
+        outputSize: usize,
+        buckets: *const u8,
+        inp: *const f32,
+        out: *mut f32,
+    );
+
+    pub fn selectBackprop(
+        batchSize: usize,
+        inputSize: usize,
+        outputSize: usize,
+        buckets: *const u8,
+        inp: *const f32,
+        out: *mut f32,
+    );
+
+    pub fn pairwiseMul(batchSize: usize, inputSize: usize, outputSize: usize, input: *const f32, output: *mut f32);
+
+    pub fn backpropPairwiseMul(
+        batchSize: usize,
+        inputSize: usize,
+        outputSize: usize,
+        input: *const f32,
+        output: *mut f32,
+    );
 }

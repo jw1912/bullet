@@ -16,39 +16,39 @@ __device__ float primeSqrReLU(float in) { return in > 0.0F ? 2.0F * in : 0.0F; }
 typedef float(*OpType)(float);
 
 template<OpType op>
-__global__ void bufferBackprop(const size_t size, const float* in, float* out)
+__global__ void bufferBackprop(const size_t size, const float* input, const float* output_grad, float* input_grad)
 {
     const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (i >= size)
         return;
 
-    const float thisIn = in[i];
-    const float thisOut = out[i];
+    const float thisIn = input[i];
+    const float thisOutGrd = output_grad[i];
 
-    out[i] = thisIn * op(thisOut);
+    input_grad[i] = op(thisIn) * thisOutGrd;
 }
 
-extern "C" void backpropReLU(const size_t size, const float* in, float* out)
+extern "C" void backpropReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
+    bufferBackprop<primeReLU><<<numBlocks, threadsPerBlock>>>(size, input, output_grad, input_grad);
 }
 
-extern "C" void backpropCReLU(const size_t size, const float* in, float* out)
+extern "C" void backpropCReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
+    bufferBackprop<primeCReLU><<<numBlocks, threadsPerBlock>>>(size, input, output_grad, input_grad);
 }
 
-extern "C" void backpropSCReLU(const size_t size, const float* in, float* out)
+extern "C" void backpropSCReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeSCReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
+    bufferBackprop<primeSCReLU><<<numBlocks, threadsPerBlock>>>(size, input, output_grad, input_grad);
 }
 
-extern "C" void backpropSqrReLU(const size_t size, const float* in, float* out)
+extern "C" void backpropSqrReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    bufferBackprop<primeSqrReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
+    bufferBackprop<primeSqrReLU><<<numBlocks, threadsPerBlock>>>(size, input, output_grad, input_grad);
 }

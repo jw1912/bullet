@@ -1,6 +1,8 @@
+mod activate;
 mod add;
 mod linear;
 
+pub use activate::Activation;
 use diffable::{DiffableOperation, GraphBuilder, Node};
 
 use crate::backend::ExecutionContext;
@@ -14,6 +16,8 @@ pub enum Operation {
     Linear,
     /// Add two matrices/vectors
     Add,
+    /// Activate a matrix/vector
+    Activate(Activation)
 }
 
 impl Operation {
@@ -31,6 +35,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
         match self {
             Operation::Linear => linear::output_tensor(inputs),
             Operation::Add => add::output_tensor(inputs),
+            Operation::Activate(_) => activate::output_tensor(inputs),
         }
     }
 
@@ -38,6 +43,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
         match self {
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::Add => add::forward(ctx, inputs, output),
+            Operation::Activate(activation) => activate::forward(*activation, inputs, output),
         }
     }
 
@@ -45,6 +51,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
         match self {
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::Add => add::backprop(ctx, output_grad, inputs),
+            Operation::Activate(activation) => activate::backprop(*activation, output_grad, inputs),
         }
     }
 }

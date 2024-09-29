@@ -7,15 +7,7 @@ pub mod util;
 
 pub use bulletformat as format;
 pub use diffable::{Graph, GraphBuilder, Node};
-pub use tensor::{Operation, Tensor};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Activation {
-    ReLU,
-    CReLU,
-    SCReLU,
-    SqrReLU,
-}
+pub use tensor::{Activation, Operation, Tensor};
 
 #[derive(Clone, Copy)]
 pub struct TestDataset<'a> {
