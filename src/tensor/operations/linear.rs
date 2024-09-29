@@ -1,4 +1,8 @@
-use crate::{backend::ExecutionContext, tensor::{dense_matrix::DenseMatrix, Shape}, Tensor};
+use crate::{
+    backend::ExecutionContext,
+    tensor::{dense_matrix::DenseMatrix, Shape},
+    Tensor,
+};
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 {
@@ -9,14 +13,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
 }
 
 pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-    DenseMatrix::matmul(
-        ctx,
-        &inputs[0].values,
-        false,
-        &inputs[1].values,
-        false,
-        &mut output.values,
-    );
+    DenseMatrix::matmul(ctx, &inputs[0].values, false, &inputs[1].values, false, &mut output.values);
 }
 
 pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {

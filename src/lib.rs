@@ -5,9 +5,9 @@ pub mod outputs;
 mod tensor;
 pub mod util;
 
-pub use tensor::{Tensor, Operation};
 pub use bulletformat as format;
 pub use diffable::{Graph, GraphBuilder, Node};
+pub use tensor::{Operation, Tensor};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Activation {

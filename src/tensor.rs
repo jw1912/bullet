@@ -1,4 +1,3 @@
-pub(crate) mod buffer;
 mod dense_matrix;
 mod operations;
 mod shape;
@@ -29,11 +28,7 @@ impl diffable::Tensor for Tensor {
     fn new(shape: Shape, requires_grad: bool) -> Self {
         Self {
             values: DenseMatrix::zeroed(shape),
-            gradients: if requires_grad {
-                Some(DenseMatrix::zeroed(shape))
-            } else {
-                None
-            },
+            gradients: if requires_grad { Some(DenseMatrix::zeroed(shape)) } else { None },
         }
     }
 

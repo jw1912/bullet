@@ -1,7 +1,8 @@
 mod add;
 mod matmul;
 
-use super::{buffer::Buffer, shape::Shape};
+use super::shape::Shape;
+use crate::backend::Buffer;
 
 #[derive(Debug)]
 pub struct DenseMatrix {
@@ -17,27 +18,24 @@ impl Default for DenseMatrix {
 
 impl DenseMatrix {
     pub fn zeroed(shape: Shape) -> Self {
-        Self {
-            shape,
-            buf: Buffer::new(shape.size()),
-        }
+        Self { shape, buf: Buffer::new(shape.size()) }
     }
 
     pub fn shape(&self) -> Shape {
         self.shape
     }
 
-    pub fn size(&self) -> usize {
+    pub fn allocated_size(&self) -> usize {
         self.buf.size()
     }
 
-    /// - If the provided `shape` matches the tensor's current shape, nothing is done.
-    /// - If it doesn't, the tensor is reshaped into this shape, and its values are zeroed.
+    /// - If the provided `shape` matches the matrix's current shape, nothing is done.
+    /// - If it doesn't, the matrix is reshaped into this shape, and its values are zeroed.
     /// #### WARNING
     /// This is a function for internal use only, with potentially
     /// unintentional side effects.
     fn reshape_if_needed(&mut self, shape: Shape) {
-        if shape.size() > self.size() {
+        if shape.size() > self.allocated_size() {
             self.buf = Buffer::new(shape.size());
         } else if self.shape != shape {
             self.buf.set_zero();
@@ -60,9 +58,11 @@ impl DenseMatrix {
         dest.buf.load_from_device(&self.buf);
     }
 
+    /// Writes the contents of this matrix into a buffer,
+    /// returns number of values written.
     pub fn write_to_slice(&self, buf: &mut [f32]) -> usize {
-        assert!(self.size() <= buf.len());
+        assert!(self.allocated_size() <= buf.len());
         self.buf.write_into_slice(buf);
-        self.size()
+        self.allocated_size()
     }
 }

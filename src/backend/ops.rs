@@ -1,10 +1,9 @@
 // Every operation has the same safety criteria, pass valid pointers
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
-use crate::{backend::bindings::cublasStatus_t, tensor::buffer::Buffer};
-
 use super::{
-    bindings::{self, cublasOperation_t},
+    bindings::{self, cublasOperation_t, cublasStatus_t},
+    buffer::Buffer,
     ExecutionContext,
 };
 
@@ -54,28 +53,11 @@ pub unsafe fn sgemm(
 
     let status = unsafe {
         bindings::cublasSgemm_v2(
-            ctx.handle,
-            trans_a,
-            trans_b,
-            m,
-            n,
-            k,
-            &alpha,
-            input_a,
-            lda,
-            input_b,
-            ldb,
-            &beta,
-            output,
-            ldo,
+            ctx.handle, trans_a, trans_b, m, n, k, &alpha, input_a, lda, input_b, ldb, &beta, output, ldo,
         )
     };
 
-    assert_eq!(
-        status,
-        cublasStatus_t::CUBLAS_STATUS_SUCCESS,
-        "cuBLAS sgemm failed!"
-    );
+    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 pub unsafe fn add_matrices(
@@ -114,20 +96,10 @@ pub unsafe fn add_matrices(
         )
     };
 
-    assert_eq!(
-        status,
-        cublasStatus_t::CUBLAS_STATUS_SUCCESS,
-        "cuBLAS sgemm failed!"
-    );
+    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
-pub unsafe fn add_matrix_to(
-    ctx: &mut ExecutionContext,
-    rows: usize,
-    cols: usize,
-    input: *const f32,
-    output: *mut f32,
-) {
+pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize, input: *const f32, output: *mut f32) {
     let alpha = 1.0;
 
     let n = (rows * cols) as c_int;
@@ -135,23 +107,9 @@ pub unsafe fn add_matrix_to(
     let incx = 1;
     let incy = 1;
 
-    let status = unsafe {
-        bindings::cublasSaxpy_v2(
-            ctx.handle,
-            n,
-            &alpha,
-            input,
-            incx,
-            output,
-            incy,
-        )
-    };
+    let status = unsafe { bindings::cublasSaxpy_v2(ctx.handle, n, &alpha, input, incx, output, incy) };
 
-    assert_eq!(
-        status,
-        cublasStatus_t::CUBLAS_STATUS_SUCCESS,
-        "cuBLAS sgemm failed!"
-    );
+    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 pub unsafe fn reduce_add_cols(
@@ -193,11 +151,7 @@ pub unsafe fn reduce_add_cols(
         )
     };
 
-    assert_eq!(
-        status,
-        cublasStatus_t::CUBLAS_STATUS_SUCCESS,
-        "cuBLAS sgemm failed!"
-    );
+    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 pub unsafe fn activate_relu(_: &ExecutionContext, size: usize, inp: *const f32, out: *mut f32) {
@@ -253,15 +207,7 @@ pub unsafe fn sparse_linear_backward(
     errors: *const f32,
     output: *const f32,
 ) {
-    bindings::sparseLinearBackward(
-        batch_size,
-        max_input_size,
-        output_size,
-        weights_grad,
-        inputs,
-        errors,
-        output,
-    );
+    bindings::sparseLinearBackward(batch_size, max_input_size, output_size, weights_grad, inputs, errors, output);
 }
 
 pub unsafe fn sparse_linear_forward(
@@ -276,7 +222,14 @@ pub unsafe fn sparse_linear_forward(
     bindings::sparseLinearForward(batch_size, max_input_size, output_size, weights, inputs, outputs);
 }
 
-pub unsafe fn splat_add(_: &ExecutionContext, batch_size: usize, tensor_size: usize, inp_a: *const f32, inp_b: *const f32, out: *mut f32) {
+pub unsafe fn splat_add(
+    _: &ExecutionContext,
+    batch_size: usize,
+    tensor_size: usize,
+    inp_a: *const f32,
+    inp_b: *const f32,
+    out: *mut f32,
+) {
     bindings::splatAdd(batch_size, tensor_size, inp_a, inp_b, out);
 }
 

@@ -1,10 +1,10 @@
 mod bindings;
+mod buffer;
 pub mod ops;
 pub mod util;
 
 use bindings::cublasHandle_t;
-
-use crate::tensor::buffer::Buffer;
+pub use buffer::Buffer;
 
 #[derive(Debug)]
 pub struct ExecutionContext {
@@ -33,9 +33,6 @@ impl Default for ExecutionContext {
         let ones = Buffer::new(1);
         ones.load_from_slice(&[1.0]);
 
-        Self {
-            handle,
-            ones,
-        }
+        Self { handle, ones }
     }
 }

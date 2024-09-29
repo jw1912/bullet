@@ -42,15 +42,7 @@ impl DenseMatrix {
         trans_b: bool,
         output: &mut Self,
     ) {
-        Self::sgemm(
-            ctx,
-            input_a,
-            trans_a,
-            input_b,
-            trans_b,
-            output,
-            false,
-        );
+        Self::sgemm(ctx, input_a, trans_a, input_b, trans_b, output, false);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -66,49 +58,17 @@ impl DenseMatrix {
     ) {
         if let Some(grad_a) = input_a_grad {
             if trans_a {
-                Self::sgemm(
-                    ctx,
-                    input_b,
-                    trans_b,
-                    output_grad,
-                    true,
-                    grad_a,
-                    true,
-                );
+                Self::sgemm(ctx, input_b, trans_b, output_grad, true, grad_a, true);
             } else {
-                Self::sgemm(
-                    ctx,
-                    output_grad,
-                    false,
-                    input_b,
-                    !trans_b,
-                    grad_a,
-                    true,
-                );
+                Self::sgemm(ctx, output_grad, false, input_b, !trans_b, grad_a, true);
             }
         }
 
         if let Some(grad_b) = input_b_grad {
             if trans_b {
-                Self::sgemm(
-                    ctx,
-                    output_grad,
-                    true,
-                    input_a,
-                    trans_a,
-                    grad_b,
-                    true,
-                );
+                Self::sgemm(ctx, output_grad, true, input_a, trans_a, grad_b, true);
             } else {
-                Self::sgemm(
-                    ctx,
-                    input_a,
-                    !trans_a,
-                    output_grad,
-                    false,
-                    grad_b,
-                    true,
-                );
+                Self::sgemm(ctx, input_a, !trans_a, output_grad, false, grad_b, true);
             }
         }
     }
@@ -116,8 +76,8 @@ impl DenseMatrix {
 
 #[cfg(test)]
 mod tests {
-    use crate::tensor::Shape;
     use super::*;
+    use crate::tensor::Shape;
 
     #[test]
     fn matmul() {
@@ -132,7 +92,7 @@ mod tests {
         let mut input2_grad = DenseMatrix::default();
         let mut output = DenseMatrix::default();
 
-        // load tensors from CPU
+        // load matrices from CPU
         {
             input1.load_from_slice(
                 shape1,
@@ -155,14 +115,7 @@ mod tests {
 
         // normal matmul
         {
-            DenseMatrix::matmul(
-                &mut ctx,
-                &input1,
-                false,
-                &input2,
-                false,
-                &mut output,
-            );
+            DenseMatrix::matmul(&mut ctx, &input1, false, &input2, false, &mut output);
 
             assert_eq!(output.shape(), Shape::new(2, 1));
 
@@ -172,7 +125,7 @@ mod tests {
         }
 
         // backprop normal matmul
-        {    
+        {
             DenseMatrix::backprop_matmul(
                 &mut ctx,
                 &input1,
@@ -198,17 +151,10 @@ mod tests {
 
         // transposed matmul
         {
-            DenseMatrix::matmul(
-                &mut ctx,
-                &input2,
-                true,
-                &input1,
-                true,
-                &mut output,
-            );
+            DenseMatrix::matmul(&mut ctx, &input2, true, &input1, true, &mut output);
 
             assert_eq!(output.shape(), Shape::new(1, 2));
-    
+
             let mut buf = [0.0; 2];
             output.write_to_slice(&mut buf);
             assert_eq!(buf, [3.0, -9.0]);
