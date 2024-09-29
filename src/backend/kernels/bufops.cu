@@ -1,6 +1,3 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __device__ float ReLU(float in) { return in > 0.0F ? in : 0.0F; }

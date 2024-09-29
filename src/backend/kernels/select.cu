@@ -1,7 +1,3 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cstdint>
-
 __global__ void selectKernel(
     const size_t batchSize,
     const size_t inputSize,

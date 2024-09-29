@@ -1,12 +1,3 @@
-/*
-Computes
-N = len(input_vector)
-output_vector = input_vector[:N] * input_vector[N:]
-(and gradients thereof)
-*/
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __global__ void pairwiseMulKernel(

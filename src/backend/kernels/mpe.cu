@@ -1,9 +1,3 @@
-/*
-Computes MSE(sigmoid(outputs), results).
-*/
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __global__ void sigmoidMPEKernel(

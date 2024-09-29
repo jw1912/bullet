@@ -1,11 +1,3 @@
-/*
-This file calculates in-place backprops for activation functions.
-Given a batch of inputs `x[i]` and destinations `y[i]`, the
-function for a given `op` calculates `y[i] = x[i] * op'(y[i])`.
-*/
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __device__ float primeReLU(float in) { return in > 0.0F ? 1.0F : 0.0F; }

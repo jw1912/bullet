@@ -1,8 +1,3 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <iostream>
-#include <cstdint>
-
 __global__ void sparseLinearForwardKernel(
     const size_t inputSize,
     const size_t outputSize,

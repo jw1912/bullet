@@ -1,6 +1,3 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 constexpr float Epsilon = 0.00000001F;
 

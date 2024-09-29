@@ -1,17 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use bindgen::{Builder, EnumVariation};
 
 use super::util;
 
-pub fn build(out_path: PathBuf) {
+pub fn build(out_path: &Path) {
     link_cuda_libs(out_path);
-
-    build_and_link_cuda_kernels();
+    build_and_link_cuda_kernels(out_path);
 }
 
-fn link_cuda_libs(out_path: PathBuf) {
-    let builder = Builder::default();
+fn link_cuda_libs(out_path: &Path) {
     let cuda_path = util::get_var_path("CUDA_PATH");
     let include_path = cuda_path.join("include");
     let include_path_str = include_path.to_str().unwrap();
@@ -20,7 +18,7 @@ fn link_cuda_libs(out_path: PathBuf) {
     link_cuda(&cuda_path);
     println!("cargo:rerun-if-changed={}", include_path_str);
 
-    builder
+    Builder::default()
         .clang_arg(format!("-I{}", include_path_str))
         .header_contents("wrapper.h", "#include <cublas_v2.h>")
         .size_t_is_usize(true)
@@ -32,11 +30,11 @@ fn link_cuda_libs(out_path: PathBuf) {
         .expect("Couldn't write bindings!");
 }
 
-fn build_and_link_cuda_kernels() {
+fn build_and_link_cuda_kernels(out_path: &Path) {
     let files: Vec<String> =
         ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse", "splat_add", "update"]
             .iter()
-            .map(|s| format!("./src/backend/kernels/{s}.cu"))
+            .map(|s| format!("{}/{s}.cu", util::KERNEL_DIR))
             .collect();
 
     cc::Build::new()
@@ -47,6 +45,7 @@ fn build_and_link_cuda_kernels() {
         .include("cuda")
         .include("")
         .files(files)
+        .out_dir(out_path)
         .compile("libkernels.a");
 }
 

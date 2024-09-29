@@ -1,6 +1,3 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 constexpr size_t threads = 1024;
 
 __global__ void splatAddKernel(
