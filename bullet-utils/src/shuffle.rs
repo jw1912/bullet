@@ -38,7 +38,9 @@ impl ShuffleOptions {
 
         if input_size <= self.mem_used_mb * BYTES_PER_MB {
             let mut raw_bytes = std::fs::read(&self.input).with_context(|| "Failed to read input.")?;
-            let data = util::to_slice_with_lifetime_mut(&mut raw_bytes);
+            let data = unsafe {
+                util::to_slice_with_lifetime_mut(&mut raw_bytes)
+            };
 
             shuffle_positions(data);
 
@@ -102,9 +104,17 @@ impl ShuffleOptions {
             input.read_exact(&mut buffer[0..buffer_size])?;
 
             println!("    -> Shuffling in memory");
-            let data = util::to_slice_with_lifetime_mut(&mut buffer[0..buffer_size]);
+
+            let data = unsafe {
+                util::to_slice_with_lifetime_mut(&mut buffer[0..buffer_size])
+            };
+
             shuffle_positions(data);
-            let data_slice = util::to_slice_with_lifetime(data);
+
+            let data_slice = unsafe {
+                util::to_slice_with_lifetime(data)
+            };
+
             assert_eq!(0, buffer_size % CHESS_BOARD_SIZE);
 
             println!("    -> Writing to temp file");
@@ -130,7 +140,9 @@ fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
         return;
     }
 
-    let data_slice = util::to_slice_with_lifetime(data);
+    let data_slice = unsafe { 
+        util::to_slice_with_lifetime(data)
+    };
 
     output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
 }

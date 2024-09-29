@@ -30,18 +30,9 @@ pub fn write_to_bin<T>(item: &[T], size: usize, output_path: &str, pad: bool) ->
     Ok(())
 }
 
-pub fn boxed_and_zeroed<T>() -> Box<T> {
-    unsafe {
-        let layout = std::alloc::Layout::new::<T>();
-        let ptr = std::alloc::alloc_zeroed(layout);
-        if ptr.is_null() {
-            std::alloc::handle_alloc_error(layout);
-        }
-        Box::from_raw(ptr.cast())
-    }
-}
-
-pub fn to_slice_with_lifetime<T, U>(slice: &[T]) -> &[U] {
+/// ### Safety
+/// `&[T]` must be reinterpretable as `&[U]`
+pub unsafe fn to_slice_with_lifetime<T, U>(slice: &[T]) -> &[U] {
     let src_size = std::mem::size_of_val(slice);
     let tgt_size = std::mem::size_of::<U>();
 
@@ -51,7 +42,9 @@ pub fn to_slice_with_lifetime<T, U>(slice: &[T]) -> &[U] {
     unsafe { std::slice::from_raw_parts(slice.as_ptr().cast(), len) }
 }
 
-pub fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
+/// ### Safety
+/// `&mut [T]` must be reinterpretable as `&mut [U]`
+pub unsafe fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     let src_size = std::mem::size_of_val(slice);
     let tgt_size = std::mem::size_of::<U>();
 
@@ -64,7 +57,7 @@ pub fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
 pub fn load_from_bin_f32_slice(size: usize, path: &str) -> Vec<f32> {
     use std::fs::File;
     use std::io::{BufReader, Read};
-    let file = File::open(path).unwrap_or_else(|_| panic!("Invalid File Path: {path}"));
+    let file = File::open(path).expect("Invalid File Path: {path}");
 
     assert_eq!(file.metadata().unwrap().len() as usize, size * std::mem::size_of::<f32>(), "Incorrect File Size!");
 
