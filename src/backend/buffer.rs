@@ -112,7 +112,7 @@ mod util {
                 dest.cast(),
                 src.cast(),
                 amt * std::mem::size_of::<T>(),
-                bindings::cudaMemcpyKind::cudaMemcpyHostToDevice,
+                bindings::H2D,
             ),
             "Memcpy",
         );
@@ -127,7 +127,7 @@ mod util {
                 dest.cast(),
                 src.cast(),
                 amt * std::mem::size_of::<T>(),
-                bindings::cudaMemcpyKind::cudaMemcpyDeviceToHost,
+                bindings::D2H,
             ),
             "Memcpy",
         );
@@ -142,7 +142,7 @@ mod util {
                 dest.cast(),
                 src.cast(),
                 amt * std::mem::size_of::<T>(),
-                bindings::cudaMemcpyKind::cudaMemcpyDeviceToDevice,
+                bindings::D2D,
             ),
             "Memcpy",
         );

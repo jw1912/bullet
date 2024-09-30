@@ -9,6 +9,9 @@ repository = "https://github.com/jw1912/bullet"
 readme = "README.md"
 build = "build/main.rs"
 
+[features]
+hip = []
+
 [dependencies]
 bulletformat = { workspace = true }
 diffable = { git = "https://github.com/jw1912/diffable.git", tag = "v0.4.0" }

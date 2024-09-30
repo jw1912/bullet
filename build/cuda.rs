@@ -37,10 +37,6 @@ fn build_and_link_cuda_kernels(out_path: &Path) {
     cc::Build::new()
         .cuda(true)
         .cudart("shared")
-        .debug(false)
-        .opt_level(3)
-        .include("cuda")
-        .include("")
         .files(&files)
         .out_dir(out_path)
         .compile("libkernels.a");

@@ -2,7 +2,7 @@
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
 use super::{
-    bindings::{self, cublasOperation_t, cublasStatus_t},
+    bindings::{self, CUBLAS_SUCCESS, CUBLAS_OP_N, CUBLAS_OP_T},
     buffer::Buffer,
     ExecutionContext,
 };
@@ -40,8 +40,8 @@ pub unsafe fn sgemm(
     assert_eq!(output_rows, m);
     assert_eq!(output_cols, n);
 
-    let trans_a = if trans_a { cublasOperation_t::CUBLAS_OP_T } else { cublasOperation_t::CUBLAS_OP_N };
-    let trans_b = if trans_b { cublasOperation_t::CUBLAS_OP_T } else { cublasOperation_t::CUBLAS_OP_N };
+    let trans_a = if trans_a { CUBLAS_OP_T } else { CUBLAS_OP_N };
+    let trans_b = if trans_b { CUBLAS_OP_T } else { CUBLAS_OP_N };
 
     let m = m as c_int;
     let n = n as c_int;
@@ -57,7 +57,7 @@ pub unsafe fn sgemm(
         )
     };
 
-    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 pub unsafe fn add_matrices(
@@ -81,8 +81,8 @@ pub unsafe fn add_matrices(
     let status = unsafe {
         bindings::cublasSgeam(
             ctx.handle,
-            cublasOperation_t::CUBLAS_OP_N,
-            cublasOperation_t::CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
             m,
             n,
             &alpha,
@@ -96,7 +96,7 @@ pub unsafe fn add_matrices(
         )
     };
 
-    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize, input: *const f32, output: *mut f32) {
@@ -109,7 +109,7 @@ pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize
 
     let status = unsafe { bindings::cublasSaxpy_v2(ctx.handle, n, &alpha, input, incx, output, incy) };
 
-    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 pub unsafe fn reduce_add_cols(
@@ -137,7 +137,7 @@ pub unsafe fn reduce_add_cols(
     let status = unsafe {
         bindings::cublasSgemv_v2(
             ctx.handle,
-            cublasOperation_t::CUBLAS_OP_N,
+            CUBLAS_OP_N,
             m,
             n,
             &alpha,
@@ -151,7 +151,7 @@ pub unsafe fn reduce_add_cols(
         )
     };
 
-    assert_eq!(status, cublasStatus_t::CUBLAS_STATUS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
 #[rustfmt::skip]

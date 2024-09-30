@@ -16,7 +16,7 @@ impl Drop for ExecutionContext {
     fn drop(&mut self) {
         unsafe {
             let status = bindings::cublasDestroy_v2(self.handle);
-            assert_eq!(status, bindings::cublasStatus_t::CUBLAS_STATUS_SUCCESS);
+            assert_eq!(status, bindings::CUBLAS_SUCCESS);
         }
     }
 }
@@ -27,7 +27,7 @@ impl Default for ExecutionContext {
 
         unsafe {
             let status = bindings::cublasCreate_v2((&mut handle) as *mut cublasHandle_t);
-            assert_eq!(status, bindings::cublasStatus_t::CUBLAS_STATUS_SUCCESS);
+            assert_eq!(status, bindings::CUBLAS_SUCCESS);
         }
 
         let ones = Buffer::new(1);

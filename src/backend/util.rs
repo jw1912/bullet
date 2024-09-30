@@ -1,7 +1,7 @@
 use super::bindings;
 
 pub unsafe fn catch(status: bindings::cudaError_t, name: &str) {
-    if status != bindings::cudaError_t::cudaSuccess {
+    if status != bindings::SUCCESS {
         panic!("{name}: {status:?}");
     }
 }
