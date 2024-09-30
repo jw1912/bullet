@@ -21,7 +21,7 @@ impl DenseMatrix {
         } else if input_a.shape.cols() == 1 {
             output.reshape_if_needed(input_b.shape);
             unsafe {
-                ops::splatAdd(
+                ops::splat_add(
                     input_b.shape.cols(),
                     input_b.shape.rows(),
                     input_a.buf.ptr(),
@@ -32,7 +32,7 @@ impl DenseMatrix {
         } else if input_b.shape.cols() == 1 {
             output.reshape_if_needed(input_a.shape);
             unsafe {
-                ops::splatAdd(
+                ops::splat_add(
                     input_a.shape.cols(),
                     input_a.shape.rows(),
                     input_b.buf.ptr(),

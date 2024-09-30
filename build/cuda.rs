@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use bindgen::{Builder, EnumVariation};
-
 use super::util;
 
 pub fn build(out_path: &Path) {
@@ -18,11 +16,11 @@ fn link_cuda_libs(out_path: &Path) {
     link_cuda(&cuda_path);
     println!("cargo:rerun-if-changed={}", include_path_str);
 
-    Builder::default()
+    bindgen::Builder::default()
         .clang_arg(format!("-I{}", include_path_str))
         .header_contents("wrapper.h", "#include <cublas_v2.h>")
         .size_t_is_usize(true)
-        .default_enum_style(EnumVariation::Rust { non_exhaustive: true })
+        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: true })
         .layout_tests(false)
         .generate()
         .expect("Unable to generate bindings")
@@ -31,11 +29,10 @@ fn link_cuda_libs(out_path: &Path) {
 }
 
 fn build_and_link_cuda_kernels(out_path: &Path) {
-    let files: Vec<String> =
-        ["backprops", "bufops", "mpe", "pairwise_mul", "select", "sparse", "splat_add", "update"]
-            .iter()
-            .map(|s| format!("{}/{s}.cu", util::KERNEL_DIR))
-            .collect();
+    let files = util::KERNEL_FILES
+        .iter()
+        .map(|s| format!("{}/{s}.cu", util::KERNEL_DIR))
+        .collect::<Vec<_>>();
 
     cc::Build::new()
         .cuda(true)
@@ -44,7 +41,7 @@ fn build_and_link_cuda_kernels(out_path: &Path) {
         .opt_level(3)
         .include("cuda")
         .include("")
-        .files(files)
+        .files(&files)
         .out_dir(out_path)
         .compile("libkernels.a");
 }
