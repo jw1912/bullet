@@ -23,7 +23,7 @@ cc = "1.0.83"
 
 [workspace]
 resolver = "2"
-members = ["bullet-utils"]
+members = ["utils"]
 
 [workspace.package]
 license = "MIT"

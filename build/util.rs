@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-pub const KERNEL_DIR: &str = "./src/backend/kernels";
+pub const KERNEL_DIR: &str = "./kernels";
 
 pub const KERNEL_FILES: [&str; 4] = ["activate", "adamw", "add", "power_error"];
 

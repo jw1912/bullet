@@ -4,7 +4,7 @@ mod linear;
 mod power_error;
 
 pub use activate::Activation;
-use diffable::{DiffableOperation, GraphBuilder, Node};
+use diffable::DiffableOperation;
 
 use crate::{
     backend::ExecutionContext,
@@ -22,16 +22,6 @@ pub enum Operation {
     Activate(Activation),
     /// Calculate `output[i] = powf(abs(input_a[i] - input_b[i]), power)`
     AbsPowerError(f32),
-}
-
-impl Operation {
-    pub fn linear(builder: &mut GraphBuilder<Tensor>, a: Node, b: Node) -> Node {
-        builder.create_result_of_operation(Operation::Linear, &[a, b])
-    }
-
-    pub fn add(builder: &mut GraphBuilder<Tensor>, a: Node, b: Node) -> Node {
-        builder.create_result_of_operation(Operation::Add, &[a, b])
-    }
 }
 
 impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
