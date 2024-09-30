@@ -1,15 +1,6 @@
-use crate::backend::ops;
+use crate::{backend::ops, optimiser::AdamWParams};
 
 use super::DenseMatrix;
-
-#[derive(Clone, Copy)]
-pub struct AdamWParams {
-    pub decay: f32,
-    pub beta1: f32,
-    pub beta2: f32,
-    pub min_weight: f32,
-    pub max_weight: f32,
-}
 
 impl DenseMatrix {
     pub fn adamw(
