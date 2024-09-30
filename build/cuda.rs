@@ -12,7 +12,7 @@ fn link_cuda_libs() {
     let include_path = cuda_path.join("include");
     let include_path_str = include_path.to_str().unwrap();
 
-    println!("cargo:rustc-link-lib=static=cublas");
+    println!("cargo:rustc-link-lib=dylib=cublas");
     link_cuda(&cuda_path);
     println!("cargo:rerun-if-changed={}", include_path_str);
 }

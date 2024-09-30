@@ -12,23 +12,12 @@ fn link_hip_libs(out_path: &Path) {
     let include_path = hip_path.join("include");
     let include_path_str = include_path.to_str().unwrap();
 
-    println!("cargo:rustc-link-lib=static=hipblas");
+    println!("cargo:rustc-link-arg=-lstdc++");
+    println!("cargo:rustc-link-lib=dylib=hipblas");
+    println!("cargo:rustc-link-lib=dylib=rocblas");
     println!("cargo:rustc-link-lib=dylib=amdhip64");
     println!("cargo:rustc-link-search=native={}", hip_path.join("lib").to_str().unwrap());
     println!("cargo:rerun-if-changed={}", include_path_str);
-
-    let header = "#define __HIP_PLATFORM_AMD__\n#include <hipblas/hipblas.h>";
-
-    bindgen::Builder::default()
-        .clang_arg(format!("-I{}", include_path_str))
-        .header_contents("wrapper.h", header)
-        .size_t_is_usize(true)
-        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: true })
-        .layout_tests(false)
-        .generate()
-        .expect("Unable to generate bindings")
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
 }
 
 fn build_and_link_hip_kernels(out_path: &Path) {
@@ -49,11 +38,16 @@ fn build_and_link_hip_kernels(out_path: &Path) {
         .flag("-munsafe-fp-atomics")
         .define("__HIP_PLATFORM_AMD__", None)
         .files(&files)
-        .out_dir(out_path)
         .compile("libkernels.a");
 }
 
 fn get_gcn_arch_name() -> Option<String> {
+    let provided = std::env::var("GCN_ARCH_NAME").ok();
+
+    if provided.is_some() {
+        return provided;
+    }
+
     let output = Command::new("hipInfo").output().expect("Failed to execute hipInfo.exe");
 
     if output.status.success() {
@@ -64,5 +58,6 @@ fn get_gcn_arch_name() -> Option<String> {
             }
         }
     }
+
     None
 }

@@ -1,6 +1,6 @@
-#[cfg(not(feature = "hip"))]
+#[allow(unused)]
 mod cuda;
-#[cfg(feature = "hip")]
+#[allow(unused)]
 mod hip;
 mod util;
 
