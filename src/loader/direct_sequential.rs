@@ -70,9 +70,7 @@ impl<T: BulletFormat + 'static> DataLoader<T> for DirectSequentialDataLoader {
                         break;
                     }
 
-                    let data: &[T] = unsafe {
-                        util::to_slice_with_lifetime(buf)
-                    };
+                    let data: &[T] = unsafe { util::to_slice_with_lifetime(buf) };
 
                     for batch in data.chunks(batch_size) {
                         let should_break = f(batch);

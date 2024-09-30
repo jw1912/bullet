@@ -107,45 +107,21 @@ mod util {
     /// # Safety
     /// Pointers need to be valid and `amt` need to be valid.
     pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
-        catch(
-            bindings::cudaMemcpy(
-                dest.cast(),
-                src.cast(),
-                amt * std::mem::size_of::<T>(),
-                bindings::H2D,
-            ),
-            "Memcpy",
-        );
+        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::H2D), "Memcpy");
         catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
     }
 
     /// # Safety
     /// Pointers need to be valid and `amt` need to be valid.
     pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
-        catch(
-            bindings::cudaMemcpy(
-                dest.cast(),
-                src.cast(),
-                amt * std::mem::size_of::<T>(),
-                bindings::D2H,
-            ),
-            "Memcpy",
-        );
+        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::D2H), "Memcpy");
         catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
     }
 
     /// # Safety
     /// Pointers need to be valid and `amt` need to be valid.
     pub unsafe fn copy_on_device<T>(dest: *mut T, src: *const T, amt: usize) {
-        catch(
-            bindings::cudaMemcpy(
-                dest.cast(),
-                src.cast(),
-                amt * std::mem::size_of::<T>(),
-                bindings::D2D,
-            ),
-            "Memcpy",
-        );
+        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::D2D), "Memcpy");
         catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
     }
 }

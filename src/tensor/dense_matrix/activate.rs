@@ -10,36 +10,20 @@ macro_rules! define_activation {
         $bwd_kernel:ident
     ) => {
         impl DenseMatrix {
-            pub fn $fwd(
-                input: &Self,
-                output: &mut Self,
-            ) {
+            pub fn $fwd(input: &Self, output: &mut Self) {
                 output.reshape_if_needed(input.shape);
                 unsafe {
-                    ops::$fwd_kernel(
-                        output.shape.size(),
-                        input.buf.ptr(),
-                        output.buf.ptr(),
-                    );
+                    ops::$fwd_kernel(output.shape.size(), input.buf.ptr(), output.buf.ptr());
                 }
             }
-        
-            pub fn $bwd(
-                input: &Self,
-                input_grad: &mut Self,
-                output_grad: &Self,
-            ) {
+
+            pub fn $bwd(input: &Self, input_grad: &mut Self, output_grad: &Self) {
                 assert_eq!(input.shape, output_grad.shape);
                 input_grad.reshape_if_needed(input.shape);
                 unsafe {
-                    ops::$bwd_kernel(
-                        input.shape.size(),
-                        input.buf.ptr(),
-                        output_grad.buf.ptr(),
-                        input_grad.buf.ptr(),
-                    );
+                    ops::$bwd_kernel(input.shape.size(), input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.ptr());
                 }
-            }           
+            }
         }
     };
 }
@@ -64,45 +48,35 @@ mod tests {
         let mut input = DenseMatrix::default();
         let mut input_grad = DenseMatrix::default();
         let mut output = DenseMatrix::default();
-        
+
         // load matrix from CPU
         input.load_from_slice(shape, &[-1.0, 0.5, 2.0, -2.0]);
         assert_eq!(input.shape(), shape);
-        
+
         fwd(&input, &mut output);
-        
+
         assert_eq!(output.shape, input.shape);
-        
+
         let mut buf = [0.0; 4];
         output.write_to_slice(&mut buf);
         assert_eq!(buf, fwd_expected);
-        
+
         bwd(&input, &mut input_grad, &output);
-        
+
         assert_eq!(input_grad.shape, input.shape);
-        
+
         input_grad.write_to_slice(&mut buf);
         assert_eq!(buf, bwd_expected);
     }
 
     #[test]
     fn relu() {
-        activation_test(
-            DenseMatrix::relu,
-            DenseMatrix::relu_backward,
-            [0.0, 0.5, 2.0, 0.0],
-            [0.0, 0.5, 2.0, 0.0],
-        );
+        activation_test(DenseMatrix::relu, DenseMatrix::relu_backward, [0.0, 0.5, 2.0, 0.0], [0.0, 0.5, 2.0, 0.0]);
     }
 
     #[test]
     fn crelu() {
-        activation_test(
-            DenseMatrix::crelu,
-            DenseMatrix::crelu_backward,
-            [0.0, 0.5, 1.0, 0.0],
-            [0.0, 0.5, 0.0, 0.0],
-        );
+        activation_test(DenseMatrix::crelu, DenseMatrix::crelu_backward, [0.0, 0.5, 1.0, 0.0], [0.0, 0.5, 0.0, 0.0]);
     }
 
     #[test]

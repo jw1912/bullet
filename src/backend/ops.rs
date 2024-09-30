@@ -2,7 +2,7 @@
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
 use super::{
-    bindings::{self, CUBLAS_SUCCESS, CUBLAS_OP_N, CUBLAS_OP_T},
+    bindings::{self, CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_SUCCESS},
     buffer::Buffer,
     ExecutionContext,
 };

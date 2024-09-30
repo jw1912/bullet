@@ -32,10 +32,7 @@ fn link_hip_libs(out_path: &Path) {
 }
 
 fn build_and_link_hip_kernels(out_path: &Path) {
-    let files = util::KERNEL_FILES
-        .iter()
-        .map(|s| format!("{}/{s}.cu", util::KERNEL_DIR))
-        .collect::<Vec<_>>();
+    let files = util::KERNEL_FILES.iter().map(|s| format!("{}/{s}.cu", util::KERNEL_DIR)).collect::<Vec<_>>();
 
     #[cfg(target_family = "windows")]
     let compiler_name = "hipcc.bin.exe";

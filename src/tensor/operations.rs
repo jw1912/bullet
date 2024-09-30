@@ -17,7 +17,7 @@ pub enum Operation {
     /// Add two matrices/vectors
     Add,
     /// Activate a matrix/vector
-    Activate(Activation)
+    Activate(Activation),
 }
 
 impl Operation {
