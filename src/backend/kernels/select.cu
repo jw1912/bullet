@@ -1,3 +1,7 @@
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#endif
+
 __global__ void selectKernel(
     const size_t batchSize,
     const size_t inputSize,

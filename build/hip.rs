@@ -13,13 +13,12 @@ fn link_hip_libs(out_path: &Path) {
     let include_path_str = include_path.to_str().unwrap();
 
     println!("cargo:rustc-link-lib=static=hipblas");
-    println!("cargo:rustc-link-lib=static=rocmblas");
     println!("cargo:rustc-link-lib=dylib=amdhip64");
     println!("cargo:rustc-link-search=native={}", hip_path.join("lib").to_str().unwrap());
     println!("cargo:rerun-if-changed={}", include_path_str);
 
     let header = "#define __HIP_PLATFORM_AMD__\n#include <hipblas/hipblas.h>";
-    
+
     bindgen::Builder::default()
         .clang_arg(format!("-I{}", include_path_str))
         .header_contents("wrapper.h", header)
@@ -51,6 +50,7 @@ fn build_and_link_hip_kernels(out_path: &Path) {
         .compiler(compiler_name)
         .flag(&format!("--offload-arch={}", gcn_arch_name))
         .flag("-munsafe-fp-atomics")
+        .define("__HIP_PLATFORM_AMD__", None)
         .files(&files)
         .out_dir(out_path)
         .compile("libkernels.a");

@@ -1,3 +1,7 @@
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#endif
+
 __global__ void sparseLinearForwardKernel(
     const size_t inputSize,
     const size_t outputSize,

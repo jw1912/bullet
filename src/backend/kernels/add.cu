@@ -1,3 +1,7 @@
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#endif
+
 constexpr size_t threads = 1024;
 
 __global__ void splatAddKernel(
