@@ -1,10 +1,10 @@
-use std::path::Path;
+use std::{path::Path, process::Command};
 
 use super::util;
 
 pub fn build(out_path: &Path) {
     link_hip_libs(out_path);
-    //build_and_link_hip_kernels(out_path);
+    build_and_link_hip_kernels(out_path);
 }
 
 fn link_hip_libs(out_path: &Path) {
@@ -19,7 +19,7 @@ fn link_hip_libs(out_path: &Path) {
     println!("cargo:rerun-if-changed={}", include_path_str);
 
     let header = "#define __HIP_PLATFORM_AMD__\n#include <hipblas/hipblas.h>";
-
+    
     bindgen::Builder::default()
         .clang_arg(format!("-I{}", include_path_str))
         .header_contents("wrapper.h", header)
@@ -44,10 +44,28 @@ fn build_and_link_hip_kernels(out_path: &Path) {
     #[cfg(not(target_family = "windows"))]
     let compiler_name = "hipcc";
 
+    // Get the gcnArchName from hipInfo.exe, since hipcc lies about doing it itself
+    let gcn_arch_name = get_gcn_arch_name().expect("Failed to get gcnArchName from hipInfo.exe");
+
     cc::Build::new()
         .compiler(compiler_name)
+        .flag(&format!("--offload-arch={}", gcn_arch_name))
         .flag("-munsafe-fp-atomics")
         .files(&files)
         .out_dir(out_path)
         .compile("libkernels.a");
+}
+
+fn get_gcn_arch_name() -> Option<String> {
+    let output = Command::new("hipInfo").output().expect("Failed to execute hipInfo.exe");
+
+    if output.status.success() {
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        for line in output_str.lines() {
+            if line.contains("gcnArchName:") {
+                return line.split_whitespace().last().map(String::from);
+            }
+        }
+    }
+    None
 }

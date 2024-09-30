@@ -27,29 +27,21 @@ You can build `bullet-utils` with `cargo b -r --package bullet-utils`, to do the
 
 Use `./target/release/bullet-utils[.exe] help` to see specific usage.
 
-### Currently Supported Backends:
-#### Default
-Reference CPU backend. It is suitable for training small networks or various utilities, such as loading nets to requantise them or test their output on specific positions.
+### Backends:
 
-> [!WARNING]
-> Not intended for serious training use. If you need to train on CPU, use the [legacy](https://github.com/jw1912/bullet/tree/legacy) branch.
+Building `bullet` requires a C++ compiler - it is recommend to use `clang`.
+- If on Windows, get it directly from LLVM github releases
+- You may need to specify the environment variable `CXX=clang++`
 
 #### CUDA
-The "first class" supported backend. To compile to target CUDA you need to enable the `cuda` feature,
-as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit), and have an available C++ compiler.
-
-> [!NOTE]
-> If you are on Windows, it is recommended to use clang, direct from LLVM github releases, for the C++ compiler.
+The default backend. You will need to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit).
 
 #### HIP
-Mainly directed toward users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature,
-as demonstrated in the [wiki](https://github.com/jw1912/bullet/wiki/2.-Getting-Started-with-bullet). You will need to install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html).
 
 > [!NOTE]
 > If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
 
 > [!WARNING]  
-> Due to what appears to be a bug in RoCM, some tests will sometimes fail due to missed synchronisation between device and host in a multithreaded context. As the trainer only calls kernels from one thread, this should not be an issue in training.
-
-> [!WARNING]  
 > The HIP backend is not *officially* supported on Linux (due to unresolved issues with annoying platform dependent stuff), but it has been made to work by a couple of users with some minor edits.
+
+For users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature. You will need to install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html).

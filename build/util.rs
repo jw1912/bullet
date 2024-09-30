@@ -9,8 +9,8 @@ pub fn get_var_path(name: &str) -> PathBuf {
 
     use std::env::VarError;
     let path = std::env::var(name).unwrap_or_else(|e| match e {
-        VarError::NotPresent => panic!("Env Var {name} is not defined"),
-        VarError::NotUnicode(_) => panic!("Env Var {name} contains non-unicode path!"),
+        VarError::NotPresent => panic!("{name} is not defined"),
+        VarError::NotUnicode(_) => panic!("{name} contains non-unicode path!"),
     });
 
     println!("Path {}={:?}", name, path);

@@ -1,11 +1,27 @@
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
+__device__ float ReLU(float in) { return in > 0.0F ? in : 0.0F; }
+__device__ float CReLU(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : in); }
+__device__ float SCReLU(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : (in * in)); }
+__device__ float SqrReLU(float in) { return in < 0.0F ? 0.0F : (in * in); }
+
 __device__ float primeReLU(float in) { return in > 0.0F ? 1.0F : 0.0F; }
 __device__ float primeCReLU(float in) { return in > 0.0F && in < 1.0F ? 1.0F : 0.0F; }
 __device__ float primeSCReLU(float in) { return in > 0.0F && in < 1.0F ? 2.0F * in : 0.0F; }
 __device__ float primeSqrReLU(float in) { return in > 0.0F ? 2.0F * in : 0.0F; }
 
 typedef float(*OpType)(float);
+
+template<OpType op>
+__global__ void bufferOperation(const size_t size, const float* in, float* out)
+{
+    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= size)
+        return;
+
+    out[i] = op(in[i]);
+}
 
 template<OpType op>
 __global__ void bufferBackprop(const size_t size, const float* input, const float* output_grad, float* input_grad)
@@ -19,22 +35,6 @@ __global__ void bufferBackprop(const size_t size, const float* input, const floa
     const float thisOutGrd = output_grad[i];
 
     input_grad[i] = op(thisIn) * thisOutGrd;
-}
-
-__device__ float ReLU(float in) { return in > 0.0F ? in : 0.0F; }
-__device__ float CReLU(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : in); }
-__device__ float SCReLU(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : (in * in)); }
-__device__ float SqrReLU(float in) { return in < 0.0F ? 0.0F : (in * in); }
-
-template<OpType op>
-__global__ void bufferOperation(const size_t size, const float* in, float* out)
-{
-    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (i >= size)
-        return;
-
-    out[i] = op(in[i]);
 }
 
 extern "C" void backpropReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
