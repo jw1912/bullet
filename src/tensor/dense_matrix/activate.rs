@@ -36,7 +36,7 @@ define_activation!(sqrrelu, sqrrelu_backward, activateSqrReLU, backpropSqrReLU);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::Shape;
+    use crate::{backend::util, tensor::Shape};
 
     fn activation_test(
         fwd: fn(&DenseMatrix, &mut DenseMatrix),
@@ -49,11 +49,17 @@ mod tests {
         let mut input_grad = DenseMatrix::default();
         let mut output = DenseMatrix::default();
 
+        util::panic_if_device_error("Failed to initialise matrices!");
+
         // load matrix from CPU
         input.load_from_slice(shape, &[-1.0, 0.5, 2.0, -2.0]);
         assert_eq!(input.shape(), shape);
 
+        util::panic_if_device_error("Failed to load data from CPU!");
+
         fwd(&input, &mut output);
+
+        util::panic_if_device_error("Failed to calculate activation!");
 
         assert_eq!(output.shape, input.shape);
 
@@ -61,12 +67,18 @@ mod tests {
         output.write_to_slice(&mut buf);
         assert_eq!(buf, fwd_expected);
 
+        util::panic_if_device_error("Failed to write data to CPU!");
+
         bwd(&input, &mut input_grad, &output);
+
+        util::panic_if_device_error("Failed to backprop activation!");
 
         assert_eq!(input_grad.shape, input.shape);
 
         input_grad.write_to_slice(&mut buf);
         assert_eq!(buf, bwd_expected);
+
+        util::panic_if_device_error("Failed to write data to CPU!");
     }
 
     #[test]

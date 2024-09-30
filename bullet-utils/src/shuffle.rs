@@ -7,7 +7,6 @@ use std::{
 
 use crate::Rand;
 use anyhow::Context;
-use bullet::util;
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 
@@ -38,7 +37,7 @@ impl ShuffleOptions {
 
         if input_size <= self.mem_used_mb * BYTES_PER_MB {
             let mut raw_bytes = std::fs::read(&self.input).with_context(|| "Failed to read input.")?;
-            let data = unsafe { util::to_slice_with_lifetime_mut(&mut raw_bytes) };
+            let data = unsafe { to_slice_with_lifetime_mut(&mut raw_bytes) };
 
             shuffle_positions(data);
 
@@ -103,11 +102,11 @@ impl ShuffleOptions {
 
             println!("    -> Shuffling in memory");
 
-            let data = unsafe { util::to_slice_with_lifetime_mut(&mut buffer[0..buffer_size]) };
+            let data = unsafe { to_slice_with_lifetime_mut(&mut buffer[0..buffer_size]) };
 
             shuffle_positions(data);
 
-            let data_slice = unsafe { util::to_slice_with_lifetime(data) };
+            let data_slice = unsafe { to_slice_with_lifetime(data) };
 
             assert_eq!(0, buffer_size % CHESS_BOARD_SIZE);
 
@@ -134,7 +133,31 @@ fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
         return;
     }
 
-    let data_slice = unsafe { util::to_slice_with_lifetime(data) };
+    let data_slice = unsafe { to_slice_with_lifetime(data) };
 
     output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
+}
+
+/// ### Safety
+/// `&[T]` must be reinterpretable as `&[U]`
+unsafe fn to_slice_with_lifetime<T, U>(slice: &[T]) -> &[U] {
+    let src_size = std::mem::size_of_val(slice);
+    let tgt_size = std::mem::size_of::<U>();
+
+    assert!(src_size % tgt_size == 0, "Target type size does not divide slice size!");
+
+    let len = src_size / tgt_size;
+    unsafe { std::slice::from_raw_parts(slice.as_ptr().cast(), len) }
+}
+
+/// ### Safety
+/// `&mut [T]` must be reinterpretable as `&mut [U]`
+unsafe fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
+    let src_size = std::mem::size_of_val(slice);
+    let tgt_size = std::mem::size_of::<U>();
+
+    assert!(src_size % tgt_size == 0, "Target type size does not divide slice size!");
+
+    let len = src_size / tgt_size;
+    unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr().cast(), len) }
 }

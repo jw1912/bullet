@@ -15,7 +15,8 @@ pub fn _device_synchronise() {
     }
 }
 
-pub fn _panic_if_device_error(msg: &str) {
+#[cfg(test)]
+pub fn panic_if_device_error(msg: &str) {
     // # Safety
     // This function cannot fail without raising an error
     // that will be caught.

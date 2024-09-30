@@ -77,7 +77,7 @@ impl DenseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::Shape;
+    use crate::{backend::util, tensor::Shape};
 
     #[test]
     fn matmul() {
@@ -91,6 +91,8 @@ mod tests {
         let mut input1_grad = DenseMatrix::default();
         let mut input2_grad = DenseMatrix::default();
         let mut output = DenseMatrix::default();
+
+        util::panic_if_device_error("Failed to initialise matrices!");
 
         // load matrices from CPU
         {
@@ -111,17 +113,23 @@ mod tests {
 
             assert_eq!(input1.shape(), shape1);
             assert_eq!(input2.shape(), shape2);
+
+            util::panic_if_device_error("Failed to load data from CPU!");
         }
 
         // normal matmul
         {
             DenseMatrix::matmul(&mut ctx, &input1, false, &input2, false, &mut output);
 
+            util::panic_if_device_error("Failed to calculate matmul!");
+
             assert_eq!(output.shape(), Shape::new(2, 1));
 
             let mut buf = [0.0; 2];
             output.write_to_slice(&mut buf);
             assert_eq!(buf, [3.0, -9.0]);
+
+            util::panic_if_device_error("Failed to write data to CPU!");
         }
 
         // backprop normal matmul
@@ -137,6 +145,8 @@ mod tests {
                 &output,
             );
 
+            util::panic_if_device_error("Failed to backprop matmul!");
+
             assert_eq!(input1_grad.shape(), shape1);
             assert_eq!(input2_grad.shape(), shape2);
 
@@ -147,17 +157,23 @@ mod tests {
             let mut grad2 = [0.0; 3];
             input2_grad.write_to_slice(&mut grad2);
             assert_eq!(grad2, [-39.0, 24.0, 27.0]);
+
+            util::panic_if_device_error("Failed to write data to CPU!");
         }
 
         // transposed matmul
         {
             DenseMatrix::matmul(&mut ctx, &input2, true, &input1, true, &mut output);
 
+            util::panic_if_device_error("Failed to calculate transposed matmul!");
+
             assert_eq!(output.shape(), Shape::new(1, 2));
 
             let mut buf = [0.0; 2];
             output.write_to_slice(&mut buf);
             assert_eq!(buf, [3.0, -9.0]);
+
+            util::panic_if_device_error("Failed to write data to CPU!");
         }
 
         // backprop transposed matmul
@@ -176,6 +192,8 @@ mod tests {
                 &output,
             );
 
+            util::panic_if_device_error("Failed to backprop transposed matmul!");
+
             assert_eq!(input1_grad.shape(), shape1);
             assert_eq!(input2_grad.shape(), shape2);
 
@@ -186,6 +204,8 @@ mod tests {
             let mut grad2 = [0.0; 3];
             input2_grad.write_to_slice(&mut grad2);
             assert_eq!(grad2, [-39.0, 24.0, 27.0]);
+
+            util::panic_if_device_error("Failed to write data to CPU!");
         }
     }
 }

@@ -27,21 +27,24 @@ You can build `bullet-utils` with `cargo b -r --package bullet-utils`, to do the
 
 Use `./target/release/bullet-utils[.exe] help` to see specific usage.
 
-### Backends:
+### Backends
 
-Building `bullet` requires a C++ compiler - it is recommend to use `clang`.
-- If on Windows, get it directly from LLVM github releases
-- You may need to specify the environment variable `CXX=clang++`
+#### General
+Building `bullet` requires a C++ compiler (which will be invoked by `nvcc` or `hipcc`).
+- On Windows, this should be `cl.exe` (requires Visual Studio to be installed)
+- On Linux, it is recommended to use `clang`
+    - You may need to specify the environment variable `CXX` or `HOST_CXX` with the compiler name
 
 #### CUDA
-The default backend. You will need to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit).
+The default backend.
+- Install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
+- CUDA version >=12.2 is required.
+- The `CUDA_PATH` environment variable must be set to the CUDA install location (should contain the `bin`, `lib` and `include` directories)
+- The system `PATH` should contain `%CUDA_PATH%\bin` (or equivalent for Linux)
 
 #### HIP
-
-> [!NOTE]
-> If you are on Windows, you must also add `%HIP_PATH%\bin\` to the PATH variable in your system environment variables.
-
-> [!WARNING]  
-> The HIP backend is not *officially* supported on Linux (due to unresolved issues with annoying platform dependent stuff), but it has been made to work by a couple of users with some minor edits.
-
-For users with AMD GPUs. To compile to target HIP you need to enable the `hip` feature. You will need to install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html).
+For users with AMD GPUs.
+- Enable the `hip` feature
+- Install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html)
+- The `HIP_PATH` environment variable must be set to the HIP install location (should contain the `bin`, `lib` and `include` directories)
+- The system `PATH` should contain `%HIP_PATH%\bin` (or equivalent for Linux)

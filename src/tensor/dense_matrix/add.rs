@@ -100,7 +100,7 @@ fn backprop_add_single(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::Shape;
+    use crate::{backend::util, tensor::Shape};
 
     #[test]
     fn add() {
@@ -115,6 +115,8 @@ mod tests {
         let mut input2_grad = DenseMatrix::default();
         let mut output = DenseMatrix::default();
 
+        util::panic_if_device_error("Failed to initialise matrices!");
+
         // load matrices from CPU
         {
             input1.load_from_slice(shape1, &[-1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 1.0, 1.0, 1.0]);
@@ -123,17 +125,23 @@ mod tests {
 
             assert_eq!(input1.shape(), shape1);
             assert_eq!(input2.shape(), shape2);
+
+            util::panic_if_device_error("Failed to load data from CPU!");
         }
 
         // add
         {
             DenseMatrix::add(&mut ctx, &input1, &input2, &mut output);
 
+            util::panic_if_device_error("Failed to add matrices!");
+
             assert_eq!(output.shape(), Shape::new(3, 3));
 
             let mut buf = [0.0; 9];
             output.write_to_slice(&mut buf);
             assert_eq!(buf, [0.0, 6.0, 5.0, -1.0, 2.0, 0.0, 2.0, 3.0, 4.0,],);
+
+            util::panic_if_device_error("Failed to write data to CPU!");
         }
 
         // backprop add
@@ -147,6 +155,8 @@ mod tests {
                 &output,
             );
 
+            util::panic_if_device_error("Failed to backprop addition!");
+
             assert_eq!(input1_grad.shape(), shape1);
             assert_eq!(input2_grad.shape(), shape2);
 
@@ -157,6 +167,8 @@ mod tests {
             let mut grad2 = [0.0; 3];
             input2_grad.write_to_slice(&mut grad2);
             assert_eq!(grad2, [1.0, 11.0, 9.0]);
+
+            util::panic_if_device_error("Failed to write data to CPU!");
         }
     }
 }
