@@ -5,7 +5,7 @@ use crate::{
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 && inputs[0] == inputs[1] {
-        Ok(inputs[0])
+        Ok(Shape::new(1, 1))
     } else {
         Err(String::from("Invalid number of inputs!"))
     }

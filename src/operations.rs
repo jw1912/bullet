@@ -20,7 +20,7 @@ pub enum Operation {
     Add,
     /// Activate a matrix/vector
     Activate(Activation),
-    /// Calculate `output[i] = powf(abs(input_a[i] - input_b[i]), power)`
+    /// Calculate `output = sum_i powf(abs(input_a[i] - input_b[i]), power)`
     AbsPowerError(f32),
 }
 
