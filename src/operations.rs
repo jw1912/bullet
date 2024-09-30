@@ -6,9 +6,10 @@ mod power_error;
 pub use activate::Activation;
 use diffable::{DiffableOperation, GraphBuilder, Node};
 
-use crate::backend::ExecutionContext;
-
-use super::{Shape, Tensor};
+use crate::{
+    backend::ExecutionContext,
+    tensor::{Shape, Tensor},
+};
 
 /// All supported operations between tensors in bullet.
 #[derive(Clone, Copy, Debug)]

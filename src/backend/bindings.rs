@@ -24,6 +24,6 @@ pub use hip::{
     hipMemcpyKind as cudaMemcpyKind, hipMemset as cudaMemset, hipblasCreate as cublasCreate_v2,
     hipblasDestroy as cublasDestroy_v2, hipblasHandle_t as cublasHandle_t, hipblasOperation_t as cublasOperation_t,
     hipblasSaxpy as cublasSaxpy_v2, hipblasSgeam as cublasSgeam, hipblasSgemm as cublasSgemm_v2,
-    hipblasSgemv as cublasSgemv_v2, hipblasStatus_t as cublasStatus_t,
-    H2D, D2H, D2D, SUCCESS, CUBLAS_SUCCESS, CUBLAS_OP_N, CUBLAS_OP_T,
+    hipblasSgemv as cublasSgemv_v2, hipblasStatus_t as cublasStatus_t, CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_SUCCESS, D2D,
+    D2H, H2D, SUCCESS,
 };

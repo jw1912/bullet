@@ -5,8 +5,8 @@
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 constexpr float Epsilon = 0.00000001F;
 
-__global__ void updateWeight(
-    const size_t networkSize,
+__global__ void AdamWKernel(
+    const size_t size,
     const float decay,
     const float beta1,
     const float beta2,
@@ -21,7 +21,7 @@ __global__ void updateWeight(
 {
     const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i >= networkSize)
+    if (i >= size)
         return;
 
     const float grad = adj * gradients[i];
@@ -38,8 +38,8 @@ __global__ void updateWeight(
     network[i] = param;
 }
 
-extern "C" void updateWeights(
-    const size_t networkSize,
+extern "C" void AdamW(
+    const size_t size,
     const float decay,
     const float beta1,
     const float beta2,
@@ -52,9 +52,9 @@ extern "C" void updateWeights(
     float* velocity,
     const float* gradients)
 {
-    const size_t numBlocks = (networkSize + threadsPerBlock - 1) / threadsPerBlock;
-    updateWeight<<<numBlocks, threadsPerBlock>>>(
-        networkSize,
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    AdamWKernel<<<numBlocks, threadsPerBlock>>>(
+        size,
         decay,
         beta1,
         beta2,

@@ -61,83 +61,14 @@ pub enum hipblasOperation_t {
 
 pub type hipblasHandle_t = *mut c_void;
 
+#[rustfmt::skip]
 extern "C" {
     pub fn hipblasCreate(handle: *mut hipblasHandle_t) -> hipblasStatus_t;
-
     pub fn hipblasDestroy(handle: hipblasHandle_t) -> hipblasStatus_t;
-
-    pub fn hipblasSaxpy(
-        handle: hipblasHandle_t,
-        n: c_int,
-        alpha: *const f32,
-        x: *const f32,
-        incx: c_int,
-        y: *mut f32,
-        incy: c_int,
-    ) -> hipblasStatus_t;
-
-    pub fn hipblasSgemv(
-        handle: hipblasHandle_t,
-        trans: hipblasOperation_t,
-        m: c_int,
-        n: c_int,
-        alpha: *const f32,
-        A: *const f32,
-        lda: c_int,
-        x: *const f32,
-        incx: c_int,
-        beta: *const f32,
-        y: *mut f32,
-        incy: c_int,
-    ) -> hipblasStatus_t;
-
-    pub fn hipblasSgemv_64(
-        handle: hipblasHandle_t,
-        trans: hipblasOperation_t,
-        m: i64,
-        n: i64,
-        alpha: *const f32,
-        A: *const f32,
-        lda: i64,
-        x: *const f32,
-        incx: i64,
-        beta: *const f32,
-        y: *mut f32,
-        incy: i64,
-    ) -> hipblasStatus_t;
-
-    pub fn hipblasSgemm(
-        handle: hipblasHandle_t,
-        transa: hipblasOperation_t,
-        transb: hipblasOperation_t,
-        m: c_int,
-        n: c_int,
-        k: c_int,
-        alpha: *const f32,
-        A: *const f32,
-        lda: c_int,
-        B: *const f32,
-        ldb: c_int,
-        beta: *const f32,
-        C: *mut f32,
-        ldc: c_int,
-    ) -> hipblasStatus_t;
-
-    pub fn hipblasSgeam(
-        handle: hipblasHandle_t,
-        transa: hipblasOperation_t,
-        transb: hipblasOperation_t,
-        m: c_int,
-        n: c_int,
-        alpha: *const f32,
-        A: *const f32,
-        lda: c_int,
-        beta: *const f32,
-        B: *const f32,
-        ldb: c_int,
-        C: *mut f32,
-        ldc: c_int,
-    ) -> hipblasStatus_t;
+    pub fn hipblasSaxpy(handle: hipblasHandle_t, n: c_int, alpha: *const f32, x: *const f32, incx: c_int, y: *mut f32, incy: c_int) -> hipblasStatus_t;
+    pub fn hipblasSgemv(handle: hipblasHandle_t, trans: hipblasOperation_t, m: c_int, n: c_int, alpha: *const f32, A: *const f32, lda: c_int, x: *const f32, incx: c_int, beta: *const f32, y: *mut f32, incy: c_int) -> hipblasStatus_t;
+    pub fn hipblasSgemm(handle: hipblasHandle_t, transa: hipblasOperation_t, transb: hipblasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const f32, A: *const f32, lda: c_int, B: *const f32, ldb: c_int, beta: *const f32, C: *mut f32, ldc: c_int) -> hipblasStatus_t;
+    pub fn hipblasSgeam(handle: hipblasHandle_t, transa: hipblasOperation_t, transb: hipblasOperation_t, m: c_int, n: c_int, alpha: *const f32, A: *const f32, lda: c_int, beta: *const f32, B: *const f32, ldb: c_int, C: *mut f32, ldc: c_int) -> hipblasStatus_t;
 }
 
 #[repr(i32)]

@@ -1,5 +1,5 @@
 use crate::{
-    tensor::{dense_matrix::DenseMatrix, Shape},
+    tensor::{DenseMatrix, Shape},
     Tensor,
 };
 

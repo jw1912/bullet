@@ -1,12 +1,10 @@
 mod dense_matrix;
-mod operations;
 mod shape;
 
-use dense_matrix::DenseMatrix;
-pub use operations::{Activation, Operation};
+pub use dense_matrix::DenseMatrix;
 pub use shape::Shape;
 
-use crate::backend::ExecutionContext;
+use crate::{backend::ExecutionContext, operations::Operation};
 
 impl From<Tensor> for Shape {
     fn from(value: Tensor) -> Self {

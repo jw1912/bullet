@@ -8,13 +8,7 @@ impl DenseMatrix {
         output.reshape_if_needed(input_a.shape);
 
         unsafe {
-            ops::powerError(
-                input_a.shape.size(),
-                input_a.buf.ptr(),
-                input_b.buf.ptr(),
-                output.buf.mut_ptr(),
-                power,
-            );
+            ops::powerError(input_a.shape.size(), input_a.buf.ptr(), input_b.buf.ptr(), output.buf.mut_ptr(), power);
         }
     }
 
@@ -66,24 +60,12 @@ mod tests {
 
     #[test]
     fn abs_power_error() {
-        abs_power_error_custom(
-            [-1.0, 4.0, 2.0],
-            [1.0, 2.0, 3.0],
-            [2.0, 2.0, 1.0],
-            [-1.0, 1.0, -1.0],
-            [1.0, -1.0, 1.0],
-        );
+        abs_power_error_custom([-1.0, 4.0, 2.0], [1.0, 2.0, 3.0], [2.0, 2.0, 1.0], [-1.0, 1.0, -1.0], [1.0, -1.0, 1.0]);
     }
 
     #[test]
     fn abs_power_error_rev() {
-        abs_power_error_custom(
-            [1.0, 2.0, 3.0],
-            [-1.0, 4.0, 2.0],
-            [2.0, 2.0, 1.0],
-            [1.0, -1.0, 1.0],
-            [-1.0, 1.0, -1.0],
-        );
+        abs_power_error_custom([1.0, 2.0, 3.0], [-1.0, 4.0, 2.0], [2.0, 2.0, 1.0], [1.0, -1.0, 1.0], [-1.0, 1.0, -1.0]);
     }
 
     fn abs_power_error_custom(
