@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 pub const KERNEL_DIR: &str = "./src/backend/kernels";
 
-pub const KERNEL_FILES: [&str; 2] = ["activate", "add"];
+pub const KERNEL_FILES: [&str; 3] = ["activate", "add", "power_error"];
 
 pub fn get_var_path(name: &str) -> PathBuf {
     println!("rerun-if-env-changed={}", name);

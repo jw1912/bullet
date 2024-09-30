@@ -15,7 +15,7 @@ impl DenseMatrix {
                     output.shape.cols(),
                     input_a.buf.ptr(),
                     input_b.buf.ptr(),
-                    output.buf.ptr(),
+                    output.buf.mut_ptr(),
                 );
             }
         } else if input_a.shape.cols() == 1 {
@@ -26,7 +26,7 @@ impl DenseMatrix {
                     input_b.shape.rows(),
                     input_a.buf.ptr(),
                     input_b.buf.ptr(),
-                    output.buf.ptr(),
+                    output.buf.mut_ptr(),
                 );
             }
         } else if input_b.shape.cols() == 1 {
@@ -37,7 +37,7 @@ impl DenseMatrix {
                     input_a.shape.rows(),
                     input_b.buf.ptr(),
                     input_a.buf.ptr(),
-                    output.buf.ptr(),
+                    output.buf.mut_ptr(),
                 );
             }
         } else {
@@ -77,7 +77,7 @@ fn backprop_add_single(
                 output_grad.shape.cols(),
                 output_grad.shape.rows(),
                 output_grad.buf.ptr(),
-                input_grad.buf.ptr(),
+                input_grad.buf.mut_ptr(),
             );
         }
     } else if input.shape.cols() == 1 {
@@ -88,7 +88,7 @@ fn backprop_add_single(
                 output_grad.shape.cols(),
                 output_grad.shape.rows(),
                 output_grad.buf.ptr(),
-                input_grad.buf.ptr(),
+                input_grad.buf.mut_ptr(),
                 true,
             );
         }

@@ -26,7 +26,7 @@ impl DenseMatrix {
                 input_b.shape.rows(),
                 input_b.shape.cols(),
                 trans_b,
-                output.buf.ptr(),
+                output.buf.mut_ptr(),
                 output.shape.rows(),
                 output.shape.cols(),
                 increment,

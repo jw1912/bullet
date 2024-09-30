@@ -9,6 +9,7 @@ pub enum Activation {
     CReLU,
     SCReLU,
     SqrReLU,
+    Sigmoid,
 }
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
@@ -28,6 +29,7 @@ pub fn forward(activation: Activation, inputs: &[&Tensor], output: &mut Tensor) 
         Activation::CReLU => DenseMatrix::crelu(input, output),
         Activation::SCReLU => DenseMatrix::screlu(input, output),
         Activation::SqrReLU => DenseMatrix::sqrrelu(input, output),
+        Activation::Sigmoid => DenseMatrix::sigmoid(input, output),
     }
 }
 
@@ -41,5 +43,6 @@ pub fn backprop(activation: Activation, output: &Tensor, inputs: &mut [&mut Tens
         Activation::CReLU => DenseMatrix::crelu_backward(input, input_grad, output_grad),
         Activation::SCReLU => DenseMatrix::screlu_backward(input, input_grad, output_grad),
         Activation::SqrReLU => DenseMatrix::sqrrelu_backward(input, input_grad, output_grad),
+        Activation::Sigmoid => DenseMatrix::sigmoid_backward(&output.values, input_grad, output_grad),
     }
 }

@@ -162,9 +162,13 @@ extern "C" {
     pub fn activateCReLU(size: usize, inp: *const f32, out: *mut f32);
     pub fn activateSCReLU(size: usize, inp: *const f32, out: *mut f32);
     pub fn activateSqrReLU(size: usize, inp: *const f32, out: *mut f32);
+    pub fn activateSigmoid(size: usize, inp: *const f32, out: *mut f32);
     pub fn backpropReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn backpropCReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn backpropSCReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn backpropSqrReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
+    pub fn backpropSigmoid(size: usize, output: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn splat_add(cols: usize, rows: usize, inp_a: *const f32, inp_b: *const f32, out: *mut f32);
+    pub fn powerError(bufferSize: usize, inputs: *const f32, results: *const f32, outputs: *mut f32, power: f32);
+    pub fn backpropPowerError(bufferSize: usize, inputs: *const f32, results: *const f32, output_grads: *const f32, input_grads: *mut f32, power: f32);
 }

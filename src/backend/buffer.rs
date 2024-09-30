@@ -29,7 +29,11 @@ impl<T: Bufferable> Buffer<T> {
         self.size
     }
 
-    pub fn ptr(&self) -> *mut T {
+    pub fn ptr(&self) -> *const T {
+        self.ptr.cast_const()
+    }
+
+    pub fn mut_ptr(&mut self) -> *mut T {
         self.ptr
     }
 

@@ -1,6 +1,7 @@
 mod activate;
 mod add;
 mod matmul;
+mod power_error;
 
 use super::shape::Shape;
 use crate::backend::Buffer;

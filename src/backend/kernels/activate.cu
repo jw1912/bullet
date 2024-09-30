@@ -8,11 +8,13 @@ __device__ float ReLU(float in) { return in > 0.0F ? in : 0.0F; }
 __device__ float CReLU(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : in); }
 __device__ float SCReLU(float in) { return in < 0.0F ? 0.0F : (in > 1.0F ? 1.0F : (in * in)); }
 __device__ float SqrReLU(float in) { return in < 0.0F ? 0.0F : (in * in); }
+__device__ float sigmoid(float in) { return 1.0F / (1.0F + expf(-in)); }
 
 __device__ float primeReLU(float in) { return in > 0.0F ? 1.0F : 0.0F; }
 __device__ float primeCReLU(float in) { return in > 0.0F && in < 1.0F ? 1.0F : 0.0F; }
 __device__ float primeSCReLU(float in) { return in > 0.0F && in < 1.0F ? 2.0F * in : 0.0F; }
 __device__ float primeSqrReLU(float in) { return in > 0.0F ? 2.0F * in : 0.0F; }
+__device__ float primeInvSigmoid(float in) { return in * (1.0F - in); }
 
 typedef float(*OpType)(float);
 
@@ -65,6 +67,12 @@ extern "C" void backpropSqrReLU(const size_t size, const float* input, const flo
     bufferBackprop<primeSqrReLU><<<numBlocks, threadsPerBlock>>>(size, input, output_grad, input_grad);
 }
 
+extern "C" void backpropSigmoid(const size_t size, const float* output, const float* output_grad, float* input_grad)
+{
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    bufferBackprop<primeSqrReLU><<<numBlocks, threadsPerBlock>>>(size, output, output_grad, input_grad);
+}
+
 extern "C" void activateReLU(const size_t size, const float* in, float* out)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
@@ -87,4 +95,10 @@ extern "C" void activateSqrReLU(const size_t size, const float* in, float* out)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
     bufferOperation<SqrReLU><<<numBlocks, threadsPerBlock>>>(size, in, out);
+}
+
+extern "C" void activateSigmoid(const size_t size, const float* in, float* out)
+{
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    bufferOperation<sigmoid><<<numBlocks, threadsPerBlock>>>(size, in, out);
 }

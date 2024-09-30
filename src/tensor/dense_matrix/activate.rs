@@ -13,7 +13,7 @@ macro_rules! define_activation {
             pub fn $fwd(input: &Self, output: &mut Self) {
                 output.reshape_if_needed(input.shape);
                 unsafe {
-                    ops::$fwd_kernel(output.shape.size(), input.buf.ptr(), output.buf.ptr());
+                    ops::$fwd_kernel(output.shape.size(), input.buf.ptr(), output.buf.mut_ptr());
                 }
             }
 
@@ -21,7 +21,7 @@ macro_rules! define_activation {
                 assert_eq!(input.shape, output_grad.shape);
                 input_grad.reshape_if_needed(input.shape);
                 unsafe {
-                    ops::$bwd_kernel(input.shape.size(), input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.ptr());
+                    ops::$bwd_kernel(input.shape.size(), input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
                 }
             }
         }
@@ -32,6 +32,7 @@ define_activation!(relu, relu_backward, activateReLU, backpropReLU);
 define_activation!(crelu, crelu_backward, activateCReLU, backpropCReLU);
 define_activation!(screlu, screlu_backward, activateSCReLU, backpropSCReLU);
 define_activation!(sqrrelu, sqrrelu_backward, activateSqrReLU, backpropSqrReLU);
+define_activation!(sigmoid, sigmoid_backward, activateSigmoid, backpropSigmoid);
 
 #[cfg(test)]
 mod tests {
