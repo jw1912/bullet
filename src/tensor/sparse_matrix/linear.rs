@@ -3,11 +3,7 @@ use crate::{backend::ops, tensor::DenseMatrix};
 use super::SparseMatrix;
 
 impl SparseMatrix {
-    pub fn linear(
-        input_a: &DenseMatrix,
-        input_b: &Self,
-        output: &mut DenseMatrix,
-    ) {
+    pub fn linear(input_a: &DenseMatrix, input_b: &Self, output: &mut DenseMatrix) {
         let output_shape = input_a.shape * input_b.shape;
         output.reshape_if_needed(output_shape);
 
@@ -21,7 +17,6 @@ impl SparseMatrix {
                 output.buf.mut_ptr(),
             );
         }
-
     }
 
     pub fn backprop_linear(

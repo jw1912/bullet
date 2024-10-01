@@ -4,12 +4,26 @@ mod linear;
 mod power_error;
 
 pub use activate::Activation;
-use diffable::DiffableOperation;
+use diffable::{DiffableOperation, Node};
 
 use crate::{
     backend::ExecutionContext,
     tensor::{Shape, Tensor},
+    GraphBuilder,
 };
+
+pub fn affine(builder: &mut GraphBuilder, weights: Node, input: Node, bias: Node) -> Node {
+    let mul = builder.create_result_of_operation(Operation::Linear, &[weights, input]);
+    builder.create_result_of_operation(Operation::Add, &[mul, bias])
+}
+
+pub fn activate(builder: &mut GraphBuilder, input: Node, activation: Activation) -> Node {
+    builder.create_result_of_operation(Operation::Activate(activation), &[input])
+}
+
+pub fn mse(builder: &mut GraphBuilder, predicted: Node, target: Node) -> Node {
+    builder.create_result_of_operation(Operation::AbsPowerError(2.0), &[predicted, target])
+}
 
 /// All supported operations between tensors in bullet.
 #[derive(Clone, Copy, Debug)]

@@ -3,16 +3,17 @@ pub mod inputs;
 pub mod loader;
 pub mod operations;
 pub mod optimiser;
-mod outputs;
+pub mod outputs;
 mod tensor;
 mod trainer;
 
+pub use backend::ExecutionContext;
 pub use bulletformat as format;
 pub use diffable::Node;
-pub use tensor::Tensor;
+pub use tensor::{Shape, Tensor};
 pub use trainer::{
     logger,
-    schedule::{lr, wdl, TrainingSchedule},
+    schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
     NetworkTrainer, Trainer,
 };

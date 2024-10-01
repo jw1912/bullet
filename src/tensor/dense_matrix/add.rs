@@ -81,7 +81,6 @@ fn backprop_add_single(
             );
         }
     } else if input.shape.cols() == 1 {
-        println!("reduce adding!");
         unsafe {
             ops::reduce_add_cols(
                 ctx,

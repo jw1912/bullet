@@ -13,6 +13,12 @@ pub struct AdamWParams {
     pub max_weight: f32,
 }
 
+impl Default for AdamWParams {
+    fn default() -> Self {
+        Self { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 }
+    }
+}
+
 pub struct AdamW {
     graph: Graph,
     momentum: HashMap<String, DenseMatrix>,

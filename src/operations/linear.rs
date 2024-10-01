@@ -15,21 +15,10 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
 pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
     match &inputs[1].values {
         Matrix::Dense(dense) => {
-            DenseMatrix::matmul(
-                ctx,
-                inputs[0].values.dense(),
-                false,
-                dense,
-                false,
-                output.values.dense_mut(),
-            );
+            DenseMatrix::matmul(ctx, inputs[0].values.dense(), false, dense, false, output.values.dense_mut());
         }
         Matrix::Sparse(sparse) => {
-            SparseMatrix::linear(
-                inputs[0].values.dense(),
-                sparse,
-                output.values.dense_mut(),
-            );
+            SparseMatrix::linear(inputs[0].values.dense(), sparse, output.values.dense_mut());
         }
     }
 }
@@ -63,6 +52,4 @@ pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut 
             }
         }
     }
-
-
 }

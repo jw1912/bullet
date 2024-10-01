@@ -90,7 +90,7 @@ pub trait NetworkTrainer {
 
             let error = self.train_on_batch(gf, lrate);
 
-            running_loss += error;
+            running_loss += error / this_batch_size as f32;
 
             if curr_batch % 128 == 0 {
                 logger::report_superbatch_progress(
@@ -104,7 +104,7 @@ pub trait NetworkTrainer {
 
             curr_batch += 1;
 
-            if curr_batch & steps.batches_per_superbatch == 0 {
+            if curr_batch % steps.batches_per_superbatch == 0 {
                 let error = running_loss / steps.batches_per_superbatch as f32;
                 running_loss = 0.0;
 
