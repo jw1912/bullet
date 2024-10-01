@@ -1,8 +1,12 @@
 mod dense_matrix;
+mod matrix;
 mod shape;
+mod sparse_matrix;
 
 pub use dense_matrix::DenseMatrix;
+use matrix::Matrix;
 pub use shape::Shape;
+use sparse_matrix::SparseMatrix;
 
 use crate::{backend::ExecutionContext, operations::Operation};
 
@@ -14,7 +18,7 @@ impl From<Tensor> for Shape {
 
 #[derive(Debug, Default)]
 pub struct Tensor {
-    pub(crate) values: DenseMatrix,
+    pub(crate) values: Matrix,
     pub(crate) gradients: Option<DenseMatrix>,
 }
 
@@ -25,7 +29,7 @@ impl diffable::Tensor for Tensor {
 
     fn new(shape: Shape, requires_grad: bool) -> Self {
         Self {
-            values: DenseMatrix::zeroed(shape),
+            values: Matrix::Dense(DenseMatrix::zeroed(shape)),
             gradients: if requires_grad { Some(DenseMatrix::zeroed(shape)) } else { None },
         }
     }
@@ -43,7 +47,7 @@ impl diffable::Tensor for Tensor {
     fn get_scalar(&self) -> Option<f32> {
         if self.values.shape() == Shape::new(1, 1) {
             let mut buf = [0.0];
-            self.values.write_to_slice(&mut buf);
+            self.values.dense().write_to_slice(&mut buf);
             Some(buf[0])
         } else {
             None
@@ -58,10 +62,22 @@ impl diffable::Tensor for Tensor {
 
 impl Tensor {
     pub fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
-        self.values.load_from_slice(shape, values);
+        if let Matrix::Dense(dst) = &mut self.values {
+            dst.load_from_slice(shape, values);
+        } else {
+            let mut dst = DenseMatrix::default();
+            dst.load_from_slice(shape, values);
+            self.values = Matrix::Dense(dst);
+        }
     }
 
     pub fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
-        unimplemented!("No sparse tensors yet!");
+        if let Matrix::Sparse(dst) = &mut self.values {
+            dst.load_from_slice(shape, max_active, values);
+        } else {
+            let mut dst = SparseMatrix::default();
+            dst.load_from_slice(shape, max_active, values);
+            self.values = Matrix::Sparse(dst);
+        }
     }
 }

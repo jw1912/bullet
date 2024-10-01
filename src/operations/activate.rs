@@ -25,11 +25,11 @@ pub fn forward(activation: Activation, inputs: &[&Tensor], output: &mut Tensor) 
     let output = &mut output.values;
 
     match activation {
-        Activation::ReLU => DenseMatrix::relu(input, output),
-        Activation::CReLU => DenseMatrix::crelu(input, output),
-        Activation::SCReLU => DenseMatrix::screlu(input, output),
-        Activation::SqrReLU => DenseMatrix::sqrrelu(input, output),
-        Activation::Sigmoid => DenseMatrix::sigmoid(input, output),
+        Activation::ReLU => DenseMatrix::relu(input.dense(), output.dense_mut()),
+        Activation::CReLU => DenseMatrix::crelu(input.dense(), output.dense_mut()),
+        Activation::SCReLU => DenseMatrix::screlu(input.dense(), output.dense_mut()),
+        Activation::SqrReLU => DenseMatrix::sqrrelu(input.dense(), output.dense_mut()),
+        Activation::Sigmoid => DenseMatrix::sigmoid(input.dense(), output.dense_mut()),
     }
 }
 
@@ -39,10 +39,10 @@ pub fn backprop(activation: Activation, output: &Tensor, inputs: &mut [&mut Tens
     let output_grad = output.gradients.as_ref().expect("Must exist!");
 
     match activation {
-        Activation::ReLU => DenseMatrix::relu_backward(input, input_grad, output_grad),
-        Activation::CReLU => DenseMatrix::crelu_backward(input, input_grad, output_grad),
-        Activation::SCReLU => DenseMatrix::screlu_backward(input, input_grad, output_grad),
-        Activation::SqrReLU => DenseMatrix::sqrrelu_backward(input, input_grad, output_grad),
-        Activation::Sigmoid => DenseMatrix::sigmoid_backward(&output.values, input_grad, output_grad),
+        Activation::ReLU => DenseMatrix::relu_backward(input.dense(), input_grad, output_grad),
+        Activation::CReLU => DenseMatrix::crelu_backward(input.dense(), input_grad, output_grad),
+        Activation::SCReLU => DenseMatrix::screlu_backward(input.dense(), input_grad, output_grad),
+        Activation::SqrReLU => DenseMatrix::sqrrelu_backward(input.dense(), input_grad, output_grad),
+        Activation::Sigmoid => DenseMatrix::sigmoid_backward(output.values.dense(), input_grad, output_grad),
     }
 }

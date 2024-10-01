@@ -17,7 +17,7 @@ pub fn write_graph_weights_component_to_file(graph: &Graph, path: &str, gradient
         let this_buf = if gradients {
             weights.gradients.as_ref().unwrap().write_to_byte_buffer(id).unwrap()
         } else {
-            weights.values.write_to_byte_buffer(id).unwrap()
+            weights.values.dense().write_to_byte_buffer(id).unwrap()
         };
 
         buf.extend_from_slice(&this_buf);
@@ -47,7 +47,7 @@ pub fn load_graph_weights_component_from_file(graph: &mut Graph, path: &str, gra
         if gradients {
             matrix_buffer.copy_into(weights.gradients.as_mut().unwrap());
         } else {
-            matrix_buffer.copy_into(&mut weights.values);
+            matrix_buffer.copy_into(weights.values.dense_mut());
         };
 
         offset += bytes_read;
