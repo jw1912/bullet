@@ -11,6 +11,7 @@ pub use bulletformat as format;
 pub use diffable::Node;
 pub use tensor::Tensor;
 pub use trainer::{
+    logger,
     schedule::{lr, wdl, TrainingSchedule},
     settings::LocalSettings,
     NetworkTrainer, Trainer,

@@ -55,3 +55,13 @@ impl diffable::Tensor for Tensor {
         grad.load_from_slice(Shape::new(1, 1), &[1.0]);
     }
 }
+
+impl Tensor {
+    pub fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
+        self.values.load_from_slice(shape, values);
+    }
+
+    pub fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
+        unimplemented!("No sparse tensors yet!");
+    }
+}

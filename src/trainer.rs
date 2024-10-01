@@ -1,11 +1,11 @@
 mod default;
-mod logger;
+pub mod logger;
 mod preparer;
 pub mod schedule;
 pub mod settings;
 
 pub use default::Trainer;
-pub use preparer::{DataPreparer, DefaultDataPreparer};
+pub use preparer::DataPreparer;
 
 use std::{sync::mpsc, time::Instant};
 
