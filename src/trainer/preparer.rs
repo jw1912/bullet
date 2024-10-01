@@ -1,41 +1,43 @@
+use std::sync::mpsc::SyncSender;
+
 use bulletformat::BulletFormat;
 
 use crate::{
-    inputs::InputType, lr::LrScheduler, outputs::OutputBuckets, tensor::Shape, wdl::WdlScheduler, DataLoader,
-    TrainingSchedule,
+    inputs::InputType, outputs::OutputBuckets, tensor::Shape,
 };
 
-use super::NetworkTrainer;
+use super::schedule::{TrainingSteps, wdl::WdlScheduler};
 
-pub trait DataPreparer<T>: Send + Sync {
-    type AdditionalArgs: Clone + Send + Sync + 'static;
+pub trait DataPreparer: Clone + Send + Sync {
+    type DataType: Send + Sync;
+    type PreparedData: Send + Sync;
 
-    fn load(args: Self::AdditionalArgs, data: &[T], threads: usize, blend: f32, rscale: f32) -> Self;
+    fn get_data_file_paths(&self) -> &[String];
+
+    fn try_count_positions(&self) -> Option<u64> {
+        None
+    }
+
+    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, batch_size: usize, f: F);
+
+    fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData;
 }
 
-pub fn create_dataloader<T, NT: NetworkTrainer, LD: DataLoader<T>, LR: LrScheduler, WDL: WdlScheduler>(
-    schedule: TrainingSchedule<LR, WDL>,
-    data_loader: &LD,
-    batch_size: usize,
+pub fn create_dataloader<D: DataPreparer + 'static, WDL: WdlScheduler>(
+    preparer: D,
+    sender: SyncSender<D::PreparedData>,
+    steps: TrainingSteps,
+    wdl: WDL,
     threads: usize,
-    sender: std::sync::mpsc::SyncSender<NT::PreparedData>,
-    getters: <NT::PreparedData as DataPreparer<T>>::AdditionalArgs,
-) -> std::thread::JoinHandle<()>
-where
-    NT::PreparedData: DataPreparer<T> + 'static,
-{
-    let rscale = 1.0 / schedule.eval_scale;
-
-    let this_loader = data_loader.clone();
-
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
-        let mut curr_superbatch = schedule.steps.start_superbatch;
+        let mut curr_superbatch = steps.start_superbatch;
         let mut curr_batch = 0;
 
-        this_loader.map_batches(batch_size, |batch| {
-            let blend = schedule.wdl_scheduler.blend(curr_batch, curr_superbatch, schedule.steps.end_superbatch);
+        preparer.load_and_map_batches(steps.batch_size, |batch| {
+            let blend = wdl.blend(curr_batch, curr_superbatch, steps.end_superbatch);
 
-            let prepared_data = NT::PreparedData::load(getters.clone(), batch, threads, blend, rscale);
+            let prepared_data = preparer.prepare(batch, threads, blend);
 
             sender.send(prepared_data).unwrap();
 
@@ -43,8 +45,8 @@ where
 
             let mut should_break = false;
 
-            if curr_batch % schedule.steps.batches_per_superbatch == 0 {
-                if curr_superbatch == schedule.steps.end_superbatch {
+            if curr_batch % steps.batches_per_superbatch == 0 {
+                if curr_superbatch == steps.end_superbatch {
                     should_break = true;
                 }
 
@@ -79,42 +81,23 @@ impl Default for SparseInput {
 pub struct DefaultDataPreparer<I, O> {
     input_getter: I,
     output_getter: O,
-    stm: SparseInput,
-    nstm: SparseInput,
-    buckets: SparseInput,
-    results: DenseInput,
+    pub batch_size: usize,
+    pub stm: SparseInput,
+    pub nstm: SparseInput,
+    pub buckets: SparseInput,
+    pub results: DenseInput,
 }
 
 impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
-    pub fn stm(&self) -> &SparseInput {
-        &self.stm
-    }
-
-    pub fn nstm(&self) -> &SparseInput {
-        &self.nstm
-    }
-
-    pub fn buckets(&self) -> &SparseInput {
-        &self.buckets
-    }
-
-    pub fn results(&self) -> &DenseInput {
-        &self.results
-    }
-}
-
-impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DataPreparer<I::RequiredDataType>
-    for DefaultDataPreparer<I, O>
-{
-    type AdditionalArgs = (I, O);
-
-    fn load(
-        (input_getter, output_getter): (I, O),
+    pub fn prepare(
+        input_getter: I,
+        output_getter: O,
         data: &[I::RequiredDataType],
         threads: usize,
         blend: f32,
-        rscale: f32,
+        scale: f32,
     ) -> Self {
+        let rscale = 1.0 / scale;
         let batch_size = data.len();
         let max_active = input_getter.max_active_inputs();
         let chunk_size = (batch_size + threads - 1) / threads;
@@ -124,6 +107,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DataPreparer<I::Requir
         let mut prep = Self {
             input_getter,
             output_getter,
+            batch_size,
             stm: SparseInput {
                 shape: Shape::new(input_size, batch_size),
                 max_active,

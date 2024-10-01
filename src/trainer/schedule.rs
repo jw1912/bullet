@@ -8,7 +8,7 @@ use super::logger::ansi;
 pub mod lr;
 pub mod wdl;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TrainingSteps {
     pub batch_size: usize,
     pub batches_per_superbatch: usize,

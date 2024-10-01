@@ -4,6 +4,8 @@ use bulletformat::BulletFormat;
 
 pub use direct_sequential::DirectSequentialDataLoader;
 
+use crate::{inputs::InputType, outputs::OutputBuckets, trainer::{DataPreparer, DefaultDataPreparer}};
+
 pub trait DataLoader<T>: Clone + Send + Sync + 'static {
     fn data_file_paths(&self) -> &[String];
 
@@ -12,6 +14,44 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
     }
 
     fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, f: F);
+}
+
+#[derive(Clone)]
+pub struct DefaultDataLoader<I, O, D> {
+    input_getter: I,
+    output_getter: O,
+    scale: f32,
+    loader: D,
+}
+
+impl<I, O, D> DataPreparer for DefaultDataLoader<I, O, D>
+where I: InputType, O: OutputBuckets<I::RequiredDataType>, D: DataLoader<I::RequiredDataType>
+{
+    type DataType = I::RequiredDataType;
+    type PreparedData = DefaultDataPreparer<I, O>;
+
+    fn get_data_file_paths(&self) -> &[String] {
+        self.loader.data_file_paths()
+    }
+
+    fn try_count_positions(&self) -> Option<u64> {
+        self.loader.count_positions()
+    }
+
+    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, batch_size: usize, f: F) {
+        self.loader.map_batches(batch_size, f);
+    }
+
+    fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
+        DefaultDataPreparer::prepare(
+            self.input_getter,
+            self.output_getter,
+            data,
+            threads,
+            blend,
+            self.scale,
+        )
+    }
 }
 
 /// ### Safety
