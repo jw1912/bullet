@@ -19,24 +19,24 @@ impl DenseMatrix {
                 );
             }
         } else if input_a.shape.cols() == 1 {
-            output.reshape_if_needed(input_b.shape);
+            input_b.copy_into(output);
             unsafe {
-                ops::splat_add(
-                    input_b.shape.cols(),
+                ops::add_vector_to_matrix_columns(
+                    ctx,
                     input_b.shape.rows(),
+                    input_b.shape.cols(),
                     input_a.buf.ptr(),
-                    input_b.buf.ptr(),
                     output.buf.mut_ptr(),
                 );
             }
         } else if input_b.shape.cols() == 1 {
-            output.reshape_if_needed(input_a.shape);
+            input_a.copy_into(output);
             unsafe {
-                ops::splat_add(
-                    input_a.shape.cols(),
+                ops::add_vector_to_matrix_columns(
+                    ctx,
                     input_a.shape.rows(),
+                    input_a.shape.cols(),
                     input_b.buf.ptr(),
-                    input_a.buf.ptr(),
                     output.buf.mut_ptr(),
                 );
             }
@@ -129,8 +129,8 @@ mod tests {
         }
 
         // add
-        {
-            DenseMatrix::add(&mut ctx, &input1, &input2, &mut output);
+        for (num, (i, j)) in [(&input1, &input2), (&input2, &input1)].iter().enumerate() {
+            DenseMatrix::add(&mut ctx, i, j, &mut output);
 
             util::panic_if_device_error("Failed to add matrices!");
 
@@ -138,7 +138,7 @@ mod tests {
 
             let mut buf = [0.0; 9];
             output.write_to_slice(&mut buf);
-            assert_eq!(buf, [0.0, 6.0, 5.0, -1.0, 2.0, 0.0, 2.0, 3.0, 4.0,],);
+            assert_eq!(buf, [0.0, 6.0, 5.0, -1.0, 2.0, 0.0, 2.0, 3.0, 4.0,], "{num}");
 
             util::panic_if_device_error("Failed to write data to CPU!");
         }

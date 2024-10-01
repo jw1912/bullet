@@ -75,6 +75,7 @@ extern "C" {
     pub fn cublasSgemv_v2(handle: cublasHandle_t, trans: cublasOperation_t, m: c_int, n: c_int, alpha: *const f32, A: *const f32, lda: c_int, x: *const f32, incx: c_int, beta: *const f32, y: *mut f32, incy: c_int) -> cublasStatus_t;
     pub fn cublasSgemm_v2(handle: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const f32, A: *const f32, lda: c_int, B: *const f32, ldb: c_int, beta: *const f32, C: *mut f32, ldc: c_int) -> cublasStatus_t;
     pub fn cublasSgeam(handle: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, alpha: *const f32, A: *const f32, lda: c_int, beta: *const f32, B: *const f32, ldb: c_int, C: *mut f32, ldc: c_int) -> cublasStatus_t;
+    pub fn cublasSger_v2(handle: cublasHandle_t, m: c_int, n: c_int, alpha: *const f32, x: *const f32, incx: c_int, y: *const f32, incy: c_int, A: *mut f32, lda: c_int) -> cublasStatus_t;
 }
 
 #[repr(i32)]

@@ -96,7 +96,7 @@ pub unsafe fn add_matrices(
         )
     };
 
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemm failed!");
 }
 
 pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize, input: *const f32, output: *mut f32) {
@@ -109,7 +109,7 @@ pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize
 
     let status = unsafe { bindings::cublasSaxpy_v2(ctx.handle, n, &alpha, input, incx, output, incy) };
 
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Saxpy failed!");
 }
 
 pub unsafe fn reduce_add_cols(
@@ -151,7 +151,45 @@ pub unsafe fn reduce_add_cols(
         )
     };
 
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemv failed!");
+}
+
+pub unsafe fn add_vector_to_matrix_columns(
+    ctx: &mut ExecutionContext,
+    rows: usize,
+    cols: usize,
+    vector: *const f32,
+    matrix: *mut f32,
+) {
+    let alpha = 1.0;
+
+    let m = rows as c_int;
+    let n = cols as c_int;
+
+    let lda = rows as c_int;
+    let inc = 1;
+
+    if cols > ctx.ones.size() {
+        ctx.ones = Buffer::new(cols);
+        ctx.ones.load_from_slice(&vec![1.0; cols]);
+    }
+
+    let status = unsafe {
+        bindings::cublasSger_v2(
+            ctx.handle,
+            m,
+            n,
+            &alpha,
+            vector,
+            inc,
+            ctx.ones.ptr(),
+            inc,
+            matrix,
+            lda,
+        )
+    };
+
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sger failed!");
 }
 
 #[rustfmt::skip]
@@ -168,7 +206,6 @@ extern "C" {
     pub fn backpropSCReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn backpropSqrReLU(size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn backpropSigmoid(size: usize, output: *const f32, output_grad: *const f32, input_grad: *mut f32);
-    pub fn splat_add(cols: usize, rows: usize, inp_a: *const f32, inp_b: *const f32, out: *mut f32);
     pub fn powerError(bufferSize: usize, inputs: *const f32, results: *const f32, output: *mut f32, power: f32);
     pub fn backpropPowerError(bufferSize: usize, inputs: *const f32, results: *const f32, output_grad: *const f32, input_grads: *mut f32, power: f32);
     pub fn AdamW(size: usize, decay: f32, beta1: f32, beta2: f32, minWeight: f32, maxWeight: f32, adj: f32, rate: f32, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
