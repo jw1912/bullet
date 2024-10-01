@@ -21,8 +21,8 @@ pub trait NetworkTrainer {
     /// Trains for a single step on a batch that has been previously
     /// loaded using `load_batch`.
     fn train_on_batch(&mut self, gf: f32, lr: f32) -> f32 {
-        self.optimiser_mut().graph_mut().zero_grads();
         util::device_synchronise();
+        self.optimiser_mut().graph_mut().zero_grads();
 
         let error = self.optimiser_mut().graph_mut().forward();
 
@@ -30,6 +30,7 @@ pub trait NetworkTrainer {
 
         self.optimiser_mut().update(gf, lr);
 
+        util::device_synchronise();
         util::panic_if_device_error("Something went wrong!");
 
         error

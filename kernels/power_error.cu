@@ -50,6 +50,7 @@ extern "C" void powerError(
     const float power)
 {
     cudaMemset(output, 0, 4);
+    cudaDeviceSynchronize();
 
     const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
     powerErrorKernel<<<numBlocks, threadsPerBlock>>>(bufferSize, inputs, results, output, power);

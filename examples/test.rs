@@ -52,7 +52,7 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 256,
             start_superbatch: 1,
-            end_superbatch: 10,
+            end_superbatch: 1,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
@@ -64,4 +64,7 @@ fn main() {
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     trainer.train(data_loader, &schedule, &settings);
+
+    let eval = trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("{eval}");
 }

@@ -112,7 +112,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let eval = self.optimiser.graph().get_node(self.output_node);
 
-        let mut val = [0.0];
+        let mut val = vec![0.0; eval.values.dense().allocated_size()];
         eval.values.dense().write_to_slice(&mut val);
         val[0]
     }
