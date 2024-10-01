@@ -4,6 +4,7 @@ pub mod loader;
 pub mod operations;
 pub mod optimiser;
 pub mod outputs;
+pub mod rng;
 mod tensor;
 mod trainer;
 

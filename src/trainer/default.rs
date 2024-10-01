@@ -48,7 +48,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
         }
 
-        graph.get_input_mut("results").load_dense_from_slice(prepared.results.shape, &prepared.results.value);
+        graph.get_input_mut("targets").load_dense_from_slice(prepared.targets.shape, &prepared.targets.value);
 
         batch_size
     }
@@ -68,7 +68,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         let inputs = inputs.iter().map(String::as_str).collect::<HashSet<_>>();
 
         assert!(inputs.contains("stm"), "Graph does not contain stm inputs!");
-        assert!(inputs.contains("results"), "Graph does not contain targets!");
+        assert!(inputs.contains("targets"), "Graph does not contain targets!");
 
         let perspective = inputs.contains("nstm");
         let output_buckets = inputs.contains("buckets");
@@ -184,7 +184,7 @@ pub struct DefaultDataPreparer<I, O> {
     pub stm: SparseInput,
     pub nstm: SparseInput,
     pub buckets: SparseInput,
-    pub results: DenseInput,
+    pub targets: DenseInput,
 }
 
 impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
@@ -218,7 +218,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 value: vec![0; max_active * batch_size],
             },
             buckets: SparseInput { shape: Shape::new(1, batch_size), max_active: 1, value: vec![0; batch_size] },
-            results: DenseInput { shape: Shape::new(1, batch_size), value: vec![0.0; batch_size] },
+            targets: DenseInput { shape: Shape::new(1, batch_size), value: vec![0.0; batch_size] },
         };
 
         std::thread::scope(|s| {
@@ -226,7 +226,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 .zip(prep.stm.value.chunks_mut(max_active * chunk_size))
                 .zip(prep.nstm.value.chunks_mut(max_active * chunk_size))
                 .zip(prep.buckets.value.chunks_mut(chunk_size))
-                .zip(prep.results.value.chunks_mut(chunk_size))
+                .zip(prep.targets.value.chunks_mut(chunk_size))
                 .for_each(|((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk)| {
                     let inp = &prep.input_getter;
                     let out = &prep.output_getter;

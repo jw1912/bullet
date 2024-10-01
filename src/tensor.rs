@@ -61,7 +61,16 @@ impl diffable::Tensor for Tensor {
 }
 
 impl Tensor {
-    pub fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
+    pub fn load_from_slice(&mut self, values: &[f32]) {
+        if let Matrix::Dense(dst) = &mut self.values {
+            assert_eq!(values.len(), dst.shape.size());
+            dst.load_from_slice(dst.shape, values);
+        } else {
+            panic!("This tensor is sparse!")
+        }
+    }
+
+    pub(crate) fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
         if let Matrix::Dense(dst) = &mut self.values {
             dst.load_from_slice(shape, values);
         } else {
@@ -71,7 +80,7 @@ impl Tensor {
         }
     }
 
-    pub fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
+    pub(crate) fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
         if let Matrix::Sparse(dst) = &mut self.values {
             dst.load_from_slice(shape, max_active, values);
         } else {
