@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{tensor::DenseMatrix, Graph};
 
-use super::{Optimiser, utils};
+use super::{utils, Optimiser};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -39,12 +39,7 @@ impl Optimiser for AdamW {
             assert!(old.is_none());
         }
 
-        Self {
-            graph,
-            momentum,
-            velocity,
-            params,
-        }
+        Self { graph, momentum, velocity, params }
     }
 
     fn graph(&self) -> &Graph {

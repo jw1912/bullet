@@ -1,14 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{Graph, tensor::DenseMatrix};
+use crate::{tensor::DenseMatrix, Graph};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.
-pub fn write_graph_weights_component_to_file(
-    graph: &Graph,
-    path: &str,
-    gradients: bool,
-) {
+pub fn write_graph_weights_component_to_file(graph: &Graph, path: &str, gradients: bool) {
     use std::{fs::File, io::Write};
 
     let weight_ids = graph.weight_ids();
@@ -33,11 +29,7 @@ pub fn write_graph_weights_component_to_file(
 
 /// Loads the weights of a graph from a file. If `gradients` is true,
 /// it will instead load the gradients of those weights.
-pub fn load_graph_weights_component_from_file(
-    graph: &mut Graph,
-    path: &str,
-    gradients: bool,
-) {
+pub fn load_graph_weights_component_from_file(graph: &mut Graph, path: &str, gradients: bool) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();

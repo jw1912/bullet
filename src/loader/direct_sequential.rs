@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use super::{BulletFormat, DataLoader, to_slice_with_lifetime};
+use super::{to_slice_with_lifetime, BulletFormat, DataLoader};
 
 #[derive(Clone)]
 pub struct DirectSequentialDataLoader {

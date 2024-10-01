@@ -1,0 +1,104 @@
+use std::{
+    io::{stdout, Write},
+    sync::atomic::{AtomicBool, Ordering::SeqCst},
+    time::Instant,
+};
+
+use super::schedule::TrainingSteps;
+
+static CBCS: AtomicBool = AtomicBool::new(false);
+
+pub fn ansi<T, U>(x: T, y: U) -> String
+where
+    T: std::fmt::Display,
+    U: std::fmt::Display,
+{
+    format!("\x1b[{}m{}\x1b[0m{}", y, x, esc())
+}
+
+pub fn set_cbcs(val: bool) {
+    CBCS.store(val, SeqCst)
+}
+
+fn num_cs() -> i32 {
+    if CBCS.load(SeqCst) {
+        35
+    } else {
+        36
+    }
+}
+
+fn esc() -> &'static str {
+    if CBCS.load(SeqCst) {
+        "\x1b[38;5;225m"
+    } else {
+        ""
+    }
+}
+
+pub fn report_superbatch_progress(
+    superbatch: usize,
+    batch_size: usize,
+    batches: usize,
+    finished_batches: usize,
+    superbatch_timer: &Instant,
+) {
+    let num_cs = num_cs();
+    let superbatch_time = superbatch_timer.elapsed().as_secs_f32();
+    let pct = finished_batches as f32 / batches as f32;
+    let positions = finished_batches * batch_size;
+    let pos_per_sec = positions as f32 / superbatch_time;
+
+    let seconds = superbatch_time / pct - superbatch_time;
+
+    print!(
+        "superbatch {} [{}% ({}/{} batches, {} pos/sec)]\n\
+        Estimated time to end of superbatch: {}s     \x1b[F",
+        ansi(superbatch, num_cs),
+        ansi(format!("{:.1}", pct * 100.0), 35),
+        ansi(finished_batches, num_cs),
+        ansi(batches, num_cs),
+        ansi(format!("{pos_per_sec:.0}"), num_cs),
+        ansi(format!("{seconds:.1}"), num_cs),
+    );
+    let _ = stdout().flush();
+}
+
+pub fn report_superbatch_finished(
+    superbatch: usize,
+    error: f32,
+    superbatch_time: f32,
+    total_time: f32,
+    positions: usize,
+) {
+    let num_cs = num_cs();
+    let pos_per_sec = positions as f32 / superbatch_time;
+
+    println!(
+        "superbatch {} | time {}s | running loss {} | {} pos/sec | total time {}s",
+        ansi(superbatch, num_cs),
+        ansi(format!("{superbatch_time:.1}"), num_cs),
+        ansi(format!("{error:.6}"), num_cs),
+        ansi(format!("{:.0}", pos_per_sec), num_cs),
+        ansi(format!("{total_time:.1}"), num_cs),
+    );
+}
+
+pub fn report_time_left(steps: TrainingSteps, superbatch: usize, total_time: f32) {
+    let num_cs = num_cs();
+    let finished_superbatches = superbatch - steps.start_superbatch + 1;
+    let total_superbatches = steps.end_superbatch - steps.start_superbatch + 1;
+    let pct = finished_superbatches as f32 / total_superbatches as f32;
+    let mut seconds = (total_time / pct - total_time) as u32;
+    let mut minutes = seconds / 60;
+    let hours = minutes / 60;
+    seconds -= minutes * 60;
+    minutes -= hours * 60;
+
+    println!(
+        "Estimated time remaining in training: {}h {}m {}s",
+        ansi(hours, num_cs),
+        ansi(minutes, num_cs),
+        ansi(seconds, num_cs),
+    );
+}
