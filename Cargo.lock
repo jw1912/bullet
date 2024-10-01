@@ -232,8 +232,8 @@ dependencies = [
 
 [[package]]
 name = "diffable"
-version = "0.5.0"
-source = "git+https://github.com/jw1912/diffable.git?tag=v0.5.0#9ae6003e61a3637451591a6ef15889e5da436012"
+version = "0.6.0"
+source = "git+https://github.com/jw1912/diffable.git?tag=v0.6.0#09a98ff45925f66937e44af6f13efbfb92d3edb9"
 
 [[package]]
 name = "dirs-next"

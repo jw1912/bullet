@@ -1,11 +1,13 @@
+mod default;
 mod logger;
 mod preparer;
 pub mod schedule;
 pub mod settings;
 
-use std::{sync::mpsc, time::Instant};
-
+pub use default::Trainer;
 pub use preparer::{DataPreparer, DefaultDataPreparer};
+
+use std::{sync::mpsc, time::Instant};
 
 use crate::{backend::util, lr::LrScheduler, optimiser::Optimiser, wdl::WdlScheduler, LocalSettings, TrainingSchedule};
 
@@ -43,7 +45,7 @@ pub trait NetworkTrainer {
         schedule: &TrainingSchedule<LR, WDL>,
         settings: &LocalSettings,
         mut callback: F,
-    ) where 
+    ) where
         D: DataPreparer<PreparedData = Self::PreparedData> + 'static,
         LR: LrScheduler,
         WDL: WdlScheduler,
@@ -63,17 +65,10 @@ pub trait NetworkTrainer {
         let steps = schedule.steps;
         let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
 
-        let (sender, reciever) = mpsc::sync_channel::<D::PreparedData>(
-            settings.batch_queue_size,
-        );
+        let (sender, reciever) = mpsc::sync_channel::<D::PreparedData>(settings.batch_queue_size);
 
-        let dataloader = preparer::create_dataloader(
-            preparer.clone(),
-            sender,
-            steps,
-            schedule.wdl_scheduler.clone(),
-            threads,
-        );
+        let dataloader =
+            preparer::create_dataloader(preparer.clone(), sender, steps, schedule.wdl_scheduler.clone(), threads);
 
         let mut prev_lr = schedule.lr(0, 1);
         let mut superbatch = steps.start_superbatch;
@@ -140,7 +135,7 @@ pub trait NetworkTrainer {
 
         let total_time = timer.elapsed().as_secs();
         let (hours, minutes, seconds) = logger::seconds_to_hms(total_time as u32);
-        
+
         println!(
             "Estimated time remaining in training: {}h {}m {}s",
             logger::ansi(hours, logger::num_cs()),

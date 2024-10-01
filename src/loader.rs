@@ -4,7 +4,11 @@ use bulletformat::BulletFormat;
 
 pub use direct_sequential::DirectSequentialDataLoader;
 
-use crate::{inputs::InputType, outputs::OutputBuckets, trainer::{DataPreparer, DefaultDataPreparer}};
+use crate::{
+    inputs::InputType,
+    outputs::OutputBuckets,
+    trainer::{DataPreparer, DefaultDataPreparer},
+};
 
 pub trait DataLoader<T>: Clone + Send + Sync + 'static {
     fn data_file_paths(&self) -> &[String];
@@ -17,15 +21,24 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
 }
 
 #[derive(Clone)]
-pub struct DefaultDataLoader<I, O, D> {
+pub(crate) struct DefaultDataLoader<I, O, D> {
     input_getter: I,
     output_getter: O,
     scale: f32,
     loader: D,
 }
 
+impl<I, O, D> DefaultDataLoader<I, O, D> {
+    pub fn new(input_getter: I, output_getter: O, scale: f32, loader: D) -> Self {
+        Self { input_getter, output_getter, scale, loader }
+    }
+}
+
 impl<I, O, D> DataPreparer for DefaultDataLoader<I, O, D>
-where I: InputType, O: OutputBuckets<I::RequiredDataType>, D: DataLoader<I::RequiredDataType>
+where
+    I: InputType,
+    O: OutputBuckets<I::RequiredDataType>,
+    D: DataLoader<I::RequiredDataType>,
 {
     type DataType = I::RequiredDataType;
     type PreparedData = DefaultDataPreparer<I, O>;
@@ -43,14 +56,7 @@ where I: InputType, O: OutputBuckets<I::RequiredDataType>, D: DataLoader<I::Requ
     }
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
-        DefaultDataPreparer::prepare(
-            self.input_getter,
-            self.output_getter,
-            data,
-            threads,
-            blend,
-            self.scale,
-        )
+        DefaultDataPreparer::prepare(self.input_getter, self.output_getter, data, threads, blend, self.scale)
     }
 }
 

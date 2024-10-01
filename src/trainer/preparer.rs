@@ -2,11 +2,9 @@ use std::sync::mpsc::SyncSender;
 
 use bulletformat::BulletFormat;
 
-use crate::{
-    inputs::InputType, outputs::OutputBuckets, tensor::Shape,
-};
+use crate::{inputs::InputType, outputs::OutputBuckets, tensor::Shape};
 
-use super::schedule::{TrainingSteps, wdl::WdlScheduler};
+use super::schedule::{wdl::WdlScheduler, TrainingSteps};
 
 pub trait DataPreparer: Clone + Send + Sync {
     type DataType: Send + Sync;
