@@ -46,7 +46,7 @@ impl Matrix {
                     src.copy_into(&mut dst);
                     *dest = Self::Dense(dst);
                 }
-            },
+            }
             Self::Sparse(src) => {
                 if let Self::Sparse(dst) = dest {
                     src.copy_into(dst)
@@ -55,7 +55,7 @@ impl Matrix {
                     src.copy_into(&mut dst);
                     *dest = Self::Sparse(dst);
                 }
-            },
+            }
         }
     }
 }

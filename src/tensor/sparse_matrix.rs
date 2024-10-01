@@ -8,7 +8,6 @@ pub struct SparseMatrix {
     buf: Buffer<i32>,
 }
 
-
 impl Default for SparseMatrix {
     fn default() -> Self {
         Self::zeroed(Shape::new(1, 1), 1)
@@ -17,11 +16,7 @@ impl Default for SparseMatrix {
 
 impl SparseMatrix {
     pub fn zeroed(shape: Shape, max_active: usize) -> Self {
-        Self {
-            shape,
-            max_active,
-            buf: Buffer::new(max_active * shape.cols()),
-        }
+        Self { shape, max_active, buf: Buffer::new(max_active * shape.cols()) }
     }
 
     pub fn shape(&self) -> Shape {
@@ -52,5 +47,4 @@ impl SparseMatrix {
         dest.reshape_if_needed(self.shape, self.max_active);
         dest.buf.load_from_device(&self.buf);
     }
-
 }

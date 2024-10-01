@@ -12,12 +12,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
 }
 
 pub fn forward(power: f32, inputs: &[&Tensor], output: &mut Tensor) {
-    DenseMatrix::abs_power_error(
-        power,
-        inputs[0].values.dense(),
-        inputs[1].values.dense(),
-        output.values.dense_mut(),
-    );
+    DenseMatrix::abs_power_error(power, inputs[0].values.dense(), inputs[1].values.dense(), output.values.dense_mut());
 }
 
 pub fn backprop(power: f32, output: &Tensor, inputs: &mut [&mut Tensor]) {

@@ -13,7 +13,14 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
 }
 
 pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-    DenseMatrix::matmul(ctx, inputs[0].values.dense(), false, inputs[1].values.dense(), false, output.values.dense_mut());
+    DenseMatrix::matmul(
+        ctx,
+        inputs[0].values.dense(),
+        false,
+        inputs[1].values.dense(),
+        false,
+        output.values.dense_mut(),
+    );
 }
 
 pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
