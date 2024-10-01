@@ -83,12 +83,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         schedule: &TrainingSchedule<LR, WDL>,
         settings: &LocalSettings,
     ) {
-        let preparer = DefaultDataLoader::new(
-            self.input_getter,
-            self.output_getter,
-            schedule.eval_scale,
-            data_loader,
-        );
+        let preparer = DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader);
 
         self.train_custom(&preparer, schedule, settings, |_, _, _, _| {});
     }
@@ -193,11 +188,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 max_active,
                 value: vec![0; max_active * batch_size],
             },
-            buckets: SparseInput {
-                shape: Shape::new(input_size, batch_size),
-                max_active: 1,
-                value: vec![0; batch_size],
-            },
+            buckets: SparseInput { shape: Shape::new(1, batch_size), max_active: 1, value: vec![0; batch_size] },
             results: DenseInput { shape: Shape::new(1, batch_size), value: vec![0.0; batch_size] },
         };
 
