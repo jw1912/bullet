@@ -9,8 +9,8 @@ use crate::backend::Buffer;
 
 #[derive(Debug)]
 pub struct DenseMatrix {
-    shape: Shape,
-    buf: Buffer<f32>,
+    pub(super) shape: Shape,
+    pub(super) buf: Buffer<f32>,
 }
 
 impl Default for DenseMatrix {
@@ -37,7 +37,7 @@ impl DenseMatrix {
     /// #### WARNING
     /// This is a function for internal use only, with potentially
     /// unintentional side effects.
-    fn reshape_if_needed(&mut self, shape: Shape) {
+    pub(super) fn reshape_if_needed(&mut self, shape: Shape) {
         if shape.size() > self.allocated_size() {
             self.buf = Buffer::new(shape.size());
         } else if self.shape != shape {

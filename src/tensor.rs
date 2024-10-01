@@ -4,9 +4,9 @@ mod shape;
 mod sparse_matrix;
 
 pub use dense_matrix::DenseMatrix;
-use matrix::Matrix;
+pub use matrix::Matrix;
 pub use shape::Shape;
-use sparse_matrix::SparseMatrix;
+pub use sparse_matrix::SparseMatrix;
 
 use crate::{backend::ExecutionContext, operations::Operation};
 

@@ -1,3 +1,5 @@
+mod linear;
+
 use super::shape::Shape;
 use crate::backend::Buffer;
 

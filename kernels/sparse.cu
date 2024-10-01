@@ -38,8 +38,7 @@ __global__ void sparseLinearBackwardKernel(
     const size_t outputSize,
     float* weightsGrad,
     const int32_t* inputs,
-    const float* errors,
-    const float* output)
+    const float* errors)
 {
     const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -48,7 +47,6 @@ __global__ void sparseLinearBackwardKernel(
 
     const int32_t* thisInput = inputs + inputSize * blockIdx.y;
     const float* thisErrors = errors + outputSize * blockIdx.y;
-    const float* thisOutput = output + 2 * outputSize * blockIdx.y;
 
     float ourError = thisErrors[elem];
 
@@ -68,7 +66,6 @@ extern "C" void sparseLinearForward(
     const size_t maxInputSize,
     const size_t outputSize,
     const float* weights,
-    const float* biases,
     const int32_t* inputs,
     float* outputs)
 {
@@ -93,8 +90,7 @@ extern "C" void sparseLinearBackward(
     const size_t outputSize,
     float* weightsGrad,
     const int32_t* inputs,
-    const float* errors,
-    const float* output)
+    const float* errors)
 {
     const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
@@ -107,7 +103,6 @@ extern "C" void sparseLinearBackward(
         outputSize,
         weightsGrad,
         inputs,
-        errors,
-        output
+        errors
     );
 }
