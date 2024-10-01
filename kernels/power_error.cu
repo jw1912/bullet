@@ -49,6 +49,8 @@ extern "C" void powerError(
     float* output,
     const float power)
 {
+    cudaMemset(output, 0, 4);
+
     const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
     powerErrorKernel<<<numBlocks, threadsPerBlock>>>(bufferSize, inputs, results, output, power);
 }
