@@ -20,26 +20,10 @@ impl DenseMatrix {
             }
         } else if input_a.shape.cols() == 1 {
             input_b.copy_into(output);
-            unsafe {
-                ops::add_vector_to_matrix_columns(
-                    ctx,
-                    input_b.shape.rows(),
-                    input_b.shape.cols(),
-                    input_a.buf.ptr(),
-                    output.buf.mut_ptr(),
-                );
-            }
+            Self::add_assign_vector_to_matrix_columns(ctx, input_a, output);
         } else if input_b.shape.cols() == 1 {
             input_a.copy_into(output);
-            unsafe {
-                ops::add_vector_to_matrix_columns(
-                    ctx,
-                    input_a.shape.rows(),
-                    input_a.shape.cols(),
-                    input_b.buf.ptr(),
-                    output.buf.mut_ptr(),
-                );
-            }
+            Self::add_assign_vector_to_matrix_columns(ctx, input_b, output);
         } else {
             panic!("Invalid shape pairs!")
         };
@@ -54,46 +38,67 @@ impl DenseMatrix {
         output_grad: &Self,
     ) {
         if let Some(grd) = input_a_grad {
-            backprop_add_single(ctx, input_a, grd, output_grad);
+            Self::backprop_add_single(ctx, input_a, grd, output_grad);
         }
 
         if let Some(grd) = input_b_grad {
-            backprop_add_single(ctx, input_b, grd, output_grad);
+            Self::backprop_add_single(ctx, input_b, grd, output_grad);
         }
     }
-}
 
-fn backprop_add_single(
-    ctx: &mut ExecutionContext,
-    input: &DenseMatrix,
-    input_grad: &mut DenseMatrix,
-    output_grad: &DenseMatrix,
-) {
-    input_grad.reshape_if_needed(input.shape);
-    if input.shape.cols() == output_grad.shape.cols() {
+    pub fn add_assign(ctx: &mut ExecutionContext, input: &Self, output: &mut Self) {
+        assert_eq!(input.shape, output.shape);
+
         unsafe {
             ops::add_matrix_to(
                 ctx,
-                output_grad.shape.cols(),
-                output_grad.shape.rows(),
-                output_grad.buf.ptr(),
-                input_grad.buf.mut_ptr(),
+                input.shape.rows(),
+                input.shape.cols(),
+                input.buf.ptr(),
+                output.buf.mut_ptr(),
             );
         }
-    } else if input.shape.cols() == 1 {
+    }
+
+    pub fn add_assign_vector_to_matrix_columns(ctx: &mut ExecutionContext, input: &Self, output: &mut Self) {
+        assert_eq!(input.shape.cols(), 1);
+        assert_eq!(input.shape.rows(), output.shape.rows());
+
         unsafe {
-            ops::reduce_add_cols(
+            ops::add_vector_to_matrix_columns(
                 ctx,
-                output_grad.shape.rows(),
-                output_grad.shape.cols(),
-                output_grad.buf.ptr(),
-                input_grad.buf.mut_ptr(),
-                true,
+                output.shape.rows(),
+                output.shape.cols(),
+                input.buf.ptr(),
+                output.buf.mut_ptr(),
             );
         }
-    } else {
-        panic!("Invalid shape pairs!")
-    };
+    }
+
+    pub fn backprop_add_single(
+        ctx: &mut ExecutionContext,
+        input: &DenseMatrix,
+        input_grad: &mut DenseMatrix,
+        output_grad: &DenseMatrix,
+    ) {
+        input_grad.reshape_if_needed(input.shape);
+        if input.shape.cols() == output_grad.shape.cols() {
+            Self::add_assign(ctx, output_grad, input_grad);
+        } else if input.shape.cols() == 1 {
+            unsafe {
+                ops::reduce_add_cols(
+                    ctx,
+                    output_grad.shape.rows(),
+                    output_grad.shape.cols(),
+                    output_grad.buf.ptr(),
+                    input_grad.buf.mut_ptr(),
+                    true,
+                );
+            }
+        } else {
+            panic!("Invalid shape pairs!")
+        };
+    }
 }
 
 #[cfg(test)]
