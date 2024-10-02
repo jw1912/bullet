@@ -34,6 +34,8 @@ fn build_and_link_hip_kernels(out_path: &Path) {
 
     cc::Build::new()
         .compiler(compiler_name)
+        .debug(false)
+        .opt_level(3)
         .flag(&format!("--offload-arch={}", gcn_arch_name))
         .flag("-munsafe-fp-atomics")
         .define("__HIP_PLATFORM_AMD__", None)

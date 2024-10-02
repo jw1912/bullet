@@ -20,7 +20,14 @@ fn link_cuda_libs() {
 fn build_and_link_cuda_kernels(out_path: &Path) {
     let files = util::KERNEL_FILES.iter().map(|s| format!("{}/{s}.cu", util::KERNEL_DIR)).collect::<Vec<_>>();
 
-    cc::Build::new().cuda(true).cudart("shared").files(&files).out_dir(out_path).compile("libkernels.a");
+    cc::Build::new()
+        .cuda(true)
+        .cudart("shared")
+        .debug(false)
+        .opt_level(3)
+        .files(&files)
+        .out_dir(out_path)
+        .compile("libkernels.a");
 }
 
 #[cfg(target_family = "windows")]

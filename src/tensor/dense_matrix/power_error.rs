@@ -6,6 +6,7 @@ impl DenseMatrix {
     pub fn abs_power_error(power: f32, input_a: &Self, input_b: &Self, output: &mut Self) {
         assert_eq!(input_a.shape, input_b.shape);
         output.reshape_if_needed(Shape::new(1, 1));
+        output.set_zero();
 
         unsafe {
             ops::powerError(input_a.shape.size(), input_a.buf.ptr(), input_b.buf.ptr(), output.buf.mut_ptr(), power);
