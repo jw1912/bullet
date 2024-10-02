@@ -58,14 +58,14 @@ impl DenseMatrix {
 
     pub fn copy_into(&self, dest: &mut Self) {
         dest.reshape_if_needed(self.shape);
-        dest.buf.load_from_device(&self.buf);
+        dest.buf.load_from_device(&self.buf, self.shape.size());
     }
 
     /// Writes the contents of this matrix into a buffer,
     /// returns number of values written.
     pub fn write_to_slice(&self, buf: &mut [f32]) -> usize {
-        assert!(self.allocated_size() <= buf.len());
-        self.buf.write_into_slice(buf);
+        assert!(self.shape.size() <= buf.len());
+        self.buf.write_into_slice(buf, self.shape.size());
         self.allocated_size()
     }
 

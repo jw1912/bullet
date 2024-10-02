@@ -47,6 +47,6 @@ impl SparseMatrix {
 
     pub fn copy_into(&self, dest: &mut Self) {
         dest.reshape_if_needed(self.shape, self.max_active);
-        dest.buf.load_from_device(&self.buf);
+        dest.buf.load_from_device(&self.buf, self.max_active * self.shape.cols());
     }
 }

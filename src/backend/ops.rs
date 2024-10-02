@@ -174,20 +174,8 @@ pub unsafe fn add_vector_to_matrix_columns(
         ctx.ones.load_from_slice(&vec![1.0; cols]);
     }
 
-    let status = unsafe {
-        bindings::cublasSger_v2(
-            ctx.handle,
-            m,
-            n,
-            &alpha,
-            vector,
-            inc,
-            ctx.ones.ptr(),
-            inc,
-            matrix,
-            lda,
-        )
-    };
+    let status =
+        unsafe { bindings::cublasSger_v2(ctx.handle, m, n, &alpha, vector, inc, ctx.ones.ptr(), inc, matrix, lda) };
 
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sger failed!");
 }

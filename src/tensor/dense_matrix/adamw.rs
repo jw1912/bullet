@@ -16,10 +16,12 @@ impl DenseMatrix {
         assert_eq!(self.shape, momentum.shape);
         assert_eq!(self.shape, velocity.shape);
 
+        let decay = 1.0 - learning_rate * params.decay;
+
         unsafe {
             ops::AdamW(
                 self.shape.size(),
-                params.decay,
+                decay,
                 params.beta1,
                 params.beta2,
                 params.min_weight,

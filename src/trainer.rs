@@ -40,6 +40,10 @@ pub trait NetworkTrainer {
 
     fn optimiser_mut(&mut self) -> &mut Self::Optimiser;
 
+    fn load_from_checkpoint(&mut self, path: &str) {
+        self.optimiser_mut().load_from_checkpoint(path);
+    }
+
     fn train_custom<D, LR, WDL, F>(
         &mut self,
         preparer: &D,

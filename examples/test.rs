@@ -1,12 +1,16 @@
 use bullet_lib::{
-    inputs, loader, lr, operations::{self, Activation}, optimiser::{AdamW, AdamWParams}, outputs, rng, wdl, ExecutionContext, GraphBuilder, LocalSettings, Shape, Trainer, TrainingSchedule, TrainingSteps
+    inputs, loader, lr,
+    operations::{self, Activation},
+    optimiser::{AdamW, AdamWParams},
+    outputs, rng, wdl, ExecutionContext, GraphBuilder, LocalSettings, NetworkTrainer, Shape, Trainer, TrainingSchedule,
+    TrainingSteps,
 };
 
 fn main() {
     let mut builder = GraphBuilder::default();
 
     let inputs = 768;
-    let hl = 512;
+    let hl = 128;
 
     let stm = builder.create_input("stm", Shape::new(inputs, 1));
     let targets = builder.create_input("targets", Shape::new(1, 1));
@@ -20,7 +24,7 @@ fn main() {
     let l1 = operations::affine(&mut builder, l1w, stm, l1b);
     let l1a = operations::activate(&mut builder, l1, Activation::ReLU);
     let predicted = operations::affine(&mut builder, l2w, l1a, l2b);
-    
+
     let sigmoided = operations::activate(&mut builder, predicted, Activation::Sigmoid);
     operations::mse(&mut builder, sigmoided, targets);
 
@@ -41,8 +45,10 @@ fn main() {
         outputs::Single,
     );
 
-    let eval = trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
-    println!("{eval}");
+    trainer.load_from_checkpoint("checkpoints/test");
+
+    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("Eval: {eval:.3}cp");
 
     let schedule = TrainingSchedule {
         net_id: "test".to_string(),
@@ -52,7 +58,7 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 256,
             start_superbatch: 1,
-            end_superbatch: 1,
+            end_superbatch: 10,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
@@ -65,6 +71,6 @@ fn main() {
 
     trainer.train(data_loader, &schedule, &settings);
 
-    let eval = trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
-    println!("{eval}");
+    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("Eval: {eval:.3}cp");
 }

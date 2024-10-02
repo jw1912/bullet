@@ -84,8 +84,8 @@ fn backprop_add_single(
         unsafe {
             ops::reduce_add_cols(
                 ctx,
-                output_grad.shape.cols(),
                 output_grad.shape.rows(),
+                output_grad.shape.cols(),
                 output_grad.buf.ptr(),
                 input_grad.buf.mut_ptr(),
                 true,

@@ -43,10 +43,11 @@ impl<T: Bufferable> Buffer<T> {
         }
     }
 
-    pub fn load_from_device(&self, buf: &Self) {
-        assert!(buf.size <= self.size, "Overflow: {} > {}!", buf.size, self.size);
+    pub fn load_from_device(&self, buf: &Self, bytes: usize) {
+        assert!(bytes <= buf.size);
+        assert!(bytes <= self.size, "Overflow: {} > {}!", buf.size, self.size);
         unsafe {
-            util::copy_on_device(self.ptr, buf.ptr, buf.size);
+            util::copy_on_device(self.ptr, buf.ptr, bytes);
         }
     }
 
@@ -57,10 +58,10 @@ impl<T: Bufferable> Buffer<T> {
         }
     }
 
-    pub fn write_into_slice(&self, buf: &mut [T]) {
-        assert!(buf.len() <= self.size, "Overflow!");
+    pub fn write_into_slice(&self, buf: &mut [T], bytes: usize) {
+        assert!(bytes <= self.size, "Overflow!");
         unsafe {
-            util::copy_from_device(buf.as_mut_ptr(), self.ptr, buf.len());
+            util::copy_from_device(buf.as_mut_ptr(), self.ptr, bytes);
         }
     }
 }

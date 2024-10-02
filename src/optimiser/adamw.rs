@@ -61,7 +61,7 @@ impl Optimiser for AdamW {
             let weights = self.graph.get_weights_mut(id);
 
             weights.values.dense_mut().adamw(
-                weights.gradients.as_mut().unwrap(),
+                weights.gradients.as_ref().unwrap(),
                 self.momentum.get_mut(id).unwrap(),
                 self.velocity.get_mut(id).unwrap(),
                 &self.params,
