@@ -10,7 +10,7 @@ fn main() {
     let mut builder = GraphBuilder::default();
 
     let inputs = 768;
-    let hl = 128;
+    let hl = 512;
 
     let stm = builder.create_input("stm", Shape::new(inputs, 1));
     let targets = builder.create_input("targets", Shape::new(1, 1));
@@ -56,7 +56,7 @@ fn main() {
         ft_regularisation: 0.0,
         steps: TrainingSteps {
             batch_size: 16_384,
-            batches_per_superbatch: 256,
+            batches_per_superbatch: 6104,
             start_superbatch: 1,
             end_superbatch: 10,
         },
