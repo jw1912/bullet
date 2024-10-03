@@ -2,10 +2,12 @@
 #include <hip/hip_runtime.h>
 #endif
 
-__global__ void sparseLinearForwardKernel(
+template<bool bias>
+__global__ void sparseAffineForwardKernel(
     const size_t inputSize,
     const size_t outputSize,
     const float* weights,
+    const float* biases,
     const int32_t* inputs,
     float* outputs)
 {
@@ -18,7 +20,11 @@ __global__ void sparseLinearForwardKernel(
     const int32_t* thisInput = inputs + inputSize * blockIdx.y;
     float* thisOutput = outputs + outputSize * blockIdx.y + elem;
 
-    float ourElementVal = 0;
+    float ourElementVal;
+    if constexpr (bias)
+        ourElementVal = biases[elem];
+    else
+        ourElementVal = 0.0F;
 
     for (size_t i = 0; i < inputSize; i++) {
         const int32_t inp = thisInput[i];
@@ -33,10 +39,12 @@ __global__ void sparseLinearForwardKernel(
     thisOutput[0] = ourElementVal;
 }
 
-__global__ void sparseLinearBackwardKernel(
+template<bool bias>
+__global__ void sparseAffineBackwardKernel(
     const size_t inputSize,
     const size_t outputSize,
     float* weightsGrad,
+    float* biasesGrad,
     const int32_t* inputs,
     const float* errors)
 {
@@ -50,6 +58,9 @@ __global__ void sparseLinearBackwardKernel(
 
     float ourError = thisErrors[elem];
 
+    if constexpr (bias)
+        atomicAdd(&biasesGrad[elem], ourError);
+
     for (size_t i = 0; i < inputSize; i++) {
         const int32_t inp = thisInput[i];
 
@@ -61,11 +72,12 @@ __global__ void sparseLinearBackwardKernel(
     }
 }
 
-extern "C" void sparseLinearForward(
+extern "C" void sparseAffineForward(
     const size_t batchSize,
     const size_t maxInputSize,
     const size_t outputSize,
     const float* weights,
+    const float* biases,
     const int32_t* inputs,
     float* outputs)
 {
@@ -75,20 +87,32 @@ extern "C" void sparseLinearForward(
 
     const size_t threads = (numChunks == 1) ? outputSize : 1024;
 
-    sparseLinearForwardKernel<<<grid, threads>>>(
-        maxInputSize,
-        outputSize,
-        weights,
-        inputs,
-        outputs
-    );
+    if (biases == nullptr)
+        sparseAffineForwardKernel<false><<<grid, threads>>>(
+            maxInputSize,
+            outputSize,
+            weights,
+            biases,
+            inputs,
+            outputs
+        );
+    else
+        sparseAffineForwardKernel<true><<<grid, threads>>>(
+            maxInputSize,
+            outputSize,
+            weights,
+            biases,
+            inputs,
+            outputs
+        );
 }
 
-extern "C" void sparseLinearBackward(
+extern "C" void sparseAffineBackward(
     const size_t batchSize,
     const size_t maxInputSize,
     const size_t outputSize,
     float* weightsGrad,
+    float* biasesGrad,
     const int32_t* inputs,
     const float* errors)
 {
@@ -98,11 +122,22 @@ extern "C" void sparseLinearBackward(
 
     const size_t threads = (numChunks == 1) ? outputSize : 1024;
 
-    sparseLinearBackwardKernel<<<grid, threads>>>(
-        maxInputSize,
-        outputSize,
-        weightsGrad,
-        inputs,
-        errors
-    );
+    if (biasesGrad == nullptr)
+        sparseAffineBackwardKernel<false><<<grid, threads>>>(
+            maxInputSize,
+            outputSize,
+            weightsGrad,
+            biasesGrad,
+            inputs,
+            errors
+        );
+    else
+        sparseAffineBackwardKernel<true><<<grid, threads>>>(
+            maxInputSize,
+            outputSize,
+            weightsGrad,
+            biasesGrad,
+            inputs,
+            errors
+        );
 }

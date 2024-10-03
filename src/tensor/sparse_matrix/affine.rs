@@ -3,20 +3,52 @@ use crate::{backend::ops, tensor::DenseMatrix};
 use super::SparseMatrix;
 
 impl SparseMatrix {
-    pub fn linear(input_a: &DenseMatrix, input_b: &Self, output: &mut DenseMatrix) {
+    pub fn affine(input_a: &DenseMatrix, input_b: &Self, input_c: Option<&DenseMatrix>, output: &mut DenseMatrix) {
         let output_shape = input_a.shape * input_b.shape;
         output.reshape_if_needed(output_shape);
 
+        if let Some(c) = input_c {
+            assert_eq!(c.shape.rows(), output_shape.rows());
+            assert_eq!(c.shape.cols(), 1);
+        }
+
         unsafe {
-            ops::sparseLinearForward(
+            ops::sparseAffineForward(
                 input_b.shape.cols(),
                 input_b.max_active,
                 output.shape().rows(),
                 input_a.buf.ptr(),
+                input_c.map(|c| c.buf.ptr()).unwrap_or(std::ptr::null()),
                 input_b.buf.ptr(),
                 output.buf.mut_ptr(),
             );
         }
+    }
+
+    pub fn backprop_affine(
+        input_a: &DenseMatrix,
+        input_a_grad: &mut DenseMatrix,
+        input_b: &Self,
+        input_c_grad: Option<&mut DenseMatrix>,
+        output_grad: &DenseMatrix,
+    ) {
+        input_a_grad.reshape_if_needed(input_a.shape());
+
+        unsafe {
+            ops::sparseAffineBackward(
+                input_b.shape.cols(),
+                input_b.max_active,
+                output_grad.shape.rows(),
+                input_a_grad.buf.mut_ptr(),
+                input_c_grad.map(|c| c.buf.mut_ptr()).unwrap_or(std::ptr::null_mut()),
+                input_b.buf.ptr(),
+                output_grad.buf.ptr(),
+            );
+        }
+    }
+
+    pub fn linear(input_a: &DenseMatrix, input_b: &Self, output: &mut DenseMatrix) {
+        Self::affine(input_a, input_b, None, output);
     }
 
     pub fn backprop_linear(
@@ -25,18 +57,7 @@ impl SparseMatrix {
         input_b: &Self,
         output_grad: &DenseMatrix,
     ) {
-        input_a_grad.reshape_if_needed(input_a.shape());
-
-        unsafe {
-            ops::sparseLinearBackward(
-                input_b.shape.cols(),
-                input_b.max_active,
-                output_grad.shape.rows(),
-                input_a_grad.buf.mut_ptr(),
-                input_b.buf.ptr(),
-                output_grad.buf.ptr(),
-            );
-        }
+        Self::backprop_affine(input_a, input_a_grad, input_b, None, output_grad);
     }
 }
 

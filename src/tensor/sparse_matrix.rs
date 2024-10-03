@@ -1,4 +1,4 @@
-mod linear;
+mod affine;
 
 use super::shape::Shape;
 use crate::backend::Buffer;
