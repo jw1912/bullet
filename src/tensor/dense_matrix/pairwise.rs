@@ -10,12 +10,7 @@ impl DenseMatrix {
         output.reshape_if_needed(shape);
 
         unsafe {
-            ops::pairwiseMul(
-                shape.cols(),
-                shape.rows(),
-                input.buf.ptr(),
-                output.buf.mut_ptr(),
-            );
+            ops::pairwiseMul(shape.cols(), shape.rows(), input.buf.ptr(), output.buf.mut_ptr());
         }
     }
 

@@ -50,13 +50,7 @@ impl DenseMatrix {
         assert_eq!(input.shape, output.shape);
 
         unsafe {
-            ops::add_matrix_to(
-                ctx,
-                input.shape.rows(),
-                input.shape.cols(),
-                input.buf.ptr(),
-                output.buf.mut_ptr(),
-            );
+            ops::add_matrix_to(ctx, input.shape.rows(), input.shape.cols(), input.buf.ptr(), output.buf.mut_ptr());
         }
     }
 

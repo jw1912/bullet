@@ -18,9 +18,7 @@ pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tens
     let out = output.values.dense_mut();
 
     match &inputs[1].values {
-        Matrix::Sparse(sparse) => {
-            SparseMatrix::affine(weights, sparse, Some(biases), out)
-        }
+        Matrix::Sparse(sparse) => SparseMatrix::affine(weights, sparse, Some(biases), out),
         Matrix::Dense(dense) => {
             DenseMatrix::matmul(ctx, weights, false, dense, false, out);
             DenseMatrix::add_assign_vector_to_matrix_columns(ctx, biases, out);

@@ -17,14 +17,7 @@ impl SparseMatrix {
         output.reshape_if_needed(shape);
 
         unsafe {
-            ops::selectForward(
-                cols,
-                rows,
-                output_rows,
-                indices.buf.ptr(),
-                input.buf.ptr(),
-                output.buf.mut_ptr(),
-            );
+            ops::selectForward(cols, rows, output_rows, indices.buf.ptr(), input.buf.ptr(), output.buf.mut_ptr());
         }
     }
 
@@ -81,9 +74,8 @@ mod tests {
             input1.load_from_slice(
                 shape1,
                 &[
-                    -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0,
-                    -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0,
-                    -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0,
+                    -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0, -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0, -1.0, 4.0,
+                    2.0, -2.0, 0.0, -3.0, 0.0, -3.0,
                 ],
             );
 
@@ -123,9 +115,8 @@ mod tests {
             assert_eq!(
                 grad1,
                 [
-                    -1.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 2.0, -2.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, -3.0, 0.0, 0.0,
+                    -1.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, -3.0, 0.0, 0.0,
                 ],
             );
 

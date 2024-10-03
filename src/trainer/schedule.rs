@@ -28,12 +28,8 @@ impl TrainingSteps {
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {
-    /// Name of the training run.
     pub net_id: String,
-    /// Scalar to divide evaluations from data by.
     pub eval_scale: f32,
-    /// Regularisation on L1, experiment from Beserk.
-    pub ft_regularisation: f32,
     pub steps: TrainingSteps,
     pub wdl_scheduler: WDL,
     pub lr_scheduler: LR,
@@ -58,9 +54,9 @@ impl<LR: LrScheduler, WDL: WdlScheduler> TrainingSchedule<LR, WDL> {
     }
 
     pub fn display(&self) {
-        println!("Scale                  : {}", ansi(format!("{:.0}", self.eval_scale), 31));
-        println!("1 / FT Regularisation  : {}", ansi(format!("{:.0}", 1.0 / self.ft_regularisation), 31));
+        println!("Net Name               : {}", ansi(self.net_id.clone(), "32;1"));
         self.steps.display();
+        println!("Eval Scale             : {}", ansi(format!("{:.0}", self.eval_scale), 31));
         println!("Save Rate              : {}", ansi(self.save_rate, 31));
         println!("WDL Scheduler          : {}", self.wdl_scheduler.colourful());
         println!("LR Scheduler           : {}", self.lr_scheduler.colourful());

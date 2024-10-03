@@ -47,13 +47,9 @@ fn main() {
 
     trainer.load_from_checkpoint("checkpoints/test");
 
-    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
-    println!("Eval: {eval:.3}cp");
-
     let schedule = TrainingSchedule {
         net_id: "test".to_string(),
         eval_scale: 400.0,
-        ft_regularisation: 0.0,
         steps: TrainingSteps {
             batch_size: 16_384,
             batches_per_superbatch: 6104,

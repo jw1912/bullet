@@ -29,12 +29,7 @@ pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
 
     if let Some(grad) = input1[0].gradients.as_mut() {
         if let Matrix::Sparse(buckets) = &input2[0].values {
-            SparseMatrix::select_backprop(
-                input1[0].values.dense(),
-                buckets,
-                output_grad,
-                grad
-            );
+            SparseMatrix::select_backprop(input1[0].values.dense(), buckets, output_grad, grad);
         } else {
             panic!("Bucket indices must be integers!")
         }

@@ -1,4 +1,7 @@
-use crate::{backend::{ops, ExecutionContext}, Shape};
+use crate::{
+    backend::{ops, ExecutionContext},
+    Shape,
+};
 
 use super::DenseMatrix;
 
@@ -9,7 +12,7 @@ impl DenseMatrix {
 
         let output_shape = Shape::new(input_a.shape.rows() + input_b.shape.rows(), cols);
         output.reshape_if_needed(output_shape);
-        
+
         unsafe {
             ops::copy_strided(
                 ctx,
@@ -128,14 +131,7 @@ mod tests {
 
         // de-concat
         {
-            DenseMatrix::de_concat(
-                &mut ctx,
-                &input1,
-                Some(&mut input1_grad),
-                &input2,
-                Some(&mut input2_grad),
-                &output,
-            );
+            DenseMatrix::de_concat(&mut ctx, &input1, Some(&mut input1_grad), &input2, Some(&mut input2_grad), &output);
 
             util::panic_if_device_error("Failed to de-concat!");
 
