@@ -1,4 +1,4 @@
-use crate::{inputs::InputType, operations::{self, Activation}, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, ExecutionContext, GraphBuilder, Shape};
+use crate::{inputs::InputType, operations, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, Activation, ExecutionContext, GraphBuilder, Shape};
 
 use super::Trainer;
 

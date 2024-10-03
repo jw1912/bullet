@@ -1,8 +1,8 @@
 use bullet_lib::{
     inputs, loader, lr,
-    operations::{self, Activation},
+    operations,
     optimiser::{AdamWOptimiser, AdamWParams},
-    outputs, rng, wdl, ExecutionContext, GraphBuilder, LocalSettings, NetworkTrainer, Shape, Trainer, TrainingSchedule,
+    outputs, rng, wdl, Activation, ExecutionContext, GraphBuilder, LocalSettings, NetworkTrainer, Shape, Trainer, TrainingSchedule,
     TrainingSteps,
 };
 
