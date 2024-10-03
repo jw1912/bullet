@@ -1,6 +1,7 @@
 mod activate;
 mod adamw;
 mod add;
+mod concat;
 mod matmul;
 mod power_error;
 

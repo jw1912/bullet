@@ -154,6 +154,46 @@ pub unsafe fn reduce_add_cols(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemv failed!");
 }
 
+pub unsafe fn copy_strided(
+    ctx: &mut ExecutionContext,
+    rows: usize,
+    cols: usize,
+    input_stride: usize,
+    input: *const f32,
+    output_stride: usize,
+    output: *mut f32,
+) {
+    let alpha = 1.0;
+    let beta = 0.0;
+
+    let m = rows as c_int;
+    let n = cols as c_int;
+
+    let lda = input_stride as c_int;
+    let ldb = rows as c_int;
+    let ldc = output_stride as c_int;
+
+    let status = unsafe {
+        bindings::cublasSgeam(
+            ctx.handle,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            m,
+            n,
+            &alpha,
+            input,
+            lda,
+            &beta,
+            std::ptr::null(),
+            ldb,
+            output,
+            ldc,
+        )
+    };
+
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemm failed!");
+}
+
 pub unsafe fn add_vector_to_matrix_columns(
     ctx: &mut ExecutionContext,
     rows: usize,
