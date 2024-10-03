@@ -3,6 +3,7 @@ mod adamw;
 mod add;
 mod concat;
 mod matmul;
+mod pairwise;
 mod power_error;
 
 use super::shape::Shape;

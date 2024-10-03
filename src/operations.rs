@@ -2,6 +2,7 @@ mod activate;
 mod add;
 mod affine;
 mod linear;
+mod pairwise;
 mod power_error;
 
 pub use activate::Activation;
@@ -38,6 +39,8 @@ pub enum Operation {
     Affine,
     /// Multiply vector by a matrix
     Linear,
+    /// Split vector in two and element-wise multiply the two halves
+    PairwiseMul,
 }
 
 impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
@@ -48,6 +51,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Add => add::output_tensor(inputs),
             Operation::Affine => affine::output_tensor(inputs),
             Operation::Linear => linear::output_tensor(inputs),
+            Operation::PairwiseMul => pairwise::output_tensor(inputs),
         }
     }
 
@@ -58,6 +62,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Add => add::forward(ctx, inputs, output),
             Operation::Affine => affine::forward(ctx, inputs, output),
             Operation::Linear => linear::forward(ctx, inputs, output),
+            Operation::PairwiseMul => pairwise::forward(inputs, output),
         }
     }
 
@@ -68,6 +73,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Add => add::backprop(ctx, output_grad, inputs),
             Operation::Affine => affine::backprop(ctx, output_grad, inputs),
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
+            Operation::PairwiseMul => pairwise::backprop(output_grad, inputs),
         }
     }
 }

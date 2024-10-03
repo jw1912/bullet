@@ -1,0 +1,29 @@
+use crate::{
+    tensor::{DenseMatrix, Shape},
+    Tensor,
+};
+
+pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
+    if inputs.len() == 1 {
+        let input = inputs[0];
+        if input.rows() % 2 != 0 {
+            Err(String::from("Input size must be even!"))
+        } else {
+            Ok(Shape::new(input.rows() / 2, input.cols()))
+        }
+    } else {
+        Err(String::from("Invalid number of inputs!"))
+    }
+}
+
+pub fn forward(inputs: &[&Tensor], output: &mut Tensor) {
+    DenseMatrix::pairwise(inputs[0].values.dense(), output.values.dense_mut());
+}
+
+pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
+    let input = inputs[0].values.dense();
+    let output_grad = output.gradients.as_ref().expect("Must exist!");
+    if let Some(input_grad) = inputs[0].gradients.as_mut() {
+        DenseMatrix::backprop_pairwise(input, output_grad, input_grad);
+    }
+}

@@ -6,7 +6,7 @@ __global__ void selectKernel(
     const size_t batchSize,
     const size_t inputSize,
     const size_t outputSize,
-    const uint8_t* buckets,
+    const int32_t* buckets,
     const float* in,
     float* out)
 {
@@ -28,7 +28,7 @@ __global__ void selectBackpropKernel(
     const size_t batchSize,
     const size_t inputSize,
     const size_t outputSize,
-    const uint8_t* buckets,
+    const int32_t* buckets,
     const float* in,
     float* out)
 {
@@ -43,7 +43,7 @@ __global__ void selectBackpropKernel(
     float* thisOutput = out + outputSize * thisIdx + inputSize * thisBucket;
 
     for (size_t i = 0; i < inputSize; i++)
-        thisOutput[i] = thisInput[i];
+        thisOutput[i] += thisInput[i];
 }
 
 constexpr size_t Threads = static_cast<size_t>(1024);
@@ -52,7 +52,7 @@ extern "C" void selectForward(
     const size_t batchSize,
     const size_t inputSize,
     const size_t outputSize,
-    const uint8_t* buckets,
+    const int32_t* buckets,
     const float* in,
     float* out)
 {
@@ -73,7 +73,7 @@ extern "C" void selectBackprop(
     const size_t batchSize,
     const size_t inputSize,
     const size_t outputSize,
-    const uint8_t* buckets,
+    const int32_t* buckets,
     const float* in,
     float* out)
 {
