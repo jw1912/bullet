@@ -31,10 +31,10 @@ fn main() {
     let ctx = ExecutionContext::default();
     let mut graph = builder.build(ctx);
 
-    let values = rng::vec_f32(hl * inputs, 0.0, 0.1, true);
+    let values = rng::vec_f32(hl * inputs, 0.0, 1.0 / (inputs as f32).sqrt(), true);
     graph.get_weights_mut("l1w").load_from_slice(&values);
 
-    let values = rng::vec_f32(hl, 0.0, 0.1, true);
+    let values = rng::vec_f32(hl, 0.0, 1.0 / (hl as f32).sqrt(), true);
     graph.get_weights_mut("l2w").load_from_slice(&values);
 
     let mut trainer = Trainer::<AdamW, inputs::Chess768>::new(
