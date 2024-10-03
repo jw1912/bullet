@@ -1,4 +1,4 @@
-use crate::{inputs::InputType, operations::{self, Activation}, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, ExecutionContext, GraphBuilder, Shape};
+use crate::{inputs::InputType, operations::{self, Activation}, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, ExecutionContext, GraphBuilder, Shape};
 
 use super::Trainer;
 
@@ -239,13 +239,28 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let ctx = ExecutionContext::default();
         let graph = builder.build(ctx);
 
-        Trainer {
+        let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
             input_getter: self.input_getter,
             output_getter: self.bucket_getter,
             output_node: out,
             perspective: self.perspective,
             output_buckets,
+        };
+
+        let graph = trainer.optimiser.graph_mut();
+
+        for l in 0..layer {
+            let w = graph.get_weights_mut(&format!("l{l}w"));
+            let shape = w.values.shape();
+            let stdev = 1.0 / (shape.cols() as f32).sqrt();
+
+            let wv = rng::vec_f32(w.values.shape().size(), 0.0, stdev, true);
+            w.load_from_slice(&wv);
+            let wb = rng::vec_f32(w.values.shape().rows(), 0.0, stdev, true);
+            graph.get_weights_mut(&format!("l{l}b")).load_from_slice(&wb);
         }
+
+        trainer
     }
 }
