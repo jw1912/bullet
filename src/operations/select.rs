@@ -11,7 +11,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
             Err(String::from("Vector cannot be split evenly among buckets!"))
         }
     } else {
-        Err(String::from("Invalid number of inputs!"))
+        Err(format!("Invalid number of inputs in select! Expected 2, got {}", inputs.len()))
     }
 }
 

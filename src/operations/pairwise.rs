@@ -12,7 +12,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
             Ok(Shape::new(input.rows() / 2, input.cols()))
         }
     } else {
-        Err(String::from("Invalid number of inputs!"))
+        Err(format!("Invalid number of inputs in pairwise! Expected 1, got {}", inputs.len()))
     }
 }
 

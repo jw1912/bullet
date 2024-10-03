@@ -8,7 +8,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 3 && inputs[0] * inputs[1] == inputs[2] {
         Ok(inputs[2])
     } else {
-        Err(String::from("Invalid number of inputs!"))
+        Err(format!("Invalid number of inputs in affine! Expected 3, got {}", inputs.len()))
     }
 }
 

@@ -8,7 +8,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 && inputs[0].cols() == inputs[1].cols() {
         Ok(Shape::new(inputs[0].rows() + inputs[1].rows(), inputs[0].cols()))
     } else {
-        Err(String::from("Invalid number of inputs!"))
+        Err(format!("Invalid number of inputs in concat! Expected 2, got {}", inputs.len()))
     }
 }
 

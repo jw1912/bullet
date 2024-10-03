@@ -11,12 +11,13 @@ mod trainer;
 pub use backend::ExecutionContext;
 pub use bulletformat as format;
 pub use diffable::Node;
+pub use operations::Activation;
 pub use tensor::{Shape, Tensor};
 pub use trainer::{
     logger,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
-    NetworkTrainer, Trainer,
+    NetworkTrainer, Trainer, TrainerBuilder, Loss
 };
 
 pub type Graph = diffable::Graph<Tensor>;

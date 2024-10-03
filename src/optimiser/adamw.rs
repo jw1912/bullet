@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{tensor::DenseMatrix, Graph};
 
-use super::{utils, Optimiser};
+use super::{utils, Optimiser, OptimiserType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -19,14 +19,20 @@ impl Default for AdamWParams {
     }
 }
 
-pub struct AdamW {
+#[derive(Default)]
+pub struct AdamW;
+impl OptimiserType for AdamW {
+    type Optimiser = AdamWOptimiser;
+}
+
+pub struct AdamWOptimiser {
     graph: Graph,
     momentum: HashMap<String, DenseMatrix>,
     velocity: HashMap<String, DenseMatrix>,
     params: AdamWParams,
 }
 
-impl Optimiser for AdamW {
+impl Optimiser for AdamWOptimiser {
     type Params = AdamWParams;
 
     fn new(graph: Graph, params: Self::Params) -> Self {
@@ -83,5 +89,9 @@ impl Optimiser for AdamW {
         utils::load_graph_weights_component_from_file(&mut self.graph, &format!("{path}/gradient.bin"), true);
         utils::load_weight_hashmap_from_file(&mut self.momentum, &format!("{path}/momentum.bin"));
         utils::load_weight_hashmap_from_file(&mut self.velocity, &format!("{path}/velocity.bin"));
+    }
+
+    fn set_params(&mut self, params: Self::Params) {
+        self.params = params;
     }
 }

@@ -1,12 +1,12 @@
 mod adamw;
 pub mod utils;
 
-pub use adamw::{AdamW, AdamWParams};
+pub use adamw::{AdamW, AdamWOptimiser, AdamWParams};
 
 use crate::Graph;
 
 pub trait Optimiser {
-    type Params: Clone + std::fmt::Debug;
+    type Params: Clone + std::fmt::Debug + Default;
 
     fn new(graph: Graph, params: Self::Params) -> Self;
 
@@ -19,4 +19,10 @@ pub trait Optimiser {
     fn load_from_checkpoint(&mut self, path: &str);
 
     fn write_to_checkpoint(&self, path: &str);
+
+    fn set_params(&mut self, params: Self::Params);
+}
+
+pub trait OptimiserType: Default {
+    type Optimiser: Optimiser;
 }

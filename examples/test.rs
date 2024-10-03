@@ -1,7 +1,7 @@
 use bullet_lib::{
     inputs, loader, lr,
     operations::{self, Activation},
-    optimiser::{AdamW, AdamWParams},
+    optimiser::{AdamWOptimiser, AdamWParams},
     outputs, rng, wdl, ExecutionContext, GraphBuilder, LocalSettings, NetworkTrainer, Shape, Trainer, TrainingSchedule,
     TrainingSteps,
 };
@@ -37,7 +37,7 @@ fn main() {
     let values = rng::vec_f32(hl, 0.0, 1.0 / (hl as f32).sqrt(), true);
     graph.get_weights_mut("l2w").load_from_slice(&values);
 
-    let mut trainer = Trainer::<AdamW, inputs::Chess768>::new(
+    let mut trainer = Trainer::<AdamWOptimiser, inputs::Chess768>::new(
         graph,
         predicted,
         AdamWParams::default(),
@@ -65,7 +65,7 @@ fn main() {
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
-    trainer.train(data_loader, &schedule, &settings);
+    trainer.run(&schedule, &settings, &data_loader);
 
     let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
     println!("Eval: {eval:.3}cp");

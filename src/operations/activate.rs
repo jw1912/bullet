@@ -16,7 +16,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 1 {
         Ok(inputs[0])
     } else {
-        Err(String::from("Invalid number of inputs!"))
+        Err(format!("Invalid number of inputs in activation! Expected 1, got {}", inputs.len()))
     }
 }
 

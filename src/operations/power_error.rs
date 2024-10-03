@@ -7,7 +7,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 && inputs[0] == inputs[1] {
         Ok(Shape::new(1, 1))
     } else {
-        Err(String::from("Invalid number of inputs!"))
+        Err(format!("Invalid number of inputs in power error! Expected 1, got {}", inputs.len()))
     }
 }
 

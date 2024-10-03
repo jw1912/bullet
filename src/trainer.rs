@@ -4,7 +4,7 @@ mod preparer;
 pub mod schedule;
 pub mod settings;
 
-pub use default::Trainer;
+pub use default::{Loss, Trainer, TrainerBuilder};
 pub use preparer::DataPreparer;
 
 use std::{sync::mpsc, time::Instant};
