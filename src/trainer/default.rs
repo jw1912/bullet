@@ -217,7 +217,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 max_active,
                 value: vec![0; max_active * batch_size],
             },
-            buckets: SparseInput { shape: Shape::new(1, batch_size), max_active: 1, value: vec![0; batch_size] },
+            buckets: SparseInput { shape: Shape::new(O::BUCKETS, batch_size), max_active: 1, value: vec![0; batch_size] },
             targets: DenseInput { shape: Shape::new(1, batch_size), value: vec![0.0; batch_size] },
         };
 

@@ -4,6 +4,7 @@ mod affine;
 mod linear;
 mod pairwise;
 mod power_error;
+mod select;
 
 pub use activate::Activation;
 use diffable::{DiffableOperation, Node};
@@ -41,6 +42,8 @@ pub enum Operation {
     Linear,
     /// Split vector in two and element-wise multiply the two halves
     PairwiseMul,
+    /// Select a subsection of a vector to use
+    Select,
 }
 
 impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
@@ -52,6 +55,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Affine => affine::output_tensor(inputs),
             Operation::Linear => linear::output_tensor(inputs),
             Operation::PairwiseMul => pairwise::output_tensor(inputs),
+            Operation::Select => select::output_tensor(inputs),
         }
     }
 
@@ -63,6 +67,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Affine => affine::forward(ctx, inputs, output),
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::PairwiseMul => pairwise::forward(inputs, output),
+            Operation::Select => select::forward(inputs, output),
         }
     }
 
@@ -74,6 +79,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Affine => affine::backprop(ctx, output_grad, inputs),
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::PairwiseMul => pairwise::backprop(output_grad, inputs),
+            Operation::Select => select::backprop(output_grad, inputs),
         }
     }
 }

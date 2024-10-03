@@ -25,25 +25,25 @@ __global__ void selectKernel(
 }
 
 __global__ void selectBackpropKernel(
-    const size_t batchSize,
-    const size_t inputSize,
-    const size_t outputSize,
+    const size_t batch_size,
+    const size_t input_size,
+    const size_t output_size,
     const int32_t* buckets,
-    const float* in,
-    float* out)
+    const float* output_grad,
+    float* input_grad)
 {
     const size_t thisIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (thisIdx >= batchSize)
+    if (thisIdx >= batch_size)
         return;
 
     const size_t thisBucket = static_cast<size_t>(buckets[thisIdx]);
 
-    const float* thisInput = in + inputSize * thisIdx;
-    float* thisOutput = out + outputSize * thisIdx + inputSize * thisBucket;
+    const float* thisOutputGrad = output_grad + output_size * thisIdx;
+    float* thisInputGrad = input_grad + input_size * thisIdx + output_size * thisBucket;
 
-    for (size_t i = 0; i < inputSize; i++)
-        thisOutput[i] += thisInput[i];
+    for (size_t i = 0; i < output_size; i++)
+        thisInputGrad[i] += thisOutputGrad[i];
 }
 
 constexpr size_t Threads = static_cast<size_t>(1024);
@@ -70,22 +70,22 @@ extern "C" void selectForward(
 }
 
 extern "C" void selectBackprop(
-    const size_t batchSize,
-    const size_t inputSize,
-    const size_t outputSize,
+    const size_t batch_size,
+    const size_t input_size,
+    const size_t output_size,
     const int32_t* buckets,
-    const float* in,
-    float* out)
+    const float* output_grad,
+    float* input_grad)
 {
-    const size_t numChunks = (batchSize + Threads - 1) / Threads;
-    const size_t threads = (numChunks == 1) ? batchSize : Threads;
+    const size_t numChunks = (batch_size + Threads - 1) / Threads;
+    const size_t threads = (numChunks == 1) ? batch_size : Threads;
 
     selectBackpropKernel<<<numChunks, threads>>>(
-        batchSize,
-        inputSize,
-        outputSize,
+        batch_size,
+        input_size,
+        output_size,
         buckets,
-        in,
-        out
+        output_grad,
+        input_grad
     );
 }

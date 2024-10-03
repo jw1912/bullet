@@ -1,4 +1,5 @@
 mod affine;
+mod select;
 
 use super::shape::Shape;
 use crate::backend::Buffer;
