@@ -34,11 +34,11 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
             start_superbatch: 1,
-            end_superbatch: 40,
+            end_superbatch: 20,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
-        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 18 },
-        save_rate: 1,
+        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 8 },
+        save_rate: 10,
     };
 
     let optimiser_params =
@@ -48,7 +48,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["data/monty-1000m.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
 }
