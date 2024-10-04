@@ -56,7 +56,7 @@ __global__ void sparseAffineBackwardKernel(
     const int32_t* thisInput = inputs + inputSize * blockIdx.y;
     const float* thisErrors = errors + outputSize * blockIdx.y;
 
-    float ourError = thisErrors[elem];
+    const float ourError = thisErrors[elem];
 
     if constexpr (bias)
         atomicAdd(&biasesGrad[elem], ourError);
@@ -140,4 +140,136 @@ extern "C" void sparseAffineBackward(
             inputs,
             errors
         );
+}
+
+__global__ void sparseAffineDualForwardKernel(
+    const size_t inputSize,
+    const size_t outputSize,
+    const float* weights,
+    const float* biases,
+    const int32_t* stm,
+    const int32_t* ntm,
+    float* outputs)
+{
+    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (elem >= outputSize)
+        return;
+
+    const size_t inputIdx = inputSize * blockIdx.y;
+    const int32_t* thisStmInput = stm + inputSize * blockIdx.y;
+    const int32_t* thisNtmInput = ntm + inputSize * blockIdx.y;
+    float* thisOutput = outputs + 2 * outputSize * blockIdx.y + elem;
+
+    float stmElementVal = biases[elem];
+    float ntmElementVal = stmElementVal;
+
+    for (size_t i = 0; i < inputSize; i++) {
+        const int32_t stmInp = thisStmInput[i];
+        const int32_t ntmInp = thisNtmInput[i];
+
+        if (stmInp == -1)
+            break;
+
+        const size_t stmIdx = static_cast<size_t>(stmInp) * outputSize + elem;
+        stmElementVal += weights[stmIdx];
+
+        const size_t ntmIdx = static_cast<size_t>(ntmInp) * outputSize + elem;
+        ntmElementVal += weights[ntmIdx];
+    }
+
+    thisOutput[0] = stmElementVal;
+    thisOutput[outputSize] = ntmElementVal;
+}
+
+__global__ void sparseAffineDualBackwardKernel(
+    const size_t inputSize,
+    const size_t outputSize,
+    float* weightsGrad,
+    float* biasesGrad,
+    const int32_t* stm,
+    const int32_t* ntm,
+    const float* errors)
+{
+    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (elem >= outputSize)
+        return;
+
+    const int32_t* thisStmInput = stm + inputSize * blockIdx.y;
+    const int32_t* thisNtmInput = ntm + inputSize * blockIdx.y;
+    const float* thisErrors = errors + 2 * outputSize * blockIdx.y;
+
+    const float stmError = thisErrors[elem];
+    const float ntmError = thisErrors[elem + outputSize];
+
+    atomicAdd(&biasesGrad[elem], stmError + ntmError);
+
+    for (size_t i = 0; i < inputSize; i++) {
+        const int32_t stmInp = thisStmInput[i];
+        const int32_t ntmInp = thisNtmInput[i];
+
+        if (stmInp == -1)
+            break;
+
+        const size_t stmIdx = static_cast<size_t>(stmInp) * outputSize + elem;
+        atomicAdd(&weightsGrad[stmIdx], stmError);
+
+        const size_t ntmIdx = static_cast<size_t>(ntmInp) * outputSize + elem;
+        atomicAdd(&weightsGrad[ntmIdx], ntmError);
+    }
+}
+
+extern "C" void sparseAffineDualForward(
+    const size_t batchSize,
+    const size_t maxInputSize,
+    const size_t outputSize,
+    const float* weights,
+    const float* biases,
+    const int32_t* stm,
+    const int32_t* ntm,
+    float* outputs)
+{
+    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
+
+    dim3 grid(numChunks, batchSize);
+
+    const size_t threads = (numChunks == 1) ? outputSize : 1024;
+
+    sparseAffineDualForwardKernel<<<grid, threads>>>(
+        maxInputSize,
+        outputSize,
+        weights,
+        biases,
+        stm,
+        ntm,
+        outputs
+    );
+}
+
+extern "C" void sparseAffineDualBackward(
+    const size_t batchSize,
+    const size_t maxInputSize,
+    const size_t outputSize,
+    float* weightsGrad,
+    float* biasesGrad,
+    const int32_t* stm,
+    const int32_t* ntm,
+    const float* errors)
+{
+    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
+
+    dim3 grid(numChunks, batchSize);
+
+    const size_t threads = (numChunks == 1) ? outputSize : 1024;
+
+    sparseAffineDualBackwardKernel<<<grid, threads>>>(
+        maxInputSize,
+        outputSize,
+        weightsGrad,
+        biasesGrad,
+        stm,
+        ntm,
+        errors
+    );
 }

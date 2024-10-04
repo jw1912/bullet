@@ -29,10 +29,18 @@ impl SparseMatrix {
         input_a: &DenseMatrix,
         input_a_grad: &mut DenseMatrix,
         input_b: &Self,
+        input_c: Option<&DenseMatrix>,
         input_c_grad: Option<&mut DenseMatrix>,
         output_grad: &DenseMatrix,
     ) {
         input_a_grad.reshape_if_needed(input_a.shape());
+
+        let c_ptr = if let Some(grad) = input_c_grad {
+            grad.reshape_if_needed(input_c.unwrap().shape);
+            grad.buf.mut_ptr()
+        } else {
+            std::ptr::null_mut()
+        };
 
         unsafe {
             ops::sparseAffineBackward(
@@ -40,7 +48,7 @@ impl SparseMatrix {
                 input_b.max_active,
                 output_grad.shape.rows(),
                 input_a_grad.buf.mut_ptr(),
-                input_c_grad.map(|c| c.buf.mut_ptr()).unwrap_or(std::ptr::null_mut()),
+                c_ptr,
                 input_b.buf.ptr(),
                 output_grad.buf.ptr(),
             );
@@ -57,7 +65,7 @@ impl SparseMatrix {
         input_b: &Self,
         output_grad: &DenseMatrix,
     ) {
-        Self::backprop_affine(input_a, input_a_grad, input_b, None, output_grad);
+        Self::backprop_affine(input_a, input_a_grad, input_b, None, None, output_grad);
     }
 }
 

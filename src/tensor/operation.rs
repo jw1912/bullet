@@ -1,5 +1,6 @@
 mod activate;
 mod add;
+mod affine_dual;
 mod affine;
 mod concat;
 mod linear;
@@ -32,9 +33,11 @@ pub enum Operation {
     /// Multiply vector by a matrix
     Linear,
     /// Split vector in two and element-wise multiply the two halves
-    PairwiseMul,
+    PairwiseMul(bool),
     /// Select a subsection of a vector to use
     Select,
+    /// Warning! Internal use only!
+    SparseAffineDual,
 }
 
 impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
@@ -46,8 +49,9 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Concat => concat::output_tensor(inputs),
             Operation::Affine => affine::output_tensor(inputs),
             Operation::Linear => linear::output_tensor(inputs),
-            Operation::PairwiseMul => pairwise::output_tensor(inputs),
+            Operation::PairwiseMul(_) => pairwise::output_tensor(inputs),
             Operation::Select => select::output_tensor(inputs),
+            Operation::SparseAffineDual => affine_dual::output_tensor(inputs),
         }
     }
 
@@ -59,8 +63,9 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Affine => affine::forward(ctx, inputs, output),
             Operation::Concat => concat::forward(ctx, inputs, output),
             Operation::Linear => linear::forward(ctx, inputs, output),
-            Operation::PairwiseMul => pairwise::forward(inputs, output),
+            Operation::PairwiseMul(pc) => pairwise::forward(inputs, output, pc),
             Operation::Select => select::forward(inputs, output),
+            Operation::SparseAffineDual => affine_dual::forward(inputs, output),
         }
     }
 
@@ -72,8 +77,9 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Affine => affine::backprop(ctx, output_grad, inputs),
             Operation::Concat => concat::backprop(ctx, output_grad, inputs),
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
-            Operation::PairwiseMul => pairwise::backprop(output_grad, inputs),
+            Operation::PairwiseMul(pc) => pairwise::backprop(output_grad, inputs, pc),
             Operation::Select => select::backprop(output_grad, inputs),
+            Operation::SparseAffineDual => affine_dual::backprop(output_grad, inputs),
         }
     }
 }

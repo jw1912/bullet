@@ -1,4 +1,4 @@
-use crate::{inputs::InputType, operations, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, Activation, ExecutionContext, GraphBuilder, Shape};
+use crate::{inputs::InputType, operations, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, tensor::Operation, Activation, ExecutionContext, GraphBuilder, Shape};
 
 use super::Trainer;
 
@@ -156,7 +156,6 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let input_size = self.input_getter.size();
         let input_shape = Shape::new(input_size, 1);
-        let mut out = builder.create_input("stm", input_shape);
         let targets = builder.create_input("targets", Shape::new(1, 1));
 
         let buckets = if output_buckets {
@@ -167,42 +166,30 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut still_in_ft = true;
 
-        let mut nstm = if self.perspective {
-            Some(builder.create_input("nstm", input_shape))
-        } else {
-            None
-        };
-
         let l0w = builder.create_weights("l0w", Shape::new(self.ft_out_size, input_size));
         let l0b = builder.create_weights("l0b", Shape::new(self.ft_out_size, 1));
 
-        out = operations::affine(&mut builder, l0w, out, l0b);
+        let stm = builder.create_input("stm", input_shape);
 
-        if self.perspective {
-            nstm = Some(operations::affine(&mut builder, l0w, nstm.unwrap(), l0b));
-        }
+        let mut out = if self.perspective {
+            let ntm = builder.create_input("nstm", input_shape);
+            builder.create_result_of_operation(Operation::SparseAffineDual, &[l0w, stm, ntm, l0b])
+        } else {
+            operations::affine(&mut builder, l0w, stm, l0b)
+        };
 
         let mut layer = 1;
 
-        let mut prev_size = self.ft_out_size;
+        let mut prev_size = self.ft_out_size * if self.perspective { 2 } else { 1 };
 
         for NodeType { size, op } in self.nodes {
             match op {
                 OpType::Activate(activation) => {
-                    if still_in_ft && self.perspective {
-                        nstm = Some(operations::activate(&mut builder, nstm.unwrap(), activation));
-                    }
-
                     out = operations::activate(&mut builder, out, activation);
                 }
                 OpType::Affine => {
+                    still_in_ft = false;
                     let raw_size = size * U::BUCKETS;
-
-                    if still_in_ft && self.perspective {
-                        out = operations::concat(&mut builder, out, nstm.unwrap());
-                        prev_size *= 2;
-                        still_in_ft = false;
-                    }
 
                     let w = builder.create_weights(&format!("l{layer}w"), Shape::new(raw_size, prev_size));
                     let b = builder.create_weights(&format!("l{layer}b"), Shape::new(raw_size, 1));
@@ -217,10 +204,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 }
                 OpType::PairwiseMul => {
                     if still_in_ft && self.perspective {
-                        nstm = Some(operations::pairwise_mul(&mut builder, nstm.unwrap()));
+                        out = builder.create_result_of_operation(Operation::PairwiseMul(true), &[out]);
+                    } else {
+                        out = operations::pairwise_mul(&mut builder, out);
                     }
 
-                    out = operations::pairwise_mul(&mut builder, out);
                     prev_size /= 2;
                 }
             }

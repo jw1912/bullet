@@ -1,3 +1,4 @@
+mod affine_dual;
 mod affine;
 mod select;
 

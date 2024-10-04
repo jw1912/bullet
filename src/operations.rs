@@ -26,7 +26,7 @@ pub fn mse(builder: &mut GraphBuilder, predicted: Node, target: Node) -> Node {
 }
 
 pub fn pairwise_mul(builder: &mut GraphBuilder, input: Node) -> Node {
-    builder.create_result_of_operation(Operation::PairwiseMul, &[input])
+    builder.create_result_of_operation(Operation::PairwiseMul(false), &[input])
 }
 
 pub fn select(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
