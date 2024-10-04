@@ -4,13 +4,20 @@
 
 </div>
 
-At this point, bullet is a general-purpose neural network trainer,
+At this point, bullet is a general-purpose ML library (it can be used as such) with a heavily limited number of supported operations.
 However, it is generally used for training NNUE-style networks for some of the strongest chess engines in the world.
 
 ### Features
-- Autograd, the code for which can be found in my [diffable](https://github.com/jw1912/diffable) crate
+- Autograd
+    - Uses my [diffable](https://github.com/jw1912/diffable) crate
 - CUDA and HIP backends
-- Lots of chess specific tooling
+    - Makes heavy use of (cu/hip)BLAS wherever possible
+    - A number of custom kernels
+- Lots of NNUE and chess engine specific tooling
+    - Input feature types
+    - Output buckets
+    - Data formats
+    - Utilities
 
 ### Usage
 
