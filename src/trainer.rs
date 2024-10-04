@@ -4,7 +4,7 @@ mod preparer;
 pub mod schedule;
 pub mod settings;
 
-pub use default::{Loss, Trainer, TrainerBuilder};
+pub use default::{Loss, Trainer, TrainerBuilder, cutechess, testing};
 pub use preparer::DataPreparer;
 
 use std::{sync::mpsc, time::Instant};
@@ -41,7 +41,14 @@ pub trait NetworkTrainer {
     fn optimiser_mut(&mut self) -> &mut Self::Optimiser;
 
     fn load_from_checkpoint(&mut self, path: &str) {
-        self.optimiser_mut().load_from_checkpoint(path);
+        self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"));
+    }
+
+    fn save_to_checkpoint(&mut self, path: &str) {
+        std::fs::create_dir(path).unwrap_or(());
+        let optimiser_path = format!("{path}/optimiser_state");
+        std::fs::create_dir(optimiser_path.as_str()).unwrap_or(());
+        self.optimiser().write_to_checkpoint(&optimiser_path);
     }
 
     fn train_custom<D, LR, WDL, F>(
@@ -123,9 +130,7 @@ pub trait NetworkTrainer {
                     let name = format!("{}-{superbatch}", schedule.net_id());
                     let out_dir = settings.output_directory;
                     let path = format!("{out_dir}/{name}");
-                    std::fs::create_dir(path.as_str()).unwrap_or(());
-
-                    self.optimiser().write_to_checkpoint(&path);
+                    self.save_to_checkpoint(path.as_str());
 
                     println!("Saved [{}]", logger::ansi(name, 31));
                 }

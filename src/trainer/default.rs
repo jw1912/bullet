@@ -1,8 +1,11 @@
 mod builder;
+pub mod cutechess;
 mod loader;
+pub mod testing;
 
 pub use builder::{Loss, TrainerBuilder};
 pub use loader::DefaultDataPreparer;
+
 use loader::DefaultDataLoader;
 
 use std::collections::HashSet;

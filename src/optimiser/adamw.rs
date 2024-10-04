@@ -78,15 +78,13 @@ impl Optimiser for AdamWOptimiser {
     }
 
     fn write_to_checkpoint(&self, path: &str) {
-        utils::write_graph_weights_component_to_file(&self.graph, &format!("{path}/weights.bin"), false);
-        utils::write_graph_weights_component_to_file(&self.graph, &format!("{path}/gradient.bin"), true);
+        utils::write_graph_weights_to_file(&self.graph, &format!("{path}/weights.bin"));
         utils::write_weight_hashmap_to_file(&self.momentum, &format!("{path}/momentum.bin"));
         utils::write_weight_hashmap_to_file(&self.velocity, &format!("{path}/velocity.bin"));
     }
 
     fn load_from_checkpoint(&mut self, path: &str) {
-        utils::load_graph_weights_component_from_file(&mut self.graph, &format!("{path}/weights.bin"), false);
-        utils::load_graph_weights_component_from_file(&mut self.graph, &format!("{path}/gradient.bin"), true);
+        utils::load_graph_weights_from_file(&mut self.graph, &format!("{path}/weights.bin"));
         utils::load_weight_hashmap_from_file(&mut self.momentum, &format!("{path}/momentum.bin"));
         utils::load_weight_hashmap_from_file(&mut self.velocity, &format!("{path}/velocity.bin"));
     }

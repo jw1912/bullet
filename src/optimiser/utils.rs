@@ -4,7 +4,7 @@ use crate::{tensor::DenseMatrix, Graph};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.
-pub fn write_graph_weights_component_to_file(graph: &Graph, path: &str, gradients: bool) {
+pub fn write_graph_weights_to_file(graph: &Graph, path: &str) {
     use std::{fs::File, io::Write};
 
     let weight_ids = graph.weight_ids();
@@ -13,12 +13,7 @@ pub fn write_graph_weights_component_to_file(graph: &Graph, path: &str, gradient
 
     for id in &weight_ids {
         let weights = graph.get_weights(id);
-
-        let this_buf = if gradients {
-            weights.gradients.as_ref().unwrap().write_to_byte_buffer(id).unwrap()
-        } else {
-            weights.values.dense().write_to_byte_buffer(id).unwrap()
-        };
+        let this_buf = weights.values.dense().write_to_byte_buffer(id).unwrap();
 
         buf.extend_from_slice(&this_buf);
     }
@@ -29,7 +24,7 @@ pub fn write_graph_weights_component_to_file(graph: &Graph, path: &str, gradient
 
 /// Loads the weights of a graph from a file. If `gradients` is true,
 /// it will instead load the gradients of those weights.
-pub fn load_graph_weights_component_from_file(graph: &mut Graph, path: &str, gradients: bool) {
+pub fn load_graph_weights_from_file(graph: &mut Graph, path: &str) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -43,12 +38,7 @@ pub fn load_graph_weights_component_from_file(graph: &mut Graph, path: &str, gra
         let (id, bytes_read) = matrix_buffer.read_from_byte_buffer(&buf[offset..]);
 
         let weights = graph.get_weights_mut(&id);
-
-        if gradients {
-            matrix_buffer.copy_into(weights.gradients.as_mut().unwrap());
-        } else {
-            matrix_buffer.copy_into(weights.values.dense_mut());
-        };
+        matrix_buffer.copy_into(weights.values.dense_mut());
 
         offset += bytes_read;
     }
