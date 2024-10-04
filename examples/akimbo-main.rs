@@ -2,8 +2,9 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, Engine, LocalSettings, Loss, OpeningBook, TestSettings,
-    TimeControl, TrainerBuilder, TrainingSchedule, UciOption,
+    inputs, loader, lr, optimiser, outputs,
+    testing::{Engine, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
+    wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
 };
 
 macro_rules! net_id {
@@ -19,6 +20,7 @@ fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[255, 64])
         .optimiser(optimiser::AdamW)
+        .loss_fn(Loss::SigmoidMSE)
         .input(inputs::ChessBucketsMirrored::new([
             0, 0, 1, 1,
             2, 2, 2, 2,
@@ -38,34 +40,33 @@ fn main() {
     let schedule = TrainingSchedule {
         net_id: NET_ID.to_string(),
         eval_scale: 400.0,
-        ft_regularisation: 0.0,
-        batch_size: 16_384,
-        batches_per_superbatch: 6104,
-        start_superbatch: 1,
-        end_superbatch: 240,
+        steps: TrainingSteps {
+            batch_size: 16_384,
+            batches_per_superbatch: 6104,
+            start_superbatch: 1,
+            end_superbatch: 240,
+        },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
-        loss_function: Loss::SigmoidMSE,
         save_rate: 150,
-        optimiser_settings: optimiser::AdamWParams {
-            decay: 0.01,
-            beta1: 0.9,
-            beta2: 0.999,
-            min_weight: -1.98,
-            max_weight: 1.98,
-        },
     };
+
+    let optimiser_params =
+        optimiser::AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 };
+
+    trainer.set_optimiser_params(optimiser_params);
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/test80-sep2022.data"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     let base_engine = Engine {
         repo: "https://github.com/jw1912/akimbo",
         branch: "main",
-        bench: Some(2430757),
+        bench: Some(2256851),
         net_path: None,
         uci_options: vec![UciOption("Hash", "16")],
+        engine_type: OpenBenchCompliant,
     };
 
     let dev_engine = Engine {
@@ -74,13 +75,14 @@ fn main() {
         bench: None,
         net_path: None,
         uci_options: vec![UciOption("Hash", "16")],
+        engine_type: OpenBenchCompliant,
     };
 
     let testing = TestSettings {
         test_rate: 20,
         out_dir: concat!("../../nets/", net_id!()),
         cutechess_path: "../../nets/cutechess-cli.exe",
-        book_path: OpeningBook::Epd("../../nets/Pohl.epd"),
+        book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
         num_game_pairs: 2000,
         concurrency: 6,
         time_control: TimeControl::FixedNodes(25_000),

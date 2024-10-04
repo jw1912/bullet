@@ -1,7 +1,8 @@
+/// The shape of a `rows x cols` matrix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shape {
-    cols: usize,
     rows: usize,
+    cols: usize,
 }
 
 impl std::fmt::Display for Shape {
@@ -20,13 +21,25 @@ impl std::ops::Mul<Shape> for Shape {
 }
 
 impl Shape {
-    pub fn new(cols: usize, rows: usize) -> Self {
+    pub fn new(rows: usize, cols: usize) -> Self {
         assert!(cols > 0, "Cannot have 0 columns!");
         assert!(rows > 0, "Cannot have 0 rows!");
         Self { cols, rows }
     }
 
-    pub fn reshape(&mut self, cols: usize, rows: usize) {
+    pub fn transpose(&self) -> Self {
+        Self { cols: self.rows, rows: self.cols }
+    }
+
+    pub fn maybe_transpose(&self, trans: bool) -> Self {
+        if trans {
+            self.transpose()
+        } else {
+            *self
+        }
+    }
+
+    pub fn reshape(&mut self, rows: usize, cols: usize) {
         assert_eq!(self.size(), cols * rows, "Invalid reshape!");
         self.cols = cols;
         self.rows = rows;
