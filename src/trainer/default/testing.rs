@@ -1,4 +1,10 @@
-use std::{fmt::Display, fs::{self, File}, io::{self, Write}, process::Command, thread::{self, JoinHandle}};
+use std::{
+    fmt::Display,
+    fs::{self, File},
+    io::{self, Write},
+    process::Command,
+    thread::{self, JoinHandle},
+};
 
 use crate::{cutechess, logger, lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 
@@ -24,7 +30,6 @@ impl<'a> Display for UciOption<'a> {
         write!(f, "option.{}={}", self.0, self.1)
     }
 }
-
 
 #[derive(Clone)]
 pub struct Engine<'a, T: EngineType> {
@@ -72,53 +77,53 @@ pub struct TestSettings<'a, T: EngineType> {
 impl<'a, T: EngineType> TestSettings<'a, T> {
     pub fn setup<LR: LrScheduler, WDL: WdlScheduler>(&self, schedule: &TrainingSchedule<LR, WDL>) {
         let output = cutechess::CuteChessCommand::health_check(self.cutechess_path);
-    
+
         assert!(output.status.success(), "Could not start cutechess!");
-    
+
         let bpath = match self.book_path {
             OpeningBook::Epd(path) => path,
             OpeningBook::Pgn(path) => path,
         };
-    
+
         File::open(bpath).expect("Could not find opening book!");
-    
+
         let out_dir = self.out_dir;
-    
+
         fs::create_dir(out_dir).expect("The output directory already exists!");
-    
+
         fs::create_dir(format!("{out_dir}/nets")).expect("Something went very wrong!");
-    
+
         let stats_path = format!("{out_dir}/stats.txt");
         let sched_path = format!("{out_dir}/schedule.txt");
-    
+
         File::create(stats_path.as_str()).expect("Couldn't create stats file!");
         File::create(sched_path.as_str()).expect("Couldn't create schedule file!");
-    
+
         let mut sched =
             fs::OpenOptions::new().write(true).open(sched_path.as_str()).expect("Couldn't open schedule file!");
         writeln!(&mut sched, "{schedule:#?}").expect("Couldn't write schedule to file!");
-    
+
         let base_path_string = format!("{out_dir}/base_engine");
         let dev_path_string = format!("{out_dir}/dev_engine");
-    
+
         let base_exe_path = format!("{base_path_string}/base_engine");
         let base_engine = &self.base_engine;
-    
+
         clone(base_engine, base_path_string.as_str());
-    
+
         println!("# [Building {}/{}]", base_engine.repo, base_engine.branch);
         base_engine.engine_type.build(base_path_string.as_str(), "base_engine", base_engine.net_path).unwrap();
-    
+
         println!("# [Running Bench]");
         let bench = base_engine.engine_type.bench(&base_exe_path).unwrap();
         if let Some(expected) = base_engine.bench {
             assert_eq!(bench, expected, "Bench did not match!")
         }
-    
+
         println!("# [Bench Successfull]");
-    
+
         let dev_engine = &self.dev_engine;
-    
+
         clone(dev_engine, dev_path_string.as_str());
     }
 
@@ -133,11 +138,14 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
 
         let dev_engine_path = format!("{out_dir}/nets/{name}/{name}");
 
-        self.dev_engine.engine_type.build(
-            dev_path_string.as_str(),
-            &format!("../nets/{name}/{name}"),
-            Some(&format!("../nets/{name}/quantised.bin")),
-        ).expect("Failed to build dev engine!");
+        self.dev_engine
+            .engine_type
+            .build(
+                dev_path_string.as_str(),
+                &format!("../nets/{name}/{name}"),
+                Some(&format!("../nets/{name}/quantised.bin")),
+            )
+            .expect("Failed to build dev engine!");
 
         let _bench = self.dev_engine.engine_type.bench(dev_engine_path.as_str()).expect("Failed to bench dev engine!");
 
@@ -162,10 +170,8 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
 
         thread::spawn(move || {
             let (elo, err) = cutechess::run_games(args).unwrap();
-            let mut file = std::fs::OpenOptions::new()
-                .append(true)
-                .open(stats_path.as_str())
-                .expect("Couldn't open stats path!");
+            let mut file =
+                std::fs::OpenOptions::new().append(true).open(stats_path.as_str()).expect("Couldn't open stats path!");
 
             writeln!(file, "{superbatch}, {elo}, {err}").expect("Couldn't write to file!");
         })
@@ -192,17 +198,15 @@ pub struct OpenBenchCompliant;
 impl EngineType for OpenBenchCompliant {
     fn build(&self, repo_path: &str, out_path: &str, net: Option<&str>) -> Result<(), String> {
         let mut build_base = Command::new("make");
-    
+
         build_base.current_dir(repo_path).arg(format!("EXE={out_path}"));
-    
+
         if let Some(net_path) = net {
             build_base.arg(format!("EVALFILE={}", net_path));
         }
 
         match build_base.output() {
-            io::Result::Err(err) => {
-                Err(format!("Failed to build engine: {err}!"))
-            }
+            io::Result::Err(err) => Err(format!("Failed to build engine: {err}!")),
             io::Result::Ok(out) => {
                 if out.status.success() {
                     Ok(())
@@ -213,30 +217,30 @@ impl EngineType for OpenBenchCompliant {
             }
         }
     }
-    
+
     fn bench(&self, path: &str) -> Result<usize, String> {
         let mut bench_cmd = Command::new(path);
-    
+
         let output = bench_cmd.arg("bench").output().expect("Failed to run bench on engine!");
-    
+
         assert!(output.status.success(), "Failed to run bench on engine!");
 
         let out = String::from_utf8(output.stdout).expect("Could not parse bench output!");
-    
+
         let split = out.split_whitespace();
-    
+
         let mut bench = None;
-    
+
         let mut prev = "what";
         for word in split {
             if word == "nodes" {
                 bench = prev.parse().ok();
                 break;
             }
-    
+
             prev = word;
         }
-    
+
         if let Some(bench) = bench {
             Ok(bench)
         } else {

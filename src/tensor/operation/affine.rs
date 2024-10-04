@@ -33,11 +33,7 @@ pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut 
 
     match &input2[0].values {
         Matrix::Sparse(sparse) => {
-            let input3_values = if input3[0].gradients.is_some() {
-                Some(input3[0].values.dense())
-            } else {
-                None
-            };
+            let input3_values = if input3[0].gradients.is_some() { Some(input3[0].values.dense()) } else { None };
 
             SparseMatrix::backprop_affine(
                 input1[0].values.dense(),

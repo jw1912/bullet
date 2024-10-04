@@ -1,7 +1,7 @@
 mod activate;
 mod add;
-mod affine_dual;
 mod affine;
+mod affine_dual;
 mod concat;
 mod linear;
 mod pairwise;

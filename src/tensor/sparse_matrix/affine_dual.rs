@@ -3,7 +3,14 @@ use crate::{backend::ops, tensor::DenseMatrix, Activation, Shape};
 use super::SparseMatrix;
 
 impl SparseMatrix {
-    pub fn affine_dual(input_a: &DenseMatrix, input_b1: &Self, input_b2: &Self, input_c: &DenseMatrix, output: &mut DenseMatrix, activation: Activation) {
+    pub fn affine_dual(
+        input_a: &DenseMatrix,
+        input_b1: &Self,
+        input_b2: &Self,
+        input_c: &DenseMatrix,
+        output: &mut DenseMatrix,
+        activation: Activation,
+    ) {
         assert_eq!(input_b1.shape, input_b2.shape);
         assert_eq!(input_b1.max_active, input_b2.max_active);
         assert_eq!(input_c.shape.rows(), input_a.shape.rows());

@@ -1,5 +1,5 @@
-mod affine_dual;
 mod affine;
+mod affine_dual;
 mod select;
 
 use super::shape::Shape;

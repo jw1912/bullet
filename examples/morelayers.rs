@@ -5,7 +5,8 @@ fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
+    TrainingSteps,
 };
 
 fn main() {
@@ -37,13 +38,8 @@ fn main() {
         save_rate: 1,
     };
 
-    let optimiser_params = optimiser::AdamWParams {
-        decay: 0.01,
-        beta1: 0.9,
-        beta2: 0.999,
-        min_weight: -1.98,
-        max_weight: 1.98,
-    };
+    let optimiser_params =
+        optimiser::AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 };
 
     trainer.set_optimiser_params(optimiser_params);
 

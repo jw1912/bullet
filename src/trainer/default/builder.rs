@@ -1,4 +1,13 @@
-use crate::{inputs::InputType, operations, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, tensor::Operation, trainer::default::quant::QuantTarget, Activation, ExecutionContext, GraphBuilder, Shape};
+use crate::{
+    inputs::InputType,
+    operations,
+    optimiser::{self, Optimiser, OptimiserType},
+    outputs::{self, OutputBuckets},
+    rng,
+    tensor::Operation,
+    trainer::default::quant::QuantTarget,
+    Activation, ExecutionContext, GraphBuilder, Shape,
+};
 
 use super::Trainer;
 
@@ -158,11 +167,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let input_shape = Shape::new(input_size, 1);
         let targets = builder.create_input("targets", Shape::new(1, 1));
 
-        let buckets = if output_buckets {
-            Some(builder.create_input("buckets", Shape::new(U::BUCKETS, 1)))
-        } else {
-            None
-        };
+        let buckets =
+            if output_buckets { Some(builder.create_input("buckets", Shape::new(U::BUCKETS, 1))) } else { None };
 
         let mut still_in_ft = true;
 
@@ -195,7 +201,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let (skip, activation) = if self.perspective {
             if let NodeType { op: OpType::Activate(act), .. } = self.nodes[0] {
-            (1, act)
+                (1, act)
             } else {
                 (0, Activation::Identity)
             }

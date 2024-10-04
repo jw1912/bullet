@@ -11,7 +11,11 @@ pub use quant::QuantTarget;
 use loader::DefaultDataLoader;
 use testing::{EngineType, TestSettings};
 
-use std::{collections::HashSet, fs::File, io::{self, Write}};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{self, Write},
+};
 
 use diffable::Node;
 
@@ -87,7 +91,14 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 }
 
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
-    pub fn new(graph: Graph, output_node: Node, params: Opt::Params, input_getter: Inp, output_getter: Out, saved_format: Vec<(String, QuantTarget)>) -> Self {
+    pub fn new(
+        graph: Graph,
+        output_node: Node,
+        params: Opt::Params,
+        input_getter: Inp,
+        output_getter: Out,
+        saved_format: Vec<(String, QuantTarget)>,
+    ) -> Self {
         let inputs = graph.input_ids();
         let inputs = inputs.iter().map(String::as_str).collect::<HashSet<_>>();
 
@@ -123,7 +134,8 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         println!("{}", logger::ansi("Beginning Training", "34;1"));
         schedule.display();
         settings.display();
-        let preparer = DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
+        let preparer =
+            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
 
         self.train_custom(&preparer, schedule, settings, |_, _, _, _| {});
     }
@@ -139,7 +151,8 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         println!("{}", logger::ansi("Beginning Training", "34;1"));
         schedule.display();
         settings.display();
-        let preparer = DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
+        let preparer =
+            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
 
         testing.setup(schedule);
 

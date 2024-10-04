@@ -1,5 +1,8 @@
 use bullet_lib::{
-    inputs, loader, lr, operations, optimiser::{AdamWOptimiser, AdamWParams}, outputs, rng, wdl, Activation, ExecutionContext, GraphBuilder, LocalSettings, NetworkTrainer, QuantTarget, Shape, Trainer, TrainingSchedule, TrainingSteps
+    inputs, loader, lr, operations,
+    optimiser::{AdamWOptimiser, AdamWParams},
+    outputs, rng, wdl, Activation, ExecutionContext, GraphBuilder, LocalSettings, NetworkTrainer, QuantTarget, Shape,
+    Trainer, TrainingSchedule, TrainingSteps,
 };
 
 fn main() {
@@ -44,7 +47,7 @@ fn main() {
             ("l1b".to_string(), QuantTarget::Float),
             ("l2w".to_string(), QuantTarget::Float),
             ("l2b".to_string(), QuantTarget::Float),
-        ]
+        ],
     );
 
     trainer.load_from_checkpoint("checkpoints/test");

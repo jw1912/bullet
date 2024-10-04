@@ -18,10 +18,7 @@ pub struct CuteChessCommand(Command);
 
 impl CuteChessCommand {
     pub fn health_check(path: &str) -> Output {
-        Command::new(path)
-            .arg("--version")
-            .output()
-            .expect("Could not start cutechess!")
+        Command::new(path).arg("--version").output().expect("Could not start cutechess!")
     }
 
     fn new(path: &str) -> Self {
@@ -54,18 +51,13 @@ impl CuteChessCommand {
     }
 
     fn num_game_pairs(mut self, pairs: usize) -> Self {
-        self.0
-            .args(["-games", "2"])
-            .arg("-rounds").arg(pairs.to_string())
-            .args(["-repeat", "2"]);
+        self.0.args(["-games", "2"]).arg("-rounds").arg(pairs.to_string()).args(["-repeat", "2"]);
 
         self
     }
 
     fn with_opening_book(mut self, book: String, is_pgn: bool) -> Self {
-        self.0
-            .args(["-openings", "policy=round", "order=random"])
-            .arg(format!("file={book}"));
+        self.0.args(["-openings", "policy=round", "order=random"]).arg(format!("file={book}"));
 
         if is_pgn {
             self.0.arg("format=pgn");
@@ -85,7 +77,7 @@ impl CuteChessCommand {
 
     fn set_stdout<T: Into<Stdio>>(mut self, out: T) -> Self {
         self.0.stdout(out);
-        
+
         self
     }
 

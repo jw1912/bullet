@@ -13,12 +13,10 @@ pub use bulletformat as format;
 pub use diffable::Node;
 pub use tensor::{Activation, Shape, Tensor};
 pub use trainer::{
-    cutechess,
-    logger,
+    cutechess, logger,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
-    testing,
-    NetworkTrainer, Trainer, TrainerBuilder, Loss, QuantTarget
+    testing, Loss, NetworkTrainer, QuantTarget, Trainer, TrainerBuilder,
 };
 
 pub type Graph = diffable::Graph<Tensor>;

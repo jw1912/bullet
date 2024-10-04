@@ -2,8 +2,9 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
-    testing::{Engine, OpenBenchCompliant, TestSettings, UciOption, OpeningBook, TimeControl}
+    inputs, loader, lr, optimiser, outputs,
+    testing::{Engine, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
+    wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
 };
 
 macro_rules! net_id {
@@ -50,13 +51,8 @@ fn main() {
         save_rate: 150,
     };
 
-    let optimiser_params = optimiser::AdamWParams {
-        decay: 0.01,
-        beta1: 0.9,
-        beta2: 0.999,
-        min_weight: -1.98,
-        max_weight: 1.98,
-    };
+    let optimiser_params =
+        optimiser::AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 };
 
     trainer.set_optimiser_params(optimiser_params);
 

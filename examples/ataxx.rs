@@ -118,13 +118,8 @@ fn main() {
         save_rate: 10,
     };
 
-    let optimiser_params = optimiser::AdamWParams {
-        decay: 0.01,
-        beta1: 0.9,
-        beta2: 0.999,
-        min_weight: -1.98,
-        max_weight: 1.98,
-    };
+    let optimiser_params =
+        optimiser::AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 };
 
     trainer.set_optimiser_params(optimiser_params);
 

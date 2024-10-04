@@ -30,17 +30,11 @@ impl DenseMatrix {
             rows /= 2;
             cols *= 2;
         }
-        
+
         input_grad.reshape_if_needed(input.shape);
 
         unsafe {
-            ops::backpropPairwiseMul(
-                cols,
-                rows / 2,
-                input.buf.ptr(),
-                output_grad.buf.ptr(),
-                input_grad.buf.mut_ptr(),
-            );
+            ops::backpropPairwiseMul(cols, rows / 2, input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
         }
     }
 }
