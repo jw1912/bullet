@@ -93,51 +93,15 @@ impl GraphOptions {
             }
             let data = reader
                 .lines()
-                .enumerate()
-                .map(|(line_no, res)| {
+                .map(|res| {
                     let line = res?;
 
-                    let sbatch_text = line
-                        .split(',')
-                        .find_map(|f| match f.split_once(':') {
-                            Some(("superbatch", v)) => Some(v),
-                            _ => None,
-                        })
-                        .with_context(|| {
-                            format!("No superbatch found in line {line_no} of file {}.", log_file.to_string_lossy())
-                        })?;
-                    let sbatch = sbatch_text
-                        .trim()
-                        .parse()
-                        .with_context(|| format!("Failed to parse \"{sbatch_text}\" as usize."))?;
+                    let mut parts = line.split(',');
+                    let sbatch = parts.next().unwrap().parse::<usize>().expect("Oh no!");
+                    let batch = parts.next().unwrap().parse::<usize>().expect("Oh no!");
+                    let error = parts.next().unwrap().parse::<f64>().expect("Oh no!");
 
-                    let batch_text = line
-                        .split(',')
-                        .find_map(|f| match f.split_once(':') {
-                            Some(("batch", v)) => Some(v),
-                            _ => None,
-                        })
-                        .with_context(|| {
-                            format!("No batch found in line {line_no} of file {}.", log_file.to_string_lossy())
-                        })?;
-                    let batch = batch_text
-                        .trim()
-                        .parse()
-                        .with_context(|| format!("Failed to parse \"{batch_text}\" as usize."))?;
-
-                    let loss_text = line
-                        .split(',')
-                        .find_map(|f| match f.split_once(':') {
-                            Some(("loss", v)) => Some(v),
-                            _ => None,
-                        })
-                        .with_context(|| {
-                            format!("No loss found in line {line_no} of file {}.", log_file.to_string_lossy())
-                        })?;
-                    let loss =
-                        loss_text.trim().parse().with_context(|| format!("Failed to parse \"{loss_text}\" as f64."))?;
-
-                    Ok((sbatch, batch, loss))
+                    Ok((sbatch, batch, error))
                 })
                 .collect::<anyhow::Result<Vec<(usize, usize, f64)>>>()?;
             if data.is_empty() {
@@ -195,7 +159,7 @@ impl GraphOptions {
             .draw()?;
 
         for (i, (run_name, data)) in data_sequences.iter().enumerate() {
-            let window_size = 10;
+            let window_size = 3;
             let smoothed_loss = moving_average(data, window_size);
 
             chart
@@ -255,7 +219,7 @@ impl GraphOptions {
             .draw()?;
 
         for (i, (run_name, data)) in data_sequences.iter().enumerate() {
-            let window_size = 200;
+            let window_size = 6;
             let smoothed_loss = moving_average(data, window_size);
             let last_exceeding_instance = data.iter().map(|p| p.1).rposition(|loss| loss > guard).unwrap_or(0);
             let cutoff = last_exceeding_instance + 1;

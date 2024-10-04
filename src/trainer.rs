@@ -7,7 +7,7 @@ pub mod settings;
 pub use default::{cutechess, testing, Loss, QuantTarget, Trainer, TrainerBuilder};
 pub use preparer::DataPreparer;
 
-use std::{sync::mpsc, time::Instant};
+use std::{sync::mpsc::{self, Receiver}, time::Instant};
 
 use crate::{backend::util, lr::LrScheduler, optimiser::Optimiser, wdl::WdlScheduler, LocalSettings, TrainingSchedule};
 
@@ -51,14 +51,16 @@ pub trait NetworkTrainer {
         self.optimiser().write_to_checkpoint(&optimiser_path);
     }
 
-    fn train_custom<D, LR, WDL, F>(
+    fn train_custom<D, D2, LR, WDL, F>(
         &mut self,
         preparer: &D,
+        test_preparer: &Option<D2>,
         schedule: &TrainingSchedule<LR, WDL>,
         settings: &LocalSettings,
         mut callback: F,
     ) where
         D: DataPreparer<PreparedData = Self::PreparedData> + 'static,
+        D2: DataPreparer<PreparedData = Self::PreparedData> + 'static,
         LR: LrScheduler,
         WDL: WdlScheduler,
         F: FnMut(usize, &Self, &TrainingSchedule<LR, WDL>, &LocalSettings),
@@ -70,6 +72,9 @@ pub trait NetworkTrainer {
         let out_dir = settings.output_directory.to_string();
         let out_dir = out_dir.as_str();
 
+        let mut error_record = Vec::new();
+        let mut validation_record = Vec::new();
+
         std::fs::create_dir(out_dir).unwrap_or(());
 
         util::device_synchronise();
@@ -77,10 +82,26 @@ pub trait NetworkTrainer {
         let steps = schedule.steps;
         let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
 
-        let (sender, reciever) = mpsc::sync_channel::<D::PreparedData>(settings.batch_queue_size);
+        let (sender, receiver) = mpsc::sync_channel::<D::PreparedData>(settings.batch_queue_size);
 
         let dataloader =
             preparer::create_dataloader(preparer.clone(), sender, steps, schedule.wdl_scheduler.clone(), threads);
+
+        let mut validation_freq = settings.test_set.map_or(32, |test| test.freq);
+
+        if validation_freq < 32 {
+            println!("Setting validation frequency to every 32 batches, come on ...");
+            validation_freq = 32;
+        }
+
+        let (test_dataloader, test_receiver) = settings
+            .test_set
+            .map(|_| {
+                let (sender, receiver) = mpsc::sync_channel::<D::PreparedData>(2);
+                let steps = schedule.steps_for_validation(validation_freq);
+                let dataloader = preparer::create_dataloader(test_preparer.clone().unwrap(), sender, steps, schedule.wdl_scheduler.clone(), threads);
+            (dataloader, receiver)
+            }).unzip();
 
         let mut prev_lr = schedule.lr(0, 1);
         let mut superbatch = steps.start_superbatch;
@@ -88,7 +109,9 @@ pub trait NetworkTrainer {
         let mut superbatch_timer = Instant::now();
         let mut running_loss = 0.0;
 
-        while let Ok(prepared_data) = reciever.recv() {
+        let mut prev32_loss = 0.0;
+
+        while let Ok(prepared_data) = receiver.recv() {
             let lrate = schedule.lr(curr_batch, superbatch);
 
             if lrate != prev_lr {
@@ -100,9 +123,22 @@ pub trait NetworkTrainer {
             let this_batch_size = self.load_batch(&prepared_data);
             let gf = 1.0 / this_batch_size as f32;
 
-            let error = self.train_on_batch(gf, lrate);
+            let error = self.train_on_batch(gf, lrate) / this_batch_size as f32;
 
-            running_loss += error / this_batch_size as f32;
+            running_loss += error;
+            prev32_loss += error;
+
+            // Track test loss every freq batches.
+            if curr_batch % validation_freq == 0 {
+                if let Some(Ok(test_batch)) = test_receiver.as_ref().map(Receiver::recv) {
+                    let this_batch_size = self.load_batch(&test_batch);
+                    util::device_synchronise();
+                    let error = self.optimiser_mut().graph_mut().forward();
+                    let error = error / this_batch_size as f32;
+
+                    validation_record.push((superbatch, curr_batch, error));
+                }
+            }
 
             if curr_batch % 128 == 0 {
                 logger::report_superbatch_progress(
@@ -115,6 +151,14 @@ pub trait NetworkTrainer {
             }
 
             curr_batch += 1;
+
+            if curr_batch % 32 == 0 {
+                prev32_loss /= 32.0;
+
+                error_record.push((superbatch, curr_batch, prev32_loss));
+
+                prev32_loss = 0.0;
+            }
 
             if curr_batch % steps.batches_per_superbatch == 0 {
                 let error = running_loss / steps.batches_per_superbatch as f32;
@@ -131,6 +175,12 @@ pub trait NetworkTrainer {
                     let out_dir = settings.output_directory;
                     let path = format!("{out_dir}/{name}");
                     self.save_to_checkpoint(path.as_str());
+
+                    write_losses(&format!("{path}/log.txt"), &error_record);
+
+                    if settings.test_set.is_some() {
+                        write_losses(&format!("{path}/validation-log.txt"), &validation_record);
+                    }
 
                     println!("Saved [{}]", logger::ansi(name, 31));
                 }
@@ -154,5 +204,21 @@ pub trait NetworkTrainer {
         );
 
         dataloader.join().unwrap();
+        if let Some(h) = test_dataloader {
+            if !h.is_finished() {
+                println!("Warning: Training set exhausted but test set is not!");
+            }
+            h.join().unwrap();
+        };
+    }
+}
+
+fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
+    use std::io::Write;
+
+    let mut writer = std::io::BufWriter::new(std::fs::File::create(path).expect("Opening log file failed!"));
+    for (superbatch, batch, loss) in error_record {
+        writeln!(writer, "{superbatch},{batch},{loss}",)
+            .expect("Writing to log file failed!");
     }
 }

@@ -21,7 +21,7 @@ use diffable::Node;
 
 use crate::{
     inputs::InputType,
-    loader::DataLoader,
+    loader::{DataLoader, DirectSequentialDataLoader},
     logger,
     lr::LrScheduler,
     optimiser::Optimiser,
@@ -136,8 +136,11 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         settings.display();
         let preparer =
             DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
+        let test_preparer = settings.test_set.map(|test|
+            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, DirectSequentialDataLoader::new(&[test.path]))
+        );
 
-        self.train_custom(&preparer, schedule, settings, |_, _, _, _| {});
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
     }
 
     pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
@@ -153,12 +156,15 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         settings.display();
         let preparer =
             DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
+        let test_preparer = settings.test_set.map(|test|
+            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, DirectSequentialDataLoader::new(&[test.path]))
+        );
 
         testing.setup(schedule);
 
         let mut handles = Vec::new();
 
-        self.train_custom(&preparer, schedule, settings, |superbatch, trainer, schedule, _| {
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
             if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
                 trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
                 let handle = testing.dispatch(&schedule.net_id, superbatch);
