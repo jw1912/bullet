@@ -145,7 +145,7 @@ __global__ void sparseAffineDualForwardKernel(
         const int32_t stmInp = thisStmInput[i];
         const int32_t ntmInp = thisNtmInput[i];
 
-        if (stmInp == -1)
+        if (stmInp == -1 || ntmInp == -1)
             break;
 
         const size_t stmIdx = static_cast<size_t>(stmInp) * outputSize + elem;
@@ -189,7 +189,7 @@ __global__ void sparseAffineDualBackwardKernel(
         const int32_t stmInp = thisStmInput[i];
         const int32_t ntmInp = thisNtmInput[i];
 
-        if (stmInp == -1)
+        if (stmInp == -1 || ntmInp == -1)
             break;
 
         const size_t stmIdx = static_cast<size_t>(stmInp) * outputSize + elem;

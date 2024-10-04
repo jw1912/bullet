@@ -16,7 +16,7 @@ pub mod optimiser;
 /// Contains the `OutputBuckets` trait for implementing custom output bucket types,
 /// as well as several premade output buckets that are commonly used.
 pub mod outputs;
-pub mod rng;
+mod rng;
 mod tensor;
 mod trainer;
 
