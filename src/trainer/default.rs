@@ -74,7 +74,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         &mut self.optimiser
     }
 
-    fn save_to_checkpoint(&mut self, path: &str) {
+    fn save_to_checkpoint(&self, path: &str) {
         std::fs::create_dir(path).unwrap_or(());
 
         let optimiser_path = format!("{path}/optimiser_state");
@@ -82,7 +82,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         self.optimiser().write_to_checkpoint(&optimiser_path);
 
         self.save_unquantised(&format!("{path}/raw.bin")).unwrap();
-        self.save_unquantised(&format!("{path}/quantised.bin")).unwrap();
+        self.save_quantised(&format!("{path}/quantised.bin")).unwrap();
     }
 }
 
@@ -145,8 +145,9 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let mut handles = Vec::new();
 
-        self.train_custom(&preparer, schedule, settings, |superbatch, _, schedule, _| {
+        self.train_custom(&preparer, schedule, settings, |superbatch, trainer, schedule, _| {
             if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
+                trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
                 let handle = testing.dispatch(&schedule.net_id, superbatch);
                 handles.push(handle);
             }
@@ -197,6 +198,15 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
             let quantised = quant.quantise(&weight_buf)?;
             buf.extend_from_slice(&quantised);
+        }
+
+        let bytes = buf.len() % 64;
+        if bytes > 0 {
+            let chs = [b'b', b'u', b'l', b'l', b'e', b't'];
+
+            for i in 0..64 - bytes {
+                buf.push(chs[i % chs.len()]);
+            }
         }
 
         file.write_all(&buf)?;

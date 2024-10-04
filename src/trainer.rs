@@ -44,7 +44,7 @@ pub trait NetworkTrainer {
         self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"));
     }
 
-    fn save_to_checkpoint(&mut self, path: &str) {
+    fn save_to_checkpoint(&self, path: &str) {
         std::fs::create_dir(path).unwrap_or(());
         let optimiser_path = format!("{path}/optimiser_state");
         std::fs::create_dir(optimiser_path.as_str()).unwrap_or(());

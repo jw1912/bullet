@@ -101,14 +101,13 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
         let base_path_string = format!("{out_dir}/base_engine");
         let dev_path_string = format!("{out_dir}/dev_engine");
     
-        let base_exe_path = format!("{base_path_string}/base_engine.exe");
+        let base_exe_path = format!("{base_path_string}/base_engine");
         let base_engine = &self.base_engine;
     
-        println!("# [Cloning {}/{}]", base_engine.repo, base_engine.branch);
         clone(base_engine, base_path_string.as_str());
     
         println!("# [Building {}/{}]", base_engine.repo, base_engine.branch);
-        base_engine.engine_type.build(base_path_string.as_str(), &base_exe_path, base_engine.net_path).unwrap();
+        base_engine.engine_type.build(base_path_string.as_str(), "base_engine", base_engine.net_path).unwrap();
     
         println!("# [Running Bench]");
         let bench = base_engine.engine_type.bench(&base_exe_path).unwrap();
@@ -120,7 +119,6 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
     
         let dev_engine = &self.dev_engine;
     
-        println!("# [Cloning {}/{}]", dev_engine.repo, dev_engine.branch);
         clone(dev_engine, dev_path_string.as_str());
     }
 
@@ -138,7 +136,7 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
         self.dev_engine.engine_type.build(
             dev_path_string.as_str(),
             &format!("../nets/{name}/{name}"),
-            Some(&format!("../nets/{name}/{name}.bin")),
+            Some(&format!("../nets/{name}/quantised.bin")),
         ).expect("Failed to build dev engine!");
 
         let _bench = self.dev_engine.engine_type.bench(dev_engine_path.as_str()).expect("Failed to bench dev engine!");
@@ -209,6 +207,7 @@ impl EngineType for OpenBenchCompliant {
                 if out.status.success() {
                     Ok(())
                 } else {
+                    println!("{}", String::from_utf8(out.stdout).unwrap());
                     Err(String::from("Failed to build engine!"))
                 }
             }

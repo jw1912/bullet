@@ -67,7 +67,7 @@ fn main() {
     let base_engine = Engine {
         repo: "https://github.com/jw1912/akimbo",
         branch: "main",
-        bench: Some(2430757),
+        bench: Some(2256851),
         net_path: None,
         uci_options: vec![UciOption("Hash", "16")],
         engine_type: OpenBenchCompliant,
@@ -86,7 +86,7 @@ fn main() {
         test_rate: 20,
         out_dir: concat!("../../nets/", net_id!()),
         cutechess_path: "../../nets/cutechess-cli.exe",
-        book_path: OpeningBook::Epd("../../nets/Pohl.epd"),
+        book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
         num_game_pairs: 2000,
         concurrency: 6,
         time_control: TimeControl::FixedNodes(25_000),
