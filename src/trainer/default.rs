@@ -9,6 +9,7 @@ pub use loader::DefaultDataPreparer;
 pub use quant::QuantTarget;
 
 use loader::DefaultDataLoader;
+use testing::{EngineType, TestSettings};
 
 use std::{collections::HashSet, fs::File, io::{self, Write}};
 
@@ -125,6 +126,38 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         let preparer = DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
 
         self.train_custom(&preparer, schedule, settings, |_, _, _, _| {});
+    }
+
+    pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
+        &mut self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+        testing: &TestSettings<T>,
+    ) {
+        logger::clear_colours();
+        println!("{}", logger::ansi("Beginning Training", "34;1"));
+        schedule.display();
+        settings.display();
+        let preparer = DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
+
+        testing.setup(schedule);
+
+        let mut handles = Vec::new();
+
+        self.train_custom(&preparer, schedule, settings, |superbatch, _, schedule, _| {
+            if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
+                let handle = testing.dispatch(&schedule.net_id, superbatch);
+                handles.push(handle);
+            }
+        });
+
+        println!("# [Waiting for Tests]");
+        for handle in handles {
+            if let Err(err) = handle.join() {
+                println!("{err:?}");
+            }
+        }
     }
 
     pub fn eval(&mut self, fen: &str) -> f32

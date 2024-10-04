@@ -1,25 +1,6 @@
-use std::{fmt::Display, process::{Child, Command, Output, Stdio}};
+use std::process::{Child, Command, Output, Stdio};
 
-#[derive(Clone, Copy)]
-pub enum TimeControl {
-    Increment { time: f32, inc: f32 },
-    FixedNodes(usize),
-}
-
-#[derive(Clone, Copy)]
-pub enum OpeningBook<'a> {
-    Epd(&'a str),
-    Pgn(&'a str),
-}
-
-#[derive(Clone)]
-pub struct UciOption<'a>(pub &'a str, pub &'a str);
-
-impl<'a> Display for UciOption<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "option.{}={}", self.0, self.1)
-    }
-}
+use super::testing::TimeControl;
 
 pub struct CuteChessArgs {
     pub cutechess_path: String,

@@ -1,8 +1,30 @@
-use std::{fs::{self, File}, io::{self, Write}, process::Command, thread::{self, JoinHandle}};
+use std::{fmt::Display, fs::{self, File}, io::{self, Write}, process::Command, thread::{self, JoinHandle}};
 
-use crate::{cutechess, lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
+use crate::{cutechess, logger, lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 
-use super::cutechess::{CuteChessArgs, OpeningBook, TimeControl, UciOption};
+use super::cutechess::CuteChessArgs;
+
+#[derive(Clone, Copy)]
+pub enum TimeControl {
+    Increment { time: f32, inc: f32 },
+    FixedNodes(usize),
+}
+
+#[derive(Clone, Copy)]
+pub enum OpeningBook<'a> {
+    Epd(&'a str),
+    Pgn(&'a str),
+}
+
+#[derive(Clone)]
+pub struct UciOption<'a>(pub &'a str, pub &'a str);
+
+impl<'a> Display for UciOption<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "option.{}={}", self.0, self.1)
+    }
+}
+
 
 #[derive(Clone)]
 pub struct Engine<'a, T: EngineType> {
@@ -105,10 +127,12 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
     pub fn dispatch(&self, net_id: &str, superbatch: usize) -> JoinHandle<()> {
         let out_dir = self.out_dir;
 
+        let name = format!("{net_id}-{superbatch}");
+        println!("Testing [{}]", logger::ansi(name.as_str(), 31));
+
         let dev_path_string = format!("{out_dir}/dev_engine");
         let base_engine_path = format!("{out_dir}/base_engine/base_engine");
 
-        let name = format!("{net_id}-{superbatch}");
         let dev_engine_path = format!("{out_dir}/nets/{name}/{name}");
 
         self.dev_engine.engine_type.build(

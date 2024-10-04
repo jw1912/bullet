@@ -2,7 +2,8 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
+    testing::{Engine, OpenBenchCompliant, TestSettings, UciOption, OpeningBook, TimeControl}
 };
 
 macro_rules! net_id {
@@ -63,7 +64,37 @@ fn main() {
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
-    trainer.run(&schedule, &settings, &data_loader);
+    let base_engine = Engine {
+        repo: "https://github.com/jw1912/akimbo",
+        branch: "main",
+        bench: Some(2430757),
+        net_path: None,
+        uci_options: vec![UciOption("Hash", "16")],
+        engine_type: OpenBenchCompliant,
+    };
+
+    let dev_engine = Engine {
+        repo: "https://github.com/jw1912/akimbo",
+        branch: "main",
+        bench: None,
+        net_path: None,
+        uci_options: vec![UciOption("Hash", "16")],
+        engine_type: OpenBenchCompliant,
+    };
+
+    let testing = TestSettings {
+        test_rate: 20,
+        out_dir: concat!("../../nets/", net_id!()),
+        cutechess_path: "../../nets/cutechess-cli.exe",
+        book_path: OpeningBook::Epd("../../nets/Pohl.epd"),
+        num_game_pairs: 2000,
+        concurrency: 6,
+        time_control: TimeControl::FixedNodes(25_000),
+        base_engine,
+        dev_engine,
+    };
+
+    trainer.run_and_test(&schedule, &settings, &data_loader, &testing);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
