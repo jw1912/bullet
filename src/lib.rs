@@ -18,7 +18,7 @@ pub use trainer::{
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
     testing,
-    NetworkTrainer, Trainer, TrainerBuilder, Loss,
+    NetworkTrainer, Trainer, TrainerBuilder, Loss, QuantTarget
 };
 
 pub type Graph = diffable::Graph<Tensor>;

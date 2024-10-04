@@ -1,4 +1,4 @@
-use crate::{inputs::InputType, operations, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, tensor::Operation, Activation, ExecutionContext, GraphBuilder, Shape};
+use crate::{inputs::InputType, operations, optimiser::{self, Optimiser, OptimiserType}, outputs::{self, OutputBuckets}, rng, tensor::Operation, trainer::default::quant::QuantTarget, Activation, ExecutionContext, GraphBuilder, Shape};
 
 use super::Trainer;
 
@@ -26,7 +26,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     bucket_getter: U,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
-    quantisations: Vec<i32>,
+    quantisations: Option<Vec<i16>>,
     perspective: bool,
     loss: Loss,
     optimiser: O,
@@ -39,7 +39,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Defa
             bucket_getter: U::default(),
             ft_out_size: 0,
             nodes: Vec::new(),
-            quantisations: Vec::new(),
+            quantisations: None,
             perspective: true,
             loss: Loss::None,
             optimiser: O::default(),
@@ -84,8 +84,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     }
 
     /// Provide a list of quantisations.
-    pub fn quantisations(mut self, quants: &[i32]) -> Self {
-        self.quantisations = quants.to_vec();
+    pub fn quantisations(mut self, quants: &[i16]) -> Self {
+        self.quantisations = Some(quants.to_vec());
         self
     }
 
@@ -166,8 +166,28 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut still_in_ft = true;
 
+        let mut saved_format = Vec::new();
+
         let l0w = builder.create_weights("l0w", Shape::new(self.ft_out_size, input_size));
         let l0b = builder.create_weights("l0b", Shape::new(self.ft_out_size, 1));
+
+        let mut net_quant = 1i16;
+
+        let mut push_saved_format = |layer: usize| {
+            let w = format!("l{layer}w");
+            let b = format!("l{layer}b");
+
+            if let Some(quants) = &self.quantisations {
+                net_quant *= quants[layer];
+                saved_format.push((w, QuantTarget::I16(quants[layer])));
+                saved_format.push((b, QuantTarget::I16(net_quant)));
+            } else {
+                saved_format.push((w, QuantTarget::Float));
+                saved_format.push((b, QuantTarget::Float));
+            }
+        };
+
+        push_saved_format(0);
 
         let mut out = builder.create_input("stm", input_shape);
 
@@ -205,6 +225,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
                     let w = builder.create_weights(&format!("l{layer}w"), Shape::new(raw_size, prev_size));
                     let b = builder.create_weights(&format!("l{layer}b"), Shape::new(raw_size, 1));
+
+                    push_saved_format(layer);
+
                     layer += 1;
 
                     out = operations::affine(&mut builder, w, out, b);
@@ -246,6 +269,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             output_node: out,
             perspective: self.perspective,
             output_buckets,
+            saved_format,
         };
 
         let graph = trainer.optimiser.graph_mut();

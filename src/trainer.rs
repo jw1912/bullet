@@ -4,7 +4,7 @@ mod preparer;
 pub mod schedule;
 pub mod settings;
 
-pub use default::{Loss, Trainer, TrainerBuilder, cutechess, testing};
+pub use default::{Loss, QuantTarget, Trainer, TrainerBuilder, cutechess, testing};
 pub use preparer::DataPreparer;
 
 use std::{sync::mpsc, time::Instant};

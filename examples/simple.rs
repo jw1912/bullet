@@ -11,8 +11,8 @@ use bullet_lib::{
 
 const HIDDEN_SIZE: usize = 512;
 const SCALE: i32 = 400;
-const QA: i32 = 255;
-const QB: i32 = 64;
+const QA: i16 = 255;
+const QB: i16 = 64;
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
@@ -68,7 +68,7 @@ static NNUE: Network =
 /// Clipped ReLU - Activation Function.
 /// Note that this takes the i16s in the accumulator to i32s.
 fn crelu(x: i16) -> i32 {
-    i32::from(x).clamp(0, QA)
+    i32::from(x).clamp(0, i32::from(QA))
 }
 
 /// This is the quantised format that bullet outputs.
@@ -107,7 +107,7 @@ impl Network {
         output *= SCALE;
 
         // Remove quantisation.
-        output /= QA * QB;
+        output /= i32::from(QA) * i32::from(QB);
 
         output
     }

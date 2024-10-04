@@ -1,14 +1,16 @@
 mod builder;
 pub mod cutechess;
 mod loader;
+mod quant;
 pub mod testing;
 
 pub use builder::{Loss, TrainerBuilder};
 pub use loader::DefaultDataPreparer;
+pub use quant::QuantTarget;
 
 use loader::DefaultDataLoader;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fs::File, io::{self, Write}};
 
 use diffable::Node;
 
@@ -31,6 +33,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     output_node: Node,
     perspective: bool,
     output_buckets: bool,
+    saved_format: Vec<(String, QuantTarget)>,
 }
 
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
@@ -69,10 +72,21 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     fn optimiser_mut(&mut self) -> &mut Self::Optimiser {
         &mut self.optimiser
     }
+
+    fn save_to_checkpoint(&mut self, path: &str) {
+        std::fs::create_dir(path).unwrap_or(());
+
+        let optimiser_path = format!("{path}/optimiser_state");
+        std::fs::create_dir(optimiser_path.as_str()).unwrap_or(());
+        self.optimiser().write_to_checkpoint(&optimiser_path);
+
+        self.save_unquantised(&format!("{path}/raw.bin")).unwrap();
+        self.save_unquantised(&format!("{path}/quantised.bin")).unwrap();
+    }
 }
 
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
-    pub fn new(graph: Graph, output_node: Node, params: Opt::Params, input_getter: Inp, output_getter: Out) -> Self {
+    pub fn new(graph: Graph, output_node: Node, params: Opt::Params, input_getter: Inp, output_getter: Out, saved_format: Vec<(String, QuantTarget)>) -> Self {
         let inputs = graph.input_ids();
         let inputs = inputs.iter().map(String::as_str).collect::<HashSet<_>>();
 
@@ -94,6 +108,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             output_node,
             perspective,
             output_buckets,
+            saved_format,
         }
     }
 
@@ -132,5 +147,49 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
     pub fn set_optimiser_params(&mut self, params: Opt::Params) {
         self.optimiser.set_params(params);
+    }
+
+    pub fn save_quantised(&self, path: &str) -> io::Result<()> {
+        let mut file = File::create(path).unwrap();
+
+        let mut buf = Vec::new();
+
+        for (id, quant) in &self.saved_format {
+            let weights = self.optimiser.graph().get_weights(id);
+            let weights = weights.values.dense();
+
+            let mut weight_buf = vec![0.0; weights.shape().size()];
+            let written = weights.write_to_slice(&mut weight_buf);
+            assert_eq!(written, weights.shape().size());
+
+            let quantised = quant.quantise(&weight_buf)?;
+            buf.extend_from_slice(&quantised);
+        }
+
+        file.write_all(&buf)?;
+
+        Ok(())
+    }
+
+    pub fn save_unquantised(&self, path: &str) -> io::Result<()> {
+        let mut file = File::create(path).unwrap();
+
+        let mut buf = Vec::new();
+
+        for (id, _) in &self.saved_format {
+            let weights = self.optimiser.graph().get_weights(id);
+            let weights = weights.values.dense();
+
+            let mut weight_buf = vec![0.0; weights.shape().size()];
+            let written = weights.write_to_slice(&mut weight_buf);
+            assert_eq!(written, weights.shape().size());
+
+            let quantised = QuantTarget::Float.quantise(&weight_buf)?;
+            buf.extend_from_slice(&quantised);
+        }
+
+        file.write_all(&buf)?;
+
+        Ok(())
     }
 }
