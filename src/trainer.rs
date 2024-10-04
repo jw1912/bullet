@@ -7,7 +7,10 @@ pub mod settings;
 pub use default::{cutechess, testing, Loss, QuantTarget, Trainer, TrainerBuilder};
 pub use preparer::DataPreparer;
 
-use std::{sync::mpsc::{self, Receiver}, time::Instant};
+use std::{
+    sync::mpsc::{self, Receiver},
+    time::Instant,
+};
 
 use crate::{backend::util, lr::LrScheduler, optimiser::Optimiser, wdl::WdlScheduler, LocalSettings, TrainingSchedule};
 
@@ -99,9 +102,16 @@ pub trait NetworkTrainer {
             .map(|_| {
                 let (sender, receiver) = mpsc::sync_channel::<D::PreparedData>(2);
                 let steps = schedule.steps_for_validation(validation_freq);
-                let dataloader = preparer::create_dataloader(test_preparer.clone().unwrap(), sender, steps, schedule.wdl_scheduler.clone(), threads);
-            (dataloader, receiver)
-            }).unzip();
+                let dataloader = preparer::create_dataloader(
+                    test_preparer.clone().unwrap(),
+                    sender,
+                    steps,
+                    schedule.wdl_scheduler.clone(),
+                    threads,
+                );
+                (dataloader, receiver)
+            })
+            .unzip();
 
         let mut prev_lr = schedule.lr(0, 1);
         let mut superbatch = steps.start_superbatch;
@@ -218,7 +228,6 @@ fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
 
     let mut writer = std::io::BufWriter::new(std::fs::File::create(path).expect("Opening log file failed!"));
     for (superbatch, batch, loss) in error_record {
-        writeln!(writer, "{superbatch},{batch},{loss}",)
-            .expect("Writing to log file failed!");
+        writeln!(writer, "{superbatch},{batch},{loss}",).expect("Writing to log file failed!");
     }
 }

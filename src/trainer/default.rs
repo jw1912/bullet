@@ -136,9 +136,14 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         settings.display();
         let preparer =
             DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
-        let test_preparer = settings.test_set.map(|test|
-            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, DirectSequentialDataLoader::new(&[test.path]))
-        );
+        let test_preparer = settings.test_set.map(|test| {
+            DefaultDataLoader::new(
+                self.input_getter,
+                self.output_getter,
+                schedule.eval_scale,
+                DirectSequentialDataLoader::new(&[test.path]),
+            )
+        });
 
         self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
     }
@@ -156,9 +161,14 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         settings.display();
         let preparer =
             DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
-        let test_preparer = settings.test_set.map(|test|
-            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, DirectSequentialDataLoader::new(&[test.path]))
-        );
+        let test_preparer = settings.test_set.map(|test| {
+            DefaultDataLoader::new(
+                self.input_getter,
+                self.output_getter,
+                schedule.eval_scale,
+                DirectSequentialDataLoader::new(&[test.path]),
+            )
+        });
 
         testing.setup(schedule);
 

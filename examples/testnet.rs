@@ -23,7 +23,12 @@ fn main() {
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),
         eval_scale: 400.0,
-        steps: TrainingSteps { batch_size: 16_384, batches_per_superbatch: 1024, start_superbatch: 1, end_superbatch: 10 },
+        steps: TrainingSteps {
+            batch_size: 16_384,
+            batches_per_superbatch: 1024,
+            start_superbatch: 1,
+            end_superbatch: 10,
+        },
         wdl_scheduler: wdl::ConstantWDL { value: 0.2 },
         lr_scheduler: lr::ConstantLR { value: 0.001 },
         save_rate: 10,
