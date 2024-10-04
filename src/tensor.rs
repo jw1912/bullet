@@ -12,7 +12,7 @@ pub use sparse_matrix::SparseMatrix;
 
 pub(crate) use operation::Operation;
 
-use crate::backend::ExecutionContext;
+use crate::{backend::ExecutionContext, rng};
 
 impl From<Tensor> for Shape {
     fn from(value: Tensor) -> Self {
@@ -72,6 +72,11 @@ impl Tensor {
         } else {
             panic!("This tensor is sparse!")
         }
+    }
+
+    pub fn seed_random(&mut self, mean: f32, stdev: f32, use_gaussian: bool) {
+        let values = rng::vec_f32(self.values.shape().size(), mean, stdev, use_gaussian);
+        self.load_from_slice(&values);
     }
 
     pub(crate) fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
