@@ -4,10 +4,9 @@ mod cuda;
 mod hip;
 mod util;
 
-use std::path::PathBuf;
-
+#[cfg(not(feature = "gh-actions"))]
 fn main() {
-    let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    let out_path = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
 
     println!("cargo:rerun-if-changed={}", util::KERNEL_DIR);
 
@@ -17,3 +16,6 @@ fn main() {
     #[cfg(feature = "hip")]
     hip::build(&out_path);
 }
+
+#[cfg(feature = "gh-actions")]
+fn main() {}
