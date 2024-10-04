@@ -147,7 +147,7 @@ pub trait NetworkTrainer {
         let (hours, minutes, seconds) = logger::seconds_to_hms(total_time as u32);
 
         println!(
-            "Estimated time remaining in training: {}h {}m {}s",
+            "Total Training Time: {}h {}m {}s",
             logger::ansi(hours, logger::num_cs()),
             logger::ansi(minutes, logger::num_cs()),
             logger::ansi(seconds, logger::num_cs()),
