@@ -239,8 +239,8 @@ extern "C" {
     pub fn AdamW(size: usize, decay: f32, beta1: f32, beta2: f32, minWeight: f32, maxWeight: f32, adj: f32, rate: f32, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
     pub fn sparseAffineForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, inputs: *const i32, outputs: *mut f32);
     pub fn sparseAffineBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, inputs: *const i32, errors: *const f32);
-    pub fn sparseAffineDualForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, stm: *const i32, ntm: *const i32, outputs: *mut f32);
-    pub fn sparseAffineDualBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, stm: *const i32, ntm: *const i32, errors: *const f32);
+    pub fn sparseAffineDualForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, stm: *const i32, ntm: *const i32, outputs: *mut f32, activation: i32);
+    pub fn sparseAffineDualBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, stm: *const i32, ntm: *const i32, outputs: *const f32, errors: *const f32, activation: i32);
     pub fn pairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output: *mut f32);
     pub fn backpropPairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn selectForward(batchSize: usize, inputSize: usize, outputSize: usize, buckets: *const i32, inp: *const f32, out: *mut f32);

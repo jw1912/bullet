@@ -31,7 +31,6 @@ pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
     let (input1, inputs2) = inputs.split_at_mut(1);
     let (input2, inputs3) = inputs2.split_at_mut(1);
     let (input3, input4) = inputs3.split_at_mut(1);
-    let out = output.gradients.as_ref().unwrap();
 
     if let (Matrix::Sparse(stm), Matrix::Sparse(ntm)) = (&input2[0].values, &input3[0].values) {
         SparseMatrix::backprop_affine_dual(
@@ -40,7 +39,8 @@ pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
             stm,
             ntm,
             input4[0].gradients.as_mut().unwrap(),
-            out,
+            output.values.dense(),
+            output.gradients.as_ref().unwrap(),
         );
     }
 }

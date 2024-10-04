@@ -1,3 +1,4 @@
+#include "util.cu"
 #ifdef __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime.h>
 #endif
@@ -46,8 +47,6 @@ __global__ void selectBackpropKernel(
         thisInputGrad[i] += thisOutputGrad[i];
 }
 
-constexpr size_t Threads = static_cast<size_t>(1024);
-
 extern "C" void selectForward(
     const size_t batchSize,
     const size_t inputSize,
@@ -56,8 +55,8 @@ extern "C" void selectForward(
     const float* in,
     float* out)
 {
-    const size_t numChunks = (batchSize + Threads - 1) / Threads;
-    const size_t threads = (numChunks == 1) ? batchSize : Threads;
+    const size_t numChunks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+    const size_t threads = (numChunks == 1) ? batchSize : threadsPerBlock;
 
     selectKernel<<<numChunks, threads>>>(
         batchSize,
@@ -77,8 +76,8 @@ extern "C" void selectBackprop(
     const float* output_grad,
     float* input_grad)
 {
-    const size_t numChunks = (batch_size + Threads - 1) / Threads;
-    const size_t threads = (numChunks == 1) ? batch_size : Threads;
+    const size_t numChunks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
+    const size_t threads = (numChunks == 1) ? batch_size : threadsPerBlock;
 
     selectBackpropKernel<<<numChunks, threads>>>(
         batch_size,

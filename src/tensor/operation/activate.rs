@@ -3,13 +3,15 @@ use crate::{
     Tensor,
 };
 
+#[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Activation {
-    ReLU,
-    CReLU,
-    SCReLU,
-    SqrReLU,
-    Sigmoid,
+    Identity = 0,
+    ReLU = 1,
+    CReLU = 2,
+    SCReLU = 3,
+    SqrReLU = 4,
+    Sigmoid = 5,
 }
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
@@ -25,6 +27,7 @@ pub fn forward(activation: Activation, inputs: &[&Tensor], output: &mut Tensor) 
     let output = &mut output.values;
 
     match activation {
+        Activation::Identity => panic!("No-op!"),
         Activation::ReLU => DenseMatrix::relu(input.dense(), output.dense_mut()),
         Activation::CReLU => DenseMatrix::crelu(input.dense(), output.dense_mut()),
         Activation::SCReLU => DenseMatrix::screlu(input.dense(), output.dense_mut()),
@@ -39,6 +42,7 @@ pub fn backprop(activation: Activation, output: &Tensor, inputs: &mut [&mut Tens
     let output_grad = output.gradients.as_ref().expect("Must exist!");
 
     match activation {
+        Activation::Identity => panic!("No-op!"),
         Activation::ReLU => DenseMatrix::relu_backward(input.dense(), input_grad, output_grad),
         Activation::CReLU => DenseMatrix::crelu_backward(input.dense(), input_grad, output_grad),
         Activation::SCReLU => DenseMatrix::screlu_backward(input.dense(), input_grad, output_grad),

@@ -1,4 +1,4 @@
-use crate::{backend::ops, tensor::DenseMatrix, Shape};
+use crate::{backend::ops, tensor::DenseMatrix, Activation, Shape};
 
 use super::SparseMatrix;
 
@@ -24,6 +24,7 @@ impl SparseMatrix {
                 input_b1.buf.ptr(),
                 input_b2.buf.ptr(),
                 output.buf.mut_ptr(),
+                Activation::Identity as i32,
             );
         }
     }
@@ -34,10 +35,12 @@ impl SparseMatrix {
         input_b1: &Self,
         input_b2: &Self,
         input_c_grad: &mut DenseMatrix,
+        outputs: &DenseMatrix,
         output_grad: &DenseMatrix,
     ) {
         assert_eq!(input_b1.shape, input_b2.shape);
         assert_eq!(input_b1.max_active, input_b2.max_active);
+        assert_eq!(outputs.shape, output_grad.shape);
 
         input_a_grad.reshape_if_needed(input_a.shape());
 
@@ -50,7 +53,9 @@ impl SparseMatrix {
                 input_c_grad.buf.mut_ptr(),
                 input_b1.buf.ptr(),
                 input_b2.buf.ptr(),
+                outputs.buf.ptr(),
                 output_grad.buf.ptr(),
+                Activation::Identity as i32,
             );
         }
     }
@@ -120,6 +125,7 @@ mod tests {
                 &input2,
                 &input3,
                 &mut input4_grad,
+                &output,
                 &output,
             );
 

@@ -1,3 +1,5 @@
+#include <iostream>
+#include "util.cu"
 #ifdef __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime.h>
 #endif
@@ -88,23 +90,9 @@ extern "C" void sparseAffineForward(
     const size_t threads = (numChunks == 1) ? outputSize : 1024;
 
     if (biases == nullptr)
-        sparseAffineForwardKernel<false><<<grid, threads>>>(
-            maxInputSize,
-            outputSize,
-            weights,
-            biases,
-            inputs,
-            outputs
-        );
+        sparseAffineForwardKernel<false><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
     else
-        sparseAffineForwardKernel<true><<<grid, threads>>>(
-            maxInputSize,
-            outputSize,
-            weights,
-            biases,
-            inputs,
-            outputs
-        );
+        sparseAffineForwardKernel<true><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
 }
 
 extern "C" void sparseAffineBackward(
@@ -123,25 +111,14 @@ extern "C" void sparseAffineBackward(
     const size_t threads = (numChunks == 1) ? outputSize : 1024;
 
     if (biasesGrad == nullptr)
-        sparseAffineBackwardKernel<false><<<grid, threads>>>(
-            maxInputSize,
-            outputSize,
-            weightsGrad,
-            biasesGrad,
-            inputs,
-            errors
-        );
+        sparseAffineBackwardKernel<false><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, inputs, errors);
     else
-        sparseAffineBackwardKernel<true><<<grid, threads>>>(
-            maxInputSize,
-            outputSize,
-            weightsGrad,
-            biasesGrad,
-            inputs,
-            errors
-        );
+        sparseAffineBackwardKernel<true><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, inputs, errors);
 }
 
+typedef float(*OpType)(float);
+
+template<OpType op>
 __global__ void sparseAffineDualForwardKernel(
     const size_t inputSize,
     const size_t outputSize,
@@ -178,10 +155,11 @@ __global__ void sparseAffineDualForwardKernel(
         ntmElementVal += weights[ntmIdx];
     }
 
-    thisOutput[0] = stmElementVal;
-    thisOutput[outputSize] = ntmElementVal;
+    thisOutput[0] = op(stmElementVal);
+    thisOutput[outputSize] = op(ntmElementVal);
 }
 
+template<OpType op>
 __global__ void sparseAffineDualBackwardKernel(
     const size_t inputSize,
     const size_t outputSize,
@@ -189,6 +167,7 @@ __global__ void sparseAffineDualBackwardKernel(
     float* biasesGrad,
     const int32_t* stm,
     const int32_t* ntm,
+    const float* outputs,
     const float* errors)
 {
     const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
@@ -198,10 +177,11 @@ __global__ void sparseAffineDualBackwardKernel(
 
     const int32_t* thisStmInput = stm + inputSize * blockIdx.y;
     const int32_t* thisNtmInput = ntm + inputSize * blockIdx.y;
+    const float* thisOutputs = outputs + 2 * outputSize * blockIdx.y;
     const float* thisErrors = errors + 2 * outputSize * blockIdx.y;
 
-    const float stmError = thisErrors[elem];
-    const float ntmError = thisErrors[elem + outputSize];
+    const float stmError = op(thisOutputs[elem]) * thisErrors[elem];
+    const float ntmError = op(thisOutputs[elem + outputSize]) *thisErrors[elem + outputSize];
 
     atomicAdd(&biasesGrad[elem], stmError + ntmError);
 
@@ -228,7 +208,8 @@ extern "C" void sparseAffineDualForward(
     const float* biases,
     const int32_t* stm,
     const int32_t* ntm,
-    float* outputs)
+    float* outputs,
+    const int32_t activation)
 {
     const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
@@ -236,15 +217,30 @@ extern "C" void sparseAffineDualForward(
 
     const size_t threads = (numChunks == 1) ? outputSize : 1024;
 
-    sparseAffineDualForwardKernel<<<grid, threads>>>(
-        maxInputSize,
-        outputSize,
-        weights,
-        biases,
-        stm,
-        ntm,
-        outputs
-    );
+    switch (activation)
+    {
+        case 0:
+            sparseAffineDualForwardKernel<Identity><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            break;
+        case 1:
+            sparseAffineDualForwardKernel<ReLU><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            break;
+        case 2:
+            sparseAffineDualForwardKernel<CReLU><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            break;
+        case 3:
+            sparseAffineDualForwardKernel<SCReLU><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            break;
+        case 4:
+            sparseAffineDualForwardKernel<SqrReLU><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            break;
+        case 5:
+            sparseAffineDualForwardKernel<sigmoid><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            break;
+        default:
+            std::cout << "Invalid activation function!" << std::endl;
+            std::abort();
+    }
 }
 
 extern "C" void sparseAffineDualBackward(
@@ -255,7 +251,9 @@ extern "C" void sparseAffineDualBackward(
     float* biasesGrad,
     const int32_t* stm,
     const int32_t* ntm,
-    const float* errors)
+    const float* outputs,
+    const float* errors,
+    const int32_t activation)
 {
     const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
 
@@ -263,13 +261,28 @@ extern "C" void sparseAffineDualBackward(
 
     const size_t threads = (numChunks == 1) ? outputSize : 1024;
 
-    sparseAffineDualBackwardKernel<<<grid, threads>>>(
-        maxInputSize,
-        outputSize,
-        weightsGrad,
-        biasesGrad,
-        stm,
-        ntm,
-        errors
-    );
+    switch (activation)
+    {
+        case 0:
+            sparseAffineDualBackwardKernel<primeInvIdentity><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            break;
+        case 1:
+            sparseAffineDualBackwardKernel<primeInvReLU><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            break;
+        case 2:
+            sparseAffineDualBackwardKernel<primeInvCReLU><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            break;
+        case 3:
+            sparseAffineDualBackwardKernel<primeInvSCReLU><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            break;
+        case 4:
+            sparseAffineDualBackwardKernel<primeInvSqrReLU><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            break;
+        case 5:
+            sparseAffineDualBackwardKernel<primeInvSigmoid><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            break;
+        default:
+            std::cout << "Invalid activation function!" << std::endl;
+            std::abort();
+    }
 }
