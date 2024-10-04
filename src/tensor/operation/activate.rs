@@ -1,8 +1,6 @@
-use crate::{
-    tensor::{DenseMatrix, Shape},
-    Tensor,
-};
+use crate::tensor::{DenseMatrix, Shape, Tensor};
 
+/// List of supported activation functions.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Activation {

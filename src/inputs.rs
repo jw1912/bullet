@@ -16,8 +16,13 @@ pub trait InputType: Send + Sync + Copy + Default + 'static {
 
     fn max_active_inputs(&self) -> usize;
 
+    /// The number of inputs per bucket.
     fn inputs(&self) -> usize;
 
+    /// The number of buckets.
+    /// ### Note
+    /// This is purely aesthetic, training is completely unchanged
+    /// so long as `inputs * buckets` is constant.
     fn buckets(&self) -> usize;
 
     fn size(&self) -> usize {

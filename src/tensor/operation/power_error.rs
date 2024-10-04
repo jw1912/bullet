@@ -1,7 +1,4 @@
-use crate::{
-    tensor::{DenseMatrix, Shape},
-    Tensor,
-};
+use crate::tensor::{DenseMatrix, Shape, Tensor};
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 && inputs[0] == inputs[1] {

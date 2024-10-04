@@ -4,6 +4,9 @@ use bulletformat::BulletFormat;
 
 pub use direct_sequential::DirectSequentialDataLoader;
 
+/// Dictates how data is read from a file into the expected datatype.
+/// This allows for the file format to be divorced from the training
+/// data format.
 pub trait DataLoader<T>: Clone + Send + Sync + 'static {
     fn data_file_paths(&self) -> &[String];
 

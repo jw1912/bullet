@@ -1,7 +1,4 @@
-use crate::{
-    tensor::{Activation, Matrix, Shape, SparseMatrix},
-    Tensor,
-};
+use crate::tensor::{Activation, Matrix, Shape, SparseMatrix, Tensor};
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 4 {

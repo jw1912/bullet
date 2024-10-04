@@ -1,3 +1,4 @@
+/// The shape of a `rows x cols` matrix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shape {
     rows: usize,

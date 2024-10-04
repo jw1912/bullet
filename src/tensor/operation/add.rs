@@ -1,7 +1,6 @@
 use crate::{
     backend::ExecutionContext,
-    tensor::{DenseMatrix, Shape},
-    Tensor,
+    tensor::{DenseMatrix, Shape, Tensor},
 };
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {

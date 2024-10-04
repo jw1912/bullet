@@ -6,6 +6,9 @@ pub mod util;
 use bindings::cublasHandle_t;
 pub use buffer::Buffer;
 
+/// This contains the internal environment for the GPU to use:
+/// - BLAS handles
+/// - Internal buffers for use in operations without additional allocation overhead
 #[derive(Debug)]
 pub struct ExecutionContext {
     handle: cublasHandle_t,
