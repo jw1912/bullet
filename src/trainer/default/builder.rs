@@ -169,20 +169,32 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let l0w = builder.create_weights("l0w", Shape::new(self.ft_out_size, input_size));
         let l0b = builder.create_weights("l0b", Shape::new(self.ft_out_size, 1));
 
-        let stm = builder.create_input("stm", input_shape);
+        let mut out = builder.create_input("stm", input_shape);
 
-        let mut out = if self.perspective {
-            let ntm = builder.create_input("nstm", input_shape);
-            builder.create_result_of_operation(Operation::SparseAffineDual, &[l0w, stm, ntm, l0b])
+        assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
+
+        let (skip, activation) = if self.perspective {
+            if let NodeType { op: OpType::Activate(act), .. } = self.nodes[0] {
+            (1, act)
+            } else {
+                (0, Activation::Identity)
+            }
         } else {
-            operations::affine(&mut builder, l0w, stm, l0b)
+            (0, Activation::Identity)
+        };
+
+        out = if self.perspective {
+            let ntm = builder.create_input("nstm", input_shape);
+            builder.create_result_of_operation(Operation::SparseAffineDual(activation), &[l0w, out, ntm, l0b])
+        } else {
+            operations::affine(&mut builder, l0w, out, l0b)
         };
 
         let mut layer = 1;
 
         let mut prev_size = self.ft_out_size * if self.perspective { 2 } else { 1 };
 
-        for NodeType { size, op } in self.nodes {
+        for &NodeType { size, op } in self.nodes.iter().skip(skip) {
             match op {
                 OpType::Activate(activation) => {
                     out = operations::activate(&mut builder, out, activation);

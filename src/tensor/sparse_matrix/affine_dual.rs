@@ -3,7 +3,7 @@ use crate::{backend::ops, tensor::DenseMatrix, Activation, Shape};
 use super::SparseMatrix;
 
 impl SparseMatrix {
-    pub fn affine_dual(input_a: &DenseMatrix, input_b1: &Self, input_b2: &Self, input_c: &DenseMatrix, output: &mut DenseMatrix) {
+    pub fn affine_dual(input_a: &DenseMatrix, input_b1: &Self, input_b2: &Self, input_c: &DenseMatrix, output: &mut DenseMatrix, activation: Activation) {
         assert_eq!(input_b1.shape, input_b2.shape);
         assert_eq!(input_b1.max_active, input_b2.max_active);
         assert_eq!(input_c.shape.rows(), input_a.shape.rows());
@@ -24,11 +24,12 @@ impl SparseMatrix {
                 input_b1.buf.ptr(),
                 input_b2.buf.ptr(),
                 output.buf.mut_ptr(),
-                Activation::Identity as i32,
+                activation as i32,
             );
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn backprop_affine_dual(
         input_a: &DenseMatrix,
         input_a_grad: &mut DenseMatrix,
@@ -37,6 +38,7 @@ impl SparseMatrix {
         input_c_grad: &mut DenseMatrix,
         outputs: &DenseMatrix,
         output_grad: &DenseMatrix,
+        activation: Activation,
     ) {
         assert_eq!(input_b1.shape, input_b2.shape);
         assert_eq!(input_b1.max_active, input_b2.max_active);
@@ -55,7 +57,7 @@ impl SparseMatrix {
                 input_b2.buf.ptr(),
                 outputs.buf.ptr(),
                 output_grad.buf.ptr(),
-                Activation::Identity as i32,
+                activation as i32,
             );
         }
     }
@@ -104,7 +106,7 @@ mod tests {
 
         // sparse linear
         {
-            SparseMatrix::affine_dual(&input1, &input2, &input3, &input4, &mut output);
+            SparseMatrix::affine_dual(&input1, &input2, &input3, &input4, &mut output, Activation::Identity);
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
@@ -127,6 +129,7 @@ mod tests {
                 &mut input4_grad,
                 &output,
                 &output,
+                Activation::Identity,
             );
 
             util::panic_if_device_error("Failed to backprop matmul!");

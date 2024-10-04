@@ -1,5 +1,5 @@
 use crate::{
-    tensor::{Matrix, Shape, SparseMatrix},
+    tensor::{Activation, Matrix, Shape, SparseMatrix},
     Tensor,
 };
 
@@ -15,19 +15,19 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     }
 }
 
-pub fn forward(inputs: &[&Tensor], output: &mut Tensor) {
+pub fn forward(inputs: &[&Tensor], output: &mut Tensor, activation: Activation) {
     let weights = inputs[0].values.dense();
     let biases = inputs[3].values.dense();
     let out = output.values.dense_mut();
 
     if let (Matrix::Sparse(stm), Matrix::Sparse(ntm)) = (&inputs[1].values, &inputs[2].values) {
-        SparseMatrix::affine_dual(weights, stm, ntm, biases, out);
+        SparseMatrix::affine_dual(weights, stm, ntm, biases, out, activation);
     } else {
         panic!("Inputs must be sparse!");
     }
 }
 
-pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
+pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor], activation: Activation) {
     let (input1, inputs2) = inputs.split_at_mut(1);
     let (input2, inputs3) = inputs2.split_at_mut(1);
     let (input3, input4) = inputs3.split_at_mut(1);
@@ -41,6 +41,7 @@ pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
             input4[0].gradients.as_mut().unwrap(),
             output.values.dense(),
             output.gradients.as_ref().unwrap(),
+            activation,
         );
     }
 }
