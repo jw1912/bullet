@@ -10,7 +10,7 @@ use bullet_lib::{
     TrainingSteps,
 };
 
-const HIDDEN_SIZE: usize = 512;
+const HIDDEN_SIZE: usize = 128;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
@@ -23,7 +23,7 @@ fn main() {
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
-        .activate(Activation::ReLU)
+        .activate(Activation::SCReLU)
         .add_layer(1)
         .build();
 
@@ -34,7 +34,7 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
             start_superbatch: 1,
-            end_superbatch: 1,
+            end_superbatch: 40,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 4 },

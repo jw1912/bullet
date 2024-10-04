@@ -93,3 +93,9 @@ impl Optimiser for AdamWOptimiser {
         self.params = params;
     }
 }
+
+impl AdamWOptimiser {
+    pub fn load_weights_from_file(&mut self, path: &str) {
+        utils::load_graph_weights_from_file(&mut self.graph, path);
+    }
+}
