@@ -28,7 +28,7 @@ use crate::{
     outputs::{self, OutputBuckets},
     trainer::NetworkTrainer,
     wdl::WdlScheduler,
-    Graph, LocalSettings, TrainingSchedule,
+    Graph, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
@@ -145,6 +145,8 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             )
         });
 
+        display_total_positions(data_loader, schedule.steps);
+
         self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
     }
 
@@ -173,6 +175,8 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         testing.setup(schedule);
 
         let mut handles = Vec::new();
+
+        display_total_positions(data_loader, schedule.steps);
 
         self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
             if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
@@ -263,5 +267,17 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         file.write_all(&buf)?;
 
         Ok(())
+    }
+}
+
+fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: TrainingSteps) {
+    if let Some(num) = data_loader.count_positions() {
+        let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
+        let sbs = steps.end_superbatch - steps.start_superbatch + 1;
+        let total_pos = pos_per_sb * sbs;
+        let iters = total_pos as f64 / num as f64;
+
+        println!("Positions              : {}", logger::ansi(num, 31));
+        println!("Total Epochs           : {}", logger::ansi(format!("{iters:.2}"), 31));
     }
 }
