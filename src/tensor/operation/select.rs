@@ -2,7 +2,7 @@ use crate::tensor::{Matrix, Shape, SparseMatrix, Tensor};
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 {
-        if inputs[0].cols() == inputs[1].cols() && inputs[0].rows() * inputs[1].rows() == 0 {
+        if inputs[0].cols() == inputs[1].cols() && inputs[0].rows() % inputs[1].rows() == 0 {
             Ok(Shape::new(inputs[0].rows() / inputs[1].rows(), inputs[0].cols()))
         } else {
             Err(String::from("Vector cannot be split evenly among buckets!"))
