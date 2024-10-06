@@ -126,6 +126,14 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         }
     }
 
+    pub fn load_from_checkpoint(&mut self, path: &str) {
+        <Self as NetworkTrainer>::load_from_checkpoint(self, path);
+    }
+
+    pub fn save_to_checkpoint(&self, path: &str) {
+        <Self as NetworkTrainer>::save_to_checkpoint(self, path);
+    }
+
     pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
         &mut self,
         schedule: &TrainingSchedule<LR, WDL>,
