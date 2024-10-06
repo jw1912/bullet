@@ -1,10 +1,10 @@
 # 1. NNUE Basics
 
-## How does the Network work?
+## Simple Feed-Forward Network
 
 ### Input
 
-The input of a basic neural network is a vector of `768 = 2 x 6 x 64` zeros or ones, where a one at a certain index
+The input of a basic neural network for chess is a vector of `768 = 2 x 6 x 64` zeros or ones, where a one at a certain index
 represents the presence of a particular piece on a particular square, and a zero represents an absence of that piece.
 
 The standard way to do this is to set `white_pawn = 0, white_knight = 1, ..., black_pawn = 6, ..., black_king = 11` and
@@ -41,7 +41,7 @@ $$
 y(\mathbf{x}) = O \rho( H \mathbf{x} + \mathbf{b} ) + c
 $$
 
-## A Perspective Network
+## Perspective Networks
 
 A perspective network architecture `768 -> Nx2 -> 1` is very similar, except there are two sets of inputs,
 $\mathbf{x}$ and $\mathbf{\hat{x}}$.
@@ -60,7 +60,57 @@ $$
 In this case you can split $O$ into $O_1$ and $O_2$ for equivalently
 
 $$
-y = O_1 \rho(\mathbf{a})+ O_2 \rho(\mathbf{\hat{a}}) + c
+y = O_1 \rho(\mathbf{a}) + O_2 \rho(\mathbf{\hat{a}}) + c
 $$
 
 which is generally the form you will use in inference.
+
+## Beginner Traps
+
+### Poor Beginner Resources
+
+#### Almost any article/blogpost/book on NNUE that isn't backed by the author's strong NNUE engine
+
+- Sure, they may explain the core NNUE concept well
+- Everything else will usually be bad advice, backed by little/no relevant evidence
+
+#### Stockfish network architectures
+
+- Specifically referring to the **architecture**, not actual SF networks (which are obviously very good)
+- SF architectures have been parodied by many an engine
+- Many aspects of the SF architectures require **significant** effort, amounts of data, and/or training time/complexity to actually gain elo
+- As a result, an engine may (and likely will for a beginner) actually *lose* elo with an SF architecture vs a much simpler one
+
+#### [nnue-pytorch's nnue.md](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md)
+
+- Good resource for general SF NNUE history + some more advanced stuff
+- Follow on from the above
+    - This is a document about Stockfish NNUE
+    - You are not writing Stockfish
+- Contains way more information than necessary for a beginner so it can be generally confusing
+- Treats arguably the most reasonable starting architecture as a [toy example](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#a-simple-input-feature-set)
+- Is generally outdated w.r.t the vast majority of its contents
+
+### Skipped Progression
+
+In general, it is good practise to start simple, and then incrementally increase complexity, whilst verifying that
+each incremental step actually gains ELO.
+
+Of particular relevance to the below beginner traps: at the time of writing, Alexandria 7.0.0 is 6th on CCRL Blitz 1CPU,
+and its net work architecture is `(768->1536)x2->1x8` - that is *no* input buckets and only a single hidden layer.
+
+#### Massive input featureset
+
+- Just start with basic 768 inputs
+- You won't have enough data for things like HalfKA/HalfKP at first (or perhaps ever, custom bucket schemes
+will generally serve better with less data)
+
+#### More than 1 hidden layer
+
+- Usually more beneficial to just increase the size of the first hidden layer (up to at least 1024)
+- Whilst further layers gain at fixed nodes, it is non-trivial to get them to *not* lose lots of elo due to the speed hit
+- Requires manual SIMD and well considered quantisation tech
+
+## Good NNUE Resources
+
+- [NNUE Performance Improvements](https://cosmo.tardis.ac/files/2024-06-01-nnue.html) - Cosmo Bobak (author of Viridithas)

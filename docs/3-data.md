@@ -1,10 +1,10 @@
-## Shuffling, Converting and Interleaving
+# Training Data
 
 Compile `bullet-utils` with `cargo b -r --package bullet-utils`, run with `./target/release/bullet-utils[.exe] help` to see usage instructions.
 
 Bullet generally functions by ingesting **binary** data formats (not text), so if you have a text format, you will need to convert it.
 
-### General Workflow
+## General Workflow
 
 1. Convert data files from your own format to `BulletFormat` compatible data
 2. Shuffle the individual converted files
@@ -44,4 +44,9 @@ You can convert text format, where
 ## Custom Data Types
 
 Any type that implements the `BulletFormat` trait can be used in the trainer.
-For example, `MarlinFormat` is implemented in the `bulletformat` crate, so it can be easily used if preferred. 
+For example, `MarlinFormat` is implemented in the `bulletformat` crate, so it can be easily used if preferred.
+
+## Custom Data Loading
+
+Your required data type `T: BulletFormat` can be loaded from any file format (e.g. text or binpack) by proiding a custom
+dataloader that implements the `DataLoader<T>` trait.

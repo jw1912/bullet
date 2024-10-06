@@ -1,4 +1,6 @@
-## Saved Networks
+# Saved Networks
+
+### Checkpoint Layout
 
 When a checkpoint is saved to a directory `<out_dir>/<checkpoint_name>`, it will contain
 - `raw.bin`, the raw floating point (`f32`) parameters of the network
@@ -9,3 +11,7 @@ If quantisation fails (due to integer overflow), then it will not save the quant
 
 If you are using the `TrainerBuilder`, the format of the two network files is `(layer 1 weights)(layer 1 biases)(layer 2 weights)...` stored
 contiguously, with the weights matrices being stored column-major.
+
+### Loading Checkpoints
+
+You can load a preexisting checkpoint into a `trainer: Trainer` by using `trainer.load_from_checkpoint()`.
