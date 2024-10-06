@@ -86,7 +86,9 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         self.optimiser().write_to_checkpoint(&optimiser_path);
 
         self.save_unquantised(&format!("{path}/raw.bin")).unwrap();
-        self.save_quantised(&format!("{path}/quantised.bin")).unwrap();
+        if let Err(e) = self.save_quantised(&format!("{path}/quantised.bin")) {
+            println!("{e}");
+        }
     }
 }
 
