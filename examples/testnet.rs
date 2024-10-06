@@ -2,7 +2,7 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, NetworkTrainer, TrainerBuilder,
+    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder,
     TrainingSchedule, TrainingSteps,
 };
 
