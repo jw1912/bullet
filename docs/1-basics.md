@@ -69,21 +69,44 @@ which is generally the form you will use in inference.
 
 ### Poor Beginner Resources
 
-#### Stockfish Network Architectures
+#### Almost any article/blogpost/book on NNUE that isn't backed by the author's strong NNUE engine
+
+- Sure, they may explain the core NNUE concept well
+- Everything else will usually be bad advice, backed by little/no relevant evidence
+
+#### Stockfish network architectures
+
+- Specifically referring to the **architecture**, not actual SF networks (which are obviously very good)
 - SF architectures have been parodied by many an engine
 - Many aspects of the SF architectures require **significant** effort, amounts of data, and/or training time/complexity to actually gain elo
 - As a result, an engine may (and likely will for a beginner) actually *lose* elo with an SF architecture vs a much simpler one
 
 #### [nnue-pytorch's nnue.md](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md)
+
+- Good resource for general SF NNUE history + more advanced stuff
 - Follow on from the above
     - This is a document about Stockfish NNUE
     - You are not writing Stockfish
 - Contains way more information than necessary for a beginner so it can be generally confusing
 - Treats arguably the most reasonable starting architecture as a [toy example](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#a-simple-input-feature-set)
 
-#### 
+### Skipped Progression
 
-### Massive Input Featureset, Tiny Dataset
+In general, it is good practise to start simple, and then incrementally increase complexity, whilst verifying that
+each incremental step actually gains ELO.
 
-### More Layers, Too Soon
+Of particular relevance to the below beginner traps: at the time of writing, Alexandria 7.0.0 is 6th on CCRL Blitz 1CPU,
+and its net work architecture is `(768->1536)x2->1x8` - that is *no* input buckets and only a single hidden layer.
+
+#### Massive input featureset
+
+- Just start with basic 768 inputs
+- You won't have enough data for things like HalfKA/HalfKP at first (or perhaps ever, custom bucket schemes
+will generally serve better)
+
+#### More than 1 hidden layer
+
+- Usually more beneficial to just increase the size of the first hidden layer (up to at least 1024)
+- Whilst further layers gain at fixed nodes, it is non-trivial to get them to *not* lose lots of elo due to the speed hit
+- Requires manual SIMD and well considered quantisation tech
 
