@@ -1,10 +1,10 @@
 # 1. NNUE Basics
 
-## How does the Network work?
+## Simple Feed-Forward Network
 
 ### Input
 
-The input of a basic neural network is a vector of `768 = 2 x 6 x 64` zeros or ones, where a one at a certain index
+The input of a basic neural network for chess is a vector of `768 = 2 x 6 x 64` zeros or ones, where a one at a certain index
 represents the presence of a particular piece on a particular square, and a zero represents an absence of that piece.
 
 The standard way to do this is to set `white_pawn = 0, white_knight = 1, ..., black_pawn = 6, ..., black_king = 11` and
@@ -41,7 +41,7 @@ $$
 y(\mathbf{x}) = O \rho( H \mathbf{x} + \mathbf{b} ) + c
 $$
 
-## A Perspective Network
+## Perspective Networks
 
 A perspective network architecture `768 -> Nx2 -> 1` is very similar, except there are two sets of inputs,
 $\mathbf{x}$ and $\mathbf{\hat{x}}$.
@@ -60,7 +60,30 @@ $$
 In this case you can split $O$ into $O_1$ and $O_2$ for equivalently
 
 $$
-y = O_1 \rho(\mathbf{a})+ O_2 \rho(\mathbf{\hat{a}}) + c
+y = O_1 \rho(\mathbf{a}) + O_2 \rho(\mathbf{\hat{a}}) + c
 $$
 
 which is generally the form you will use in inference.
+
+## Beginner Traps
+
+### Poor Beginner Resources
+
+#### Stockfish Network Architectures
+- SF architectures have been parodied by many an engine
+- Many aspects of the SF architectures require **significant** effort, amounts of data, and/or training time/complexity to actually gain elo
+- As a result, an engine may (and likely will for a beginner) actually *lose* elo with an SF architecture vs a much simpler one
+
+#### [nnue-pytorch's nnue.md](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md)
+- Follow on from the above
+    - This is a document about Stockfish NNUE
+    - You are not writing Stockfish
+- Contains way more information than necessary for a beginner so it can be generally confusing
+- Treats arguably the most reasonable starting architecture as a [toy example](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#a-simple-input-feature-set)
+
+#### 
+
+### Massive Input Featureset, Tiny Dataset
+
+### More Layers, Too Soon
+
