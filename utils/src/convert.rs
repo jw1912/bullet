@@ -20,7 +20,7 @@ pub struct ConvertOptions {
     input: PathBuf,
     #[structopt(required = true, short, long)]
     output: PathBuf,
-    #[structopt(short, long, default_value="1")]
+    #[structopt(short, long, default_value = "1")]
     threads: usize,
 }
 
