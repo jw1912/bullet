@@ -83,12 +83,13 @@ which is generally the form you will use in inference.
 
 #### [nnue-pytorch's nnue.md](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md)
 
-- Good resource for general SF NNUE history + more advanced stuff
+- Good resource for general SF NNUE history + some more advanced stuff
 - Follow on from the above
     - This is a document about Stockfish NNUE
     - You are not writing Stockfish
 - Contains way more information than necessary for a beginner so it can be generally confusing
 - Treats arguably the most reasonable starting architecture as a [toy example](https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#a-simple-input-feature-set)
+- Is generally outdated w.r.t the vast majority of its contents
 
 ### Skipped Progression
 
@@ -110,3 +111,6 @@ will generally serve better with less data)
 - Whilst further layers gain at fixed nodes, it is non-trivial to get them to *not* lose lots of elo due to the speed hit
 - Requires manual SIMD and well considered quantisation tech
 
+## Good NNUE Resources
+
+- [NNUE Performance Improvements](https://cosmo.tardis.ac/files/2024-06-01-nnue.html) - Cosmo Bobak (author of Viridithas)
