@@ -97,7 +97,7 @@ In general, it is good practise to start simple, and then incrementally increase
 each incremental step actually gains ELO.
 
 Of particular relevance to the below beginner traps: at the time of writing, Alexandria 7.0.0 is 6th on CCRL Blitz 1CPU,
-and its net work architecture is `(768->1536)x2->1x8` - that is *no* input buckets and only a single hidden layer.
+and its network architecture is `(768->1536)x2->1x8` - that is *no* input buckets and only a single hidden layer.
 
 #### Massive input featureset
 
