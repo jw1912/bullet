@@ -102,7 +102,7 @@ and its net work architecture is `(768->1536)x2->1x8` - that is *no* input bucke
 
 - Just start with basic 768 inputs
 - You won't have enough data for things like HalfKA/HalfKP at first (or perhaps ever, custom bucket schemes
-will generally serve better)
+will generally serve better with less data)
 
 #### More than 1 hidden layer
 
