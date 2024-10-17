@@ -12,6 +12,7 @@ pub struct CuteChessArgs {
     pub opening_book: String,
     pub is_pgn: bool,
     pub num_game_pairs: usize,
+    pub concurrency: usize,
 }
 
 pub struct CuteChessCommand(Command);
@@ -75,6 +76,13 @@ impl CuteChessCommand {
         self
     }
 
+    fn with_concurrency(mut self, concurrency: usize) -> Self {
+        self.0.arg("-concurrency");
+        self.0.arg(concurrency.to_string());
+
+        self
+    }
+
     fn set_stdout<T: Into<Stdio>>(mut self, out: T) -> Self {
         self.0.stdout(out);
 
@@ -94,6 +102,7 @@ pub fn run_games(args: CuteChessArgs) -> Result<(f32, f32), String> {
         .num_game_pairs(args.num_game_pairs)
         .with_opening_book(args.opening_book, args.is_pgn)
         .with_adjudication()
+        .with_concurrency(args.concurrency)
         .set_stdout(Stdio::piped())
         .execute();
 
