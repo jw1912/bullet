@@ -164,6 +164,7 @@ impl<'a, T: EngineType> TestSettings<'a, T> {
             opening_book,
             is_pgn,
             num_game_pairs: self.num_game_pairs,
+            concurrency: self.concurrency,
         };
 
         let stats_path = format!("{out_dir}/stats.txt");
