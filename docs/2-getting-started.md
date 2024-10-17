@@ -47,6 +47,7 @@ For users with AMD GPUs.
 - Install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html)
 - The `HIP_PATH` environment variable must be set to the HIP install location (should contain the `bin`, `lib` and `include` directories)
 - The system `PATH` should contain `%HIP_PATH%\bin` (or equivalent for Linux)
+- On Linux, you will need to specify the `GCN_ARCH_NAME` environment variable, which you should be able to find using `rocminfo`.
 
 #### CPU
 If you need to train on CPU you can use the [legacy branch](https://github.com/jw1912/bullet/tree/legacy).

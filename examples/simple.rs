@@ -31,7 +31,7 @@ fn main() {
 
     let schedule = TrainingSchedule {
         net_id: "simple".to_string(),
-        eval_scale: 400.0,
+        eval_scale: SCALE as f32,
         steps: TrainingSteps {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
