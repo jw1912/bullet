@@ -34,9 +34,24 @@ __global__ void softmaxAcrossColumnsKernel(const size_t rows, const size_t cols,
     }
 }
 
+__global__ void crossEntropyKernel(const size_t size, const float* pred, const float* target, float* out)
+{
+    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= size)
+        return;
+
+    out[i] = (target[i] == 0.0F) ? 0.0F : -target[i] * logf(pred[i]);
+}
 
 extern "C" void softmax_across_columns(const size_t rows, const size_t cols, const float* input, float* output)
 {
     const size_t grid_x = (cols + threadsPerBlock - 1) / threadsPerBlock;
     softmaxAcrossColumnsKernel<<<grid_x, threadsPerBlock>>>(rows, cols, input, output);
+}
+
+extern "C" void crossentropy(const size_t size, const float* pred, const float* target, float* out)
+{
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    crossEntropyKernel<<<numBlocks, threadsPerBlock>>>(size, pred, target, out);
 }

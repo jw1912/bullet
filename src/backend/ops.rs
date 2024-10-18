@@ -245,4 +245,5 @@ extern "C" {
     pub fn selectForward(batchSize: usize, inputSize: usize, outputSize: usize, buckets: *const i32, inp: *const f32, out: *mut f32);
     pub fn selectBackprop(batch_size: usize, input_size: usize, output_size: usize, buckets: *const i32, output_grad: *const f32, input_grad: *mut f32);
     pub fn softmax_across_columns(rows: usize, cols: usize, inp: *const f32, out: *mut f32);
+    pub fn crossentropy(size: usize, pred: *const f32, target: *const f32, out: *mut f32);
 }
