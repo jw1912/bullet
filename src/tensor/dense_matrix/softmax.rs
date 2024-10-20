@@ -60,6 +60,28 @@ impl DenseMatrix {
             );
         }
     }
+
+    pub fn backprop_softmax_crossentropy_loss(
+        softmaxed: &Self,
+        target: &Self,
+        output_grad: &Self,
+        input_grad: &mut Self,
+    ) {
+        assert_eq!(softmaxed.shape, target.shape);
+        assert_eq!(output_grad.shape, Shape::new(1, 1));
+
+        input_grad.reshape_if_needed(softmaxed.shape);
+
+        unsafe {
+            ops::backprop_softmax_cross_entropy(
+                softmaxed.shape.size(),
+                softmaxed.buf.ptr(),
+                target.buf.ptr(),
+                output_grad.buf.ptr(),
+                input_grad.buf.mut_ptr(),
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -136,6 +158,32 @@ mod tests {
         output.write_to_slice(&mut buf);
 
         assert!((buf[0] - 3.865).abs() < 0.001);
+
+        util::panic_if_device_error("Failed to load data from CPU!");
+
+        pred.set_zero();
+        output.load_from_slice(Shape::new(1, 1), &[1.0]);
+
+        DenseMatrix::backprop_softmax_crossentropy_loss(
+            &softmaxed,
+            &target,
+            &output,
+            &mut pred,
+        );
+
+        util::panic_if_device_error("Failed to calculate activation!");
+
+        let mut buf = [0.0; 12];
+        pred.write_to_slice(&mut buf);
+
+        let expected = [-0.8655, 0.3655, 0.1345, 0.3655, 0.0163, -0.6721, 0.3279, 0.3279, 0.1749, 0.1749, -0.5246, 0.1749];
+
+        let mut total = 0.0;
+        for (p, e) in buf.iter().zip(expected.iter()) {
+            total += (p - e).abs();
+        }
+
+        assert!(total < 0.01);
 
         util::panic_if_device_error("Failed to write data to CPU!");
     }
