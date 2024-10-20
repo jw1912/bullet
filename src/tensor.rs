@@ -24,6 +24,7 @@ impl From<Tensor> for Shape {
 pub struct Tensor {
     pub(crate) values: Matrix,
     pub(crate) gradients: Option<DenseMatrix>,
+    internal: Vec<(String, DenseMatrix)>,
 }
 
 impl diffable::Tensor for Tensor {
@@ -35,6 +36,7 @@ impl diffable::Tensor for Tensor {
         Self {
             values: Matrix::Dense(DenseMatrix::zeroed(shape)),
             gradients: if requires_grad { Some(DenseMatrix::zeroed(shape)) } else { None },
+            internal: Vec::new(),
         }
     }
 
