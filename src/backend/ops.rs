@@ -60,17 +60,16 @@ pub unsafe fn sgemm(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
-pub unsafe fn add_matrices(
+pub unsafe fn linear_comb_matrices(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
+    alpha: f32,
     input_a: *const f32,
+    beta: f32,
     input_b: *const f32,
     output: *mut f32,
 ) {
-    let alpha = 1.0;
-    let beta = 1.0;
-
     let m = rows as c_int;
     let n = cols as c_int;
 
@@ -245,4 +244,7 @@ extern "C" {
     pub fn backpropPairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn selectForward(batchSize: usize, inputSize: usize, outputSize: usize, buckets: *const i32, inp: *const f32, out: *mut f32);
     pub fn selectBackprop(batch_size: usize, input_size: usize, output_size: usize, buckets: *const i32, output_grad: *const f32, input_grad: *mut f32);
+    pub fn softmax_across_columns(rows: usize, cols: usize, inp: *const f32, out: *mut f32);
+    pub fn crossentropy(size: usize, pred: *const f32, target: *const f32, out: *mut f32);
+    pub fn backprop_softmax_cross_entropy(size: usize, softmaxed: *const f32, target: *const f32, out_grad: *const f32, input_grad: *mut f32);
 }

@@ -5,6 +5,7 @@ mod concat;
 mod matmul;
 mod pairwise;
 mod power_error;
+mod softmax;
 
 use super::shape::Shape;
 use crate::backend::Buffer;

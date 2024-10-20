@@ -9,11 +9,13 @@ impl DenseMatrix {
         if input_a.shape == input_b.shape {
             output.reshape_if_needed(input_a.shape);
             unsafe {
-                ops::add_matrices(
+                ops::linear_comb_matrices(
                     ctx,
                     output.shape.rows(),
                     output.shape.cols(),
+                    1.0,
                     input_a.buf.ptr(),
+                    1.0,
                     input_b.buf.ptr(),
                     output.buf.mut_ptr(),
                 );

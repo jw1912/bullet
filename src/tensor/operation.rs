@@ -7,6 +7,7 @@ mod linear;
 mod pairwise;
 mod power_error;
 mod select;
+mod softmax;
 
 pub use activate::Activation;
 
@@ -36,6 +37,8 @@ pub enum Operation {
     PairwiseMul(bool),
     /// Select a subsection of a vector to use
     Select,
+    /// Apply softmax followed by crossentropy loss
+    SoftmaxCrossEntropyLoss,
     /// Warning! Internal use only!
     SparseAffineDual(Activation),
 }
@@ -51,6 +54,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Linear => linear::output_tensor(inputs),
             Operation::PairwiseMul(_) => pairwise::output_tensor(inputs),
             Operation::Select => select::output_tensor(inputs),
+            Operation::SoftmaxCrossEntropyLoss => softmax::output_tensor(inputs),
             Operation::SparseAffineDual(_) => affine_dual::output_tensor(inputs),
         }
     }
@@ -65,6 +69,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::PairwiseMul(pc) => pairwise::forward(inputs, output, pc),
             Operation::Select => select::forward(inputs, output),
+            Operation::SoftmaxCrossEntropyLoss => softmax::forward(ctx, inputs, output),
             Operation::SparseAffineDual(activation) => affine_dual::forward(inputs, output, activation),
         }
     }
@@ -79,6 +84,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::PairwiseMul(pc) => pairwise::backprop(output_grad, inputs, pc),
             Operation::Select => select::backprop(output_grad, inputs),
+            Operation::SoftmaxCrossEntropyLoss => softmax::backprop(output_grad, inputs),
             Operation::SparseAffineDual(activation) => affine_dual::backprop(output_grad, inputs, activation),
         }
     }

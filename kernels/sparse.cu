@@ -19,7 +19,7 @@ __global__ void sparseAffineForwardKernel(
         return;
 
     const size_t inputIdx = inputSize * blockIdx.y;
-    const int32_t* thisInput = inputs + inputSize * blockIdx.y;
+    const int32_t* thisInput = inputs + inputIdx;
     float* thisOutput = outputs + outputSize * blockIdx.y + elem;
 
     float ourElementVal;
@@ -134,8 +134,8 @@ __global__ void sparseAffineDualForwardKernel(
         return;
 
     const size_t inputIdx = inputSize * blockIdx.y;
-    const int32_t* thisStmInput = stm + inputSize * blockIdx.y;
-    const int32_t* thisNtmInput = ntm + inputSize * blockIdx.y;
+    const int32_t* thisStmInput = stm + inputIdx;
+    const int32_t* thisNtmInput = ntm + inputIdx;
     float* thisOutput = outputs + 2 * outputSize * blockIdx.y + elem;
 
     float stmElementVal = biases[elem];

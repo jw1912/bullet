@@ -4,4 +4,5 @@
 #include "pairwise.cu"
 #include "power_error.cu"
 #include "select.cu"
+#include "softmax.cu"
 #include "sparse.cu"
