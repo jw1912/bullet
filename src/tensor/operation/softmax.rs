@@ -25,7 +25,7 @@ pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tens
         inputs[1].values.dense(),
         output.values.dense_mut(),
         &mut smax[0].1,
-        &mut indv[1].1,
+        &mut indv[0].1,
     );
 }
 

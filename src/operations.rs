@@ -58,3 +58,7 @@ pub fn sparse_affine_dual_with_activation(
 pub fn pairwise_mul_post_sparse_affine_dual(builder: &mut GraphBuilder, input: Node) -> Node {
     builder.create_result_of_operation(Operation::PairwiseMul(true), &[input])
 }
+
+pub fn softmax_crossentropy_loss(builder: &mut GraphBuilder, predicted: Node, target: Node) -> Node {
+    builder.create_result_of_operation(Operation::SoftmaxCrossEntropyLoss, &[predicted, target])
+}
