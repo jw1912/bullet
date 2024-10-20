@@ -9,12 +9,7 @@ impl DenseMatrix {
         output.reshape_if_needed(input.shape);
 
         unsafe {
-            ops::softmax_across_columns(
-                input.shape.rows(),
-                input.shape.cols(),
-                input.buf.ptr(),
-                output.buf.mut_ptr(),
-            );
+            ops::softmax_across_columns(input.shape.rows(), input.shape.cols(), input.buf.ptr(), output.buf.mut_ptr());
         }
     }
 
@@ -24,12 +19,7 @@ impl DenseMatrix {
         output.reshape_if_needed(pred.shape);
 
         unsafe {
-            ops::crossentropy(
-                pred.shape.size(),
-                pred.buf.ptr(),
-                target.buf.ptr(),
-                output.buf.mut_ptr(),
-            );
+            ops::crossentropy(pred.shape.size(), pred.buf.ptr(), target.buf.ptr(), output.buf.mut_ptr());
         }
     }
 
@@ -50,14 +40,7 @@ impl DenseMatrix {
         output.reshape_if_needed(Shape::new(1, 1));
 
         unsafe {
-            ops::reduce_add_cols(
-                ctx,
-                1,
-                input.shape.size(),
-                individual_losses.buf.ptr(),
-                output.buf.mut_ptr(),
-                false,
-            );
+            ops::reduce_add_cols(ctx, 1, input.shape.size(), individual_losses.buf.ptr(), output.buf.mut_ptr(), false);
         }
     }
 
@@ -164,19 +147,15 @@ mod tests {
         pred.set_zero();
         output.load_from_slice(Shape::new(1, 1), &[1.0]);
 
-        DenseMatrix::backprop_softmax_crossentropy_loss(
-            &softmaxed,
-            &target,
-            &output,
-            &mut pred,
-        );
+        DenseMatrix::backprop_softmax_crossentropy_loss(&softmaxed, &target, &output, &mut pred);
 
         util::panic_if_device_error("Failed to calculate activation!");
 
         let mut buf = [0.0; 12];
         pred.write_to_slice(&mut buf);
 
-        let expected = [-0.8655, 0.3655, 0.1345, 0.3655, 0.0163, -0.6721, 0.3279, 0.3279, 0.1749, 0.1749, -0.5246, 0.1749];
+        let expected =
+            [-0.8655, 0.3655, 0.1345, 0.3655, 0.0163, -0.6721, 0.3279, 0.3279, 0.1749, 0.1749, -0.5246, 0.1749];
 
         let mut total = 0.0;
         for (p, e) in buf.iter().zip(expected.iter()) {
