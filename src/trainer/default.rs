@@ -134,12 +134,12 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         <Self as NetworkTrainer>::save_to_checkpoint(self, path);
     }
 
-    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
-        &mut self,
+    fn preamble<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
+        &self,
         schedule: &TrainingSchedule<LR, WDL>,
         settings: &LocalSettings,
         data_loader: &D,
-    ) {
+    ) -> (DefaultDataLoader<Inp, Out, D>, Option<DirectLoader<Inp, Out>>) {
         logger::clear_colours();
         println!("{}", logger::ansi("Beginning Training", "34;1"));
         schedule.display();
@@ -156,6 +156,17 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         });
 
         display_total_positions(data_loader, schedule.steps);
+
+        (preparer, test_preparer)
+    }
+
+    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
+        &mut self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+    ) {
+        let (preparer, test_preparer) = self.preamble(schedule, settings, data_loader);
 
         self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
     }
@@ -167,26 +178,11 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         data_loader: &D,
         testing: &TestSettings<T>,
     ) {
-        logger::clear_colours();
-        println!("{}", logger::ansi("Beginning Training", "34;1"));
-        schedule.display();
-        settings.display();
-        let preparer =
-            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
-        let test_preparer = settings.test_set.map(|test| {
-            DefaultDataLoader::new(
-                self.input_getter,
-                self.output_getter,
-                schedule.eval_scale,
-                DirectSequentialDataLoader::new(&[test.path]),
-            )
-        });
+        let (preparer, test_preparer) = self.preamble(schedule, settings, data_loader);
 
         testing.setup(schedule);
 
         let mut handles = Vec::new();
-
-        display_total_positions(data_loader, schedule.steps);
 
         self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
             if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
@@ -291,3 +287,5 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
         println!("Total Epochs           : {}", logger::ansi(format!("{iters:.2}"), 31));
     }
 }
+
+type DirectLoader<Inp, Out> = DefaultDataLoader<Inp, Out, DirectSequentialDataLoader>;
