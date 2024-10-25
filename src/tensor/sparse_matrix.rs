@@ -42,7 +42,9 @@ impl SparseMatrix {
         self.max_active = max_active;
     }
 
-    pub fn load_from_slice(&mut self, shape: Shape, max_active: usize, buf: &[i32]) {
+    /// #### Safety
+    /// It is the responsibility of the user to ensure all indices fall within the given shape.
+    pub unsafe fn load_from_slice(&mut self, shape: Shape, max_active: usize, buf: &[i32]) {
         self.reshape_if_needed(shape, max_active);
         self.buf.load_from_slice(buf);
     }
