@@ -81,7 +81,7 @@ impl Tensor {
         self.load_from_slice(&values);
     }
 
-    pub(crate) fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
+    pub fn load_dense_from_slice(&mut self, shape: Shape, values: &[f32]) {
         if let Matrix::Dense(dst) = &mut self.values {
             dst.load_from_slice(shape, values);
         } else {
@@ -91,7 +91,9 @@ impl Tensor {
         }
     }
 
-    pub(crate) fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
+    /// #### Safety
+    /// It is the responsibility of the user to ensure that all indices fall within the given shape.
+    pub unsafe fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
         if let Matrix::Sparse(dst) = &mut self.values {
             dst.load_from_slice(shape, max_active, values);
         } else {
