@@ -28,7 +28,7 @@ pub use trainer::{
     cutechess, logger,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
-    testing, Loss, NetworkTrainer, QuantTarget, Trainer, TrainerBuilder,
+    testing, DataPreparer, Loss, NetworkTrainer, QuantTarget, Trainer, TrainerBuilder,
 };
 
 pub type Graph = diffable::Graph<tensor::Tensor>;
