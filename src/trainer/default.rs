@@ -52,17 +52,19 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let graph = self.optimiser.graph_mut();
 
-        let input = &prepared.stm;
-        graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+        unsafe {
+            let input = &prepared.stm;
+            graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
 
-        if self.perspective {
-            let input = &prepared.nstm;
-            graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
-        }
+            if self.perspective {
+                let input = &prepared.nstm;
+                graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+            }
 
-        if self.output_buckets {
-            let input = &prepared.buckets;
-            graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+            if self.output_buckets {
+                let input = &prepared.buckets;
+                graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+            }
         }
 
         graph.get_input_mut("targets").load_dense_from_slice(prepared.targets.shape, &prepared.targets.value);

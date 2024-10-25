@@ -79,7 +79,9 @@ mod tests {
                 ],
             );
 
-            input2.load_from_slice(shape2, 1, &[0, 1, 2]);
+            unsafe {
+                input2.load_from_slice(shape2, 1, &[0, 1, 2]);
+            }
 
             assert_eq!(input1.shape(), shape1);
             assert_eq!(input2.shape(), shape2);
