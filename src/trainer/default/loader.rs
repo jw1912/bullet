@@ -110,7 +110,10 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 max_active: 1,
                 value: vec![0; batch_size],
             },
-            targets: DenseInput { shape: Shape::new(output_size, batch_size), value: vec![0.0; output_size * batch_size] },
+            targets: DenseInput {
+                shape: Shape::new(output_size, batch_size),
+                value: vec![0.0; output_size * batch_size],
+            },
         };
 
         std::thread::scope(|s| {
@@ -143,7 +146,6 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
 
                             assert!(j <= max_active, "More inputs provided than the specified maximum!");
 
-                            
                             buckets_chunk[i] = i32::from(out.bucket(pos));
 
                             if wdl {

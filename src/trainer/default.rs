@@ -20,7 +20,15 @@ use std::{
 use diffable::Node;
 
 use crate::{
-    inputs::InputType, loader::{DataLoader, DirectSequentialDataLoader}, logger, lr::LrScheduler, optimiser::Optimiser, outputs::{self, OutputBuckets}, trainer::NetworkTrainer, wdl::WdlScheduler, Graph, LocalSettings, TrainingSchedule, TrainingSteps
+    inputs::InputType,
+    loader::{DataLoader, DirectSequentialDataLoader},
+    logger,
+    lr::LrScheduler,
+    optimiser::Optimiser,
+    outputs::{self, OutputBuckets},
+    trainer::NetworkTrainer,
+    wdl::WdlScheduler,
+    Graph, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 #[derive(Clone, Copy)]
@@ -127,11 +135,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             input_getter,
             output_getter,
             output_node,
-            additional_inputs: AdditionalTrainerInputs {
-                nstm,
-                output_buckets,
-                wdl,
-            },
+            additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl },
             saved_format,
         }
     }
@@ -154,8 +158,13 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         println!("{}", logger::ansi("Beginning Training", "34;1"));
         schedule.display();
         settings.display();
-        let preparer =
-            DefaultDataLoader::new(self.input_getter, self.output_getter, self.additional_inputs.wdl, schedule.eval_scale, data_loader.clone());
+        let preparer = DefaultDataLoader::new(
+            self.input_getter,
+            self.output_getter,
+            self.additional_inputs.wdl,
+            schedule.eval_scale,
+            data_loader.clone(),
+        );
         let test_preparer = settings.test_set.map(|test| {
             DefaultDataLoader::new(
                 self.input_getter,
@@ -217,7 +226,15 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
-        let prepared = DefaultDataPreparer::prepare(self.input_getter, self.output_getter, self.additional_inputs.wdl, &[pos], 1, 1.0, 1.0);
+        let prepared = DefaultDataPreparer::prepare(
+            self.input_getter,
+            self.output_getter,
+            self.additional_inputs.wdl,
+            &[pos],
+            1,
+            1.0,
+            1.0,
+        );
 
         self.load_batch(&prepared);
         self.optimiser.graph_mut().forward();
