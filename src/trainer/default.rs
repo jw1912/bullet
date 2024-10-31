@@ -31,13 +31,19 @@ use crate::{
     Graph, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
+#[derive(Clone, Copy)]
+pub struct AdditionalTrainerInputs {
+    nstm: bool,
+    output_buckets: bool,
+    wdl: bool,
+}
+
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     optimiser: Opt,
     input_getter: Inp,
     output_getter: Out,
     output_node: Node,
-    perspective: bool,
-    output_buckets: bool,
+    additional_inputs: AdditionalTrainerInputs,
     saved_format: Vec<(String, QuantTarget)>,
 }
 
@@ -56,12 +62,12 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             let input = &prepared.stm;
             graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
 
-            if self.perspective {
+            if self.additional_inputs.nstm {
                 let input = &prepared.nstm;
                 graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
             }
 
-            if self.output_buckets {
+            if self.additional_inputs.output_buckets {
                 let input = &prepared.buckets;
                 graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
             }
@@ -109,9 +115,16 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         assert!(inputs.contains("stm"), "Graph does not contain stm inputs!");
         assert!(inputs.contains("targets"), "Graph does not contain targets!");
 
-        let perspective = inputs.contains("nstm");
+        let nstm = inputs.contains("nstm");
         let output_buckets = inputs.contains("buckets");
-        let expected = 2 + usize::from(perspective) + usize::from(output_buckets);
+        let expected = 2 + usize::from(nstm) + usize::from(output_buckets);
+
+        let output_shape = graph.get_node(output_node).values.shape();
+
+        assert_eq!(output_shape.cols(), 1, "Output cannot have >1 column!");
+        assert!(output_shape.rows() == 1 || output_shape.rows() == 3, "Only supports 1 or 3 outputs!");
+
+        let wdl = output_shape.rows() == 3;
 
         if inputs.len() != expected {
             println!("WARNING: The network graph contains an unexpected number of inputs!")
@@ -122,8 +135,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             input_getter,
             output_getter,
             output_node,
-            perspective,
-            output_buckets,
+            additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl },
             saved_format,
         }
     }
@@ -146,12 +158,18 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         println!("{}", logger::ansi("Beginning Training", "34;1"));
         schedule.display();
         settings.display();
-        let preparer =
-            DefaultDataLoader::new(self.input_getter, self.output_getter, schedule.eval_scale, data_loader.clone());
+        let preparer = DefaultDataLoader::new(
+            self.input_getter,
+            self.output_getter,
+            self.additional_inputs.wdl,
+            schedule.eval_scale,
+            data_loader.clone(),
+        );
         let test_preparer = settings.test_set.map(|test| {
             DefaultDataLoader::new(
                 self.input_getter,
                 self.output_getter,
+                self.additional_inputs.wdl,
                 schedule.eval_scale,
                 DirectSequentialDataLoader::new(&[test.path]),
             )
@@ -208,7 +226,15 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
-        let prepared = DefaultDataPreparer::prepare(self.input_getter, self.output_getter, &[pos], 1, 1.0, 1.0);
+        let prepared = DefaultDataPreparer::prepare(
+            self.input_getter,
+            self.output_getter,
+            self.additional_inputs.wdl,
+            &[pos],
+            1,
+            1.0,
+            1.0,
+        );
 
         self.load_batch(&prepared);
         self.optimiser.graph_mut().forward();
