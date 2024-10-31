@@ -1,5 +1,7 @@
 # Saved Networks
 
+Primitives (e.g. `f32`, `i16`) are always written to files in **little-endian** layout (as is the standard on pretty much all modern hardware).
+
 ## Checkpoint Layout
 
 When a checkpoint is saved to a directory `<out_dir>/<checkpoint_name>`, it will contain
