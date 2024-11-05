@@ -135,4 +135,50 @@ mod tests {
             util::panic_if_device_error("Failed to write data to CPU!");
         }
     }
+
+    #[test]
+    fn aligned_matches_unaligned() {
+        let input_shape = Shape::new(4, 3);
+        let shape1 = Shape::new(256, 4);
+        let mut inputs1 = SparseMatrix::default();
+        let mut weights1 = DenseMatrix::default();
+
+        println!("wha");
+
+        unsafe {
+            inputs1.load_from_slice(input_shape, 2, &[0, -1, 1, 2, -1, -1]);
+        }
+        weights1.load_from_slice(shape1, &vec![1.0; 256 * 4]);
+
+        let shape2 = Shape::new(255, 4);
+        let mut inputs2 = SparseMatrix::default();
+        let mut weights2 = DenseMatrix::default();
+
+        println!("yeah");
+
+        unsafe {
+            inputs2.load_from_slice(input_shape, 2, &[0, -1, 1, 2, -1, -1]);
+        }
+        weights2.load_from_slice(shape2, &[1.0; 255 * 4]);
+
+        let mut output = DenseMatrix::default();
+
+        println!("loaded");
+
+        util::panic_if_device_error("Failed to initialise matrices!");
+
+        let mut buf2 = vec![0.0; 255 * 3];
+        SparseMatrix::linear(&weights2, &inputs2, &mut output);
+        output.write_to_slice(&mut buf2);
+
+        let mut buf = vec![0.0; 256 * 3];
+        SparseMatrix::linear(&weights1, &inputs1, &mut output);
+        output.write_to_slice(&mut buf);
+
+        for i in 0..3 {
+            for j in 0..255 {
+                assert_eq!(buf[256 * i + j], buf2[255 * i + j]);
+            }
+        }
+    }
 }
