@@ -173,7 +173,7 @@ mod tests {
 
         let mut buf = vec![0.0; 256 * 3];
         SparseMatrix::linear(&weights1, &inputs1, &mut output);
-        output.write_to_slice(&mut buf);        
+        output.write_to_slice(&mut buf);
 
         for i in 0..3 {
             for j in 0..255 {

@@ -162,7 +162,6 @@ extern "C" void sparseAffineDualForward(
     float* outputs,
     const int32_t activation)
 {
-
     switch (activation)
     {
         case 0:
