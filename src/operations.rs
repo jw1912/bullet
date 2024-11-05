@@ -9,6 +9,10 @@ pub fn activate(builder: &mut GraphBuilder, input: Node, activation: Activation)
     builder.create_result_of_operation(Operation::Activate(activation), &[input])
 }
 
+pub fn add(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
+    builder.create_result_of_operation(Operation::Add, &[input1, input2])
+}
+
 pub fn affine(builder: &mut GraphBuilder, weights: Node, input: Node, bias: Node) -> Node {
     builder.create_result_of_operation(Operation::Affine, &[weights, input, bias])
 }
