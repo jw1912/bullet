@@ -3,8 +3,6 @@
 #include <hip/hip_runtime.h>
 #endif
 
-typedef float(*OpType)(float);
-
 template<OpType op>
 __global__ void buffer_operation_kernel(const size_t size, const float* in, float* out)
 {
