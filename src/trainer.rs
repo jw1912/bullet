@@ -199,6 +199,7 @@ pub trait NetworkTrainer {
 
                 superbatch += 1;
                 curr_batch = 0;
+                prev32_loss = 0.0;
                 superbatch_timer = Instant::now();
             }
         }
