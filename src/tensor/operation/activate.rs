@@ -45,6 +45,6 @@ pub fn backprop(activation: Activation, output: &Tensor, inputs: &mut [&mut Tens
         Activation::CReLU => DenseMatrix::crelu_backward(input.dense(), input_grad, output_grad),
         Activation::SCReLU => DenseMatrix::screlu_backward(input.dense(), input_grad, output_grad),
         Activation::SqrReLU => DenseMatrix::sqrrelu_backward(input.dense(), input_grad, output_grad),
-        Activation::Sigmoid => DenseMatrix::sigmoid_backward(output.values.dense(), input_grad, output_grad),
+        Activation::Sigmoid => DenseMatrix::sigmoid_backward(input.dense(), input_grad, output_grad),
     }
 }
