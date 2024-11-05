@@ -2,7 +2,6 @@
 #include <hip/hip_runtime.h>
 #endif
 
-template<bool bias>
 __global__ void sparseAffineForwardKernel(
     const size_t max_active,
     const size_t outputSize,
@@ -20,11 +19,7 @@ __global__ void sparseAffineForwardKernel(
     const int32_t* thisInput = inputs + inputIdx;
     float* thisOutput = outputs + outputSize * blockIdx.y + elem;
 
-    float ourElementVal;
-    if constexpr (bias)
-        ourElementVal = biases[elem];
-    else
-        ourElementVal = 0.0F;
+    float ourElementVal = biases == nullptr ? 0.0F : biases[elem];
 
     for (size_t i = 0; i < max_active; i++) {
         const int32_t inp = thisInput[i];
@@ -39,7 +34,6 @@ __global__ void sparseAffineForwardKernel(
     thisOutput[0] = ourElementVal;
 }
 
-template<bool bias>
 __global__ void sparseAffineForwardAlignedKernel(
     const size_t max_active,
     const size_t output_size,
@@ -67,11 +61,7 @@ __global__ void sparseAffineForwardAlignedKernel(
 
     __syncthreads();
 
-    float4 val;
-    if constexpr (bias)
-        val = ((const float4 *)biases)[elem];
-    else
-        val = make_float4(0.0F, 0.0F, 0.0F, 0.0F);
+    float4 val = biases == nullptr ? make_float4(0.0F, 0.0F, 0.0F, 0.0F) : ((const float4 *)biases)[elem];
 
     for (size_t i = 0; i < max_active; i++) {
         const int32_t inp = shared_input_indices[i];
@@ -110,14 +100,7 @@ extern "C" void sparseAffineForward(
         const size_t chunks = (output4_size + threads - 1) / threads;
         dim3 grid(chunks, batchSize);
 
-        if (biases == nullptr)
-        {
-            sparseAffineForwardAlignedKernel<false><<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
-        }
-        else
-        {
-            sparseAffineForwardAlignedKernel<true><<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
-        }
+        sparseAffineForwardAlignedKernel<<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
     }
     else
     {
@@ -125,13 +108,6 @@ extern "C" void sparseAffineForward(
         const size_t chunks = (outputSize + threads - 1) / threads;
         dim3 grid(chunks, batchSize);
 
-        if (biases == nullptr)
-        {
-            sparseAffineForwardKernel<false><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
-        }
-        else
-        {
-            sparseAffineForwardKernel<true><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
-        }
+        sparseAffineForwardKernel<<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
     }
 }
