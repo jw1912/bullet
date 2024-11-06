@@ -124,7 +124,7 @@ extern "C" void softmax_across_columns_masked(
     softmax_across_columns_masked_kernel<<<grid_x, threadsPerBlock>>>(max_active, rows, cols, mask, input, output);
 }
 
-extern "C" void cross_entropy_masked(
+extern "C" void crossentropy_masked(
     const size_t max_active,
     const size_t rows,
     const size_t cols,
