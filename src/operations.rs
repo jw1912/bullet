@@ -66,3 +66,7 @@ pub fn pairwise_mul_post_sparse_affine_dual(builder: &mut GraphBuilder, input: N
 pub fn softmax_crossentropy_loss(builder: &mut GraphBuilder, predicted: Node, target: Node) -> Node {
     builder.create_result_of_operation(Operation::SoftmaxCrossEntropyLoss, &[predicted, target])
 }
+
+pub fn softmax_crossentropy_loss_masked(builder: &mut GraphBuilder, predicted: Node, target: Node, mask: Node) -> Node {
+    builder.create_result_of_operation(Operation::SoftmaxCrossEntropyLoss, &[predicted, target, mask])
+}

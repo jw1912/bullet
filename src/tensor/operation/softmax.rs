@@ -1,10 +1,10 @@
 use crate::{
-    tensor::{DenseMatrix, Shape, Tensor},
+    tensor::{DenseMatrix, Matrix, Shape, Tensor},
     ExecutionContext,
 };
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
-    if inputs.len() == 2 && inputs[0] == inputs[1] {
+    if (inputs.len() == 2 && inputs[0] == inputs[1]) || (inputs.len() == 3 && inputs[0] == inputs[1] && inputs[1] == inputs[2]) {
         Ok(Shape::new(1, 1))
     } else {
         Err(format!("Invalid number of inputs in power error! Expected 1, got {}", inputs.len()))
@@ -22,8 +22,16 @@ pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tens
 
     let (smax, indv) = output.internal.split_at_mut(1);
 
+    let mask = inputs.get(2).map(|mask| {
+        match &mask.values {
+            Matrix::Sparse(sparse) => sparse,
+            Matrix::Dense(_) => panic!("Don't support dense masks!"),
+        }
+    });
+
     DenseMatrix::softmax_crossentropy_loss(
         ctx,
+        mask,
         inputs[0].values.dense(),
         inputs[1].values.dense(),
         output.values.dense_mut(),

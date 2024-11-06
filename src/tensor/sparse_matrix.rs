@@ -1,6 +1,7 @@
 mod affine;
 mod affine_dual;
 mod select;
+mod softmax;
 
 use super::shape::Shape;
 use crate::backend::Buffer;
