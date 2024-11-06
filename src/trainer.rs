@@ -8,6 +8,8 @@ pub use default::{cutechess, testing, Loss, QuantTarget, Trainer, TrainerBuilder
 pub use preparer::DataPreparer;
 
 use std::{
+    fs::File,
+    io::{self, Write},
     sync::mpsc::{self, Receiver},
     time::Instant,
 };
@@ -221,6 +223,28 @@ pub trait NetworkTrainer {
             }
             h.join().unwrap();
         };
+    }
+
+    fn save_weights_portion(&self, path: &str, ids: &[&str]) -> io::Result<()> {
+        let mut file = File::create(path).unwrap();
+
+        let mut buf = Vec::new();
+
+        for id in ids {
+            let weights = self.optimiser().graph().get_weights(id);
+            let weights = weights.values.dense();
+
+            let mut weight_buf = vec![0.0; weights.shape().size()];
+            let written = weights.write_to_slice(&mut weight_buf);
+            assert_eq!(written, weights.shape().size());
+
+            let quantised = QuantTarget::Float.quantise(&weight_buf)?;
+            buf.extend_from_slice(&quantised);
+        }
+
+        file.write_all(&buf)?;
+
+        Ok(())
     }
 }
 
