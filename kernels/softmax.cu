@@ -2,6 +2,7 @@
 #ifdef __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime.h>
 #endif
+#include "softmax/masked.cu"
 #include "softmax/naive.cu"
 
 __global__ void crossEntropyKernel(const size_t size, const float* pred, const float* target, float* out)
