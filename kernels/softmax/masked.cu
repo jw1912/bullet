@@ -70,9 +70,7 @@ __global__ void cross_entropy_masked_kernel(
     float* this_out = out + max_active * tid;
 
     for (size_t i = 0; i < max_active; i++) {
-        const int32_t idx = this_mask[i];
-
-        if (idx == -1)
+        if (this_mask[i] == -1)
             break;
 
         const float err = (this_target[i] == 0.0F) ? 0.0F : -this_target[i] * logf(this_pred[i]);
