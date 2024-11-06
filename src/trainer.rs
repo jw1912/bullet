@@ -8,7 +8,10 @@ pub use default::{cutechess, testing, Loss, QuantTarget, Trainer, TrainerBuilder
 pub use preparer::DataPreparer;
 
 use std::{
-    fs::File, io::{self, Write}, sync::mpsc::{self, Receiver}, time::Instant
+    fs::File,
+    io::{self, Write},
+    sync::mpsc::{self, Receiver},
+    time::Instant,
 };
 
 use crate::{backend::util, lr::LrScheduler, optimiser::Optimiser, wdl::WdlScheduler, LocalSettings, TrainingSchedule};

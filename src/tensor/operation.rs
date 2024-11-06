@@ -7,8 +7,8 @@ mod linear;
 mod pairwise;
 mod power_error;
 mod select;
-mod softmax_sparse;
 mod softmax;
+mod softmax_sparse;
 
 pub use activate::Activation;
 

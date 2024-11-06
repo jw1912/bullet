@@ -19,7 +19,13 @@ impl SparseMatrix {
         }
     }
 
-    fn crossentropy_masked(mask: &Self, pred: &DenseMatrix, target: &DenseMatrix, output: &mut DenseMatrix, error: &mut DenseMatrix) {
+    fn crossentropy_masked(
+        mask: &Self,
+        pred: &DenseMatrix,
+        target: &DenseMatrix,
+        output: &mut DenseMatrix,
+        error: &mut DenseMatrix,
+    ) {
         assert_eq!(pred.shape, target.shape);
         assert_eq!(mask.shape.cols(), pred.shape.cols());
         assert_eq!(mask.max_active, pred.shape.rows());
