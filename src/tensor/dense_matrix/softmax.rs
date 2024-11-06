@@ -1,4 +1,4 @@
-use crate::{backend::ops, tensor::SparseMatrix, ExecutionContext, Shape};
+use crate::{backend::ops, ExecutionContext, Shape};
 
 use super::DenseMatrix;
 
@@ -25,7 +25,6 @@ impl DenseMatrix {
 
     pub fn softmax_crossentropy_loss(
         ctx: &mut ExecutionContext,
-        mask: Option<&SparseMatrix>,
         input: &Self,
         target: &Self,
         output: &mut Self,
@@ -34,11 +33,7 @@ impl DenseMatrix {
     ) {
         assert_eq!(input.shape, target.shape);
 
-        if let Some(mask) = mask {
-            SparseMatrix::softmax_across_columns_masked(input, mask, softmaxed);
-        } else {
-            Self::softmax_across_columns(input, softmaxed);
-        }
+        Self::softmax_across_columns(input, softmaxed);
 
         Self::crossentropy(softmaxed, target, individual_losses);
 
@@ -131,7 +126,6 @@ mod tests {
 
         DenseMatrix::softmax_crossentropy_loss(
             &mut ctx,
-            None,
             &pred,
             &target,
             &mut output,

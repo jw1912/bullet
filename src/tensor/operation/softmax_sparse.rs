@@ -1,17 +1,14 @@
-use crate::{
-    tensor::{DenseMatrix, Shape, Tensor},
-    ExecutionContext,
-};
+use crate::tensor::{DenseMatrix, Matrix, Shape, SparseMatrix, Tensor};
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
-    if inputs.len() == 2 && inputs[0] == inputs[1] {
+    if inputs.len() == 3 && inputs[0] == inputs[1] && inputs[1].cols() == inputs[2].cols() {
         Ok(Shape::new(1, 1))
     } else {
         Err(format!("Invalid number of inputs in power error! Expected 1, got {}", inputs.len()))
     }
 }
 
-pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
+pub fn forward(inputs: &[&Tensor], output: &mut Tensor) {
     if output.internal.is_empty() {
         output.internal.push((String::from("softmaxed"), DenseMatrix::default()));
         output.internal.push((String::from("individual_losses"), DenseMatrix::default()));
@@ -22,10 +19,15 @@ pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tens
 
     let (smax, indv) = output.internal.split_at_mut(1);
 
-    DenseMatrix::softmax_crossentropy_loss(
-        ctx,
-        inputs[0].values.dense(),
+    let mask = match &inputs[0].values {
+        Matrix::Sparse(sparse) => sparse,
+        Matrix::Dense(_) => panic!("Dense mask not supported!"),
+    };
+
+    SparseMatrix::softmax_crossentropy_loss_masked(
+        mask,
         inputs[1].values.dense(),
+        inputs[2].values.dense(),
         output.values.dense_mut(),
         &mut smax[0].1,
         &mut indv[0].1,
@@ -38,19 +40,26 @@ pub fn backprop(output: &Tensor, inputs: &mut [&mut Tensor]) {
     assert_eq!(&output.internal[0].0, "softmaxed");
     assert_eq!(&output.internal[1].0, "individual_losses");
 
-    if let Some(grad) = &mut input1[0].gradients {
-        DenseMatrix::backprop_softmax_crossentropy_loss(
+    let mask = match &input1[0].values {
+        Matrix::Sparse(sparse) => sparse,
+        Matrix::Dense(_) => panic!("Dense mask not supported!"),
+    };
+
+    if let Some(grad) = &mut input2[0].gradients {
+        SparseMatrix::backprop_softmax_crossentropy_loss_masked(
+            mask,
             &output.internal[0].1,
-            input2[0].values.dense(),
+            input2[1].values.dense(),
             output.gradients.as_ref().unwrap(),
             grad,
         );
     }
 
-    if let Some(grad) = &mut input2[0].gradients {
-        DenseMatrix::backprop_softmax_crossentropy_loss(
+    if let Some(grad) = &mut input2[1].gradients {
+        SparseMatrix::backprop_softmax_crossentropy_loss_masked(
+            mask,
             &output.internal[0].1,
-            input1[0].values.dense(),
+            input2[0].values.dense(),
             output.gradients.as_ref().unwrap(),
             grad,
         );
