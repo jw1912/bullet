@@ -118,7 +118,6 @@ extern "C" void softmax_across_columns_masked(
     float* output)
 {
     const size_t grid_x = (cols + threadsPerBlock - 1) / threadsPerBlock;
-    cudaMemset(output, 0, sizeof(float) * rows * cols);
     softmax_across_columns_masked_kernel<<<grid_x, threadsPerBlock>>>(max_active, rows, cols, mask, input, output);
 }
 
