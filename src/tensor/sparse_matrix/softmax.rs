@@ -17,8 +17,6 @@ impl SparseMatrix {
                 output.buf.mut_ptr(),
             );
         }
-
-        crate::backend::util::panic_if_device_error("Softmax!");
     }
 
     fn crossentropy_masked(mask: &Self, pred: &DenseMatrix, target: &DenseMatrix, output: &mut DenseMatrix, error: &mut DenseMatrix) {
@@ -28,6 +26,7 @@ impl SparseMatrix {
 
         output.reshape_if_needed(pred.shape);
         error.reshape_if_needed(Shape::new(1, 1));
+        error.set_zero();
 
         unsafe {
             ops::crossentropy_masked(
@@ -41,8 +40,6 @@ impl SparseMatrix {
                 error.buf.mut_ptr(),
             );
         }
-
-        crate::backend::util::panic_if_device_error("CR!");
     }
 
     pub fn softmax_crossentropy_loss_masked(
@@ -88,7 +85,5 @@ impl SparseMatrix {
                 input_grad.buf.mut_ptr(),
             );
         }
-
-        crate::backend::util::panic_if_device_error("BP!");
     }
 }
