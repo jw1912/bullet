@@ -4,7 +4,7 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 3 && inputs[0] == inputs[1] && inputs[1].cols() == inputs[2].cols() {
         Ok(Shape::new(1, 1))
     } else {
-        Err(format!("Invalid number of inputs in power error! Expected 1, got {}", inputs.len()))
+        Err(format!("Invalid shape in sparse softmax: {inputs:?}"))
     }
 }
 
