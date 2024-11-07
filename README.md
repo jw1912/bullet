@@ -32,3 +32,8 @@ bullet = { git = "https://github.com/jw1912/bullet" }
 ```
 
 Specific API documentation is covered by Rust's docstrings.
+
+### Help/Feedback
+
+Please open an issue to file any bug reports/feature requests.
+For general questions about bullet - e.g. what your training schedule should look like - you can go to the dedicated channel in the [Engine Programming](https://discord.com/invite/F6W6mMsTGN) discord server.

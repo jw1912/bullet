@@ -6,13 +6,14 @@ use crate::{inputs::InputType, loader::DataLoader, outputs::OutputBuckets, tenso
 pub(crate) struct DefaultDataLoader<I, O, D> {
     input_getter: I,
     output_getter: O,
+    wdl: bool,
     scale: f32,
     loader: D,
 }
 
 impl<I, O, D> DefaultDataLoader<I, O, D> {
-    pub fn new(input_getter: I, output_getter: O, scale: f32, loader: D) -> Self {
-        Self { input_getter, output_getter, scale, loader }
+    pub fn new(input_getter: I, output_getter: O, wdl: bool, scale: f32, loader: D) -> Self {
+        Self { input_getter, output_getter, wdl, scale, loader }
     }
 }
 
@@ -38,7 +39,7 @@ where
     }
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
-        DefaultDataPreparer::prepare(self.input_getter, self.output_getter, data, threads, blend, self.scale)
+        DefaultDataPreparer::prepare(self.input_getter, self.output_getter, self.wdl, data, threads, blend, self.scale)
     }
 }
 
@@ -75,6 +76,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
     pub fn prepare(
         input_getter: I,
         output_getter: O,
+        wdl: bool,
         data: &[I::RequiredDataType],
         threads: usize,
         blend: f32,
@@ -86,6 +88,8 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
         let chunk_size = (batch_size + threads - 1) / threads;
 
         let input_size = input_getter.size();
+
+        let output_size = if wdl { 3 } else { 1 };
 
         let mut prep = Self {
             input_getter,
@@ -106,7 +110,10 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 max_active: 1,
                 value: vec![0; batch_size],
             },
-            targets: DenseInput { shape: Shape::new(1, batch_size), value: vec![0.0; batch_size] },
+            targets: DenseInput {
+                shape: Shape::new(output_size, batch_size),
+                value: vec![0.0; output_size * batch_size],
+            },
         };
 
         std::thread::scope(|s| {
@@ -114,7 +121,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 .zip(prep.stm.value.chunks_mut(max_active * chunk_size))
                 .zip(prep.nstm.value.chunks_mut(max_active * chunk_size))
                 .zip(prep.buckets.value.chunks_mut(chunk_size))
-                .zip(prep.targets.value.chunks_mut(chunk_size))
+                .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
                 .for_each(|((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk)| {
                     let inp = &prep.input_getter;
                     let out = &prep.output_getter;
@@ -139,8 +146,13 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
 
                             assert!(j <= max_active, "More inputs provided than the specified maximum!");
 
-                            results_chunk[i] = pos.blended_result(blend, rscale);
                             buckets_chunk[i] = i32::from(out.bucket(pos));
+
+                            if wdl {
+                                results_chunk[output_size * i + pos.result_idx()] = 1.0;
+                            } else {
+                                results_chunk[i] = pos.blended_result(blend, rscale);
+                            }
                         }
                     });
                 });

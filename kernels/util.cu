@@ -1,6 +1,8 @@
 #ifndef BULLET_CUDA_UTILS
 #define BULLET_CUDA_UTILS
 
+typedef float(*OpType)(float);
+
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
 
 __device__ float Identity(float in) { return in; }

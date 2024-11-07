@@ -5,7 +5,7 @@ use crate::{
     outputs::{self, OutputBuckets},
     rng,
     tensor::Operation,
-    trainer::default::quant::QuantTarget,
+    trainer::default::{quant::QuantTarget, AdditionalTrainerInputs},
     Activation, ExecutionContext, GraphBuilder, Shape,
 };
 
@@ -273,8 +273,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             input_getter: self.input_getter,
             output_getter: self.bucket_getter,
             output_node: out,
-            perspective: self.perspective,
-            output_buckets,
+            additional_inputs: AdditionalTrainerInputs { nstm: self.perspective, output_buckets, wdl: false },
             saved_format,
         };
 
