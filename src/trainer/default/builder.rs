@@ -1,15 +1,17 @@
 use crate::{
-    inputs::InputType,
     operations,
     optimiser::{self, Optimiser, OptimiserType},
-    outputs::{self, OutputBuckets},
     rng,
     tensor::Operation,
     trainer::default::{quant::QuantTarget, AdditionalTrainerInputs},
     Activation, ExecutionContext, GraphBuilder, Shape,
 };
 
-use super::Trainer;
+use super::{
+    inputs::InputType,
+    outputs::{self, OutputBuckets},
+    Trainer,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Loss {

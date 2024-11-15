@@ -1,6 +1,8 @@
 use bulletformat::BulletFormat;
 
-use crate::{inputs::InputType, loader::DataLoader, outputs::OutputBuckets, tensor::Shape, trainer::DataPreparer};
+use super::{inputs::InputType, outputs::OutputBuckets};
+
+use crate::{loader::DataLoader, tensor::Shape, trainer::DataPreparer};
 
 #[derive(Clone)]
 pub(crate) struct DefaultDataLoader<I, O, D> {

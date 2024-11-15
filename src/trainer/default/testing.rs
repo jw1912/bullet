@@ -6,9 +6,12 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::{cutechess, logger, lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
+use crate::trainer::schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 
-use super::cutechess::CuteChessArgs;
+use super::{
+    cutechess::{self, CuteChessArgs},
+    logger,
+};
 
 #[derive(Clone, Copy)]
 pub enum TimeControl {
