@@ -19,11 +19,11 @@ pub use bulletformat as format;
 pub use diffable::Node;
 pub use tensor::{Activation, Shape};
 pub use trainer::{
+    default::{cutechess, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
     logger,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
     DataPreparer, NetworkTrainer,
-    default::{cutechess, testing, inputs, outputs, Loss, QuantTarget, Trainer, TrainerBuilder},
 };
 
 pub type Graph = diffable::Graph<tensor::Tensor>;

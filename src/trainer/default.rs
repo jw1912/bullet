@@ -32,7 +32,7 @@ use diffable::Node;
 use super::{
     logger,
     schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSteps},
-    LocalSettings, TrainingSchedule, 
+    LocalSettings, TrainingSchedule,
 };
 
 use crate::{

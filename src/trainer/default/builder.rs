@@ -7,7 +7,11 @@ use crate::{
     Activation, ExecutionContext, GraphBuilder, Shape,
 };
 
-use super::{Trainer, inputs::InputType, outputs::{self, OutputBuckets}};
+use super::{
+    inputs::InputType,
+    outputs::{self, OutputBuckets},
+    Trainer,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Loss {

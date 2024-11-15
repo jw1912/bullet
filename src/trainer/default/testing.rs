@@ -8,7 +8,10 @@ use std::{
 
 use crate::trainer::schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 
-use super::{cutechess::{self, CuteChessArgs}, logger};
+use super::{
+    cutechess::{self, CuteChessArgs},
+    logger,
+};
 
 #[derive(Clone, Copy)]
 pub enum TimeControl {
