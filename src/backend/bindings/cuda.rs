@@ -99,6 +99,17 @@ pub enum cudnnStatus_t {
     CUDNN_STATUS_VERSION_MISMATCH             = 14,
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cudnnContext;
+pub type cudnnHandle_t = *mut cudnnContext;
+
+#[rustfmt::skip]
+extern "C" {
+    pub fn cudnnCreate(handle: *mut cudnnHandle_t) -> cudnnStatus_t;
+    pub fn cudnnDestroy(handle: cudnnHandle_t) -> cudnnStatus_t;
+}
+
 #[repr(i32)]
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
