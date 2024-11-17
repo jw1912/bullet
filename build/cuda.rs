@@ -16,6 +16,7 @@ fn link_cuda_libs() {
     link_cuda(&cuda_path);
     println!("cargo:rerun-if-changed={}", include_path_str);
 
+    #[cfg(feature = "cudnn")]
     cudnn::link_cudnn_libs();
 }
 
@@ -49,7 +50,9 @@ mod cudnn {
     use crate::util;
 
     pub fn link_cudnn_libs() {
-        println!("cargo:rustc-link=dylib=cudnn");
+        println!("cargo:rustc-link-lib=dylib=cudart");
+        println!("cargo:rustc-link-lib=dylib=cudnn");
+        println!("cargo:rustc-link-lib=dylib=cublas");
         let cudnn_path = util::get_var_path("CUDNN_PATH");
         let include_path = cudnn_path.join("include");
         let include_path_str = include_path.to_str().unwrap();

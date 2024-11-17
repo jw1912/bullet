@@ -10,6 +10,7 @@ readme = "README.md"
 build = "build/main.rs"
 
 [features]
+cudnn = []
 hip = []
 gh-actions = []
 
