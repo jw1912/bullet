@@ -161,16 +161,18 @@ pub unsafe fn copy_strided(
     input: *const f32,
     output_stride: usize,
     output: *mut f32,
+    increment: bool,
 ) {
     let alpha = 1.0;
-    let beta = 0.0;
+    let beta = f32::from(increment);
 
     let m = rows as c_int;
     let n = cols as c_int;
 
     let lda = input_stride as c_int;
-    let ldb = rows as c_int;
     let ldc = output_stride as c_int;
+
+    let (ldb, bptr) = if increment { (ldc, output) } else { (rows as c_int, std::ptr::null_mut()) };
 
     let status = unsafe {
         bindings::cublasSgeam(
@@ -183,7 +185,7 @@ pub unsafe fn copy_strided(
             input,
             lda,
             &beta,
-            std::ptr::null(),
+            bptr,
             ldb,
             output,
             ldc,

@@ -18,7 +18,7 @@ pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tens
 pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
     let (input1, input2) = inputs.split_at_mut(1);
 
-    DenseMatrix::de_concat(
+    DenseMatrix::backprop_concat(
         ctx,
         input1[0].values.dense(),
         input1[0].gradients.as_mut(),
