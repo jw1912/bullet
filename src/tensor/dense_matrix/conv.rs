@@ -60,8 +60,8 @@ mod tests {
         let mut output = DenseMatrix::default();
 
         let input_shape = Shape::new(4, 4);
-        let input_channels = 2;
-        let output_channels = 1;
+        let input_channels = 1;
+        let output_channels = 2;
         let filter_shape = Shape::new(3, 3);
 
         let desc = ConvolutionDescription::new(
@@ -82,14 +82,14 @@ mod tests {
                 1.0, 1.0, 1.0,
                 1.0, 1.0, 1.0,
 
-                1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0,
+                -1.0, -1.0, -1.0,
+                -1.0, -1.0, -1.0,
+                -1.0, -1.0, -1.0,
             ],
         );
 
         input.load_from_slice(
-            Shape::new(32, 1),
+            Shape::new(16, 2),
             &[
                 1.0, 2.0, 3.0, 4.0,
                 5.0, 6.0, 7.0, 8.0,
@@ -113,14 +113,36 @@ mod tests {
             &mut output,
         );
 
+        assert_eq!(output.shape(), Shape::new(32, 2));
+
         panic_if_device_error("Failed conv fwd!");
 
-        let mut buf = [0.0; 16];
+        let mut buf = [0.0; 64];
         output.write_to_slice(&mut buf);
 
         assert_eq!(
             buf,
-            [0.0; 16],
+            [
+                14.0, 24.0, 30.0, 22.0,
+                17.0, 30.0, 39.0, 29.0,
+                25.0, 42.0, 51.0, 37.0,
+                14.0, 24.0, 30.0, 22.0,
+
+                -14.0, -24.0, -30.0, -22.0,
+                -17.0, -30.0, -39.0, -29.0,
+                -25.0, -42.0, -51.0, -37.0,
+                -14.0, -24.0, -30.0, -22.0,
+
+                -14.0, -24.0, -30.0, -22.0,
+                -17.0, -30.0, -39.0, -29.0,
+                -25.0, -42.0, -51.0, -37.0,
+                -14.0, -24.0, -30.0, -22.0,
+
+                14.0, 24.0, 30.0, 22.0,
+                17.0, 30.0, 39.0, 29.0,
+                25.0, 42.0, 51.0, 37.0,
+                14.0, 24.0, 30.0, 22.0,
+            ],
         );
     }
 }
