@@ -5,7 +5,13 @@ pub mod util;
 
 use std::ffi::c_int;
 
-use bindings::{cublasHandle_t, cudnnConvolutionDescriptor_t, cudnnConvolutionFwdAlgo_t, cudnnConvolutionMode_t, cudnnCreateConvolutionDescriptor, cudnnCreateFilterDescriptor, cudnnCreateTensorDescriptor, cudnnDataType_t, cudnnDestroyConvolutionDescriptor, cudnnDestroyFilterDescriptor, cudnnDestroyTensorDescriptor, cudnnFilterDescriptor_t, cudnnHandle_t, cudnnSetConvolution2dDescriptor, cudnnSetFilter4dDescriptor, cudnnSetTensor4dDescriptor, cudnnStatus_t, cudnnTensorDescriptor_t, cudnnTensorFormat_t};
+use bindings::{
+    cublasHandle_t, cudnnConvolutionDescriptor_t, cudnnConvolutionFwdAlgo_t, cudnnConvolutionMode_t,
+    cudnnCreateConvolutionDescriptor, cudnnCreateFilterDescriptor, cudnnCreateTensorDescriptor, cudnnDataType_t,
+    cudnnDestroyConvolutionDescriptor, cudnnDestroyFilterDescriptor, cudnnDestroyTensorDescriptor,
+    cudnnFilterDescriptor_t, cudnnHandle_t, cudnnSetConvolution2dDescriptor, cudnnSetFilter4dDescriptor,
+    cudnnSetTensor4dDescriptor, cudnnStatus_t, cudnnTensorDescriptor_t, cudnnTensorFormat_t,
+};
 pub use buffer::Buffer;
 
 use crate::Shape;

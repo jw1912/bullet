@@ -1,4 +1,7 @@
-use crate::{backend::{bindings, catch_cudnn, ConvolutionDescription, ExecutionContext}, Shape};
+use crate::{
+    backend::{bindings, catch_cudnn, ConvolutionDescription, ExecutionContext},
+    Shape,
+};
 
 use super::DenseMatrix;
 
@@ -21,23 +24,21 @@ impl DenseMatrix {
         let beta = 0f32;
 
         unsafe {
-            catch_cudnn(
-                bindings::cudnnConvolutionForward(
-                    ctx.cudnn,
-                    ((&alpha) as *const f32).cast(),
-                    desc.input,
-                    input.buf.ptr().cast(),
-                    desc.filter,
-                    filters.buf.ptr().cast(),
-                    desc.conv,
-                    desc.algo,
-                    std::ptr::null_mut(),
-                    0,
-                    ((&beta) as *const f32).cast(),
-                    desc.output,
-                    output.buf.mut_ptr().cast(),
-                )
-            );
+            catch_cudnn(bindings::cudnnConvolutionForward(
+                ctx.cudnn,
+                ((&alpha) as *const f32).cast(),
+                desc.input,
+                input.buf.ptr().cast(),
+                desc.filter,
+                filters.buf.ptr().cast(),
+                desc.conv,
+                desc.algo,
+                std::ptr::null_mut(),
+                0,
+                ((&beta) as *const f32).cast(),
+                desc.output,
+                output.buf.mut_ptr().cast(),
+            ));
         }
     }
 }
