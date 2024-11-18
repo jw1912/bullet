@@ -68,6 +68,6 @@ mod cudnn {
 
     #[cfg(target_family = "unix")]
     fn link_cudnn(cudnn_path: &Path) {
-        println!("cargo:rustc-link-search=native={}", cuda_path.join("lib64").to_str().unwrap());
+        println!("cargo:rustc-link-search=native={}", cudnn_path.join("lib64").to_str().unwrap());
     }
 }
