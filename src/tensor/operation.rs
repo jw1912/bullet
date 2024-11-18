@@ -7,6 +7,7 @@ mod linear;
 mod pairwise;
 mod power_error;
 mod select;
+mod slice;
 mod softmax;
 mod softmax_sparse;
 
@@ -38,6 +39,8 @@ pub enum Operation {
     PairwiseMul(bool),
     /// Select a subsection of a vector to use
     Select,
+    /// Take a contiguous slice of rows of a matrix
+    SliceRows(usize, usize),
     /// Apply softmax followed by crossentropy loss
     SoftmaxCrossEntropyLoss,
     /// Apply sparse masked softmax followed by crossentropy loss
@@ -48,7 +51,7 @@ pub enum Operation {
 
 impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
-        match self {
+        match *self {
             Operation::AbsPowerError(_) => power_error::output_tensor(inputs),
             Operation::Activate(_) => activate::output_tensor(inputs),
             Operation::Add => add::output_tensor(inputs),
@@ -57,6 +60,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Linear => linear::output_tensor(inputs),
             Operation::PairwiseMul(_) => pairwise::output_tensor(inputs),
             Operation::Select => select::output_tensor(inputs),
+            Operation::SliceRows(start, end) => slice::output_tensor(inputs, start, end),
             Operation::SoftmaxCrossEntropyLoss => softmax::output_tensor(inputs),
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::output_tensor(inputs),
             Operation::SparseAffineDual(_) => affine_dual::output_tensor(inputs),
@@ -73,6 +77,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::PairwiseMul(pc) => pairwise::forward(inputs, output, pc),
             Operation::Select => select::forward(inputs, output),
+            Operation::SliceRows(start, end) => slice::forward(ctx, inputs, start, end, output),
             Operation::SoftmaxCrossEntropyLoss => softmax::forward(ctx, inputs, output),
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::forward(inputs, output),
             Operation::SparseAffineDual(activation) => affine_dual::forward(inputs, output, activation),
@@ -89,6 +94,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::PairwiseMul(pc) => pairwise::backprop(output_grad, inputs, pc),
             Operation::Select => select::backprop(output_grad, inputs),
+            Operation::SliceRows(start, end) => slice::backprop(ctx, output_grad, start, end, inputs),
             Operation::SoftmaxCrossEntropyLoss => softmax::backprop(output_grad, inputs),
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::backprop(output_grad, inputs),
             Operation::SparseAffineDual(activation) => affine_dual::backprop(output_grad, inputs, activation),
