@@ -1,5 +1,5 @@
 use crate::{
-    backend::{bindings, catch_cudnn, ConvolutionDescription, ExecutionContext},
+    backend::{bindings, catch_cudnn, ConvolutionCudnnDescription, ConvolutionDescription, ExecutionContext},
     Shape,
 };
 
@@ -16,7 +16,8 @@ impl DenseMatrix {
         assert_eq!(filters.shape.rows(), desc.filter_shape.size());
         assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
         assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
-        desc.set_descriptors(input.shape.cols());
+        
+        let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
 
         output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));
 
@@ -27,16 +28,16 @@ impl DenseMatrix {
             catch_cudnn(bindings::cudnnConvolutionForward(
                 ctx.cudnn,
                 ((&alpha) as *const f32).cast(),
-                desc.input,
+                cudnn_desc.input,
                 input.buf.ptr().cast(),
-                desc.filter,
+                cudnn_desc.filter,
                 filters.buf.ptr().cast(),
-                desc.conv,
-                desc.algo,
+                cudnn_desc.conv,
+                cudnn_desc.algo,
                 std::ptr::null_mut(),
                 0,
                 ((&beta) as *const f32).cast(),
-                desc.output,
+                cudnn_desc.output,
                 output.buf.mut_ptr().cast(),
             ));
         }

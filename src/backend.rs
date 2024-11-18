@@ -58,6 +58,13 @@ impl Default for ExecutionContext {
     }
 }
 
+pub fn catch_cudnn(status: cudnnStatus_t) {
+    if status != cudnnStatus_t::CUDNN_STATUS_SUCCESS {
+        panic!("cuDNN error: {status:?}");
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct ConvolutionDescription {
     pub input_shape: Shape,
     pub input_channels: usize,
@@ -66,28 +73,6 @@ pub struct ConvolutionDescription {
     pub filter_shape: Shape,
     pub padding_shape: Shape,
     pub stride_shape: Shape,
-    pub input: cudnnTensorDescriptor_t,
-    pub filter: cudnnFilterDescriptor_t,
-    pub conv: cudnnConvolutionDescriptor_t,
-    pub algo: cudnnConvolutionFwdAlgo_t,
-    pub output: cudnnTensorDescriptor_t,
-}
-
-pub fn catch_cudnn(status: cudnnStatus_t) {
-    if status != cudnnStatus_t::CUDNN_STATUS_SUCCESS {
-        panic!("cuDNN error: {status:?}");
-    }
-}
-
-impl Drop for ConvolutionDescription {
-    fn drop(&mut self) {
-        unsafe {
-            catch_cudnn(cudnnDestroyTensorDescriptor(self.input));
-            catch_cudnn(cudnnDestroyFilterDescriptor(self.filter));
-            catch_cudnn(cudnnDestroyConvolutionDescriptor(self.conv));
-            catch_cudnn(cudnnDestroyTensorDescriptor(self.output));
-        }
-    }
 }
 
 impl ConvolutionDescription {
@@ -102,7 +87,7 @@ impl ConvolutionDescription {
         let hout = (input_shape.rows() + 2 * padding_shape.rows() - filter_shape.rows()) / stride_shape.rows() + 1;
         let wout = (input_shape.cols() + 2 * padding_shape.cols() - filter_shape.cols()) / stride_shape.cols() + 1;
 
-        let mut desc = Self {
+        Self {
             input_shape,
             input_channels,
             output_shape: Shape::new(hout, wout),
@@ -110,6 +95,32 @@ impl ConvolutionDescription {
             filter_shape,
             padding_shape,
             stride_shape,
+        }
+    }
+}
+
+pub struct ConvolutionCudnnDescription {
+    pub input: cudnnTensorDescriptor_t,
+    pub filter: cudnnFilterDescriptor_t,
+    pub conv: cudnnConvolutionDescriptor_t,
+    pub algo: cudnnConvolutionFwdAlgo_t,
+    pub output: cudnnTensorDescriptor_t,
+}
+
+impl Drop for ConvolutionCudnnDescription {
+    fn drop(&mut self) {
+        unsafe {
+            catch_cudnn(cudnnDestroyTensorDescriptor(self.input));
+            catch_cudnn(cudnnDestroyFilterDescriptor(self.filter));
+            catch_cudnn(cudnnDestroyConvolutionDescriptor(self.conv));
+            catch_cudnn(cudnnDestroyTensorDescriptor(self.output));
+        }
+    }
+}
+
+impl ConvolutionCudnnDescription {
+    pub fn new(desc: &ConvolutionDescription, batch_size: usize) -> Self {
+        let mut res = Self {
             input: std::ptr::null_mut(),
             filter: std::ptr::null_mut(),
             conv: std::ptr::null_mut(),
@@ -118,45 +129,37 @@ impl ConvolutionDescription {
         };
 
         unsafe {
-            catch_cudnn(cudnnCreateTensorDescriptor((&mut desc.input) as *mut cudnnTensorDescriptor_t));
-            catch_cudnn(cudnnCreateFilterDescriptor((&mut desc.filter) as *mut cudnnFilterDescriptor_t));
-            catch_cudnn(cudnnCreateConvolutionDescriptor((&mut desc.conv) as *mut cudnnConvolutionDescriptor_t));
-            catch_cudnn(cudnnCreateTensorDescriptor((&mut desc.output) as *mut cudnnTensorDescriptor_t));
+            catch_cudnn(cudnnCreateTensorDescriptor((&mut res.input) as *mut cudnnTensorDescriptor_t));
+            catch_cudnn(cudnnCreateFilterDescriptor((&mut res.filter) as *mut cudnnFilterDescriptor_t));
+            catch_cudnn(cudnnCreateConvolutionDescriptor((&mut res.conv) as *mut cudnnConvolutionDescriptor_t));
+            catch_cudnn(cudnnCreateTensorDescriptor((&mut res.output) as *mut cudnnTensorDescriptor_t));
 
-            desc.set_descriptors(1);
-        }
-
-        desc
-    }
-
-    pub fn set_descriptors(&self, batch_size: usize) {
-        unsafe {
             catch_cudnn(cudnnSetTensor4dDescriptor(
-                self.input,
+                res.input,
                 cudnnTensorFormat_t::CUDNN_TENSOR_NCHW,
                 cudnnDataType_t::CUDNN_DATA_FLOAT,
                 batch_size as c_int,
-                self.input_channels as c_int,
-                self.input_shape.rows() as c_int,
-                self.input_shape.cols() as c_int,
+                desc.input_channels as c_int,
+                desc.input_shape.rows() as c_int,
+                desc.input_shape.cols() as c_int,
             ));
 
             catch_cudnn(cudnnSetFilter4dDescriptor(
-                self.filter,
+                res.filter,
                 cudnnDataType_t::CUDNN_DATA_FLOAT,
                 cudnnTensorFormat_t::CUDNN_TENSOR_NCHW,
-                self.output_channels as c_int,
-                self.input_channels as c_int,
-                self.filter_shape.rows() as c_int,
-                self.filter_shape.cols() as c_int,
+                desc.output_channels as c_int,
+                desc.input_channels as c_int,
+                desc.filter_shape.rows() as c_int,
+                desc.filter_shape.cols() as c_int,
             ));
 
             catch_cudnn(cudnnSetConvolution2dDescriptor(
-                self.conv,
-                self.padding_shape.rows() as c_int,
-                self.padding_shape.cols() as c_int,
-                self.stride_shape.rows() as c_int,
-                self.stride_shape.cols() as c_int,
+                res.conv,
+                desc.padding_shape.rows() as c_int,
+                desc.padding_shape.cols() as c_int,
+                desc.stride_shape.rows() as c_int,
+                desc.stride_shape.cols() as c_int,
                 1,
                 1,
                 cudnnConvolutionMode_t::CUDNN_CROSS_CORRELATION,
@@ -164,14 +167,16 @@ impl ConvolutionDescription {
             ));
 
             catch_cudnn(cudnnSetTensor4dDescriptor(
-                self.output,
+                res.output,
                 cudnnTensorFormat_t::CUDNN_TENSOR_NCHW,
                 cudnnDataType_t::CUDNN_DATA_FLOAT,
                 batch_size as c_int,
-                self.output_channels as c_int,
-                self.output_shape.rows() as c_int,
-                self.output_shape.cols() as c_int,
+                desc.output_channels as c_int,
+                desc.output_shape.rows() as c_int,
+                desc.output_shape.cols() as c_int,
             ));
         }
+
+        res
     }
 }
