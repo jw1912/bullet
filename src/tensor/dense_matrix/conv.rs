@@ -16,7 +16,7 @@ impl DenseMatrix {
         assert_eq!(filters.shape.rows(), desc.filter_shape.size());
         assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
         assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
-        
+
         let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
 
         output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));

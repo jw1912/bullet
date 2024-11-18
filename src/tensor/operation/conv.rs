@@ -8,7 +8,7 @@ pub fn output_tensor(inputs: &[Shape], desc: &ConvolutionDescription) -> Result<
         if inputs[1].cols() == 1 {
             if inputs[1].size() == desc.input_shape.size() * desc.input_channels {
                 if inputs[0] == Shape::new(desc.filter_shape.size(), desc.input_channels * desc.output_channels) {
-                    Ok(inputs[0])
+                    Ok(Shape::new(desc.output_shape.size() * desc.output_channels, 1))
                 } else {
                     Err(format!(
                         "Invalid filter size! Cannot accomodate {} {}x{} filters.",
