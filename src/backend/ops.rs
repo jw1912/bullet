@@ -172,11 +172,7 @@ pub unsafe fn copy_strided(
     let lda = input_stride as c_int;
     let ldc = output_stride as c_int;
 
-    let (ldb, bptr) = if increment {
-        (ldc, output)
-    } else {
-        (rows as c_int, std::ptr::null_mut())
-    };
+    let (ldb, bptr) = if increment { (ldc, output) } else { (rows as c_int, std::ptr::null_mut()) };
 
     let status = unsafe {
         bindings::cublasSgeam(

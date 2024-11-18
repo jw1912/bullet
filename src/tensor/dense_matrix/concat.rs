@@ -137,7 +137,14 @@ mod tests {
         {
             input1_grad.load_from_slice(shape1, &[1.0; 9]);
 
-            DenseMatrix::backprop_concat(&mut ctx, &input1, Some(&mut input1_grad), &input2, Some(&mut input2_grad), &output);
+            DenseMatrix::backprop_concat(
+                &mut ctx,
+                &input1,
+                Some(&mut input1_grad),
+                &input2,
+                Some(&mut input2_grad),
+                &output,
+            );
 
             util::panic_if_device_error("Failed to de-concat!");
 
