@@ -2,7 +2,7 @@
 name = "bullet_lib"
 version = "1.0.0"
 edition = "2021"
-description = "Neural Network Trainer for 2-Player Games."
+description = "Neural Network Trainer"
 authors = ["Jamie Whiting"]
 license = "MIT"
 repository = "https://github.com/jw1912/bullet"

@@ -38,10 +38,7 @@ fn main() {
         save_rate: 1,
     };
 
-    let optimiser_params =
-        optimiser::AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 };
-
-    trainer.set_optimiser_params(optimiser_params);
+    trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 

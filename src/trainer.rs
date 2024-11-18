@@ -1,11 +1,13 @@
-mod default;
+pub mod default;
 pub mod logger;
 mod preparer;
 pub mod schedule;
 pub mod settings;
 
-pub use default::{cutechess, testing, Loss, QuantTarget, Trainer, TrainerBuilder};
+use default::QuantTarget;
 pub use preparer::DataPreparer;
+use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
+use settings::LocalSettings;
 
 use std::{
     fs::File,
@@ -14,7 +16,7 @@ use std::{
     time::Instant,
 };
 
-use crate::{backend::util, lr::LrScheduler, optimiser::Optimiser, wdl::WdlScheduler, LocalSettings, TrainingSchedule};
+use crate::{backend::util, optimiser::Optimiser};
 
 pub trait NetworkTrainer {
     type PreparedData;

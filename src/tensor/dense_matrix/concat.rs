@@ -22,6 +22,7 @@ impl DenseMatrix {
                 input_a.buf.ptr(),
                 output_shape.rows(),
                 output.buf.mut_ptr(),
+                false,
             );
 
             ops::copy_strided(
@@ -32,11 +33,12 @@ impl DenseMatrix {
                 input_b.buf.ptr(),
                 output_shape.rows(),
                 output.buf.mut_ptr().add(input_a.shape.rows()),
+                false,
             );
         }
     }
 
-    pub fn de_concat(
+    pub fn backprop_concat(
         ctx: &mut ExecutionContext,
         input_a: &Self,
         input_a_grad: Option<&mut Self>,
@@ -60,6 +62,7 @@ impl DenseMatrix {
                     output_grad.buf.ptr(),
                     grad.shape.rows(),
                     grad.buf.mut_ptr(),
+                    true,
                 );
             }
         }
@@ -76,6 +79,7 @@ impl DenseMatrix {
                     output_grad.buf.ptr().add(input_a.shape.rows()),
                     grad.shape.rows(),
                     grad.buf.mut_ptr(),
+                    true,
                 );
             }
         }
@@ -88,7 +92,7 @@ mod tests {
     use crate::{backend::util, tensor::Shape};
 
     #[test]
-    fn add() {
+    fn concat() {
         let mut ctx = ExecutionContext::default();
 
         let shape1 = Shape::new(3, 3);
@@ -131,7 +135,16 @@ mod tests {
 
         // de-concat
         {
-            DenseMatrix::de_concat(&mut ctx, &input1, Some(&mut input1_grad), &input2, Some(&mut input2_grad), &output);
+            input1_grad.load_from_slice(shape1, &[1.0; 9]);
+
+            DenseMatrix::backprop_concat(
+                &mut ctx,
+                &input1,
+                Some(&mut input1_grad),
+                &input2,
+                Some(&mut input2_grad),
+                &output,
+            );
 
             util::panic_if_device_error("Failed to de-concat!");
 
@@ -140,7 +153,7 @@ mod tests {
 
             let mut grad1 = [0.0; 9];
             input1_grad.write_to_slice(&mut grad1);
-            assert_eq!(grad1, [-1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 1.0, 1.0, 1.0]);
+            assert_eq!(grad1, [0.0, 5.0, 3.0, -1.0, 1.0, -2.0, 2.0, 2.0, 2.0]);
 
             let mut grad2 = [0.0; 3];
             input2_grad.write_to_slice(&mut grad2);

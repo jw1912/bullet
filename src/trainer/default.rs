@@ -1,14 +1,24 @@
 mod builder;
 pub mod cutechess;
+/// Contains the `InputType` trait for implementing custom input types,
+/// as well as several premade input formats that are commonly used.
+pub mod inputs;
 mod loader;
+/// Contains the `OutputBuckets` trait for implementing custom output bucket types,
+/// as well as several premade output buckets that are commonly used.
+pub mod outputs;
 mod quant;
 pub mod testing;
+
+use bulletformat::BulletFormat;
 
 pub use builder::{Loss, TrainerBuilder};
 pub use loader::DefaultDataPreparer;
 pub use quant::QuantTarget;
 
+use inputs::InputType;
 use loader::DefaultDataLoader;
+use outputs::OutputBuckets;
 use testing::{EngineType, TestSettings};
 
 use std::{
@@ -19,17 +29,22 @@ use std::{
 
 use diffable::Node;
 
-use crate::{
-    inputs::InputType,
-    loader::{DataLoader, DirectSequentialDataLoader},
+use super::{
     logger,
-    lr::LrScheduler,
-    optimiser::Optimiser,
-    outputs::{self, OutputBuckets},
-    trainer::NetworkTrainer,
-    wdl::WdlScheduler,
-    Graph, LocalSettings, TrainingSchedule, TrainingSteps,
+    schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSteps},
+    LocalSettings, TrainingSchedule,
 };
+
+use crate::{
+    loader::{CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader},
+    optimiser::Optimiser,
+    trainer::NetworkTrainer,
+    Graph,
+};
+
+/// Holy unsound code batman!
+/// Needs refactor.
+unsafe impl<T: BulletFormat + 'static> CanBeDirectlySequentiallyLoaded for T {}
 
 #[derive(Clone, Copy)]
 pub struct AdditionalTrainerInputs {
