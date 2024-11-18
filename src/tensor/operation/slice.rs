@@ -5,7 +5,7 @@ use crate::{
 
 pub fn output_tensor(inputs: &[Shape], start: usize, end: usize) -> Result<Shape, String> {
     if inputs.len() == 1{
-        if start > end {
+        if end > start {
             if end <= inputs[0].rows() {
                 Ok(Shape::new(end - start, inputs[0].cols()))
             } else {
