@@ -75,3 +75,7 @@ pub fn sparse_softmax_crossentropy_loss_masked(
 ) -> Node {
     builder.create_result_of_operation(Operation::SparseSoftmaxCrossEntropyLoss, &[mask, predicted, target])
 }
+
+pub fn slice_rows(builder: &mut GraphBuilder, input: Node, start: usize, end: usize) -> Node {
+    builder.create_result_of_operation(Operation::SliceRows(start, end), &[input])
+}
