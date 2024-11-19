@@ -42,7 +42,16 @@ where
     }
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
-        DefaultDataPreparer::prepare(self.input_getter, self.output_getter, self.wdl, data, threads, blend, self.scale, self.dense_inputs)
+        DefaultDataPreparer::prepare(
+            self.input_getter,
+            self.output_getter,
+            self.wdl,
+            data,
+            threads,
+            blend,
+            self.scale,
+            self.dense_inputs,
+        )
     }
 }
 
@@ -106,24 +115,10 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
             input_getter,
             output_getter,
             batch_size,
-            stm: SparseInput {
-                shape,
-                max_active,
-                value: vec![0; sparse_size],
-            },
-            nstm: SparseInput {
-                shape,
-                max_active,
-                value: vec![0; sparse_size],
-            },
-            dstm: DenseInput {
-                shape,
-                value: vec![0.0; dense_size],
-            },
-            dnstm: DenseInput {
-                shape,
-                value: vec![0.0; dense_size],
-            },
+            stm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
+            nstm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
+            dstm: DenseInput { shape, value: vec![0.0; dense_size] },
+            dnstm: DenseInput { shape, value: vec![0.0; dense_size] },
             buckets: SparseInput {
                 shape: Shape::new(O::BUCKETS, batch_size),
                 max_active: 1,
@@ -146,47 +141,52 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                 .zip(prep.dnstm.value.chunks_mut(dense_chunk_size))
                 .zip(prep.buckets.value.chunks_mut(chunk_size))
                 .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
-                .for_each(|((((((data_chunk, stm_chunk), nstm_chunk), dstm_chunk), dnstm_chunk), buckets_chunk), results_chunk)| {
-                    let inp = &prep.input_getter;
-                    let out = &prep.output_getter;
-                    s.spawn(move || {
-                        let chunk_len = data_chunk.len();
+                .for_each(
+                    |(
+                        (((((data_chunk, stm_chunk), nstm_chunk), dstm_chunk), dnstm_chunk), buckets_chunk),
+                        results_chunk,
+                    )| {
+                        let inp = &prep.input_getter;
+                        let out = &prep.output_getter;
+                        s.spawn(move || {
+                            let chunk_len = data_chunk.len();
 
-                        for i in 0..chunk_len {
-                            let pos = &data_chunk[i];
-                            let mut j = 0;
-                            let sparse_offset = max_active * i;
-                            let dense_offset = input_size * i;
+                            for i in 0..chunk_len {
+                                let pos = &data_chunk[i];
+                                let mut j = 0;
+                                let sparse_offset = max_active * i;
+                                let dense_offset = input_size * i;
 
-                            for (our, opp) in inp.feature_iter(pos) {
-                                if dense {
-                                    dstm_chunk[dense_offset + our] = 1.0;
-                                    dnstm_chunk[dense_offset + opp] = 1.0;
-                                } else {
-                                    stm_chunk[sparse_offset + j] = our as i32;
-                                    nstm_chunk[sparse_offset + j] = opp as i32;
+                                for (our, opp) in inp.feature_iter(pos) {
+                                    if dense {
+                                        dstm_chunk[dense_offset + our] = 1.0;
+                                        dnstm_chunk[dense_offset + opp] = 1.0;
+                                    } else {
+                                        stm_chunk[sparse_offset + j] = our as i32;
+                                        nstm_chunk[sparse_offset + j] = opp as i32;
+                                    }
+
+                                    j += 1;
                                 }
-                                
-                                j += 1;
+
+                                if !dense && j < max_active {
+                                    stm_chunk[sparse_offset + j] = -1;
+                                    nstm_chunk[sparse_offset + j] = -1;
+                                }
+
+                                assert!(j <= max_active, "More inputs provided than the specified maximum!");
+
+                                buckets_chunk[i] = i32::from(out.bucket(pos));
+
+                                if wdl {
+                                    results_chunk[output_size * i + pos.result_idx()] = 1.0;
+                                } else {
+                                    results_chunk[i] = pos.blended_result(blend, rscale);
+                                }
                             }
-
-                            if !dense && j < max_active {
-                                stm_chunk[sparse_offset + j] = -1;
-                                nstm_chunk[sparse_offset + j] = -1;
-                            }
-
-                            assert!(j <= max_active, "More inputs provided than the specified maximum!");
-
-                            buckets_chunk[i] = i32::from(out.bucket(pos));
-
-                            if wdl {
-                                results_chunk[output_size * i + pos.result_idx()] = 1.0;
-                            } else {
-                                results_chunk[i] = pos.blended_result(blend, rscale);
-                            }
-                        }
-                    });
-                });
+                        });
+                    },
+                );
         });
 
         prep

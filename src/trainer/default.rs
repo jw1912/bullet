@@ -78,7 +78,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             if self.additional_inputs.dense_inputs {
                 let input = &prepared.dstm;
                 graph.get_input_mut("stm").load_dense_from_slice(input.shape, &input.value);
-    
+
                 if self.additional_inputs.nstm {
                     let input = &prepared.dnstm;
                     graph.get_input_mut("nstm").load_dense_from_slice(input.shape, &input.value);
@@ -86,7 +86,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             } else {
                 let input = &prepared.stm;
                 graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
-    
+
                 if self.additional_inputs.nstm {
                     let input = &prepared.nstm;
                     graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);

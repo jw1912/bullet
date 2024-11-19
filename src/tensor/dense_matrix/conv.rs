@@ -66,23 +66,21 @@ impl DenseMatrix {
             grad.reshape_if_needed(filters.shape);
 
             unsafe {
-                catch_cudnn(
-                    bindings::cudnnConvolutionBackwardFilter(
-                        ctx.cudnn,
-                        ((&alpha) as *const f32).cast(),
-                        cudnn_desc.input,
-                        input.buf.ptr().cast(),
-                        cudnn_desc.output,
-                        output_grad.buf.ptr().cast(),
-                        cudnn_desc.conv,
-                        cudnn_desc.bwd_filter_algo,
-                        std::ptr::null_mut(),
-                        0,
-                        ((&beta) as *const f32).cast(),
-                        cudnn_desc.filter,
-                        grad.buf.mut_ptr().cast(),
-                    )
-                );
+                catch_cudnn(bindings::cudnnConvolutionBackwardFilter(
+                    ctx.cudnn,
+                    ((&alpha) as *const f32).cast(),
+                    cudnn_desc.input,
+                    input.buf.ptr().cast(),
+                    cudnn_desc.output,
+                    output_grad.buf.ptr().cast(),
+                    cudnn_desc.conv,
+                    cudnn_desc.bwd_filter_algo,
+                    std::ptr::null_mut(),
+                    0,
+                    ((&beta) as *const f32).cast(),
+                    cudnn_desc.filter,
+                    grad.buf.mut_ptr().cast(),
+                ));
             }
         }
 
@@ -90,23 +88,21 @@ impl DenseMatrix {
             grad.reshape_if_needed(input.shape);
 
             unsafe {
-                catch_cudnn(
-                    bindings::cudnnConvolutionBackwardData(
-                        ctx.cudnn,
-                        ((&alpha) as *const f32).cast(),
-                        cudnn_desc.filter,
-                        filters.buf.ptr().cast(),
-                        cudnn_desc.output,
-                        output_grad.buf.ptr().cast(),
-                        cudnn_desc.conv,
-                        cudnn_desc.bwd_data_algo,
-                        std::ptr::null_mut(),
-                        0,
-                        ((&beta) as *const f32).cast(),
-                        cudnn_desc.input,
-                        grad.buf.mut_ptr().cast(),
-                    )
-                );
+                catch_cudnn(bindings::cudnnConvolutionBackwardData(
+                    ctx.cudnn,
+                    ((&alpha) as *const f32).cast(),
+                    cudnn_desc.filter,
+                    filters.buf.ptr().cast(),
+                    cudnn_desc.output,
+                    output_grad.buf.ptr().cast(),
+                    cudnn_desc.conv,
+                    cudnn_desc.bwd_data_algo,
+                    std::ptr::null_mut(),
+                    0,
+                    ((&beta) as *const f32).cast(),
+                    cudnn_desc.input,
+                    grad.buf.mut_ptr().cast(),
+                ));
             }
         }
     }
