@@ -69,6 +69,33 @@ pub enum cudnnConvolutionFwdAlgo_t {
 #[repr(i32)]
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum cudnnConvolutionBwdFilterAlgo_t {
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0                 = 0,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1                 = 1,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT               = 2,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_3                 = 3,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD          = 4,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD_NONFUSED = 5,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT_TILING        = 6,
+    CUDNN_CONVOLUTION_BWD_FILTER_ALGO_COUNT             = 7
+}
+
+#[repr(i32)]
+#[non_exhaustive]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum cudnnConvolutionBwdDataAlgo_t {
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_0                 = 0,
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_1                 = 1,
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT               = 2,
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING        = 3,
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD          = 4,
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD_NONFUSED = 5,
+    CUDNN_CONVOLUTION_BWD_DATA_ALGO_COUNT             = 6
+}
+
+#[repr(i32)]
+#[non_exhaustive]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum cudnnTensorFormat_t {
     CUDNN_TENSOR_NCHW = 0,
     CUDNN_TENSOR_NHWC = 1,
@@ -166,6 +193,36 @@ mod cudnn {
             beta: *const c_void,
             yDesc: cudnnTensorDescriptor_t,
             y: *mut c_void,
+        ) -> cudnnStatus_t;
+        pub fn cudnnConvolutionBackwardData(
+            handle: cudnnHandle_t,
+            alpha: *const c_void,
+            wDesc: cudnnFilterDescriptor_t,
+            w: *const c_void,
+            dyDesc: cudnnTensorDescriptor_t,
+            dy: *const c_void,
+            convDesc: cudnnConvolutionDescriptor_t,
+            algo: cudnnConvolutionBwdDataAlgo_t,
+            workSpace: *mut c_void,
+            workSpaceSizeInBytes: usize,
+            beta: *const c_void,
+            dxDesc: cudnnTensorDescriptor_t,
+            dx: *mut c_void,
+        ) -> cudnnStatus_t;
+        pub fn cudnnConvolutionBackwardFilter(
+            handle: cudnnHandle_t,
+            alpha: *const c_void,
+            xDesc: cudnnTensorDescriptor_t,
+            x: *const c_void,
+            dyDesc: cudnnTensorDescriptor_t,
+            dy: *const c_void,
+            convDesc: cudnnConvolutionDescriptor_t,
+            algo: cudnnConvolutionBwdFilterAlgo_t,
+            workSpace: *mut c_void,
+            workSpaceSizeInBytes: usize,
+            beta: *const c_void,
+            dwDesc: cudnnFilterDescriptor_t,
+            dw: *mut c_void,
         ) -> cudnnStatus_t;
     }
 }
@@ -265,6 +322,42 @@ mod fallback {
         beta: *const c_void,
         yDesc: cudnnTensorDescriptor_t,
         y: *mut c_void,
+    ) -> cudnnStatus_t {
+        unimplemented!("Convolution is not implemented without cuDNN!");
+    }
+
+    pub unsafe fn cudnnConvolutionBackwardData(
+        handle: cudnnHandle_t,
+        alpha: *const c_void,
+        wDesc: cudnnFilterDescriptor_t,
+        w: *const c_void,
+        dyDesc: cudnnTensorDescriptor_t,
+        dy: *const c_void,
+        convDesc: cudnnConvolutionDescriptor_t,
+        algo: cudnnConvolutionBwdDataAlgo_t,
+        workSpace: *mut c_void,
+        workSpaceSizeInBytes: usize,
+        beta: *const c_void,
+        dxDesc: cudnnTensorDescriptor_t,
+        dx: *mut c_void,
+    ) -> cudnnStatus_t {
+        unimplemented!("Convolution is not implemented without cuDNN!");
+    }
+
+    pub unsafe fn cudnnConvolutionBackwardFilter(
+        handle: cudnnHandle_t,
+        alpha: *const c_void,
+        xDesc: cudnnTensorDescriptor_t,
+        x: *const c_void,
+        dyDesc: cudnnTensorDescriptor_t,
+        dy: *const c_void,
+        convDesc: cudnnConvolutionDescriptor_t,
+        algo: cudnnConvolutionBwdFilterAlgo_t,
+        workSpace: *mut c_void,
+        workSpaceSizeInBytes: usize,
+        beta: *const c_void,
+        dwDesc: cudnnFilterDescriptor_t,
+        dw: *mut c_void,
     ) -> cudnnStatus_t {
         unimplemented!("Convolution is not implemented without cuDNN!");
     }

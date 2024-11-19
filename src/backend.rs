@@ -6,11 +6,7 @@ pub mod util;
 use std::ffi::c_int;
 
 use bindings::{
-    cublasHandle_t, cudnnConvolutionDescriptor_t, cudnnConvolutionFwdAlgo_t, cudnnConvolutionMode_t,
-    cudnnCreateConvolutionDescriptor, cudnnCreateFilterDescriptor, cudnnCreateTensorDescriptor, cudnnDataType_t,
-    cudnnDestroyConvolutionDescriptor, cudnnDestroyFilterDescriptor, cudnnDestroyTensorDescriptor,
-    cudnnFilterDescriptor_t, cudnnHandle_t, cudnnSetConvolution2dDescriptor, cudnnSetFilter4dDescriptor,
-    cudnnSetTensor4dDescriptor, cudnnStatus_t, cudnnTensorDescriptor_t, cudnnTensorFormat_t,
+    cublasHandle_t, cudnnConvolutionBwdDataAlgo_t, cudnnConvolutionBwdFilterAlgo_t, cudnnConvolutionDescriptor_t, cudnnConvolutionFwdAlgo_t, cudnnConvolutionMode_t, cudnnCreateConvolutionDescriptor, cudnnCreateFilterDescriptor, cudnnCreateTensorDescriptor, cudnnDataType_t, cudnnDestroyConvolutionDescriptor, cudnnDestroyFilterDescriptor, cudnnDestroyTensorDescriptor, cudnnFilterDescriptor_t, cudnnHandle_t, cudnnSetConvolution2dDescriptor, cudnnSetFilter4dDescriptor, cudnnSetTensor4dDescriptor, cudnnStatus_t, cudnnTensorDescriptor_t, cudnnTensorFormat_t
 };
 pub use buffer::Buffer;
 
@@ -103,7 +99,9 @@ pub struct ConvolutionCudnnDescription {
     pub input: cudnnTensorDescriptor_t,
     pub filter: cudnnFilterDescriptor_t,
     pub conv: cudnnConvolutionDescriptor_t,
-    pub algo: cudnnConvolutionFwdAlgo_t,
+    pub fwd_algo: cudnnConvolutionFwdAlgo_t,
+    pub bwd_data_algo: cudnnConvolutionBwdDataAlgo_t,
+    pub bwd_filter_algo: cudnnConvolutionBwdFilterAlgo_t,
     pub output: cudnnTensorDescriptor_t,
 }
 
@@ -124,7 +122,9 @@ impl ConvolutionCudnnDescription {
             input: std::ptr::null_mut(),
             filter: std::ptr::null_mut(),
             conv: std::ptr::null_mut(),
-            algo: cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM,
+            fwd_algo: cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM,
+            bwd_data_algo: cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_0,
+            bwd_filter_algo: cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
             output: std::ptr::null_mut(),
         };
 

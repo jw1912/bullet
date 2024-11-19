@@ -33,13 +33,81 @@ impl DenseMatrix {
                 cudnn_desc.filter,
                 filters.buf.ptr().cast(),
                 cudnn_desc.conv,
-                cudnn_desc.algo,
+                cudnn_desc.fwd_algo,
                 std::ptr::null_mut(),
                 0,
                 ((&beta) as *const f32).cast(),
                 cudnn_desc.output,
                 output.buf.mut_ptr().cast(),
             ));
+        }
+    }
+
+    pub fn convolution_backward(
+        ctx: &mut ExecutionContext,
+        desc: &ConvolutionDescription,
+        filters: &Self,
+        filters_grad: Option<&mut Self>,
+        input: &Self,
+        input_grad: Option<&mut Self>,
+        output_grad: &Self,
+    ) {
+        assert_eq!(filters.shape.rows(), desc.filter_shape.size());
+        assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
+        assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
+        assert_eq!(output_grad.shape.rows(), desc.output_shape.size() * desc.output_channels);
+        assert_eq!(output_grad.shape.cols(), input.shape.cols());
+
+        let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
+        let alpha = 1f32;
+        let beta = 0f32;
+
+        if let Some(grad) = filters_grad {
+            grad.reshape_if_needed(filters.shape);
+
+            unsafe {
+                catch_cudnn(
+                    bindings::cudnnConvolutionBackwardFilter(
+                        ctx.cudnn,
+                        ((&alpha) as *const f32).cast(),
+                        cudnn_desc.input,
+                        input.buf.ptr().cast(),
+                        cudnn_desc.output,
+                        output_grad.buf.ptr().cast(),
+                        cudnn_desc.conv,
+                        cudnn_desc.bwd_filter_algo,
+                        std::ptr::null_mut(),
+                        0,
+                        ((&beta) as *const f32).cast(),
+                        cudnn_desc.filter,
+                        grad.buf.mut_ptr().cast(),
+                    )
+                );
+            }
+        }
+
+        if let Some(grad) = input_grad {
+            grad.reshape_if_needed(input.shape);
+
+            unsafe {
+                catch_cudnn(
+                    bindings::cudnnConvolutionBackwardData(
+                        ctx.cudnn,
+                        ((&alpha) as *const f32).cast(),
+                        cudnn_desc.filter,
+                        filters.buf.ptr().cast(),
+                        cudnn_desc.output,
+                        output_grad.buf.ptr().cast(),
+                        cudnn_desc.conv,
+                        cudnn_desc.bwd_data_algo,
+                        std::ptr::null_mut(),
+                        0,
+                        ((&beta) as *const f32).cast(),
+                        cudnn_desc.input,
+                        grad.buf.mut_ptr().cast(),
+                    )
+                );
+            }
         }
     }
 }
@@ -53,7 +121,7 @@ mod tests {
 
     #[rustfmt::skip]
     #[test]
-    fn conv_fwd() {
+    fn conv() {
         println!("start");
         let mut ctx = ExecutionContext::default();
 
@@ -144,6 +212,56 @@ mod tests {
                 17.0, 30.0, 39.0, 29.0,
                 25.0, 42.0, 51.0, 37.0,
                 14.0, 24.0, 30.0, 22.0,
+            ],
+        );
+
+        let mut filters_grad = DenseMatrix::default();
+        let mut input_grad = DenseMatrix::default();
+
+        DenseMatrix::convolution_backward(
+            &mut ctx,
+            &desc,
+            &filters,
+            Some(&mut filters_grad),
+            &input,
+            Some(&mut input_grad),
+            &output,
+        );
+
+        assert_eq!(filters_grad.shape, filters.shape);
+        assert_eq!(input_grad.shape, input.shape);
+
+        let mut fbuf = vec![0.0; filters.shape.size()];
+        filters_grad.write_to_slice(&mut fbuf);
+
+        assert_eq!(
+            &fbuf,
+            &[
+                2240.0, 3160.0, 2704.0,
+                2892.0, 4040.0, 3432.0,
+                2848.0, 3880.0, 3248.0,
+
+                -2240.0, -3160.0, -2704.0,
+                -2892.0, -4040.0, -3432.0,
+                -2848.0, -3880.0, -3248.0,
+            ],
+        );
+
+        let mut ibuf = vec![0.0; input.shape.size()];
+        input_grad.write_to_slice(&mut ibuf);
+
+        assert_eq!(
+            &ibuf,
+            &[
+                170.0, 308.0, 348.0, 240.0,
+                304.0, 544.0, 608.0, 416.0,
+                304.0, 544.0, 608.0, 416.0,
+                210.0, 372.0, 412.0, 280.0,
+
+                -170.0, -308.0, -348.0, -240.0,
+                -304.0, -544.0, -608.0, -416.0,
+                -304.0, -544.0, -608.0, -416.0,
+                -210.0, -372.0, -412.0, -280.0,
             ],
         );
     }

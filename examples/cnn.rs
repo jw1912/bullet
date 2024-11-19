@@ -9,17 +9,17 @@ fn main() {
     let mut trainer = make_trainer();
 
     let schedule = TrainingSchedule {
-        net_id: "4096EXP".to_string(),
+        net_id: "cnn".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps {
             batch_size: 16_384,
-            batches_per_superbatch: 6104,
+            batches_per_superbatch: 128,
             start_superbatch: 1,
-            end_superbatch: 2400,
+            end_superbatch: 20,
         },
-        wdl_scheduler: wdl::ConstantWDL { value: 1.0 },
-        lr_scheduler: lr::ExponentialDecayLR { initial_lr: 0.001, final_lr: 0.0000005, final_superbatch: 2400 },
-        save_rate: 40,
+        wdl_scheduler: wdl::ConstantWDL { value: 0.75 },
+        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 8 },
+        save_rate: 10,
     };
 
     let optimiser_params =
@@ -47,7 +47,7 @@ fn main() {
 }
 
 pub fn make_trainer() -> Trainer<AdamWOptimiser, inputs::Chess768, outputs::Single> {
-    let channels = [16, 8, 4, 2, 1];
+    let channels = [8, 4, 2, 1];
 
     let (mut graph, output_node) = build_network(&channels);
 
@@ -70,7 +70,7 @@ pub fn make_trainer() -> Trainer<AdamWOptimiser, inputs::Chess768, outputs::Sing
     save.push(("ow".to_string(), QuantTarget::Float));
     save.push(("ob".to_string(), QuantTarget::Float));
 
-    Trainer::new(graph, output_node, AdamWParams::default(), inputs::Chess768, outputs::Single, save)
+    Trainer::new(graph, output_node, AdamWParams::default(), inputs::Chess768, outputs::Single, save, true)
 }
 
 fn build_network(channels: &[usize]) -> (Graph, Node) {

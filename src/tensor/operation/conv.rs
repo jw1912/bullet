@@ -44,10 +44,20 @@ pub fn forward(ctx: &mut ExecutionContext, desc: &ConvolutionDescription, inputs
 }
 
 pub fn backprop(
-    _ctx: &mut ExecutionContext,
-    _desc: &ConvolutionDescription,
-    _output: &Tensor,
-    _inputs: &mut [&mut Tensor],
+    ctx: &mut ExecutionContext,
+    desc: &ConvolutionDescription,
+    output: &Tensor,
+    inputs: &mut [&mut Tensor],
 ) {
-    unimplemented!("Not yet implemented!");
+    let (input1, input2) = inputs.split_at_mut(1);
+
+    DenseMatrix::convolution_backward(
+        ctx,
+        desc,
+        input1[0].values.dense(),
+        input1[0].gradients.as_mut(),
+        input2[0].values.dense(),
+        input2[0].gradients.as_mut(),
+        output.gradients.as_ref().unwrap(),
+    );
 }
