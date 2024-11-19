@@ -8,6 +8,10 @@
 #![allow(clippy::enum_variant_names)]
 #![allow(clippy::useless_transmute)]
 
+mod cudnn;
+
+pub use cudnn::*;
+
 #[cfg(not(feature = "hip"))]
 mod cuda;
 

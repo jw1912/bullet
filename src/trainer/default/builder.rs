@@ -275,7 +275,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             input_getter: self.input_getter,
             output_getter: self.bucket_getter,
             output_node: out,
-            additional_inputs: AdditionalTrainerInputs { nstm: self.perspective, output_buckets, wdl: false },
+            additional_inputs: AdditionalTrainerInputs {
+                nstm: self.perspective,
+                output_buckets,
+                wdl: false,
+                dense_inputs: false,
+            },
             saved_format,
         };
 

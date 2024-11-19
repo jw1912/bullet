@@ -30,6 +30,7 @@ fn main() {
             ("l1w".to_string(), QuantTarget::I16(64)),
             ("l1b".to_string(), QuantTarget::I16(64 * 255)),
         ],
+        false,
     );
 
     let schedule = TrainingSchedule {

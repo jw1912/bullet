@@ -2,7 +2,7 @@ use diffable::Node;
 
 use crate::{
     tensor::{Activation, Operation},
-    GraphBuilder,
+    ConvolutionDescription, GraphBuilder,
 };
 
 pub fn activate(builder: &mut GraphBuilder, input: Node, activation: Activation) -> Node {
@@ -74,4 +74,12 @@ pub fn sparse_softmax_crossentropy_loss_masked(
     target: Node,
 ) -> Node {
     builder.create_result_of_operation(Operation::SparseSoftmaxCrossEntropyLoss, &[mask, predicted, target])
+}
+
+pub fn slice_rows(builder: &mut GraphBuilder, input: Node, start: usize, end: usize) -> Node {
+    builder.create_result_of_operation(Operation::SliceRows(start, end), &[input])
+}
+
+pub fn convolution(builder: &mut GraphBuilder, filters: Node, input: Node, desc: ConvolutionDescription) -> Node {
+    builder.create_result_of_operation(Operation::Convolution(desc), &[filters, input])
 }

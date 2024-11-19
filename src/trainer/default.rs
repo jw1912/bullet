@@ -51,6 +51,7 @@ pub struct AdditionalTrainerInputs {
     nstm: bool,
     output_buckets: bool,
     wdl: bool,
+    dense_inputs: bool,
 }
 
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
@@ -74,12 +75,22 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         let graph = self.optimiser.graph_mut();
 
         unsafe {
-            let input = &prepared.stm;
-            graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+            if self.additional_inputs.dense_inputs {
+                let input = &prepared.dstm;
+                graph.get_input_mut("stm").load_dense_from_slice(input.shape, &input.value);
 
-            if self.additional_inputs.nstm {
-                let input = &prepared.nstm;
-                graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+                if self.additional_inputs.nstm {
+                    let input = &prepared.dnstm;
+                    graph.get_input_mut("nstm").load_dense_from_slice(input.shape, &input.value);
+                }
+            } else {
+                let input = &prepared.stm;
+                graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+
+                if self.additional_inputs.nstm {
+                    let input = &prepared.nstm;
+                    graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+                }
             }
 
             if self.additional_inputs.output_buckets {
@@ -123,6 +134,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         input_getter: Inp,
         output_getter: Out,
         saved_format: Vec<(String, QuantTarget)>,
+        dense_inputs: bool,
     ) -> Self {
         let inputs = graph.input_ids();
         let inputs = inputs.iter().map(String::as_str).collect::<HashSet<_>>();
@@ -150,7 +162,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             input_getter,
             output_getter,
             output_node,
-            additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl },
+            additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
         }
     }
@@ -179,6 +191,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             self.additional_inputs.wdl,
             schedule.eval_scale,
             data_loader.clone(),
+            self.additional_inputs.dense_inputs,
         );
         let test_preparer = settings.test_set.map(|test| {
             DefaultDataLoader::new(
@@ -187,6 +200,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                 self.additional_inputs.wdl,
                 schedule.eval_scale,
                 DirectSequentialDataLoader::new(&[test.path]),
+                self.additional_inputs.dense_inputs,
             )
         });
 
@@ -249,6 +263,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             1,
             1.0,
             1.0,
+            self.additional_inputs.dense_inputs,
         );
 
         self.load_batch(&prepared);

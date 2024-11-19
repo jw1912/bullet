@@ -11,11 +11,12 @@ pub(crate) struct DefaultDataLoader<I, O, D> {
     wdl: bool,
     scale: f32,
     loader: D,
+    dense_inputs: bool,
 }
 
 impl<I, O, D> DefaultDataLoader<I, O, D> {
-    pub fn new(input_getter: I, output_getter: O, wdl: bool, scale: f32, loader: D) -> Self {
-        Self { input_getter, output_getter, wdl, scale, loader }
+    pub fn new(input_getter: I, output_getter: O, wdl: bool, scale: f32, loader: D, dense_inputs: bool) -> Self {
+        Self { input_getter, output_getter, wdl, scale, loader, dense_inputs }
     }
 }
 
@@ -41,7 +42,16 @@ where
     }
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
-        DefaultDataPreparer::prepare(self.input_getter, self.output_getter, self.wdl, data, threads, blend, self.scale)
+        DefaultDataPreparer::prepare(
+            self.input_getter,
+            self.output_getter,
+            self.wdl,
+            data,
+            threads,
+            blend,
+            self.scale,
+            self.dense_inputs,
+        )
     }
 }
 
@@ -70,11 +80,14 @@ pub struct DefaultDataPreparer<I, O> {
     pub batch_size: usize,
     pub stm: SparseInput,
     pub nstm: SparseInput,
+    pub dstm: DenseInput,
+    pub dnstm: DenseInput,
     pub buckets: SparseInput,
     pub targets: DenseInput,
 }
 
 impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
+    #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         input_getter: I,
         output_getter: O,
@@ -83,6 +96,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
         threads: usize,
         blend: f32,
         scale: f32,
+        dense: bool,
     ) -> Self {
         let rscale = 1.0 / scale;
         let batch_size = data.len();
@@ -93,20 +107,18 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
 
         let output_size = if wdl { 3 } else { 1 };
 
+        let shape = Shape::new(input_size, batch_size);
+        let sparse_size = if dense { batch_size } else { max_active * batch_size };
+        let dense_size = if dense { shape.size() } else { batch_size };
+
         let mut prep = Self {
             input_getter,
             output_getter,
             batch_size,
-            stm: SparseInput {
-                shape: Shape::new(input_size, batch_size),
-                max_active,
-                value: vec![0; max_active * batch_size],
-            },
-            nstm: SparseInput {
-                shape: Shape::new(input_size, batch_size),
-                max_active,
-                value: vec![0; max_active * batch_size],
-            },
+            stm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
+            nstm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
+            dstm: DenseInput { shape, value: vec![0.0; dense_size] },
+            dnstm: DenseInput { shape, value: vec![0.0; dense_size] },
             buckets: SparseInput {
                 shape: Shape::new(O::BUCKETS, batch_size),
                 max_active: 1,
@@ -118,46 +130,63 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
             },
         };
 
+        let sparse_chunk_size = if dense { 1 } else { max_active * chunk_size };
+        let dense_chunk_size = if dense { input_size * chunk_size } else { 1 };
+
         std::thread::scope(|s| {
             data.chunks(chunk_size)
-                .zip(prep.stm.value.chunks_mut(max_active * chunk_size))
-                .zip(prep.nstm.value.chunks_mut(max_active * chunk_size))
+                .zip(prep.stm.value.chunks_mut(sparse_chunk_size))
+                .zip(prep.nstm.value.chunks_mut(sparse_chunk_size))
+                .zip(prep.dstm.value.chunks_mut(dense_chunk_size))
+                .zip(prep.dnstm.value.chunks_mut(dense_chunk_size))
                 .zip(prep.buckets.value.chunks_mut(chunk_size))
                 .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
-                .for_each(|((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk)| {
-                    let inp = &prep.input_getter;
-                    let out = &prep.output_getter;
-                    s.spawn(move || {
-                        let chunk_len = data_chunk.len();
+                .for_each(
+                    |(
+                        (((((data_chunk, stm_chunk), nstm_chunk), dstm_chunk), dnstm_chunk), buckets_chunk),
+                        results_chunk,
+                    )| {
+                        let inp = &prep.input_getter;
+                        let out = &prep.output_getter;
+                        s.spawn(move || {
+                            let chunk_len = data_chunk.len();
 
-                        for i in 0..chunk_len {
-                            let pos = &data_chunk[i];
-                            let mut j = 0;
-                            let offset = max_active * i;
+                            for i in 0..chunk_len {
+                                let pos = &data_chunk[i];
+                                let mut j = 0;
+                                let sparse_offset = max_active * i;
+                                let dense_offset = input_size * i;
 
-                            for (our, opp) in inp.feature_iter(pos) {
-                                stm_chunk[offset + j] = our as i32;
-                                nstm_chunk[offset + j] = opp as i32;
-                                j += 1;
+                                for (our, opp) in inp.feature_iter(pos) {
+                                    if dense {
+                                        dstm_chunk[dense_offset + our] = 1.0;
+                                        dnstm_chunk[dense_offset + opp] = 1.0;
+                                    } else {
+                                        stm_chunk[sparse_offset + j] = our as i32;
+                                        nstm_chunk[sparse_offset + j] = opp as i32;
+                                    }
+
+                                    j += 1;
+                                }
+
+                                if !dense && j < max_active {
+                                    stm_chunk[sparse_offset + j] = -1;
+                                    nstm_chunk[sparse_offset + j] = -1;
+                                }
+
+                                assert!(j <= max_active, "More inputs provided than the specified maximum!");
+
+                                buckets_chunk[i] = i32::from(out.bucket(pos));
+
+                                if wdl {
+                                    results_chunk[output_size * i + pos.result_idx()] = 1.0;
+                                } else {
+                                    results_chunk[i] = pos.blended_result(blend, rscale);
+                                }
                             }
-
-                            if j < max_active {
-                                stm_chunk[offset + j] = -1;
-                                nstm_chunk[offset + j] = -1;
-                            }
-
-                            assert!(j <= max_active, "More inputs provided than the specified maximum!");
-
-                            buckets_chunk[i] = i32::from(out.bucket(pos));
-
-                            if wdl {
-                                results_chunk[output_size * i + pos.result_idx()] = 1.0;
-                            } else {
-                                results_chunk[i] = pos.blended_result(blend, rscale);
-                            }
-                        }
-                    });
-                });
+                        });
+                    },
+                );
         });
 
         prep
