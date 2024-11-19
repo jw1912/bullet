@@ -72,7 +72,8 @@ pub struct ConvolutionDescription {
     pub output_shape: Shape,
     pub output_channels: usize,
     pub filter_shape: Shape,
-    pub padding_shape: Shape,
+    /// Can be (0, 0), which is not a valid shape
+    pub padding_shape: (usize, usize),
     pub stride_shape: Shape,
 }
 
@@ -82,11 +83,11 @@ impl ConvolutionDescription {
         input_channels: usize,
         output_channels: usize,
         filter_shape: Shape,
-        padding_shape: Shape,
+        padding_shape: (usize, usize),
         stride_shape: Shape,
     ) -> Self {
-        let hout = (input_shape.rows() + 2 * padding_shape.rows() - filter_shape.rows()) / stride_shape.rows() + 1;
-        let wout = (input_shape.cols() + 2 * padding_shape.cols() - filter_shape.cols()) / stride_shape.cols() + 1;
+        let hout = (input_shape.rows() + 2 * padding_shape.0 - filter_shape.rows()) / stride_shape.rows() + 1;
+        let wout = (input_shape.cols() + 2 * padding_shape.1 - filter_shape.cols()) / stride_shape.cols() + 1;
 
         Self {
             input_shape,
@@ -161,8 +162,8 @@ impl ConvolutionCudnnDescription {
 
             catch_cudnn(cudnnSetConvolution2dDescriptor(
                 res.conv,
-                desc.padding_shape.rows() as c_int,
-                desc.padding_shape.cols() as c_int,
+                desc.padding_shape.0 as c_int,
+                desc.padding_shape.1 as c_int,
                 desc.stride_shape.rows() as c_int,
                 desc.stride_shape.cols() as c_int,
                 1,
