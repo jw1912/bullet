@@ -79,7 +79,7 @@ fn build_network(channels: &[usize]) -> (Graph, Node) {
             input_channels,
             output_channels,
             Shape::new(3, 3),
-            Shape::new(1, 1),
+            (1, 1),
             Shape::new(1, 1),
         );
 
