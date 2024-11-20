@@ -1,19 +1,17 @@
 use std::{
-    io::{stdout, Write},
-    sync::atomic::{AtomicBool, Ordering::SeqCst},
-    time::Instant,
+    fmt::Display, io::{stdout, Write}, sync::atomic::{AtomicBool, Ordering::SeqCst}, time::Instant
 };
 
 use super::schedule::TrainingSteps;
 
 static CBCS: AtomicBool = AtomicBool::new(false);
 
-pub fn ansi<T, U>(x: T, y: U) -> String
-where
-    T: std::fmt::Display,
-    U: std::fmt::Display,
-{
-    format!("\x1b[{}m{}\x1b[0m{}", y, x, esc())
+pub fn ansi<T: Display, U: Display>(x: T, y: U) -> String {
+    format!("\x1b[{y}m{x}\x1b[0m{}", esc())
+}
+
+pub fn set_colour<U: Display>(x: U) {
+    print!("\x1b[{x}m");
 }
 
 pub fn clear_colours() {
