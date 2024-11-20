@@ -1,5 +1,8 @@
 use std::{
-    fmt::Display, io::{stdout, Write}, sync::atomic::{AtomicBool, Ordering::SeqCst}, time::Instant
+    fmt::Display,
+    io::{stdout, Write},
+    sync::atomic::{AtomicBool, Ordering::SeqCst},
+    time::Instant,
 };
 
 use super::schedule::TrainingSteps;

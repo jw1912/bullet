@@ -1,5 +1,10 @@
 use crate::{
-    logger, operations, optimiser::{self, Optimiser, OptimiserType}, rng, tensor::Operation, trainer::default::{quant::QuantTarget, AdditionalTrainerInputs}, Activation, ExecutionContext, GraphBuilder, Shape
+    logger, operations,
+    optimiser::{self, Optimiser, OptimiserType},
+    rng,
+    tensor::Operation,
+    trainer::default::{quant::QuantTarget, AdditionalTrainerInputs},
+    Activation, ExecutionContext, GraphBuilder, Shape,
 };
 
 use super::{
