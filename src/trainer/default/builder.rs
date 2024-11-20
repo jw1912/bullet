@@ -1,5 +1,5 @@
 use crate::{
-    operations,
+    logger, operations,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
     tensor::Operation,
@@ -175,6 +175,17 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let mut still_in_ft = true;
 
         let mut saved_format = Vec::new();
+
+        if self.ft_out_size % 8 != 0 {
+            logger::set_colour("31");
+            println!("==================================");
+            println!("  Feature transformer size = {}", self.ft_out_size);
+            println!("     is not a multiple of 8.");
+            println!("     Why are you doing this?");
+            println!("        Please seek help.");
+            println!("==================================");
+            logger::clear_colours();
+        }
 
         let l0w = builder.create_weights("l0w", Shape::new(self.ft_out_size, input_size));
         let l0b = builder.create_weights("l0b", Shape::new(self.ft_out_size, 1));
