@@ -38,7 +38,7 @@ __global__ void backpropPowerErrorKernel(
     const float absd = abs(diff);
 
     const float grad = power * powf(absd, power - 1) * (*output_grad);
-    input_grads[i] = diff > 0.0F ? grad : -grad;
+    input_grads[i] += diff > 0.0F ? grad : -grad;
 }
 
 extern "C" void powerError(
