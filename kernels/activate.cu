@@ -41,12 +41,13 @@ __global__ void buffer_backprop_kernel(const size_t size, const float* input, co
     {
         const float4 this_in = ((const float4 *)input)[tid];
         const float4 this_out_grad = ((const float4 *)output_grad)[tid];
+        const float4 curr_input_grad = ((const float4 *)input_grad)[tid];
 
         ((float4 *)input_grad)[tid] = make_float4(
-            op(this_in.x) * this_out_grad.x,
-            op(this_in.y) * this_out_grad.y,
-            op(this_in.z) * this_out_grad.z,
-            op(this_in.w) * this_out_grad.w
+            curr_input_grad.x + op(this_in.x) * this_out_grad.x,
+            curr_input_grad.y + op(this_in.y) * this_out_grad.y,
+            curr_input_grad.z + op(this_in.z) * this_out_grad.z,
+            curr_input_grad.w + op(this_in.w) * this_out_grad.w
         );
     }
     else if (4 * tid < size)
@@ -56,7 +57,7 @@ __global__ void buffer_backprop_kernel(const size_t size, const float* input, co
             const size_t idx = 4 * tid + i;
             const float this_in = input[i];
             const float this_out_grad = output_grad[i];
-            input_grad[idx] = op(this_in) * this_out_grad;
+            input_grad[idx] += op(this_in) * this_out_grad;
         }
     }
 }
