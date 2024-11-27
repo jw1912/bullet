@@ -8,6 +8,11 @@ use super::DenseMatrix;
 impl DenseMatrix {
     pub fn slice_rows(ctx: &mut ExecutionContext, input: &Self, start: usize, end: usize, output: &mut Self) {
         assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");
+        assert!(
+            end <= input.shape.rows(),
+            "Slice index out of bounds! Number of rows is {} but slice endpoint is {end}!",
+            input.shape.rows()
+        );
 
         let output_shape = Shape::new(end - start, input.shape.cols());
         output.reshape_if_needed(output_shape);

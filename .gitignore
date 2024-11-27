@@ -1,6 +1,7 @@
 /target
 /nets
 /checkpoints
+/data
 /.idea
 /.vscode
 /venv
@@ -10,5 +11,6 @@
 *.epd
 *.txt
 *.bin
+*.data
 
 !requirements.txt

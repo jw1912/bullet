@@ -31,8 +31,8 @@ __global__ void pairwiseMulBackwardKernel(const size_t output_size, const float*
 
     const float gradIn = thisOutputGrad[0];
 
-    thisInputGrad[0] = gradIn * thisInput[output_size];
-    thisInputGrad[output_size] = gradIn * thisInput[0];
+    thisInputGrad[0] += gradIn * thisInput[output_size];
+    thisInputGrad[output_size] += gradIn * thisInput[0];
 }
 
 extern "C" void pairwiseMul(const size_t batch_size, const size_t output_size, const float* input, float* output)

@@ -10,6 +10,7 @@ readme = "README.md"
 build = "build/main.rs"
 
 [features]
+cudnn = []
 hip = []
 gh-actions = []
 
@@ -34,7 +35,6 @@ authors = ["Jamie Whiting"]
 bulletformat = "1.7.0"
 
 [profile.release]
-panic = 'abort'
-strip = true
+debug = true
 codegen-units = 1
 lto = true

@@ -14,7 +14,7 @@ mod rng;
 mod tensor;
 mod trainer;
 
-pub use backend::ExecutionContext;
+pub use backend::{ConvolutionDescription, ExecutionContext};
 pub use bulletformat as format;
 pub use diffable::Node;
 pub use tensor::{Activation, Shape};
