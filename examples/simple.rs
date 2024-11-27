@@ -27,7 +27,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    //trainer.load_from_checkpoint("C:\\NNUE-Trainer\\checkpoints\\simple-165\\");
+    //trainer.load_from_checkpoint("C:\\NNUE-Trainer\\checkpoints\\simple-220\\");
 
     let schedule = TrainingSchedule {
         net_id: "simple".to_string(),
@@ -47,7 +47,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["C:\\NNUE-Trainer\\data-1.bin", "C:\\NNUE-Trainer\\data.bin"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["C:\\NNUE-Trainer\\data.bin", "C:\\NNUE-Trainer\\data-train.bin"]);
 
     trainer.run(&schedule, &settings, &data_loader);
 }
