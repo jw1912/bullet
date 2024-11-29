@@ -27,8 +27,6 @@ use std::{
     io::{self, Write},
 };
 
-use diffable::Node;
-
 use super::{
     logger,
     schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSteps},
@@ -36,6 +34,7 @@ use super::{
 };
 
 use crate::{
+    autograd::Node,
     loader::{CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader},
     optimiser::Optimiser,
     trainer::NetworkTrainer,

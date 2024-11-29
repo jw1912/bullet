@@ -4,12 +4,10 @@
 
 </div>
 
-At this point, bullet is a general-purpose ML library (it can be used as such) with a heavily limited number of supported operations.
-However, it is generally used for training NNUE-style networks for some of the strongest chess engines in the world.
+bullet is a domain-specific ML library, generally used for training NNUE-style networks for some of the strongest chess engines in the world.
 
 ### Features
 - Autograd
-    - Uses my [diffable](https://github.com/jw1912/diffable) crate
 - CUDA and HIP backends
     - Makes heavy use of (cu/hip)BLAS wherever possible
     - A number of custom kernels

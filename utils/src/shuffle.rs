@@ -50,7 +50,7 @@ impl ShuffleOptions {
                 fs::create_dir(temp_dir).with_context(|| "Temp dir could not be created.")?;
             }
             let bytes_used = self.mem_used_mb * BYTES_PER_MB;
-            let num_tmp_files = ((input_size + bytes_used - 1) / bytes_used).max(MIN_TMP_FILES);
+            let num_tmp_files = input_size.div_ceil(bytes_used).max(MIN_TMP_FILES);
             let temp_files = (0..num_tmp_files)
                 .map(|idx| {
                     let output_file = format!(
