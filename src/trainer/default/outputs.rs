@@ -22,7 +22,7 @@ impl<const N: usize> OutputBuckets<ChessBoard> for MaterialCount<N> {
     const BUCKETS: usize = N;
 
     fn bucket(&self, pos: &ChessBoard) -> u8 {
-        let divisor = (32 + N - 1) / N;
+        let divisor = 32usize.div_ceil(N);
         (pos.occ().count_ones() as u8 - 2) / divisor as u8
     }
 }
