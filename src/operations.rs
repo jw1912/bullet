@@ -1,6 +1,5 @@
-use diffable::Node;
-
 use crate::{
+    autograd::Node,
     tensor::{Activation, Operation},
     ConvolutionDescription, GraphBuilder,
 };

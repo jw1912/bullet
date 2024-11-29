@@ -1,3 +1,4 @@
+mod autograd;
 mod backend;
 /// Contains the `DataLoader` trait:
 /// - Determines how input files are read to produce the specified `BulletFormat` data type,
@@ -16,7 +17,7 @@ mod trainer;
 
 pub use backend::{ConvolutionDescription, ExecutionContext};
 pub use bulletformat as format;
-pub use diffable::Node;
+pub use autograd::{Graph, GraphBuilder, Node};
 pub use tensor::{Activation, Shape};
 pub use trainer::{
     default::{cutechess, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
@@ -26,5 +27,3 @@ pub use trainer::{
     DataPreparer, NetworkTrainer,
 };
 
-pub type Graph = diffable::Graph<tensor::Tensor>;
-pub type GraphBuilder = diffable::GraphBuilder<tensor::Tensor>;
