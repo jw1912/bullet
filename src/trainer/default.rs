@@ -275,6 +275,46 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         val[0]
     }
 
+    pub fn eval_wdl(&mut self, fen: &str) -> (f32, f32, f32)
+    where
+        Inp::RequiredDataType: std::str::FromStr<Err = String>,
+    {
+        let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
+
+        let prepared = DefaultDataPreparer::prepare(
+            self.input_getter,
+            self.output_getter,
+            self.additional_inputs.wdl,
+            &[pos],
+            1,
+            1.0,
+            1.0,
+            self.additional_inputs.dense_inputs,
+        );
+
+        self.load_batch(&prepared);
+        self.optimiser.graph_mut().forward();
+
+        let eval = self.optimiser.graph().get_node(self.output_node);
+
+        let mut val = vec![0.0; eval.values.dense().allocated_size()];
+        eval.values.dense().write_to_slice(&mut val);
+
+        let mut win = val[2];
+        let mut draw = val[1];
+        let mut loss = val[0];
+
+        let max = win.max(draw).max(loss);
+
+        win = (win - max).exp();
+        draw = (draw - max).exp();
+        loss = (loss - max).exp();
+
+        let sum = win + draw + loss;
+
+        (win / sum, draw / sum, loss / sum)
+    }
+
     pub fn set_optimiser_params(&mut self, params: Opt::Params) {
         self.optimiser.set_params(params);
     }
