@@ -248,7 +248,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         }
     }
 
-    pub fn eval(&mut self, fen: &str) -> f32
+    pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err = String>,
     {
@@ -270,9 +270,29 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let eval = self.optimiser.graph().get_node(self.output_node);
 
-        let mut val = vec![0.0; eval.values.dense().allocated_size()];
-        eval.values.dense().write_to_slice(&mut val);
-        val[0]
+        let mut vals = vec![0.0; eval.values.dense().shape().size()];
+        eval.values.dense().write_to_slice(&mut vals);
+        vals
+    }
+
+    pub fn eval(&mut self, fen: &str) -> f32
+    where
+        Inp::RequiredDataType: std::str::FromStr<Err = String>,
+    {
+        let vals = self.eval_raw_output(fen);
+
+        match &vals[..] {
+            [mut loss, mut draw, mut win] => {
+                let max = win.max(draw).max(loss);
+                win = (win - max).exp();
+                draw = (draw - max).exp();
+                loss = (loss - max).exp();
+
+                (win + draw / 2.0) / (win + draw + loss)
+            }
+            [score] => *score,
+            _ => panic!("Invalid output size!"),
+        }
     }
 
     pub fn set_optimiser_params(&mut self, params: Opt::Params) {
