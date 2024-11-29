@@ -287,9 +287,9 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                 win = (win - max).exp();
                 draw = (draw - max).exp();
                 loss = (loss - max).exp();
-        
+
                 (win + draw / 2.0) / (win + draw + loss)
-            },
+            }
             [score] => *score,
             _ => panic!("Invalid output size!"),
         }
