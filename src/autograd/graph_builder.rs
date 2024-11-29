@@ -5,7 +5,10 @@ use std::{
     ops::Index,
 };
 
-use crate::{tensor::{Operation, Tensor}, ExecutionContext, Shape};
+use crate::{
+    tensor::{Operation, Tensor},
+    ExecutionContext, Shape,
+};
 
 use super::{operation::OperationQueue, Graph};
 
@@ -93,21 +96,11 @@ impl GraphBuilder {
         node
     }
 
-    pub fn create_result_of_operation(
-        &mut self,
-        operation: Operation,
-        inputs: &[Node],
-    ) -> Node {
+    pub fn create_result_of_operation(&mut self, operation: Operation, inputs: &[Node]) -> Node {
         let mut set = HashSet::new();
-        assert!(
-            inputs.iter().all(|node| set.insert(node)),
-            "An operation will alias nodes on backprop!"
-        );
+        assert!(inputs.iter().all(|node| set.insert(node)), "An operation will alias nodes on backprop!");
 
-        let input_shape = inputs
-            .iter()
-            .map(|node| self[*node].shape)
-            .collect::<Vec<_>>();
+        let input_shape = inputs.iter().map(|node| self[*node].shape).collect::<Vec<_>>();
 
         match operation.output_tensor(&input_shape) {
             Ok(shape) => self.create_node(NodeData::new(None, Some(operation), shape, true, inputs)),
@@ -148,10 +141,7 @@ impl GraphBuilder {
 
         let root = *self.roots.iter().next().unwrap();
         assert!(self[root].requires_grad, "Output cannot be an input!");
-        assert!(
-            !self.weights.contains(&root),
-            "Can't output trainable weights!"
-        );
+        assert!(!self.weights.contains(&root), "Can't output trainable weights!");
 
         let nodes = self
             .nodes
@@ -159,35 +149,16 @@ impl GraphBuilder {
             .map(|node_data| RefCell::new(Tensor::new(node_data.shape, node_data.requires_grad)))
             .collect::<Vec<_>>();
 
-        let inputs = self
-            .inputs
-            .iter()
-            .map(|&node| (self[node].id.clone().unwrap(), node))
-            .collect::<HashMap<_, _>>();
+        let inputs = self.inputs.iter().map(|&node| (self[node].id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
-        let weights = self
-            .weights
-            .iter()
-            .map(|&node| (self[node].id.clone().unwrap(), node))
-            .collect::<HashMap<_, _>>();
+        let weights =
+            self.weights.iter().map(|&node| (self[node].id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
-        let node_ids = self
-            .nodes
-            .iter()
-            .map(|node_data| node_data.own)
-            .collect::<Vec<_>>();
+        let node_ids = self.nodes.iter().map(|node_data| node_data.own).collect::<Vec<_>>();
 
         let forward = self.build_forward(&node_ids);
         let backward = self.build_backward(&node_ids);
 
-        Graph::new(
-            nodes,
-            root,
-            inputs,
-            weights,
-            forward,
-            backward,
-            execution_context,
-        )
+        Graph::new(nodes, root, inputs, weights, forward, backward, execution_context)
     }
 }

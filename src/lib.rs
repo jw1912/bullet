@@ -15,9 +15,9 @@ mod rng;
 mod tensor;
 mod trainer;
 
+pub use autograd::{Graph, GraphBuilder, Node};
 pub use backend::{ConvolutionDescription, ExecutionContext};
 pub use bulletformat as format;
-pub use autograd::{Graph, GraphBuilder, Node};
 pub use tensor::{Activation, Shape};
 pub use trainer::{
     default::{cutechess, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
@@ -26,4 +26,3 @@ pub use trainer::{
     settings::LocalSettings,
     DataPreparer, NetworkTrainer,
 };
-

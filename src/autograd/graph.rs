@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
 
-use crate::{tensor::Tensor, ExecutionContext};
 use super::{operation::OperationQueue, Node};
+use crate::{tensor::Tensor, ExecutionContext};
 
 pub struct Graph {
     nodes: Vec<RefCell<Tensor>>,
@@ -29,27 +29,17 @@ impl Graph {
         backward: OperationQueue<true>,
         execution_context: ExecutionContext,
     ) -> Self {
-        Self {
-            nodes,
-            root,
-            inputs,
-            weights,
-            forward,
-            backward,
-            execution_context,
-        }
+        Self { nodes, root, inputs, weights, forward, backward, execution_context }
     }
 
     pub fn forward(&mut self) -> f32 {
-        self.forward
-            .execute_on(&mut self.execution_context, &mut self.nodes);
+        self.forward.execute_on(&mut self.execution_context, &mut self.nodes);
         self.nodes[self.root.0].borrow().get_scalar().unwrap()
     }
 
     pub fn backward(&mut self) {
         self.nodes[self.root.0].get_mut().set_grad_to_unit();
-        self.backward
-            .execute_on(&mut self.execution_context, &mut self.nodes);
+        self.backward.execute_on(&mut self.execution_context, &mut self.nodes);
     }
 
     fn store_values(&mut self, node: Node, data: &Tensor) {
