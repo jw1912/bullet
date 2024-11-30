@@ -1,5 +1,10 @@
 # Getting Started
 
+### Installing Rust
+
+Install Rust via [rustup](https://www.rust-lang.org/tools/install).
+This is the official way to install rust. You are on your own if you decide to install rust in a different way (i.e. via your system package manager).
+
 ### General Usage
 
 You can use `bullet` as a crate:
