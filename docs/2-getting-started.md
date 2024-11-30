@@ -2,8 +2,7 @@
 
 ### Installing Rust
 
-Install Rust via [rustup](https://www.rust-lang.org/tools/install).
-This is the official way to install rust. You are on your own if you decide to install rust in a different way (i.e. via your system package manager).
+Install Rust via [rustup](https://www.rust-lang.org/tools/install) (this is the official way to install rust).
 
 ### General Usage
 
