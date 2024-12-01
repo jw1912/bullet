@@ -28,7 +28,7 @@ pub enum OpeningBook<'a> {
 #[derive(Clone)]
 pub struct UciOption<'a>(pub &'a str, pub &'a str);
 
-impl<'a> Display for UciOption<'a> {
+impl Display for UciOption<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "option.{}={}", self.0, self.1)
     }
@@ -77,7 +77,7 @@ pub struct TestSettings<'a, T: EngineType> {
     pub dev_engine: Engine<'a, T>,
 }
 
-impl<'a, T: EngineType> TestSettings<'a, T> {
+impl<T: EngineType> TestSettings<'_, T> {
     pub fn setup<LR: LrScheduler, WDL: WdlScheduler>(&self, schedule: &TrainingSchedule<LR, WDL>) {
         let output = cutechess::CuteChessCommand::health_check(self.cutechess_path);
 

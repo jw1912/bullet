@@ -14,8 +14,6 @@ mod softmax_sparse;
 
 pub use activate::Activation;
 
-use diffable::DiffableOperation;
-
 use crate::{
     backend::{ConvolutionDescription, ExecutionContext},
     tensor::{Shape, Tensor},
@@ -52,8 +50,8 @@ pub enum Operation {
     SparseAffineDual(Activation),
 }
 
-impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
-    fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
+impl Operation {
+    pub fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         match *self {
             Operation::AbsPowerError(_) => power_error::output_tensor(inputs),
             Operation::Activate(_) => activate::output_tensor(inputs),
@@ -71,7 +69,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
         }
     }
 
-    fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
+    pub fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
         match *self {
             Operation::AbsPowerError(power) => power_error::forward(power, inputs, output),
             Operation::Activate(activation) => activate::forward(activation, inputs, output),
@@ -89,7 +87,7 @@ impl DiffableOperation<Tensor, ExecutionContext, Shape> for Operation {
         }
     }
 
-    fn backward(&self, ctx: &mut ExecutionContext, output_grad: &Tensor, inputs: &mut [&mut Tensor]) {
+    pub fn backward(&self, ctx: &mut ExecutionContext, output_grad: &Tensor, inputs: &mut [&mut Tensor]) {
         match *self {
             Operation::AbsPowerError(power) => power_error::backprop(power, output_grad, inputs),
             Operation::Activate(activation) => activate::backprop(activation, output_grad, inputs),

@@ -83,7 +83,6 @@ version = "1.0.0"
 dependencies = [
  "bulletformat",
  "cc",
- "diffable",
  "rand",
  "rand_distr",
 ]
@@ -229,11 +228,6 @@ dependencies = [
  "proc-macro2",
  "quote",
 ]
-
-[[package]]
-name = "diffable"
-version = "0.7.0"
-source = "git+https://github.com/jw1912/diffable.git?tag=v0.7.0#95e0fbd8edc4c8a9f6a723a04d6aa5bb8da4708b"
 
 [[package]]
 name = "dirs-next"

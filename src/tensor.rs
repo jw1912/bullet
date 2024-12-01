@@ -12,7 +12,7 @@ pub use sparse_matrix::SparseMatrix;
 
 pub(crate) use operation::Operation;
 
-use crate::{backend::ExecutionContext, rng};
+use crate::rng;
 
 impl From<Tensor> for Shape {
     fn from(value: Tensor) -> Self {
@@ -27,12 +27,8 @@ pub struct Tensor {
     internal: Vec<(String, DenseMatrix)>,
 }
 
-impl diffable::Tensor for Tensor {
-    type ModelOfTensor = Shape;
-    type ExecutionContext = ExecutionContext;
-    type DiffableOperation = Operation;
-
-    fn new(shape: Shape, requires_grad: bool) -> Self {
+impl Tensor {
+    pub fn new(shape: Shape, requires_grad: bool) -> Self {
         Self {
             values: Matrix::Dense(DenseMatrix::zeroed(shape)),
             gradients: if requires_grad { Some(DenseMatrix::zeroed(shape)) } else { None },
@@ -40,17 +36,17 @@ impl diffable::Tensor for Tensor {
         }
     }
 
-    fn zero_grad(&mut self) {
+    pub fn zero_grad(&mut self) {
         if let Some(grad) = self.gradients.as_mut() {
             grad.set_zero();
         }
     }
 
-    fn copy_values_into(&self, dest: &mut Self) {
+    pub fn copy_values_into(&self, dest: &mut Self) {
         self.values.copy_into(&mut dest.values);
     }
 
-    fn get_scalar(&self) -> Option<f32> {
+    pub fn get_scalar(&self) -> Option<f32> {
         if self.values.shape() == Shape::new(1, 1) {
             let mut buf = [0.0];
             self.values.dense().write_to_slice(&mut buf);
@@ -60,13 +56,11 @@ impl diffable::Tensor for Tensor {
         }
     }
 
-    fn set_grad_to_unit(&mut self) {
+    pub fn set_grad_to_unit(&mut self) {
         let grad = self.gradients.as_mut().unwrap();
         grad.load_from_slice(Shape::new(1, 1), &[1.0]);
     }
-}
 
-impl Tensor {
     pub fn load_from_slice(&mut self, values: &[f32]) {
         if let Matrix::Dense(dst) = &mut self.values {
             assert_eq!(values.len(), dst.shape.size());

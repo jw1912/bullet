@@ -101,7 +101,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
         let rscale = 1.0 / scale;
         let batch_size = data.len();
         let max_active = input_getter.max_active_inputs();
-        let chunk_size = (batch_size + threads - 1) / threads;
+        let chunk_size = batch_size.div_ceil(threads);
 
         let input_size = input_getter.size();
 
