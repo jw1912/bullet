@@ -9,7 +9,7 @@ use std::{
 use crate::trainer::schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 
 use super::{
-    cutechess::{self, CuteChessArgs},
+    gamerunner::{self, GameRunnerArgs},
     logger,
 };
 
@@ -61,8 +61,8 @@ pub struct TestSettings<'a, T: EngineType> {
     pub test_rate: usize,
     /// Directory to use for testing (MUST NOT EXIST CURRENTLY).
     pub out_dir: &'a str,
-    /// Path to cutechess executable.
-    pub cutechess_path: &'a str,
+    /// Path to gamerunner executable.
+    pub gamerunner_path: &'a str,
     /// Path to opening book.
     pub book_path: OpeningBook<'a>,
     /// Number of game pairs to play.
@@ -79,9 +79,9 @@ pub struct TestSettings<'a, T: EngineType> {
 
 impl<T: EngineType> TestSettings<'_, T> {
     pub fn setup<LR: LrScheduler, WDL: WdlScheduler>(&self, schedule: &TrainingSchedule<LR, WDL>) {
-        let output = cutechess::CuteChessCommand::health_check(self.cutechess_path);
+        let output = gamerunner::GameRunnerCommand::health_check(self.gamerunner_path);
 
-        assert!(output.status.success(), "Could not start cutechess!");
+        assert!(output.status.success(), "Could not start gamerunner!");
 
         let bpath = match self.book_path {
             OpeningBook::Epd(path) => path,
@@ -157,8 +157,8 @@ impl<T: EngineType> TestSettings<'_, T> {
             OpeningBook::Pgn(path) => (path.to_string(), true),
         };
 
-        let args = CuteChessArgs {
-            cutechess_path: self.cutechess_path.to_string(),
+        let args = GameRunnerArgs {
+            gamerunner_path: self.gamerunner_path.to_string(),
             dev_engine_path,
             base_engine_path,
             dev_options: self.dev_engine.uci_options.iter().map(UciOption::to_string).collect(),
@@ -173,7 +173,7 @@ impl<T: EngineType> TestSettings<'_, T> {
         let stats_path = format!("{out_dir}/stats.txt");
 
         thread::spawn(move || {
-            let (elo, err) = cutechess::run_games(args).unwrap();
+            let (elo, err) = gamerunner::run_games(args).unwrap();
             let mut file =
                 std::fs::OpenOptions::new().append(true).open(stats_path.as_str()).expect("Couldn't open stats path!");
 
