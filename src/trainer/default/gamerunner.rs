@@ -57,6 +57,20 @@ impl GameRunnerCommand {
         self
     }
 
+    fn rating_interval(mut self) -> Self {
+        self.0.args(["-ratinginterval", "1"]);
+
+        self
+    }
+
+    fn output_format(mut self, path: &str) -> Self {
+        if path.contains("fastchess") {
+            self.0.args(["-output", "format=cutechess"]);
+        }
+        
+        self
+    }
+
     fn with_opening_book(mut self, book: String, is_pgn: bool) -> Self {
         self.0.args(["-openings", "policy=round", "order=random"]).arg(format!("file={book}"));
 
@@ -102,6 +116,8 @@ pub fn run_games(args: GameRunnerArgs) -> Result<(f32, f32), String> {
         .num_game_pairs(args.num_game_pairs)
         .with_opening_book(args.opening_book, args.is_pgn)
         .with_adjudication()
+        .rating_interval()
+        .output_format(args.gamerunner_path.as_str())
         .with_concurrency(args.concurrency)
         .set_stdout(Stdio::piped())
         .execute();
