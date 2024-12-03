@@ -2,8 +2,8 @@ use std::process::{Child, Command, Output, Stdio};
 
 use super::testing::TimeControl;
 
-pub struct CuteChessArgs {
-    pub cutechess_path: String,
+pub struct FastChessArgs {
+    pub fastchess_path: String,
     pub dev_engine_path: String,
     pub base_engine_path: String,
     pub dev_options: Vec<String>,
@@ -15,11 +15,11 @@ pub struct CuteChessArgs {
     pub concurrency: usize,
 }
 
-pub struct CuteChessCommand(Command);
+pub struct FastChessCommand(Command);
 
-impl CuteChessCommand {
+impl FastChessCommand {
     pub fn health_check(path: &str) -> Output {
-        Command::new(path).arg("--version").output().expect("Could not start cutechess!")
+        Command::new(path).arg("--version").output().expect("Could not start fastchess!")
     }
 
     fn new(path: &str) -> Self {
@@ -90,12 +90,12 @@ impl CuteChessCommand {
     }
 
     fn execute(mut self) -> Child {
-        self.0.spawn().expect("Couldn't launch cutechess games!")
+        self.0.spawn().expect("Couldn't launch fastchess games!")
     }
 }
 
-pub fn run_games(args: CuteChessArgs) -> Result<(f32, f32), String> {
-    let output = CuteChessCommand::new(args.cutechess_path.as_str())
+pub fn run_games(args: FastChessArgs) -> Result<(f32, f32), String> {
+    let output = FastChessCommand::new(args.fastchess_path.as_str())
         .add_engine(args.dev_engine_path.as_str(), &args.dev_options)
         .add_engine(args.base_engine_path.as_str(), &args.base_options)
         .with_tc(args.time_control)
