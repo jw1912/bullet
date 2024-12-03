@@ -67,7 +67,6 @@ impl GameRunnerCommand {
         if path.contains("fastchess") {
             self.0.args(["-output", "format=cutechess"]);
         }
-        
         self
     }
 
