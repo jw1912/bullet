@@ -58,7 +58,7 @@ impl GameRunnerCommand {
     }
 
     fn rating_interval(mut self) -> Self {
-        self.0.args(["-ratinginterval", "1"]);
+        self.0.args(["-ratinginterval", "0"]);
 
         self
     }
