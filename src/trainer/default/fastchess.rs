@@ -110,7 +110,7 @@ pub fn run_games(args: FastChessArgs) -> Result<(f32, f32), String> {
 
     let stdout = String::from_utf8(output.stdout).expect("Couldn't parse stdout!");
 
-    let mut split = stdout.split("Elo difference: ");
+    let mut split = stdout.split("Elo: ");
 
     let line = split.nth(1).unwrap();
 
