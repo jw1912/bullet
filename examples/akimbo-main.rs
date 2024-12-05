@@ -3,7 +3,7 @@ The exact training used for akimbo's current network, updated as I merge new net
 */
 use bullet_lib::{
     inputs, loader, lr, optimiser, outputs,
-    testing::{Engine, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
+    testing::{Engine, GameRunnerPath, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
     wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
 };
 
@@ -78,7 +78,7 @@ fn main() {
     let testing = TestSettings {
         test_rate: 20,
         out_dir: concat!("../../nets/", net_id!()),
-        gamerunner_path: "../../nets/fastchess.exe",
+        gamerunner_path: GameRunnerPath::CuteChess("../../nets/cutechess-cli.exe"),
         book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
         num_game_pairs: 2000,
         concurrency: 6,

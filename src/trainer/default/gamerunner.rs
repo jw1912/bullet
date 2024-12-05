@@ -2,8 +2,23 @@ use std::process::{Child, Command, Output, Stdio};
 
 use super::testing::TimeControl;
 
+#[derive(Clone)]
+pub enum GameRunnerPathInternal {
+    CuteChess(String),
+    FastChess(String),
+}
+
+impl GameRunnerPathInternal {
+    fn inner(&self) -> &str {
+        match self {
+            GameRunnerPathInternal::CuteChess(x) => x,
+            GameRunnerPathInternal::FastChess(x) => x,
+        }
+    }
+}
+
 pub struct GameRunnerArgs {
-    pub gamerunner_path: String,
+    pub gamerunner_path: GameRunnerPathInternal,
     pub dev_engine_path: String,
     pub base_engine_path: String,
     pub dev_options: Vec<String>,
@@ -18,8 +33,8 @@ pub struct GameRunnerArgs {
 pub struct GameRunnerCommand(Command);
 
 impl GameRunnerCommand {
-    pub fn health_check(path: &str) -> Output {
-        Command::new(path).arg("--version").output().expect("Could not start gamerunner!")
+    pub fn health_check(path: &GameRunnerPathInternal) -> Output {
+        Command::new(path.inner()).arg("--version").output().expect("Could not start gamerunner!")
     }
 
     fn new(path: &str) -> Self {
@@ -63,8 +78,8 @@ impl GameRunnerCommand {
         self
     }
 
-    fn output_format(mut self, path: &str) -> Self {
-        if path.contains("fastchess") {
+    fn output_format(mut self, path: &GameRunnerPathInternal) -> Self {
+        if let GameRunnerPathInternal::FastChess(_) = path {
             self.0.args(["-output", "format=cutechess"]);
         }
         self
@@ -108,7 +123,7 @@ impl GameRunnerCommand {
 }
 
 pub fn run_games(args: GameRunnerArgs) -> Result<(f32, f32), String> {
-    let output = GameRunnerCommand::new(args.gamerunner_path.as_str())
+    let output = GameRunnerCommand::new(args.gamerunner_path.inner())
         .add_engine(args.dev_engine_path.as_str(), &args.dev_options)
         .add_engine(args.base_engine_path.as_str(), &args.base_options)
         .with_tc(args.time_control)
@@ -116,7 +131,7 @@ pub fn run_games(args: GameRunnerArgs) -> Result<(f32, f32), String> {
         .with_opening_book(args.opening_book, args.is_pgn)
         .with_adjudication()
         .rating_interval()
-        .output_format(args.gamerunner_path.as_str())
+        .output_format(&args.gamerunner_path)
         .with_concurrency(args.concurrency)
         .set_stdout(Stdio::piped())
         .execute();
