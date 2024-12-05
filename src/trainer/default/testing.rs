@@ -9,7 +9,7 @@ use std::{
 use crate::trainer::schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 
 use super::{
-    gamerunner::{self, GameRunnerArgs},
+    gamerunner::{self, GameRunnerArgs, GameRunnerPathInternal},
     logger,
 };
 
@@ -31,6 +31,21 @@ pub struct UciOption<'a>(pub &'a str, pub &'a str);
 impl Display for UciOption<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "option.{}={}", self.0, self.1)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum GameRunnerPath<'a> {
+    CuteChess(&'a str),
+    FastChess(&'a str),
+}
+
+impl GameRunnerPath<'_> {
+    fn as_internal(&self) -> GameRunnerPathInternal {
+        match self {
+            GameRunnerPath::CuteChess(x) => GameRunnerPathInternal::CuteChess(x.to_string()),
+            GameRunnerPath::FastChess(x) => GameRunnerPathInternal::FastChess(x.to_string()),
+        }
     }
 }
 
@@ -62,7 +77,7 @@ pub struct TestSettings<'a, T: EngineType> {
     /// Directory to use for testing (MUST NOT EXIST CURRENTLY).
     pub out_dir: &'a str,
     /// Path to gamerunner executable.
-    pub gamerunner_path: &'a str,
+    pub gamerunner_path: GameRunnerPath<'a>,
     /// Path to opening book.
     pub book_path: OpeningBook<'a>,
     /// Number of game pairs to play.
@@ -79,7 +94,7 @@ pub struct TestSettings<'a, T: EngineType> {
 
 impl<T: EngineType> TestSettings<'_, T> {
     pub fn setup<LR: LrScheduler, WDL: WdlScheduler>(&self, schedule: &TrainingSchedule<LR, WDL>) {
-        let output = gamerunner::GameRunnerCommand::health_check(self.gamerunner_path);
+        let output = gamerunner::GameRunnerCommand::health_check(&self.gamerunner_path.as_internal());
 
         assert!(output.status.success(), "Could not start gamerunner!");
 
@@ -158,7 +173,7 @@ impl<T: EngineType> TestSettings<'_, T> {
         };
 
         let args = GameRunnerArgs {
-            gamerunner_path: self.gamerunner_path.to_string(),
+            gamerunner_path: self.gamerunner_path.as_internal(),
             dev_engine_path,
             base_engine_path,
             dev_options: self.dev_engine.uci_options.iter().map(UciOption::to_string).collect(),
