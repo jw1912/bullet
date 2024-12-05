@@ -1,5 +1,5 @@
 mod builder;
-pub mod cutechess;
+pub mod gamerunner;
 /// Contains the `InputType` trait for implementing custom input types,
 /// as well as several premade input formats that are commonly used.
 pub mod inputs;

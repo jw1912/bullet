@@ -78,7 +78,7 @@ fn main() {
     let testing = TestSettings {
         test_rate: 20,
         out_dir: concat!("../../nets/", net_id!()),
-        cutechess_path: "../../nets/cutechess-cli.exe",
+        gamerunner_path: "../../nets/fastchess.exe",
         book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
         num_game_pairs: 2000,
         concurrency: 6,

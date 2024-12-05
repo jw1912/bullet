@@ -20,7 +20,7 @@ pub use backend::{ConvolutionDescription, ExecutionContext};
 pub use bulletformat as format;
 pub use tensor::{Activation, Shape};
 pub use trainer::{
-    default::{cutechess, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
+    default::{gamerunner, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
     logger,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
