@@ -20,6 +20,10 @@ pub fn concat(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
     builder.create_result_of_operation(Operation::Concat, &[input1, input2])
 }
 
+pub fn matmul(builder: &mut GraphBuilder, weights: Node, input: Node) -> Node {
+    builder.create_result_of_operation(Operation::Linear, &[weights, input])
+}
+
 pub fn mpe(builder: &mut GraphBuilder, predicted: Node, target: Node, power: f32) -> Node {
     builder.create_result_of_operation(Operation::AbsPowerError(power), &[predicted, target])
 }
