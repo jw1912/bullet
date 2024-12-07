@@ -29,6 +29,7 @@ fn main() {
             ("l0b".to_string(), QuantTarget::I16(255)),
             ("l1w".to_string(), QuantTarget::I16(64)),
             ("l1b".to_string(), QuantTarget::I16(64 * 255)),
+            ("pst".to_string(), QuantTarget::I16(255)),
         ],
         false,
     );
@@ -70,10 +71,14 @@ fn build_network(inputs: usize, hl: usize) -> (Graph, Node) {
     let l0b = builder.create_weights("l0b", Shape::new(hl, 1));
     let l1w = builder.create_weights("l1w", Shape::new(1, hl * 2));
     let l1b = builder.create_weights("l1b", Shape::new(1, 1));
+    let pst = builder.create_weights("pst", Shape::new(1, inputs));
 
     // inference
     let l1 = operations::sparse_affine_dual_with_activation(&mut builder, l0w, stm, nstm, l0b, Activation::SCReLU);
-    let predicted = operations::affine(&mut builder, l1w, l1, l1b);
+    let l2 = operations::affine(&mut builder, l1w, l1, l1b);
+    let psqt = operations::matmul(&mut builder, pst, stm);
+    let predicted = operations::add(&mut builder, l2, psqt);
+
     let sigmoided = operations::activate(&mut builder, predicted, Activation::Sigmoid);
     operations::mse(&mut builder, sigmoided, targets);
 
