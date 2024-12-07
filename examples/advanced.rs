@@ -78,7 +78,7 @@ fn build_network(inputs: usize, hl: usize) -> (Graph, Node) {
     let l2 = operations::affine(&mut builder, l1w, l1, l1b);
     let psqt = operations::matmul(&mut builder, pst, stm);
     let predicted = operations::add(&mut builder, l2, psqt);
-    
+
     let sigmoided = operations::activate(&mut builder, predicted, Activation::Sigmoid);
     operations::mse(&mut builder, sigmoided, targets);
 
