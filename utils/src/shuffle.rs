@@ -32,6 +32,10 @@ impl ShuffleOptions {
         let input_size = fs::metadata(self.input.clone()).with_context(|| "Input file is invalid.")?.len() as usize;
         assert_eq!(0, input_size % CHESS_BOARD_SIZE);
 
+        // Test path before doing useless work
+        validate_output_path(Path::new(&self.output))
+            .with_context(|| format!("Invalid output path: {}", self.output.display()))?;
+
         println!("# [Shuffling Data]");
         let time = Instant::now();
 
@@ -136,6 +140,14 @@ fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
     let data_slice = unsafe { to_slice_with_lifetime(data) };
 
     output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
+}
+
+/// Test if we can write to the output path
+fn validate_output_path(path: &Path) -> anyhow::Result<()> {
+    match File::create(path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(anyhow::anyhow!("Cannot create file at specified path: {}", e)),
+    }
 }
 
 /// ### Safety
