@@ -11,6 +11,7 @@ mod select;
 mod slice;
 mod softmax;
 mod softmax_sparse;
+mod submatrix_product;
 
 pub use activate::Activation;
 
@@ -48,6 +49,8 @@ pub enum Operation {
     SparseSoftmaxCrossEntropyLoss,
     /// Warning! Internal use only!
     SparseAffineDual(Activation),
+    /// Reshapes vectors A, B with shape (n, 1) into (m, n / m) and computes A^T B
+    SubmatrixProduct(usize),
 }
 
 impl Operation {
@@ -66,6 +69,7 @@ impl Operation {
             Operation::SoftmaxCrossEntropyLoss => softmax::output_tensor(inputs),
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::output_tensor(inputs),
             Operation::SparseAffineDual(_) => affine_dual::output_tensor(inputs),
+            Operation::SubmatrixProduct(m) => submatrix_product::output_tensor(m, inputs),
         }
     }
 
@@ -84,6 +88,7 @@ impl Operation {
             Operation::SoftmaxCrossEntropyLoss => softmax::forward(ctx, inputs, output),
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::forward(inputs, output),
             Operation::SparseAffineDual(activation) => affine_dual::forward(inputs, output, activation),
+            Operation::SubmatrixProduct(m) => submatrix_product::forward(ctx, m, inputs, output),
         }
     }
 
@@ -102,6 +107,7 @@ impl Operation {
             Operation::SoftmaxCrossEntropyLoss => softmax::backprop(output_grad, inputs),
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::backprop(output_grad, inputs),
             Operation::SparseAffineDual(activation) => affine_dual::backprop(output_grad, inputs, activation),
+            Operation::SubmatrixProduct(m) => submatrix_product::backprop(ctx, m, output_grad, inputs),
         }
     }
 }

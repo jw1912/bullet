@@ -40,6 +40,11 @@ pub fn select(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
     builder.create_result_of_operation(Operation::Select, &[input1, input2])
 }
 
+/// Reshapes vectors A, B with shape (n, 1) into (m, n / m) and computes A^T B
+pub fn submatrix_product(builder: &mut GraphBuilder, m: usize, input1: Node, input2: Node) -> Node {
+    builder.create_result_of_operation(Operation::SubmatrixProduct(m), &[input1, input2])
+}
+
 /// This fuses the following operations
 ///
 /// ` stm_accumulator = activate(affine(weights,  stm, bias))`

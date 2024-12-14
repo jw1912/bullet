@@ -8,6 +8,7 @@ mod pairwise;
 mod power_error;
 mod slice;
 mod softmax;
+mod submatrix_product;
 
 use super::shape::Shape;
 use crate::backend::Buffer;
