@@ -70,6 +70,7 @@ extern "C" {
     pub fn hipblasSgemm(handle: hipblasHandle_t, transa: hipblasOperation_t, transb: hipblasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const f32, A: *const f32, lda: c_int, B: *const f32, ldb: c_int, beta: *const f32, C: *mut f32, ldc: c_int) -> hipblasStatus_t;
     pub fn hipblasSgeam(handle: hipblasHandle_t, transa: hipblasOperation_t, transb: hipblasOperation_t, m: c_int, n: c_int, alpha: *const f32, A: *const f32, lda: c_int, beta: *const f32, B: *const f32, ldb: c_int, C: *mut f32, ldc: c_int) -> hipblasStatus_t;
     pub fn hipblasSger(handle: hipblasHandle_t, m: c_int, n: c_int, alpha: *const f32, x: *const f32, incx: c_int, y: *const f32, incy: c_int, A: *mut f32, lda: c_int) -> hipblasStatus_t;
+    pub fn hipblasSgemmStridedBatched(handle: hipblasHandle_t, transA: hipblasOperation_t, transB: hipblasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const f32, AP: *const f32, lda: c_int, strideA: c_longlong, BP: *const f32, ldb: c_int, strideB: c_longlong, beta: *const f32, CP: *mut f32, ldc: c_int, strideC: c_longlong, batchCount: c_int) -> hipblasStatus_t;
 }
 
 #[repr(i32)]

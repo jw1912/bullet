@@ -6,6 +6,7 @@ mod conv;
 mod matmul;
 mod pairwise;
 mod power_error;
+mod submatrix_product;
 mod slice;
 mod softmax;
 

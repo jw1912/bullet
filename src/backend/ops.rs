@@ -60,6 +60,79 @@ pub unsafe fn sgemm(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
+pub unsafe fn batched_sgemm(
+    ctx: &mut ExecutionContext,
+    batch_size: usize,
+    input_a: *const f32,
+    input_a_rows: usize,
+    input_a_cols: usize,
+    trans_a: bool,
+    input_b: *const f32,
+    input_b_rows: usize,
+    input_b_cols: usize,
+    trans_b: bool,
+    output: *mut f32,
+    output_rows: usize,
+    output_cols: usize,
+    increment: bool,
+) {
+    let alpha = 1.0;
+    let beta = f32::from(increment);
+
+    let m = if trans_a { input_a_cols } else { input_a_rows };
+    let n = if trans_b { input_b_rows } else { input_b_cols };
+    let k = if trans_a { input_a_rows } else { input_a_cols };
+
+    if trans_b {
+        assert_eq!(input_b_cols, k);
+    } else {
+        assert_eq!(input_b_rows, k);
+    }
+
+    assert_eq!(output_rows, m);
+    assert_eq!(output_cols, n);
+
+    let trans_a = if trans_a { CUBLAS_OP_T } else { CUBLAS_OP_N };
+    let trans_b = if trans_b { CUBLAS_OP_T } else { CUBLAS_OP_N };
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let k = k as c_int;
+
+    let lda = input_a_rows as c_int;
+    let ldb = input_b_rows as c_int;
+    let ldo = output_rows as c_int;
+
+    let stride_a = (input_a_rows * input_a_cols) as i64;
+    let stride_b = (input_b_rows * input_b_cols) as i64;
+    let stride_o = (output_rows * output_cols) as i64;
+
+    let status = unsafe {
+        bindings::cublasSgemmStridedBatched(
+            ctx.handle,
+            trans_a,
+            trans_b,
+            m,
+            n,
+            k,
+            &alpha,
+            input_a,
+            lda,
+            stride_a,
+            input_b,
+            ldb,
+            stride_b,
+            &beta,
+            output,
+            ldo,
+            stride_o,
+            batch_size as i32,
+        )
+    };
+
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+}
+
 pub unsafe fn linear_comb_matrices(
     ctx: &mut ExecutionContext,
     rows: usize,
