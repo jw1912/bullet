@@ -6,9 +6,9 @@ mod conv;
 mod matmul;
 mod pairwise;
 mod power_error;
-mod submatrix_product;
 mod slice;
 mod softmax;
+mod submatrix_product;
 
 use super::shape::Shape;
 use crate::backend::Buffer;

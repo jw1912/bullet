@@ -26,7 +26,13 @@ pub fn output_tensor(m: usize, inputs: &[Shape]) -> Result<Shape, String> {
 }
 
 pub fn forward(ctx: &mut ExecutionContext, m: usize, inputs: &[&Tensor], output: &mut Tensor) {
-    DenseMatrix::submatrix_product(ctx, m, inputs[0].values.dense(), inputs[1].values.dense(), output.values.dense_mut());
+    DenseMatrix::submatrix_product(
+        ctx,
+        m,
+        inputs[0].values.dense(),
+        inputs[1].values.dense(),
+        output.values.dense_mut(),
+    );
 }
 
 pub fn backprop(ctx: &mut ExecutionContext, m: usize, output: &Tensor, inputs: &mut [&mut Tensor]) {
