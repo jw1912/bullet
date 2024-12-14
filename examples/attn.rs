@@ -83,7 +83,10 @@ fn build_network(inputs: usize, hl: usize, key_size: usize) -> (Graph, Node) {
 
     // inference
     let stm_acc = operations::affine(builder, l0w, stm, l0b);
+    let stm_acc = operations::activate(builder, stm_acc, Activation::CReLU);
+
     let ntm_acc = operations::affine(builder, l0w, nstm, l0b);
+    let ntm_acc = operations::activate(builder, ntm_acc, Activation::CReLU);
 
     let attn = operations::submatrix_product(builder, key_size, stm_acc, ntm_acc);
     let main_out = operations::affine(builder, l1w, attn, l1b);
