@@ -8,8 +8,9 @@ pub fn output_tensor(m: usize, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs[0] == inputs[1] {
             if inputs[0].cols() == 1 {
                 if inputs[0].rows() % m == 0 {
-                    let shape = Shape::new(m, inputs[0].rows() / m);
-                    Ok(shape.transpose() * shape)
+                    let inp = Shape::new(m, inputs[0].rows() / m);
+                    let out = inp.transpose() * inp;
+                    Ok(Shape::new(out.size(), 1))
                 } else {
                     Err(format!("Input vector ({}) must have dimension divisible by {m}!", inputs[0]))
                 }
