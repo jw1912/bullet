@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File},
-    io::{BufReader, BufWriter, Read, Write},
+    io::{BufReader, BufWriter, IoSliceMut, Read, Write},
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -100,9 +100,27 @@ impl ShuffleOptions {
         for (idx, file) in temp_files.iter().enumerate() {
             println!("# [Shuffling temp file {} / {}]", idx + 1, temp_files.len());
             println!("    -> Reading into ram");
+
             let buffer_size = positions_per_file[idx] * CHESS_BOARD_SIZE;
             let mut buffer = vec![0u8; buffer_size];
-            input.read_exact(&mut buffer[0..buffer_size])?;
+
+            // performs better than a read_exact
+
+            let chunk_size = 1024 * 1024;
+            let mut offset = 0;
+
+            while offset < buffer_size {
+                let remaining = buffer_size - offset;
+                let current_chunk = remaining.min(chunk_size);
+                let mut iovec = [IoSliceMut::new(&mut buffer[offset..offset + current_chunk])];
+                let bytes_read = input.read_vectored(&mut iovec)?;
+
+                if bytes_read == 0 {
+                    break;
+                }
+
+                offset += bytes_read;
+            }
 
             println!("    -> Shuffling in memory");
 
