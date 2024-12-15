@@ -31,6 +31,7 @@ impl SparseMatrix {
         input_b: &Self,
         input_c: Option<&DenseMatrix>,
         input_c_grad: Option<&mut DenseMatrix>,
+        outputs: &DenseMatrix,
         output_grad: &DenseMatrix,
     ) {
         input_a_grad.reshape_if_needed(input_a.shape());
@@ -50,6 +51,7 @@ impl SparseMatrix {
                 input_a_grad.buf.mut_ptr(),
                 c_ptr,
                 input_b.buf.ptr(),
+                outputs.buf.ptr(),
                 output_grad.buf.ptr(),
             );
         }
@@ -63,9 +65,10 @@ impl SparseMatrix {
         input_a: &DenseMatrix,
         input_a_grad: &mut DenseMatrix,
         input_b: &Self,
+        outputs: &DenseMatrix,
         output_grad: &DenseMatrix,
     ) {
-        Self::backprop_affine(input_a, input_a_grad, input_b, None, None, output_grad);
+        Self::backprop_affine(input_a, input_a_grad, input_b, None, None, outputs, output_grad);
     }
 }
 
@@ -122,7 +125,7 @@ mod tests {
 
         // backprop sparse linear
         {
-            SparseMatrix::backprop_linear(&input1, &mut input1_grad, &input2, &output);
+            SparseMatrix::backprop_linear(&input1, &mut input1_grad, &input2, &output, &output);
 
             util::panic_if_device_error("Failed to backprop matmul!");
 
