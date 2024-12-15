@@ -1,7 +1,9 @@
+#include "../util.cu"
 #ifdef __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime.h>
 #endif
 
+template<OpType op, size_t stride = 1>
 __global__ void sparseAffineForwardKernel(
     const size_t max_active,
     const size_t outputSize,
@@ -17,7 +19,7 @@ __global__ void sparseAffineForwardKernel(
 
     const size_t inputIdx = max_active * blockIdx.y;
     const int32_t* thisInput = inputs + inputIdx;
-    float* thisOutput = outputs + outputSize * blockIdx.y + elem;
+    float* thisOutput = outputs + stride * outputSize * blockIdx.y + elem;
 
     float ourElementVal = biases == nullptr ? 0.0F : biases[elem];
 
@@ -31,9 +33,10 @@ __global__ void sparseAffineForwardKernel(
         ourElementVal += weights[ourIdx];
     }
 
-    thisOutput[0] = ourElementVal;
+    thisOutput[0] = op(ourElementVal);
 }
 
+template<OpType op, size_t stride = 1>
 __global__ void sparseAffineForwardAlignedKernel(
     const size_t max_active,
     const size_t output_size,
@@ -78,7 +81,12 @@ __global__ void sparseAffineForwardAlignedKernel(
         val.w += a.w;
     }
 
-    ((float4 *)outputs)[output_size * blockIdx.y / 4 + elem] = val;
+    val.x = op(val.x);
+    val.y = op(val.y);
+    val.z = op(val.z);
+    val.w = op(val.w);
+
+    ((float4 *)outputs)[stride * output_size * blockIdx.y / 4 + elem] = val;
 }
 
 extern "C" void sparseAffineForward(
@@ -100,7 +108,7 @@ extern "C" void sparseAffineForward(
         const size_t chunks = (output4_size + threads - 1) / threads;
         dim3 grid(chunks, batchSize);
 
-        sparseAffineForwardAlignedKernel<<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
+        sparseAffineForwardAlignedKernel<Identity><<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
     }
     else
     {
@@ -108,6 +116,6 @@ extern "C" void sparseAffineForward(
         const size_t chunks = (outputSize + threads - 1) / threads;
         dim3 grid(chunks, batchSize);
 
-        sparseAffineForwardKernel<<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
+        sparseAffineForwardKernel<Identity><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
     }
 }

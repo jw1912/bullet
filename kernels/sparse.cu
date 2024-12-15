@@ -4,4 +4,3 @@
 #include "sparse/bwd.cu"
 #include "sparse/dual_fwd.cu"
 #include "sparse/dual_bwd.cu"
-#include "sparse/fwd.cu"
