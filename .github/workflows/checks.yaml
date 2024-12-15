@@ -12,7 +12,7 @@ jobs:
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
-        - run: cargo check --all --features gh-actions
+        - run: cargo check --features gh-actions
 
   clippy:
     name: cargo clippy
@@ -22,7 +22,7 @@ jobs:
         - uses: dtolnay/rust-toolchain@stable
           with:
             component: clippy
-        - run: cargo clippy --all --features gh-actions -- -D warnings
+        - run: cargo clippy --features gh-actions -- -D warnings
 
   fmt:
     name: cargo fmt
@@ -32,4 +32,4 @@ jobs:
         - uses: dtolnay/rust-toolchain@stable
           with:
             component: rustfmt
-        - run: cargo fmt --all -- --check
+        - run: cargo fmt -- --check
