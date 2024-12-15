@@ -222,5 +222,46 @@ mod tests {
 
             util::panic_if_device_error("Failed to write data to CPU!");
         }
+
+        DenseMatrix::linear_comb(&mut ctx, alpha, &input1, beta, &input1, &mut output);
+
+        util::panic_if_device_error("Failed to add matrices!");
+
+        assert_eq!(output.shape(), Shape::new(3, 3));
+
+        let mut buf = [0.0; 9];
+        output.write_to_slice(&mut buf);
+        assert_eq!(buf, [-1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 1.0, 1.0, 1.0]);
+
+        util::panic_if_device_error("Failed to write data to CPU!");
+
+        input1_grad.set_zero();
+        input2_grad.set_zero();
+
+        DenseMatrix::linear_comb_backward(
+            &mut ctx,
+            alpha,
+            &input1,
+            Some(&mut input1_grad),
+            beta,
+            &input1,
+            Some(&mut input2_grad),
+            &output,
+        );
+
+        util::panic_if_device_error("Failed to backprop addition!");
+
+        assert_eq!(input1_grad.shape(), shape1);
+        assert_eq!(input2_grad.shape(), shape1);
+
+        let mut grad1 = [0.0; 9];
+        input1_grad.write_to_slice(&mut grad1);
+        assert_eq!(grad1, [-2.0, 8.0, 4.0, -4.0, 0.0, -6.0, 2.0, 2.0, 2.0]);
+
+        let mut grad2 = [0.0; 9];
+        input2_grad.write_to_slice(&mut grad2);
+        assert_eq!(grad2, [1.0, -4.0, -2.0, 2.0, 0.0, 3.0, -1.0, -1.0, -1.0]);
+
+        util::panic_if_device_error("Failed to write data to CPU!");
     }
 }
