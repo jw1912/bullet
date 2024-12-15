@@ -40,7 +40,15 @@ impl DenseMatrix {
         output.reshape_if_needed(Shape::new(1, 1));
 
         unsafe {
-            ops::reduce_add_cols(ctx, 1, input.shape.size(), individual_losses.buf.ptr(), output.buf.mut_ptr(), false);
+            ops::reduce_add_cols(
+                ctx,
+                1,
+                input.shape.size(),
+                individual_losses.buf.ptr(),
+                output.buf.mut_ptr(),
+                1.0,
+                false,
+            );
         }
     }
 

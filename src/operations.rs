@@ -9,7 +9,7 @@ pub fn activate(builder: &mut GraphBuilder, input: Node, activation: Activation)
 }
 
 pub fn add(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
-    builder.create_result_of_operation(Operation::Add, &[input1, input2])
+    linear_combination(builder, 1.0, input1, 1.0, input2)
 }
 
 pub fn affine(builder: &mut GraphBuilder, weights: Node, input: Node, bias: Node) -> Node {
@@ -18,6 +18,10 @@ pub fn affine(builder: &mut GraphBuilder, weights: Node, input: Node, bias: Node
 
 pub fn concat(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
     builder.create_result_of_operation(Operation::Concat, &[input1, input2])
+}
+
+pub fn linear_combination(builder: &mut GraphBuilder, alpha: f32, input1: Node, beta: f32, input2: Node) -> Node {
+    builder.create_result_of_operation(Operation::LinearCombination(alpha, beta), &[input1, input2])
 }
 
 pub fn matmul(builder: &mut GraphBuilder, weights: Node, input: Node) -> Node {
@@ -38,6 +42,10 @@ pub fn pairwise_mul(builder: &mut GraphBuilder, input: Node) -> Node {
 
 pub fn select(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
     builder.create_result_of_operation(Operation::Select, &[input1, input2])
+}
+
+pub fn sub(builder: &mut GraphBuilder, input1: Node, input2: Node) -> Node {
+    linear_combination(builder, 1.0, input1, -1.0, input2)
 }
 
 /// Reshapes vectors A, B with shape (n, 1) into (m, n / m) and computes A^T B
