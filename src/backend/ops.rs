@@ -133,12 +133,13 @@ pub unsafe fn batched_sgemm(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
+/// If `input_a = None` then it takes `input_a = output` (in-place operation).
 pub unsafe fn linear_comb_matrices(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
     alpha: f32,
-    input_a: *const f32,
+    input_a: Option<*const f32>,
     beta: f32,
     input_b: *const f32,
     output: *mut f32,
@@ -158,7 +159,7 @@ pub unsafe fn linear_comb_matrices(
             m,
             n,
             &alpha,
-            input_a,
+            input_a.unwrap_or(output),
             lda,
             &beta,
             input_b,
@@ -171,28 +172,15 @@ pub unsafe fn linear_comb_matrices(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemm failed!");
 }
 
-pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize, input: *const f32, output: *mut f32) {
-    let alpha = 1.0;
-
-    let n = (rows * cols) as c_int;
-
-    let incx = 1;
-    let incy = 1;
-
-    let status = unsafe { bindings::cublasSaxpy_v2(ctx.handle, n, &alpha, input, incx, output, incy) };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Saxpy failed!");
-}
-
 pub unsafe fn reduce_add_cols(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
     input: *const f32,
     output: *mut f32,
+    alpha: f32,
     increment: bool,
 ) {
-    let alpha = 1.0;
     let beta = f32::from(increment);
 
     let m = rows as c_int;
@@ -272,11 +260,10 @@ pub unsafe fn add_vector_to_matrix_columns(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
+    alpha: f32,
     vector: *const f32,
     matrix: *mut f32,
 ) {
-    let alpha = 1.0;
-
     let m = rows as c_int;
     let n = cols as c_int;
 

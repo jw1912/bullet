@@ -20,7 +20,7 @@ pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tens
         Matrix::Sparse(sparse) => SparseMatrix::affine(weights, sparse, Some(biases), out),
         Matrix::Dense(dense) => {
             DenseMatrix::matmul(ctx, weights, false, dense, false, out);
-            DenseMatrix::add_assign_vector_to_matrix_columns(ctx, biases, out);
+            DenseMatrix::add_assign_vector_to_matrix_columns_scaled(ctx, 1.0, biases, out);
         }
     }
 }
@@ -46,7 +46,7 @@ pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut 
         Matrix::Dense(_) => {
             super::linear::backprop(ctx, output, &mut [&mut input1[0], &mut input2[0]]);
             if let Some(grad) = &mut input3[0].gradients {
-                DenseMatrix::backprop_add_single(ctx, input3[0].values.dense(), grad, out);
+                DenseMatrix::backprop_add_single(ctx, 1.0, input3[0].values.dense(), grad, out);
             }
         }
     }
