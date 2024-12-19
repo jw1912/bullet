@@ -142,7 +142,7 @@ fn shuffle_positions(data: &mut [u8]) {
     for i in (0..len).rev() {
         let idx = rng.rand_int() as usize % (i + 1);
         for j in 0..CHESS_BOARD_SIZE {
-            data.swap(idx + j, i + j);
+            data.swap(CHESS_BOARD_SIZE * idx + j, CHESS_BOARD_SIZE * i + j);
         }
     }
 }
