@@ -64,29 +64,11 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
     fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, mut f: F) {
         let buffer_size_mb = 256;
         let buffer_size = buffer_size_mb * 1024 * 1024;
-        let data_size: usize = std::mem::size_of::<T>();
+        let data_size = size_of::<T>();
         let batches_per_load = buffer_size / data_size / batch_size;
         let cap = batch_size * batches_per_load;
 
-        let mut buf = Box::<[T]>::new_uninit_slice(cap);
-
-        // safe as `T` can be any bit pattern, including 0s
-        let zeroed = unsafe {
-            let mut t: MaybeUninit<T> = MaybeUninit::uninit();
-            let tslice: &mut [MaybeUninit<u8>] = slice::from_raw_parts_mut(t.as_mut_ptr().cast(), size_of::<T>());
-
-            for elem in tslice {
-                elem.write(0);
-            }
-
-            t.assume_init()
-        };
-
-        for elem in buf.iter_mut() {
-            elem.write(zeroed);
-        }
-
-        let mut buf = unsafe { buf.assume_init() };
+        let mut buf = unsafe { zeroed_boxed_slice::<T>(cap) };
 
         'dataloading: loop {
             let mut loader_files = vec![];
@@ -121,4 +103,26 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
             }
         }
     }
+}
+
+unsafe fn zeroed_boxed_slice<T: CanBeDirectlySequentiallyLoaded>(cap: usize) -> Box<[T]> {
+    let mut buf = Box::<[T]>::new_uninit_slice(cap);
+
+    // safe as `T` can be any bit pattern, including 0s
+    let zeroed = unsafe {
+        let mut t: MaybeUninit<T> = MaybeUninit::uninit();
+        let tslice: &mut [MaybeUninit<u8>] = slice::from_raw_parts_mut(t.as_mut_ptr().cast(), size_of::<T>());
+
+        for elem in tslice {
+            elem.write(0);
+        }
+
+        t.assume_init()
+    };
+
+    for elem in buf.iter_mut() {
+        elem.write(zeroed);
+    }
+
+    unsafe { buf.assume_init() }
 }
