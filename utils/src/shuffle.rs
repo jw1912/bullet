@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File},
-    io::{BufReader, BufWriter, IoSliceMut, Read, Write},
+    io::{BufReader, IoSliceMut, Read, Write},
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -41,13 +41,11 @@ impl ShuffleOptions {
 
         if input_size <= self.mem_used_mb * BYTES_PER_MB {
             let mut raw_bytes = std::fs::read(&self.input).with_context(|| "Failed to read input.")?;
-            let data = unsafe { to_slice_with_lifetime_mut(&mut raw_bytes) };
 
-            shuffle_positions(data);
+            shuffle_positions(&mut raw_bytes);
 
-            let mut output = BufWriter::new(File::create(&self.output).with_context(|| "Provide a correct path!")?);
-
-            write_data(data, &mut output);
+            let mut file = File::create(&self.output).with_context(|| "Provide a correct path!")?;
+            file.write_all(&raw_bytes)?;
         } else {
             let temp_dir = Path::new(TMP_DIR);
             if !Path::exists(temp_dir) {
@@ -97,7 +95,7 @@ impl ShuffleOptions {
             *size += 1;
         }
 
-        for (idx, file) in temp_files.iter().enumerate() {
+        for (idx, mut file) in temp_files.iter().enumerate() {
             println!("# [Shuffling temp file {} / {}]", idx + 1, temp_files.len());
             println!("    -> Reading into ram");
 
@@ -124,40 +122,29 @@ impl ShuffleOptions {
 
             println!("    -> Shuffling in memory");
 
-            let data = unsafe { to_slice_with_lifetime_mut(&mut buffer[0..buffer_size]) };
-
-            shuffle_positions(data);
-
-            let data_slice = unsafe { to_slice_with_lifetime(data) };
-
-            assert_eq!(0, buffer_size % CHESS_BOARD_SIZE);
+            shuffle_positions(&mut buffer[0..buffer_size]);
 
             println!("    -> Writing to temp file");
-            let mut writer = BufWriter::new(file);
-            writer.write_all(data_slice)?;
+            file.write_all(&buffer[0..buffer_size])?;
         }
 
         Ok(())
     }
 }
 
-fn shuffle_positions(data: &mut [ChessBoard]) {
+fn shuffle_positions(data: &mut [u8]) {
+    assert_eq!(data.len() % CHESS_BOARD_SIZE, 0);
+
+    let len = data.len() / CHESS_BOARD_SIZE;
+
     let mut rng = Rand::default();
 
-    for i in (0..data.len()).rev() {
+    for i in (0..len).rev() {
         let idx = rng.rand_int() as usize % (i + 1);
-        data.swap(idx, i);
+        for j in 0..CHESS_BOARD_SIZE {
+            data.swap(CHESS_BOARD_SIZE * idx + j, CHESS_BOARD_SIZE * i + j);
+        }
     }
-}
-
-fn write_data(data: &[ChessBoard], output: &mut BufWriter<File>) {
-    if data.is_empty() {
-        return;
-    }
-
-    let data_slice = unsafe { to_slice_with_lifetime(data) };
-
-    output.write_all(data_slice).expect("Nothing can go wrong in unsafe code!");
 }
 
 /// Test if we can write to the output path
@@ -166,28 +153,4 @@ fn validate_output_path(path: &Path) -> anyhow::Result<()> {
         Ok(_) => Ok(()),
         Err(e) => Err(anyhow::anyhow!("Cannot create file at specified path: {}", e)),
     }
-}
-
-/// ### Safety
-/// `&[T]` must be reinterpretable as `&[U]`
-unsafe fn to_slice_with_lifetime<T, U>(slice: &[T]) -> &[U] {
-    let src_size = std::mem::size_of_val(slice);
-    let tgt_size = std::mem::size_of::<U>();
-
-    assert!(src_size % tgt_size == 0, "Target type size does not divide slice size!");
-
-    let len = src_size / tgt_size;
-    unsafe { std::slice::from_raw_parts(slice.as_ptr().cast(), len) }
-}
-
-/// ### Safety
-/// `&mut [T]` must be reinterpretable as `&mut [U]`
-unsafe fn to_slice_with_lifetime_mut<T, U>(slice: &mut [T]) -> &mut [U] {
-    let src_size = std::mem::size_of_val(slice);
-    let tgt_size = std::mem::size_of::<U>();
-
-    assert!(src_size % tgt_size == 0, "Target type size does not divide slice size!");
-
-    let len = src_size / tgt_size;
-    unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr().cast(), len) }
 }
