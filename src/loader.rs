@@ -108,8 +108,9 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
                     }
 
                     assert_eq!(count % size_of::<T>(), 0);
+                    let len = count / size_of::<T>();
 
-                    for batch in buf[..count].chunks(batch_size) {
+                    for batch in buf[..len].chunks(batch_size) {
                         let should_break = f(batch);
 
                         if should_break {
