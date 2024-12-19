@@ -1,6 +1,4 @@
-use std::{
-    fs::File, io::Read, mem::MaybeUninit, path::PathBuf, slice
-};
+use std::{fs::File, io::Read, mem::MaybeUninit, path::PathBuf, slice};
 
 /// Dictates how data is read from a file into the expected datatype.
 /// This allows for the file format to be divorced from the training
@@ -78,12 +76,12 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
 
             for mut loader_file in loader_files {
                 loop {
-                    let count = loader_file.read(
-                        // we can cast the type `T` to an array of bytes
-                        unsafe {
-                            std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), cap * size_of::<T>())
-                        }
-                    ).unwrap_or(0);
+                    let count = loader_file
+                        .read(
+                            // we can cast the type `T` to an array of bytes
+                            unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), cap * size_of::<T>()) },
+                        )
+                        .unwrap_or(0);
 
                     if count == 0 {
                         break;
