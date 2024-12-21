@@ -206,8 +206,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             }
         };
 
-        let mut ft_desc =
-            format!("{}x{} -> {}", self.input_getter.inputs(), self.input_getter.buckets(), self.ft_out_size);
+        let input_buckets = self.input_getter.buckets();
+        let mut ft_desc = if input_buckets > 1 {
+            format!("{}x{input_buckets} -> {}", self.input_getter.inputs(), self.ft_out_size)
+        } else {
+            format!("{} -> {}", self.input_getter.inputs(), self.ft_out_size)
+        };
 
         if self.perspective {
             ft_desc = format!("({ft_desc})x2");

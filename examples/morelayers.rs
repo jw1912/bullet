@@ -14,7 +14,7 @@ fn main() {
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
         .input(inputs::Chess768)
-        .output_buckets(outputs::Single)
+        .output_buckets(outputs::MaterialCount::<8>)
         .feature_transformer(768)
         .activate(Activation::SCReLU)
         .add_layer(8)
@@ -42,7 +42,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["../../data/akimbo3-9.data"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
 }
