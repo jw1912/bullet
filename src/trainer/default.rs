@@ -60,6 +60,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     output_node: Node,
     additional_inputs: AdditionalTrainerInputs,
     saved_format: Vec<(String, QuantTarget)>,
+    arch_description: Option<String>,
 }
 
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
@@ -163,6 +164,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             output_node,
             additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
+            arch_description: None,
         }
     }
 
@@ -182,8 +184,14 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     ) -> (DefaultDataLoader<Inp, Out, D>, Option<DirectLoader<Inp, Out>>) {
         logger::clear_colours();
         println!("{}", logger::ansi("Beginning Training", "34;1"));
+
+        if let Some(desc) = &self.arch_description {
+            println!("Architecture           : {}", logger::ansi(desc, "32;1"));
+        }
+
         schedule.display();
         settings.display();
+
         let preparer = DefaultDataLoader::new(
             self.input_getter,
             self.output_getter,
@@ -192,6 +200,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             data_loader.clone(),
             self.additional_inputs.dense_inputs,
         );
+
         let test_preparer = settings.test_set.map(|test| {
             DefaultDataLoader::new(
                 self.input_getter,
