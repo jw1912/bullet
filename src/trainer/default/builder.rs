@@ -206,6 +206,17 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             }
         };
 
+        let input_buckets = self.input_getter.buckets();
+        let mut ft_desc = if input_buckets > 1 {
+            format!("{}x{input_buckets} -> {}", self.input_getter.inputs(), self.ft_out_size)
+        } else {
+            format!("{} -> {}", self.input_getter.inputs(), self.ft_out_size)
+        };
+
+        if self.perspective {
+            ft_desc = format!("({ft_desc})x2");
+        }
+
         push_saved_format(0);
 
         let mut out = builder.create_input("stm", input_shape);
@@ -231,6 +242,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut layer = 1;
 
+        let mut layer_sizes = Vec::new();
+
         let mut prev_size = self.ft_out_size * if self.perspective { 2 } else { 1 };
 
         for &NodeType { size, op } in self.nodes.iter().skip(skip) {
@@ -251,6 +264,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
                     out = operations::affine(&mut builder, w, out, b);
                     prev_size = size;
+
+                    layer_sizes.push(size);
 
                     if let Some(buckets) = buckets {
                         out = operations::select(&mut builder, out, buckets);
@@ -281,6 +296,20 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let ctx = ExecutionContext::default();
         let graph = builder.build(ctx);
 
+        let mut output_desc = format!("{}", layer_sizes[0]);
+
+        for size in layer_sizes.iter().skip(1) {
+            output_desc.push_str(&format!(" -> {size}"));
+        }
+
+        if output_buckets {
+            if layer_sizes.len() == 1 {
+                output_desc = format!("{output_desc}x{}", U::BUCKETS);
+            } else {
+                output_desc = format!("({output_desc})x{}", U::BUCKETS);
+            }
+        }
+
         let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
             input_getter: self.input_getter,
@@ -293,6 +322,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 dense_inputs: false,
             },
             saved_format,
+            arch_description: Some(format!("{ft_desc} -> {output_desc}")),
         };
 
         let graph = trainer.optimiser.graph_mut();
