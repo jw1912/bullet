@@ -61,6 +61,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     additional_inputs: AdditionalTrainerInputs,
     saved_format: Vec<(String, QuantTarget)>,
     arch_description: Option<String>,
+    factorised_weights: Option<String>,
 }
 
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
@@ -165,6 +166,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
             arch_description: None,
+            factorised_weights: None,
         }
     }
 
@@ -320,6 +322,13 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             let mut weight_buf = vec![0.0; weights.shape().size()];
             let written = weights.write_to_slice(&mut weight_buf);
             assert_eq!(written, weights.shape().size());
+
+            if let Some(factorised) = &self.factorised_weights {
+                if factorised == id {
+                    assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
+                    weight_buf = self.input_getter.merge_factoriser(weight_buf);
+                }
+            }
 
             let quantised = quant.quantise(&weight_buf)?;
             buf.extend_from_slice(&quantised);

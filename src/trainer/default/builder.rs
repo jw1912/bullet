@@ -310,6 +310,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             }
         }
 
+        let factorised_weights = if self.input_getter.is_factorised() { Some("l0w".to_string()) } else { None };
+
         let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
             input_getter: self.input_getter,
@@ -323,6 +325,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             },
             saved_format,
             arch_description: Some(format!("{ft_desc} -> {output_desc}")),
+            factorised_weights,
         };
 
         let graph = trainer.optimiser.graph_mut();
