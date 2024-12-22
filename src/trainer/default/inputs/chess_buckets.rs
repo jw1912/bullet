@@ -52,6 +52,10 @@ impl InputType for ChessBuckets {
 
         ChessBucketsIter { buckets, board_iter: pos.into_iter() }
     }
+
+    fn description(&self) -> String {
+        "King bucketed psqt chess inputs".to_string()
+    }
 }
 
 pub struct ChessBucketsIter {

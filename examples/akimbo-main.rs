@@ -21,7 +21,7 @@ fn main() {
         .quantisations(&[255, 64])
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
-        .input(inputs::ChessBucketsMirrored::new([
+        .input(inputs::ChessBucketsMirroredFactorised::new([
             0, 0, 1, 1,
             2, 2, 2, 2,
             3, 3, 3, 3,

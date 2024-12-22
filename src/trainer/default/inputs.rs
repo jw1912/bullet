@@ -41,6 +41,10 @@ pub trait InputType: Send + Sync + Copy + Default + 'static {
         assert!(self.is_factorised());
         unmerged
     }
+
+    fn description(&self) -> String {
+        "Unspecified input format".to_string()
+    }
 }
 
 fn get_num_buckets<const N: usize>(arr: &[usize; N]) -> usize {

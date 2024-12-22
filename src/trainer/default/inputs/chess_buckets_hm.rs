@@ -58,6 +58,10 @@ impl InputType for ChessBucketsMirrored {
             board_iter: pos.into_iter(),
         }
     }
+
+    fn description(&self) -> String {
+        "Horizontally mirrored, king bucketed psqt chess inputs".to_string()
+    }
 }
 
 pub struct ChessBucketsMirroredIter {
