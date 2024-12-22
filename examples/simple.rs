@@ -45,7 +45,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
+    let data_loader = loader::SfBinpackLoader::new("data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack", 1024);
 
     trainer.run(&schedule, &settings, &data_loader);
 }

@@ -27,8 +27,13 @@ fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     bbs[6] = pc_bb(PieceType::Queen);
     bbs[7] = pc_bb(PieceType::King);
 
-    let score = entry.score;
-    let result = f32::from(entry.result) / 2.0;
+    let mut score = entry.score;
+    let mut result = f32::from(entry.result) / 2.0;
+
+    if stm > 0 {
+        score = -score;
+        result = 1.0 - result;
+    }
 
     ChessBoard::from_raw(bbs, stm, score, result).expect("Binpack must be malformed!")
 }
