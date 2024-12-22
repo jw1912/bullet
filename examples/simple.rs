@@ -40,28 +40,29 @@ fn main() {
             start_superbatch: 1,
             end_superbatch: 20,
         },
-        wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
+        wdl_scheduler: wdl::ConstantWDL { value: 0.75 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 8 },
         save_rate: 10,
     };
 
     trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
     // loading from a SF binpack
     let data_loader = {
         let file_path = "data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack";
         let buffer_size_mb = 1024;
+        let threads = 4;
         fn filter(entry: &TrainingDataEntry) -> bool {
             entry.ply >= 16
-                // && entry.pos.is_checked(entry.pos.side_to_move())
+                && !entry.pos.is_checked(entry.pos.side_to_move())
                 && entry.score.unsigned_abs() <= 10000
                 && entry.mv.mtype() == MoveType::Normal
                 && entry.pos.piece_at(entry.mv.to).piece_type() == PieceType::None
         }
 
-        loader::SfBinpackLoader::new(file_path, buffer_size_mb, filter)
+        loader::SfBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
     };
 
     // loading directly from a `BulletFormat` file

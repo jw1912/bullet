@@ -1,5 +1,6 @@
 use std::{
-    sync::mpsc::{self, Receiver, SyncSender},
+    sync::mpsc,
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -42,14 +43,16 @@ fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
 pub struct SfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool> {
     file_path: [String; 1],
     buffer_size: usize,
+    threads: usize,
     filter: T,
 }
 
 impl<T: Fn(&TrainingDataEntry) -> bool> SfBinpackLoader<T> {
-    pub fn new(path: &str, buffer_size_mb: usize, filter: T) -> Self {
+    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: T) -> Self {
         Self {
             file_path: [path.to_string(); 1],
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
+            threads,
             filter,
         }
     }
@@ -70,13 +73,100 @@ where
     fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, batch_size: usize, mut f: F) {
         let file_path = self.file_path[0].clone();
         let buffer_size = self.buffer_size;
+        let threads = self.threads;
         let filter = self.filter.clone();
+
+        let reader_buffer_size = 16384 * threads;
+        let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<TrainingDataEntry>>(8);
+        let (reader_msg_sender, reader_msg_receiver) = mpsc::sync_channel::<bool>(1);
+
+        std::thread::spawn(move || {
+            let mut buffer = Vec::with_capacity(reader_buffer_size);
+
+            'dataloading: loop {
+                let mut reader = CompressedTrainingDataEntryReader::new(&file_path).unwrap();
+
+                while reader.has_next() {
+                    buffer.push(reader.next());
+
+                    if buffer.len() == reader_buffer_size || !reader.has_next() {
+                        if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(buffer).is_err() {
+                            break 'dataloading;
+                        }
+
+                        buffer = Vec::with_capacity(reader_buffer_size);
+                    }
+                }
+            }
+        });
+
+        let (converted_sender, converted_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(4 * threads);
+        let (converted_msg_sender, converted_msg_receiver) = mpsc::sync_channel::<bool>(1);
+
+        std::thread::spawn(move || {
+            let filter = &filter;
+            let mut should_break = false;
+            'dataloading: while let Ok(unfiltered) = reader_receiver.recv() {
+                if should_break || converted_msg_receiver.try_recv().unwrap_or(false) {
+                    reader_msg_sender.send(true).unwrap();
+                    break 'dataloading;
+                }
+
+                thread::scope(|s| {
+                    let chunk_size = unfiltered.len().div_ceil(threads);
+                    let mut handles = Vec::new();
+
+                    for chunk in unfiltered.chunks(chunk_size) {
+                        let this_sender = converted_sender.clone();
+                        let handle = s.spawn(move || {
+                            let mut buffer = Vec::with_capacity(chunk_size);
+
+                            for entry in chunk {
+                                if filter(entry) {
+                                    buffer.push(convert_to_bulletformat(entry));
+                                }
+                            }
+
+                            this_sender.send(buffer).is_err()
+                        });
+
+                        handles.push(handle);
+                    }
+
+                    for handle in handles {
+                        if handle.join().unwrap() {
+                            reader_msg_sender.send(true).unwrap();
+                            should_break = true;
+                        }
+                    }
+                });
+            }
+        });
 
         let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
         let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
-            read_from_file(&file_path, buffer_size, &filter, buffer_sender, buffer_msg_receiver)
+            let mut shuffle_buffer = Vec::with_capacity(buffer_size);
+
+            'dataloading: while let Ok(converted) = converted_receiver.recv() {
+                for entry in converted {
+                    shuffle_buffer.push(entry);
+
+                    if shuffle_buffer.len() == buffer_size {
+                        shuffle(&mut shuffle_buffer);
+
+                        if buffer_msg_receiver.try_recv().unwrap_or(false)
+                            || buffer_sender.send(shuffle_buffer).is_err()
+                        {
+                            converted_msg_sender.send(true).unwrap();
+                            break 'dataloading;
+                        }
+
+                        shuffle_buffer = Vec::with_capacity(buffer_size);
+                    }
+                }
+            }
         });
 
         let (batch_sender, batch_reciever) = mpsc::sync_channel::<Vec<ChessBoard>>(16);
@@ -105,40 +195,6 @@ where
         }
 
         drop(batch_reciever);
-    }
-}
-
-fn read_from_file<T>(
-    file_path: &str,
-    buffer_size: usize,
-    filter: &T,
-    sender: SyncSender<Vec<ChessBoard>>,
-    receiver: Receiver<bool>,
-) where
-    T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
-{
-    let mut shuffle_buffer = Vec::with_capacity(buffer_size);
-
-    'dataloading: loop {
-        let mut reader = CompressedTrainingDataEntryReader::new(file_path).unwrap();
-
-        while reader.has_next() {
-            let entry = reader.next();
-
-            if filter(&entry) {
-                shuffle_buffer.push(convert_to_bulletformat(&entry));
-            }
-
-            if shuffle_buffer.len() == buffer_size || !reader.has_next() {
-                shuffle(&mut shuffle_buffer);
-
-                if receiver.try_recv().unwrap_or(false) || sender.send(shuffle_buffer).is_err() {
-                    break 'dataloading;
-                }
-
-                shuffle_buffer = Vec::with_capacity(buffer_size);
-            }
-        }
     }
 }
 
