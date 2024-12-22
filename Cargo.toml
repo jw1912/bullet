@@ -19,9 +19,10 @@ gh-actions = []
 bulletformat = { workspace = true }
 rand = "0.8.5"
 rand_distr = "0.4.3"
+sfbinpack = { package = "binpack", git = "https://github.com/Disservin/binpack-rust" }
 
 [build-dependencies]
-cc = "1.0.83"
+cc = "1.2.5"
 
 [workspace]
 resolver = "2"
