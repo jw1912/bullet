@@ -6,8 +6,12 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
-    TrainingSteps,
+    inputs, loader, lr, optimiser, outputs,
+    sfbinpack::{
+        chess::{piecetype::PieceType, r#move::MoveType},
+        data_entry::TrainingDataEntry,
+    },
+    wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -43,9 +47,26 @@ fn main() {
 
     trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
+    // loading from a SF binpack
+    let data_loader = {
+        let file_path = "data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack";
+        let buffer_size_mb = 1024;
+        let threads = 4;
+        fn filter(entry: &TrainingDataEntry) -> bool {
+            entry.ply >= 16
+                && !entry.pos.is_checked(entry.pos.side_to_move())
+                && entry.score.unsigned_abs() <= 10000
+                && entry.mv.mtype() == MoveType::Normal
+                && entry.pos.piece_at(entry.mv.to).piece_type() == PieceType::None
+        }
+
+        loader::SfBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
+    };
+
+    // loading directly from a `BulletFormat` file
+    //let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
 }

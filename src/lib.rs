@@ -18,6 +18,7 @@ mod trainer;
 pub use autograd::{Graph, GraphBuilder, Node};
 pub use backend::{ConvolutionDescription, ExecutionContext};
 pub use bulletformat as format;
+pub use sfbinpack;
 pub use tensor::{Activation, Shape};
 pub use trainer::{
     default::{gamerunner, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
