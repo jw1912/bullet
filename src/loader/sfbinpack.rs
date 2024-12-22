@@ -129,7 +129,7 @@ fn read_from_file<T>(
                 shuffle_buffer.push(convert_to_bulletformat(&entry));
             }
 
-            if shuffle_buffer.len() == buffer_size {
+            if shuffle_buffer.len() == buffer_size || !reader.has_next() {
                 shuffle(&mut shuffle_buffer);
 
                 if receiver.try_recv().unwrap_or(false) || sender.send(shuffle_buffer).is_err() {

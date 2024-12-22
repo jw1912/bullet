@@ -52,9 +52,11 @@ fn main() {
     // loading from a SF binpack
     let data_loader = {
         let file_path = "data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack";
-        let buffer_size_mb = 2048;
+        let buffer_size_mb = 1024;
         fn filter(entry: &TrainingDataEntry) -> bool {
-            entry.score.unsigned_abs() <= 10000
+            entry.ply >= 16
+                // && entry.pos.is_checked(entry.pos.side_to_move())
+                && entry.score.unsigned_abs() <= 10000
                 && entry.mv.mtype() == MoveType::Normal
                 && entry.pos.piece_at(entry.mv.to).piece_type() == PieceType::None
         }
