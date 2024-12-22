@@ -1,5 +1,5 @@
 use std::{
-    sync::mpsc,
+    sync::mpsc::{self, Receiver, SyncSender},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -28,7 +28,7 @@ fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     bbs[7] = pc_bb(PieceType::King);
 
     let mut score = entry.score;
-    let mut result = f32::from(entry.result) / 2.0;
+    let mut result = f32::from(1 + entry.result) / 2.0;
 
     if stm > 0 {
         score = -score;
@@ -39,21 +39,26 @@ fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
 }
 
 #[derive(Clone)]
-pub struct SfBinpackLoader {
+pub struct SfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool> {
     file_path: [String; 1],
     buffer_size: usize,
+    filter: T,
 }
 
-impl SfBinpackLoader {
-    pub fn new(path: &str, buffer_size_mb: usize) -> Self {
+impl<T: Fn(&TrainingDataEntry) -> bool> SfBinpackLoader<T> {
+    pub fn new(path: &str, buffer_size_mb: usize, filter: T) -> Self {
         Self {
             file_path: [path.to_string(); 1],
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
+            filter,
         }
     }
 }
 
-impl DataLoader<ChessBoard> for SfBinpackLoader {
+impl<T> DataLoader<ChessBoard> for SfBinpackLoader<T>
+where
+    T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
+{
     fn data_file_paths(&self) -> &[String] {
         &self.file_path
     }
@@ -63,35 +68,15 @@ impl DataLoader<ChessBoard> for SfBinpackLoader {
     }
 
     fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, batch_size: usize, mut f: F) {
+        let file_path = self.file_path[0].clone();
+        let buffer_size = self.buffer_size;
+        let filter = self.filter.clone();
+
         let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
         let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
-        let file_path = self.file_path[0].clone();
-        let buffer_size = self.buffer_size;
-
         std::thread::spawn(move || {
-            let mut shuffle_buffer = Vec::with_capacity(buffer_size);
-
-            'dataloading: loop {
-                let mut reader = CompressedTrainingDataEntryReader::new(&file_path).unwrap();
-
-                while reader.has_next() {
-                    let entry = reader.next();
-                    shuffle_buffer.push(convert_to_bulletformat(&entry));
-
-                    if shuffle_buffer.len() == buffer_size {
-                        shuffle(&mut shuffle_buffer);
-
-                        if buffer_msg_receiver.try_recv().unwrap_or(false)
-                            || buffer_sender.send(shuffle_buffer).is_err()
-                        {
-                            break 'dataloading;
-                        }
-
-                        shuffle_buffer = Vec::with_capacity(buffer_size);
-                    }
-                }
-            }
+            read_from_file(&file_path, buffer_size, &filter, buffer_sender, buffer_msg_receiver)
         });
 
         let (batch_sender, batch_reciever) = mpsc::sync_channel::<Vec<ChessBoard>>(16);
@@ -120,6 +105,40 @@ impl DataLoader<ChessBoard> for SfBinpackLoader {
         }
 
         drop(batch_reciever);
+    }
+}
+
+fn read_from_file<T>(
+    file_path: &str,
+    buffer_size: usize,
+    filter: &T,
+    sender: SyncSender<Vec<ChessBoard>>,
+    receiver: Receiver<bool>,
+) where
+    T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
+{
+    let mut shuffle_buffer = Vec::with_capacity(buffer_size);
+
+    'dataloading: loop {
+        let mut reader = CompressedTrainingDataEntryReader::new(file_path).unwrap();
+
+        while reader.has_next() {
+            let entry = reader.next();
+
+            if filter(&entry) {
+                shuffle_buffer.push(convert_to_bulletformat(&entry));
+            }
+
+            if shuffle_buffer.len() == buffer_size {
+                shuffle(&mut shuffle_buffer);
+
+                if receiver.try_recv().unwrap_or(false) || sender.send(shuffle_buffer).is_err() {
+                    break 'dataloading;
+                }
+
+                shuffle_buffer = Vec::with_capacity(buffer_size);
+            }
+        }
     }
 }
 

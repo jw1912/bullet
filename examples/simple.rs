@@ -6,14 +6,24 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
-    TrainingSteps,
+    inputs, loader, lr, optimiser, outputs,
+    sfbinpack::{
+        chess::{piecetype::PieceType, r#move::MoveType},
+        data_entry::TrainingDataEntry,
+    },
+    wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
 };
 
 const HIDDEN_SIZE: usize = 128;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
+
+fn filter(entry: &TrainingDataEntry) -> bool {
+    entry.score.unsigned_abs() <= 10000
+        && entry.mv.mtype() == MoveType::Normal
+        && entry.pos.piece_at(entry.mv.to).piece_type() == PieceType::None
+}
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
@@ -36,7 +46,7 @@ fn main() {
             start_superbatch: 1,
             end_superbatch: 20,
         },
-        wdl_scheduler: wdl::ConstantWDL { value: 0.75 },
+        wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 8 },
         save_rate: 10,
     };
@@ -45,7 +55,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::SfBinpackLoader::new("data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack", 1024);
+    let data_loader = loader::SfBinpackLoader::new("data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack", 1024, filter);
 
     trainer.run(&schedule, &settings, &data_loader);
 }
