@@ -37,7 +37,12 @@ impl<A: InputType, B: Factorises<A>> InputType for Factorised<A, B> {
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        FactorisedIter { iter: self.normal.feature_iter(pos), queued: None, offset: self.normal.size(), inputs: *self }
+        FactorisedIter {
+            iter: self.normal.feature_iter(pos),
+            queued: None,
+            offset: self.factoriser.size(),
+            inputs: *self,
+        }
     }
 
     fn is_factorised(&self) -> bool {
@@ -45,19 +50,18 @@ impl<A: InputType, B: Factorises<A>> InputType for Factorised<A, B> {
     }
 
     fn merge_factoriser(&self, unmerged: Vec<f32>) -> Vec<f32> {
-        let tgt_size = self.normal.size();
         let src_size = self.size();
 
         assert_eq!(unmerged.len() % src_size, 0);
-
         let layer_size = unmerged.len() / src_size;
+        let offset = self.factoriser.size();
 
-        (0..src_size * layer_size)
+        (0..self.normal.size() * layer_size)
             .map(|elem| {
                 let feat = elem / layer_size;
                 let idx = elem % layer_size;
                 let factorised_feat = self.factoriser.derive_feature(&self.normal, feat);
-                unmerged[layer_size * feat + idx] + unmerged[layer_size * (tgt_size + factorised_feat) + idx]
+                unmerged[layer_size * (feat + offset) + idx] + unmerged[layer_size * factorised_feat + idx]
             })
             .collect()
     }
@@ -85,9 +89,12 @@ impl<A: InputType, B: Factorises<A>> Iterator for FactorisedIter<A, B> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(feats) = self.queued {
             self.queued = None;
-            Some((self.offset + feats.0, self.offset + feats.1))
+            Some(feats)
         } else {
-            self.iter.next().inspect(|&feat| self.queued = Some(self.map_feat(feat)))
+            self.iter.next().map(|feat| {
+                self.queued = Some(self.map_feat(feat));
+                (self.offset + feat.0, self.offset + feat.1)
+            })
         }
     }
 }
