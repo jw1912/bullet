@@ -1,14 +1,16 @@
-use bulletformat::BulletFormat;
-
 mod ataxx147;
 mod chess768;
 mod chess_buckets;
 mod chess_buckets_hm;
+mod factorised;
+
+use bulletformat::BulletFormat;
 
 pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
 pub use chess_buckets::ChessBuckets;
 pub use chess_buckets_hm::{ChessBucketsMirrored, ChessBucketsMirroredFactorised};
+pub use factorised::{Factorised, Factorises};
 
 pub trait InputType: Send + Sync + Copy + Default + 'static {
     type RequiredDataType: BulletFormat + Copy + Send + Sync;
@@ -30,6 +32,15 @@ pub trait InputType: Send + Sync + Copy + Default + 'static {
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter;
+
+    fn is_factorised(&self) -> bool {
+        false
+    }
+
+    fn merge_factoriser(&self, unmerged: Vec<f32>) -> Vec<f32> {
+        assert!(self.is_factorised());
+        unmerged
+    }
 }
 
 fn get_num_buckets<const N: usize>(arr: &[usize; N]) -> usize {
