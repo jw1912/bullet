@@ -188,7 +188,24 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         println!("{}", logger::ansi("Beginning Training", "34;1"));
 
         if let Some(desc) = &self.arch_description {
+            let quantisations: Vec<_> = self
+                .saved_format
+                .iter()
+                .filter_map(|fmt| if let QuantTarget::I16(x) = fmt.1 { Some(x) } else { None })
+                .collect();
+
             println!("Architecture           : {}", logger::ansi(desc, "32;1"));
+            println!("                       : {}", logger::ansi(self.input_getter.description(), "31"));
+
+            if quantisations.len() == self.saved_format.len() {
+                let desc = logger::ansi("Quantisations", "31");
+                println!("                       : {desc} {quantisations:?}");
+            }
+
+            if self.input_getter.is_factorised() {
+                let desc = logger::ansi("Factoriser weights will be merged in quantised network", "31");
+                println!("                       : {desc}");
+            }
         }
 
         schedule.display();

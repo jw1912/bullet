@@ -23,6 +23,10 @@ impl InputType for Chess768 {
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
         Chess768Iter { board_iter: pos.into_iter() }
     }
+
+    fn description(&self) -> String {
+        "Default psqt chess inputs".to_string()
+    }
 }
 
 pub struct Chess768Iter {

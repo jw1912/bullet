@@ -65,6 +65,10 @@ impl<A: InputType, B: Factorises<A>> InputType for Factorised<A, B> {
             })
             .collect()
     }
+
+    fn description(&self) -> String {
+        format!("{} factorised by {}", self.normal.description(), self.factoriser.description().to_lowercase())
+    }
 }
 
 pub struct FactorisedIter<A: InputType, B: Factorises<A>> {

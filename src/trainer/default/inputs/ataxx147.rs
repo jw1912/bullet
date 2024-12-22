@@ -23,6 +23,10 @@ impl InputType for Ataxx147 {
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
         Ataxx147Iter { board_iter: pos.into_iter() }
     }
+
+    fn description(&self) -> String {
+        "Default ataxx psqt inputs".to_string()
+    }
 }
 
 pub struct Ataxx147Iter {
