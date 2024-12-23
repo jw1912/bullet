@@ -1,7 +1,7 @@
 use bullet_lib::{
     default::{
         inputs::{self, InputType},
-        loader, outputs, QuantTarget, Trainer,
+        loader, outputs, Layout, QuantTarget, SavedFormat, Trainer,
     },
     lr, operations,
     optimiser::{AdamWOptimiser, AdamWParams},
@@ -28,11 +28,11 @@ fn main() {
         inputs::Chess768,
         outputs::Single,
         vec![
-            ("l0w".to_string(), QuantTarget::I16(255)),
-            ("l0b".to_string(), QuantTarget::I16(255)),
-            ("l1w".to_string(), QuantTarget::I16(64)),
-            ("l1b".to_string(), QuantTarget::I16(64 * 255)),
-            ("pst".to_string(), QuantTarget::I16(255)),
+            SavedFormat::new("l0w", QuantTarget::I16(255), Layout::Normal),
+            SavedFormat::new("l0b", QuantTarget::I16(255), Layout::Normal),
+            SavedFormat::new("l1w", QuantTarget::I16(64), Layout::Normal),
+            SavedFormat::new("l1b", QuantTarget::I16(64 * 255), Layout::Normal),
+            SavedFormat::new("pst", QuantTarget::I16(255), Layout::Normal),
         ],
         false,
     );
