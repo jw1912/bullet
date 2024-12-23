@@ -53,14 +53,33 @@ pub struct AdditionalTrainerInputs {
     dense_inputs: bool,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    Normal,
+    // Reshapes and transposes
+    Transposed,
+}
+
+#[derive(Clone)]
+pub struct SavedFormat {
+    id: String,
+    quant: QuantTarget,
+    layout: Layout,
+}
+
+impl SavedFormat {
+    pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
+        SavedFormat { id: id.to_string(), quant, layout }
+    }
+}
+
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     optimiser: Opt,
     input_getter: Inp,
     output_getter: Out,
     output_node: Node,
     additional_inputs: AdditionalTrainerInputs,
-    saved_format: Vec<(String, QuantTarget)>,
-    arch_description: Option<String>,
+    saved_format: Vec<SavedFormat>,
     factorised_weights: Option<String>,
 }
 
@@ -134,7 +153,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         params: Opt::Params,
         input_getter: Inp,
         output_getter: Out,
-        saved_format: Vec<(String, QuantTarget)>,
+        saved_format: Vec<SavedFormat>,
         dense_inputs: bool,
     ) -> Self {
         let inputs = graph.input_ids();
@@ -165,7 +184,6 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             output_node,
             additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
-            arch_description: None,
             factorised_weights: None,
         }
     }
@@ -186,32 +204,6 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     ) -> (DefaultDataLoader<Inp, Out, D>, Option<DirectLoader<Inp, Out>>) {
         logger::clear_colours();
         println!("{}", logger::ansi("Beginning Training", "34;1"));
-
-        if let Some(desc) = &self.arch_description {
-            let quantisations: Vec<_> = self
-                .saved_format
-                .iter()
-                .filter_map(|fmt| match fmt.1 {
-                    QuantTarget::I16(x) => Some(x),
-                    QuantTarget::I8(x) => Some(x),
-                    QuantTarget::I32(_) => None,
-                    QuantTarget::Float => Some(1),
-                })
-                .collect();
-
-            println!("Architecture           : {}", logger::ansi(desc, "32;1"));
-            println!("                       : {}", logger::ansi(self.input_getter.description(), "31"));
-
-            if quantisations.len() == self.saved_format.len() {
-                let desc = logger::ansi("Quantisations", "31");
-                println!("                       : {desc} {quantisations:?}");
-            }
-
-            if self.input_getter.is_factorised() {
-                let desc = logger::ansi("Factoriser weights will be merged in quantised network", "31");
-                println!("                       : {desc}");
-            }
-        }
 
         schedule.display();
         settings.display();
@@ -337,7 +329,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let mut buf = Vec::new();
 
-        for (id, quant) in &self.saved_format {
+        for SavedFormat { id, quant, layout } in &self.saved_format {
             let weights = self.optimiser.graph().get_weights(id);
             let weights = weights.values.dense();
 
@@ -350,6 +342,26 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                     assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
                     weight_buf = self.input_getter.merge_factoriser(weight_buf);
                 }
+
+                if *layout == Layout::Transposed {
+                    unimplemented!(
+                        "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
+                    );
+                }
+            }
+
+            if let Layout::Transposed = layout {
+                let rows = weights.shape().rows();
+                let cols = weights.shape().cols();
+                let mut new_buf = vec![0.0; weights.shape().size()];
+
+                for i in 0..rows {
+                    for j in 0..cols {
+                        new_buf[cols * i + j] = weight_buf[rows * j + i];
+                    }
+                }
+
+                weight_buf = new_buf;
             }
 
             let quantised = quant.quantise(&weight_buf)?;
@@ -375,7 +387,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let mut buf = Vec::new();
 
-        for (id, _) in &self.saved_format {
+        for SavedFormat { id, .. } in &self.saved_format {
             let weights = self.optimiser.graph().get_weights(id);
             let weights = weights.values.dense();
 

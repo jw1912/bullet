@@ -1,4 +1,5 @@
 use crate::{
+    default::{Layout, SavedFormat},
     logger, operations,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
@@ -205,26 +206,36 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             let b = format!("l{layer}b");
 
             if let Some(quants) = &self.quantisations {
-                saved_format.push((w, quants[layer]));
+                let layout = if layer > 0 && output_buckets { Layout::Transposed } else { Layout::Normal };
+
+                saved_format.push(SavedFormat { id: w, quant: quants[layer], layout });
 
                 match quants[layer] {
                     QuantTarget::Float => {
                         net_quant = 1;
-                        saved_format.push((b, QuantTarget::Float));
+                        saved_format.push(SavedFormat { id: b, quant: QuantTarget::Float, layout: Layout::Normal });
                     }
                     QuantTarget::I16(q) => {
                         net_quant = net_quant.checked_mul(q).expect("Bias quantisation factor overflowed!");
-                        saved_format.push((b, QuantTarget::I16(net_quant)));
+                        saved_format.push(SavedFormat {
+                            id: b,
+                            quant: QuantTarget::I16(net_quant),
+                            layout: Layout::Normal,
+                        });
                     }
                     QuantTarget::I8(q) => {
                         net_quant = net_quant.checked_mul(q).expect("Bias quantisation factor overflowed!");
-                        saved_format.push((b, QuantTarget::I8(net_quant)));
+                        saved_format.push(SavedFormat {
+                            id: b,
+                            quant: QuantTarget::I8(net_quant),
+                            layout: Layout::Normal,
+                        });
                     }
                     QuantTarget::I32(_) => unimplemented!("i32 quant is not implemented for TrainerBuilder!"),
                 }
             } else {
-                saved_format.push((w, QuantTarget::Float));
-                saved_format.push((b, QuantTarget::Float));
+                saved_format.push(SavedFormat { id: w, quant: QuantTarget::Float, layout: Layout::Normal });
+                saved_format.push(SavedFormat { id: b, quant: QuantTarget::Float, layout: Layout::Normal });
             }
         };
 
@@ -345,8 +356,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 wdl: false,
                 dense_inputs: false,
             },
-            saved_format,
-            arch_description: Some(format!("{ft_desc} -> {output_desc}")),
+            saved_format: saved_format.clone(),
             factorised_weights,
         };
 
@@ -361,6 +371,38 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             w.load_from_slice(&wv);
             let wb = rng::vec_f32(w.values.shape().rows(), 0.0, stdev, true);
             graph.get_weights_mut(&format!("l{l}b")).load_from_slice(&wb);
+        }
+
+        logger::clear_colours();
+        println!("{}", logger::ansi("Built Trainer", "34;1"));
+        println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
+        println!("Inputs                 : {}", logger::ansi(self.input_getter.description(), "31"));
+
+        if self.input_getter.is_factorised() {
+            let desc = logger::ansi("Will be merged in quantised network for you", "31");
+            println!("Factoriser             : {desc}");
+        }
+
+        if output_buckets {
+            let desc = logger::ansi("Will be transposed in quantised network for you", "31");
+            println!("Output Buckets         : {desc}")
+        }
+
+        if let Some(quantisations) = self.quantisations {
+            let quantisations: Vec<_> = quantisations
+                .iter()
+                .filter_map(|q| match *q {
+                    QuantTarget::I16(x) => Some(x),
+                    QuantTarget::I8(x) => Some(x),
+                    QuantTarget::I32(_) => None,
+                    QuantTarget::Float => Some(1),
+                })
+                .collect();
+
+            if quantisations.len() == saved_format.len() {
+                let desc = logger::ansi("Quantisations", "31");
+                println!("                       : {desc} {quantisations:?}");
+            }
         }
 
         trainer
