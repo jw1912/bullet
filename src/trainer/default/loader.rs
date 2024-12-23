@@ -1,3 +1,9 @@
+mod direct;
+mod sfbinpack;
+
+pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
+pub use sfbinpack::SfBinpackLoader;
+
 use bulletformat::BulletFormat;
 
 use super::{inputs::InputType, outputs::OutputBuckets};
@@ -55,13 +61,13 @@ where
     }
 }
 
-pub struct DenseInput {
+pub(crate) struct DenseInput {
     pub shape: Shape,
     pub value: Vec<f32>,
 }
 
 #[derive(Clone)]
-pub struct SparseInput {
+pub(crate) struct SparseInput {
     pub shape: Shape,
     pub value: Vec<i32>,
     pub max_active: usize,
@@ -77,13 +83,13 @@ impl Default for SparseInput {
 pub struct DefaultDataPreparer<I, O> {
     input_getter: I,
     output_getter: O,
-    pub batch_size: usize,
-    pub stm: SparseInput,
-    pub nstm: SparseInput,
-    pub dstm: DenseInput,
-    pub dnstm: DenseInput,
-    pub buckets: SparseInput,
-    pub targets: DenseInput,
+    pub(crate) batch_size: usize,
+    pub(crate) stm: SparseInput,
+    pub(crate) nstm: SparseInput,
+    pub(crate) dstm: DenseInput,
+    pub(crate) dnstm: DenseInput,
+    pub(crate) buckets: SparseInput,
+    pub(crate) targets: DenseInput,
 }
 
 impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {

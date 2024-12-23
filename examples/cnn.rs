@@ -1,8 +1,9 @@
 use bullet_lib::{
-    inputs, loader, lr, operations,
+    default::{inputs, loader, outputs, QuantTarget, Trainer},
+    lr, operations,
     optimiser::{self, AdamWOptimiser, AdamWParams},
-    outputs, wdl, Activation, ConvolutionDescription, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node,
-    QuantTarget, Shape, Trainer, TrainingSchedule, TrainingSteps,
+    wdl, Activation, ConvolutionDescription, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, Shape,
+    TrainingSchedule, TrainingSteps,
 };
 
 fn main() {

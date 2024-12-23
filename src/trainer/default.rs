@@ -3,7 +3,7 @@ pub mod gamerunner;
 /// Contains the `InputType` trait for implementing custom input types,
 /// as well as several premade input formats that are commonly used.
 pub mod inputs;
-mod loader;
+pub mod loader;
 /// Contains the `OutputBuckets` trait for implementing custom output bucket types,
 /// as well as several premade output buckets that are commonly used.
 pub mod outputs;

@@ -1,8 +1,6 @@
-mod direct;
-mod sfbinpack;
-
-pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
-pub use sfbinpack::SfBinpackLoader;
+pub use crate::trainer::default::loader::{
+    CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader, SfBinpackLoader,
+};
 
 /// Dictates how data is read from a file into the expected datatype.
 /// This allows for the file format to be divorced from the training

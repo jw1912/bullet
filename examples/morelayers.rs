@@ -5,8 +5,8 @@ fixed-nodes, but unfortunately was too much of a slowdown to pass any
 time-controlled test.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
-    TrainingSteps,
+    default::{inputs, loader, outputs, Loss, TrainerBuilder},
+    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 fn main() {

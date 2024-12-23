@@ -58,7 +58,7 @@ checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 [[package]]
 name = "binpack"
 version = "0.1.0"
-source = "git+https://github.com/Disservin/binpack-rust#483e9aac028b4c3e0671af6b28ff50f64d696558"
+source = "git+https://github.com/Disservin/binpack-rust?rev=483e9aac028b4c3e0671af6b28ff50f64d696558#483e9aac028b4c3e0671af6b28ff50f64d696558"
 dependencies = [
  "thiserror 2.0.9",
 ]
