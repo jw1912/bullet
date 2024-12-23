@@ -355,9 +355,6 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                     }
                 }
 
-                println!("{weight_buf:?}");
-                println!("{new_buf:?}");
-
                 weight_buf = new_buf;
             }
 
