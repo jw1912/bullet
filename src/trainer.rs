@@ -42,6 +42,7 @@ impl Trainer {
         self.network.write(&mut File::create(format!("{path}/network.bin")).unwrap()).unwrap();
         self.adamw.momentum.write(&mut File::create(format!("{path}/momentum.bin")).unwrap()).unwrap();
         self.adamw.velocity.write(&mut File::create(format!("{path}/velocity.bin")).unwrap()).unwrap();
+        self.network.write_quantised(&mut File::create(format!("{path}/quantised.bin")).unwrap()).unwrap();
     }
 
     pub fn run<LR: lr::LrScheduler, WDL: wdl::WdlScheduler>(
@@ -70,8 +71,6 @@ impl Trainer {
         let out_dir = settings.output_directory.to_string();
         let out_dir = out_dir.as_str();
 
-        let mut error_record = Vec::new();
-
         std::fs::create_dir(out_dir).unwrap_or(());
 
         let (sender, receiver) = mpsc::sync_channel(settings.batch_queue_size);
@@ -86,9 +85,7 @@ impl Trainer {
         let mut superbatch_timer = Instant::now();
         let mut running_loss = 0.0;
 
-        let mut prev32_loss = 0.0;
-
-        while let Ok(batch) = receiver.recv() {
+        'training: while let Ok(batch) = receiver.recv() {
             let lrate = schedule.lr(curr_batch, superbatch);
             let wdl = schedule.wdl(curr_batch, superbatch);
 
@@ -107,7 +104,6 @@ impl Trainer {
 
             error *= adj;
             running_loss += error;
-            prev32_loss += error;
 
             if curr_batch % 128 == 0 {
                 logger::report_superbatch_progress(
@@ -120,14 +116,6 @@ impl Trainer {
             }
 
             curr_batch += 1;
-
-            if curr_batch % 32 == 0 {
-                prev32_loss /= 32.0;
-
-                error_record.push((superbatch, curr_batch, prev32_loss));
-
-                prev32_loss = 0.0;
-            }
 
             if curr_batch % steps.batches_per_superbatch == 0 {
                 let error = running_loss / steps.batches_per_superbatch as f32;
@@ -149,12 +137,13 @@ impl Trainer {
 
                 superbatch += 1;
                 curr_batch = 0;
-                prev32_loss = 0.0;
                 superbatch_timer = Instant::now();
+
+                if superbatch > steps.end_superbatch {
+                    break 'training;
+                }
             }
         }
-
-        drop(receiver);
 
         let total_time = timer.elapsed().as_secs();
         let (hours, minutes, seconds) = logger::seconds_to_hms(total_time as u32);
@@ -166,6 +155,7 @@ impl Trainer {
             logger::ansi(seconds, logger::num_cs()),
         );
 
+        drop(receiver);
         dataloader.join().unwrap();
     }
 }

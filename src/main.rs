@@ -6,10 +6,15 @@ mod trainer;
 
 use trainer::{lr, wdl, DirectSequentialDataLoader, LocalSettings, Trainer, TrainingSchedule, TrainingSteps};
 
+// Network architecture settings
 pub type InputFeatures = inputs::Chess768;
 pub type OutputBuckets = outputs::Single;
 pub type Activation = activation::SCReLU;
-pub const HL_SIZE: usize = 32;
+pub const HL_SIZE: usize = 128;
+
+// Quantisations
+pub const QA: i16 = 255;
+pub const QB: i16 = 64;
 
 /// Applicable only with `InputFeatures` option `ChessBucketsMirrored`.
 /// Indexed from white POV, so index 0 corresponds to A1, 3 corresponds to D1.

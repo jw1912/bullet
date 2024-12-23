@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 
 use bulletformat::{BulletFormat, ChessBoard};
 
-use crate::{inputs::InputType, Activation, InputFeatures, OutputBuckets, HL_SIZE};
+use crate::{inputs::InputType, Activation, InputFeatures, OutputBuckets, HL_SIZE, QA, QB};
 
 const INPUTS: usize = InputFeatures::SIZE;
 const HL: usize = HL_SIZE;
@@ -43,6 +43,27 @@ impl Network {
 
         for elem in &self.l2b {
             writer.write_all(&f32::to_le_bytes(*elem))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn write_quantised(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        for col in &self.l1w {
+            col.write_quantised(writer, QA)?;
+        }
+
+        self.l1b.write_quantised(writer, QA)?;
+
+        for bucket in &self.l2w {
+            for col in bucket {
+                col.write_quantised(writer, QB)?;
+            }
+        }
+
+        for elem in &self.l2b {
+            let quantised = (*elem * f32::from(QA) * f32::from(QB)) as i16;
+            writer.write_all(&i16::to_le_bytes(quantised))?;
         }
 
         Ok(())
@@ -251,6 +272,15 @@ impl Accumulator {
     fn write(&self, writer: &mut impl Write) -> std::io::Result<()> {
         for elem in &self.0 {
             writer.write_all(&f32::to_le_bytes(*elem))?;
+        }
+
+        Ok(())
+    }
+
+    fn write_quantised(&self, writer: &mut impl Write, q: i16) -> std::io::Result<()> {
+        for elem in &self.0 {
+            let quantised = (*elem * f32::from(q)) as i16;
+            writer.write_all(&i16::to_le_bytes(quantised))?;
         }
 
         Ok(())
