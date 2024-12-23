@@ -201,12 +201,12 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut net_quant = 1i16;
 
-        let mut push_saved_format = |layer: usize| {
+        let mut push_saved_format = |layer: usize, size: usize| {
             let w = format!("l{layer}w");
             let b = format!("l{layer}b");
 
             if let Some(quants) = &self.quantisations {
-                let layout = if layer > 0 && output_buckets { Layout::Transposed } else { Layout::Normal };
+                let layout = if layer > 0 && output_buckets { Layout::Transposed(Shape::new(U::BUCKETS, size)) } else { Layout::Normal };
 
                 saved_format.push(SavedFormat { id: w, quant: quants[layer], layout });
 
@@ -250,7 +250,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             ft_desc = format!("({ft_desc})x2");
         }
 
-        push_saved_format(0);
+        push_saved_format(0, input_size * self.ft_out_size);
 
         let mut out = builder.create_input("stm", input_shape);
 
@@ -291,7 +291,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                     let w = builder.create_weights(&format!("l{layer}w"), Shape::new(raw_size, prev_size));
                     let b = builder.create_weights(&format!("l{layer}b"), Shape::new(raw_size, 1));
 
-                    push_saved_format(layer);
+                    push_saved_format(layer, prev_size * size);
 
                     layer += 1;
 

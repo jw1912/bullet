@@ -38,7 +38,7 @@ use crate::{
     loader::{CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader},
     optimiser::Optimiser,
     trainer::NetworkTrainer,
-    Graph,
+    Graph, Shape,
 };
 
 /// Holy unsound code batman!
@@ -56,7 +56,8 @@ pub struct AdditionalTrainerInputs {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Layout {
     Normal,
-    Transposed,
+    // Reshapes and transposes
+    Transposed(Shape),
 }
 
 #[derive(Clone)]
@@ -341,18 +342,12 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                     assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
                     weight_buf = self.input_getter.merge_factoriser(weight_buf);
                 }
-
-                if *layout == Layout::Transposed {
-                    unimplemented!(
-                        "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
-                    );
-                }
             }
 
-            if *layout == Layout::Transposed {
-                let cols = weights.shape().cols();
-                let rows = weights.shape().rows();
-                let mut new_buf = vec![0.0; weights.shape().size()];
+            if let Layout::Transposed(shape) = layout {
+                let cols = shape.cols();
+                let rows = shape.rows();
+                let mut new_buf = vec![0.0; shape.size()];
 
                 for i in 0..rows {
                     for j in 0..cols {
