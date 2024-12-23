@@ -9,12 +9,10 @@ use trainer::{lr, wdl, DirectSequentialDataLoader, LocalSettings, Trainer, Train
 pub type InputFeatures = inputs::Chess768;
 pub type OutputBuckets = outputs::Single;
 pub type Activation = activation::SCReLU;
-pub const HL_SIZE: usize = 512;
+pub const HL_SIZE: usize = 32;
 
 /// Applicable only with `InputFeatures` option `ChessBucketsMirrored`.
-/// Indexed from white POV, so index 0 corresponds to A1, 7 corresponds to H1,
-/// 56 corresponds to A8 and 63 corresponds to H8. With `N` buckets,
-/// the values in this array need to be in the set {0, 1, ..., N - 1}.
+/// Indexed from white POV, so index 0 corresponds to A1, 3 corresponds to D1.
 pub const BUCKETS_MIRRORED: [usize; 32] = [
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -45,7 +43,7 @@ fn main() {
         save_rate: 10,
     };
 
-    let settings = LocalSettings { threads: 4, output_directory: "checkpoints", batch_queue_size: 64 };
+    let settings = LocalSettings { threads: 6, output_directory: "checkpoints", batch_queue_size: 64 };
 
     trainer.train(loader, &schedule, &settings);
 }

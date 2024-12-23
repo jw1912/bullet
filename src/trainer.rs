@@ -123,7 +123,8 @@ impl Trainer {
                     let name = format!("{}-{superbatch}", schedule.net_id());
                     let out_dir = settings.output_directory;
                     let path = format!("{out_dir}/{name}");
-                    println!("Saved [{}]", logger::ansi(name, 31));
+                    println!("Saved [{}] to {}", logger::ansi(name, 31), logger::ansi(path, 31));
+                    unimplemented!("Need to implement checkpoint saving!");
                 }
 
                 superbatch += 1;
