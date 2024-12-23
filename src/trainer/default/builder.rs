@@ -37,7 +37,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     bucket_getter: U,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
-    quantisations: Option<Vec<i16>>,
+    quantisations: Option<Vec<QuantTarget>>,
     perspective: bool,
     loss: Loss,
     optimiser: O,
@@ -96,6 +96,14 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
     /// Provide a list of quantisations.
     pub fn quantisations(mut self, quants: &[i16]) -> Self {
+        assert!(self.quantisations.is_none(), "Quantisations already set!");
+        self.quantisations = Some(quants.iter().map(|&x| QuantTarget::I16(x)).collect());
+        self
+    }
+
+    /// Provide a list of quantisations.
+    pub fn advanced_quantisations(mut self, quants: &[QuantTarget]) -> Self {
+        assert!(self.quantisations.is_none(), "Quantisations already set!");
         self.quantisations = Some(quants.to_vec());
         self
     }
@@ -197,9 +205,23 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             let b = format!("l{layer}b");
 
             if let Some(quants) = &self.quantisations {
-                net_quant *= quants[layer];
-                saved_format.push((w, QuantTarget::I16(quants[layer])));
-                saved_format.push((b, QuantTarget::I16(net_quant)));
+                saved_format.push((w, quants[layer]));
+
+                match quants[layer] {
+                    QuantTarget::Float => {
+                        net_quant = 1;
+                        saved_format.push((b, QuantTarget::Float));
+                    }
+                    QuantTarget::I16(q) => {
+                        net_quant = net_quant.checked_mul(q).expect("Bias quantisation factor overflowed!");
+                        saved_format.push((b, QuantTarget::I16(net_quant)));
+                    }
+                    QuantTarget::I8(q) => {
+                        net_quant = net_quant.checked_mul(q).expect("Bias quantisation factor overflowed!");
+                        saved_format.push((b, QuantTarget::I8(net_quant)));
+                    }
+                    QuantTarget::I32(_) => unimplemented!("i32 quant is not implemented for TrainerBuilder!"),
+                }
             } else {
                 saved_format.push((w, QuantTarget::Float));
                 saved_format.push((b, QuantTarget::Float));

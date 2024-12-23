@@ -6,11 +6,12 @@ time-controlled test.
 */
 use bullet_lib::{
     default::{inputs, loader, outputs, Loss, TrainerBuilder},
-    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
+    lr, optimiser, wdl, Activation, LocalSettings, QuantTarget, TrainingSchedule, TrainingSteps,
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
+        .advanced_quantisations(&[QuantTarget::I16(255), QuantTarget::I16(64), QuantTarget::Float, QuantTarget::Float])
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
         .input(inputs::Chess768)
