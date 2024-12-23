@@ -60,14 +60,4 @@ impl<LR: LrScheduler, WDL: WdlScheduler> TrainingSchedule<LR, WDL> {
         println!("WDL Scheduler          : {}", self.wdl_scheduler.colourful());
         println!("LR Scheduler           : {}", self.lr_scheduler.colourful());
     }
-
-    /// For evaluation passes, in order to ensure that we exhaust the test set at the
-    /// same time as we exhaust the training set.
-    pub fn steps_for_validation(&self, validation_freq: usize) -> TrainingSteps {
-        let mut res = self.steps;
-
-        res.batches_per_superbatch = self.steps.batches_per_superbatch / validation_freq;
-
-        res
-    }
 }

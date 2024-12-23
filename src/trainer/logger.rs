@@ -13,16 +13,8 @@ pub fn ansi<T: Display, U: Display>(x: T, y: U) -> String {
     format!("\x1b[{y}m{x}\x1b[0m{}", esc())
 }
 
-pub fn set_colour<U: Display>(x: U) {
-    print!("\x1b[{x}m");
-}
-
 pub fn clear_colours() {
     print!("{}", esc());
-}
-
-pub fn set_cbcs(val: bool) {
-    CBCS.store(val, SeqCst)
 }
 
 pub fn num_cs() -> i32 {

@@ -153,22 +153,22 @@ impl Network {
     ) {
         let mut components = [(0.0, 0.0); HL];
 
-        for i in 0..HL {
-            components[i] = (
+        for (i, component) in components.iter_mut().enumerate() {
+            *component = (
                 err * self.l2w[bucket][0].0[i] * Activation::prime(accs[0].0[i]),
                 err * self.l2w[bucket][1].0[i] * Activation::prime(accs[1].0[i]),
             );
 
-            grad.l1b.0[i] += components[i].0 + components[i].1;
+            grad.l1b.0[i] += component.0 + component.1;
 
             grad.l2w[bucket][0].0[i] += err * activated[0].0[i];
             grad.l2w[bucket][1].0[i] += err * activated[1].0[i];
         }
 
         for (wfeat, bfeat) in features {
-            for i in 0..HL {
-                grad.l1w[wfeat].0[i] += components[i].0;
-                grad.l1w[bfeat].0[i] += components[i].1;
+            for (i, component) in components.iter().enumerate() {
+                grad.l1w[wfeat].0[i] += component.0;
+                grad.l1w[bfeat].0[i] += component.1;
             }
         }
 
@@ -184,16 +184,6 @@ impl Accumulator {
         for (i, &j) in self.0.iter_mut().zip(other.0.iter()) {
             *i += j;
         }
-    }
-
-    fn apply<F: Fn(f32) -> f32>(&self, f: F) -> Self {
-        let mut res = Accumulator([0.0; HL]);
-
-        for (i, &j) in res.0.iter_mut().zip(self.0.iter()) {
-            *i = f(j);
-        }
-
-        res
     }
 
     fn adamw(&mut self, m: &mut Self, v: &mut Self, grad: &Self, decay: f32, adj: f32, rate: f32) {

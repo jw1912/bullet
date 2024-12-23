@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub trait InputType {
     const BUCKETS: usize;
     const SIZE: usize;

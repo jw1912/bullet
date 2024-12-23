@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub struct Single;
 impl Single {
     pub const NUM: usize = 1;
