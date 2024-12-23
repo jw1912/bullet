@@ -26,11 +26,12 @@ pub const BUCKETS_MIRRORED: [usize; 32] = [
 
 fn main() {
     let mut trainer = Trainer::default();
+    // let mut trainer = Trainer::from_checkpoint("checkpoints/legacy-10");
 
     let loader = DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     let schedule = TrainingSchedule {
-        net_id: "simple".to_string(),
+        net_id: "legacy".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps {
             batch_size: 16_384,
@@ -45,5 +46,5 @@ fn main() {
 
     let settings = LocalSettings { threads: 6, output_directory: "checkpoints", batch_queue_size: 64 };
 
-    trainer.train(loader, &schedule, &settings);
+    trainer.run(loader, &schedule, &settings);
 }

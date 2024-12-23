@@ -3,7 +3,7 @@ mod logger;
 mod schedule;
 mod settings;
 
-use std::{sync::mpsc, thread, time::Instant};
+use std::{fs::File, sync::mpsc, thread, time::Instant};
 
 pub use loader::DirectSequentialDataLoader;
 pub use schedule::{lr, wdl, TrainingSchedule, TrainingSteps};
@@ -24,7 +24,27 @@ impl Default for Trainer {
 }
 
 impl Trainer {
-    pub fn train<LR: lr::LrScheduler, WDL: wdl::WdlScheduler>(
+    #[allow(unused)]
+    pub fn from_checkpoint(path: &str) -> Self {
+        Self {
+            network: Network::read(&mut File::open(format!("{path}/network.bin")).unwrap()).unwrap(),
+            adamw: AdamW {
+                momentum: Network::read(&mut File::open(format!("{path}/momentum.bin")).unwrap()).unwrap(),
+                velocity: Network::read(&mut File::open(format!("{path}/velocity.bin")).unwrap()).unwrap(),
+                ..Default::default()
+            },
+        }
+    }
+
+    pub fn save_to_checkpoint(&self, path: &str) {
+        std::fs::create_dir(path).unwrap_or(());
+
+        self.network.write(&mut File::create(format!("{path}/network.bin")).unwrap()).unwrap();
+        self.adamw.momentum.write(&mut File::create(format!("{path}/momentum.bin")).unwrap()).unwrap();
+        self.adamw.velocity.write(&mut File::create(format!("{path}/velocity.bin")).unwrap()).unwrap();
+    }
+
+    pub fn run<LR: lr::LrScheduler, WDL: wdl::WdlScheduler>(
         &mut self,
         loader: DirectSequentialDataLoader,
         schedule: &TrainingSchedule<LR, WDL>,
@@ -123,8 +143,8 @@ impl Trainer {
                     let name = format!("{}-{superbatch}", schedule.net_id());
                     let out_dir = settings.output_directory;
                     let path = format!("{out_dir}/{name}");
+                    self.save_to_checkpoint(&path);
                     println!("Saved [{}] to {}", logger::ansi(name, 31), logger::ansi(path, 31));
-                    unimplemented!("Need to implement checkpoint saving!");
                 }
 
                 superbatch += 1;

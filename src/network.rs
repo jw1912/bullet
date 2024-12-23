@@ -1,3 +1,5 @@
+use std::io::{Read, Write};
+
 use bulletformat::{BulletFormat, ChessBoard};
 
 use crate::{inputs::InputType, Activation, InputFeatures, OutputBuckets, HL_SIZE};
@@ -24,6 +26,50 @@ impl Network {
             }
             Box::from_raw(ptr.cast())
         }
+    }
+
+    pub fn write(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        for col in &self.l1w {
+            col.write(writer)?;
+        }
+
+        self.l1b.write(writer)?;
+
+        for bucket in &self.l2w {
+            for col in bucket {
+                col.write(writer)?;
+            }
+        }
+
+        for elem in &self.l2b {
+            writer.write_all(&f32::to_le_bytes(*elem))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn read(reader: &mut impl Read) -> std::io::Result<Box<Self>> {
+        let mut res = Self::new();
+        
+        for col in &mut res.l1w {
+            col.read_from(reader)?;
+        }
+
+        res.l1b.read_from(reader)?;
+
+        for bucket in &mut res.l2w {
+            for col in bucket {
+                col.read_from(reader)?;
+            }
+        }
+
+        for elem in &mut res.l2b {
+            let mut bytes = [0; 4];
+            reader.read_exact(&mut bytes)?;
+            *elem = f32::from_le_bytes(bytes);
+        }
+
+        Ok(res)
     }
 
     pub fn random() -> Box<Self> {
@@ -190,6 +236,24 @@ impl Accumulator {
         for (p, (m, (v, &g))) in self.0.iter_mut().zip(m.0.iter_mut().zip(v.0.iter_mut().zip(grad.0.iter()))) {
             adamw(p, m, v, g, decay, adj, rate);
         }
+    }
+
+    fn read_from(&mut self, reader: &mut impl Read) -> std::io::Result<()> {
+        for elem in &mut self.0 {
+            let mut bytes = [0; 4];
+            reader.read_exact(&mut bytes)?;
+            *elem = f32::from_le_bytes(bytes);
+        }
+
+        Ok(())
+    }
+
+    fn write(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        for elem in &self.0 {
+            writer.write_all(&f32::to_le_bytes(*elem))?;
+        }
+
+        Ok(())
     }
 }
 
