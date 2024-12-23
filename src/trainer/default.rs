@@ -341,12 +341,12 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                 if factorised == id {
                     assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
                     weight_buf = self.input_getter.merge_factoriser(weight_buf);
-                }
 
-                if *layout == Layout::Transposed {
-                    unimplemented!(
-                        "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
-                    );
+                    if *layout == Layout::Transposed {
+                        unimplemented!(
+                            "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
+                        );
+                    }
                 }
             }
 

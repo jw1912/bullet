@@ -92,12 +92,6 @@ extern "C" void sparseAffineDualBackward(
     const float* errors,
     const int32_t activation)
 {
-    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
-
-    dim3 grid(numChunks, batchSize);
-
-    const size_t threads = (numChunks == 1) ? outputSize : 1024;
-
     switch (activation)
     {
         case 0:

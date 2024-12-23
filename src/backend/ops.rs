@@ -310,6 +310,6 @@ extern "C" {
     pub fn crossentropy(size: usize, pred: *const f32, target: *const f32, out: *mut f32);
     pub fn backprop_softmax_cross_entropy(size: usize, softmaxed: *const f32, target: *const f32, out_grad: *const f32, input_grad: *mut f32);
     pub fn softmax_across_columns_masked(max_active: usize, rows: usize, cols: usize, mask: *const i32, inp: *const f32, out: *mut f32);
-    pub fn crossentropy_masked(max_active: usize, rows: usize, cols: usize, mask: *const i32, pred: *const f32, target: *const f32, out: *mut f32, err: *mut f32);
+    pub fn crossentropy_masked(max_active: usize, cols: usize, mask: *const i32, pred: *const f32, target: *const f32, out: *mut f32, err: *mut f32);
     pub fn backprop_softmax_cross_entropy_masked(max_active: usize, rows: usize, cols: usize, mask: *const i32, softmaxed: *const f32, target: *const f32, out_grad: *const f32, input_grad: *mut f32);
 }

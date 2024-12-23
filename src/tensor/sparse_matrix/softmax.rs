@@ -37,7 +37,6 @@ impl SparseMatrix {
         unsafe {
             ops::crossentropy_masked(
                 mask.max_active,
-                mask.shape.rows(),
                 mask.shape.cols(),
                 mask.buf.ptr(),
                 pred.buf.ptr(),
