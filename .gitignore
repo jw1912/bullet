@@ -4,6 +4,8 @@
 /checkpoints
 /.idea
 /.vscode
+/data
+/visualisation
 
 *.epd
 *.txt

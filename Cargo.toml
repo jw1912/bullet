@@ -1,6 +1,11 @@
-[workspace]
-members = ["common", "cpu", "cuda", "trainer", "utils"]
-resolver = "2"
+[package]
+name = "bullet-legacy"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
+
+[dependencies]
+bulletformat = "1.7.0"
 
 [profile.release]
 panic = 'abort'
