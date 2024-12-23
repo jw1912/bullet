@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub struct ReLU;
 impl ReLU {
     pub fn activate(x: f32) -> f32 {
