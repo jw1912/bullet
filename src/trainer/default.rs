@@ -38,7 +38,7 @@ use crate::{
     loader::{CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader},
     optimiser::Optimiser,
     trainer::NetworkTrainer,
-    Graph, Shape,
+    Graph,
 };
 
 /// Holy unsound code batman!
@@ -57,7 +57,7 @@ pub struct AdditionalTrainerInputs {
 pub enum Layout {
     Normal,
     // Reshapes and transposes
-    Transposed(Shape),
+    Transposed,
 }
 
 #[derive(Clone)]
@@ -344,16 +344,19 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                 }
             }
 
-            if let Layout::Transposed(shape) = layout {
-                let cols = shape.cols();
-                let rows = shape.rows();
-                let mut new_buf = vec![0.0; shape.size()];
+            if let Layout::Transposed = layout {
+                let rows = weights.shape().rows();
+                let cols = weights.shape().cols();
+                let mut new_buf = vec![0.0; weights.shape().size()];
 
                 for i in 0..rows {
                     for j in 0..cols {
                         new_buf[cols * i + j] = weight_buf[rows * j + i];
                     }
                 }
+
+                println!("{weight_buf:?}");
+                println!("{new_buf:?}");
 
                 weight_buf = new_buf;
             }
