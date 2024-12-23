@@ -2,9 +2,12 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    inputs, loader, lr, optimiser, outputs,
-    testing::{Engine, GameRunnerPath, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
-    wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule, TrainingSteps,
+    default::{
+        inputs, loader, outputs,
+        testing::{Engine, GameRunnerPath, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
+        Loss, TrainerBuilder,
+    },
+    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 macro_rules! net_id {

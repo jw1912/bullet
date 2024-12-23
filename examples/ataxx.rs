@@ -1,6 +1,7 @@
 use bullet_lib::{
-    format::AtaxxBoard, inputs::InputType, loader, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss,
-    TrainerBuilder, TrainingSchedule, TrainingSteps,
+    default::{inputs::InputType, loader, outputs, Loss, TrainerBuilder},
+    format::AtaxxBoard,
+    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 const HIDDEN_SIZE: usize = 128;

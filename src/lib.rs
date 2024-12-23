@@ -21,9 +21,11 @@ pub use bulletformat as format;
 pub use sfbinpack;
 pub use tensor::{Activation, Shape};
 pub use trainer::{
-    default::{gamerunner, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder},
-    logger,
+    default, logger,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
     DataPreparer, NetworkTrainer,
 };
+
+// to be removed at some point
+pub use trainer::default::{gamerunner, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder};

@@ -1,9 +1,12 @@
 use bullet_lib::{
-    inputs::{self, InputType},
-    loader, lr, operations,
+    default::{
+        inputs::{self, InputType},
+        loader, outputs, QuantTarget, Trainer,
+    },
+    lr, operations,
     optimiser::{AdamWOptimiser, AdamWParams},
-    outputs, wdl, Activation, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, QuantTarget, Shape, Trainer,
-    TrainingSchedule, TrainingSteps,
+    wdl, Activation, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, Shape, TrainingSchedule,
+    TrainingSteps,
 };
 
 fn main() {
