@@ -97,18 +97,24 @@ impl Network {
         let mut params = Self::new();
         let mut rng = Rand::new(173645501);
 
+        let val = (1.0 / INPUTS as f64).sqrt();
+
         for col in params.l1w.iter_mut() {
-            for elem in col.0.iter_mut() {
-                *elem = rng.rand(0.01);
-            }
+            col.randomise(&mut rng, val);
         }
+
+        params.l1b.randomise(&mut rng, val);
+
+        let val = (1.0 / HL as f64).sqrt();
 
         for bucket in params.l2w.iter_mut() {
             for col in bucket.iter_mut() {
-                for elem in col.0.iter_mut() {
-                    *elem = rng.rand(0.01);
-                }
+                col.randomise(&mut rng, val);
             }
+        }
+
+        for elem in params.l2b.iter_mut() {
+            *elem = rng.rand(val);
         }
 
         params
@@ -259,6 +265,12 @@ impl Accumulator {
         }
     }
 
+    fn randomise(&mut self, rng: &mut Rand, max: f64) {
+        for elem in self.0.iter_mut() {
+            *elem = rng.rand(max);
+        }
+    }
+
     fn read_from(&mut self, reader: &mut impl Read) -> std::io::Result<()> {
         for elem in &mut self.0 {
             let mut bytes = [0; 4];
@@ -348,7 +360,7 @@ impl Rand {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 17;
         self.0 ^= self.0 << 5;
-        ((1. - f64::from(self.0) / f64::from(u32::MAX)) * max) as f32
+        (2.0 * (0.5 - f64::from(self.0) / f64::from(u32::MAX)) * max) as f32
     }
 }
 
