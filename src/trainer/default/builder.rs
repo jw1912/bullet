@@ -376,33 +376,35 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         logger::clear_colours();
         println!("{}", logger::ansi("Built Trainer", "34;1"));
         println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
-        println!("Inputs                 : {}", logger::ansi(self.input_getter.description(), "31"));
+        println!("Inputs                 : {}", self.input_getter.description());
 
         if self.input_getter.is_factorised() {
-            let desc = logger::ansi("Will be merged in quantised network for you", "31");
-            println!("Factoriser             : {desc}");
+            println!("Factoriser             : Will be merged in quantised network for you");
         }
 
         if output_buckets {
-            let desc = logger::ansi("Will be transposed in quantised network for you", "31");
-            println!("Output Buckets         : {desc}")
+            println!("Output Buckets         : Will be transposed in quantised network for you")
         }
 
         if let Some(quantisations) = self.quantisations {
-            let quantisations: Vec<_> = quantisations
-                .iter()
-                .filter_map(|q| match *q {
-                    QuantTarget::I16(x) => Some(x),
-                    QuantTarget::I8(x) => Some(x),
-                    QuantTarget::I32(_) => None,
-                    QuantTarget::Float => Some(1),
-                })
-                .collect();
+            print!("Quantisations          : [");
 
-            if quantisations.len() == saved_format.len() {
-                let desc = logger::ansi("Quantisations", "31");
-                println!("                       : {desc} {quantisations:?}");
+            for (i, q) in quantisations.iter().enumerate() {
+                if i != 0 {
+                    print!(", ");
+                }
+
+                let q = match *q {
+                    QuantTarget::I16(x) => i32::from(x),
+                    QuantTarget::I8(x) => i32::from(x),
+                    QuantTarget::I32(x) => x,
+                    QuantTarget::Float => 1,
+                };
+
+                print!("{}", logger::ansi(q.to_string(), "31"));
             }
+
+            println!("]");
         }
 
         trainer
