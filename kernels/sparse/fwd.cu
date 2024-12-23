@@ -152,7 +152,7 @@ void sparseAffineDualForwardInternal(
         dim3 grid(chunks, batchSize);
 
         sparseAffineForwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, outputs);
-        sparseAffineForwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, outputs + outputSize);
+        sparseAffineForwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, ntm, outputs + outputSize);
     }
 }
 
