@@ -24,6 +24,7 @@ fn build_and_link_cuda_kernels(out_path: &Path) {
     let files = util::KERNEL_FILES.iter().map(|s| format!("{}/{s}.cu", util::KERNEL_DIR)).collect::<Vec<_>>();
 
     cc::Build::new()
+        .cargo_warnings(false)
         .cuda(true)
         .cudart("shared")
         .debug(false)
