@@ -191,7 +191,12 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             let quantisations: Vec<_> = self
                 .saved_format
                 .iter()
-                .filter_map(|fmt| if let QuantTarget::I16(x) = fmt.1 { Some(x) } else { None })
+                .filter_map(|fmt| match fmt.1 {
+                    QuantTarget::I16(x) => Some(x),
+                    QuantTarget::I8(x) => Some(x),
+                    QuantTarget::I32(_) => None,
+                    QuantTarget::Float => Some(1),
+                })
                 .collect();
 
             println!("Architecture           : {}", logger::ansi(desc, "32;1"));
