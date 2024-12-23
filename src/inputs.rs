@@ -63,9 +63,7 @@ impl InputType for ChessBucketsMirrored {
     const BUCKETS: usize = get_num_buckets(Self::BUCKETING);
     const SIZE: usize = 768 * Self::BUCKETS;
 
-    fn get_feature_indices(
-        (piece, square): (u8, u8), (our_ksq, opp_ksq): (u8, u8)
-    ) -> (usize, usize) {
+    fn get_feature_indices((piece, square): (u8, u8), (our_ksq, opp_ksq): (u8, u8)) -> (usize, usize) {
         let c = usize::from(piece & 8 > 0);
         let pc = 64 * usize::from(piece & 7);
         let sq = usize::from(square);

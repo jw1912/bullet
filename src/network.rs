@@ -71,7 +71,7 @@ impl Network {
 
     pub fn read(reader: &mut impl Read) -> std::io::Result<Box<Self>> {
         let mut res = Self::new();
-        
+
         for col in &mut res.l1w {
             col.read_from(reader)?;
         }
@@ -156,25 +156,19 @@ impl Network {
         }
     }
 
-    pub fn update_single_grad(
-        &self,
-        grad: &mut Self,
-        pos: &ChessBoard,
-        blend: f32,
-        rscale: f32,
-    ) -> f32 {
+    pub fn update_single_grad(&self, grad: &mut Self, pos: &ChessBoard, blend: f32, rscale: f32) -> f32 {
         let bias = self.l1b;
         let mut accs = [bias; 2];
         let mut activated = [Accumulator([0.0; HL]); 2];
         let mut features = Features::default();
-    
+
         let (eval, bucket) = self.forward(pos, &mut accs, &mut activated, &mut features);
-    
+
         let result = pos.blended_result(blend, rscale);
-    
+
         let sigmoid = sigmoid(eval);
         let err = 2.0 * (sigmoid - result) * sigmoid * (1. - sigmoid);
-    
+
         self.backprop(err, grad, &accs, &activated, &mut features, bucket);
 
         (sigmoid - result).powi(2)
@@ -308,11 +302,7 @@ pub struct Features {
 
 impl Default for Features {
     fn default() -> Self {
-        Self {
-            features: [(0, 0); MAX_ACTIVE],
-            len: 0,
-            consumed: 0,
-        }
+        Self { features: [(0, 0); MAX_ACTIVE], len: 0, consumed: 0 }
     }
 }
 
@@ -342,10 +332,7 @@ pub struct Rand(u32);
 impl Default for Rand {
     fn default() -> Self {
         Self(
-            (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("valid")
-                .as_nanos()
+            (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("valid").as_nanos()
                 & 0xFFFF_FFFF) as u32,
         )
     }

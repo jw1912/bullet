@@ -1,4 +1,4 @@
-use std::{slice, fs::File, io::Read, mem::MaybeUninit, path::PathBuf};
+use std::{fs::File, io::Read, mem::MaybeUninit, path::PathBuf, slice};
 
 use bulletformat::ChessBoard;
 

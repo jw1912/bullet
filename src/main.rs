@@ -18,6 +18,7 @@ pub const QB: i16 = 64;
 
 /// Applicable only with `InputFeatures` option `ChessBucketsMirrored`.
 /// Indexed from white POV, so index 0 corresponds to A1, 3 corresponds to D1.
+#[rustfmt::skip]
 pub const BUCKETS_MIRRORED: [usize; 32] = [
     0, 0, 0, 0,
     0, 0, 0, 0,

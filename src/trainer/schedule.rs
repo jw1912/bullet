@@ -1,8 +1,8 @@
 pub mod lr;
 pub mod wdl;
 
-use std::fmt::Debug;
 use lr::LrScheduler;
+use std::fmt::Debug;
 use wdl::WdlScheduler;
 
 use super::logger::ansi;

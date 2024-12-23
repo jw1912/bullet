@@ -5,10 +5,10 @@ mod settings;
 
 use std::{fs::File, sync::mpsc, thread, time::Instant};
 
+use crate::network::Network;
 pub use loader::DirectSequentialDataLoader;
 pub use schedule::{lr, wdl, TrainingSchedule, TrainingSteps};
 pub use settings::LocalSettings;
-use crate::network::Network;
 
 use bulletformat::ChessBoard;
 
@@ -204,11 +204,7 @@ pub struct AdamW {
 
 impl Default for AdamW {
     fn default() -> Self {
-        Self {
-            velocity: Network::new(),
-            momentum: Network::new(),
-            decay: 0.01,
-        }
+        Self { velocity: Network::new(), momentum: Network::new(), decay: 0.01 }
     }
 }
 
