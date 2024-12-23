@@ -25,24 +25,24 @@ impl Default for Trainer {
 
 impl Trainer {
     #[allow(unused)]
-    pub fn from_checkpoint(path: &str) -> Self {
-        Self {
-            network: Network::read(&mut File::open(format!("{path}/network.bin")).unwrap()).unwrap(),
+    pub fn from_checkpoint(path: &str) -> std::io::Result<Self> {
+        Ok(Self {
+            network: Network::read(&mut File::open(format!("{path}/network.bin"))?)?,
             adamw: AdamW {
-                momentum: Network::read(&mut File::open(format!("{path}/momentum.bin")).unwrap()).unwrap(),
-                velocity: Network::read(&mut File::open(format!("{path}/velocity.bin")).unwrap()).unwrap(),
+                momentum: Network::read(&mut File::open(format!("{path}/momentum.bin"))?)?,
+                velocity: Network::read(&mut File::open(format!("{path}/velocity.bin"))?)?,
                 ..Default::default()
             },
-        }
+        })
     }
 
-    pub fn save_to_checkpoint(&self, path: &str) {
+    pub fn save_to_checkpoint(&self, path: &str) -> std::io::Result<()> {
         std::fs::create_dir(path).unwrap_or(());
 
-        self.network.write(&mut File::create(format!("{path}/network.bin")).unwrap()).unwrap();
-        self.adamw.momentum.write(&mut File::create(format!("{path}/momentum.bin")).unwrap()).unwrap();
-        self.adamw.velocity.write(&mut File::create(format!("{path}/velocity.bin")).unwrap()).unwrap();
-        self.network.write_quantised(&mut File::create(format!("{path}/quantised.bin")).unwrap()).unwrap();
+        self.network.write(&mut File::create(format!("{path}/network.bin"))?)?;
+        self.adamw.momentum.write(&mut File::create(format!("{path}/momentum.bin"))?)?;
+        self.adamw.velocity.write(&mut File::create(format!("{path}/velocity.bin"))?)?;
+        self.network.write_quantised(&mut File::create(format!("{path}/quantised.bin"))?)
     }
 
     pub fn run<LR: lr::LrScheduler, WDL: wdl::WdlScheduler>(
@@ -131,7 +131,7 @@ impl Trainer {
                     let name = format!("{}-{superbatch}", schedule.net_id());
                     let out_dir = settings.output_directory;
                     let path = format!("{out_dir}/{name}");
-                    self.save_to_checkpoint(&path);
+                    self.save_to_checkpoint(&path).expect("Failure in writing to checkpoint!");
                     println!("Saved [{}] to {}", logger::ansi(name, 31), logger::ansi(path, 31));
                 }
 

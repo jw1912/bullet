@@ -31,7 +31,7 @@ pub const BUCKETS_MIRRORED: [usize; 32] = [
 
 fn main() {
     let mut trainer = Trainer::default();
-    // let mut trainer = Trainer::from_checkpoint("checkpoints/legacy-10");
+    // let mut trainer = Trainer::from_checkpoint("checkpoints/legacy-10").unwrap();
 
     let loader = DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
