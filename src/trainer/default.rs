@@ -342,6 +342,12 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
                     assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
                     weight_buf = self.input_getter.merge_factoriser(weight_buf);
                 }
+
+                if *layout == Layout::Transposed {
+                    unimplemented!(
+                        "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
+                    );
+                }
             }
 
             if let Layout::Transposed = layout {
