@@ -10,13 +10,7 @@ use bullet_lib::{
     lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
-macro_rules! net_id {
-    () => {
-        "lnet002"
-    };
-}
-
-const NET_ID: &str = net_id!();
+const NET_ID: &str = "lnet002";
 
 fn main() {
     #[rustfmt::skip]
@@ -60,19 +54,10 @@ fn main() {
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
-    let base_engine = Engine {
+    let engine = |bench| Engine {
         repo: "https://github.com/jw1912/akimbo",
         branch: "main",
-        bench: Some(2256851),
-        net_path: None,
-        uci_options: vec![UciOption("Hash", "16")],
-        engine_type: OpenBenchCompliant,
-    };
-
-    let dev_engine = Engine {
-        repo: "https://github.com/jw1912/akimbo",
-        branch: "main",
-        bench: None,
+        bench,
         net_path: None,
         uci_options: vec![UciOption("Hash", "16")],
         engine_type: OpenBenchCompliant,
@@ -80,14 +65,14 @@ fn main() {
 
     let testing = TestSettings {
         test_rate: 20,
-        out_dir: concat!("../../nets/", net_id!()),
+        out_dir: &format!("../../nets/{NET_ID}"),
         gamerunner_path: GameRunnerPath::CuteChess("../../nets/cutechess-cli.exe"),
         book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
         num_game_pairs: 2000,
         concurrency: 6,
         time_control: TimeControl::FixedNodes(25_000),
-        base_engine,
-        dev_engine,
+        base_engine: engine(Some(2256851)),
+        dev_engine: engine(None),
     };
 
     trainer.run_and_test(&schedule, &settings, &data_loader, &testing);
