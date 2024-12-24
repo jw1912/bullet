@@ -9,6 +9,8 @@ pub struct ChessBucketsMergedKingsMirrored {
 }
 
 impl Default for ChessBucketsMergedKingsMirrored {
+    /// While the defaults for most feature sets produce a single bucket, this would produce an unusable network.
+    /// Instead, this is HalfKAv2_hm, i.e. one bucket for each square.
     #[rustfmt::skip]
     fn default() -> Self {
         Self::new([
