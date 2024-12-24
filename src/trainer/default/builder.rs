@@ -243,7 +243,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             let b = format!("l{layer}b");
 
             if let Some(quants) = &self.quantisations {
-                let layout = if self.allow_transpose && layer > 0 && output_buckets { Layout::Transposed } else { Layout::Normal };
+                let layout = if self.allow_transpose && layer > 0 && output_buckets {
+                    Layout::Transposed
+                } else {
+                    Layout::Normal
+                };
 
                 saved_format.push(SavedFormat { id: w, quant: quants[layer], layout });
 
