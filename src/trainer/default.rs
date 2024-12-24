@@ -13,11 +13,12 @@ pub mod testing;
 use bulletformat::BulletFormat;
 
 pub use builder::{Loss, TrainerBuilder};
-pub use loader::DefaultDataPreparer;
 pub use quant::QuantTarget;
 
 use inputs::InputType;
-use loader::DefaultDataLoader;
+use loader::{
+    CanBeDirectlySequentiallyLoaded, DataLoader, DefaultDataLoader, DefaultDataPreparer, DirectSequentialDataLoader,
+};
 use outputs::OutputBuckets;
 use testing::{EngineType, TestSettings};
 
@@ -33,13 +34,7 @@ use super::{
     LocalSettings, TrainingSchedule,
 };
 
-use crate::{
-    autograd::Node,
-    loader::{CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader},
-    optimiser::Optimiser,
-    trainer::NetworkTrainer,
-    Graph,
-};
+use crate::{autograd::Node, optimiser::Optimiser, trainer::NetworkTrainer, Graph};
 
 /// Holy unsound code batman!
 /// Needs refactor.
