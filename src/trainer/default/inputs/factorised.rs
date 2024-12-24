@@ -1,7 +1,7 @@
 use super::InputType;
 
 pub trait Factorises<T: InputType>: InputType<RequiredDataType = T::RequiredDataType> {
-    fn derive_feature(&self, input: &T, feat: usize) -> usize;
+    fn derive_feature(&self, input: &T, feat: usize) -> Option<usize>;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -33,7 +33,7 @@ impl<A: InputType, B: Factorises<A>> InputType for Factorised<A, B> {
     }
 
     fn max_active_inputs(&self) -> usize {
-        self.normal.max_active_inputs() + self.factoriser.max_active_inputs()
+        2 * self.normal.max_active_inputs()
     }
 
     fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
@@ -60,8 +60,13 @@ impl<A: InputType, B: Factorises<A>> InputType for Factorised<A, B> {
             .map(|elem| {
                 let feat = elem / layer_size;
                 let idx = elem % layer_size;
-                let factorised_feat = self.factoriser.derive_feature(&self.normal, feat);
-                unmerged[layer_size * (feat + offset) + idx] + unmerged[layer_size * factorised_feat + idx]
+                let factoriser = self
+                    .factoriser
+                    .derive_feature(&self.normal, feat)
+                    .map(|feat| unmerged[layer_size * feat + idx])
+                    .unwrap_or(0.0);
+
+                unmerged[layer_size * (feat + offset) + idx] + factoriser
             })
             .collect()
     }
@@ -79,11 +84,15 @@ pub struct FactorisedIter<A: InputType, B: Factorises<A>> {
 }
 
 impl<A: InputType, B: Factorises<A>> FactorisedIter<A, B> {
-    fn map_feat(&self, feat: (usize, usize)) -> (usize, usize) {
-        (
-            self.inputs.factoriser.derive_feature(&self.inputs.normal, feat.0),
-            self.inputs.factoriser.derive_feature(&self.inputs.normal, feat.1),
-        )
+    fn map_feat(&self, feat: (usize, usize)) -> Option<(usize, usize)> {
+        let stm = self.inputs.factoriser.derive_feature(&self.inputs.normal, feat.0);
+        let ntm = self.inputs.factoriser.derive_feature(&self.inputs.normal, feat.1);
+
+        match (stm, ntm) {
+            (Some(stm), Some(ntm)) => Some((stm, ntm)),
+            (None, None) => None,
+            _ => panic!("One factorised feature existed but the other did not!"),
+        }
     }
 }
 
@@ -96,7 +105,7 @@ impl<A: InputType, B: Factorises<A>> Iterator for FactorisedIter<A, B> {
             Some(feats)
         } else {
             self.iter.next().map(|feat| {
-                self.queued = Some(self.map_feat(feat));
+                self.queued = self.map_feat(feat);
                 (self.offset + feat.0, self.offset + feat.1)
             })
         }
