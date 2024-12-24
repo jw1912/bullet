@@ -100,7 +100,7 @@ impl Iterator for ChessBucketsMergedKingsMirroredIter {
 }
 
 impl Factorises<ChessBucketsMergedKingsMirrored> for Chess768 {
-    fn derive_feature(&self, _: &ChessBucketsMergedKingsMirrored, feat: usize) -> Option<usize> {
+    fn derive_feature(&self, _: &ChessBucketsMergedKingsMirrored, _feat: usize) -> Option<usize> {
         todo!();
     }
 }
