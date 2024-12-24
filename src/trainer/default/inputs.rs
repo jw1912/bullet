@@ -1,6 +1,7 @@
 mod ataxx147;
 mod chess768;
 mod chess_buckets;
+mod chess_buckets_mk;
 mod factorised;
 
 #[allow(deprecated)]
@@ -11,6 +12,7 @@ use super::loader::LoadableDataType;
 pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
 pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};
+pub use chess_buckets_mk::{ChessBucketsMergedKings, ChessBucketsMergedKingsMirrored};
 pub use factorised::{Factorised, Factorises};
 
 #[allow(deprecated)]
