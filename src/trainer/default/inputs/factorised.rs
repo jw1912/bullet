@@ -91,7 +91,7 @@ impl<A: InputType, B: Factorises<A>> FactorisedIter<A, B> {
         match (stm, ntm) {
             (Some(stm), Some(ntm)) => Some((stm, ntm)),
             (None, None) => None,
-            _ => panic!("One factorised feature existed but the other did not!")
+            _ => panic!("One factorised feature existed but the other did not!"),
         }
     }
 }
