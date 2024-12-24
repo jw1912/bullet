@@ -43,6 +43,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     loss: Loss,
     optimiser: O,
     psqt_subnet: bool,
+    allow_transpose: bool,
 }
 
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -57,6 +58,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Defa
             loss: Loss::None,
             optimiser: O::default(),
             psqt_subnet: false,
+            allow_transpose: true,
         }
     }
 }
@@ -116,6 +118,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     pub fn feature_transformer(mut self, size: usize) -> Self {
         assert!(self.nodes.is_empty());
         self.ft_out_size = size;
+        self
+    }
+
+    pub fn disallow_tranpose_in_quantised_network(mut self) -> Self {
+        self.allow_transpose = false;
         self
     }
 
@@ -236,7 +243,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             let b = format!("l{layer}b");
 
             if let Some(quants) = &self.quantisations {
-                let layout = if layer > 0 && output_buckets { Layout::Transposed } else { Layout::Normal };
+                let layout = if self.allow_transpose && layer > 0 && output_buckets {
+                    Layout::Transposed
+                } else {
+                    Layout::Normal
+                };
 
                 saved_format.push(SavedFormat { id: w, quant: quants[layer], layout });
 
@@ -414,7 +425,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         }
 
         if output_buckets {
-            println!("Output Buckets         : Will be transposed in quantised network for you")
+            if self.allow_transpose {
+                println!("Output Buckets         : Will be transposed in quantised network for you");
+            } else {
+                println!("Output Buckets         : Will **not** be transposed in quantised network for you");
+            }
         }
 
         if let Some(quantisations) = self.quantisations {
