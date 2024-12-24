@@ -121,7 +121,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self
     }
 
-    pub fn disallow_tranpose_in_quantised_network(mut self) -> Self {
+    pub fn disallow_transpose_in_quantised_network(mut self) -> Self {
         self.allow_transpose = false;
         self
     }
