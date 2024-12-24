@@ -56,7 +56,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Defa
             perspective: true,
             loss: Loss::None,
             optimiser: O::default(),
-            psqt_subnet: false
+            psqt_subnet: false,
         }
     }
 }
