@@ -90,8 +90,8 @@ impl Iterator for ChessBucketsMirroredIter {
 }
 
 impl Factorises<ChessBucketsMirrored> for Chess768 {
-    fn derive_feature(&self, _: &ChessBucketsMirrored, feat: usize) -> usize {
-        feat % 768
+    fn derive_feature(&self, _: &ChessBucketsMirrored, feat: usize) -> Option<usize> {
+        Some(feat % 768)
     }
 }
 
