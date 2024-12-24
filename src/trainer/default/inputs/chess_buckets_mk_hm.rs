@@ -8,12 +8,6 @@ pub struct ChessBucketsMergedKingsMirrored {
     num_buckets: usize,
 }
 
-impl Default for ChessBucketsMergedKingsMirrored {
-    fn default() -> Self {
-        Self { buckets: [0; 64], num_buckets: 1 }
-    }
-}
-
 impl ChessBucketsMergedKingsMirrored {
     pub fn new(buckets: [usize; 32]) -> Self {
         let num_buckets = get_num_buckets(&buckets);
