@@ -2,6 +2,8 @@ mod ataxx147;
 mod chess768;
 mod chess_buckets;
 mod chess_buckets_hm;
+mod chess_buckets_mk;
+mod chess_buckets_mk_hm;
 mod factorised;
 
 use bulletformat::BulletFormat;
@@ -10,6 +12,8 @@ pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
 pub use chess_buckets::ChessBuckets;
 pub use chess_buckets_hm::{ChessBucketsMirrored, ChessBucketsMirroredFactorised};
+pub use chess_buckets_mk::ChessBucketsMergedKings;
+pub use chess_buckets_mk_hm::{ChessBucketsMergedKingsMirrored, ChessBucketsMergedKingsMirroredFactorised};
 pub use factorised::{Factorised, Factorises};
 
 pub trait InputType: Send + Sync + Copy + Default + 'static {
