@@ -42,6 +42,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     perspective: bool,
     loss: Loss,
     optimiser: O,
+    psqt_subnet: bool,
 }
 
 impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -55,6 +56,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Defa
             perspective: true,
             loss: Loss::None,
             optimiser: O::default(),
+            psqt_subnet: false,
         }
     }
 }
@@ -169,6 +171,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self.add(size, OpType::Activate(activation))
     }
 
+    /// Adds a PSQT subnet directly from inputs to output.
+    /// The PSQT weights will be placed **before** all other network weights.
+    pub fn psqt_subnet(mut self) -> Self {
+        self.psqt_subnet = true;
+        self
+    }
+
     pub fn build(self) -> Trainer<O::Optimiser, T, U> {
         let mut builder = GraphBuilder::default();
 
@@ -200,6 +209,27 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let l0b = builder.create_weights("l0b", Shape::new(self.ft_out_size, 1));
 
         let mut net_quant = 1i16;
+
+        let input_buckets = self.input_getter.buckets();
+        let mut ft_desc = if input_buckets > 1 {
+            format!("{}x{input_buckets} -> {}", self.input_getter.inputs(), self.ft_out_size)
+        } else {
+            format!("{} -> {}", self.input_getter.inputs(), self.ft_out_size)
+        };
+
+        if self.perspective {
+            ft_desc = format!("({ft_desc})x2");
+        }
+
+        let mut out = builder.create_input("stm", input_shape);
+
+        let pst = if self.psqt_subnet {
+            let pst = builder.create_weights("pst", Shape::new(1, input_size));
+            saved_format.push(SavedFormat { id: "pst".to_string(), quant: QuantTarget::Float, layout: Layout::Normal });
+            Some(operations::matmul(&mut builder, pst, out))
+        } else {
+            None
+        };
 
         let mut push_saved_format = |layer: usize| {
             let w = format!("l{layer}w");
@@ -239,20 +269,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             }
         };
 
-        let input_buckets = self.input_getter.buckets();
-        let mut ft_desc = if input_buckets > 1 {
-            format!("{}x{input_buckets} -> {}", self.input_getter.inputs(), self.ft_out_size)
-        } else {
-            format!("{} -> {}", self.input_getter.inputs(), self.ft_out_size)
-        };
-
-        if self.perspective {
-            ft_desc = format!("({ft_desc})x2");
-        }
-
         push_saved_format(0);
-
-        let mut out = builder.create_input("stm", input_shape);
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
@@ -318,6 +335,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         assert!(!still_in_ft);
 
+        if let Some(pst) = pst {
+            out = operations::add(&mut builder, out, pst);
+        }
+
         let predicted = operations::activate(&mut builder, out, Activation::Sigmoid);
 
         match self.loss {
@@ -343,7 +364,17 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             }
         }
 
-        let factorised_weights = if self.input_getter.is_factorised() { Some("l0w".to_string()) } else { None };
+        let factorised_weights = if self.input_getter.is_factorised() {
+            let mut f = vec!["l0w".to_string()];
+
+            if self.psqt_subnet {
+                f.push("pst".to_string());
+            }
+
+            Some(f)
+        } else {
+            None
+        };
 
         let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),

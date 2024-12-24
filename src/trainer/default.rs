@@ -75,7 +75,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     output_node: Node,
     additional_inputs: AdditionalTrainerInputs,
     saved_format: Vec<SavedFormat>,
-    factorised_weights: Option<String>,
+    factorised_weights: Option<Vec<String>>,
 }
 
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
@@ -333,7 +333,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             assert_eq!(written, weights.shape().size());
 
             if let Some(factorised) = &self.factorised_weights {
-                if factorised == id {
+                if factorised.contains(id) {
                     assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
                     weight_buf = self.input_getter.merge_factoriser(weight_buf);
 
