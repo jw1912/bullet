@@ -4,16 +4,16 @@ mod chess_buckets;
 mod chess_buckets_hm;
 mod factorised;
 
-use bulletformat::BulletFormat;
-
 pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
 pub use chess_buckets::ChessBuckets;
 pub use chess_buckets_hm::{ChessBucketsMirrored, ChessBucketsMirroredFactorised};
 pub use factorised::{Factorised, Factorises};
 
+use super::loader::LoadableDataType;
+
 pub trait InputType: Send + Sync + Copy + Default + 'static {
-    type RequiredDataType: BulletFormat + Copy + Send + Sync;
+    type RequiredDataType: LoadableDataType + Copy + Send + Sync;
     type FeatureIter: Iterator<Item = (usize, usize)>;
 
     fn max_active_inputs(&self) -> usize;

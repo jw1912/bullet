@@ -1,14 +1,37 @@
 mod direct;
 mod sfbinpack;
 
+use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use sfbinpack::SfBinpackLoader;
-
-use bulletformat::BulletFormat;
 
 use super::{inputs::InputType, outputs::OutputBuckets};
 
 use crate::{tensor::Shape, trainer::DataPreparer};
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GameResult {
+    Loss = 0,
+    Draw = 1,
+    Win = 2,
+}
+
+pub trait LoadableDataType: Sized {
+    fn score(&self) -> i16;
+
+    fn result(&self) -> GameResult;
+}
+
+impl<T: BulletFormat + 'static> LoadableDataType for T {
+    fn result(&self) -> GameResult {
+        [GameResult::Loss, GameResult::Draw, GameResult::Win][self.result_idx()]
+    }
+
+    fn score(&self) -> i16 {
+        <Self as BulletFormat>::score(self)
+    }
+}
 
 /// Dictates how data is read from a file into the expected datatype.
 /// This allows for the file format to be divorced from the training
@@ -24,7 +47,7 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
 }
 
 #[derive(Clone)]
-pub(crate) struct DefaultDataLoader<I, O, D> {
+pub struct DefaultDataLoader<I, O, D> {
     input_getter: I,
     output_getter: O,
     wdl: bool,
@@ -198,9 +221,11 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                                 buckets_chunk[i] = i32::from(out.bucket(pos));
 
                                 if wdl {
-                                    results_chunk[output_size * i + pos.result_idx()] = 1.0;
+                                    results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
                                 } else {
-                                    results_chunk[i] = pos.blended_result(blend, rscale);
+                                    let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
+                                    let result = f32::from(pos.result() as u8) / 2.0;
+                                    results_chunk[i] = blend * result + (1. - blend) * score;
                                 }
                             }
                         });

@@ -1,6 +1,6 @@
-use bulletformat::{BulletFormat, ChessBoard};
+use bulletformat::ChessBoard;
 
-pub trait OutputBuckets<T: BulletFormat>: Send + Sync + Copy + Default + 'static {
+pub trait OutputBuckets<T>: Send + Sync + Copy + Default + 'static {
     const BUCKETS: usize;
 
     fn bucket(&self, pos: &T) -> u8;
@@ -8,7 +8,7 @@ pub trait OutputBuckets<T: BulletFormat>: Send + Sync + Copy + Default + 'static
 
 #[derive(Clone, Copy, Default)]
 pub struct Single;
-impl<T: BulletFormat + 'static> OutputBuckets<T> for Single {
+impl<T: 'static> OutputBuckets<T> for Single {
     const BUCKETS: usize = 1;
 
     fn bucket(&self, _: &T) -> u8 {
