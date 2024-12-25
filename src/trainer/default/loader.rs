@@ -5,7 +5,7 @@ use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use sfbinpack::SfBinpackLoader;
 
-use super::{inputs::InputType, outputs::OutputBuckets};
+use super::{inputs::SparseInputType, outputs::OutputBuckets};
 
 use crate::{tensor::Shape, trainer::DataPreparer};
 
@@ -64,7 +64,7 @@ impl<I, O, D> DefaultDataLoader<I, O, D> {
 
 impl<I, O, D> DataPreparer for DefaultDataLoader<I, O, D>
 where
-    I: InputType,
+    I: SparseInputType,
     O: OutputBuckets<I::RequiredDataType>,
     D: DataLoader<I::RequiredDataType>,
 {
@@ -85,7 +85,7 @@ where
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
         DefaultDataPreparer::prepare(
-            self.input_getter,
+            self.input_getter.clone(),
             self.output_getter,
             self.wdl,
             data,
@@ -128,7 +128,7 @@ pub struct DefaultDataPreparer<I, O> {
     pub(crate) targets: DenseInput,
 }
 
-impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
+impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         input_getter: I,
@@ -142,10 +142,10 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
     ) -> Self {
         let rscale = 1.0 / scale;
         let batch_size = data.len();
-        let max_active = input_getter.max_active_inputs();
+        let max_active = input_getter.max_active();
         let chunk_size = batch_size.div_ceil(threads);
 
-        let input_size = input_getter.size();
+        let input_size = input_getter.num_inputs();
 
         let output_size = if wdl { 3 } else { 1 };
 
@@ -199,7 +199,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                                 let sparse_offset = max_active * i;
                                 let dense_offset = input_size * i;
 
-                                for (our, opp) in inp.feature_iter(pos) {
+                                inp.map_features(pos, |our, opp| {
                                     if dense {
                                         dstm_chunk[dense_offset + our] = 1.0;
                                         dnstm_chunk[dense_offset + opp] = 1.0;
@@ -209,7 +209,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                                     }
 
                                     j += 1;
-                                }
+                                });
 
                                 if !dense && j < max_active {
                                     stm_chunk[sparse_offset + j] = -1;
