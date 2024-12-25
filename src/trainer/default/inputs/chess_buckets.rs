@@ -1,6 +1,6 @@
 use bulletformat::ChessBoard;
 
-use super::{get_num_buckets, Chess768, Factorised, Factorises, SparseInputType};
+use super::{get_num_buckets, Chess768, Factorises, SparseInputType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ChessBuckets {
@@ -107,16 +107,14 @@ impl SparseInputType for ChessBucketsMirrored {
     }
 }
 
-impl Factorises<ChessBucketsMirrored> for Chess768 {
-    fn derive_feature(&self, _: &ChessBucketsMirrored, feat: usize) -> Option<usize> {
+impl Factorises<ChessBuckets> for Chess768 {
+    fn derive_feature(&self, _: &ChessBuckets, feat: usize) -> Option<usize> {
         Some(feat % 768)
     }
 }
 
-pub type ChessBucketsMirroredFactorised = Factorised<ChessBucketsMirrored, Chess768>;
-
-impl ChessBucketsMirroredFactorised {
-    pub fn new(buckets: [usize; 32]) -> Self {
-        Self::from_parts(ChessBucketsMirrored::new(buckets), Chess768)
+impl Factorises<ChessBucketsMirrored> for Chess768 {
+    fn derive_feature(&self, _: &ChessBucketsMirrored, feat: usize) -> Option<usize> {
+        Some(feat % 768)
     }
 }

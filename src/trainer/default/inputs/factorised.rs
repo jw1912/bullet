@@ -36,7 +36,7 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
 
             match (stm, ntm) {
                 (Some(stm), Some(ntm)) => f(stm, ntm),
-                (None, None) => {},
+                (None, None) => {}
                 _ => panic!("One factorised feature existed but the other did not!"),
             }
         });
