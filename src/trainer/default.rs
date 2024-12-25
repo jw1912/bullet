@@ -10,8 +10,6 @@ pub mod outputs;
 mod quant;
 pub mod testing;
 
-use bulletformat::BulletFormat;
-
 pub use builder::{Loss, TrainerBuilder};
 pub use quant::QuantTarget;
 
@@ -36,9 +34,10 @@ use super::{
 
 use crate::{autograd::Node, optimiser::Optimiser, trainer::NetworkTrainer, Graph};
 
-/// Holy unsound code batman!
-/// Needs refactor.
-unsafe impl<T: BulletFormat + 'static> CanBeDirectlySequentiallyLoaded for T {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::CudADFormat {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::MarlinFormat {}
 
 #[derive(Clone, Copy)]
 pub struct AdditionalTrainerInputs {
@@ -377,10 +376,9 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
     }
 }
 
-// TODO: remove `BulletFormat` requirement
 impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out>
 where
-    Inp::RequiredDataType: BulletFormat,
+    Inp::RequiredDataType: CanBeDirectlySequentiallyLoaded,
 {
     pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
         &mut self,
