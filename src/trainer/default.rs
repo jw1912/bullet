@@ -191,83 +191,6 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         <Self as NetworkTrainer>::save_to_checkpoint(self, path);
     }
 
-    fn preamble<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
-        &self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
-        data_loader: &D,
-    ) -> (DefaultDataLoader<Inp, Out, D>, Option<DirectLoader<Inp, Out>>) {
-        logger::clear_colours();
-        println!("{}", logger::ansi("Beginning Training", "34;1"));
-
-        schedule.display();
-        settings.display();
-
-        let preparer = DefaultDataLoader::new(
-            self.input_getter,
-            self.output_getter,
-            self.additional_inputs.wdl,
-            schedule.eval_scale,
-            data_loader.clone(),
-            self.additional_inputs.dense_inputs,
-        );
-
-        let test_preparer = settings.test_set.map(|test| {
-            DefaultDataLoader::new(
-                self.input_getter,
-                self.output_getter,
-                self.additional_inputs.wdl,
-                schedule.eval_scale,
-                DirectSequentialDataLoader::new(&[test.path]),
-                self.additional_inputs.dense_inputs,
-            )
-        });
-
-        display_total_positions(data_loader, schedule.steps);
-
-        (preparer, test_preparer)
-    }
-
-    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
-        &mut self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
-        data_loader: &D,
-    ) {
-        let (preparer, test_preparer) = self.preamble(schedule, settings, data_loader);
-
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
-    }
-
-    pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
-        &mut self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
-        data_loader: &D,
-        testing: &TestSettings<T>,
-    ) {
-        let (preparer, test_preparer) = self.preamble(schedule, settings, data_loader);
-
-        testing.setup(schedule);
-
-        let mut handles = Vec::new();
-
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
-            if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
-                trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
-                let handle = testing.dispatch(&schedule.net_id, superbatch);
-                handles.push(handle);
-            }
-        });
-
-        println!("# [Waiting for Tests]");
-        for handle in handles {
-            if let Err(err) = handle.join() {
-                println!("{err:?}");
-            }
-        }
-    }
-
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err = String>,
@@ -398,6 +321,48 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         Ok(())
     }
+
+    pub fn training_preamble<D, D2, LR: LrScheduler, WDL: WdlScheduler>(
+        &self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+        test_loader: &Option<D2>,
+    ) -> PairedLoaders<Inp, Out, D, D2>
+    where
+        D: DataLoader<Inp::RequiredDataType>,
+        D2: DataLoader<Inp::RequiredDataType>,
+    {
+        logger::clear_colours();
+        println!("{}", logger::ansi("Beginning Training", "34;1"));
+
+        schedule.display();
+        settings.display();
+
+        let preparer = DefaultDataLoader::new(
+            self.input_getter,
+            self.output_getter,
+            self.additional_inputs.wdl,
+            schedule.eval_scale,
+            data_loader.clone(),
+            self.additional_inputs.dense_inputs,
+        );
+
+        let test_preparer = test_loader.as_ref().map(|loader| {
+            DefaultDataLoader::new(
+                self.input_getter,
+                self.output_getter,
+                self.additional_inputs.wdl,
+                schedule.eval_scale,
+                loader.clone(),
+                self.additional_inputs.dense_inputs,
+            )
+        });
+
+        display_total_positions(data_loader, schedule.steps);
+
+        (preparer, test_preparer)
+    }
 }
 
 fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: TrainingSteps) {
@@ -412,4 +377,52 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
     }
 }
 
-type DirectLoader<Inp, Out> = DefaultDataLoader<Inp, Out, DirectSequentialDataLoader>;
+// TODO: remove `BulletFormat` requirement
+impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out>
+where
+    Inp::RequiredDataType: BulletFormat,
+{
+    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
+        &mut self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+    ) {
+        let test_loader = settings.test_set.map(|test| DirectSequentialDataLoader::new(&[test.path]));
+        let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
+
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
+    }
+
+    pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
+        &mut self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+        testing: &TestSettings<T>,
+    ) {
+        let test_loader = settings.test_set.map(|test| DirectSequentialDataLoader::new(&[test.path]));
+        let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
+
+        testing.setup(schedule);
+
+        let mut handles = Vec::new();
+
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
+            if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
+                trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
+                let handle = testing.dispatch(&schedule.net_id, superbatch);
+                handles.push(handle);
+            }
+        });
+
+        println!("# [Waiting for Tests]");
+        for handle in handles {
+            if let Err(err) = handle.join() {
+                println!("{err:?}");
+            }
+        }
+    }
+}
+
+type PairedLoaders<Inp, Out, D, D2> = (DefaultDataLoader<Inp, Out, D>, Option<DefaultDataLoader<Inp, Out, D2>>);
