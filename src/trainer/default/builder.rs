@@ -425,9 +425,11 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         if output_buckets {
             if self.allow_transpose {
-                println!("Output Buckets         : Will be transposed in quantised network for you");
+                println!("Output Buckets         : Will be transposed in quantised network for you, output bucketed layers will");
+                println!("                       : have weights in form [[[T; layer input size]; layer output size]; buckets]")
             } else {
-                println!("Output Buckets         : Will **not** be transposed in quantised network for you");
+                println!("Output Buckets         : Will **not** be transposed in quantised network for you, output bucketed layers will");
+                println!("                       : have weights in form [[[T; layer output size]; buckets]; layer input size]")
             }
         }
 
