@@ -18,16 +18,12 @@ pub enum GameResult {
 }
 
 pub trait LoadableDataType: Sized {
-    type DefaultDataLoader: DataLoader<Self>;
-
     fn score(&self) -> i16;
 
     fn result(&self) -> GameResult;
 }
 
 impl<T: BulletFormat + 'static> LoadableDataType for T {
-    type DefaultDataLoader = DirectSequentialDataLoader;
-
     fn result(&self) -> GameResult {
         [GameResult::Loss, GameResult::Draw, GameResult::Win][self.result_idx()]
     }
