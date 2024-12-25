@@ -1,6 +1,6 @@
 use bullet_lib::{
     default::{
-        inputs::{self, InputType},
+        inputs::{self, SparseInputType},
         loader, outputs, Layout, QuantTarget, SavedFormat, Trainer,
     },
     lr, operations,
@@ -12,7 +12,7 @@ use bullet_lib::{
 fn main() {
     let inputs = inputs::Chess768;
     let hl = 512;
-    let num_inputs = inputs.size();
+    let num_inputs = inputs.num_inputs();
 
     let (mut graph, output_node) = build_network(num_inputs, hl);
 

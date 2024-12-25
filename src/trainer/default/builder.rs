@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    inputs::InputType,
+    inputs::SparseInputType,
     outputs::{self, OutputBuckets},
     Trainer,
 };
@@ -34,7 +34,7 @@ struct NodeType {
 }
 
 pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
-    input_getter: T,
+    input_getter: Option<T>,
     bucket_getter: U,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
@@ -46,10 +46,10 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     allow_transpose: bool,
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
+impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
     fn default() -> Self {
         Self {
-            input_getter: T::default(),
+            input_getter: None,
             bucket_getter: U::default(),
             ft_out_size: 0,
             nodes: Vec::new(),
@@ -63,7 +63,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Defa
     }
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> TrainerBuilder<T, U, O> {
+impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> TrainerBuilder<T, U, O> {
     fn get_last_layer_size(&self) -> usize {
         if let Some(node) = self.nodes.last() {
             node.size
@@ -89,7 +89,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
     /// Sets the input featureset.
     pub fn input(mut self, input_getter: T) -> Self {
-        self.input_getter = input_getter;
+        assert!(self.input_getter.is_none(), "Cannot set the input features more than once!");
+        self.input_getter = Some(input_getter);
         self
     }
 
@@ -190,7 +191,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let output_buckets = U::BUCKETS > 1;
 
-        let input_size = self.input_getter.size();
+        let input_getter = self.input_getter.expect("Need to set the input features!");
+
+        let input_size = input_getter.num_inputs();
         let input_shape = Shape::new(input_size, 1);
         let targets = builder.create_input("targets", Shape::new(1, 1));
 
@@ -217,12 +220,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut net_quant = 1i16;
 
-        let input_buckets = self.input_getter.buckets();
-        let mut ft_desc = if input_buckets > 1 {
-            format!("{}x{input_buckets} -> {}", self.input_getter.inputs(), self.ft_out_size)
-        } else {
-            format!("{} -> {}", self.input_getter.inputs(), self.ft_out_size)
-        };
+        //let input_buckets = self.input_getter.buckets();
+        let mut ft_desc = format!("{} -> {}", input_getter.shorthand(), self.ft_out_size);
 
         if self.perspective {
             ft_desc = format!("({ft_desc})x2");
@@ -375,7 +374,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             }
         }
 
-        let factorised_weights = if self.input_getter.is_factorised() {
+        let factorised_weights = if input_getter.is_factorised() {
             let mut f = vec!["l0w".to_string()];
 
             if self.psqt_subnet {
@@ -389,7 +388,7 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
-            input_getter: self.input_getter,
+            input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
             output_node: out,
             additional_inputs: AdditionalTrainerInputs {
@@ -418,9 +417,9 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         logger::clear_colours();
         println!("{}", logger::ansi("Built Trainer", "34;1"));
         println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
-        println!("Inputs                 : {}", self.input_getter.description());
+        println!("Inputs                 : {}", input_getter.description());
 
-        if self.input_getter.is_factorised() {
+        if input_getter.is_factorised() {
             println!("Factoriser             : Will be merged in quantised network for you");
         }
 

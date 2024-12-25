@@ -13,7 +13,7 @@ pub mod testing;
 pub use builder::{Loss, TrainerBuilder};
 pub use quant::QuantTarget;
 
-use inputs::InputType;
+use inputs::SparseInputType;
 use loader::{
     CanBeDirectlySequentiallyLoaded, DataLoader, DefaultDataLoader, DefaultDataPreparer, DirectSequentialDataLoader,
 };
@@ -77,7 +77,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     factorised_weights: Option<Vec<String>>,
 }
 
-impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
+impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
     for Trainer<Opt, Inp, Out>
 {
     type Optimiser = Opt;
@@ -140,7 +140,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     }
 }
 
-impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
+impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
     pub fn new(
         graph: Graph,
         output_node: Node,
@@ -197,7 +197,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
         let prepared = DefaultDataPreparer::prepare(
-            self.input_getter,
+            self.input_getter.clone(),
             self.output_getter,
             self.additional_inputs.wdl,
             &[pos],
@@ -339,7 +339,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         settings.display();
 
         let preparer = DefaultDataLoader::new(
-            self.input_getter,
+            self.input_getter.clone(),
             self.output_getter,
             self.additional_inputs.wdl,
             schedule.eval_scale,
@@ -349,7 +349,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let test_preparer = test_loader.as_ref().map(|loader| {
             DefaultDataLoader::new(
-                self.input_getter,
+                self.input_getter.clone(),
                 self.output_getter,
                 self.additional_inputs.wdl,
                 schedule.eval_scale,
@@ -376,7 +376,7 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
     }
 }
 
-impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out>
+impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out>
 where
     Inp::RequiredDataType: CanBeDirectlySequentiallyLoaded,
 {
