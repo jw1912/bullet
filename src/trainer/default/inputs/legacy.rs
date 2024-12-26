@@ -2,6 +2,7 @@ use crate::default::loader::LoadableDataType;
 
 use super::SparseInputType;
 
+#[deprecated]
 pub trait InputType: Send + Sync + Copy + Default + 'static {
     type RequiredDataType: LoadableDataType + Copy + Send + Sync;
     type FeatureIter: Iterator<Item = (usize, usize)>;

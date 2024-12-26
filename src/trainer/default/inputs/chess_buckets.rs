@@ -89,12 +89,12 @@ impl SparseInputType for ChessBucketsMirrored {
 
     /// Shorthand for the input e.g. `768x4`
     fn shorthand(&self) -> String {
-        "768".to_string()
+        format!("768x{}hm", self.num_buckets)
     }
 
     /// Description of the input type
     fn description(&self) -> String {
-        "Default psqt chess inputs".to_string()
+        "Horizontally mirrored, king bucketed psqt chess inputs".to_string()
     }
 
     fn is_factorised(&self) -> bool {
