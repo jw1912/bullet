@@ -19,6 +19,7 @@ gh-actions = []
 bulletformat = { workspace = true }
 rand = "0.8.5"
 rand_distr = "0.4.3"
+montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.6.0" }
 sfbinpack = { package = "binpack", git = "https://github.com/Disservin/binpack-rust", rev = "483e9aac028b4c3e0671af6b28ff50f64d696558" }
 
 [build-dependencies]

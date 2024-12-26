@@ -1,8 +1,4 @@
-use std::{
-    sync::mpsc,
-    thread,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{sync::mpsc, thread};
 
 use sfbinpack::{
     chess::{color::Color, piecetype::PieceType},
@@ -10,7 +6,7 @@ use sfbinpack::{
     reader::data_reader::CompressedTrainingDataEntryReader,
 };
 
-use crate::{format::ChessBoard, loader::DataLoader};
+use crate::{format::ChessBoard, loader::DataLoader, rng::SimpleRand};
 
 fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     let mut bbs = [0; 8];
@@ -199,28 +195,10 @@ where
 }
 
 fn shuffle(data: &mut [ChessBoard]) {
-    let mut rng = Rand::with_seed();
+    let mut rng = SimpleRand::with_seed();
 
     for i in (0..data.len()).rev() {
         let idx = rng.rng() as usize % (i + 1);
         data.swap(idx, i);
-    }
-}
-
-pub struct Rand(u64);
-
-impl Rand {
-    pub fn with_seed() -> Self {
-        let seed = SystemTime::now().duration_since(UNIX_EPOCH).expect("Guaranteed increasing.").as_micros() as u64
-            & 0xFFFF_FFFF;
-
-        Self(seed)
-    }
-
-    pub fn rng(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
     }
 }

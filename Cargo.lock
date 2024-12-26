@@ -92,6 +92,7 @@ dependencies = [
  "binpack",
  "bulletformat",
  "cc",
+ "montyformat",
  "rand",
  "rand_distr",
 ]
@@ -515,6 +516,11 @@ dependencies = [
  "adler",
  "simd-adler32",
 ]
+
+[[package]]
+name = "montyformat"
+version = "0.6.0"
+source = "git+https://github.com/official-monty/montyformat.git?tag=v0.6.0#7169d4eee4b1ae2050700bf98c48496f695e44f2"
 
 [[package]]
 name = "num-traits"
