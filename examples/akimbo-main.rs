@@ -51,7 +51,7 @@ fn main() {
 
     trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
     let data_loader = {
         let file_path = "data/datagen24.binpack";
