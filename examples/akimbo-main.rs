@@ -55,7 +55,7 @@ fn main() {
 
     let data_loader = {
         let file_path = "data/datagen24.binpack";
-        let buffer_size_mb = 1024;
+        let buffer_size_mb = 4096;
         let threads = 4;
         fn filter(pos: &Position, best_move: Move, score: i16, _result: f32) -> bool {
             pos.fullm() >= 16
