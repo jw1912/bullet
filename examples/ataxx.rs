@@ -1,5 +1,8 @@
 use bullet_lib::{
-    default::{loader, outputs, Loss, TrainerBuilder}, format::AtaxxBoard, inputs::SparseInputType, lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps
+    default::{loader, outputs, Loss, TrainerBuilder},
+    format::AtaxxBoard,
+    inputs::SparseInputType,
+    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 const HIDDEN_SIZE: usize = 128;

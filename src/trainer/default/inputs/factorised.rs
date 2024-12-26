@@ -42,6 +42,14 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
         });
     }
 
+    fn shorthand(&self) -> String {
+        self.normal.shorthand()
+    }
+
+    fn description(&self) -> String {
+        format!("{} factorised by {}", self.normal.description(), self.factoriser.description().to_lowercase())
+    }
+
     fn is_factorised(&self) -> bool {
         true
     }
@@ -66,13 +74,5 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
                 unmerged[layer_size * (feat + offset) + idx] + factoriser
             })
             .collect()
-    }
-
-    fn shorthand(&self) -> String {
-        self.normal.shorthand()
-    }
-
-    fn description(&self) -> String {
-        format!("{} factorised by {}", self.normal.description(), self.factoriser.description().to_lowercase())
     }
 }

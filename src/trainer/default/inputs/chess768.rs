@@ -38,13 +38,4 @@ impl SparseInputType for Chess768 {
     fn description(&self) -> String {
         "Default psqt chess inputs".to_string()
     }
-
-    fn is_factorised(&self) -> bool {
-        false
-    }
-
-    fn merge_factoriser(&self, unmerged: Vec<f32>) -> Vec<f32> {
-        assert!(self.is_factorised());
-        unmerged
-    }
 }

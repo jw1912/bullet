@@ -49,7 +49,11 @@ impl SparseInputType for Ataxx98 {
     }
 
     fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
-        Ataxx147.map_features(pos, |stm, ntm| if stm < 98 { f(stm, ntm) });
+        Ataxx147.map_features(pos, |stm, ntm| {
+            if stm < 98 {
+                f(stm, ntm)
+            }
+        });
     }
 
     fn shorthand(&self) -> String {
