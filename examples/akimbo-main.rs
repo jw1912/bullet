@@ -7,10 +7,11 @@ use bullet_lib::{
         testing::{Engine, GameRunnerPath, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
         Loss, TrainerBuilder,
     },
+    montyformat::chess::{Move, Position},
     lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
-const NET_ID: &str = "lnet002";
+const NET_ID: &str = "montynet";
 
 fn main() {
     #[rustfmt::skip]
@@ -52,7 +53,20 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
+    let data_loader = {
+        let file_path = "data/datagen24.binpack";
+        let buffer_size_mb = 1024;
+        let threads = 4;
+        fn filter(pos: &Position, best_move: Move, score: i16, _result: f32) -> bool {
+            pos.fullm() >= 16
+                && score.unsigned_abs() <= 10000
+                && !best_move.is_capture()
+                && !best_move.is_promo()
+                && !pos.in_check()
+        }
+
+        loader::MontyBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
+    };
 
     let engine = |bench| Engine {
         repo: "https://github.com/jw1912/akimbo",
