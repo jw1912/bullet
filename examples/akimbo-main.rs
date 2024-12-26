@@ -58,7 +58,7 @@ fn main() {
         let buffer_size_mb = 4096;
         let threads = 4;
         fn filter(pos: &Position, best_move: Move, score: i16, _result: f32) -> bool {
-            pos.fullm() >= 16
+            pos.fullm() >= 8
                 && score.unsigned_abs() <= 10000
                 && !best_move.is_capture()
                 && !best_move.is_promo()
