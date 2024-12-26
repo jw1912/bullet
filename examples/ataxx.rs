@@ -1,6 +1,7 @@
 use bullet_lib::{
-    default::{inputs::InputType, loader, outputs, Loss, TrainerBuilder},
+    default::{loader, outputs, Loss, TrainerBuilder},
     format::AtaxxBoard,
+    inputs::SparseInputType,
     lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
@@ -10,25 +11,18 @@ const NUM_TUPLES: usize = 36;
 
 #[derive(Clone, Copy, Default)]
 pub struct Ataxx2Tuples;
-impl InputType for Ataxx2Tuples {
+impl SparseInputType for Ataxx2Tuples {
     type RequiredDataType = AtaxxBoard;
-    type FeatureIter = ThisIterator;
 
-    fn max_active_inputs(&self) -> usize {
+    fn num_inputs(&self) -> usize {
+        NUM_TUPLES * PER_TUPLE
+    }
+
+    fn max_active(&self) -> usize {
         NUM_TUPLES
     }
 
-    fn buckets(&self) -> usize {
-        1
-    }
-
-    fn inputs(&self) -> usize {
-        self.max_active_inputs() * PER_TUPLE
-    }
-
-    fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        let mut res = [(0, 0); NUM_TUPLES];
-
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
         let [boys, opps, _] = pos.bbs();
 
         for i in 0..6 {
@@ -37,7 +31,8 @@ impl InputType for Ataxx2Tuples {
                 const MASK: u64 = 0b0001_1000_0011;
 
                 let tuple = 6 * i + j;
-                let mut feat = PER_TUPLE * tuple;
+                let mut stm = PER_TUPLE * tuple;
+                let mut ntm = stm;
 
                 let offset = 7 * i + j;
                 let mut b = (boys >> offset) & MASK;
@@ -49,7 +44,8 @@ impl InputType for Ataxx2Tuples {
                         sq -= 5;
                     }
 
-                    feat += POWERS[sq];
+                    stm += POWERS[sq];
+                    ntm += 2 * POWERS[sq];
 
                     b &= b - 1;
                 }
@@ -60,35 +56,23 @@ impl InputType for Ataxx2Tuples {
                         sq -= 5;
                     }
 
-                    feat += 2 * POWERS[sq];
+                    stm += 2 * POWERS[sq];
+                    ntm += POWERS[sq];
 
                     o &= o - 1;
                 }
 
-                res[tuple] = (feat, feat);
+                f(stm, ntm);
             }
         }
-
-        ThisIterator { inner: res, index: 0 }
     }
-}
 
-pub struct ThisIterator {
-    inner: [(usize, usize); NUM_TUPLES],
-    index: usize,
-}
+    fn shorthand(&self) -> String {
+        "2-tuples".to_string()
+    }
 
-impl Iterator for ThisIterator {
-    type Item = (usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= NUM_TUPLES {
-            return None;
-        }
-
-        let res = self.inner[self.index];
-        self.index += 1;
-        Some(res)
+    fn description(&self) -> String {
+        "Ataxx 2x2-typles".to_string()
     }
 }
 

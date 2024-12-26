@@ -1,27 +1,33 @@
 use bulletformat::AtaxxBoard;
 
-use super::InputType;
+use super::SparseInputType;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Ataxx147;
-impl InputType for Ataxx147 {
+impl SparseInputType for Ataxx147 {
     type RequiredDataType = AtaxxBoard;
-    type FeatureIter = Ataxx147Iter;
 
-    fn max_active_inputs(&self) -> usize {
-        49
-    }
-
-    fn inputs(&self) -> usize {
+    fn num_inputs(&self) -> usize {
         147
     }
 
-    fn buckets(&self) -> usize {
-        1
+    fn max_active(&self) -> usize {
+        49
     }
 
-    fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        Ataxx147Iter { board_iter: pos.into_iter() }
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
+        for (piece, square) in <AtaxxBoard as std::iter::IntoIterator>::into_iter(*pos) {
+            let pc = usize::from(piece);
+            let sq = usize::from(square);
+
+            let stm = 49 * pc + sq;
+            let ntm = if pc == 2 { stm } else { 49 * (1 - pc) + sq };
+            f(stm, ntm)
+        }
+    }
+
+    fn shorthand(&self) -> String {
+        "147".to_string()
     }
 
     fn description(&self) -> String {
@@ -29,71 +35,32 @@ impl InputType for Ataxx147 {
     }
 }
 
-pub struct Ataxx147Iter {
-    board_iter: <AtaxxBoard as std::iter::IntoIterator>::IntoIter,
-}
-
-impl Iterator for Ataxx147Iter {
-    type Item = (usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.board_iter.next().map(|(piece, square)| {
-            let pc = usize::from(piece);
-            let sq = usize::from(square);
-
-            let stm_idx = 49 * pc + sq;
-            let nstm_idx = if pc == 2 { stm_idx } else { 49 * (pc ^ 1) + sq };
-
-            (stm_idx, nstm_idx)
-        })
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Ataxx98;
-impl InputType for Ataxx98 {
+impl SparseInputType for Ataxx98 {
     type RequiredDataType = AtaxxBoard;
-    type FeatureIter = Ataxx98Iter;
 
-    fn max_active_inputs(&self) -> usize {
-        49
-    }
-
-    fn inputs(&self) -> usize {
+    fn num_inputs(&self) -> usize {
         98
     }
 
-    fn buckets(&self) -> usize {
-        1
+    fn max_active(&self) -> usize {
+        49
     }
 
-    fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        Ataxx98Iter { board_iter: pos.into_iter() }
-    }
-}
-
-pub struct Ataxx98Iter {
-    board_iter: <AtaxxBoard as std::iter::IntoIterator>::IntoIter,
-}
-
-impl Iterator for Ataxx98Iter {
-    type Item = (usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some((piece, square)) = self.board_iter.next() {
-            if piece == 2 {
-                return None;
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
+        Ataxx147.map_features(pos, |stm, ntm| {
+            if stm < 98 {
+                f(stm, ntm)
             }
+        });
+    }
 
-            let pc = usize::from(piece);
-            let sq = usize::from(square);
+    fn shorthand(&self) -> String {
+        "98".to_string()
+    }
 
-            let stm_idx = 49 * pc + sq;
-            let nstm_idx = 49 * (1 - pc) + sq;
-
-            return Some((stm_idx, nstm_idx));
-        }
-
-        None
+    fn description(&self) -> String {
+        "Default ataxx psqt inputs without gaps".to_string()
     }
 }
