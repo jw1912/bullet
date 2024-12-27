@@ -46,6 +46,7 @@ pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut 
                     input1[0].values.dense(),
                     grad,
                     sparse,
+                    output.values.dense(),
                     output.gradients.as_ref().unwrap(),
                 );
             }

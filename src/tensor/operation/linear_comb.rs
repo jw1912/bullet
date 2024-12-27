@@ -11,17 +11,26 @@ pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     }
 }
 
-pub fn forward(ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-    DenseMatrix::add(ctx, inputs[0].values.dense(), inputs[1].values.dense(), output.values.dense_mut());
+pub fn forward(ctx: &mut ExecutionContext, alpha: f32, beta: f32, inputs: &[&Tensor], output: &mut Tensor) {
+    DenseMatrix::linear_comb(
+        ctx,
+        alpha,
+        inputs[0].values.dense(),
+        beta,
+        inputs[1].values.dense(),
+        output.values.dense_mut(),
+    );
 }
 
-pub fn backprop(ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
+pub fn backprop(ctx: &mut ExecutionContext, alpha: f32, beta: f32, output: &Tensor, inputs: &mut [&mut Tensor]) {
     let (input1, input2) = inputs.split_at_mut(1);
 
-    DenseMatrix::add_backward(
+    DenseMatrix::linear_comb_backward(
         ctx,
+        alpha,
         input1[0].values.dense(),
         input1[0].gradients.as_mut(),
+        beta,
         input2[0].values.dense(),
         input2[0].gradients.as_mut(),
         output.gradients.as_ref().unwrap(),

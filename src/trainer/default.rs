@@ -1,23 +1,22 @@
 mod builder;
-pub mod cutechess;
+pub mod gamerunner;
 /// Contains the `InputType` trait for implementing custom input types,
 /// as well as several premade input formats that are commonly used.
 pub mod inputs;
-mod loader;
+pub mod loader;
 /// Contains the `OutputBuckets` trait for implementing custom output bucket types,
 /// as well as several premade output buckets that are commonly used.
 pub mod outputs;
 mod quant;
 pub mod testing;
 
-use bulletformat::BulletFormat;
-
 pub use builder::{Loss, TrainerBuilder};
-pub use loader::DefaultDataPreparer;
 pub use quant::QuantTarget;
 
-use inputs::InputType;
-use loader::DefaultDataLoader;
+use inputs::SparseInputType;
+use loader::{
+    CanBeDirectlySequentiallyLoaded, DataLoader, DefaultDataLoader, DefaultDataPreparer, DirectSequentialDataLoader,
+};
 use outputs::OutputBuckets;
 use testing::{EngineType, TestSettings};
 
@@ -33,17 +32,12 @@ use super::{
     LocalSettings, TrainingSchedule,
 };
 
-use crate::{
-    autograd::Node,
-    loader::{CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader},
-    optimiser::Optimiser,
-    trainer::NetworkTrainer,
-    Graph,
-};
+use crate::{autograd::Node, optimiser::Optimiser, trainer::NetworkTrainer, Graph};
 
-/// Holy unsound code batman!
-/// Needs refactor.
-unsafe impl<T: BulletFormat + 'static> CanBeDirectlySequentiallyLoaded for T {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::CudADFormat {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::MarlinFormat {}
 
 #[derive(Clone, Copy)]
 pub struct AdditionalTrainerInputs {
@@ -53,16 +47,37 @@ pub struct AdditionalTrainerInputs {
     dense_inputs: bool,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    Normal,
+    // Reshapes and transposes
+    Transposed,
+}
+
+#[derive(Clone)]
+pub struct SavedFormat {
+    id: String,
+    quant: QuantTarget,
+    layout: Layout,
+}
+
+impl SavedFormat {
+    pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
+        SavedFormat { id: id.to_string(), quant, layout }
+    }
+}
+
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     optimiser: Opt,
     input_getter: Inp,
     output_getter: Out,
     output_node: Node,
     additional_inputs: AdditionalTrainerInputs,
-    saved_format: Vec<(String, QuantTarget)>,
+    saved_format: Vec<SavedFormat>,
+    factorised_weights: Option<Vec<String>>,
 }
 
-impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
+impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
     for Trainer<Opt, Inp, Out>
 {
     type Optimiser = Opt;
@@ -125,14 +140,14 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
     }
 }
 
-impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
+impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
     pub fn new(
         graph: Graph,
         output_node: Node,
         params: Opt::Params,
         input_getter: Inp,
         output_getter: Out,
-        saved_format: Vec<(String, QuantTarget)>,
+        saved_format: Vec<SavedFormat>,
         dense_inputs: bool,
     ) -> Self {
         let inputs = graph.input_ids();
@@ -163,6 +178,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
             output_node,
             additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
+            factorised_weights: None,
         }
     }
 
@@ -174,80 +190,6 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         <Self as NetworkTrainer>::save_to_checkpoint(self, path);
     }
 
-    fn preamble<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
-        &self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
-        data_loader: &D,
-    ) -> (DefaultDataLoader<Inp, Out, D>, Option<DirectLoader<Inp, Out>>) {
-        logger::clear_colours();
-        println!("{}", logger::ansi("Beginning Training", "34;1"));
-        schedule.display();
-        settings.display();
-        let preparer = DefaultDataLoader::new(
-            self.input_getter,
-            self.output_getter,
-            self.additional_inputs.wdl,
-            schedule.eval_scale,
-            data_loader.clone(),
-            self.additional_inputs.dense_inputs,
-        );
-        let test_preparer = settings.test_set.map(|test| {
-            DefaultDataLoader::new(
-                self.input_getter,
-                self.output_getter,
-                self.additional_inputs.wdl,
-                schedule.eval_scale,
-                DirectSequentialDataLoader::new(&[test.path]),
-                self.additional_inputs.dense_inputs,
-            )
-        });
-
-        display_total_positions(data_loader, schedule.steps);
-
-        (preparer, test_preparer)
-    }
-
-    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
-        &mut self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
-        data_loader: &D,
-    ) {
-        let (preparer, test_preparer) = self.preamble(schedule, settings, data_loader);
-
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
-    }
-
-    pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
-        &mut self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
-        data_loader: &D,
-        testing: &TestSettings<T>,
-    ) {
-        let (preparer, test_preparer) = self.preamble(schedule, settings, data_loader);
-
-        testing.setup(schedule);
-
-        let mut handles = Vec::new();
-
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
-            if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
-                trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
-                let handle = testing.dispatch(&schedule.net_id, superbatch);
-                handles.push(handle);
-            }
-        });
-
-        println!("# [Waiting for Tests]");
-        for handle in handles {
-            if let Err(err) = handle.join() {
-                println!("{err:?}");
-            }
-        }
-    }
-
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err = String>,
@@ -255,7 +197,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
         let prepared = DefaultDataPreparer::prepare(
-            self.input_getter,
+            self.input_getter.clone(),
             self.output_getter,
             self.additional_inputs.wdl,
             &[pos],
@@ -304,13 +246,40 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let mut buf = Vec::new();
 
-        for (id, quant) in &self.saved_format {
+        for SavedFormat { id, quant, layout } in &self.saved_format {
             let weights = self.optimiser.graph().get_weights(id);
             let weights = weights.values.dense();
 
             let mut weight_buf = vec![0.0; weights.shape().size()];
             let written = weights.write_to_slice(&mut weight_buf);
             assert_eq!(written, weights.shape().size());
+
+            if let Some(factorised) = &self.factorised_weights {
+                if factorised.contains(id) {
+                    assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
+                    weight_buf = self.input_getter.merge_factoriser(weight_buf);
+
+                    if *layout == Layout::Transposed {
+                        unimplemented!(
+                            "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
+                        );
+                    }
+                }
+            }
+
+            if let Layout::Transposed = layout {
+                let rows = weights.shape().rows();
+                let cols = weights.shape().cols();
+                let mut new_buf = vec![0.0; weights.shape().size()];
+
+                for i in 0..rows {
+                    for j in 0..cols {
+                        new_buf[cols * i + j] = weight_buf[rows * j + i];
+                    }
+                }
+
+                weight_buf = new_buf;
+            }
 
             let quantised = quant.quantise(&weight_buf)?;
             buf.extend_from_slice(&quantised);
@@ -335,7 +304,7 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         let mut buf = Vec::new();
 
-        for (id, _) in &self.saved_format {
+        for SavedFormat { id, .. } in &self.saved_format {
             let weights = self.optimiser.graph().get_weights(id);
             let weights = weights.values.dense();
 
@@ -351,6 +320,48 @@ impl<Opt: Optimiser, Inp: InputType, Out: OutputBuckets<Inp::RequiredDataType>> 
 
         Ok(())
     }
+
+    pub fn training_preamble<D, D2, LR: LrScheduler, WDL: WdlScheduler>(
+        &self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+        test_loader: &Option<D2>,
+    ) -> PairedLoaders<Inp, Out, D, D2>
+    where
+        D: DataLoader<Inp::RequiredDataType>,
+        D2: DataLoader<Inp::RequiredDataType>,
+    {
+        logger::clear_colours();
+        println!("{}", logger::ansi("Beginning Training", "34;1"));
+
+        schedule.display();
+        settings.display();
+
+        let preparer = DefaultDataLoader::new(
+            self.input_getter.clone(),
+            self.output_getter,
+            self.additional_inputs.wdl,
+            schedule.eval_scale,
+            data_loader.clone(),
+            self.additional_inputs.dense_inputs,
+        );
+
+        let test_preparer = test_loader.as_ref().map(|loader| {
+            DefaultDataLoader::new(
+                self.input_getter.clone(),
+                self.output_getter,
+                self.additional_inputs.wdl,
+                schedule.eval_scale,
+                loader.clone(),
+                self.additional_inputs.dense_inputs,
+            )
+        });
+
+        display_total_positions(data_loader, schedule.steps);
+
+        (preparer, test_preparer)
+    }
 }
 
 fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: TrainingSteps) {
@@ -365,4 +376,51 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
     }
 }
 
-type DirectLoader<Inp, Out> = DefaultDataLoader<Inp, Out, DirectSequentialDataLoader>;
+impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out>
+where
+    Inp::RequiredDataType: CanBeDirectlySequentiallyLoaded,
+{
+    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
+        &mut self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+    ) {
+        let test_loader = settings.test_set.map(|test| DirectSequentialDataLoader::new(&[test.path]));
+        let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
+
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
+    }
+
+    pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
+        &mut self,
+        schedule: &TrainingSchedule<LR, WDL>,
+        settings: &LocalSettings,
+        data_loader: &D,
+        testing: &TestSettings<T>,
+    ) {
+        let test_loader = settings.test_set.map(|test| DirectSequentialDataLoader::new(&[test.path]));
+        let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
+
+        testing.setup(schedule);
+
+        let mut handles = Vec::new();
+
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
+            if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
+                trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
+                let handle = testing.dispatch(&schedule.net_id, superbatch);
+                handles.push(handle);
+            }
+        });
+
+        println!("# [Waiting for Tests]");
+        for handle in handles {
+            if let Err(err) = handle.join() {
+                println!("{err:?}");
+            }
+        }
+    }
+}
+
+type PairedLoaders<Inp, Out, D, D2> = (DefaultDataLoader<Inp, Out, D>, Option<DefaultDataLoader<Inp, Out, D2>>);

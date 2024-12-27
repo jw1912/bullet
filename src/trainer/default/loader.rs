@@ -1,11 +1,55 @@
+mod direct;
+mod montybinpack;
+mod sfbinpack;
+
 use bulletformat::BulletFormat;
+pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
+pub use montybinpack::MontyBinpackLoader;
+pub use sfbinpack::SfBinpackLoader;
 
-use super::{inputs::InputType, outputs::OutputBuckets};
+use super::{inputs::SparseInputType, outputs::OutputBuckets};
 
-use crate::{loader::DataLoader, tensor::Shape, trainer::DataPreparer};
+use crate::{tensor::Shape, trainer::DataPreparer};
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GameResult {
+    Loss = 0,
+    Draw = 1,
+    Win = 2,
+}
+
+pub trait LoadableDataType: Sized {
+    fn score(&self) -> i16;
+
+    fn result(&self) -> GameResult;
+}
+
+impl<T: BulletFormat + 'static> LoadableDataType for T {
+    fn result(&self) -> GameResult {
+        [GameResult::Loss, GameResult::Draw, GameResult::Win][self.result_idx()]
+    }
+
+    fn score(&self) -> i16 {
+        <Self as BulletFormat>::score(self)
+    }
+}
+
+/// Dictates how data is read from a file into the expected datatype.
+/// This allows for the file format to be divorced from the training
+/// data format.
+pub trait DataLoader<T>: Clone + Send + Sync + 'static {
+    fn data_file_paths(&self) -> &[String];
+
+    fn count_positions(&self) -> Option<u64> {
+        None
+    }
+
+    fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, f: F);
+}
 
 #[derive(Clone)]
-pub(crate) struct DefaultDataLoader<I, O, D> {
+pub struct DefaultDataLoader<I, O, D> {
     input_getter: I,
     output_getter: O,
     wdl: bool,
@@ -22,7 +66,7 @@ impl<I, O, D> DefaultDataLoader<I, O, D> {
 
 impl<I, O, D> DataPreparer for DefaultDataLoader<I, O, D>
 where
-    I: InputType,
+    I: SparseInputType,
     O: OutputBuckets<I::RequiredDataType>,
     D: DataLoader<I::RequiredDataType>,
 {
@@ -43,7 +87,7 @@ where
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
         DefaultDataPreparer::prepare(
-            self.input_getter,
+            self.input_getter.clone(),
             self.output_getter,
             self.wdl,
             data,
@@ -55,13 +99,13 @@ where
     }
 }
 
-pub struct DenseInput {
+pub(crate) struct DenseInput {
     pub shape: Shape,
     pub value: Vec<f32>,
 }
 
 #[derive(Clone)]
-pub struct SparseInput {
+pub(crate) struct SparseInput {
     pub shape: Shape,
     pub value: Vec<i32>,
     pub max_active: usize,
@@ -77,16 +121,16 @@ impl Default for SparseInput {
 pub struct DefaultDataPreparer<I, O> {
     input_getter: I,
     output_getter: O,
-    pub batch_size: usize,
-    pub stm: SparseInput,
-    pub nstm: SparseInput,
-    pub dstm: DenseInput,
-    pub dnstm: DenseInput,
-    pub buckets: SparseInput,
-    pub targets: DenseInput,
+    pub(crate) batch_size: usize,
+    pub(crate) stm: SparseInput,
+    pub(crate) nstm: SparseInput,
+    pub(crate) dstm: DenseInput,
+    pub(crate) dnstm: DenseInput,
+    pub(crate) buckets: SparseInput,
+    pub(crate) targets: DenseInput,
 }
 
-impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
+impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         input_getter: I,
@@ -100,10 +144,10 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
     ) -> Self {
         let rscale = 1.0 / scale;
         let batch_size = data.len();
-        let max_active = input_getter.max_active_inputs();
+        let max_active = input_getter.max_active();
         let chunk_size = batch_size.div_ceil(threads);
 
-        let input_size = input_getter.size();
+        let input_size = input_getter.num_inputs();
 
         let output_size = if wdl { 3 } else { 1 };
 
@@ -157,7 +201,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                                 let sparse_offset = max_active * i;
                                 let dense_offset = input_size * i;
 
-                                for (our, opp) in inp.feature_iter(pos) {
+                                inp.map_features(pos, |our, opp| {
                                     if dense {
                                         dstm_chunk[dense_offset + our] = 1.0;
                                         dnstm_chunk[dense_offset + opp] = 1.0;
@@ -167,7 +211,7 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                                     }
 
                                     j += 1;
-                                }
+                                });
 
                                 if !dense && j < max_active {
                                     stm_chunk[sparse_offset + j] = -1;
@@ -179,9 +223,11 @@ impl<I: InputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I,
                                 buckets_chunk[i] = i32::from(out.bucket(pos));
 
                                 if wdl {
-                                    results_chunk[output_size * i + pos.result_idx()] = 1.0;
+                                    results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
                                 } else {
-                                    results_chunk[i] = pos.blended_result(blend, rscale);
+                                    let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
+                                    let result = f32::from(pos.result() as u8) / 2.0;
+                                    results_chunk[i] = blend * result + (1. - blend) * score;
                                 }
                             }
                         });

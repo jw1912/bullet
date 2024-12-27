@@ -102,7 +102,7 @@ mod tests {
             unsafe {
                 input2.load_from_slice(shape2, 2, &[0, -1, 1, 2, -1, -1]);
 
-                input3.load_from_slice(shape2, 2, &[0, -1, 1, 2, -1, -1]);
+                input3.load_from_slice(shape2, 2, &[0, -1, 1, 1, -1, -1]);
             }
 
             input4.load_from_slice(Shape::new(2, 1), &[0.0, 0.0]);
@@ -123,7 +123,7 @@ mod tests {
 
             let mut buf = [0.0; 12];
             output.write_to_slice(&mut buf);
-            assert_eq!(buf, [-1.0, 4.0, -1.0, 4.0, 2.0, -5.0, 2.0, -5.0, 0.0, 0.0, 0.0, 0.0]);
+            assert_eq!(buf, [-1.0, 4.0, -1.0, 4.0, 2.0, -5.0, 4.0, -4.0, 0.0, 0.0, 0.0, 0.0]);
 
             util::panic_if_device_error("Failed to write data to CPU!");
         }
@@ -147,7 +147,7 @@ mod tests {
 
             let mut grad1 = [0.0; 6];
             input1_grad.write_to_slice(&mut grad1);
-            assert_eq!(grad1, [-2.0, 8.0, 4.0, -10.0, 4.0, -10.0]);
+            assert_eq!(grad1, [-2.0, 8.0, 10.0, -13.0, 2.0, -5.0]);
 
             util::panic_if_device_error("Failed to write data to CPU!");
         }

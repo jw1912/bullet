@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use rand::{rngs::ThreadRng, thread_rng};
 use rand_distr::{Distribution, Normal, Uniform};
 
@@ -34,4 +36,22 @@ pub fn vec_f32(length: usize, mean: f32, stdev: f32, use_gaussian: bool) -> Vec<
     }
 
     res
+}
+
+pub struct SimpleRand(u64);
+
+impl SimpleRand {
+    pub fn with_seed() -> Self {
+        let seed = SystemTime::now().duration_since(UNIX_EPOCH).expect("Guaranteed increasing.").as_micros() as u64
+            & 0xFFFF_FFFF;
+
+        Self(seed)
+    }
+
+    pub fn rng(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
 }

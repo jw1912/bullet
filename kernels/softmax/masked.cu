@@ -51,7 +51,6 @@ __global__ void softmax_across_columns_masked_kernel(
 
 __global__ void cross_entropy_masked_kernel(
     const size_t max_active,
-    const size_t rows,
     const size_t cols,
     const int32_t* mask,
     const float* pred,
@@ -123,7 +122,6 @@ extern "C" void softmax_across_columns_masked(
 
 extern "C" void crossentropy_masked(
     const size_t max_active,
-    const size_t rows,
     const size_t cols,
     const int32_t* mask,
     const float* pred,
@@ -132,7 +130,7 @@ extern "C" void crossentropy_masked(
     float* error)
 {
     const size_t grid_x = (cols + threadsPerBlock - 1) / threadsPerBlock;
-    cross_entropy_masked_kernel<<<grid_x, threadsPerBlock>>>(max_active, rows, cols, mask, pred, target, out, error);
+    cross_entropy_masked_kernel<<<grid_x, threadsPerBlock>>>(max_active, cols, mask, pred, target, out, error);
 }
 
 extern "C" void backprop_softmax_cross_entropy_masked(

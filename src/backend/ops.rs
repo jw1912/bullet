@@ -60,12 +60,86 @@ pub unsafe fn sgemm(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
 }
 
+pub unsafe fn batched_sgemm(
+    ctx: &mut ExecutionContext,
+    batch_size: usize,
+    input_a: *const f32,
+    input_a_rows: usize,
+    input_a_cols: usize,
+    trans_a: bool,
+    input_b: *const f32,
+    input_b_rows: usize,
+    input_b_cols: usize,
+    trans_b: bool,
+    output: *mut f32,
+    output_rows: usize,
+    output_cols: usize,
+    increment: bool,
+) {
+    let alpha = 1.0;
+    let beta = f32::from(increment);
+
+    let m = if trans_a { input_a_cols } else { input_a_rows };
+    let n = if trans_b { input_b_rows } else { input_b_cols };
+    let k = if trans_a { input_a_rows } else { input_a_cols };
+
+    if trans_b {
+        assert_eq!(input_b_cols, k);
+    } else {
+        assert_eq!(input_b_rows, k);
+    }
+
+    assert_eq!(output_rows, m);
+    assert_eq!(output_cols, n);
+
+    let trans_a = if trans_a { CUBLAS_OP_T } else { CUBLAS_OP_N };
+    let trans_b = if trans_b { CUBLAS_OP_T } else { CUBLAS_OP_N };
+
+    let m = m as c_int;
+    let n = n as c_int;
+    let k = k as c_int;
+
+    let lda = input_a_rows as c_int;
+    let ldb = input_b_rows as c_int;
+    let ldo = output_rows as c_int;
+
+    let stride_a = (input_a_rows * input_a_cols) as i64;
+    let stride_b = (input_b_rows * input_b_cols) as i64;
+    let stride_o = (output_rows * output_cols) as i64;
+
+    let status = unsafe {
+        bindings::cublasSgemmStridedBatched(
+            ctx.handle,
+            trans_a,
+            trans_b,
+            m,
+            n,
+            k,
+            &alpha,
+            input_a,
+            lda,
+            stride_a,
+            input_b,
+            ldb,
+            stride_b,
+            &beta,
+            output,
+            ldo,
+            stride_o,
+            batch_size as i32,
+        )
+    };
+
+    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+}
+
+/// If `input_a = None` then it takes `input_a = output` (in-place operation).
 pub unsafe fn linear_comb_matrices(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
     alpha: f32,
-    input_a: *const f32,
+    input_a: Option<*const f32>,
     beta: f32,
     input_b: *const f32,
     output: *mut f32,
@@ -85,7 +159,7 @@ pub unsafe fn linear_comb_matrices(
             m,
             n,
             &alpha,
-            input_a,
+            input_a.unwrap_or(output),
             lda,
             &beta,
             input_b,
@@ -98,28 +172,15 @@ pub unsafe fn linear_comb_matrices(
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemm failed!");
 }
 
-pub unsafe fn add_matrix_to(ctx: &mut ExecutionContext, rows: usize, cols: usize, input: *const f32, output: *mut f32) {
-    let alpha = 1.0;
-
-    let n = (rows * cols) as c_int;
-
-    let incx = 1;
-    let incy = 1;
-
-    let status = unsafe { bindings::cublasSaxpy_v2(ctx.handle, n, &alpha, input, incx, output, incy) };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Saxpy failed!");
-}
-
 pub unsafe fn reduce_add_cols(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
     input: *const f32,
     output: *mut f32,
+    alpha: f32,
     increment: bool,
 ) {
-    let alpha = 1.0;
     let beta = f32::from(increment);
 
     let m = rows as c_int;
@@ -199,11 +260,10 @@ pub unsafe fn add_vector_to_matrix_columns(
     ctx: &mut ExecutionContext,
     rows: usize,
     cols: usize,
+    alpha: f32,
     vector: *const f32,
     matrix: *mut f32,
 ) {
-    let alpha = 1.0;
-
     let m = rows as c_int;
     let n = cols as c_int;
 
@@ -239,7 +299,7 @@ extern "C" {
     pub fn backpropPowerError(bufferSize: usize, inputs: *const f32, results: *const f32, output_grad: *const f32, input_grads: *mut f32, power: f32);
     pub fn AdamW(size: usize, decay: f32, beta1: f32, beta2: f32, minWeight: f32, maxWeight: f32, adj: f32, rate: f32, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
     pub fn sparseAffineForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, inputs: *const i32, outputs: *mut f32);
-    pub fn sparseAffineBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, inputs: *const i32, errors: *const f32);
+    pub fn sparseAffineBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, inputs: *const i32, outputs: *const f32, errors: *const f32);
     pub fn sparseAffineDualForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, stm: *const i32, ntm: *const i32, outputs: *mut f32, activation: i32);
     pub fn sparseAffineDualBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, stm: *const i32, ntm: *const i32, outputs: *const f32, errors: *const f32, activation: i32);
     pub fn pairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output: *mut f32);
@@ -250,6 +310,6 @@ extern "C" {
     pub fn crossentropy(size: usize, pred: *const f32, target: *const f32, out: *mut f32);
     pub fn backprop_softmax_cross_entropy(size: usize, softmaxed: *const f32, target: *const f32, out_grad: *const f32, input_grad: *mut f32);
     pub fn softmax_across_columns_masked(max_active: usize, rows: usize, cols: usize, mask: *const i32, inp: *const f32, out: *mut f32);
-    pub fn crossentropy_masked(max_active: usize, rows: usize, cols: usize, mask: *const i32, pred: *const f32, target: *const f32, out: *mut f32, err: *mut f32);
+    pub fn crossentropy_masked(max_active: usize, cols: usize, mask: *const i32, pred: *const f32, target: *const f32, out: *mut f32, err: *mut f32);
     pub fn backprop_softmax_cross_entropy_masked(max_active: usize, rows: usize, cols: usize, mask: *const i32, softmaxed: *const f32, target: *const f32, out_grad: *const f32, input_grad: *mut f32);
 }

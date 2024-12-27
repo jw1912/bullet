@@ -1,4 +1,5 @@
 use crate::{
+    default::{Layout, SavedFormat},
     logger, operations,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
@@ -8,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    inputs::InputType,
+    inputs::SparseInputType,
     outputs::{self, OutputBuckets},
     Trainer,
 };
@@ -33,20 +34,22 @@ struct NodeType {
 }
 
 pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
-    input_getter: T,
+    input_getter: Option<T>,
     bucket_getter: U,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
-    quantisations: Option<Vec<i16>>,
+    quantisations: Option<Vec<QuantTarget>>,
     perspective: bool,
     loss: Loss,
     optimiser: O,
+    psqt_subnet: bool,
+    allow_transpose: bool,
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
+impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
     fn default() -> Self {
         Self {
-            input_getter: T::default(),
+            input_getter: None,
             bucket_getter: U::default(),
             ft_out_size: 0,
             nodes: Vec::new(),
@@ -54,11 +57,13 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Defa
             perspective: true,
             loss: Loss::None,
             optimiser: O::default(),
+            psqt_subnet: false,
+            allow_transpose: true,
         }
     }
 }
 
-impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> TrainerBuilder<T, U, O> {
+impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> TrainerBuilder<T, U, O> {
     fn get_last_layer_size(&self) -> usize {
         if let Some(node) = self.nodes.last() {
             node.size
@@ -84,7 +89,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
     /// Sets the input featureset.
     pub fn input(mut self, input_getter: T) -> Self {
-        self.input_getter = input_getter;
+        assert!(self.input_getter.is_none(), "Cannot set the input features more than once!");
+        self.input_getter = Some(input_getter);
         self
     }
 
@@ -96,6 +102,14 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
     /// Provide a list of quantisations.
     pub fn quantisations(mut self, quants: &[i16]) -> Self {
+        assert!(self.quantisations.is_none(), "Quantisations already set!");
+        self.quantisations = Some(quants.iter().map(|&x| QuantTarget::I16(x)).collect());
+        self
+    }
+
+    /// Provide a list of quantisations.
+    pub fn advanced_quantisations(mut self, quants: &[QuantTarget]) -> Self {
+        assert!(self.quantisations.is_none(), "Quantisations already set!");
         self.quantisations = Some(quants.to_vec());
         self
     }
@@ -105,6 +119,11 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
     pub fn feature_transformer(mut self, size: usize) -> Self {
         assert!(self.nodes.is_empty());
         self.ft_out_size = size;
+        self
+    }
+
+    pub fn disallow_transpose_in_quantised_network(mut self) -> Self {
+        self.allow_transpose = false;
         self
     }
 
@@ -160,12 +179,21 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         self.add(size, OpType::Activate(activation))
     }
 
+    /// Adds a PSQT subnet directly from inputs to output.
+    /// The PSQT weights will be placed **before** all other network weights.
+    pub fn psqt_subnet(mut self) -> Self {
+        self.psqt_subnet = true;
+        self
+    }
+
     pub fn build(self) -> Trainer<O::Optimiser, T, U> {
         let mut builder = GraphBuilder::default();
 
         let output_buckets = U::BUCKETS > 1;
 
-        let input_size = self.input_getter.size();
+        let input_getter = self.input_getter.expect("Need to set the input features!");
+
+        let input_size = input_getter.num_inputs();
         let input_shape = Shape::new(input_size, 1);
         let targets = builder.create_input("targets", Shape::new(1, 1));
 
@@ -192,23 +220,66 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut net_quant = 1i16;
 
+        //let input_buckets = self.input_getter.buckets();
+        let mut ft_desc = format!("{} -> {}", input_getter.shorthand(), self.ft_out_size);
+
+        if self.perspective {
+            ft_desc = format!("({ft_desc})x2");
+        }
+
+        let mut out = builder.create_input("stm", input_shape);
+
+        let pst = if self.psqt_subnet {
+            let pst = builder.create_weights("pst", Shape::new(1, input_size));
+            saved_format.push(SavedFormat { id: "pst".to_string(), quant: QuantTarget::Float, layout: Layout::Normal });
+            Some(operations::matmul(&mut builder, pst, out))
+        } else {
+            None
+        };
+
         let mut push_saved_format = |layer: usize| {
             let w = format!("l{layer}w");
             let b = format!("l{layer}b");
 
             if let Some(quants) = &self.quantisations {
-                net_quant *= quants[layer];
-                saved_format.push((w, QuantTarget::I16(quants[layer])));
-                saved_format.push((b, QuantTarget::I16(net_quant)));
+                let layout = if self.allow_transpose && layer > 0 && output_buckets {
+                    Layout::Transposed
+                } else {
+                    Layout::Normal
+                };
+
+                saved_format.push(SavedFormat { id: w, quant: quants[layer], layout });
+
+                match quants[layer] {
+                    QuantTarget::Float => {
+                        net_quant = 1;
+                        saved_format.push(SavedFormat { id: b, quant: QuantTarget::Float, layout: Layout::Normal });
+                    }
+                    QuantTarget::I16(q) => {
+                        net_quant = net_quant.checked_mul(q).expect("Bias quantisation factor overflowed!");
+                        saved_format.push(SavedFormat {
+                            id: b,
+                            quant: QuantTarget::I16(net_quant),
+                            layout: Layout::Normal,
+                        });
+                    }
+                    QuantTarget::I8(q) => {
+                        net_quant = net_quant.checked_mul(q).expect("Bias quantisation factor overflowed!");
+                        saved_format.push(SavedFormat {
+                            id: b,
+                            quant: QuantTarget::I8(net_quant),
+                            layout: Layout::Normal,
+                        });
+                    }
+                    QuantTarget::I32(_) => unimplemented!("i32 quant is not implemented for TrainerBuilder!"),
+                }
             } else {
-                saved_format.push((w, QuantTarget::Float));
-                saved_format.push((b, QuantTarget::Float));
+                saved_format.push(SavedFormat { id: w, quant: QuantTarget::Float, layout: Layout::Normal });
+                saved_format.push(SavedFormat { id: b, quant: QuantTarget::Float, layout: Layout::Normal });
             }
         };
 
         push_saved_format(0);
-
-        let mut out = builder.create_input("stm", input_shape);
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
@@ -231,6 +302,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         let mut layer = 1;
 
+        let mut layer_sizes = Vec::new();
+
         let mut prev_size = self.ft_out_size * if self.perspective { 2 } else { 1 };
 
         for &NodeType { size, op } in self.nodes.iter().skip(skip) {
@@ -252,6 +325,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                     out = operations::affine(&mut builder, w, out, b);
                     prev_size = size;
 
+                    layer_sizes.push(size);
+
                     if let Some(buckets) = buckets {
                         out = operations::select(&mut builder, out, buckets);
                     }
@@ -270,6 +345,10 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
 
         assert!(!still_in_ft);
 
+        if let Some(pst) = pst {
+            out = operations::add(&mut builder, out, pst);
+        }
+
         let predicted = operations::activate(&mut builder, out, Activation::Sigmoid);
 
         match self.loss {
@@ -281,9 +360,35 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
         let ctx = ExecutionContext::default();
         let graph = builder.build(ctx);
 
+        let mut output_desc = format!("{}", layer_sizes[0]);
+
+        for size in layer_sizes.iter().skip(1) {
+            output_desc.push_str(&format!(" -> {size}"));
+        }
+
+        if output_buckets {
+            if layer_sizes.len() == 1 {
+                output_desc = format!("{output_desc}x{}", U::BUCKETS);
+            } else {
+                output_desc = format!("({output_desc})x{}", U::BUCKETS);
+            }
+        }
+
+        let factorised_weights = if input_getter.is_factorised() {
+            let mut f = vec!["l0w".to_string()];
+
+            if self.psqt_subnet {
+                f.push("pst".to_string());
+            }
+
+            Some(f)
+        } else {
+            None
+        };
+
         let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
-            input_getter: self.input_getter,
+            input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
             output_node: out,
             additional_inputs: AdditionalTrainerInputs {
@@ -292,7 +397,8 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
                 wdl: false,
                 dense_inputs: false,
             },
-            saved_format,
+            saved_format: saved_format.clone(),
+            factorised_weights,
         };
 
         let graph = trainer.optimiser.graph_mut();
@@ -306,6 +412,46 @@ impl<T: InputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Trai
             w.load_from_slice(&wv);
             let wb = rng::vec_f32(w.values.shape().rows(), 0.0, stdev, true);
             graph.get_weights_mut(&format!("l{l}b")).load_from_slice(&wb);
+        }
+
+        logger::clear_colours();
+        println!("{}", logger::ansi("Built Trainer", "34;1"));
+        println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
+        println!("Inputs                 : {}", input_getter.description());
+
+        if input_getter.is_factorised() {
+            println!("Factoriser             : Will be merged in quantised network for you");
+        }
+
+        if output_buckets {
+            if self.allow_transpose {
+                println!("Output Buckets         : Will be transposed in quantised network for you, output bucketed layers will");
+                println!("                       : have weights in form [[[T; layer input size]; layer output size]; buckets]")
+            } else {
+                println!("Output Buckets         : Will **not** be transposed in quantised network for you, output bucketed layers will");
+                println!("                       : have weights in form [[[T; layer output size]; buckets]; layer input size]")
+            }
+        }
+
+        if let Some(quantisations) = self.quantisations {
+            print!("Quantisations          : [");
+
+            for (i, q) in quantisations.iter().enumerate() {
+                if i != 0 {
+                    print!(", ");
+                }
+
+                let q = match *q {
+                    QuantTarget::I16(x) => i32::from(x),
+                    QuantTarget::I8(x) => i32::from(x),
+                    QuantTarget::I32(x) => x,
+                    QuantTarget::Float => 1,
+                };
+
+                print!("{}", logger::ansi(q.to_string(), "31"));
+            }
+
+            println!("]");
         }
 
         trainer

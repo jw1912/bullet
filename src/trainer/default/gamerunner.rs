@@ -2,8 +2,23 @@ use std::process::{Child, Command, Output, Stdio};
 
 use super::testing::TimeControl;
 
-pub struct CuteChessArgs {
-    pub cutechess_path: String,
+#[derive(Clone)]
+pub enum GameRunnerPathInternal {
+    CuteChess(String),
+    FastChess(String),
+}
+
+impl GameRunnerPathInternal {
+    fn inner(&self) -> &str {
+        match self {
+            GameRunnerPathInternal::CuteChess(x) => x,
+            GameRunnerPathInternal::FastChess(x) => x,
+        }
+    }
+}
+
+pub struct GameRunnerArgs {
+    pub gamerunner_path: GameRunnerPathInternal,
     pub dev_engine_path: String,
     pub base_engine_path: String,
     pub dev_options: Vec<String>,
@@ -15,11 +30,11 @@ pub struct CuteChessArgs {
     pub concurrency: usize,
 }
 
-pub struct CuteChessCommand(Command);
+pub struct GameRunnerCommand(Command);
 
-impl CuteChessCommand {
-    pub fn health_check(path: &str) -> Output {
-        Command::new(path).arg("--version").output().expect("Could not start cutechess!")
+impl GameRunnerCommand {
+    pub fn health_check(path: &GameRunnerPathInternal) -> Output {
+        Command::new(path.inner()).arg("--version").output().expect("Could not start gamerunner!")
     }
 
     fn new(path: &str) -> Self {
@@ -57,6 +72,19 @@ impl CuteChessCommand {
         self
     }
 
+    fn rating_interval(mut self) -> Self {
+        self.0.args(["-ratinginterval", "0"]);
+
+        self
+    }
+
+    fn output_format(mut self, path: &GameRunnerPathInternal) -> Self {
+        if let GameRunnerPathInternal::FastChess(_) = path {
+            self.0.args(["-output", "format=cutechess"]);
+        }
+        self
+    }
+
     fn with_opening_book(mut self, book: String, is_pgn: bool) -> Self {
         self.0.args(["-openings", "policy=round", "order=random"]).arg(format!("file={book}"));
 
@@ -90,18 +118,20 @@ impl CuteChessCommand {
     }
 
     fn execute(mut self) -> Child {
-        self.0.spawn().expect("Couldn't launch cutechess games!")
+        self.0.spawn().expect("Couldn't launch gamerunner games!")
     }
 }
 
-pub fn run_games(args: CuteChessArgs) -> Result<(f32, f32), String> {
-    let output = CuteChessCommand::new(args.cutechess_path.as_str())
+pub fn run_games(args: GameRunnerArgs) -> Result<(f32, f32), String> {
+    let output = GameRunnerCommand::new(args.gamerunner_path.inner())
         .add_engine(args.dev_engine_path.as_str(), &args.dev_options)
         .add_engine(args.base_engine_path.as_str(), &args.base_options)
         .with_tc(args.time_control)
         .num_game_pairs(args.num_game_pairs)
         .with_opening_book(args.opening_book, args.is_pgn)
         .with_adjudication()
+        .rating_interval()
+        .output_format(&args.gamerunner_path)
         .with_concurrency(args.concurrency)
         .set_stdout(Stdio::piped())
         .execute();

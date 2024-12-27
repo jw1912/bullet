@@ -1,15 +1,18 @@
 use bullet_lib::{
-    inputs::{self, InputType},
-    loader, lr, operations,
+    default::{
+        inputs::{self, SparseInputType},
+        loader, outputs, Layout, QuantTarget, SavedFormat, Trainer,
+    },
+    lr, operations,
     optimiser::{AdamWOptimiser, AdamWParams},
-    outputs, wdl, Activation, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, QuantTarget, Shape, Trainer,
-    TrainingSchedule, TrainingSteps,
+    wdl, Activation, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, Shape, TrainingSchedule,
+    TrainingSteps,
 };
 
 fn main() {
     let inputs = inputs::Chess768;
     let hl = 512;
-    let num_inputs = inputs.size();
+    let num_inputs = inputs.num_inputs();
 
     let (mut graph, output_node) = build_network(num_inputs, hl);
 
@@ -25,10 +28,11 @@ fn main() {
         inputs::Chess768,
         outputs::Single,
         vec![
-            ("l0w".to_string(), QuantTarget::I16(255)),
-            ("l0b".to_string(), QuantTarget::I16(255)),
-            ("l1w".to_string(), QuantTarget::I16(64)),
-            ("l1b".to_string(), QuantTarget::I16(64 * 255)),
+            SavedFormat::new("l0w", QuantTarget::I16(255), Layout::Normal),
+            SavedFormat::new("l0b", QuantTarget::I16(255), Layout::Normal),
+            SavedFormat::new("l1w", QuantTarget::I16(64), Layout::Normal),
+            SavedFormat::new("l1b", QuantTarget::I16(64 * 255), Layout::Normal),
+            SavedFormat::new("pst", QuantTarget::I16(255), Layout::Normal),
         ],
         false,
     );
@@ -40,7 +44,7 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
             start_superbatch: 1,
-            end_superbatch: 1,
+            end_superbatch: 240,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
@@ -70,10 +74,14 @@ fn build_network(inputs: usize, hl: usize) -> (Graph, Node) {
     let l0b = builder.create_weights("l0b", Shape::new(hl, 1));
     let l1w = builder.create_weights("l1w", Shape::new(1, hl * 2));
     let l1b = builder.create_weights("l1b", Shape::new(1, 1));
+    let pst = builder.create_weights("pst", Shape::new(1, inputs));
 
     // inference
     let l1 = operations::sparse_affine_dual_with_activation(&mut builder, l0w, stm, nstm, l0b, Activation::SCReLU);
-    let predicted = operations::affine(&mut builder, l1w, l1, l1b);
+    let l2 = operations::affine(&mut builder, l1w, l1, l1b);
+    let psqt = operations::matmul(&mut builder, pst, stm);
+    let predicted = operations::add(&mut builder, l2, psqt);
+
     let sigmoided = operations::activate(&mut builder, predicted, Activation::Sigmoid);
     operations::mse(&mut builder, sigmoided, targets);
 

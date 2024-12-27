@@ -1,13 +1,14 @@
 mod activate;
 mod adamw;
-mod add;
 mod concat;
 mod conv;
+mod linear_comb;
 mod matmul;
 mod pairwise;
 mod power_error;
 mod slice;
 mod softmax;
+mod submatrix_product;
 
 use super::shape::Shape;
 use crate::backend::Buffer;
