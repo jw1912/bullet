@@ -55,16 +55,6 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
             file_size += this_size;
         });
 
-        for file in self.file_paths.iter() {
-            let this_size = std::fs::metadata(file).unwrap().len();
-
-            if this_size % data_size != 0 {
-                panic!("File [{file}] does not have a multiple of {data_size} size!");
-            }
-
-            file_size += this_size;
-        }
-
         Some(file_size / data_size)
     }
 
