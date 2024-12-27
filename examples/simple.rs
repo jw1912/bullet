@@ -38,7 +38,7 @@ fn main() {
         steps: TrainingSteps {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
-            start_superbatch: 1,
+            start_superbatch: 10,
             end_superbatch: 20,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.75 },
@@ -67,7 +67,7 @@ fn main() {
     };
 
     // loading directly from a `BulletFormat` file
-    //let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
 }
