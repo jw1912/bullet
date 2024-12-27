@@ -5,14 +5,12 @@ and the training schedule is pretty sensible.
 There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
+use bullet_lib::default::loader::MontyBinpackLoader;
 use bullet_lib::{
     default::{inputs, outputs, Loss, TrainerBuilder},
-    lr, optimiser,
-    sfbinpack::data_entry::TrainingDataEntry,
-    wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
+    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 use montyformat::chess::{Move, Position};
-use bullet_lib::default::loader::MontyBinpackLoader; // Correct import for MontyBinpackLoader
 
 const HIDDEN_SIZE: usize = 1024;
 const SCALE: i32 = 400;
@@ -47,28 +45,11 @@ fn main() {
 
     trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
-    let settings = LocalSettings {
-        threads: 4,
-        test_set: None,
-        output_directory: "checkpoints",
-        batch_queue_size: 64,
-    };
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
-    // Define a filter function for MontyBinpackLoader
-    let filter = |pos: &Position, mv: Move, score: i16, result: f32| -> bool {
-        // Example filter: Include all positions with a positive score
-        score > -15000 && score < 15000
-    };
+    let filter = |_pos: &Position, _mv: Move, score: i16, _result: f32| -> bool { score > -15000 && score < 15000 };
 
-    // Create a data loader using MontyBinpackLoader
-    let data_loader = MontyBinpackLoader::new(
-        "datamonty.binpack", // Path to your data file
-        256,             // Buffer size in MB
-        4,               // Number of threads
-        filter,          // Filter function
-    );
-
-    // Train the model with the schedule, settings, and data loader
+    let data_loader = MontyBinpackLoader::new("datamonty.binpack", 256, 4, filter);
     trainer.run(&schedule, &settings, &data_loader);
 }
 
