@@ -1,4 +1,10 @@
-use std::{fs::File, io::{Read, Seek, SeekFrom}, mem::MaybeUninit, path::PathBuf, slice};
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom},
+    mem::MaybeUninit,
+    path::PathBuf,
+    slice,
+};
 
 use super::DataLoader;
 
