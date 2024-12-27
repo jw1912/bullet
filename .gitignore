@@ -12,5 +12,6 @@
 *.txt
 *.bin
 *.data
+*.binpack
 
 !requirements.txt
