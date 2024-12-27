@@ -519,8 +519,8 @@ dependencies = [
 
 [[package]]
 name = "montyformat"
-version = "0.6.0"
-source = "git+https://github.com/official-monty/montyformat.git?tag=v0.6.0#7169d4eee4b1ae2050700bf98c48496f695e44f2"
+version = "0.7.0"
+source = "git+https://github.com/official-monty/montyformat.git?tag=v0.7.0#090d64814e5d4f5f7053f2fd846381b0ad89c7a4"
 
 [[package]]
 name = "num-traits"
