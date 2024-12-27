@@ -32,6 +32,20 @@ impl ChessBucketsMirroredFactorised {
     }
 }
 
+pub type ChessBucketsMergedKingsFactorised = Factorised<ChessBucketsMergedKings, Chess768>;
+impl ChessBucketsMergedKingsFactorised {
+    pub fn new(buckets: [usize; 64]) -> Self {
+        Self::from_parts(ChessBucketsMergedKings::new(buckets), Chess768)
+    }
+}
+
+pub type ChessBucketsMergedKingsMirroredFactorised = Factorised<ChessBucketsMergedKingsMirrored, Chess768>;
+impl ChessBucketsMergedKingsMirroredFactorised {
+    pub fn new(buckets: [usize; 32]) -> Self {
+        Self::from_parts(ChessBucketsMergedKingsMirrored::new(buckets), Chess768)
+    }
+}
+
 pub trait SparseInputType: Clone + Send + Sync + 'static {
     type RequiredDataType: LoadableDataType + Send + Sync;
 

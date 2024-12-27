@@ -1,6 +1,6 @@
-use bulletformat::{chess::BoardIter, ChessBoard};
+use bulletformat::ChessBoard;
 
-use super::{get_num_buckets, InputType};
+use super::{get_num_buckets, Chess768, Factorises, SparseInputType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ChessBucketsMergedKings {
@@ -8,61 +8,40 @@ pub struct ChessBucketsMergedKings {
     num_buckets: usize,
 }
 
-impl Default for ChessBucketsMergedKings {
-    /// While the defaults for most feature sets produce a single bucket, this would produce an unusable network.
-    /// Instead, this is HalfKAv2, i.e. one bucket for each square.
-    #[rustfmt::skip]
-    fn default() -> Self {
-        Self::new([
-             0,  1,  2,  3,  4,  5,  6,  7,
-             8,  9, 10, 11, 12, 13, 14, 15,
-            16, 17, 18, 19, 20, 21, 22, 23,
-            24, 25, 26, 27, 28, 29, 30, 31,
-            32, 33, 34, 35, 36, 37, 38, 39,
-            40, 41, 42, 43, 44, 45, 46, 47,
-            48, 49, 50, 51, 52, 53, 54, 55,
-            56, 57, 58, 59, 60, 61, 62, 63,
-        ])
-    }
-}
-
 impl ChessBucketsMergedKings {
     pub fn new(buckets: [usize; 64]) -> Self {
-        let num_buckets = get_num_buckets(&buckets);
-        let buckets = {
-            let mut idx = 0;
-            let mut ret = [0; 64];
-            while idx < 64 {
-                ret[idx] = 704 * buckets[idx];
-                idx += 1;
-            }
-            ret
-        };
-
-        Self { buckets, num_buckets }
+        Self { buckets, num_buckets: get_num_buckets(&buckets) }
     }
 }
 
-impl InputType for ChessBucketsMergedKings {
+impl SparseInputType for ChessBucketsMergedKings {
     type RequiredDataType = ChessBoard;
-    type FeatureIter = ChessBucketsMergedKingsIter;
 
-    fn max_active_inputs(&self) -> usize {
+    fn num_inputs(&self) -> usize {
+        704 * self.num_buckets
+    }
+
+    fn max_active(&self) -> usize {
         32
     }
 
-    fn inputs(&self) -> usize {
-        704
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
+        let our_bucket = 704 * self.buckets[usize::from(pos.our_ksq())];
+        let opp_bucket = 704 * self.buckets[usize::from(pos.opp_ksq())];
+
+        for (piece, square) in pos.into_iter() {
+            let c = usize::from(piece & 8 > 0 && piece & 7 != 5);
+            let pc = 64 * usize::from(piece & 7);
+            let sq = usize::from(square);
+
+            let stm = [0, 384][c] + pc + sq;
+            let ntm = [384, 0][c] + pc + (sq ^ 56);
+            f(our_bucket + stm, opp_bucket + ntm)
+        }
     }
 
-    fn buckets(&self) -> usize {
-        self.num_buckets
-    }
-
-    fn feature_iter(&self, pos: &Self::RequiredDataType) -> Self::FeatureIter {
-        let buckets = [self.buckets[usize::from(pos.our_ksq())], self.buckets[usize::from(pos.opp_ksq())]];
-
-        ChessBucketsMergedKingsIter { buckets, board_iter: pos.into_iter() }
+    fn shorthand(&self) -> String {
+        format!("704x{}", self.num_buckets)
     }
 
     fn description(&self) -> String {
@@ -70,22 +49,62 @@ impl InputType for ChessBucketsMergedKings {
     }
 }
 
-pub struct ChessBucketsMergedKingsIter {
-    buckets: [usize; 2],
-    board_iter: BoardIter,
+#[derive(Clone, Copy, Debug)]
+pub struct ChessBucketsMergedKingsMirrored {
+    wrapped: ChessBucketsMergedKings,
 }
 
-impl Iterator for ChessBucketsMergedKingsIter {
-    type Item = (usize, usize);
+impl ChessBucketsMergedKingsMirrored {
+    pub fn new(buckets: [usize; 32]) -> Self {
+        let mut expanded = [0; 64];
+        for (idx, elem) in expanded.iter_mut().enumerate() {
+            *elem = buckets[(idx / 8) * 4 + [0, 1, 2, 3, 3, 2, 1, 0][idx % 8]];
+        }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.board_iter.next().map(|(piece, square)| {
-            let c = usize::from(piece & 8 > 0 && piece & 7 != 5);
-            let pc = 64 * usize::from(piece & 7);
-            let sq = usize::from(square);
-            let wfeat = self.buckets[0] + [0, 384][c] + pc + sq;
-            let bfeat = self.buckets[1] + [384, 0][c] + pc + (sq ^ 56);
-            (wfeat, bfeat)
-        })
+        Self { wrapped: ChessBucketsMergedKings::new(expanded) }
+    }
+}
+
+impl SparseInputType for ChessBucketsMergedKingsMirrored {
+    type RequiredDataType = ChessBoard;
+
+    /// The total number of inputs
+    fn num_inputs(&self) -> usize {
+        self.wrapped.num_inputs()
+    }
+
+    /// The maximum number of active inputs
+    fn max_active(&self) -> usize {
+        32
+    }
+
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
+        let get_flip = |ksq| if ksq % 8 > 3 { 7 } else { 0 };
+        let stm_flip = get_flip(pos.our_ksq());
+        let ntm_flip = get_flip(pos.opp_ksq());
+
+        self.wrapped.map_features(pos, |stm, ntm| f(stm ^ stm_flip, ntm ^ ntm_flip));
+    }
+
+    /// Shorthand for the input e.g. `704x32`
+    fn shorthand(&self) -> String {
+        format!("{}hm", self.wrapped.shorthand())
+    }
+
+    /// Description of the input type
+    fn description(&self) -> String {
+        "Horizontally mirrored, king bucketed psqt chess inputs, with merged kings".to_string()
+    }
+}
+
+impl Factorises<ChessBucketsMergedKings> for Chess768 {
+    fn derive_feature(&self, _: &ChessBucketsMergedKings, _feat: usize) -> Option<usize> {
+        todo!()
+    }
+}
+
+impl Factorises<ChessBucketsMergedKingsMirrored> for Chess768 {
+    fn derive_feature(&self, _: &ChessBucketsMergedKingsMirrored, _feat: usize) -> Option<usize> {
+        todo!()
     }
 }
