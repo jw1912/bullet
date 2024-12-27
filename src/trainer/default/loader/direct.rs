@@ -1,4 +1,10 @@
-use std::{fs::File, io::Read, mem::MaybeUninit, path::PathBuf, slice};
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom},
+    mem::MaybeUninit,
+    path::PathBuf,
+    slice,
+};
 
 use super::DataLoader;
 
@@ -23,6 +29,12 @@ impl DirectSequentialDataLoader {
 
         Self { file_paths }
     }
+
+    pub fn map_file_sizes<F: FnMut(&str, u64)>(&self, mut f: F) {
+        for file in self.file_paths.iter() {
+            f(file, std::fs::metadata(file).unwrap().len());
+        }
+    }
 }
 
 impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataLoader {
@@ -34,6 +46,14 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
         let data_size = std::mem::size_of::<T>() as u64;
 
         let mut file_size = 0;
+
+        self.map_file_sizes(|file, this_size| {
+            if this_size % data_size != 0 {
+                panic!("File [{file}] does not have a multiple of {data_size} size!");
+            }
+
+            file_size += this_size;
+        });
 
         for file in self.file_paths.iter() {
             let this_size = std::fs::metadata(file).unwrap().len();
@@ -48,22 +68,56 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
         Some(file_size / data_size)
     }
 
-    fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, mut f: F) {
+    fn map_batches<F: FnMut(&[T]) -> bool>(&self, start_batch: usize, batch_size: usize, mut f: F) {
         let buffer_size_mb = 256;
         let buffer_size = buffer_size_mb * 1024 * 1024;
         let data_size = size_of::<T>();
         let batches_per_load = buffer_size / data_size / batch_size;
         let cap = batch_size * batches_per_load;
 
+        let data_size = std::mem::size_of::<T>() as u64;
+
+        let mut batches_per_epoch = 0;
+        self.map_file_sizes(|_, this_size| batches_per_epoch += (this_size / data_size).div_ceil(batch_size as u64));
+
+        let start_point = start_batch % batches_per_epoch as usize;
+
+        let mut start_file_idx = 0;
+        let mut net_batches = 0;
+        for file in self.file_paths.iter() {
+            let this_size = std::fs::metadata(file).unwrap().len();
+            let this_batches = (this_size / data_size).div_ceil(batch_size as u64);
+
+            net_batches += this_batches;
+
+            if start_point < net_batches as usize {
+                net_batches -= this_batches;
+                break;
+            } else {
+                start_file_idx += 1;
+            }
+        }
+
+        let mut file_paths = self.file_paths.clone();
+        file_paths.rotate_left(start_file_idx);
+
+        let mut to_skip = (start_point - net_batches as usize) * batch_size;
+
         let mut buf = unsafe { zeroed_boxed_slice::<T>(cap) };
 
         'dataloading: loop {
             let mut loader_files = vec![];
-            for file in self.file_paths.iter() {
+            for file in file_paths.iter() {
                 loader_files.push(File::open(file).unwrap());
             }
 
-            for mut loader_file in loader_files {
+            for (mut loader_file, file_path) in loader_files.into_iter().zip(file_paths.iter()) {
+                if to_skip > 0 {
+                    println!("Skipping to {to_skip}th entry in file [{file_path}]");
+                    loader_file.seek(SeekFrom::Current((to_skip * data_size as usize) as i64)).unwrap();
+                    to_skip = 0;
+                }
+
                 loop {
                     let count = loader_file
                         .read(
