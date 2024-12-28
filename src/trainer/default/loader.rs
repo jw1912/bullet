@@ -45,7 +45,7 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
         None
     }
 
-    fn map_batches<F: FnMut(&[T]) -> bool>(&self, batch_size: usize, f: F);
+    fn map_batches<F: FnMut(&[T]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F);
 }
 
 #[derive(Clone)]
@@ -81,8 +81,8 @@ where
         self.loader.count_positions()
     }
 
-    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, batch_size: usize, f: F) {
-        self.loader.map_batches(batch_size, f);
+    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F) {
+        self.loader.map_batches(start_batch, batch_size, f);
     }
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {

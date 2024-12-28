@@ -12,7 +12,7 @@ pub trait DataPreparer: Clone + Send + Sync {
         None
     }
 
-    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, batch_size: usize, f: F);
+    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F);
 
     fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData;
 }
@@ -28,7 +28,9 @@ pub fn create_dataloader<D: DataPreparer + 'static, WDL: WdlScheduler>(
         let mut curr_superbatch = steps.start_superbatch;
         let mut curr_batch = 0;
 
-        preparer.load_and_map_batches(steps.batch_size, |batch| {
+        let start_batch = steps.batches_per_superbatch * (steps.start_superbatch - 1);
+
+        preparer.load_and_map_batches(start_batch, steps.batch_size, |batch| {
             let blend = wdl.blend(curr_batch, curr_superbatch, steps.end_superbatch);
 
             let prepared_data = preparer.prepare(batch, threads, blend);

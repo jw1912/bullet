@@ -7,6 +7,7 @@ authors.workspace = true
 
 [dependencies]
 bulletformat = { workspace = true }
+montyformat = { workspace = true }
 structopt = "0.3.26"
 plotters = "0.3.6"
 anyhow = "1.0.86"

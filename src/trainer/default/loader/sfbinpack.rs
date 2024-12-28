@@ -66,7 +66,7 @@ where
         None
     }
 
-    fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, batch_size: usize, mut f: F) {
+    fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, batch_size: usize, mut f: F) {
         let file_path = self.file_path[0].clone();
         let buffer_size = self.buffer_size;
         let threads = self.threads;
