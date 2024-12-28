@@ -2,13 +2,10 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    default::{
-        inputs, loader, outputs,
-        testing::{Engine, GameRunnerPath, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
-        Loss, TrainerBuilder,
-    },
+    default::{inputs, loader, outputs, Loss, TrainerBuilder},
+    lr,
     montyformat::chess::{Move, Position},
-    lr, optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
+    optimiser, wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 const NET_ID: &str = "montynet";
@@ -19,15 +16,15 @@ fn main() {
         .quantisations(&[255, 64])
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
-        .input(inputs::ChessBucketsMirrored::new([
-            0, 0, 1, 1,
-            2, 2, 2, 2,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
+        .input(inputs::ChessBucketsMirroredFactorised::new([
+             0,  1,  2,  3,
+             4,  5,  6,  7,
+             8,  8,  9,  9,
+            10, 10, 10, 10,
+            11, 11, 11, 11,
+            11, 11, 11, 11,
+            12, 12, 12, 12,
+            12, 12, 12, 12,
         ]))
         .output_buckets(outputs::Single)
         .feature_transformer(1024)
@@ -42,10 +39,13 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
             start_superbatch: 1,
-            end_superbatch: 240,
+            end_superbatch: 800,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
-        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
+        lr_scheduler: lr::Warmup {
+            inner: lr::CosineDecayLR { initial_lr: 0.001, final_lr: 0.001 * 0.3f32.powi(3), final_superbatch: 800 },
+            warmup_batches: 200,
+        },
         save_rate: 150,
     };
 
@@ -68,28 +68,7 @@ fn main() {
         loader::MontyBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
     };
 
-    let engine = |bench| Engine {
-        repo: "https://github.com/jw1912/akimbo",
-        branch: "main",
-        bench,
-        net_path: None,
-        uci_options: vec![UciOption("Hash", "16")],
-        engine_type: OpenBenchCompliant,
-    };
-
-    let testing = TestSettings {
-        test_rate: 20,
-        out_dir: &format!("../../nets/{NET_ID}"),
-        gamerunner_path: GameRunnerPath::CuteChess("../../nets/cutechess-cli.exe"),
-        book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
-        num_game_pairs: 2000,
-        concurrency: 6,
-        time_control: TimeControl::FixedNodes(25_000),
-        base_engine: engine(Some(2256851)),
-        dev_engine: engine(None),
-    };
-
-    trainer.run_and_test(&schedule, &settings, &data_loader, &testing);
+    trainer.run(&schedule, &settings, &data_loader);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
