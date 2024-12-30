@@ -8,11 +8,13 @@ pub trait Factorises<T: SparseInputType>: SparseInputType<RequiredDataType = T::
 pub struct Factorised<A: SparseInputType, B: Factorises<A>> {
     normal: A,
     factoriser: B,
+    offset: usize,
 }
 
 impl<A: SparseInputType, B: Factorises<A>> Factorised<A, B> {
     pub fn from_parts(normal: A, factoriser: B) -> Self {
-        Self { normal, factoriser }
+        let offset = factoriser.num_inputs();
+        Self { normal, factoriser, offset }
     }
 }
 
@@ -29,7 +31,7 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
 
     fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
         self.normal.map_features(pos, |stm, ntm| {
-            f(stm, ntm);
+            f(self.offset + stm, self.offset + ntm);
 
             let stm = self.factoriser.derive_feature(&self.normal, stm);
             let ntm = self.factoriser.derive_feature(&self.normal, ntm);

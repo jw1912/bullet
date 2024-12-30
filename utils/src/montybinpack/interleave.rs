@@ -1,12 +1,13 @@
 use std::{
     fs::File,
-    io::{BufReader, BufWriter, Read, Write},
+    io::{BufReader, BufWriter, Write},
     path::PathBuf,
 };
 
-use crate::Rand;
-use anyhow::Context;
+use montyformat::{FastDeserialise, MontyValueFormat};
 use structopt::StructOpt;
+
+use crate::Rand;
 
 #[derive(StructOpt)]
 pub struct InterleaveOptions {
@@ -18,20 +19,18 @@ pub struct InterleaveOptions {
 
 impl InterleaveOptions {
     pub fn run(&self) -> anyhow::Result<()> {
-        const SIZE: usize = 32;
-
         println!("Writing to {:#?}", self.output);
         println!("Reading from:\n{:#?}", self.inputs);
         let mut streams = Vec::new();
         let mut total = 0;
 
-        let target = File::create(&self.output).with_context(|| "Failed to create output file")?;
+        let target = File::create(&self.output)?;
         let mut writer = BufWriter::new(target);
 
         for path in &self.inputs {
-            let file =
-                File::open(path).with_context(|| format!("Failed to open {path}", path = path.to_string_lossy()))?;
-            let count = file.metadata()?.len() as usize / SIZE;
+            let file = File::open(path)?;
+
+            let count = file.metadata()?.len();
 
             if count > 0 {
                 streams.push((count, BufReader::new(file)));
@@ -42,8 +41,14 @@ impl InterleaveOptions {
         let mut remaining = total;
         let mut rng = Rand::default();
 
+        const INTERVAL: u64 = 1024 * 1024 * 256;
+        let mut prev = remaining / INTERVAL;
+
+        let mut buffer = Vec::new();
+        let mut games = 0usize;
+
         while remaining > 0 {
-            let mut spot = rng.rand() as usize % remaining;
+            let mut spot = rng.rand() % remaining;
             let mut idx = 0;
             while streams[idx].0 < spot {
                 spot -= streams[idx].0;
@@ -51,27 +56,30 @@ impl InterleaveOptions {
             }
 
             let (count, reader) = &mut streams[idx];
-            let mut value = [0; SIZE];
-            reader.read_exact(&mut value)?;
-            writer.write_all(&value)?;
 
-            remaining -= 1;
-            *count -= 1;
+            MontyValueFormat::deserialise_fast_into_buffer(reader, &mut buffer)?;
+            writer.write_all(&buffer)?;
+            games += 1;
+
+            let size = buffer.len() as u64;
+
+            remaining -= size;
+            *count -= size;
             if *count == 0 {
                 streams.swap_remove(idx);
             }
 
-            if remaining % 1_048_576 == 0 {
+            if remaining / INTERVAL < prev {
+                prev = remaining / INTERVAL;
                 let written = total - remaining;
-                print!("Written {written} / {total} ({:.2})\r", written as f32 / total as f32 * 100.0);
+                print!("Written {written}/{total} Bytes ({:.2}%)\r", written as f64 / total as f64 * 100.0);
                 let _ = std::io::stdout().flush();
             }
         }
 
-        Ok(())
-    }
+        println!();
+        println!("Written {games} games to {:#?}", self.output);
 
-    pub fn new(inputs: Vec<PathBuf>, output: PathBuf) -> Self {
-        Self { inputs, output }
+        Ok(())
     }
 }

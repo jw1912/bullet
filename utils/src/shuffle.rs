@@ -5,12 +5,11 @@ use std::{
     time::Instant,
 };
 
-use crate::Rand;
 use anyhow::Context;
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 
-use crate::interleave::InterleaveOptions;
+use crate::{interleave::InterleaveOptions, Rand};
 
 #[derive(StructOpt)]
 pub struct ShuffleOptions {
@@ -140,7 +139,7 @@ fn shuffle_positions(data: &mut [u8]) {
     let mut rng = Rand::default();
 
     for i in (0..len).rev() {
-        let idx = rng.rand_int() as usize % (i + 1);
+        let idx = rng.rand() as usize % (i + 1);
         for j in 0..CHESS_BOARD_SIZE {
             data.swap(CHESS_BOARD_SIZE * idx + j, CHESS_BOARD_SIZE * i + j);
         }
