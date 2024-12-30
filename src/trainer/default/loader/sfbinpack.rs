@@ -2,8 +2,7 @@ use std::{sync::mpsc, thread};
 
 use sfbinpack::{
     chess::{color::Color, piecetype::PieceType},
-    data_entry::TrainingDataEntry,
-    reader::data_reader::CompressedTrainingDataEntryReader,
+    CompressedTrainingDataEntryReader, TrainingDataEntry,
 };
 
 use crate::{format::ChessBoard, loader::DataLoader, rng::SimpleRand};

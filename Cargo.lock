@@ -56,14 +56,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
-name = "binpack"
-version = "0.1.0"
-source = "git+https://github.com/Disservin/binpack-rust?rev=483e9aac028b4c3e0671af6b28ff50f64d696558#483e9aac028b4c3e0671af6b28ff50f64d696558"
-dependencies = [
- "thiserror 2.0.9",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,12 +82,12 @@ dependencies = [
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
- "binpack",
  "bulletformat",
  "cc",
  "montyformat",
  "rand",
  "rand_distr",
+ "sfbinpack",
 ]
 
 [[package]]
@@ -745,6 +737,15 @@ name = "semver"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
+
+[[package]]
+name = "sfbinpack"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20d1c02db05e63b9d3b048f682a2a372cab9a8686f0e0c2f5489959e8aaa3b03"
+dependencies = [
+ "thiserror 2.0.9",
+]
 
 [[package]]
 name = "shlex"

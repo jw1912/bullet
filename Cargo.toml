@@ -20,7 +20,7 @@ bulletformat = { workspace = true }
 rand = "0.8.5"
 rand_distr = "0.4.3"
 montyformat = { workspace = true }
-sfbinpack = { package = "binpack", git = "https://github.com/Disservin/binpack-rust", rev = "483e9aac028b4c3e0671af6b28ff50f64d696558" }
+sfbinpack = "0.2.0"
 
 [build-dependencies]
 cc = "1.2.5"
