@@ -1,6 +1,7 @@
 mod ataxx147;
 mod chess768;
 mod chess_buckets;
+mod chess_buckets_mk;
 mod factorised;
 
 #[allow(deprecated)]
@@ -11,6 +12,7 @@ use super::loader::LoadableDataType;
 pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
 pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};
+pub use chess_buckets_mk::{ChessBucketsMergedKings, ChessBucketsMergedKingsMirrored};
 pub use factorised::{Factorised, Factorises};
 
 #[allow(deprecated)]
@@ -27,6 +29,20 @@ pub type ChessBucketsMirroredFactorised = Factorised<ChessBucketsMirrored, Chess
 impl ChessBucketsMirroredFactorised {
     pub fn new(buckets: [usize; 32]) -> Self {
         Self::from_parts(ChessBucketsMirrored::new(buckets), Chess768)
+    }
+}
+
+pub type ChessBucketsMergedKingsFactorised = Factorised<ChessBucketsMergedKings, Chess768>;
+impl ChessBucketsMergedKingsFactorised {
+    pub fn new(buckets: [usize; 64]) -> Self {
+        Self::from_parts(ChessBucketsMergedKings::new(buckets), Chess768)
+    }
+}
+
+pub type ChessBucketsMergedKingsMirroredFactorised = Factorised<ChessBucketsMergedKingsMirrored, Chess768>;
+impl ChessBucketsMergedKingsMirroredFactorised {
+    pub fn new(buckets: [usize; 32]) -> Self {
+        Self::from_parts(ChessBucketsMergedKingsMirrored::new(buckets), Chess768)
     }
 }
 
