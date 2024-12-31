@@ -98,8 +98,20 @@ impl SparseInputType for ChessBucketsMergedKingsMirrored {
 }
 
 impl Factorises<ChessBucketsMergedKings> for Chess768 {
-    fn derive_feature(&self, _: &ChessBucketsMergedKings, _feat: usize) -> Option<usize> {
-        todo!()
+    fn derive_feature(&self, inputs: &ChessBucketsMergedKings, feat: usize) -> Option<usize> {
+        let mut feature = feat % 704;
+        let pc = feature / 64;
+
+        if pc == 5 {
+            let bucket = feat / 704;
+            let sq = feat % 64;
+
+            if inputs.buckets[sq] != bucket {
+                feature += 384;
+            }
+        };
+
+        Some(feature)
     }
 }
 
