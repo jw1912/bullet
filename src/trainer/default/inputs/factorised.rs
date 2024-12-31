@@ -49,7 +49,7 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
     }
 
     fn description(&self) -> String {
-        format!("{} factorised by {}", self.normal.description(), self.factoriser.description().to_lowercase())
+        format!("{}, factorised by {}", self.normal.description(), self.factoriser.description().to_lowercase())
     }
 
     fn is_factorised(&self) -> bool {
