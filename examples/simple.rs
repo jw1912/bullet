@@ -10,7 +10,7 @@ use bullet_lib::{
     lr, optimiser,
     sfbinpack::{
         chess::{piecetype::PieceType, r#move::MoveType},
-        data_entry::TrainingDataEntry,
+        TrainingDataEntry,
     },
     wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
