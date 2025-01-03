@@ -38,7 +38,7 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
 
             match (stm, ntm) {
                 (Some(stm), Some(ntm)) => {
-                    assert!(stm < self.offset && ntm < self.offset);
+                    assert!(stm < self.offset && ntm < self.offset, "Factoriser feature exceeded factoriser size!");
                     f(stm, ntm);
                 }
                 (None, None) => {}
