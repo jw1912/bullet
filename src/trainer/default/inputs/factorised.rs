@@ -40,7 +40,7 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
                 (Some(stm), Some(ntm)) => {
                     assert!(stm < self.offset && ntm < self.offset);
                     f(stm, ntm);
-                },
+                }
                 (None, None) => {}
                 _ => panic!("One factorised feature existed but the other did not!"),
             }
