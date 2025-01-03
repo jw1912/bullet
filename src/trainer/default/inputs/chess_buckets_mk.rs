@@ -30,12 +30,13 @@ impl SparseInputType for ChessBucketsMergedKings {
         let opp_bucket = 704 * self.buckets[usize::from(pos.opp_ksq())];
 
         for (piece, square) in pos.into_iter() {
-            let c = usize::from(piece & 8 > 0 && piece & 7 != 5);
+            let c = usize::from(piece & 8 > 0);
             let pc = 64 * usize::from(piece & 7);
             let sq = usize::from(square);
 
-            let stm = [0, 384][c] + pc + sq;
-            let ntm = [384, 0][c] + pc + (sq ^ 56);
+            let offsets = [0, if piece & 7 != 5 { 384 } else { 0 }];
+            let stm = offsets[c] + pc + sq;
+            let ntm = offsets[1 - c] + pc + (sq ^ 56);
             f(our_bucket + stm, opp_bucket + ntm)
         }
     }
