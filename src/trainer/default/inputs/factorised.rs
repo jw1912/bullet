@@ -37,7 +37,10 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
             let ntm = self.factoriser.derive_feature(&self.normal, ntm);
 
             match (stm, ntm) {
-                (Some(stm), Some(ntm)) => f(stm, ntm),
+                (Some(stm), Some(ntm)) => {
+                    assert!(stm < self.offset && ntm < self.offset, "Factoriser feature exceeded factoriser size!");
+                    f(stm, ntm);
+                }
                 (None, None) => {}
                 _ => panic!("One factorised feature existed but the other did not!"),
             }

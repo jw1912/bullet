@@ -202,6 +202,11 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
                                 let dense_offset = input_size * i;
 
                                 inp.map_features(pos, |our, opp| {
+                                    assert!(
+                                        our < input_size && opp < input_size,
+                                        "Input feature index exceeded input size!"
+                                    );
+
                                     if dense {
                                         dstm_chunk[dense_offset + our] = 1.0;
                                         dnstm_chunk[dense_offset + opp] = 1.0;
