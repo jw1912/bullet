@@ -32,7 +32,7 @@ use super::{
     LocalSettings, TrainingSchedule,
 };
 
-use crate::{autograd::Node, optimiser::Optimiser, trainer::NetworkTrainer, Graph};
+use crate::{autograd::Node, optimiser::Optimiser, tensor::SparseMatrix, trainer::NetworkTrainer, Graph};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
@@ -75,6 +75,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     additional_inputs: AdditionalTrainerInputs,
     saved_format: Vec<SavedFormat>,
     factorised_weights: Option<Vec<String>>,
+    sparse_scratch_space: SparseMatrix,
 }
 
 impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
@@ -90,12 +91,14 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
 
         unsafe {
             if self.additional_inputs.dense_inputs {
-                let input = &prepared.dstm;
-                graph.get_input_mut("stm").load_dense_from_slice(input.shape, &input.value);
+                let input = &prepared.stm;
+                self.sparse_scratch_space.load_from_slice(input.shape, input.max_active, &input.value);
+                self.sparse_scratch_space.copy_into_dense(graph.get_input_mut("stm").values.dense_mut());
 
                 if self.additional_inputs.nstm {
-                    let input = &prepared.dnstm;
-                    graph.get_input_mut("nstm").load_dense_from_slice(input.shape, &input.value);
+                    let input = &prepared.nstm;
+                    self.sparse_scratch_space.load_from_slice(input.shape, input.max_active, &input.value);
+                    self.sparse_scratch_space.copy_into_dense(graph.get_input_mut("nstm").values.dense_mut());
                 }
             } else {
                 let input = &prepared.stm;
@@ -179,6 +182,7 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
             factorised_weights: None,
+            sparse_scratch_space: SparseMatrix::default(),
         }
     }
 
@@ -204,7 +208,6 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             1,
             1.0,
             1.0,
-            self.additional_inputs.dense_inputs,
         );
 
         self.load_batch(&prepared);
@@ -344,7 +347,6 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             self.additional_inputs.wdl,
             schedule.eval_scale,
             data_loader.clone(),
-            self.additional_inputs.dense_inputs,
         );
 
         let test_preparer = test_loader.as_ref().map(|loader| {
@@ -354,7 +356,6 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
                 self.additional_inputs.wdl,
                 schedule.eval_scale,
                 loader.clone(),
-                self.additional_inputs.dense_inputs,
             )
         });
 

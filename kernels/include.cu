@@ -9,3 +9,4 @@
 #include "softmax/naive.cu"
 #include "sparse/fwd.cu"
 #include "sparse/bwd.cu"
+#include "sparse/to_dense.cu"

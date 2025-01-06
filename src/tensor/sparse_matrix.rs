@@ -3,8 +3,8 @@ mod affine_dual;
 mod select;
 mod softmax;
 
-use super::shape::Shape;
-use crate::backend::Buffer;
+use super::{shape::Shape, DenseMatrix};
+use crate::backend::{ops, Buffer};
 
 #[derive(Debug)]
 pub struct SparseMatrix {
@@ -53,5 +53,48 @@ impl SparseMatrix {
     pub fn copy_into(&self, dest: &mut Self) {
         dest.reshape_if_needed(self.shape, self.max_active);
         dest.buf.load_from_device(&self.buf, self.max_active * self.shape.cols());
+    }
+
+    pub fn copy_into_dense(&self, dest: &mut DenseMatrix) {
+        dest.reshape_if_needed(self.shape);
+        dest.set_zero();
+
+        unsafe {
+            ops::sparse_to_dense(
+                self.shape.rows(),
+                self.shape.cols(),
+                self.max_active,
+                self.buf.ptr(),
+                dest.buf.mut_ptr(),
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::backend::util;
+
+    use super::*;
+
+    #[test]
+    fn sparse_to_dense() {
+        let shape = Shape::new(3, 3);
+
+        let mut input = SparseMatrix::default();
+        let mut output = DenseMatrix::default();
+
+        util::panic_if_device_error("Failed to initialise matrices!");
+
+        unsafe {
+            input.load_from_slice(shape, 2, &[0, -1, 1, 2, 1, -1]);
+        }
+
+        input.copy_into_dense(&mut output);
+
+        let mut buf = [0.0; 9];
+        output.write_to_slice(&mut buf);
+
+        assert_eq!(buf, [1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0]);
     }
 }
