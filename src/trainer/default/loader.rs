@@ -174,53 +174,48 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
                 .zip(prep.nstm.value.chunks_mut(sparse_chunk_size))
                 .zip(prep.buckets.value.chunks_mut(chunk_size))
                 .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
-                .for_each(
-                    |(
-                        (((data_chunk, stm_chunk), nstm_chunk), buckets_chunk),
-                        results_chunk,
-                    )| {
-                        let inp = &prep.input_getter;
-                        let out = &prep.output_getter;
-                        s.spawn(move || {
-                            let chunk_len = data_chunk.len();
+                .for_each(|((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk)| {
+                    let inp = &prep.input_getter;
+                    let out = &prep.output_getter;
+                    s.spawn(move || {
+                        let chunk_len = data_chunk.len();
 
-                            for i in 0..chunk_len {
-                                let pos = &data_chunk[i];
-                                let mut j = 0;
-                                let sparse_offset = max_active * i;
+                        for i in 0..chunk_len {
+                            let pos = &data_chunk[i];
+                            let mut j = 0;
+                            let sparse_offset = max_active * i;
 
-                                inp.map_features(pos, |our, opp| {
-                                    assert!(
-                                        our < input_size && opp < input_size,
-                                        "Input feature index exceeded input size!"
-                                    );
+                            inp.map_features(pos, |our, opp| {
+                                assert!(
+                                    our < input_size && opp < input_size,
+                                    "Input feature index exceeded input size!"
+                                );
 
-                                    stm_chunk[sparse_offset + j] = our as i32;
-                                    nstm_chunk[sparse_offset + j] = opp as i32;
+                                stm_chunk[sparse_offset + j] = our as i32;
+                                nstm_chunk[sparse_offset + j] = opp as i32;
 
-                                    j += 1;
-                                });
+                                j += 1;
+                            });
 
-                                if j < max_active {
-                                    stm_chunk[sparse_offset + j] = -1;
-                                    nstm_chunk[sparse_offset + j] = -1;
-                                }
-
-                                assert!(j <= max_active, "More inputs provided than the specified maximum!");
-
-                                buckets_chunk[i] = i32::from(out.bucket(pos));
-
-                                if wdl {
-                                    results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
-                                } else {
-                                    let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
-                                    let result = f32::from(pos.result() as u8) / 2.0;
-                                    results_chunk[i] = blend * result + (1. - blend) * score;
-                                }
+                            if j < max_active {
+                                stm_chunk[sparse_offset + j] = -1;
+                                nstm_chunk[sparse_offset + j] = -1;
                             }
-                        });
-                    },
-                );
+
+                            assert!(j <= max_active, "More inputs provided than the specified maximum!");
+
+                            buckets_chunk[i] = i32::from(out.bucket(pos));
+
+                            if wdl {
+                                results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
+                            } else {
+                                let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
+                                let result = f32::from(pos.result() as u8) / 2.0;
+                                results_chunk[i] = blend * result + (1. - blend) * score;
+                            }
+                        }
+                    });
+                });
         });
 
         prep
