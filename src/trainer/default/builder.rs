@@ -3,7 +3,7 @@ use crate::{
     logger, operations,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
-    tensor::Operation,
+    tensor::{Operation, SparseMatrix},
     trainer::default::{quant::QuantTarget, AdditionalTrainerInputs},
     Activation, ExecutionContext, GraphBuilder, Shape,
 };
@@ -399,6 +399,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             },
             saved_format: saved_format.clone(),
             factorised_weights,
+            sparse_scratch_space: SparseMatrix::default(),
         };
 
         let graph = trainer.optimiser.graph_mut();
