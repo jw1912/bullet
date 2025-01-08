@@ -13,6 +13,7 @@ mod slice;
 mod softmax;
 mod softmax_sparse;
 mod submatrix_product;
+mod gaussian_error;
 
 pub use activate::Activation;
 
@@ -34,6 +35,8 @@ pub enum Operation {
     Concat,
     /// Convolution
     Convolution(ConvolutionDescription),
+    /// Gaussian NLL loss
+    GaussianNLLLoss,
     /// Multiply vector by a matrix
     Linear,
     /// Linear combination of two vectors
@@ -74,6 +77,7 @@ impl Operation {
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::output_tensor(inputs),
             Operation::SparseAffineDual(_) => affine_dual::output_tensor(inputs),
             Operation::SubmatrixProduct(m) => submatrix_product::output_tensor(m, inputs),
+            Operation::GaussianNLLLoss => gaussian_error::output_tensor(inputs),
         }
     }
 
@@ -94,6 +98,7 @@ impl Operation {
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::forward(inputs, output),
             Operation::SparseAffineDual(activation) => affine_dual::forward(inputs, output, activation),
             Operation::SubmatrixProduct(m) => submatrix_product::forward(ctx, m, inputs, output),
+            Operation::GaussianNLLLoss => gaussian_error::forward(inputs, output),
         }
     }
 
@@ -114,6 +119,7 @@ impl Operation {
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::backprop(output_grad, inputs),
             Operation::SparseAffineDual(activation) => affine_dual::backprop(output_grad, inputs, activation),
             Operation::SubmatrixProduct(m) => submatrix_product::backprop(ctx, m, output_grad, inputs),
+            Operation::GaussianNLLLoss => gaussian_error::backprop(output_grad, inputs),
         }
     }
 }

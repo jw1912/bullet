@@ -36,6 +36,10 @@ pub fn mse(builder: &mut GraphBuilder, predicted: Node, target: Node) -> Node {
     builder.create_result_of_operation(Operation::AbsPowerError(2.0), &[predicted, target])
 }
 
+pub fn gaussian_nll(builder: &mut GraphBuilder, mean: Node, var: Node, target: Node) -> Node {
+    builder.create_result_of_operation(Operation::GaussianNLLLoss, &[mean, var, target])
+}
+
 pub fn pairwise_mul(builder: &mut GraphBuilder, input: Node) -> Node {
     builder.create_result_of_operation(Operation::PairwiseMul(false), &[input])
 }

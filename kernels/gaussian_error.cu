@@ -65,21 +65,21 @@ __global__ void backpropGaussianErrorKernel(
 
 extern "C" void gaussianError(
     const size_t bufferSize,
-    const float* inputs,
+    const float* mean_inputs,
+    const float* variance_inputs,
     const float* results,
-    float* output,
-    const float power) {
+    float* output) {
     const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
-    gaussianErrorKernel<<<numBlocks, threadsPerBlock>>>(bufferSize, inputs, results, output, power);
+    gaussianErrorKernel<<<numBlocks, threadsPerBlock>>>(bufferSize, mean_inputs, variance_inputs, results, output);
 }
 
 extern "C" void backpropGaussianError(
     const size_t bufferSize,
-    const float* inputs,
+    const float* mean_inputs,
+    const float* variance_inputs,
     const float* results,
     const float* output_grad,
-    float* input_grads,
-    const float power) {
+    float* input_grads) {
     const size_t numBlocks = (bufferSize + threadsPerBlock - 1) / threadsPerBlock;
-    backpropGaussianErrorKernel<<<numBlocks, threadsPerBlock>>>(bufferSize, inputs, results, output_grad, input_grads, power);
+    backpropGaussianErrorKernel<<<numBlocks, threadsPerBlock>>>(bufferSize, mean_inputs, variance_inputs, results, output_grad, input_grads);
 }

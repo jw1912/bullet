@@ -297,6 +297,8 @@ extern "C" {
     pub fn backpropSigmoid(size: usize, output: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn powerError(bufferSize: usize, inputs: *const f32, results: *const f32, output: *mut f32, power: f32);
     pub fn backpropPowerError(bufferSize: usize, inputs: *const f32, results: *const f32, output_grad: *const f32, input_grads: *mut f32, power: f32);
+    pub fn gaussianError(bufferSize: usize, mean_inputs: *const f32, variance_inputs: *const f32, results: *const f32, output: *mut f32);
+    pub fn backpropGaussianError(bufferSize: usize, mean_inputs: *const f32, variance_inputs: *const f32, results: *const f32, output_grad: *const f32, input_grads: *mut f32);
     pub fn AdamW(size: usize, decay: f32, beta1: f32, beta2: f32, minWeight: f32, maxWeight: f32, adj: f32, rate: f32, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
     pub fn sparseAffineForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, inputs: *const i32, outputs: *mut f32);
     pub fn sparseAffineBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, inputs: *const i32, outputs: *const f32, errors: *const f32);
