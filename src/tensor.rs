@@ -56,6 +56,17 @@ impl Tensor {
         }
     }
 
+    pub fn get_dense_vals(&self) -> Option<Vec<f32>> {
+        match &self.values {
+            Matrix::Sparse(_) => None,
+            Matrix::Dense(dense) => {
+                let mut buf = vec![0.0; dense.shape.size()];
+                dense.write_to_slice(&mut buf);
+                Some(buf)
+            }
+        }
+    }
+
     pub fn set_grad_to_unit(&mut self) {
         let grad = self.gradients.as_mut().unwrap();
         grad.load_from_slice(Shape::new(1, 1), &[1.0]);
