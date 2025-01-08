@@ -64,9 +64,10 @@ impl Operation {
         match *self {
             Operation::AbsPowerError(_) => power_error::output_tensor(inputs),
             Operation::Activate(_) => activate::output_tensor(inputs),
+            Operation::Affine => affine::output_tensor(inputs),
             Operation::Concat => concat::output_tensor(inputs),
             Operation::Convolution(desc) => conv::output_tensor(inputs, &desc),
-            Operation::Affine => affine::output_tensor(inputs),
+            Operation::GaussianNLLLoss => gaussian_error::output_tensor(inputs),
             Operation::Linear => linear::output_tensor(inputs),
             Operation::LinearCombination(_, _) => linear_comb::output_tensor(inputs),
             Operation::Mask => mask::output_tensor(inputs),
@@ -77,7 +78,6 @@ impl Operation {
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::output_tensor(inputs),
             Operation::SparseAffineDual(_) => affine_dual::output_tensor(inputs),
             Operation::SubmatrixProduct(m) => submatrix_product::output_tensor(m, inputs),
-            Operation::GaussianNLLLoss => gaussian_error::output_tensor(inputs),
         }
     }
 
@@ -88,6 +88,7 @@ impl Operation {
             Operation::Affine => affine::forward(ctx, inputs, output),
             Operation::Concat => concat::forward(ctx, inputs, output),
             Operation::Convolution(desc) => conv::forward(ctx, &desc, inputs, output),
+            Operation::GaussianNLLLoss => gaussian_error::forward(inputs, output),
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::LinearCombination(alpha, beta) => linear_comb::forward(ctx, alpha, beta, inputs, output),
             Operation::Mask => mask::forward(inputs, output),
@@ -98,7 +99,6 @@ impl Operation {
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::forward(inputs, output),
             Operation::SparseAffineDual(activation) => affine_dual::forward(inputs, output, activation),
             Operation::SubmatrixProduct(m) => submatrix_product::forward(ctx, m, inputs, output),
-            Operation::GaussianNLLLoss => gaussian_error::forward(inputs, output),
         }
     }
 
@@ -109,6 +109,7 @@ impl Operation {
             Operation::Affine => affine::backprop(ctx, output_grad, inputs),
             Operation::Concat => concat::backprop(ctx, output_grad, inputs),
             Operation::Convolution(desc) => conv::backprop(ctx, &desc, output_grad, inputs),
+            Operation::GaussianNLLLoss => gaussian_error::backprop(output_grad, inputs),
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::LinearCombination(alpha, beta) => linear_comb::backprop(ctx, alpha, beta, output_grad, inputs),
             Operation::Mask => mask::backprop(output_grad, inputs),
@@ -119,7 +120,6 @@ impl Operation {
             Operation::SparseSoftmaxCrossEntropyLoss => softmax_sparse::backprop(output_grad, inputs),
             Operation::SparseAffineDual(activation) => affine_dual::backprop(output_grad, inputs, activation),
             Operation::SubmatrixProduct(m) => submatrix_product::backprop(ctx, m, output_grad, inputs),
-            Operation::GaussianNLLLoss => gaussian_error::backprop(output_grad, inputs),
         }
     }
 }

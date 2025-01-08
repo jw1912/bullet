@@ -29,47 +29,6 @@ impl DenseMatrix {
             backprop_abs_power_error_single(power, input_b, input_a, output_grad, grd);
         }
     }
-
-    pub fn gaussian_error(input_a: &Self, input_b: &Self, input_c: &Self, output: &mut Self) {
-        assert_eq!(input_a.shape, input_b.shape);
-        assert_eq!(input_a.shape, input_c.shape);
-        output.reshape_if_needed(Shape::new(1, 1));
-        output.set_zero();
-
-        unsafe {
-            ops::gaussianError(
-                input_a.shape.size(),
-                input_a.buf.ptr(),
-                input_b.buf.ptr(),
-                input_c.buf.ptr(),
-                output.buf.mut_ptr(),
-            );
-        }
-    }
-
-    pub fn backprop_gaussian_error(
-        input_a: &Self,
-        input_a_grad: Option<&mut Self>,
-        input_b: &Self,
-        input_b_grad: Option<&mut Self>,
-        input_c: &Self,
-        input_c_grad: Option<&mut Self>,
-        output_grad: &Self,
-    ) {
-        // what the hell is this doing?
-
-        if let Some(grd) = input_a_grad {
-            backprop_gaussian_error_single(input_a, input_b, input_c, output_grad, grd);
-        }
-
-        if let Some(grd) = input_b_grad {
-            backprop_gaussian_error_single(input_b, input_a, input_c, output_grad, grd);
-        }
-
-        if let Some(grd) = input_c_grad {
-            backprop_gaussian_error_single(input_c, input_a, input_b, output_grad, grd);
-        }
-    }
 }
 
 fn backprop_abs_power_error_single(
@@ -91,30 +50,6 @@ fn backprop_abs_power_error_single(
             output_grad.buf.ptr(),
             input_a_grad.buf.mut_ptr(),
             power,
-        );
-    }
-}
-
-fn backprop_gaussian_error_single(
-    input_a: &DenseMatrix,
-    input_b: &DenseMatrix,
-    input_c: &DenseMatrix,
-    output_grad: &DenseMatrix,
-    input_a_grad: &mut DenseMatrix,
-) {
-    assert_eq!(input_a.shape, input_b.shape);
-    assert_eq!(input_a.shape, input_c.shape);
-    assert_eq!(output_grad.shape, Shape::new(1, 1));
-    input_a_grad.reshape_if_needed(input_a.shape);
-
-    unsafe {
-        ops::backpropGaussianError(
-            input_a.shape.size(),
-            input_a.buf.ptr(),
-            input_b.buf.ptr(),
-            input_c.buf.ptr(),
-            output_grad.buf.ptr(),
-            input_a_grad.buf.mut_ptr(),
         );
     }
 }

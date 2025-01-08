@@ -9,6 +9,7 @@ mod power_error;
 mod slice;
 mod softmax;
 mod submatrix_product;
+mod gaussian_error;
 
 use super::shape::Shape;
 use crate::backend::Buffer;
