@@ -7,11 +7,10 @@ pub mod loader;
 /// Contains the `OutputBuckets` trait for implementing custom output bucket types,
 /// as well as several premade output buckets that are commonly used.
 pub mod outputs;
-mod quant;
 pub mod testing;
 
+pub use super::save::{Layout, QuantTarget, SavedFormat};
 pub use builder::{Loss, TrainerBuilder};
-pub use quant::QuantTarget;
 
 use inputs::SparseInputType;
 use loader::{
@@ -29,10 +28,10 @@ use std::{
 use super::{
     logger,
     schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSteps},
-    LocalSettings, TrainingSchedule,
+    LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{autograd::Node, optimiser::Optimiser, tensor::SparseMatrix, trainer::NetworkTrainer, Graph};
+use crate::{autograd::Node, optimiser::Optimiser, save, tensor::SparseMatrix, Graph};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
@@ -45,26 +44,6 @@ pub struct AdditionalTrainerInputs {
     output_buckets: bool,
     wdl: bool,
     dense_inputs: bool,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Layout {
-    Normal,
-    // Reshapes and transposes
-    Transposed,
-}
-
-#[derive(Clone)]
-pub struct SavedFormat {
-    id: String,
-    quant: QuantTarget,
-    layout: Layout,
-}
-
-impl SavedFormat {
-    pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
-        SavedFormat { id: id.to_string(), quant, layout }
-    }
 }
 
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
@@ -271,17 +250,7 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             }
 
             if let Layout::Transposed = layout {
-                let rows = weights.shape().rows();
-                let cols = weights.shape().cols();
-                let mut new_buf = vec![0.0; weights.shape().size()];
-
-                for i in 0..rows {
-                    for j in 0..cols {
-                        new_buf[cols * i + j] = weight_buf[rows * j + i];
-                    }
-                }
-
-                weight_buf = new_buf;
+                weight_buf = save::transpose(weights.shape(), &weight_buf);
             }
 
             let quantised = quant.quantise(&weight_buf)?;

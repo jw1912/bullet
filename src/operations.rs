@@ -99,3 +99,7 @@ pub fn slice_rows(builder: &mut GraphBuilder, input: Node, start: usize, end: us
 pub fn convolution(builder: &mut GraphBuilder, filters: Node, input: Node, desc: ConvolutionDescription) -> Node {
     builder.create_result_of_operation(Operation::Convolution(desc), &[filters, input])
 }
+
+pub fn mask(builder: &mut GraphBuilder, input: Node, mask: Node) -> Node {
+    builder.create_result_of_operation(Operation::Mask, &[input, mask])
+}

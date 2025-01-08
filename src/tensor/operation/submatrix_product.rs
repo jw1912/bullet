@@ -5,20 +5,21 @@ use crate::{
 
 pub fn output_tensor(m: usize, inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 {
-        if inputs[0] == inputs[1] {
-            if inputs[0].cols() == 1 {
-                if inputs[0].rows() % m == 0 {
-                    let inp = Shape::new(m, inputs[0].rows() / m);
-                    let out = inp.transpose() * inp;
-                    Ok(Shape::new(out.size(), 1))
-                } else {
-                    Err(format!("Input vector ({}) must have dimension divisible by {m}!", inputs[0]))
-                }
+        if inputs[0].cols() == 1 && inputs[1].cols() == 1 {
+            if inputs[0].rows() % m == 0 && inputs[1].rows() % m == 0 {
+                let inp1 = Shape::new(m, inputs[0].rows() / m);
+                let inp2 = Shape::new(m, inputs[1].rows() / m);
+                let out = inp1.transpose() * inp2;
+                Ok(Shape::new(out.size(), 1))
             } else {
-                Err("Input must be a vector!".to_string())
+                Err(format!(
+                    "Input vectors ({}, {}) must have dimension divisible by {m}!",
+                    inputs[0].rows(),
+                    inputs[1].rows()
+                ))
             }
         } else {
-            Err(format!("Inputs must have same shape! {} != {}", inputs[0], inputs[1]))
+            Err("Input must be a vector!".to_string())
         }
     } else {
         Err(format!("Invalid number of inputs in linear! Expected 2, got {}", inputs.len()))

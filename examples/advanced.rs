@@ -1,10 +1,11 @@
 use bullet_lib::{
     default::{
         inputs::{self, SparseInputType},
-        loader, outputs, Layout, QuantTarget, SavedFormat, Trainer,
+        loader, outputs, Trainer,
     },
     lr, operations,
     optimiser::{AdamWOptimiser, AdamWParams},
+    save::{Layout, QuantTarget, SavedFormat},
     wdl, Activation, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, Shape, TrainingSchedule,
     TrainingSteps,
 };

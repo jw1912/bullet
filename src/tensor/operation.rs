@@ -5,6 +5,7 @@ mod concat;
 mod conv;
 mod linear;
 mod linear_comb;
+mod mask;
 mod pairwise;
 mod power_error;
 mod select;
@@ -37,6 +38,8 @@ pub enum Operation {
     Linear,
     /// Linear combination of two vectors
     LinearCombination(f32, f32),
+    /// Mask a vector, replacing elements not in the mask by 0
+    Mask,
     /// Split vector in two and element-wise multiply the two halves
     PairwiseMul(bool),
     /// Select a subsection of a vector to use
@@ -63,6 +66,7 @@ impl Operation {
             Operation::Affine => affine::output_tensor(inputs),
             Operation::Linear => linear::output_tensor(inputs),
             Operation::LinearCombination(_, _) => linear_comb::output_tensor(inputs),
+            Operation::Mask => mask::output_tensor(inputs),
             Operation::PairwiseMul(_) => pairwise::output_tensor(inputs),
             Operation::Select => select::output_tensor(inputs),
             Operation::SliceRows(start, end) => slice::output_tensor(inputs, start, end),
@@ -82,6 +86,7 @@ impl Operation {
             Operation::Convolution(desc) => conv::forward(ctx, &desc, inputs, output),
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::LinearCombination(alpha, beta) => linear_comb::forward(ctx, alpha, beta, inputs, output),
+            Operation::Mask => mask::forward(inputs, output),
             Operation::PairwiseMul(pc) => pairwise::forward(inputs, output, pc),
             Operation::Select => select::forward(inputs, output),
             Operation::SliceRows(start, end) => slice::forward(ctx, inputs, start, end, output),
@@ -101,6 +106,7 @@ impl Operation {
             Operation::Convolution(desc) => conv::backprop(ctx, &desc, output_grad, inputs),
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::LinearCombination(alpha, beta) => linear_comb::backprop(ctx, alpha, beta, output_grad, inputs),
+            Operation::Mask => mask::backprop(output_grad, inputs),
             Operation::PairwiseMul(pc) => pairwise::backprop(output_grad, inputs, pc),
             Operation::Select => select::backprop(output_grad, inputs),
             Operation::SliceRows(start, end) => slice::backprop(ctx, output_grad, start, end, inputs),
