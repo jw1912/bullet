@@ -54,12 +54,13 @@ impl DenseMatrix {
         input_b: &Self,
         output: &mut Self,
     ) {
-        assert_eq!(input_a.shape, input_b.shape);
+        assert_eq!(input_a.shape.cols(), input_b.shape.cols());
         assert_eq!(input_a.shape.rows() % key_size, 0);
 
-        let shape = Shape::new(key_size, input_a.shape.rows() / key_size);
+        let shape_a = Shape::new(key_size, input_a.shape.rows() / key_size);
+        let shape_b = Shape::new(key_size, input_b.shape.rows() / key_size);
 
-        Self::batched_sgemm(ctx, input_a, shape, true, input_b, shape, false, output, false);
+        Self::batched_sgemm(ctx, input_a, shape_a, true, input_b, shape_b, false, output, false);
     }
 
     pub fn backprop_submatrix_product(
@@ -71,20 +72,21 @@ impl DenseMatrix {
         input_b_grad: Option<&mut Self>,
         output_grad: &Self,
     ) {
-        assert_eq!(input_a.shape, input_b.shape);
+        assert_eq!(input_a.shape.cols(), input_b.shape.cols());
         assert_eq!(input_a.shape.rows() % key_size, 0);
 
-        let shape = Shape::new(key_size, input_a.shape.rows() / key_size);
-        let output_shape = shape.transpose() * shape;
+        let shape_a = Shape::new(key_size, input_a.shape.rows() / key_size);
+        let shape_b = Shape::new(key_size, input_b.shape.rows() / key_size);
+        let output_shape = shape_a.transpose() * shape_b;
 
         assert_eq!(output_grad.shape.rows(), output_shape.size());
 
         if let Some(grad_a) = input_a_grad {
-            Self::batched_sgemm(ctx, input_b, shape, false, output_grad, output_shape, true, grad_a, true);
+            Self::batched_sgemm(ctx, input_b, shape_b, false, output_grad, output_shape, true, grad_a, true);
         }
 
         if let Some(grad_b) = input_b_grad {
-            Self::batched_sgemm(ctx, input_a, shape, false, output_grad, output_shape, false, grad_b, true);
+            Self::batched_sgemm(ctx, input_a, shape_a, false, output_grad, output_shape, false, grad_b, true);
         }
     }
 }
