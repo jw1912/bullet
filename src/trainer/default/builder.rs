@@ -4,14 +4,14 @@ use crate::{
     optimiser::{self, Optimiser, OptimiserType},
     rng,
     tensor::{Operation, SparseMatrix},
-    trainer::default::{quant::QuantTarget, AdditionalTrainerInputs},
+    trainer::save::QuantTarget,
     Activation, ExecutionContext, GraphBuilder, Shape,
 };
 
 use super::{
     inputs::SparseInputType,
     outputs::{self, OutputBuckets},
-    Trainer,
+    AdditionalTrainerInputs, Trainer,
 };
 
 #[derive(Clone, Copy, Debug)]

@@ -1,11 +1,12 @@
 pub mod default;
 pub mod logger;
 mod preparer;
+pub mod save;
 pub mod schedule;
 pub mod settings;
 
-use default::QuantTarget;
 pub use preparer::DataPreparer;
+use save::SavedFormat;
 use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 use settings::LocalSettings;
 
@@ -227,21 +228,14 @@ pub trait NetworkTrainer {
         };
     }
 
-    fn save_weights_portion(&self, path: &str, ids: &[&str]) -> io::Result<()> {
+    fn save_weights_portion(&self, path: &str, weights: &[SavedFormat]) -> io::Result<()> {
         let mut file = File::create(path).unwrap();
 
         let mut buf = Vec::new();
 
-        for id in ids {
-            let weights = self.optimiser().graph().get_weights(id);
-            let weights = weights.values.dense();
-
-            let mut weight_buf = vec![0.0; weights.shape().size()];
-            let written = weights.write_to_slice(&mut weight_buf);
-            assert_eq!(written, weights.shape().size());
-
-            let quantised = QuantTarget::Float.quantise(&weight_buf)?;
-            buf.extend_from_slice(&quantised);
+        for fmt in weights {
+            let weights = self.optimiser().graph().get_weights(&fmt.id);
+            buf.extend_from_slice(&fmt.write_to_byte_buffer(weights.values.dense())?);
         }
 
         file.write_all(&buf)?;
