@@ -16,14 +16,17 @@ pub use montyformat;
 pub use sfbinpack;
 pub use tensor::{Activation, Shape};
 pub use trainer::{
-    default, logger,
+    default, logger, save,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
     DataPreparer, NetworkTrainer,
 };
 
 // to be removed at some point
-pub use trainer::default::{gamerunner, inputs, outputs, testing, Loss, QuantTarget, Trainer, TrainerBuilder};
+pub use trainer::{
+    default::{gamerunner, inputs, outputs, testing, Loss, Trainer, TrainerBuilder},
+    save::QuantTarget,
+};
 
 /// Contains the `DataLoader` trait:
 /// - Determines how input files are read to produce the specified `BulletFormat` data type,
