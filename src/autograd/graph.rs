@@ -87,4 +87,14 @@ impl Graph {
     pub fn get_node(&self, node: Node) -> std::cell::Ref<'_, Tensor> {
         self.nodes[node.0].borrow()
     }
+
+    pub fn get_num_params(&self) -> usize {
+        let mut total = 0;
+
+        for weight in self.weight_ids() {
+            total += self.get_weights(&weight).values.shape().size();
+        }
+
+        total
+    }
 }

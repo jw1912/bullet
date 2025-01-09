@@ -420,6 +420,14 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
         println!("Inputs                 : {}", input_getter.description());
 
+        let num_params = trainer.optimiser.graph().get_num_params();
+        let fmt = if num_params >= 1_000_000 {
+            format!("{:.2}m", num_params as f64 / 1_000_000.0)
+        } else {
+            format!("{:.2}k", num_params as f64 / 1_000.0)
+        };
+        println!("Number of Weights      : {fmt}");
+
         if input_getter.is_factorised() {
             println!("Factoriser             : Will be merged in quantised network for you");
         }
