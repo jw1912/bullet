@@ -103,3 +103,7 @@ pub fn convolution(builder: &mut GraphBuilder, filters: Node, input: Node, desc:
 pub fn mask(builder: &mut GraphBuilder, input: Node, mask: Node) -> Node {
     builder.create_result_of_operation(Operation::Mask, &[input, mask])
 }
+
+pub fn gather(builder: &mut GraphBuilder, input: Node, indices: Node) -> Node {
+    builder.create_result_of_operation(Operation::Gather, &[input, indices])
+}

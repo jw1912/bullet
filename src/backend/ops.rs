@@ -315,4 +315,6 @@ extern "C" {
     pub fn sparse_to_dense(rows: usize, cols: usize, max_active: usize, inputs: *const i32, outputs: *mut f32);
     pub fn sparse_mask(rows: usize, cols: usize, max_active: usize, inputs: *const f32, masks: *const i32, outputs: *mut f32);
     pub fn sparse_mask_backprop(rows: usize, cols: usize, max_active: usize, output_grads: *const f32, masks: *const i32, input_grads: *mut f32);
+    pub fn gather(input_rows: usize, output_rows: usize, cols: usize, inputs: *const f32, indices: *const i32, outputs: *mut f32);
+    pub fn gather_backprop(input_rows: usize, output_rows: usize, cols: usize, output_grads: *const f32, indices: *const i32, input_grads: *mut f32);
 }

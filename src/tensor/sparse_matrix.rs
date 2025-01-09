@@ -1,5 +1,6 @@
 mod affine;
 mod affine_dual;
+mod gather;
 mod mask;
 mod select;
 mod softmax;
