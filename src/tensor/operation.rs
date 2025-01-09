@@ -3,6 +3,7 @@ mod affine;
 mod affine_dual;
 mod concat;
 mod conv;
+mod gather;
 mod linear;
 mod linear_comb;
 mod mask;
@@ -34,6 +35,8 @@ pub enum Operation {
     Concat,
     /// Convolution
     Convolution(ConvolutionDescription),
+    /// Gather elements from vector into another by given index mapping
+    Gather,
     /// Multiply vector by a matrix
     Linear,
     /// Linear combination of two vectors
@@ -61,9 +64,10 @@ impl Operation {
         match *self {
             Operation::AbsPowerError(_) => power_error::output_tensor(inputs),
             Operation::Activate(_) => activate::output_tensor(inputs),
+            Operation::Affine => affine::output_tensor(inputs),
             Operation::Concat => concat::output_tensor(inputs),
             Operation::Convolution(desc) => conv::output_tensor(inputs, &desc),
-            Operation::Affine => affine::output_tensor(inputs),
+            Operation::Gather => gather::output_tensor(inputs),
             Operation::Linear => linear::output_tensor(inputs),
             Operation::LinearCombination(_, _) => linear_comb::output_tensor(inputs),
             Operation::Mask => mask::output_tensor(inputs),
@@ -84,6 +88,7 @@ impl Operation {
             Operation::Affine => affine::forward(ctx, inputs, output),
             Operation::Concat => concat::forward(ctx, inputs, output),
             Operation::Convolution(desc) => conv::forward(ctx, &desc, inputs, output),
+            Operation::Gather => gather::forward(inputs, output),
             Operation::Linear => linear::forward(ctx, inputs, output),
             Operation::LinearCombination(alpha, beta) => linear_comb::forward(ctx, alpha, beta, inputs, output),
             Operation::Mask => mask::forward(inputs, output),
@@ -104,6 +109,7 @@ impl Operation {
             Operation::Affine => affine::backprop(ctx, output_grad, inputs),
             Operation::Concat => concat::backprop(ctx, output_grad, inputs),
             Operation::Convolution(desc) => conv::backprop(ctx, &desc, output_grad, inputs),
+            Operation::Gather => gather::backprop(output_grad, inputs),
             Operation::Linear => linear::backprop(ctx, output_grad, inputs),
             Operation::LinearCombination(alpha, beta) => linear_comb::backprop(ctx, alpha, beta, output_grad, inputs),
             Operation::Mask => mask::backprop(output_grad, inputs),
