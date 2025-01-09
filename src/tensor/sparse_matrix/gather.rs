@@ -1,13 +1,13 @@
-use crate::{backend::ops, tensor::DenseMatrix};
+use crate::{backend::ops, tensor::DenseMatrix, Shape};
 
 use super::SparseMatrix;
 
 impl SparseMatrix {
     pub fn gather(inputs: &DenseMatrix, indices: &Self, outputs: &mut DenseMatrix) {
-        assert_eq!(inputs.shape.cols(), indices.shape.cols());
+        assert_eq!(indices.shape.cols(), 1);
         assert_eq!(indices.shape.rows(), indices.max_active);
 
-        outputs.reshape_if_needed(indices.shape);
+        outputs.reshape_if_needed(Shape::new(indices.shape.rows(), inputs.shape.cols()));
         outputs.set_zero();
 
         unsafe {
@@ -28,7 +28,9 @@ impl SparseMatrix {
         inputs: &DenseMatrix,
         input_grads: &mut DenseMatrix,
     ) {
-        assert_eq!(output_grads.shape, indices.shape);
+        assert_eq!(indices.shape.cols(), 1);
+        assert_eq!(output_grads.shape.cols(), inputs.shape.cols());
+        assert_eq!(output_grads.shape.rows(), indices.shape.rows());
 
         input_grads.reshape_if_needed(inputs.shape);
 
@@ -53,7 +55,6 @@ mod tests {
     #[test]
     fn gather() {
         let shape1 = Shape::new(3, 3);
-        let shape2 = Shape::new(5, 3);
 
         let mut inputs = DenseMatrix::default();
         let mut output = DenseMatrix::default();
@@ -62,19 +63,19 @@ mod tests {
 
         inputs.load_from_slice(shape1, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
         unsafe {
-            indices.load_from_slice(shape2, 5, &[-1, 0, 2, 1, 2, 0, 0, 0, 1, 1, -1, -1, -1, -1, -1]);
+            indices.load_from_slice(Shape::new(5, 1), 5, &[-1, 0, 2, 1, 2]);
         }
 
         SparseMatrix::gather(&inputs, &indices, &mut output);
 
         let mut buf = [0.0; 15];
         output.write_to_slice(&mut buf);
-        assert_eq!(buf, [0.0, 1.0, 3.0, 2.0, 3.0, 4.0, 4.0, 4.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0,]);
+        assert_eq!(buf, [0.0, 1.0, 3.0, 2.0, 3.0, 0.0, 4.0, 6.0, 5.0, 6.0, 0.0, 7.0, 9.0, 8.0, 9.0]);
 
         SparseMatrix::backprop_gather(&output, &indices, &inputs, &mut input_grads);
 
         let mut buf = [0.0; 9];
         input_grads.write_to_slice(&mut buf);
-        assert_eq!(buf, [1.0, 2.0, 6.0, 12.0, 10.0, 0.0, 0.0, 0.0, 0.0,]);
+        assert_eq!(buf, [1.0, 2.0, 6.0, 4.0, 5.0, 12.0, 7.0, 8.0, 18.0,]);
     }
 }

@@ -14,9 +14,8 @@ __global__ void gather_kernel(
         return;
 
     const size_t tid = blockIdx.y;
-    const size_t outIdx = output_rows * tid + elem;
-    const int32_t inpIdx = indices[outIdx];
-    outputs[outIdx] = (inpIdx == -1) ? 0.0F : inputs[input_rows * tid + inpIdx];
+    const int32_t inpIdx = indices[elem];
+    outputs[output_rows * tid + elem] = (inpIdx == -1) ? 0.0F : inputs[input_rows * tid + inpIdx];
 }
 
 __global__ void gather_backprop_kernel(
@@ -33,11 +32,10 @@ __global__ void gather_backprop_kernel(
         return;
 
     const size_t tid = blockIdx.y;
-    const size_t outIdx = output_rows * tid + elem;
-    const int32_t inpIdx = indices[outIdx];
+    const int32_t inpIdx = indices[elem];
 
     if (inpIdx != -1)
-        atomicAdd(&input_grads[input_rows * tid + inpIdx], output_grads[outIdx]);
+        atomicAdd(&input_grads[input_rows * tid + inpIdx], output_grads[output_rows * tid + elem]);
 }
 
 extern "C" void gather(

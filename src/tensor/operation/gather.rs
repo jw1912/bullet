@@ -2,7 +2,11 @@ use crate::tensor::{Matrix, Shape, SparseMatrix, Tensor};
 
 pub fn output_tensor(inputs: &[Shape]) -> Result<Shape, String> {
     if inputs.len() == 2 {
-        Ok(inputs[1])
+        if inputs[0].cols() == 1 && inputs[1].cols() == 1 {
+            Ok(inputs[1])
+        } else {
+            Err("Both inputs must be vectors!".to_string())
+        }
     } else {
         Err(format!("Invalid number of inputs in linear! Expected 2, got {}", inputs.len()))
     }
