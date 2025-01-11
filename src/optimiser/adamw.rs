@@ -29,17 +29,18 @@ pub struct AdamWOptimiser {
     graph: Graph,
     momentum: HashMap<String, DenseMatrix>,
     velocity: HashMap<String, DenseMatrix>,
-    params: AdamWParams,
+    params: HashMap<String, AdamWParams>,
 }
 
 impl Optimiser for AdamWOptimiser {
     type Params = AdamWParams;
 
-    fn new(graph: Graph, params: Self::Params) -> Self {
+    fn new(graph: Graph, default_params: Self::Params) -> Self {
         let weight_ids = graph.weight_ids();
 
         let mut momentum = HashMap::new();
         let mut velocity = HashMap::new();
+        let mut params = HashMap::new();
 
         for id in weight_ids {
             let shape = graph.get_weights(&id).values.shape();
@@ -47,7 +48,10 @@ impl Optimiser for AdamWOptimiser {
             let old = momentum.insert(id.clone(), DenseMatrix::zeroed(shape));
             assert!(old.is_none());
 
-            let old = velocity.insert(id, DenseMatrix::zeroed(shape));
+            let old = velocity.insert(id.clone(), DenseMatrix::zeroed(shape));
+            assert!(old.is_none());
+
+            let old = params.insert(id, default_params);
             assert!(old.is_none());
         }
 
@@ -70,7 +74,7 @@ impl Optimiser for AdamWOptimiser {
                 weights.gradients.as_ref().unwrap(),
                 self.momentum.get_mut(id).unwrap(),
                 self.velocity.get_mut(id).unwrap(),
-                &self.params,
+                self.params.get(id).unwrap(),
                 gradient_factor,
                 learning_rate,
             );
@@ -89,8 +93,8 @@ impl Optimiser for AdamWOptimiser {
         utils::load_weight_hashmap_from_file(&mut self.velocity, &format!("{path}/velocity.bin"));
     }
 
-    fn set_params(&mut self, params: Self::Params) {
-        self.params = params;
+    fn set_params_for_weight(&mut self, id: &str, params: Self::Params) {
+        *self.params.get_mut(id).unwrap() = params;
     }
 }
 
