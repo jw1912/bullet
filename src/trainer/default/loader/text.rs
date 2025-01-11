@@ -1,4 +1,9 @@
-use std::{fmt::Debug, fs::File, io::{BufRead, BufReader}, str::FromStr};
+use std::{
+    fmt::Debug,
+    fs::File,
+    io::{BufRead, BufReader},
+    str::FromStr,
+};
 
 use super::DataLoader;
 
@@ -9,14 +14,13 @@ pub struct InMemoryTextLoader {
 
 impl InMemoryTextLoader {
     pub fn new(file_path: &str) -> Self {
-        Self {
-            file_path: [file_path.to_string()],
-        }
+        Self { file_path: [file_path.to_string()] }
     }
 }
 
 impl<T: FromStr> DataLoader<T> for InMemoryTextLoader
-where <T as FromStr>::Err: Debug
+where
+    <T as FromStr>::Err: Debug,
 {
     fn data_file_paths(&self) -> &[String] {
         &self.file_path
@@ -34,7 +38,7 @@ where <T as FromStr>::Err: Debug
         'dataloading: loop {
             for batch in data.chunks(batch_size) {
                 if f(batch) {
-                    break 'dataloading
+                    break 'dataloading;
                 }
             }
         }
