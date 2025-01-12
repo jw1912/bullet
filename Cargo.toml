@@ -8,7 +8,6 @@ authors = ["Jamie Whiting"]
 license = "MIT"
 repository = "https://github.com/jw1912/bullet"
 readme = "README.md"
-build = "build/main.rs"
 
 [features]
 cudnn = []
