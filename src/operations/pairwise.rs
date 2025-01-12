@@ -1,4 +1,8 @@
-use crate::{autograd::Operation, tensor::{DenseMatrix, Shape, Tensor}, backend::ExecutionContext};
+use crate::{
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{DenseMatrix, Shape, Tensor},
+};
 
 #[derive(Debug)]
 pub struct PairwiseMul(pub bool);

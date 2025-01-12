@@ -1,4 +1,8 @@
-use crate::{autograd::Operation, tensor::{DenseMatrix, Shape, Tensor}, backend::ExecutionContext};
+use crate::{
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{DenseMatrix, Shape, Tensor},
+};
 
 #[derive(Debug)]
 pub struct AbsPowerError(pub f32);
@@ -13,7 +17,12 @@ impl Operation for AbsPowerError {
     }
 
     fn forward(&self, _: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-        DenseMatrix::abs_power_error(self.0, inputs[0].values.dense(), inputs[1].values.dense(), output.values.dense_mut());
+        DenseMatrix::abs_power_error(
+            self.0,
+            inputs[0].values.dense(),
+            inputs[1].values.dense(),
+            output.values.dense_mut(),
+        );
     }
 
     fn backward(&self, _: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {

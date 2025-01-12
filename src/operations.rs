@@ -15,11 +15,7 @@ mod softmax;
 mod softmax_sparse;
 mod submatrix_product;
 
-use crate::{
-    autograd::Node,
-    tensor::Activation,
-    ConvolutionDescription, GraphBuilder,
-};
+use crate::{autograd::Node, tensor::Activation, ConvolutionDescription, GraphBuilder};
 
 pub fn activate(builder: &mut GraphBuilder, input: Node, activation: Activation) -> Node {
     builder.create_result_of_operation(activation, &[input])
@@ -85,7 +81,10 @@ pub fn sparse_affine_dual_with_activation(
     bias: Node,
     activation: Activation,
 ) -> Node {
-    builder.create_result_of_operation(affine_dual::SparseAffineDualWithActivation(activation), &[weights, stm, nstm, bias])
+    builder.create_result_of_operation(
+        affine_dual::SparseAffineDualWithActivation(activation),
+        &[weights, stm, nstm, bias],
+    )
 }
 
 /// Post sparse-affine-dual, doing pairwise would just elementise-mul the stm and nstm

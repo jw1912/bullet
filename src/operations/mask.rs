@@ -1,4 +1,8 @@
-use crate::{autograd::Operation, backend::ExecutionContext, tensor::{Matrix, Shape, SparseMatrix, Tensor}};
+use crate::{
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{Matrix, Shape, SparseMatrix, Tensor},
+};
 
 #[derive(Debug)]
 pub struct Mask;

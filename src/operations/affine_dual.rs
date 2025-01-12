@@ -1,4 +1,8 @@
-use crate::{autograd::Operation, tensor::{Activation, Matrix, Shape, SparseMatrix, Tensor}, backend::ExecutionContext};
+use crate::{
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{Activation, Matrix, Shape, SparseMatrix, Tensor},
+};
 
 #[derive(Debug)]
 pub struct SparseAffineDualWithActivation(pub Activation);

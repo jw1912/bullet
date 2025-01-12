@@ -1,5 +1,7 @@
 use crate::{
-    autograd::Operation, backend::{ConvolutionDescription, ExecutionContext}, tensor::{DenseMatrix, Shape, Tensor}
+    autograd::Operation,
+    backend::{ConvolutionDescription, ExecutionContext},
+    tensor::{DenseMatrix, Shape, Tensor},
 };
 
 impl Operation for ConvolutionDescription {
@@ -43,11 +45,7 @@ impl Operation for ConvolutionDescription {
         );
     }
 
-    fn backward(&self,
-        ctx: &mut ExecutionContext,
-        output: &Tensor,
-        inputs: &mut [&mut Tensor],
-    ) {
+    fn backward(&self, ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
         let (input1, input2) = inputs.split_at_mut(1);
 
         DenseMatrix::convolution_backward(

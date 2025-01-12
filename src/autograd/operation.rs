@@ -1,11 +1,7 @@
 use std::{cell::RefCell, fmt::Debug, time::Instant};
 
 use super::Node;
-use crate::{
-    backend::util,
-    tensor::Tensor,
-    ExecutionContext, Shape,
-};
+use crate::{backend::util, tensor::Tensor, ExecutionContext, Shape};
 
 pub trait Operation: Debug + 'static {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String>;

@@ -1,4 +1,8 @@
-use crate::{autograd::Operation, tensor::{DenseMatrix, Matrix, Shape, SparseMatrix, Tensor}, backend::ExecutionContext};
+use crate::{
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{DenseMatrix, Matrix, Shape, SparseMatrix, Tensor},
+};
 
 #[derive(Debug)]
 pub struct SparseSoftmaxCrossEntropyLoss;

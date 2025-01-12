@@ -10,9 +10,9 @@ mod slice;
 mod softmax;
 mod submatrix_product;
 
-pub use activate::Activation;
 use super::shape::Shape;
 use crate::backend::Buffer;
+pub use activate::Activation;
 
 #[derive(Debug)]
 pub struct DenseMatrix {

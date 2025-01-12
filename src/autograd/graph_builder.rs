@@ -5,12 +5,12 @@ use std::{
     ops::Index,
 };
 
-use crate::{
-    tensor::Tensor,
-    ExecutionContext, Shape,
-};
+use crate::{tensor::Tensor, ExecutionContext, Shape};
 
-use super::{operation::{Operation, OperationQueue}, Graph};
+use super::{
+    operation::{Operation, OperationQueue},
+    Graph,
+};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node(pub(crate) usize);

@@ -1,5 +1,7 @@
 use crate::{
-    autograd::Operation, backend::ExecutionContext, tensor::{DenseMatrix, Shape, Tensor}
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{DenseMatrix, Shape, Tensor},
 };
 
 #[derive(Debug)]

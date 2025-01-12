@@ -1,4 +1,8 @@
-use crate::{autograd::Operation, tensor::{Activation, DenseMatrix, Shape, Tensor}, backend::ExecutionContext};
+use crate::{
+    autograd::Operation,
+    backend::ExecutionContext,
+    tensor::{Activation, DenseMatrix, Shape, Tensor},
+};
 
 impl Operation for Activation {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
@@ -8,11 +12,11 @@ impl Operation for Activation {
             Err(format!("Invalid number of inputs in activation! Expected 1, got {}", inputs.len()))
         }
     }
-    
+
     fn forward(&self, _: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
         let input = &inputs[0].values;
         let output = &mut output.values;
-    
+
         match *self {
             Activation::Identity => panic!("No-op!"),
             Activation::ReLU => DenseMatrix::relu(input.dense(), output.dense_mut()),
@@ -22,12 +26,12 @@ impl Operation for Activation {
             Activation::Sigmoid => DenseMatrix::sigmoid(input.dense(), output.dense_mut()),
         }
     }
-    
+
     fn backward(&self, _: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
         let input = &inputs[0].values;
         let input_grad = inputs[0].gradients.as_mut().expect("Must track gradients in activations!");
         let output_grad = output.gradients.as_ref().expect("Must exist!");
-    
+
         match *self {
             Activation::Identity => panic!("No-op!"),
             Activation::ReLU => DenseMatrix::relu_backward(input.dense(), input_grad, output_grad),
@@ -38,4 +42,3 @@ impl Operation for Activation {
         }
     }
 }
-
