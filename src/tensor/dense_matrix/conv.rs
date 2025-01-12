@@ -67,7 +67,7 @@ impl DenseMatrix {
 #[cfg(feature = "cudnn")]
 #[cfg(test)]
 mod tests {
-    use crate::{backend::util::panic_if_device_error, Shape};
+    use crate::tensor::{backend::util::panic_if_device_error, Shape};
 
     use super::*;
 
@@ -91,7 +91,7 @@ mod tests {
             input_channels,
             output_channels,
             filter_shape,
-            Shape::new(1, 1),
+            (1, 1),
             Shape::new(1, 1),
         );
 
