@@ -107,18 +107,6 @@ impl GraphBuilder {
         }
     }
 
-    fn compile_graph(self) -> OperationQueue {
-        let mut queue = OperationQueue::default();
-
-        for node in self.nodes {
-            if let Some(operation) = node.parent_operation {
-                queue.push(operation, &node.parent_nodes, node.own);
-            }
-        }
-
-        queue
-    }
-
     pub fn build(self, execution_context: ExecutionContext) -> Graph {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
@@ -137,7 +125,13 @@ impl GraphBuilder {
         let weights =
             self.weights.iter().map(|&node| (self[node].id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
-        let compiled_graph = self.compile_graph();
+        let mut compiled_graph = OperationQueue::default();
+
+        for node in self.nodes {
+            if let Some(operation) = node.parent_operation {
+                compiled_graph.push(operation, &node.parent_nodes, node.own);
+            }
+        }
 
         Graph::new(nodes, root, inputs, weights, compiled_graph, execution_context)
     }
