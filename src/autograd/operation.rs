@@ -2,7 +2,9 @@ use std::{cell::RefCell, time::Instant};
 
 use super::Node;
 use crate::{
-    backend::util, tensor::{Operation, Tensor}, ExecutionContext
+    backend::util,
+    tensor::{Operation, Tensor},
+    ExecutionContext,
 };
 
 #[derive(Debug)]
