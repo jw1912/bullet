@@ -1,8 +1,10 @@
+mod backend;
 mod dense_matrix;
 mod matrix;
 mod shape;
 mod sparse_matrix;
 
+pub use backend::{util, ConvolutionDescription, ExecutionContext};
 pub use dense_matrix::{Activation, DenseMatrix};
 pub use matrix::Matrix;
 pub use shape::Shape;

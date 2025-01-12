@@ -1,7 +1,6 @@
 use crate::{
     autograd::Operation,
-    backend::{ConvolutionDescription, ExecutionContext},
-    tensor::{DenseMatrix, Shape, Tensor},
+    tensor::{ConvolutionDescription, DenseMatrix, ExecutionContext, Shape, Tensor},
 };
 
 impl Operation for ConvolutionDescription {

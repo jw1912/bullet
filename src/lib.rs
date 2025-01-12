@@ -1,5 +1,4 @@
 mod autograd;
-mod backend;
 /// Contains functions that apply publically-exposed operations to nodes in the network graph.
 pub mod operations;
 /// Contains the `Optimiser` trait, for implementing custom optimisers, as well as all premade
@@ -10,11 +9,10 @@ mod tensor;
 mod trainer;
 
 pub use autograd::{Graph, GraphBuilder, Node};
-pub use backend::{ConvolutionDescription, ExecutionContext};
 pub use bulletformat as format;
 pub use montyformat;
 pub use sfbinpack;
-pub use tensor::{Activation, Shape};
+pub use tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape};
 pub use trainer::{
     default, logger, save,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},

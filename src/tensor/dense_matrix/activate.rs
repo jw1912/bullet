@@ -1,4 +1,4 @@
-use crate::backend::ops;
+use crate::tensor::backend::ops;
 
 use super::DenseMatrix;
 
@@ -54,7 +54,7 @@ define_activation!(sigmoid, sigmoid_backward, activateSigmoid, backpropSigmoid);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     fn activation_test(
         fwd: fn(&DenseMatrix, &mut DenseMatrix),

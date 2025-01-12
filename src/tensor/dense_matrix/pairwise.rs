@@ -1,4 +1,4 @@
-use crate::{backend::ops, tensor::Shape};
+use crate::tensor::{backend::ops, Shape};
 
 use super::DenseMatrix;
 
@@ -42,7 +42,7 @@ impl DenseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn pairwise() {

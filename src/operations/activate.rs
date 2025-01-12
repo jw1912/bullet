@@ -1,7 +1,6 @@
 use crate::{
     autograd::Operation,
-    backend::ExecutionContext,
-    tensor::{Activation, DenseMatrix, Shape, Tensor},
+    tensor::{Activation, DenseMatrix, ExecutionContext, Shape, Tensor},
 };
 
 impl Operation for Activation {

@@ -1,4 +1,4 @@
-use crate::{backend::ops, tensor::DenseMatrix};
+use crate::tensor::{backend::ops, DenseMatrix};
 
 use super::SparseMatrix;
 
@@ -75,7 +75,7 @@ impl SparseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn linear() {

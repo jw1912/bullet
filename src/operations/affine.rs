@@ -1,7 +1,6 @@
 use crate::{
     autograd::Operation,
-    backend::ExecutionContext,
-    tensor::{DenseMatrix, Matrix, Shape, SparseMatrix, Tensor},
+    tensor::{DenseMatrix, ExecutionContext, Matrix, Shape, SparseMatrix, Tensor},
 };
 
 use super::linear::Linear;
