@@ -4,19 +4,13 @@ mod matrix;
 mod shape;
 mod sparse_matrix;
 
-pub use backend::{util, ConvolutionDescription, ExecutionContext};
+pub use backend::{conv::ConvolutionDescription, util, ExecutionContext};
 pub use dense_matrix::{Activation, DenseMatrix};
 pub use matrix::Matrix;
 pub use shape::Shape;
 pub use sparse_matrix::SparseMatrix;
 
 use crate::rng;
-
-impl From<Tensor> for Shape {
-    fn from(value: Tensor) -> Self {
-        value.values.shape()
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct Tensor {

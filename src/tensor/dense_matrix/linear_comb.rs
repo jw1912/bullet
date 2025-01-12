@@ -1,4 +1,4 @@
-use crate::tensor::backend::{ops, ExecutionContext};
+use crate::tensor::backend::{blas, ExecutionContext};
 
 use super::DenseMatrix;
 
@@ -16,7 +16,7 @@ impl DenseMatrix {
         if input_a.shape == input_b.shape {
             output.reshape_if_needed(input_a.shape);
             unsafe {
-                ops::linear_comb_matrices(
+                blas::linear_comb_matrices(
                     ctx,
                     output.shape.rows(),
                     output.shape.cols(),
@@ -62,7 +62,7 @@ impl DenseMatrix {
         output.reshape_if_needed(input.shape);
 
         unsafe {
-            ops::linear_comb_matrices(
+            blas::linear_comb_matrices(
                 ctx,
                 output.shape.rows(),
                 output.shape.cols(),
@@ -79,7 +79,7 @@ impl DenseMatrix {
         assert_eq!(input.shape, output.shape);
 
         unsafe {
-            ops::linear_comb_matrices(
+            blas::linear_comb_matrices(
                 ctx,
                 input.shape.rows(),
                 input.shape.cols(),
@@ -102,7 +102,7 @@ impl DenseMatrix {
         assert_eq!(input.shape.rows(), output.shape.rows());
 
         unsafe {
-            ops::add_vector_to_matrix_columns(
+            blas::add_vector_to_matrix_columns(
                 ctx,
                 output.shape.rows(),
                 output.shape.cols(),
@@ -125,7 +125,7 @@ impl DenseMatrix {
             Self::add_assign_scaled(ctx, alpha, output_grad, input_grad);
         } else if input.shape.cols() == 1 {
             unsafe {
-                ops::reduce_add_cols(
+                blas::reduce_add_cols(
                     ctx,
                     output_grad.shape.rows(),
                     output_grad.shape.cols(),
