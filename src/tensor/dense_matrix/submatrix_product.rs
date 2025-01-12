@@ -1,5 +1,5 @@
 use crate::tensor::{
-    backend::{ops, ExecutionContext},
+    backend::{blas, ExecutionContext},
     Shape,
 };
 
@@ -28,7 +28,7 @@ impl DenseMatrix {
         output.reshape_if_needed(Shape::new(output_shape.size(), batch_size));
 
         unsafe {
-            ops::batched_sgemm(
+            blas::batched_sgemm(
                 ctx,
                 batch_size,
                 input_a.buf.ptr(),

@@ -1,5 +1,8 @@
 use crate::tensor::{
-    backend::{bindings, catch_cudnn, ConvolutionCudnnDescription, ConvolutionDescription, ExecutionContext},
+    backend::{
+        conv::{self, ConvolutionCudnnDescription, ConvolutionDescription},
+        ExecutionContext,
+    },
     Shape,
 };
 
@@ -21,25 +24,8 @@ impl DenseMatrix {
 
         output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));
 
-        let alpha = 1f32;
-        let beta = 0f32;
-
         unsafe {
-            catch_cudnn(bindings::cudnnConvolutionForward(
-                ctx.cudnn,
-                ((&alpha) as *const f32).cast(),
-                cudnn_desc.input,
-                input.buf.ptr().cast(),
-                cudnn_desc.filter,
-                filters.buf.ptr().cast(),
-                cudnn_desc.conv,
-                cudnn_desc.fwd_algo,
-                std::ptr::null_mut(),
-                0,
-                ((&beta) as *const f32).cast(),
-                cudnn_desc.output,
-                output.buf.mut_ptr().cast(),
-            ));
+            conv::conv_fwd(ctx, &cudnn_desc, input.buf.ptr(), filters.buf.ptr(), output.buf.mut_ptr());
         }
     }
 
@@ -59,28 +45,12 @@ impl DenseMatrix {
         assert_eq!(output_grad.shape.cols(), input.shape.cols());
 
         let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
-        let alpha = 1f32;
-        let beta = 0f32;
 
         if let Some(grad) = filters_grad {
             grad.reshape_if_needed(filters.shape);
 
             unsafe {
-                catch_cudnn(bindings::cudnnConvolutionBackwardFilter(
-                    ctx.cudnn,
-                    ((&alpha) as *const f32).cast(),
-                    cudnn_desc.input,
-                    input.buf.ptr().cast(),
-                    cudnn_desc.output,
-                    output_grad.buf.ptr().cast(),
-                    cudnn_desc.conv,
-                    cudnn_desc.bwd_filter_algo,
-                    std::ptr::null_mut(),
-                    0,
-                    ((&beta) as *const f32).cast(),
-                    cudnn_desc.filter,
-                    grad.buf.mut_ptr().cast(),
-                ));
+                conv::conv_bwd_filter(ctx, &cudnn_desc, input.buf.ptr(), output_grad.buf.ptr(), grad.buf.mut_ptr());
             }
         }
 
@@ -88,21 +58,7 @@ impl DenseMatrix {
             grad.reshape_if_needed(input.shape);
 
             unsafe {
-                catch_cudnn(bindings::cudnnConvolutionBackwardData(
-                    ctx.cudnn,
-                    ((&alpha) as *const f32).cast(),
-                    cudnn_desc.filter,
-                    filters.buf.ptr().cast(),
-                    cudnn_desc.output,
-                    output_grad.buf.ptr().cast(),
-                    cudnn_desc.conv,
-                    cudnn_desc.bwd_data_algo,
-                    std::ptr::null_mut(),
-                    0,
-                    ((&beta) as *const f32).cast(),
-                    cudnn_desc.input,
-                    grad.buf.mut_ptr().cast(),
-                ));
+                conv::conv_bwd_data(ctx, &cudnn_desc, filters.buf.ptr(), output_grad.buf.ptr(), grad.buf.mut_ptr());
             }
         }
     }

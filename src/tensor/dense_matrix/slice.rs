@@ -1,5 +1,5 @@
 use crate::tensor::{
-    backend::{ops, ExecutionContext},
+    backend::{blas, ExecutionContext},
     Shape,
 };
 
@@ -18,7 +18,7 @@ impl DenseMatrix {
         output.reshape_if_needed(output_shape);
 
         unsafe {
-            ops::copy_strided(
+            blas::copy_strided(
                 ctx,
                 output_shape.rows(),
                 input.shape.cols(),
@@ -47,7 +47,7 @@ impl DenseMatrix {
             grad.reshape_if_needed(input.shape);
 
             unsafe {
-                ops::copy_strided(
+                blas::copy_strided(
                     ctx,
                     output_shape.rows(),
                     output_shape.cols(),
