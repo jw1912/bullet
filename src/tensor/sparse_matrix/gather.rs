@@ -1,4 +1,7 @@
-use crate::{backend::ops, tensor::DenseMatrix, Shape};
+use crate::{
+    tensor::{backend::ops, DenseMatrix},
+    Shape,
+};
 
 use super::SparseMatrix;
 

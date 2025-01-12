@@ -17,7 +17,7 @@ use std::{
     time::Instant,
 };
 
-use crate::{backend::util, optimiser::Optimiser};
+use crate::{optimiser::Optimiser, tensor::util};
 
 pub trait NetworkTrainer {
     type PreparedData;

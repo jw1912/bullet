@@ -1,4 +1,4 @@
-use crate::backend::{ops, ExecutionContext};
+use crate::tensor::backend::{ops, ExecutionContext};
 
 use super::DenseMatrix;
 
@@ -144,7 +144,7 @@ impl DenseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn linear_comb() {

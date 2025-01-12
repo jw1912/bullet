@@ -5,30 +5,29 @@ use std::{
     ops::Index,
 };
 
-use crate::{
-    tensor::{Operation, Tensor},
-    ExecutionContext, Shape,
-};
+use crate::{tensor::Tensor, ExecutionContext, Shape};
 
-use super::{operation::OperationQueue, Graph};
+use super::{
+    operation::{Operation, OperationQueue},
+    Graph,
+};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node(pub(crate) usize);
 
-#[derive(Debug)]
 pub struct NodeData {
     own: Node,
     id: Option<String>,
     shape: Shape,
     requires_grad: bool,
-    parent_operation: Option<Operation>,
+    parent_operation: Option<Box<dyn Operation>>,
     parent_nodes: Vec<Node>,
 }
 
 impl NodeData {
     pub fn new(
         id: Option<String>,
-        operation: Option<Operation>,
+        operation: Option<Box<dyn Operation>>,
         shape: Shape,
         requires_grad: bool,
         parents: &[Node],
@@ -44,7 +43,7 @@ impl NodeData {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct GraphBuilder {
     nodes: Vec<NodeData>,
     roots: HashSet<Node>,
@@ -96,47 +95,19 @@ impl GraphBuilder {
         node
     }
 
-    pub fn create_result_of_operation(&mut self, operation: Operation, inputs: &[Node]) -> Node {
+    pub fn create_result_of_operation(&mut self, operation: impl Operation, inputs: &[Node]) -> Node {
         let mut set = HashSet::new();
         assert!(inputs.iter().all(|node| set.insert(node)), "An operation will alias nodes on backprop!");
 
         let input_shape = inputs.iter().map(|node| self[*node].shape).collect::<Vec<_>>();
 
         match operation.output_tensor(&input_shape) {
-            Ok(shape) => self.create_node(NodeData::new(None, Some(operation), shape, true, inputs)),
+            Ok(shape) => self.create_node(NodeData::new(None, Some(Box::new(operation)), shape, true, inputs)),
             Err(s) => panic!("{s}"),
         }
     }
 
-    fn build_forward(&self, nodes: &[Node]) -> OperationQueue<false> {
-        let mut queue = OperationQueue::default();
-
-        for &node in nodes {
-            let data = &self[node];
-
-            if let Some(operation) = data.parent_operation {
-                queue.push(operation, &data.parent_nodes, node);
-            }
-        }
-
-        queue
-    }
-
-    fn build_backward(&self, nodes: &[Node]) -> OperationQueue<true> {
-        let mut queue = OperationQueue::default();
-
-        for &node in nodes.iter().rev() {
-            let data = &self[node];
-
-            if let Some(operation) = data.parent_operation {
-                queue.push(operation, &data.parent_nodes, node);
-            }
-        }
-
-        queue
-    }
-
-    pub fn build(&self, execution_context: ExecutionContext) -> Graph {
+    pub fn build(self, execution_context: ExecutionContext) -> Graph {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
@@ -154,11 +125,14 @@ impl GraphBuilder {
         let weights =
             self.weights.iter().map(|&node| (self[node].id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
-        let node_ids = self.nodes.iter().map(|node_data| node_data.own).collect::<Vec<_>>();
+        let mut compiled_graph = OperationQueue::default();
 
-        let forward = self.build_forward(&node_ids);
-        let backward = self.build_backward(&node_ids);
+        for node in self.nodes {
+            if let Some(operation) = node.parent_operation {
+                compiled_graph.push(operation, &node.parent_nodes, node.own);
+            }
+        }
 
-        Graph::new(nodes, root, inputs, weights, forward, backward, execution_context)
+        Graph::new(nodes, root, inputs, weights, compiled_graph, execution_context)
     }
 }

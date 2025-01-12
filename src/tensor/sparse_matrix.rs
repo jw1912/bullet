@@ -5,8 +5,11 @@ mod mask;
 mod select;
 mod softmax;
 
-use super::{shape::Shape, DenseMatrix};
-use crate::backend::{ops, Buffer};
+use super::{
+    backend::{ops, Buffer},
+    shape::Shape,
+    DenseMatrix,
+};
 
 #[derive(Debug)]
 pub struct SparseMatrix {
@@ -75,7 +78,7 @@ impl SparseMatrix {
 
 #[cfg(test)]
 mod tests {
-    use crate::backend::util;
+    use crate::tensor::backend::util;
 
     use super::*;
 

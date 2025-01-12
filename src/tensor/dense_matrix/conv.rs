@@ -1,4 +1,4 @@
-use crate::{
+use crate::tensor::{
     backend::{bindings, catch_cudnn, ConvolutionCudnnDescription, ConvolutionDescription, ExecutionContext},
     Shape,
 };

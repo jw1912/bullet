@@ -3,7 +3,7 @@ use crate::{
     logger, operations,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
-    tensor::{Operation, SparseMatrix},
+    tensor::SparseMatrix,
     trainer::save::QuantTarget,
     Activation, ExecutionContext, GraphBuilder, Shape,
 };
@@ -295,7 +295,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         out = if self.perspective {
             let ntm = builder.create_input("nstm", input_shape);
-            builder.create_result_of_operation(Operation::SparseAffineDual(activation), &[l0w, out, ntm, l0b])
+            operations::sparse_affine_dual_with_activation(&mut builder, l0w, out, ntm, l0b, activation)
         } else {
             operations::affine(&mut builder, l0w, out, l0b)
         };
@@ -333,7 +333,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
                 }
                 OpType::PairwiseMul => {
                     if still_in_ft && self.perspective {
-                        out = builder.create_result_of_operation(Operation::PairwiseMul(true), &[out]);
+                        out = operations::pairwise_mul_post_sparse_affine_dual(&mut builder, out);
                     } else {
                         out = operations::pairwise_mul(&mut builder, out);
                     }

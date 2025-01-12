@@ -1,16 +1,14 @@
+mod backend;
 mod dense_matrix;
 mod matrix;
-mod operation;
 mod shape;
 mod sparse_matrix;
 
-pub use dense_matrix::DenseMatrix;
+pub use backend::{util, ConvolutionDescription, ExecutionContext};
+pub use dense_matrix::{Activation, DenseMatrix};
 pub use matrix::Matrix;
-pub use operation::Activation;
 pub use shape::Shape;
 pub use sparse_matrix::SparseMatrix;
-
-pub(crate) use operation::Operation;
 
 use crate::rng;
 
@@ -24,7 +22,7 @@ impl From<Tensor> for Shape {
 pub struct Tensor {
     pub(crate) values: Matrix,
     pub(crate) gradients: Option<DenseMatrix>,
-    internal: Vec<(String, DenseMatrix)>,
+    pub(crate) internal: Vec<(String, DenseMatrix)>,
 }
 
 impl Tensor {

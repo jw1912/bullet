@@ -1,6 +1,18 @@
-use crate::backend::ops;
+use crate::tensor::backend::ops;
 
 use super::DenseMatrix;
+
+/// List of supported activation functions.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Activation {
+    Identity = 0,
+    ReLU = 1,
+    CReLU = 2,
+    SCReLU = 3,
+    SqrReLU = 4,
+    Sigmoid = 5,
+}
 
 macro_rules! define_activation {
     (
@@ -42,7 +54,7 @@ define_activation!(sigmoid, sigmoid_backward, activateSigmoid, backpropSigmoid);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     fn activation_test(
         fwd: fn(&DenseMatrix, &mut DenseMatrix),

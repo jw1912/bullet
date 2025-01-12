@@ -1,4 +1,4 @@
-use crate::{backend::ops, tensor::Shape};
+use crate::tensor::{backend::ops, Shape};
 
 use super::DenseMatrix;
 
@@ -57,7 +57,7 @@ fn backprop_abs_power_error_single(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn abs_power_error() {
