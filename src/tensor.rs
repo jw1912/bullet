@@ -56,6 +56,10 @@ impl Tensor {
         }
     }
 
+    pub fn shape(&self) -> Shape {
+        self.values.shape()
+    }
+
     pub fn get_dense_vals(&self) -> Option<Vec<f32>> {
         match &self.values {
             Matrix::Sparse(_) => None,

@@ -219,6 +219,22 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
         }
     }
 
+    pub fn profile_all_operations(&mut self) {
+        self.optimiser.graph_mut().profile_all_operations();
+    }
+
+    pub fn disable_profiling(&mut self) {
+        self.optimiser.graph_mut().disable_profiling();
+    }
+
+    pub fn profile_operation_that_produces(&mut self, node: Node) {
+        self.optimiser.graph_mut().profile_operation_that_produces(node);
+    }
+
+    pub fn report_profiles(&self) {
+        self.optimiser.graph().report_profiles();
+    }
+
     pub fn set_optimiser_params(&mut self, params: Opt::Params) {
         self.optimiser.set_params(params);
     }
