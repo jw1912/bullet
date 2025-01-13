@@ -11,8 +11,9 @@ use crate::{
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
-    Normal(f32, f32),
-    Uniform(f32, f32),
+    Zeroed,
+    Normal { mean: f32, stdev: f32 },
+    Uniform { mean: f32, stdev: f32 },
 }
 
 #[derive(Default)]
@@ -35,28 +36,19 @@ impl NetworkBuilder {
         NetworkBuilderNode { node, builder: self }
     }
 
-    pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: Option<InitSettings>) -> NetworkBuilderNode<'a> {
+    pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: InitSettings) -> NetworkBuilderNode<'a> {
         let node = self.builder().create_weights(id, shape);
-
-        if let Some(init) = init {
-            self.set_init_data(id.to_string(), init);
-        }
-
+        self.init().insert(id.to_string(), init);
         NetworkBuilderNode { node, builder: self }
-    }
-
-    pub fn set_init_data(&self, id: String, init_data: InitSettings) {
-        self.init().insert(id, init_data);
     }
 
     pub fn new_affine(&self, id: &str, input_size: usize, output_size: usize) -> Affine {
         let wid = format!("{}w", id);
-        let weights = self.builder().create_weights(&wid, Shape::new(output_size, input_size));
-        let bias = self.builder().create_weights(&format!("{}b", id), Shape::new(output_size, 1));
+        let init = InitSettings::Uniform { mean: 0.0, stdev: 1.0 / (input_size as f32).sqrt() };
+        let weights = self.new_weights(&wid, Shape::new(output_size, input_size), init);
+        let bias = self.new_weights(&format!("{}b", id), Shape::new(output_size, 1), InitSettings::Zeroed);
 
-        self.set_init_data(wid, InitSettings::Uniform(0.0, 1.0 / (input_size as f32).sqrt()));
-
-        Affine { weights, bias }
+        Affine { weights: weights.node, bias: bias.node }
     }
 
     pub fn apply<'a>(&'a self, operation: impl Operation, inputs: &[Node]) -> NetworkBuilderNode<'a> {
@@ -69,12 +61,11 @@ impl NetworkBuilder {
         let mut graph = builder.build(execution_context);
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
-            let (mean, stdev, use_gaussian) = match *init_data {
-                InitSettings::Normal(mean, stdev) => (mean, stdev, true),
-                InitSettings::Uniform(mean, stdev) => (mean, stdev, false),
+            match *init_data {
+                InitSettings::Zeroed => {}
+                InitSettings::Normal { mean, stdev } => graph.get_weights_mut(id).seed_random(mean, stdev, true),
+                InitSettings::Uniform { mean, stdev } => graph.get_weights_mut(id).seed_random(mean, stdev, false),
             };
-
-            graph.get_weights_mut(id).seed_random(mean, stdev, use_gaussian);
         }
 
         graph

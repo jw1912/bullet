@@ -2,6 +2,7 @@ use crate::{
     default::{Layout, SavedFormat},
     frontend::NetworkBuilder,
     logger,
+    nn::InitSettings,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
     tensor::SparseMatrix,
@@ -229,7 +230,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let mut out = builder.new_input("stm", input_shape);
 
         let pst = if self.psqt_subnet {
-            let pst = builder.new_weights("pst", Shape::new(1, input_size), None);
+            let pst = builder.new_weights("pst", Shape::new(1, input_size), InitSettings::Zeroed);
             saved_format.push(SavedFormat { id: "pst".to_string(), quant: QuantTarget::Float, layout: Layout::Normal });
             Some(pst * out)
         } else {

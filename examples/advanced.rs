@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape,
+        Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
     },
     trainer::{
         default::{inputs, loader, outputs, Trainer},
@@ -78,7 +78,7 @@ fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, No
     let l1 = builder.new_affine("l1", hl, num_buckets * 16);
     let l2 = builder.new_affine("l2", 15, num_buckets * 32);
     let l3 = builder.new_affine("l3", 32, num_buckets);
-    let pst = builder.new_weights("pst", Shape::new(1, num_inputs), None);
+    let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
     // inference
     let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
