@@ -232,7 +232,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let pst = if self.psqt_subnet {
             let pst = builder.new_weights("pst", Shape::new(1, input_size), InitSettings::Zeroed);
             saved_format.push(SavedFormat { id: "pst".to_string(), quant: QuantTarget::Float, layout: Layout::Normal });
-            Some(pst * out)
+            Some(pst.matmul(out))
         } else {
             None
         };

@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ops::{Add, Mul, Sub},
+    ops::{Add, Sub},
     sync::{Mutex, MutexGuard},
 };
 
@@ -94,14 +94,6 @@ impl Sub<Self> for NetworkBuilderNode<'_> {
     }
 }
 
-impl Mul<Self> for NetworkBuilderNode<'_> {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        self.builder.apply(operations::Linear, &[self.node, rhs.node])
-    }
-}
-
 impl NetworkBuilderNode<'_> {
     pub fn node(self) -> Node {
         self.node
@@ -121,6 +113,10 @@ impl NetworkBuilderNode<'_> {
 
     pub fn linear_comb(self, alpha: f32, rhs: Self, beta: f32) -> Self {
         self.builder.apply(operations::LinearCombination(alpha, beta), &[self.node, rhs.node])
+    }
+
+    pub fn matmul(self, rhs: Self) -> Self {
+        self.builder.apply(operations::Linear, &[self.node, rhs.node])
     }
 
     pub fn mpe(self, targets: Self, power: f32) -> Self {
