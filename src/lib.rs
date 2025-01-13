@@ -1,5 +1,5 @@
 mod autograd;
-mod frontend;
+pub mod frontend;
 mod operations;
 /// Contains the `Optimiser` trait, for implementing custom optimisers, as well as all premade
 /// optimisers that are commonly used (e.g. `AdamW`).
@@ -10,7 +10,6 @@ mod trainer;
 
 pub use autograd::{Graph, Node};
 pub use bulletformat as format;
-pub use frontend::NetworkBuilder;
 pub use montyformat;
 pub use sfbinpack;
 pub use tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape};

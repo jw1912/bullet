@@ -1,5 +1,12 @@
 use crate::{
-    autograd::GraphBuilder, default::{Layout, SavedFormat}, logger, operations, optimiser::{self, Optimiser, OptimiserType}, rng, tensor::SparseMatrix, trainer::save::QuantTarget, Activation, ExecutionContext, NetworkBuilder, Shape
+    default::{Layout, SavedFormat},
+    frontend::NetworkBuilder,
+    logger,
+    optimiser::{self, Optimiser, OptimiserType},
+    rng,
+    tensor::SparseMatrix,
+    trainer::save::QuantTarget,
+    Activation, ExecutionContext, Shape,
 };
 
 use super::{
@@ -181,7 +188,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U> {
-        let mut builder = NetworkBuilder::default();
+        let builder = NetworkBuilder::default();
 
         let output_buckets = U::BUCKETS > 1;
 
@@ -191,8 +198,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let input_shape = Shape::new(input_size, 1);
         let targets = builder.new_input("targets", Shape::new(1, 1));
 
-        let buckets =
-            if output_buckets { Some(builder.new_input("buckets", Shape::new(U::BUCKETS, 1))) } else { None };
+        let buckets = if output_buckets { Some(builder.new_input("buckets", Shape::new(U::BUCKETS, 1))) } else { None };
 
         let mut still_in_ft = true;
 

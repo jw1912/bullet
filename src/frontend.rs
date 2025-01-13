@@ -1,9 +1,15 @@
 use std::{
-    collections::HashMap, ops::{Add, AddAssign, Mul, Sub, SubAssign}, sync::{Mutex, MutexGuard}
+    collections::HashMap,
+    ops::{Add, AddAssign, Mul, Sub, SubAssign},
+    sync::{Mutex, MutexGuard},
 };
 
-use crate::{autograd::{Graph, GraphBuilder, Node, Operation}, operations, Activation, ExecutionContext, Shape};
+use crate::{
+    autograd::{Graph, GraphBuilder, Node, Operation},
+    operations, Activation, ConvolutionDescription, ExecutionContext, Shape,
+};
 
+#[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
     Normal(f32, f32),
     Uniform(f32, f32),
@@ -12,7 +18,7 @@ pub enum InitSettings {
 #[derive(Default)]
 pub struct NetworkBuilder {
     graph_builder: Mutex<GraphBuilder>,
-    init_data: Mutex<HashMap<String, InitSettings>>
+    init_data: Mutex<HashMap<String, InitSettings>>,
 }
 
 impl NetworkBuilder {
@@ -34,12 +40,16 @@ impl NetworkBuilder {
         NetworkNode { node, builder: self }
     }
 
+    pub fn set_init_data(&self, id: String, init_data: InitSettings) {
+        self.init().insert(id, init_data);
+    }
+
     pub fn new_affine(&self, id: &str, input_size: usize, output_size: usize) -> Affine {
         let wid = format!("{}w", id);
         let weights = self.builder().create_weights(&wid, Shape::new(output_size, input_size));
         let bias = self.builder().create_weights(&format!("{}b", id), Shape::new(output_size, 1));
 
-        self.init().insert(wid, InitSettings::Uniform(0.0, 1.0 / (input_size as f32).sqrt()));
+        self.set_init_data(wid, InitSettings::Uniform(0.0, 1.0 / (input_size as f32).sqrt()));
 
         Affine { weights, bias }
     }
@@ -51,7 +61,18 @@ impl NetworkBuilder {
 
     pub fn build(self, execution_context: ExecutionContext) -> Graph {
         let builder = self.graph_builder.into_inner().unwrap();
-        builder.build(execution_context)
+        let mut graph = builder.build(execution_context);
+
+        for (id, init_data) in self.init_data.lock().unwrap().iter() {
+            let (mean, stdev, use_gaussian) = match *init_data {
+                InitSettings::Normal(mean, stdev) => (mean, stdev, true),
+                InitSettings::Uniform(mean, stdev) => (mean, stdev, false),
+            };
+
+            graph.get_weights_mut(id).seed_random(mean, stdev, use_gaussian);
+        }
+
+        graph
     }
 }
 
@@ -140,6 +161,26 @@ impl NetworkNode<'_> {
 
     pub fn gather(self, indices: Self) -> Self {
         self.builder.apply(operations::Gather, &[self.node, indices.node])
+    }
+
+    pub fn submatrix_product(self, rhs: Self, size: usize) -> Self {
+        self.builder.apply(operations::SubmatrixProduct(size), &[self.node, rhs.node])
+    }
+
+    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
+        self.builder.apply(operations::SoftmaxCrossEntropyLoss, &[self.node, targets.node])
+    }
+
+    pub fn masked_softmax_crossentropy_loss(self, targets: Self, mask: Self) -> Self {
+        self.builder.apply(operations::SparseSoftmaxCrossEntropyLoss, &[mask.node, self.node, targets.node])
+    }
+
+    pub fn slice_rows(self, start: usize, end: usize) -> Self {
+        self.builder.apply(operations::SliceRows(start, end), &[self.node])
+    }
+
+    pub fn convolution(self, filters: Self, desc: ConvolutionDescription) -> Self {
+        self.builder.apply(desc, &[filters.node, self.node])
     }
 }
 

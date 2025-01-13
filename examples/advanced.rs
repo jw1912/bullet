@@ -1,29 +1,33 @@
 use bullet_lib::{
     default::{
         inputs::{self, SparseInputType},
-        loader, outputs, Trainer,
+        loader,
+        outputs::{self, OutputBuckets as A},
+        Trainer,
     },
-    NetworkBuilder,
+    frontend::NetworkBuilder,
     lr,
     optimiser::{AdamWOptimiser, AdamWParams},
     save::{Layout, QuantTarget, SavedFormat},
-    wdl, Activation, ExecutionContext, Graph, LocalSettings, Node, Shape, TrainingSchedule,
-    TrainingSteps,
+    wdl, Activation, ExecutionContext, Graph, LocalSettings, Node, Shape, TrainingSchedule, TrainingSteps,
 };
 
+type InputFeatures = inputs::Chess768;
+type OutputBuckets = outputs::MaterialCount<8>;
+const HL_SIZE: usize = 1024;
+
 fn main() {
-    let inputs = inputs::Chess768;
-    let hl = 512;
-    let num_inputs = inputs.num_inputs();
+    let inputs = InputFeatures::default();
+    let output_buckets = OutputBuckets::default();
 
-    let (graph, output_node) = build_network(num_inputs, hl);
+    let (graph, output_node) = build_network(inputs.num_inputs(), OutputBuckets::BUCKETS, HL_SIZE);
 
-    let mut trainer = Trainer::<AdamWOptimiser, inputs::Chess768, outputs::Single>::new(
+    let mut trainer = Trainer::<AdamWOptimiser, _, _>::new(
         graph,
         output_node,
         AdamWParams::default(),
-        inputs::Chess768,
-        outputs::Single,
+        inputs,
+        output_buckets,
         vec![
             SavedFormat::new("pst", QuantTarget::I16(255), Layout::Normal),
             SavedFormat::new("l0w", QuantTarget::I16(255), Layout::Normal),
@@ -58,24 +62,38 @@ fn main() {
     println!("Eval: {eval:.3}cp");
 }
 
-fn build_network(inputs: usize, hl: usize) -> (Graph, Node) {
+fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, Node) {
     let builder = NetworkBuilder::default();
 
     // inputs
-    let stm = builder.new_input("stm", Shape::new(inputs, 1));
-    let nstm = builder.new_input("nstm", Shape::new(inputs, 1));
+    let stm = builder.new_input("stm", Shape::new(num_inputs, 1));
+    let nstm = builder.new_input("nstm", Shape::new(num_inputs, 1));
     let targets = builder.new_input("targets", Shape::new(1, 1));
+    let buckets = builder.new_input("buckets", Shape::new(num_buckets, 1));
 
     // trainable weights
-    let l0 = builder.new_affine("l0", inputs, hl);
-    let l1 = builder.new_affine("l1", hl * 2, 1);
-    let pst = builder.new_weights("pst", Shape::new(1, inputs));
+    let l0 = builder.new_affine("l0", num_inputs, hl);
+    let l1 = builder.new_affine("l1", hl, num_buckets * 16);
+    let l2 = builder.new_affine("l2", 15, num_buckets * 32);
+    let l3 = builder.new_affine("l3", 32, num_buckets);
+    let pst = builder.new_weights("pst", Shape::new(1, num_inputs));
 
     // inference
-    let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::SCReLU);
-    out = l1.forward(out);
-    out += pst * stm;
-    out.mse(targets);
+    let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
+    out = out.pairwise_mul_post_affine_dual();
+    out = l1.forward(out).select(buckets).activate(Activation::SCReLU);
+
+    let skip_neuron = out.slice_rows(15, 16);
+    out = out.slice_rows(0, 15);
+
+    out = l2.forward(out).select(buckets).activate(Activation::SCReLU);
+    out = l3.forward(out).select(buckets);
+
+    out += pst * stm - pst * nstm;
+    out += skip_neuron;
+
+    let pred = out.activate(Activation::Sigmoid);
+    pred.mse(targets);
 
     // graph, output node
     let output_node = out.node();
