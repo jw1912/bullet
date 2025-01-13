@@ -248,9 +248,11 @@ impl Graph {
         let mut count = 0;
 
         for operation in &self.compiled_graph.queue {
-            if let Some((fwd_time, bwd_time)) = operation.time_spent {
+            if let Some((fwd_time, bwd_time, fwd_exes, bwd_exes)) = operation.time_spent {
                 count += 1;
-                println!("{: <30} {fwd_time: <15} {bwd_time: <15}", operation.operation.name());
+                let fwd_avg = fwd_time / u128::from(fwd_exes);
+                let bwd_avg = bwd_time / u128::from(bwd_exes);
+                println!("{: <30} {fwd_avg: <15} {bwd_avg: <15}", operation.operation.name());
             }
         }
 
@@ -278,7 +280,7 @@ pub struct OperationPayload {
     operation: Box<dyn Operation>,
     inputs: Vec<Node>,
     output: Node,
-    time_spent: Option<(u128, u128)>,
+    time_spent: Option<(u128, u128, u64, u64)>,
 }
 
 #[derive(Default)]
@@ -293,7 +295,7 @@ impl OperationQueue {
 
     pub fn profile_all_operations(&mut self) {
         for op in &mut self.queue {
-            op.time_spent = Some((0, 0));
+            op.time_spent = Some((0, 0, 0, 0));
         }
     }
 
@@ -306,7 +308,7 @@ impl OperationQueue {
     pub fn profile_operation_that_produces(&mut self, node: Node) {
         for op in &mut self.queue {
             if op.output == node {
-                op.time_spent = Some((0, 0));
+                op.time_spent = Some((0, 0, 0, 0));
             }
         }
     }
@@ -329,6 +331,7 @@ impl OperationQueue {
             if let Some(spent) = time_spent {
                 util::device_synchronise();
                 spent.0 += t.elapsed().as_micros();
+                spent.2 += 1;
             }
         }
     }
@@ -351,6 +354,7 @@ impl OperationQueue {
             if let Some(spent) = time_spent {
                 util::device_synchronise();
                 spent.1 += t.elapsed().as_micros();
+                spent.3 += 1;
             }
         }
     }
