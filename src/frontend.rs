@@ -23,11 +23,11 @@ pub struct NetworkBuilder {
 
 impl NetworkBuilder {
     fn builder(&self) -> MutexGuard<GraphBuilder> {
-        self.graph_builder.lock().unwrap()
+        self.graph_builder.try_lock().unwrap()
     }
 
     fn init(&self) -> MutexGuard<HashMap<String, InitSettings>> {
-        self.init_data.lock().unwrap()
+        self.init_data.try_lock().unwrap()
     }
 
     pub fn new_input<'a>(&'a self, id: &str, shape: Shape) -> NetworkNode<'a> {
