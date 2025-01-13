@@ -13,7 +13,7 @@ use bullet_lib::{
 
 type InputFeatures = inputs::Chess768;
 type OutputBuckets = outputs::MaterialCount<8>;
-const HL_SIZE: usize = 1024;
+const HL_SIZE: usize = 512;
 
 fn main() {
     let inputs = InputFeatures::default();
@@ -91,8 +91,8 @@ fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, No
     out = l2.forward(out).select(buckets).activate(Activation::SCReLU);
     out = l3.forward(out).select(buckets);
 
-    out += pst * stm - pst * nstm;
-    out += skip_neuron;
+    let pst_out = pst * stm - pst * nstm;
+    out = out + skip_neuron + pst_out;
 
     let pred = out.activate(Activation::Sigmoid);
     pred.mse(targets);

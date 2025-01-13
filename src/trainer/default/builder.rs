@@ -345,7 +345,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         assert!(!still_in_ft);
 
         if let Some(pst) = pst {
-            out += pst;
+            out = out + pst;
         }
 
         let output_node = out.node();

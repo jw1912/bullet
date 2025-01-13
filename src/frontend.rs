@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ops::{Add, AddAssign, Mul, Sub, SubAssign},
+    ops::{Add, Mul, Sub},
     sync::{Mutex, MutexGuard},
 };
 
@@ -86,23 +86,11 @@ impl Add<Self> for NetworkBuilderNode<'_> {
     }
 }
 
-impl AddAssign<Self> for NetworkBuilderNode<'_> {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
 impl Sub<Self> for NetworkBuilderNode<'_> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
         self.linear_comb(1.0, rhs, -1.0)
-    }
-}
-
-impl SubAssign<Self> for NetworkBuilderNode<'_> {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = *self - rhs;
     }
 }
 
