@@ -12,10 +12,10 @@ pub mod trainer;
 /// optimisers that are commonly used (e.g. `AdamW`)
 pub mod optimiser;
 
-// TODO: Remove this re-export as they are exported in the `nn` module
+// TODO: Remove these re-exports as they are exported in the `nn` module
 pub use tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape};
 
-// TODO: Reorganise these
+// TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
     default, logger, save,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
