@@ -1,5 +1,7 @@
 use std::{
-    collections::HashMap, ops::{Add, Sub}, sync::{Mutex, MutexGuard}
+    collections::HashMap,
+    ops::{Add, Sub},
+    sync::{Mutex, MutexGuard},
 };
 
 use crate::{
