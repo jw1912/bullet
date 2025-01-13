@@ -3,10 +3,11 @@ use bullet_lib::{
         inputs::{self, SparseInputType},
         loader, outputs, Trainer,
     },
-    lr, operations,
+    NetworkBuilder,
+    lr,
     optimiser::{AdamWOptimiser, AdamWParams},
     save::{Layout, QuantTarget, SavedFormat},
-    wdl, Activation, ExecutionContext, Graph, GraphBuilder, LocalSettings, Node, Shape, TrainingSchedule,
+    wdl, Activation, ExecutionContext, Graph, LocalSettings, Node, Shape, TrainingSchedule,
     TrainingSteps,
 };
 
@@ -15,12 +16,7 @@ fn main() {
     let hl = 512;
     let num_inputs = inputs.num_inputs();
 
-    let (mut graph, output_node) = build_network(num_inputs, hl);
-
-    graph.get_weights_mut("l0w").seed_random(0.0, 1.0 / (num_inputs as f32).sqrt(), true);
-    graph.get_weights_mut("l0b").seed_random(0.0, 1.0 / (num_inputs as f32).sqrt(), true);
-    graph.get_weights_mut("l1w").seed_random(0.0, 1.0 / (2.0 * hl as f32).sqrt(), true);
-    graph.get_weights_mut("l1b").seed_random(0.0, 1.0 / (2.0 * hl as f32).sqrt(), true);
+    let (graph, output_node) = build_network(num_inputs, hl);
 
     let mut trainer = Trainer::<AdamWOptimiser, inputs::Chess768, outputs::Single>::new(
         graph,
@@ -63,29 +59,25 @@ fn main() {
 }
 
 fn build_network(inputs: usize, hl: usize) -> (Graph, Node) {
-    let mut builder = GraphBuilder::default();
+    let builder = NetworkBuilder::default();
 
     // inputs
-    let stm = builder.create_input("stm", Shape::new(inputs, 1));
-    let nstm = builder.create_input("nstm", Shape::new(inputs, 1));
-    let targets = builder.create_input("targets", Shape::new(1, 1));
+    let stm = builder.new_input("stm", Shape::new(inputs, 1));
+    let nstm = builder.new_input("nstm", Shape::new(inputs, 1));
+    let targets = builder.new_input("targets", Shape::new(1, 1));
 
     // trainable weights
-    let l0w = builder.create_weights("l0w", Shape::new(hl, inputs));
-    let l0b = builder.create_weights("l0b", Shape::new(hl, 1));
-    let l1w = builder.create_weights("l1w", Shape::new(1, hl * 2));
-    let l1b = builder.create_weights("l1b", Shape::new(1, 1));
-    let pst = builder.create_weights("pst", Shape::new(1, inputs));
+    let l0 = builder.new_affine("l0", inputs, hl);
+    let l1 = builder.new_affine("l1", hl * 2, 1);
+    let pst = builder.new_weights("pst", Shape::new(1, inputs));
 
     // inference
-    let l1 = operations::sparse_affine_dual_with_activation(&mut builder, l0w, stm, nstm, l0b, Activation::SCReLU);
-    let l2 = operations::affine(&mut builder, l1w, l1, l1b);
-    let psqt = operations::matmul(&mut builder, pst, stm);
-    let predicted = operations::add(&mut builder, l2, psqt);
-
-    let sigmoided = operations::activate(&mut builder, predicted, Activation::Sigmoid);
-    operations::mse(&mut builder, sigmoided, targets);
+    let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::SCReLU);
+    out = l1.forward(out);
+    out += pst * stm;
+    out.mse(targets);
 
     // graph, output node
-    (builder.build(ExecutionContext::default()), predicted)
+    let output_node = out.node();
+    (builder.build(ExecutionContext::default()), output_node)
 }

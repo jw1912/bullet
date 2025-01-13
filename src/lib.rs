@@ -1,6 +1,6 @@
 mod autograd;
-/// Contains functions that apply publically-exposed operations to nodes in the network graph.
-pub mod operations;
+mod frontend;
+mod operations;
 /// Contains the `Optimiser` trait, for implementing custom optimisers, as well as all premade
 /// optimisers that are commonly used (e.g. `AdamW`).
 pub mod optimiser;
@@ -8,8 +8,9 @@ mod rng;
 mod tensor;
 mod trainer;
 
-pub use autograd::{Graph, GraphBuilder, Node};
+pub use autograd::{Graph, Node};
 pub use bulletformat as format;
+pub use frontend::NetworkBuilder;
 pub use montyformat;
 pub use sfbinpack;
 pub use tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape};
@@ -21,10 +22,10 @@ pub use trainer::{
 };
 
 // to be removed at some point
-pub use trainer::{
-    default::{gamerunner, inputs, outputs, testing, Loss, Trainer, TrainerBuilder},
-    save::QuantTarget,
-};
+//pub use trainer::{
+//    default::{gamerunner, inputs, outputs, testing, Loss, Trainer, TrainerBuilder},
+//    save::QuantTarget,
+//};
 
 /// Contains the `DataLoader` trait:
 /// - Determines how input files are read to produce the specified `BulletFormat` data type,
@@ -32,7 +33,7 @@ pub use trainer::{
 /// - The `DirectSequentialDataLoader` is included to read all `BulletFormat` types directly
 ///     from input files
 pub mod loader {
-    pub use crate::trainer::default::loader::{
-        CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader, SfBinpackLoader,
-    };
+    //pub use crate::trainer::default::loader::{
+    //    CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader, SfBinpackLoader,
+    //};
 }

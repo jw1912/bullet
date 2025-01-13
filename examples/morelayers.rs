@@ -6,7 +6,9 @@ time-controlled test.
 */
 use bullet_lib::{
     default::{inputs, loader, outputs, Loss, TrainerBuilder},
-    lr, optimiser, wdl, Activation, LocalSettings, QuantTarget, TrainingSchedule, TrainingSteps,
+    lr, optimiser,
+    save::QuantTarget,
+    wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 fn main() {
