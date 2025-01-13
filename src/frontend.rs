@@ -181,9 +181,6 @@ impl Affine {
         ntm: NetworkBuilderNode<'a>,
         activation: Activation,
     ) -> NetworkBuilderNode<'a> {
-        stm.builder.apply(
-            operations::SparseAffineDualWithActivation(activation),
-            &[self.weights, stm.node, ntm.node, self.bias],
-        )
+        stm.builder.apply(operations::AffineDualActivate(activation), &[self.weights, stm.node, ntm.node, self.bias])
     }
 }

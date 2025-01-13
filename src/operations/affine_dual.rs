@@ -4,9 +4,9 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct SparseAffineDualWithActivation(pub Activation);
+pub struct AffineDualActivate(pub Activation);
 
-impl Operation for SparseAffineDualWithActivation {
+impl Operation for AffineDualActivate {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs.len() == 4 {
             if inputs[0] * inputs[1] == inputs[3] && inputs[1] == inputs[2] {

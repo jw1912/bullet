@@ -22,7 +22,7 @@ fn main() {
     let num_inputs = <InputFeatures as inputs::SparseInputType>::num_inputs(&inputs);
     let num_buckets = <OutputBuckets as outputs::OutputBuckets<_>>::BUCKETS;
 
-    let (graph, output_node) = build_network(num_inputs, num_buckets, HL_SIZE);
+    let (graph, output_node, profile) = build_network(num_inputs, num_buckets, HL_SIZE);
 
     let mut trainer = Trainer::<AdamWOptimiser, _, _>::new(
         graph,
@@ -45,9 +45,9 @@ fn main() {
         eval_scale: 400.0,
         steps: TrainingSteps {
             batch_size: 16_384,
-            batches_per_superbatch: 6104,
+            batches_per_superbatch: 1024,
             start_superbatch: 1,
-            end_superbatch: 240,
+            end_superbatch: 1,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
         lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
@@ -58,13 +58,15 @@ fn main() {
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
+    trainer.profile_operation_that_produces(profile);
     trainer.run(&schedule, &settings, &data_loader);
+    trainer.report_profiles();
 
     let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
     println!("Eval: {eval:.3}cp");
 }
 
-fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, Node) {
+fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, Node, Node) {
     let builder = NetworkBuilder::default();
 
     // inputs
@@ -82,6 +84,9 @@ fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, No
 
     // inference
     let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
+
+    let profile = out.node();
+
     out = out.pairwise_mul_post_affine_dual();
     out = l1.forward(out).select(buckets).activate(Activation::SCReLU);
 
@@ -99,5 +104,5 @@ fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, No
 
     // graph, output node
     let output_node = out.node();
-    (builder.build(ExecutionContext::default()), output_node)
+    (builder.build(ExecutionContext::default()), output_node, profile)
 }
