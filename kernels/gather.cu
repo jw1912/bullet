@@ -3,21 +3,18 @@
 __global__ void gather_kernel(
     const size_t input_rows,
     const size_t output_rows,
-    const size_t cols,
     const float* inputs,
     const int32_t* indices,
     float* outputs)
 {
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (tid >= cols * output_rows)
+    if (elem >= output_rows)
         return;
 
-    const size_t idxInBatch = tid / output_rows;
-    const size_t idxInOutput = tid % output_rows;
-
-    const int32_t inpIdx = indices[idxInOutput];
-    outputs[output_rows * idxInBatch + idxInOutput] = (inpIdx == -1) ? 0.0F : inputs[input_rows * idxInBatch + inpIdx];
+    const size_t tid = blockIdx.y;
+    const int32_t inpIdx = indices[elem];
+    outputs[output_rows * tid + elem] = (inpIdx == -1) ? 0.0F : inputs[input_rows * tid + inpIdx];
 }
 
 __global__ void gather_backprop_kernel(
@@ -47,8 +44,11 @@ extern "C" void gather(
     const int32_t* indices,
     float* outputs)
 {
-    const size_t blocks = (cols * output_rows + threadsPerBlock - 1) / threadsPerBlock;
-    gather_kernel<<<blocks, threadsPerBlock>>>(input_rows, output_rows, cols, inputs, indices, outputs);
+    const size_t threads = min(output_rows, threadsPerBlock);
+    const size_t chunks = (output_rows + threads - 1) / threads;
+    dim3 grid(chunks, cols);
+
+    gather_kernel<<<grid, threads>>>(input_rows, output_rows, inputs, indices, outputs);
 }
 
 extern "C" void gather_backprop(
