@@ -1,11 +1,13 @@
 use crate::{
     default::{Layout, SavedFormat},
-    logger, operations,
+    frontend::NetworkBuilder,
+    logger,
+    nn::InitSettings,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
     tensor::SparseMatrix,
     trainer::save::QuantTarget,
-    Activation, ExecutionContext, GraphBuilder, Shape,
+    Activation, ExecutionContext, Shape,
 };
 
 use super::{
@@ -187,7 +189,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U> {
-        let mut builder = GraphBuilder::default();
+        let builder = NetworkBuilder::default();
 
         let output_buckets = U::BUCKETS > 1;
 
@@ -195,10 +197,9 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         let input_size = input_getter.num_inputs();
         let input_shape = Shape::new(input_size, 1);
-        let targets = builder.create_input("targets", Shape::new(1, 1));
+        let targets = builder.new_input("targets", Shape::new(1, 1));
 
-        let buckets =
-            if output_buckets { Some(builder.create_input("buckets", Shape::new(U::BUCKETS, 1))) } else { None };
+        let buckets = if output_buckets { Some(builder.new_input("buckets", Shape::new(U::BUCKETS, 1))) } else { None };
 
         let mut still_in_ft = true;
 
@@ -215,8 +216,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             logger::clear_colours();
         }
 
-        let l0w = builder.create_weights("l0w", Shape::new(self.ft_out_size, input_size));
-        let l0b = builder.create_weights("l0b", Shape::new(self.ft_out_size, 1));
+        let l0 = builder.new_affine("l0", input_size, self.ft_out_size);
 
         let mut net_quant = 1i16;
 
@@ -227,12 +227,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             ft_desc = format!("({ft_desc})x2");
         }
 
-        let mut out = builder.create_input("stm", input_shape);
+        let mut out = builder.new_input("stm", input_shape);
 
         let pst = if self.psqt_subnet {
-            let pst = builder.create_weights("pst", Shape::new(1, input_size));
+            let pst = builder.new_weights("pst", Shape::new(1, input_size), InitSettings::Zeroed);
             saved_format.push(SavedFormat { id: "pst".to_string(), quant: QuantTarget::Float, layout: Layout::Normal });
-            Some(operations::matmul(&mut builder, pst, out))
+            Some(pst.matmul(out))
         } else {
             None
         };
@@ -294,10 +294,10 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         };
 
         out = if self.perspective {
-            let ntm = builder.create_input("nstm", input_shape);
-            operations::sparse_affine_dual_with_activation(&mut builder, l0w, out, ntm, l0b, activation)
+            let ntm = builder.new_input("nstm", input_shape);
+            l0.forward_sparse_dual_with_activation(out, ntm, activation)
         } else {
-            operations::affine(&mut builder, l0w, out, l0b)
+            l0.forward(out)
         };
 
         let mut layer = 1;
@@ -309,33 +309,32 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         for &NodeType { size, op } in self.nodes.iter().skip(skip) {
             match op {
                 OpType::Activate(activation) => {
-                    out = operations::activate(&mut builder, out, activation);
+                    out = out.activate(activation);
                 }
                 OpType::Affine => {
                     still_in_ft = false;
                     let raw_size = size * U::BUCKETS;
 
-                    let w = builder.create_weights(&format!("l{layer}w"), Shape::new(raw_size, prev_size));
-                    let b = builder.create_weights(&format!("l{layer}b"), Shape::new(raw_size, 1));
+                    let l = builder.new_affine(&format!("l{layer}"), prev_size, raw_size);
 
                     push_saved_format(layer);
 
                     layer += 1;
 
-                    out = operations::affine(&mut builder, w, out, b);
+                    out = l.forward(out);
                     prev_size = size;
 
                     layer_sizes.push(size);
 
                     if let Some(buckets) = buckets {
-                        out = operations::select(&mut builder, out, buckets);
+                        out = out.select(buckets);
                     }
                 }
                 OpType::PairwiseMul => {
                     if still_in_ft && self.perspective {
-                        out = operations::pairwise_mul_post_sparse_affine_dual(&mut builder, out);
+                        out = out.pairwise_mul_post_affine_dual();
                     } else {
-                        out = operations::pairwise_mul(&mut builder, out);
+                        out = out.pairwise_mul();
                     }
 
                     prev_size /= 2;
@@ -346,15 +345,17 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         assert!(!still_in_ft);
 
         if let Some(pst) = pst {
-            out = operations::add(&mut builder, out, pst);
+            out = out + pst;
         }
 
-        let predicted = operations::activate(&mut builder, out, Activation::Sigmoid);
+        let output_node = out.node();
+
+        let predicted = out.activate(Activation::Sigmoid);
 
         match self.loss {
             Loss::None => panic!("No loss function specified!"),
-            Loss::SigmoidMSE => operations::mse(&mut builder, predicted, targets),
-            Loss::SigmoidMPE(power) => operations::mpe(&mut builder, predicted, targets, power),
+            Loss::SigmoidMSE => predicted.mse(targets),
+            Loss::SigmoidMPE(power) => predicted.mpe(targets, power),
         };
 
         let ctx = ExecutionContext::default();
@@ -390,7 +391,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             optimiser: O::Optimiser::new(graph, Default::default()),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
-            output_node: out,
+            output_node,
             additional_inputs: AdditionalTrainerInputs {
                 nstm: self.perspective,
                 output_buckets,

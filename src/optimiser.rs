@@ -3,7 +3,7 @@ pub mod utils;
 
 pub use adamw::{AdamW, AdamWOptimiser, AdamWParams};
 
-use crate::Graph;
+use crate::nn::Graph;
 
 pub trait Optimiser {
     type Params: Clone + std::fmt::Debug + Default;

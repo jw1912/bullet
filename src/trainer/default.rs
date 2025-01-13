@@ -9,6 +9,13 @@ pub mod loader;
 pub mod outputs;
 pub mod testing;
 
+/// Re-exports crates for certain file formats (e.g. Bulletformat)
+pub mod formats {
+    pub use bulletformat;
+    pub use montyformat;
+    pub use sfbinpack;
+}
+
 pub use super::save::{Layout, QuantTarget, SavedFormat};
 pub use builder::{Loss, TrainerBuilder};
 
@@ -31,7 +38,12 @@ use super::{
     LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{autograd::Node, optimiser::Optimiser, save, tensor::SparseMatrix, Graph};
+use crate::{
+    autograd::{Graph, Node},
+    optimiser::Optimiser,
+    save,
+    tensor::SparseMatrix,
+};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}

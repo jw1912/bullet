@@ -1,18 +1,21 @@
 mod autograd;
-/// Contains functions that apply publically-exposed operations to nodes in the network graph.
-pub mod operations;
-/// Contains the `Optimiser` trait, for implementing custom optimisers, as well as all premade
-/// optimisers that are commonly used (e.g. `AdamW`).
-pub mod optimiser;
+mod frontend;
+mod operations;
 mod rng;
 mod tensor;
-mod trainer;
 
-pub use autograd::{Graph, GraphBuilder, Node};
-pub use bulletformat as format;
-pub use montyformat;
-pub use sfbinpack;
+/// Contains the `NetworkTrainer` trait and associated structs for its use
+/// as well as the `default` impl of the trait for training value networks
+pub mod trainer;
+
+/// Contains the `Optimiser` trait, for implementing custom optimisers, as well as all premade
+/// optimisers that are commonly used (e.g. `AdamW`)
+pub mod optimiser;
+
+// TODO: Remove these re-exports as they are exported in the `nn` module
 pub use tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape};
+
+// TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
     default, logger, save,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
@@ -20,19 +23,13 @@ pub use trainer::{
     DataPreparer, NetworkTrainer,
 };
 
-// to be removed at some point
-pub use trainer::{
-    default::{gamerunner, inputs, outputs, testing, Loss, Trainer, TrainerBuilder},
-    save::QuantTarget,
-};
-
-/// Contains the `DataLoader` trait:
-/// - Determines how input files are read to produce the specified `BulletFormat` data type,
-///     in order to support e.g. reading from binpacked data
-/// - The `DirectSequentialDataLoader` is included to read all `BulletFormat` types directly
-///     from input files
-pub mod loader {
-    pub use crate::trainer::default::loader::{
-        CanBeDirectlySequentiallyLoaded, DataLoader, DirectSequentialDataLoader, SfBinpackLoader,
+/// Contains the Graph API, by which neural networks are created with
+/// `NetworkBuilder`, and then compiled into an executable `Graph`
+pub mod nn {
+    pub use super::{
+        autograd::{Graph, Node},
+        frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode},
+        optimiser,
+        tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape},
     };
 }

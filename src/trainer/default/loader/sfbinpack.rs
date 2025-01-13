@@ -5,7 +5,10 @@ use sfbinpack::{
     CompressedTrainingDataEntryReader, TrainingDataEntry,
 };
 
-use crate::{format::ChessBoard, loader::DataLoader, rng::SimpleRand};
+use crate::{
+    default::{formats::bulletformat::ChessBoard, loader::DataLoader},
+    rng::SimpleRand,
+};
 
 fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     let mut bbs = [0; 8];

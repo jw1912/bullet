@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{tensor::DenseMatrix, Graph};
+use crate::{nn::Graph, tensor::DenseMatrix};
 
 use super::{utils, Optimiser, OptimiserType};
 
