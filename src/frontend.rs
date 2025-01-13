@@ -30,14 +30,19 @@ impl NetworkBuilder {
         self.init_data.try_lock().unwrap()
     }
 
-    pub fn new_input<'a>(&'a self, id: &str, shape: Shape) -> NetworkNode<'a> {
+    pub fn new_input<'a>(&'a self, id: &str, shape: Shape) -> NetworkBuilderNode<'a> {
         let node = self.builder().create_input(id, shape);
-        NetworkNode { node, builder: self }
+        NetworkBuilderNode { node, builder: self }
     }
 
-    pub fn new_weights<'a>(&'a self, id: &str, shape: Shape) -> NetworkNode<'a> {
+    pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: Option<InitSettings>) -> NetworkBuilderNode<'a> {
         let node = self.builder().create_weights(id, shape);
-        NetworkNode { node, builder: self }
+
+        if let Some(init) = init {
+            self.set_init_data(id.to_string(), init);
+        }
+
+        NetworkBuilderNode { node, builder: self }
     }
 
     pub fn set_init_data(&self, id: String, init_data: InitSettings) {
@@ -54,9 +59,9 @@ impl NetworkBuilder {
         Affine { weights, bias }
     }
 
-    pub fn apply<'a>(&'a self, operation: impl Operation, inputs: &[Node]) -> NetworkNode<'a> {
+    pub fn apply<'a>(&'a self, operation: impl Operation, inputs: &[Node]) -> NetworkBuilderNode<'a> {
         let node = self.builder().create_result_of_operation(operation, inputs);
-        NetworkNode { node, builder: self }
+        NetworkBuilderNode { node, builder: self }
     }
 
     pub fn build(self, execution_context: ExecutionContext) -> Graph {
@@ -77,12 +82,12 @@ impl NetworkBuilder {
 }
 
 #[derive(Clone, Copy)]
-pub struct NetworkNode<'a> {
+pub struct NetworkBuilderNode<'a> {
     node: Node,
     builder: &'a NetworkBuilder,
 }
 
-impl Add<Self> for NetworkNode<'_> {
+impl Add<Self> for NetworkBuilderNode<'_> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -90,13 +95,13 @@ impl Add<Self> for NetworkNode<'_> {
     }
 }
 
-impl AddAssign<Self> for NetworkNode<'_> {
+impl AddAssign<Self> for NetworkBuilderNode<'_> {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
     }
 }
 
-impl Sub<Self> for NetworkNode<'_> {
+impl Sub<Self> for NetworkBuilderNode<'_> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -104,13 +109,13 @@ impl Sub<Self> for NetworkNode<'_> {
     }
 }
 
-impl SubAssign<Self> for NetworkNode<'_> {
+impl SubAssign<Self> for NetworkBuilderNode<'_> {
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
     }
 }
 
-impl Mul<Self> for NetworkNode<'_> {
+impl Mul<Self> for NetworkBuilderNode<'_> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -118,7 +123,7 @@ impl Mul<Self> for NetworkNode<'_> {
     }
 }
 
-impl NetworkNode<'_> {
+impl NetworkBuilderNode<'_> {
     pub fn node(self) -> Node {
         self.node
     }
@@ -191,16 +196,16 @@ pub struct Affine {
 }
 
 impl Affine {
-    pub fn forward(self, input: NetworkNode<'_>) -> NetworkNode<'_> {
+    pub fn forward(self, input: NetworkBuilderNode<'_>) -> NetworkBuilderNode<'_> {
         input.builder.apply(operations::Affine(operations::Linear), &[self.weights, input.node, self.bias])
     }
 
     pub fn forward_sparse_dual_with_activation<'a>(
         self,
-        stm: NetworkNode<'a>,
-        ntm: NetworkNode<'a>,
+        stm: NetworkBuilderNode<'a>,
+        ntm: NetworkBuilderNode<'a>,
         activation: Activation,
-    ) -> NetworkNode<'a> {
+    ) -> NetworkBuilderNode<'a> {
         stm.builder.apply(
             operations::SparseAffineDualWithActivation(activation),
             &[self.weights, stm.node, ntm.node, self.bias],

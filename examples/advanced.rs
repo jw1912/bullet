@@ -1,15 +1,14 @@
 use bullet_lib::{
-    default::{
-        inputs::{self, SparseInputType},
-        loader,
-        outputs::{self, OutputBuckets as A},
-        Trainer,
+    nn::{
+        optimiser::{AdamWOptimiser, AdamWParams},
+        Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape,
     },
-    frontend::NetworkBuilder,
-    lr,
-    optimiser::{AdamWOptimiser, AdamWParams},
-    save::{Layout, QuantTarget, SavedFormat},
-    wdl, Activation, ExecutionContext, Graph, LocalSettings, Node, Shape, TrainingSchedule, TrainingSteps,
+    trainer::{
+        default::{inputs, loader, outputs, Trainer},
+        save::{Layout, QuantTarget, SavedFormat},
+        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+        settings::LocalSettings,
+    },
 };
 
 type InputFeatures = inputs::Chess768;
@@ -20,7 +19,10 @@ fn main() {
     let inputs = InputFeatures::default();
     let output_buckets = OutputBuckets::default();
 
-    let (graph, output_node) = build_network(inputs.num_inputs(), OutputBuckets::BUCKETS, HL_SIZE);
+    let num_inputs = <InputFeatures as inputs::SparseInputType>::num_inputs(&inputs);
+    let num_buckets = <OutputBuckets as outputs::OutputBuckets<_>>::BUCKETS;
+
+    let (graph, output_node) = build_network(num_inputs, num_buckets, HL_SIZE);
 
     let mut trainer = Trainer::<AdamWOptimiser, _, _>::new(
         graph,
@@ -76,7 +78,7 @@ fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, No
     let l1 = builder.new_affine("l1", hl, num_buckets * 16);
     let l2 = builder.new_affine("l2", 15, num_buckets * 32);
     let l3 = builder.new_affine("l3", 32, num_buckets);
-    let pst = builder.new_weights("pst", Shape::new(1, num_inputs));
+    let pst = builder.new_weights("pst", Shape::new(1, num_inputs), None);
 
     // inference
     let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
