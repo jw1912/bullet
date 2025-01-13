@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    sync::{Mutex, MutexGuard},
+    collections::HashMap, ops::{Add, Sub}, sync::{Mutex, MutexGuard}
 };
 
 use crate::{
@@ -77,19 +76,25 @@ pub struct NetworkBuilderNode<'a> {
     builder: &'a NetworkBuilder,
 }
 
+impl Add<Self> for NetworkBuilderNode<'_> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.linear_comb(1.0, rhs, 1.0)
+    }
+}
+
+impl Sub<Self> for NetworkBuilderNode<'_> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.linear_comb(1.0, rhs, -1.0)
+    }
+}
+
 impl NetworkBuilderNode<'_> {
     pub fn node(self) -> Node {
         self.node
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn add(self, rhs: Self) -> Self {
-        self.linear_comb(1.0, rhs, 1.0)
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn sub(self, rhs: Self) -> Self {
-        self.linear_comb(1.0, rhs, -1.0)
     }
 
     pub fn activate(self, activation: Activation) -> Self {
