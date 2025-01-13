@@ -84,12 +84,11 @@ fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, No
 
     // inference
     let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
-    out = out.pairwise_mul_post_affine_dual();
-    out = l1.forward(out).select(buckets);
 
     let profile = out.node();
-    
-    out = out.activate(Activation::SCReLU);
+
+    out = out.pairwise_mul_post_affine_dual();
+    out = l1.forward(out).select(buckets).activate(Activation::SCReLU);
 
     let skip_neuron = out.slice_rows(15, 16);
     out = out.slice_rows(0, 15);
