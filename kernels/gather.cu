@@ -23,23 +23,20 @@ __global__ void gather_kernel(
 __global__ void gather_backprop_kernel(
     const size_t input_rows,
     const size_t output_rows,
-    const size_t cols,
     const float* output_grads,
     const int32_t* indices,
     float* input_grads)
 {
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (tid >= cols * output_rows)
+    if (elem >= output_rows)
         return;
 
-    const size_t idxInBatch = tid / output_rows;
-    const size_t idxInOutput = tid % output_rows;
-
-    const int32_t inpIdx = indices[idxInOutput];
+    const size_t tid = blockIdx.y;
+    const int32_t inpIdx = indices[elem];
 
     if (inpIdx != -1)
-        atomicAdd(&input_grads[input_rows * idxInBatch + inpIdx], output_grads[output_rows * idxInBatch + idxInOutput]);
+        atomicAdd(&input_grads[input_rows * tid + inpIdx], output_grads[output_rows * tid + elem]);
 }
 
 extern "C" void gather(
@@ -62,6 +59,9 @@ extern "C" void gather_backprop(
     const int32_t* indices,
     float* input_grads)
 {
-    const size_t blocks = (cols * output_rows + threadsPerBlock - 1) / threadsPerBlock;
-    gather_backprop_kernel<<<blocks, threadsPerBlock>>>(input_rows, output_rows, cols, output_grads, indices, input_grads);
+    const size_t threads = min(output_rows, threadsPerBlock);
+    const size_t chunks = (output_rows + threads - 1) / threads;
+    dim3 grid(chunks, cols);
+
+    gather_backprop_kernel<<<grid, threads>>>(input_rows, output_rows, output_grads, indices, input_grads);
 }
