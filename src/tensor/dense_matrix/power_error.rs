@@ -1,12 +1,11 @@
-use crate::tensor::{backend::ops, Shape};
+use crate::tensor::backend::ops;
 
 use super::DenseMatrix;
 
 impl DenseMatrix {
     pub fn abs_power_error(power: f32, input_a: &Self, input_b: &Self, output: &mut Self) {
         assert_eq!(input_a.shape, input_b.shape);
-        output.reshape_if_needed(Shape::new(1, 1));
-        output.set_zero();
+        output.reshape_if_needed(input_a.shape);
 
         unsafe {
             ops::powerError(input_a.shape.size(), input_a.buf.ptr(), input_b.buf.ptr(), output.buf.mut_ptr(), power);
@@ -39,7 +38,7 @@ fn backprop_abs_power_error_single(
     input_a_grad: &mut DenseMatrix,
 ) {
     assert_eq!(input_a.shape, input_b.shape);
-    assert_eq!(output_grad.shape, Shape::new(1, 1));
+    assert_eq!(output_grad.shape, input_a.shape);
     input_a_grad.reshape_if_needed(input_a.shape);
 
     unsafe {
@@ -61,18 +60,18 @@ mod tests {
 
     #[test]
     fn abs_power_error() {
-        abs_power_error_custom([-1.0, 4.0, 2.0], [1.0, 2.0, 3.0], 5.0, [-1.0, 1.0, -1.0], [1.0, -1.0, 1.0]);
+        abs_power_error_custom([-1.0, 4.0, 2.0], [1.0, 2.0, 3.0], [2.0, 2.0, 1.0], [-1.0, 1.0, -1.0], [1.0, -1.0, 1.0]);
     }
 
     #[test]
     fn abs_power_error_rev() {
-        abs_power_error_custom([1.0, 2.0, 3.0], [-1.0, 4.0, 2.0], 5.0, [1.0, -1.0, 1.0], [-1.0, 1.0, -1.0]);
+        abs_power_error_custom([1.0, 2.0, 3.0], [-1.0, 4.0, 2.0], [2.0, 2.0, 1.0], [1.0, -1.0, 1.0], [-1.0, 1.0, -1.0]);
     }
 
     fn abs_power_error_custom(
         input_a: [f32; 3],
         input_b: [f32; 3],
-        output_val: f32,
+        outputs: [f32; 3],
         grad_a: [f32; 3],
         grad_b: [f32; 3],
     ) {
@@ -104,11 +103,11 @@ mod tests {
 
             util::panic_if_device_error("Failed to add matrices!");
 
-            assert_eq!(output.shape(), Shape::new(1, 1));
+            assert_eq!(output.shape(), shape);
 
-            let mut buf = [0.0];
+            let mut buf = [0.0; 3];
             output.write_to_slice(&mut buf);
-            assert_eq!(buf[0], output_val);
+            assert_eq!(buf, outputs);
 
             util::panic_if_device_error("Failed to write data to CPU!");
         }
@@ -118,8 +117,6 @@ mod tests {
             output.load_from_slice(shape, &[1.0, 1.0, 1.0]);
 
             util::panic_if_device_error("Failed to load data from CPU!");
-
-            output.load_from_slice(Shape::new(1, 1), &[1.0]);
 
             DenseMatrix::backprop_abs_power_error(
                 1.0,

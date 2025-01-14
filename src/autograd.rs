@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    tensor::{util, Tensor},
-    ExecutionContext, Shape,
+    nn::{ExecutionContext, Shape},
+    tensor::{util, DenseMatrix, Tensor},
 };
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -106,12 +106,14 @@ impl GraphBuilder {
         }
     }
 
-    pub fn build(self, execution_context: ExecutionContext) -> Graph {
+    pub fn build(mut self, execution_context: ExecutionContext) -> Graph {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
         assert!(self[root].requires_grad, "Output cannot be an input!");
         assert!(!self.weights.contains(&root), "Can't output trainable weights!");
+
+        let root = self.create_result_of_operation(ReduceAcrossBatch, &[root]);
 
         let nodes = self
             .nodes
@@ -356,6 +358,37 @@ impl OperationQueue {
                 spent.1 += t.elapsed().as_micros();
                 spent.3 += 1;
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ReduceAcrossBatch;
+
+impl Operation for ReduceAcrossBatch {
+    fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
+        if inputs.len() == 1 && inputs[0] == Shape::new(1, 1) {
+            Ok(Shape::new(1, 1))
+        } else {
+            Err("Must be single scalar input!".to_string())
+        }
+    }
+
+    fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
+        let input = inputs[0].values.dense();
+
+        DenseMatrix::reduce_add_cols(ctx, input, output.values.dense_mut());
+    }
+
+    fn backward(&self, ctx: &mut ExecutionContext, output_grad: &Tensor, inputs: &mut [&mut Tensor]) {
+        if let Some(grad) = &mut inputs[0].gradients {
+            grad.reshape_if_needed(inputs[0].values.shape());
+            DenseMatrix::add_assign_vector_to_matrix_columns_scaled(
+                ctx,
+                1.0,
+                output_grad.gradients.as_ref().unwrap(),
+                grad,
+            );
         }
     }
 }
