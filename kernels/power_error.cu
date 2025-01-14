@@ -15,10 +15,7 @@ __global__ void powerErrorKernel(
     if (i >= bufferSize)
         return;
 
-    const float absd = abs(inputs[i] - results[i]);
-    const float error = powf(absd, power);
-
-    atomicAdd(output, error);
+    output[i] = powf(abs(inputs[i] - results[i]), power);
 }
 
 __global__ void backpropPowerErrorKernel(
@@ -35,9 +32,7 @@ __global__ void backpropPowerErrorKernel(
         return;
 
     const float diff = inputs[i] - results[i];
-    const float absd = abs(diff);
-
-    const float grad = power * powf(absd, power - 1) * (*output_grad);
+    const float grad = power * powf(abs(diff), power - 1) * output_grad[i];
     input_grads[i] += diff > 0.0F ? grad : -grad;
 }
 

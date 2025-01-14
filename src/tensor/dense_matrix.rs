@@ -43,7 +43,7 @@ impl DenseMatrix {
     /// #### WARNING
     /// This is a function for internal use only, with potentially
     /// unintentional side effects.
-    pub(super) fn reshape_if_needed(&mut self, shape: Shape) {
+    pub(crate) fn reshape_if_needed(&mut self, shape: Shape) {
         if shape.size() > self.allocated_size() {
             self.buf = Buffer::new(shape.size());
         } else if self.shape != shape {
