@@ -258,7 +258,11 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
 
         for weight in weights {
             let shape = self.optimiser.graph().get_weights(weight).shape();
-            assert_eq!(shape.cols(), self.input_getter.num_inputs(), "Weights cannot be factorised, wrong number of columns!");
+            assert_eq!(
+                shape.cols(),
+                self.input_getter.num_inputs(),
+                "Weights cannot be factorised, wrong number of columns!"
+            );
             self.factorised_weights.as_mut().unwrap().push(weight.to_string());
         }
     }
