@@ -251,6 +251,22 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
         self.optimiser.set_params(params);
     }
 
+    pub fn mark_weights_as_input_factorised(&mut self, weights: &[&str]) {
+        if self.factorised_weights.is_none() {
+            self.factorised_weights = Some(Vec::new())
+        }
+
+        for weight in weights {
+            let shape = self.optimiser.graph().get_weights(weight).shape();
+            assert_eq!(
+                shape.cols(),
+                self.input_getter.num_inputs(),
+                "Weights cannot be factorised, wrong number of columns!"
+            );
+            self.factorised_weights.as_mut().unwrap().push(weight.to_string());
+        }
+    }
+
     pub fn save_quantised(&self, path: &str) -> io::Result<()> {
         let mut file = File::create(path).unwrap();
 
