@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{tensor::DenseMatrix, Graph};
+use crate::{nn::Graph, tensor::DenseMatrix};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.

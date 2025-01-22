@@ -1,5 +1,5 @@
-use crate::{
-    backend::{ops, ExecutionContext},
+use crate::tensor::{
+    backend::{blas, ExecutionContext},
     Shape,
 };
 
@@ -14,7 +14,7 @@ impl DenseMatrix {
         output.reshape_if_needed(output_shape);
 
         unsafe {
-            ops::copy_strided(
+            blas::copy_strided(
                 ctx,
                 input_a.shape.rows(),
                 cols,
@@ -25,7 +25,7 @@ impl DenseMatrix {
                 false,
             );
 
-            ops::copy_strided(
+            blas::copy_strided(
                 ctx,
                 input_b.shape.rows(),
                 cols,
@@ -54,7 +54,7 @@ impl DenseMatrix {
             grad.reshape_if_needed(input_a.shape);
 
             unsafe {
-                ops::copy_strided(
+                blas::copy_strided(
                     ctx,
                     grad.shape.rows(),
                     grad.shape.cols(),
@@ -71,7 +71,7 @@ impl DenseMatrix {
             grad.reshape_if_needed(input_b.shape);
 
             unsafe {
-                ops::copy_strided(
+                blas::copy_strided(
                     ctx,
                     grad.shape.rows(),
                     grad.shape.cols(),
@@ -89,7 +89,7 @@ impl DenseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn concat() {

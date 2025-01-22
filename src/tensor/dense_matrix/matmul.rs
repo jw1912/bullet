@@ -1,4 +1,4 @@
-use crate::backend::{ops, ExecutionContext};
+use crate::tensor::backend::{blas, ExecutionContext};
 
 use super::DenseMatrix;
 
@@ -16,7 +16,7 @@ impl DenseMatrix {
         output.reshape_if_needed(output_shape);
 
         unsafe {
-            ops::sgemm(
+            blas::sgemm(
                 ctx,
                 input_a.buf.ptr(),
                 input_a.shape.rows(),
@@ -77,7 +77,7 @@ impl DenseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn matmul() {

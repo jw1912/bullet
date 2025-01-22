@@ -1,4 +1,7 @@
-use crate::backend::{ops, ExecutionContext};
+use crate::{
+    tensor::backend::{blas, ExecutionContext},
+    Shape,
+};
 
 use super::DenseMatrix;
 
@@ -16,7 +19,7 @@ impl DenseMatrix {
         if input_a.shape == input_b.shape {
             output.reshape_if_needed(input_a.shape);
             unsafe {
-                ops::linear_comb_matrices(
+                blas::linear_comb_matrices(
                     ctx,
                     output.shape.rows(),
                     output.shape.cols(),
@@ -62,7 +65,7 @@ impl DenseMatrix {
         output.reshape_if_needed(input.shape);
 
         unsafe {
-            ops::linear_comb_matrices(
+            blas::linear_comb_matrices(
                 ctx,
                 output.shape.rows(),
                 output.shape.cols(),
@@ -79,7 +82,7 @@ impl DenseMatrix {
         assert_eq!(input.shape, output.shape);
 
         unsafe {
-            ops::linear_comb_matrices(
+            blas::linear_comb_matrices(
                 ctx,
                 input.shape.rows(),
                 input.shape.cols(),
@@ -102,7 +105,7 @@ impl DenseMatrix {
         assert_eq!(input.shape.rows(), output.shape.rows());
 
         unsafe {
-            ops::add_vector_to_matrix_columns(
+            blas::add_vector_to_matrix_columns(
                 ctx,
                 output.shape.rows(),
                 output.shape.cols(),
@@ -125,7 +128,7 @@ impl DenseMatrix {
             Self::add_assign_scaled(ctx, alpha, output_grad, input_grad);
         } else if input.shape.cols() == 1 {
             unsafe {
-                ops::reduce_add_cols(
+                blas::reduce_add_cols(
                     ctx,
                     output_grad.shape.rows(),
                     output_grad.shape.cols(),
@@ -139,12 +142,28 @@ impl DenseMatrix {
             panic!("Invalid shape pairs!")
         };
     }
+
+    pub fn reduce_add_cols(ctx: &mut ExecutionContext, input: &Self, output: &mut Self) {
+        let shape = Shape::new(input.shape.rows(), 1);
+        output.reshape_if_needed(shape);
+        unsafe {
+            blas::reduce_add_cols(
+                ctx,
+                input.shape.rows(),
+                input.shape.cols(),
+                input.buf.ptr(),
+                output.buf.mut_ptr(),
+                1.0,
+                false,
+            );
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn linear_comb() {
@@ -263,5 +282,22 @@ mod tests {
         assert_eq!(grad2, [1.0, -4.0, -2.0, 2.0, 0.0, 3.0, -1.0, -1.0, -1.0]);
 
         util::panic_if_device_error("Failed to write data to CPU!");
+    }
+
+    #[test]
+    fn reduce_add_cols() {
+        let mut ctx = ExecutionContext::default();
+
+        let mut input = DenseMatrix::default();
+        let mut output = DenseMatrix::default();
+
+        input.load_from_slice(Shape::new(1, 9), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+
+        DenseMatrix::reduce_add_cols(&mut ctx, &input, &mut output);
+
+        assert_eq!(output.shape, Shape::new(1, 1));
+        let mut buf = [0.0];
+        output.write_to_slice(&mut buf);
+        assert_eq!(buf, [45.0]);
     }
 }

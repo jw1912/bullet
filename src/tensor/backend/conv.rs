@@ -1,65 +1,102 @@
-pub mod bindings;
-mod buffer;
-pub mod ops;
-pub mod util;
-
 use std::ffi::c_int;
 
-use bindings::{
-    cublasHandle_t, cudnnConvolutionBwdDataAlgo_t, cudnnConvolutionBwdFilterAlgo_t, cudnnConvolutionDescriptor_t,
-    cudnnConvolutionFwdAlgo_t, cudnnConvolutionMode_t, cudnnCreateConvolutionDescriptor, cudnnCreateFilterDescriptor,
-    cudnnCreateTensorDescriptor, cudnnDataType_t, cudnnDestroyConvolutionDescriptor, cudnnDestroyFilterDescriptor,
-    cudnnDestroyTensorDescriptor, cudnnFilterDescriptor_t, cudnnHandle_t, cudnnSetConvolution2dDescriptor,
-    cudnnSetFilter4dDescriptor, cudnnSetTensor4dDescriptor, cudnnStatus_t, cudnnTensorDescriptor_t,
-    cudnnTensorFormat_t,
+use super::{
+    bindings::{
+        cudnnConvolutionBackwardData, cudnnConvolutionBackwardFilter, cudnnConvolutionBwdDataAlgo_t,
+        cudnnConvolutionBwdFilterAlgo_t, cudnnConvolutionDescriptor_t, cudnnConvolutionForward,
+        cudnnConvolutionFwdAlgo_t, cudnnConvolutionMode_t, cudnnCreateConvolutionDescriptor,
+        cudnnCreateFilterDescriptor, cudnnCreateTensorDescriptor, cudnnDataType_t, cudnnDestroyConvolutionDescriptor,
+        cudnnDestroyFilterDescriptor, cudnnDestroyTensorDescriptor, cudnnFilterDescriptor_t,
+        cudnnSetConvolution2dDescriptor, cudnnSetFilter4dDescriptor, cudnnSetTensor4dDescriptor, cudnnStatus_t,
+        cudnnTensorDescriptor_t, cudnnTensorFormat_t,
+    },
+    ExecutionContext,
 };
-pub use buffer::Buffer;
 
 use crate::Shape;
 
-/// This contains the internal environment for the GPU to use:
-/// - BLAS handles
-/// - Internal buffers for use in operations without additional allocation overhead
-#[derive(Debug)]
-pub struct ExecutionContext {
-    handle: cublasHandle_t,
-    pub(crate) cudnn: cudnnHandle_t,
-    ones: Buffer<f32>,
+pub unsafe fn conv_fwd(
+    ctx: &mut ExecutionContext,
+    desc: &ConvolutionCudnnDescription,
+    input: *const f32,
+    filters: *const f32,
+    output: *mut f32,
+) {
+    let alpha = 1f32;
+    let beta = 0f32;
+
+    catch_cudnn(cudnnConvolutionForward(
+        ctx.cudnn,
+        ((&alpha) as *const f32).cast(),
+        desc.input,
+        input.cast(),
+        desc.filter,
+        filters.cast(),
+        desc.conv,
+        desc.fwd_algo,
+        std::ptr::null_mut(),
+        0,
+        ((&beta) as *const f32).cast(),
+        desc.output,
+        output.cast(),
+    ));
 }
 
-impl Drop for ExecutionContext {
-    fn drop(&mut self) {
-        unsafe {
-            let status = bindings::cublasDestroy_v2(self.handle);
-            assert_eq!(status, bindings::CUBLAS_SUCCESS);
+pub unsafe fn conv_bwd_filter(
+    ctx: &mut ExecutionContext,
+    desc: &ConvolutionCudnnDescription,
+    input: *const f32,
+    output_grad: *const f32,
+    input_grad: *mut f32,
+) {
+    let alpha = 1f32;
+    let beta = 0f32;
 
-            let status = bindings::cudnnDestroy(self.cudnn);
-            assert_eq!(status, bindings::cudnnStatus_t::CUDNN_STATUS_SUCCESS);
-        }
-    }
+    catch_cudnn(cudnnConvolutionBackwardFilter(
+        ctx.cudnn,
+        ((&alpha) as *const f32).cast(),
+        desc.input,
+        input.cast(),
+        desc.output,
+        output_grad.cast(),
+        desc.conv,
+        desc.bwd_filter_algo,
+        std::ptr::null_mut(),
+        0,
+        ((&beta) as *const f32).cast(),
+        desc.filter,
+        input_grad.cast(),
+    ));
 }
 
-impl Default for ExecutionContext {
-    fn default() -> Self {
-        let mut handle: cublasHandle_t = std::ptr::null_mut();
-        let mut cudnn: cudnnHandle_t = std::ptr::null_mut();
+pub unsafe fn conv_bwd_data(
+    ctx: &mut ExecutionContext,
+    desc: &ConvolutionCudnnDescription,
+    filters: *const f32,
+    output_grad: *const f32,
+    input_grad: *mut f32,
+) {
+    let alpha = 1f32;
+    let beta = 0f32;
 
-        unsafe {
-            let status = bindings::cublasCreate_v2((&mut handle) as *mut cublasHandle_t);
-            assert_eq!(status, bindings::CUBLAS_SUCCESS);
-
-            let status = bindings::cudnnCreate((&mut cudnn) as *mut cudnnHandle_t);
-            assert_eq!(status, bindings::cudnnStatus_t::CUDNN_STATUS_SUCCESS);
-        }
-
-        let ones = Buffer::new(1);
-        ones.load_from_slice(&[1.0]);
-
-        Self { handle, cudnn, ones }
-    }
+    catch_cudnn(cudnnConvolutionBackwardData(
+        ctx.cudnn,
+        ((&alpha) as *const f32).cast(),
+        desc.filter,
+        filters.cast(),
+        desc.output,
+        output_grad.cast(),
+        desc.conv,
+        desc.bwd_data_algo,
+        std::ptr::null_mut(),
+        0,
+        ((&beta) as *const f32).cast(),
+        desc.input,
+        input_grad.cast(),
+    ));
 }
 
-pub fn catch_cudnn(status: cudnnStatus_t) {
+fn catch_cudnn(status: cudnnStatus_t) {
     if status != cudnnStatus_t::CUDNN_STATUS_SUCCESS {
         panic!("cuDNN error: {status:?}");
     }

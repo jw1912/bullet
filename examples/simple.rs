@@ -6,13 +6,18 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    default::{inputs, loader, outputs, Loss, TrainerBuilder},
-    lr, optimiser,
-    sfbinpack::{
-        chess::{piecetype::PieceType, r#move::MoveType},
-        TrainingDataEntry,
+    nn::{optimiser, Activation},
+    trainer::{
+        default::{
+            formats::sfbinpack::{
+                chess::{piecetype::PieceType, r#move::MoveType},
+                TrainingDataEntry,
+            },
+            inputs, loader, outputs, Loss, TrainerBuilder,
+        },
+        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+        settings::LocalSettings,
     },
-    wdl, Activation, LocalSettings, TrainingSchedule, TrainingSteps,
 };
 
 const HIDDEN_SIZE: usize = 128;

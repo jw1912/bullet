@@ -1,4 +1,7 @@
-use crate::{backend::ops, ExecutionContext, Shape};
+use crate::tensor::{
+    backend::{blas, ops},
+    ExecutionContext, Shape,
+};
 
 use super::DenseMatrix;
 
@@ -40,7 +43,7 @@ impl DenseMatrix {
         output.reshape_if_needed(Shape::new(1, 1));
 
         unsafe {
-            ops::reduce_add_cols(
+            blas::reduce_add_cols(
                 ctx,
                 1,
                 input.shape.size(),
@@ -78,7 +81,7 @@ impl DenseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn softmax() {

@@ -2,6 +2,7 @@
 #include "util.cu"
 #include "activate.cu"
 #include "adamw.cu"
+#include "gather.cu"
 #include "pairwise.cu"
 #include "power_error.cu"
 #include "select.cu"

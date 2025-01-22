@@ -7,11 +7,17 @@ pub mod loader;
 /// Contains the `OutputBuckets` trait for implementing custom output bucket types,
 /// as well as several premade output buckets that are commonly used.
 pub mod outputs;
-mod quant;
 pub mod testing;
 
+/// Re-exports crates for certain file formats (e.g. Bulletformat)
+pub mod formats {
+    pub use bulletformat;
+    pub use montyformat;
+    pub use sfbinpack;
+}
+
+pub use super::save::{Layout, QuantTarget, SavedFormat};
 pub use builder::{Loss, TrainerBuilder};
-pub use quant::QuantTarget;
 
 use inputs::SparseInputType;
 use loader::{
@@ -29,10 +35,15 @@ use std::{
 use super::{
     logger,
     schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSteps},
-    LocalSettings, TrainingSchedule,
+    LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{autograd::Node, optimiser::Optimiser, tensor::SparseMatrix, trainer::NetworkTrainer, Graph};
+use crate::{
+    autograd::{Graph, Node},
+    optimiser::Optimiser,
+    save,
+    tensor::SparseMatrix,
+};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
@@ -45,26 +56,6 @@ pub struct AdditionalTrainerInputs {
     output_buckets: bool,
     wdl: bool,
     dense_inputs: bool,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Layout {
-    Normal,
-    // Reshapes and transposes
-    Transposed,
-}
-
-#[derive(Clone)]
-pub struct SavedFormat {
-    id: String,
-    quant: QuantTarget,
-    layout: Layout,
-}
-
-impl SavedFormat {
-    pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
-        SavedFormat { id: id.to_string(), quant, layout }
-    }
 }
 
 pub struct Trainer<Opt, Inp, Out = outputs::Single> {
@@ -240,6 +231,22 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
         }
     }
 
+    pub fn profile_all_operations(&mut self) {
+        self.optimiser.graph_mut().profile_all_operations();
+    }
+
+    pub fn disable_profiling(&mut self) {
+        self.optimiser.graph_mut().disable_profiling();
+    }
+
+    pub fn profile_operation_that_produces(&mut self, node: Node) {
+        self.optimiser.graph_mut().profile_operation_that_produces(node);
+    }
+
+    pub fn report_profiles(&self) {
+        self.optimiser.graph().report_profiles();
+    }
+
     pub fn set_optimiser_params(&mut self, params: Opt::Params) {
         self.optimiser.set_params(params);
     }
@@ -271,17 +278,7 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             }
 
             if let Layout::Transposed = layout {
-                let rows = weights.shape().rows();
-                let cols = weights.shape().cols();
-                let mut new_buf = vec![0.0; weights.shape().size()];
-
-                for i in 0..rows {
-                    for j in 0..cols {
-                        new_buf[cols * i + j] = weight_buf[rows * j + i];
-                    }
-                }
-
-                weight_buf = new_buf;
+                weight_buf = save::transpose(weights.shape(), &weight_buf);
             }
 
             let quantised = quant.quantise(&weight_buf)?;

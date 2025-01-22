@@ -1,4 +1,7 @@
-use crate::{backend::ops, tensor::DenseMatrix, Activation, Shape};
+use crate::{
+    tensor::{backend::ops, DenseMatrix},
+    Activation, Shape,
+};
 
 use super::SparseMatrix;
 
@@ -73,7 +76,7 @@ impl SparseMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{backend::util, tensor::Shape};
+    use crate::tensor::{backend::util, Shape};
 
     #[test]
     fn affine_dual() {

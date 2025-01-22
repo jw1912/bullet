@@ -1,4 +1,4 @@
-use crate::{backend::ops, optimiser::AdamWParams};
+use crate::{optimiser::AdamWParams, tensor::backend::ops};
 
 use super::DenseMatrix;
 

@@ -1,30 +1,22 @@
+mod backend;
 mod dense_matrix;
 mod matrix;
-mod operation;
 mod shape;
 mod sparse_matrix;
 
-pub use dense_matrix::DenseMatrix;
+pub use backend::{conv::ConvolutionDescription, util, ExecutionContext};
+pub use dense_matrix::{Activation, DenseMatrix};
 pub use matrix::Matrix;
-pub use operation::Activation;
 pub use shape::Shape;
 pub use sparse_matrix::SparseMatrix;
 
-pub(crate) use operation::Operation;
-
 use crate::rng;
-
-impl From<Tensor> for Shape {
-    fn from(value: Tensor) -> Self {
-        value.values.shape()
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct Tensor {
     pub(crate) values: Matrix,
     pub(crate) gradients: Option<DenseMatrix>,
-    internal: Vec<(String, DenseMatrix)>,
+    pub(crate) internal: Vec<(String, DenseMatrix)>,
 }
 
 impl Tensor {
@@ -53,6 +45,21 @@ impl Tensor {
             Some(buf[0])
         } else {
             None
+        }
+    }
+
+    pub fn shape(&self) -> Shape {
+        self.values.shape()
+    }
+
+    pub fn get_dense_vals(&self) -> Option<Vec<f32>> {
+        match &self.values {
+            Matrix::Sparse(_) => None,
+            Matrix::Dense(dense) => {
+                let mut buf = vec![0.0; dense.shape.size()];
+                dense.write_to_slice(&mut buf);
+                Some(buf)
+            }
         }
     }
 

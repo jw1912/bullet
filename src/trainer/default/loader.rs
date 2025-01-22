@@ -1,11 +1,13 @@
 mod direct;
 mod montybinpack;
 mod sfbinpack;
+mod text;
 
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
 pub use sfbinpack::SfBinpackLoader;
+pub use text::InMemoryTextLoader;
 
 use super::{inputs::SparseInputType, outputs::OutputBuckets};
 
