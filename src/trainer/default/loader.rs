@@ -176,7 +176,7 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
                 .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
                 .for_each(|((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk)| {
                     let inp = &prep.input_getter;
-                    let out = &prep.output_getter;
+                    let mut out = prep.output_getter;
                     s.spawn(move || {
                         let chunk_len = data_chunk.len();
 

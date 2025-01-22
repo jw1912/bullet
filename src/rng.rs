@@ -38,6 +38,7 @@ pub fn vec_f32(length: usize, mean: f32, stdev: f32, use_gaussian: bool) -> Vec<
     res
 }
 
+#[derive(Clone, Copy)]
 pub struct SimpleRand(u64);
 
 impl SimpleRand {
@@ -53,5 +54,11 @@ impl SimpleRand {
         self.0 ^= self.0 >> 7;
         self.0 ^= self.0 << 17;
         self.0
+    }
+}
+
+impl Default for SimpleRand {
+    fn default() -> Self {
+        Self::with_seed()
     }
 }
