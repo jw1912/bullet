@@ -1,17 +1,18 @@
-/// ### Safety
-/// - Type must be zeroable
-pub unsafe trait Bufferable: Copy {}
-unsafe impl Bufferable for f32 {}
-unsafe impl Bufferable for i32 {}
+use std::sync::Arc;
+
+use bullet_core::device::{DeviceBuffer, ValidType};
+
+use super::ExecutionContext;
 
 /// Managed memory buffer of `T` on the device.
 #[derive(Debug)]
-pub struct Buffer<T: Bufferable> {
+pub struct Buffer<T: ValidType> {
     size: usize,
     ptr: *mut T,
+    ctx: Arc<ExecutionContext>,
 }
 
-impl<T: Bufferable> Drop for Buffer<T> {
+impl<T: ValidType> Drop for Buffer<T> {
     fn drop(&mut self) {
         unsafe {
             util::free(self.ptr, self.size);
@@ -19,16 +20,7 @@ impl<T: Bufferable> Drop for Buffer<T> {
     }
 }
 
-impl<T: Bufferable> Buffer<T> {
-    /// Creates a new **zeroed** buffer with the given number of elements.
-    pub fn new(size: usize) -> Self {
-        Self { size, ptr: unsafe { util::calloc(size) } }
-    }
-
-    pub fn size(&self) -> usize {
-        self.size
-    }
-
+impl<T: ValidType> Buffer<T> {
     pub fn ptr(&self) -> *const T {
         self.ptr.cast_const()
     }
@@ -36,14 +28,29 @@ impl<T: Bufferable> Buffer<T> {
     pub fn mut_ptr(&mut self) -> *mut T {
         self.ptr
     }
+}
 
-    pub fn set_zero(&self) {
+impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
+    /// Creates a new **zeroed** buffer with the given number of elements.
+    fn new(ctx: Arc<ExecutionContext>, size: usize) -> Self {
+        Self { size, ptr: unsafe { util::calloc(size) }, ctx }
+    }
+
+    fn device(&self) -> Arc<ExecutionContext> {
+        self.ctx.clone()
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn set_zero(&mut self) {
         unsafe {
             util::set_zero(self.ptr, self.size);
         }
     }
 
-    pub fn load_from_device(&self, buf: &Self, bytes: usize) {
+    fn load_from_device(&mut self, buf: &Self, bytes: usize) {
         assert!(bytes <= buf.size);
         assert!(bytes <= self.size, "Overflow: {} > {}!", buf.size, self.size);
         unsafe {
@@ -51,14 +58,14 @@ impl<T: Bufferable> Buffer<T> {
         }
     }
 
-    pub fn load_from_slice(&self, buf: &[T]) {
+    fn load_from_slice(&mut self, buf: &[T]) {
         assert!(buf.len() <= self.size, "Overflow!");
         unsafe {
             util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
         }
     }
 
-    pub fn write_into_slice(&self, buf: &mut [T], bytes: usize) {
+    fn write_into_slice(&self, buf: &mut [T], bytes: usize) {
         assert!(bytes <= self.size, "Overflow!");
         unsafe {
             util::copy_from_device(buf.as_mut_ptr(), self.ptr, bytes);

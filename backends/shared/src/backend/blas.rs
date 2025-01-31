@@ -2,7 +2,7 @@
 
 use std::ffi::c_int;
 
-use crate::tensor::backend::{
+use super::{
     bindings::{self, CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_SUCCESS},
     Buffer,
 };

@@ -41,7 +41,7 @@ impl Default for ExecutionContext {
             assert_eq!(status, bindings::cudnnStatus_t::CUDNN_STATUS_SUCCESS);
         }
 
-        let ones = Buffer::new(1);
+        let mut ones = Buffer::new(1);
         ones.load_from_slice(&[1.0]);
 
         Self { cublas, cudnn, ones }

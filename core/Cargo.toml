@@ -1,0 +1,9 @@
+[package]
+name = "bullet_core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
+
+[dependencies]
+rand = "0.8.5"
+rand_distr = "0.4.3"

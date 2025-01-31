@@ -1,9 +1,8 @@
-use crate::{
-    autograd::Operation,
-    tensor::{Activation, DenseMatrix, ExecutionContext, Shape, Tensor},
-};
+use bullet_core::{shape::Shape, graph::Operation};
 
-impl Operation for Activation {
+use crate::{Activation, ExecutionContext, Tensor, DenseMatrix};
+
+impl Operation<ExecutionContext> for Activation {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs.len() == 1 {
             Ok(inputs[0])
@@ -12,7 +11,7 @@ impl Operation for Activation {
         }
     }
 
-    fn forward(&self, _: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
+    fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         let input = &inputs[0].values;
         let output = &mut output.values;
 
@@ -26,7 +25,7 @@ impl Operation for Activation {
         }
     }
 
-    fn backward(&self, _: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
+    fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
         let input = &inputs[0].values;
         let input_grad = inputs[0].gradients.as_mut().expect("Must track gradients in activations!");
         let output_grad = output.gradients.as_ref().expect("Must exist!");

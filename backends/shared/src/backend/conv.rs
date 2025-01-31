@@ -13,7 +13,7 @@ use super::{
     ExecutionContext,
 };
 
-use crate::Shape;
+use bullet_core::shape::Shape;
 
 pub unsafe fn conv_fwd(
     ctx: &mut ExecutionContext,

@@ -79,15 +79,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "bullet_core"
+version = "0.1.0"
+dependencies = [
+ "rand",
+ "rand_distr",
+]
+
+[[package]]
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
+ "bullet_core",
  "bulletformat",
- "cc",
  "montyformat",
  "rand",
  "rand_distr",
  "sfbinpack",
+ "shared_backend",
 ]
 
 [[package]]
@@ -745,6 +754,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20d1c02db05e63b9d3b048f682a2a372cab9a8686f0e0c2f5489959e8aaa3b03"
 dependencies = [
  "thiserror 2.0.9",
+]
+
+[[package]]
+name = "shared_backend"
+version = "0.1.0"
+dependencies = [
+ "bullet_core",
+ "cc",
 ]
 
 [[package]]

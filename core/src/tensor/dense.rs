@@ -1,33 +1,15 @@
-mod activate;
-mod adamw;
-mod concat;
-mod conv;
-mod linear_comb;
-mod matmul;
-mod pairwise;
-mod power_error;
-mod slice;
-mod softmax;
-mod submatrix_product;
+use std::sync::Arc;
 
-use super::{backend::Buffer, shape::Shape};
-pub use activate::Activation;
+use crate::{device::{Device, DeviceBuffer}, shape::Shape};
 
-#[derive(Debug)]
-pub struct DenseMatrix {
-    pub(super) shape: Shape,
-    pub(super) buf: Buffer<f32>,
+pub struct DenseMatrix<D: Device> {
+    pub buf: D::Buffer<f32>,
+    pub shape: Shape,
 }
 
-impl Default for DenseMatrix {
-    fn default() -> Self {
-        Self::zeroed(Shape::new(1, 1))
-    }
-}
-
-impl DenseMatrix {
-    pub fn zeroed(shape: Shape) -> Self {
-        Self { shape, buf: Buffer::new(shape.size()) }
+impl<D: Device> DenseMatrix<D> {
+    pub fn zeroed(device: Arc<D>, shape: Shape) -> Self {
+        Self { buf: D::Buffer::new(device, shape.size()), shape }
     }
 
     pub fn shape(&self) -> Shape {
@@ -43,9 +25,9 @@ impl DenseMatrix {
     /// #### WARNING
     /// This is a function for internal use only, with potentially
     /// unintentional side effects.
-    pub(crate) fn reshape_if_needed(&mut self, shape: Shape) {
+    pub fn reshape_if_needed(&mut self, shape: Shape) {
         if shape.size() > self.allocated_size() {
-            self.buf = Buffer::new(shape.size());
+            self.buf = D::Buffer::new(self.buf.device(), shape.size());
         } else if self.shape != shape {
             self.buf.set_zero();
         }
@@ -152,43 +134,5 @@ impl DenseMatrix {
         self.load_from_slice(shape, &values);
 
         (id, total_read)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn read_write_dense_matrix() {
-        let mut matrix = DenseMatrix::default();
-
-        let values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
-
-        matrix.load_from_slice(Shape::new(3, 3), &values);
-
-        let bytes = matrix.write_to_byte_buffer("matrix").unwrap();
-
-        println!("{bytes:?}");
-
-        matrix.set_zero();
-
-        let (id, bytes_read) = matrix.read_from_byte_buffer(&bytes);
-
-        assert_eq!(id.as_str(), "matrix");
-        assert_eq!(bytes_read, 59);
-
-        let mut buf = [0.0; 9];
-
-        matrix.write_to_slice(&mut buf);
-
-        assert_eq!(buf, values);
-    }
-
-    #[test]
-    fn attempt_invalid_writes() {
-        let matrix = DenseMatrix::default();
-        assert!(matrix.write_to_byte_buffer("matrix\n").is_err());
-        assert!(matrix.write_to_byte_buffer("màtrix\n").is_err());
     }
 }

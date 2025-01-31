@@ -1,8 +1,6 @@
 mod autograd;
 mod frontend;
-mod operations;
 mod rng;
-mod tensor;
 
 /// Contains the `NetworkTrainer` trait and associated structs for its use
 /// as well as the `default` impl of the trait for training value networks
@@ -13,7 +11,8 @@ pub mod trainer;
 pub mod optimiser;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape};
+pub use bullet_core::shape::Shape;
+pub use backend::{Activation, ConvolutionDescription, ExecutionContext};
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
@@ -30,6 +29,8 @@ pub mod nn {
         autograd::{Graph, Node},
         frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode},
         optimiser,
-        tensor::{Activation, ConvolutionDescription, ExecutionContext, Shape},
     };
+
+    pub use bullet_core::shape::Shape;
+    pub use backend::{Activation, ConvolutionDescription, ExecutionContext};
 }

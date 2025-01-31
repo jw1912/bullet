@@ -1,30 +1,27 @@
-mod backend;
-mod dense_matrix;
+mod dense;
 mod matrix;
-mod shape;
-mod sparse_matrix;
+mod sparse;
 
-pub use backend::{conv::ConvolutionDescription, util, ExecutionContext};
-pub use dense_matrix::{Activation, DenseMatrix};
+use std::{collections::HashMap, sync::Arc};
+
+pub use dense::DenseMatrix;
 pub use matrix::Matrix;
-pub use shape::Shape;
-pub use sparse_matrix::SparseMatrix;
+pub use sparse::SparseMatrix;
 
-use crate::rng;
+use crate::{device::Device, rng, shape::Shape};
 
-#[derive(Debug, Default)]
-pub struct Tensor {
-    pub(crate) values: Matrix,
-    pub(crate) gradients: Option<DenseMatrix>,
-    pub(crate) internal: Vec<(String, DenseMatrix)>,
+pub struct Tensor<D: Device> {
+    pub values: Matrix<D>,
+    pub gradients: Option<DenseMatrix<D>>,
+    pub internal: HashMap<String, DenseMatrix<D>>,
 }
 
-impl Tensor {
-    pub fn new(shape: Shape, requires_grad: bool) -> Self {
+impl<D: Device> Tensor<D> {
+    pub fn new(device: Arc<D>, shape: Shape, requires_grad: bool) -> Self {
         Self {
-            values: Matrix::Dense(DenseMatrix::zeroed(shape)),
-            gradients: if requires_grad { Some(DenseMatrix::zeroed(shape)) } else { None },
-            internal: Vec::new(),
+            values: Matrix::Dense(DenseMatrix::zeroed(device.clone(), shape)),
+            gradients: requires_grad.then(|| DenseMatrix::zeroed(device, shape)),
+            internal: HashMap::new(),
         }
     }
 
@@ -86,7 +83,7 @@ impl Tensor {
         if let Matrix::Dense(dst) = &mut self.values {
             dst.load_from_slice(shape, values);
         } else {
-            let mut dst = DenseMatrix::default();
+            let mut dst = DenseMatrix::zeroed(self.values.device(), shape);
             dst.load_from_slice(shape, values);
             self.values = Matrix::Dense(dst);
         }
@@ -94,12 +91,12 @@ impl Tensor {
 
     /// #### Safety
     /// It is the responsibility of the user to ensure that all indices fall within the given shape.
-    pub unsafe fn load_sparse_from_slice(&mut self, shape: Shape, max_active: usize, values: &[i32]) {
+    pub unsafe fn load_sparse_from_slice(&mut self, shape: Shape, nnz: usize, values: &[i32]) {
         if let Matrix::Sparse(dst) = &mut self.values {
-            dst.load_from_slice(shape, max_active, values);
+            dst.load_from_slice(shape, nnz, values);
         } else {
-            let mut dst = SparseMatrix::default();
-            dst.load_from_slice(shape, max_active, values);
+            let mut dst = SparseMatrix::zeroed(self.values.device(), shape, nnz);
+            dst.load_from_slice(shape, nnz, values);
             self.values = Matrix::Sparse(dst);
         }
     }

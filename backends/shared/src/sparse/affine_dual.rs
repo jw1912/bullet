@@ -1,82 +1,77 @@
-use crate::{
-    tensor::{backend::ops, DenseMatrix},
-    Activation, Shape,
-};
+use crate::{backend::ops, DenseMatrix, SparseMatrix};
+use bullet_core::shape::Shape;
 
-use super::SparseMatrix;
+pub fn affine_dual(
+    input_a: &DenseMatrix,
+    input_b1: &SparseMatrix,
+    input_b2: &SparseMatrix,
+    input_c: &DenseMatrix,
+    output: &mut DenseMatrix,
+    activation: Activation,
+) {
+    assert_eq!(input_b1.shape, input_b2.shape);
+    assert_eq!(input_b1.max_active, input_b2.max_active);
+    assert_eq!(input_c.shape.rows(), input_a.shape.rows());
+    assert_eq!(input_c.shape.cols(), 1);
 
-impl SparseMatrix {
-    pub fn affine_dual(
-        input_a: &DenseMatrix,
-        input_b1: &Self,
-        input_b2: &Self,
-        input_c: &DenseMatrix,
-        output: &mut DenseMatrix,
-        activation: Activation,
-    ) {
-        assert_eq!(input_b1.shape, input_b2.shape);
-        assert_eq!(input_b1.max_active, input_b2.max_active);
-        assert_eq!(input_c.shape.rows(), input_a.shape.rows());
-        assert_eq!(input_c.shape.cols(), 1);
+    let mut output_shape = input_a.shape * input_b1.shape;
+    output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
 
-        let mut output_shape = input_a.shape * input_b1.shape;
-        output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
+    output.reshape_if_needed(output_shape);
 
-        output.reshape_if_needed(output_shape);
-
-        unsafe {
-            ops::sparseAffineDualForward(
-                input_b1.shape.cols(),
-                input_b1.max_active,
-                input_a.shape().rows(),
-                input_a.buf.ptr(),
-                input_c.buf.ptr(),
-                input_b1.buf.ptr(),
-                input_b2.buf.ptr(),
-                output.buf.mut_ptr(),
-                activation as i32,
-            );
-        }
+    unsafe {
+        ops::sparseAffineDualForward(
+            input_b1.shape.cols(),
+            input_b1.max_active,
+            input_a.shape().rows(),
+            input_a.buf.ptr(),
+            input_c.buf.ptr(),
+            input_b1.buf.ptr(),
+            input_b2.buf.ptr(),
+            output.buf.mut_ptr(),
+            activation as i32,
+        );
     }
+}
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn backprop_affine_dual(
-        input_a: &DenseMatrix,
-        input_a_grad: &mut DenseMatrix,
-        input_b1: &Self,
-        input_b2: &Self,
-        input_c_grad: &mut DenseMatrix,
-        outputs: &DenseMatrix,
-        output_grad: &DenseMatrix,
-        activation: Activation,
-    ) {
-        assert_eq!(input_b1.shape, input_b2.shape);
-        assert_eq!(input_b1.max_active, input_b2.max_active);
-        assert_eq!(outputs.shape, output_grad.shape);
+#[allow(clippy::too_many_arguments)]
+pub fn backprop_affine_dual(
+    input_a: &DenseMatrix,
+    input_a_grad: &mut DenseMatrix,
+    input_b1: &SparseMatrix,
+    input_b2: &SparseMatrix,
+    input_c_grad: &mut DenseMatrix,
+    outputs: &DenseMatrix,
+    output_grad: &DenseMatrix,
+    activation: Activation,
+) {
+    assert_eq!(input_b1.shape, input_b2.shape);
+    assert_eq!(input_b1.max_active, input_b2.max_active);
+    assert_eq!(outputs.shape, output_grad.shape);
 
-        input_a_grad.reshape_if_needed(input_a.shape());
+    input_a_grad.reshape_if_needed(input_a.shape());
 
-        unsafe {
-            ops::sparseAffineDualBackward(
-                input_b1.shape.cols(),
-                input_b1.max_active,
-                input_a.shape.rows(),
-                input_a_grad.buf.mut_ptr(),
-                input_c_grad.buf.mut_ptr(),
-                input_b1.buf.ptr(),
-                input_b2.buf.ptr(),
-                outputs.buf.ptr(),
-                output_grad.buf.ptr(),
-                activation as i32,
-            );
-        }
+    unsafe {
+        ops::sparseAffineDualBackward(
+            input_b1.shape.cols(),
+            input_b1.max_active,
+            input_a.shape.rows(),
+            input_a_grad.buf.mut_ptr(),
+            input_c_grad.buf.mut_ptr(),
+            input_b1.buf.ptr(),
+            input_b2.buf.ptr(),
+            outputs.buf.ptr(),
+            output_grad.buf.ptr(),
+            activation as i32,
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::{backend::util, Shape};
+    use crate::backend::util;
+    use bullet_core::shape::Shape;
 
     #[test]
     fn affine_dual() {

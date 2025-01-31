@@ -1,6 +1,4 @@
-use crate::tensor::backend::ops;
-
-use super::DenseMatrix;
+use crate::{backend::ops, DenseMatrix};
 
 /// List of supported activation functions.
 #[repr(i32)]
@@ -21,25 +19,23 @@ macro_rules! define_activation {
         $fwd_kernel:ident,
         $bwd_kernel:ident
     ) => {
-        impl DenseMatrix {
-            pub fn $fwd(input: &Self, output: &mut Self) {
-                output.reshape_if_needed(input.shape);
-                unsafe {
-                    ops::$fwd_kernel(output.shape.size(), input.buf.ptr(), output.buf.mut_ptr());
-                }
+        pub fn $fwd(input: &DenseMatrix, output: &mut DenseMatrix) {
+            output.reshape_if_needed(input.shape);
+            unsafe {
+                ops::$fwd_kernel(output.shape.size(), input.buf.ptr(), output.buf.mut_ptr());
             }
+        }
 
-            pub fn $bwd(input: &Self, input_grad: &mut Self, output_grad: &Self) {
-                assert_eq!(input.shape, output_grad.shape);
-                input_grad.reshape_if_needed(input.shape);
-                unsafe {
-                    ops::$bwd_kernel(
-                        input.shape.size(),
-                        input.buf.ptr(),
-                        output_grad.buf.ptr(),
-                        input_grad.buf.mut_ptr(),
-                    );
-                }
+        pub fn $bwd(input: &DenseMatrix, input_grad: &mut DenseMatrix, output_grad: &DenseMatrix) {
+            assert_eq!(input.shape, output_grad.shape);
+            input_grad.reshape_if_needed(input.shape);
+            unsafe {
+                ops::$bwd_kernel(
+                    input.shape.size(),
+                    input.buf.ptr(),
+                    output_grad.buf.ptr(),
+                    input_grad.buf.mut_ptr(),
+                );
             }
         }
     };
@@ -54,7 +50,7 @@ define_activation!(sigmoid, sigmoid_backward, activateSigmoid, backpropSigmoid);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::{backend::util, Shape};
+    use crate::{backend::util, Shape};
 
     fn activation_test(
         fwd: fn(&DenseMatrix, &mut DenseMatrix),

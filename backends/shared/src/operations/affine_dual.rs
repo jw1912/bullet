@@ -1,12 +1,11 @@
-use crate::{
-    autograd::Operation,
-    tensor::{Activation, ExecutionContext, Matrix, Shape, SparseMatrix, Tensor},
-};
+use bullet_core::{shape::Shape, graph::Operation};
+
+use crate::{Activation, ExecutionContext, Tensor, SparseMatrix, Matrix};
 
 #[derive(Debug)]
 pub struct AffineDualActivate(pub Activation);
 
-impl Operation for AffineDualActivate {
+impl Operation<ExecutionContext> for AffineDualActivate {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs.len() == 4 {
             if inputs[0] * inputs[1] == inputs[3] && inputs[1] == inputs[2] {
@@ -19,7 +18,7 @@ impl Operation for AffineDualActivate {
         }
     }
 
-    fn forward(&self, _: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
+    fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         let weights = inputs[0].values.dense();
         let biases = inputs[3].values.dense();
         let out = output.values.dense_mut();
@@ -31,7 +30,7 @@ impl Operation for AffineDualActivate {
         }
     }
 
-    fn backward(&self, _: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
+    fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
         let (input1, inputs2) = inputs.split_at_mut(1);
         let (input2, inputs3) = inputs2.split_at_mut(1);
         let (input3, input4) = inputs3.split_at_mut(1);

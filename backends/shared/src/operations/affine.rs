@@ -1,14 +1,13 @@
-use crate::{
-    autograd::Operation,
-    tensor::{DenseMatrix, ExecutionContext, Matrix, Shape, SparseMatrix, Tensor},
-};
+use bullet_core::{shape::Shape, graph::Operation};
+
+use crate::{ExecutionContext, Tensor, DenseMatrix, SparseMatrix, Matrix};
 
 use super::linear::Linear;
 
 #[derive(Debug)]
 pub struct Affine(pub Linear);
 
-impl Operation for Affine {
+impl Operation<ExecutionContext> for Affine {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs.len() == 3 && inputs[0] * inputs[1] == inputs[2] {
             Ok(inputs[2])
@@ -17,7 +16,7 @@ impl Operation for Affine {
         }
     }
 
-    fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
+    fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         let weights = inputs[0].values.dense();
         let biases = inputs[2].values.dense();
         let out = output.values.dense_mut();
@@ -31,7 +30,7 @@ impl Operation for Affine {
         }
     }
 
-    fn backward(&self, ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
+    fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
         let (input1, inputs2) = inputs.split_at_mut(1);
         let (input2, input3) = inputs2.split_at_mut(1);
         let out = output.gradients.as_ref().unwrap();

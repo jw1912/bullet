@@ -1,18 +1,13 @@
-use super::{DenseMatrix, Shape, SparseMatrix};
+use std::sync::Arc;
 
-#[derive(Debug)]
-pub enum Matrix {
-    Dense(DenseMatrix),
-    Sparse(SparseMatrix),
+use crate::{device::{Device, DeviceBuffer}, shape::Shape, tensor::{dense::DenseMatrix, sparse::SparseMatrix}};
+
+pub enum Matrix<D: Device> {
+    Dense(DenseMatrix<D>),
+    Sparse(SparseMatrix<D>),
 }
 
-impl Default for Matrix {
-    fn default() -> Self {
-        Self::Dense(DenseMatrix::default())
-    }
-}
-
-impl Matrix {
+impl<D: Device> Matrix<D> {
     pub fn shape(&self) -> Shape {
         match self {
             Self::Dense(dense) => dense.shape(),
@@ -20,7 +15,14 @@ impl Matrix {
         }
     }
 
-    pub fn dense(&self) -> &DenseMatrix {
+    pub fn device(&self) -> Arc<D> {
+        match self {
+            Self::Dense(dense) => dense.buf.device(),
+            Self::Sparse(sparse) => sparse.buf.device(),
+        }
+    }
+
+    pub fn dense(&self) -> &DenseMatrix<D> {
         if let Self::Dense(matrix) = self {
             matrix
         } else {
@@ -28,7 +30,7 @@ impl Matrix {
         }
     }
 
-    pub fn dense_mut(&mut self) -> &mut DenseMatrix {
+    pub fn dense_mut(&mut self) -> &mut DenseMatrix<D> {
         if let Self::Dense(matrix) = self {
             matrix
         } else {
@@ -42,7 +44,7 @@ impl Matrix {
                 if let Self::Dense(dst) = dest {
                     src.copy_into(dst)
                 } else {
-                    let mut dst = DenseMatrix::default();
+                    let mut dst = DenseMatrix::zeroed(src.buf.device(), src.shape());
                     src.copy_into(&mut dst);
                     *dest = Self::Dense(dst);
                 }
@@ -51,7 +53,7 @@ impl Matrix {
                 if let Self::Sparse(dst) = dest {
                     src.copy_into(dst)
                 } else {
-                    let mut dst = SparseMatrix::default();
+                    let mut dst = SparseMatrix::zeroed(src.buf.device(), src.shape, src.nnz);
                     src.copy_into(&mut dst);
                     *dest = Self::Sparse(dst);
                 }
