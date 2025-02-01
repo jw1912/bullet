@@ -10,9 +10,9 @@ repository = "https://github.com/jw1912/bullet"
 readme = "README.md"
 
 [features]
-cudnn = []
-hip = []
-gh-actions = []
+cudnn = ["bullet_backend/cudnn"]
+hip = ["bullet_backend/hip"]
+gh-actions = ["bullet_backend/gh-actions"]
 
 [dependencies]
 bullet_backend = { path = "backend" }

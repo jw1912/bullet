@@ -7,3 +7,8 @@ authors = ["Jamie Whiting"]
 [dependencies]
 bullet_core = { workspace = true }
 bullet_shared_backend = { path = "shared", package = "bullet_shared_backend"}
+
+[features]
+cudnn = ["bullet_shared_backend/cudnn"]
+hip = ["bullet_shared_backend/hip"]
+gh-actions = ["bullet_shared_backend/gh-actions"]
