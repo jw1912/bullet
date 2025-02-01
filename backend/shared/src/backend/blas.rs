@@ -2,15 +2,12 @@
 
 use std::ffi::c_int;
 
-use super::{
-    bindings::{self, CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_SUCCESS},
-    Buffer,
-};
+use super::bindings::{self, CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_SUCCESS};
 
 use super::ExecutionContext;
 
 pub unsafe fn sgemm(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     input_a: *const f32,
     input_a_rows: usize,
     input_a_cols: usize,
@@ -61,7 +58,7 @@ pub unsafe fn sgemm(
 }
 
 pub unsafe fn batched_sgemm(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     batch_size: usize,
     input_a: *const f32,
     input_a_rows: usize,
@@ -135,7 +132,7 @@ pub unsafe fn batched_sgemm(
 
 /// If `input_a = None` then it takes `input_a = output` (in-place operation).
 pub unsafe fn linear_comb_matrices(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     rows: usize,
     cols: usize,
     alpha: f32,
@@ -173,9 +170,10 @@ pub unsafe fn linear_comb_matrices(
 }
 
 pub unsafe fn reduce_add_cols(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     rows: usize,
     cols: usize,
+    ones: *const f32,
     input: *const f32,
     output: *mut f32,
     alpha: f32,
@@ -189,11 +187,6 @@ pub unsafe fn reduce_add_cols(
     let lda = rows as c_int;
     let inc = 1;
 
-    if cols > ctx.ones.size() {
-        ctx.ones = Buffer::new(cols);
-        ctx.ones.load_from_slice(&vec![1.0; cols]);
-    }
-
     let status = unsafe {
         bindings::cublasSgemv_v2(
             ctx.cublas,
@@ -203,7 +196,7 @@ pub unsafe fn reduce_add_cols(
             &alpha,
             input,
             lda,
-            ctx.ones.ptr(),
+            ones,
             inc,
             &beta,
             output,
@@ -215,7 +208,7 @@ pub unsafe fn reduce_add_cols(
 }
 
 pub unsafe fn copy_strided(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     rows: usize,
     cols: usize,
     input_stride: usize,
@@ -257,10 +250,11 @@ pub unsafe fn copy_strided(
 }
 
 pub unsafe fn add_vector_to_matrix_columns(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     rows: usize,
     cols: usize,
     alpha: f32,
+    ones: *const f32,
     vector: *const f32,
     matrix: *mut f32,
 ) {
@@ -270,13 +264,8 @@ pub unsafe fn add_vector_to_matrix_columns(
     let lda = rows as c_int;
     let inc = 1;
 
-    if cols > ctx.ones.size() {
-        ctx.ones = Buffer::new(cols);
-        ctx.ones.load_from_slice(&vec![1.0; cols]);
-    }
-
     let status =
-        unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ctx.ones.ptr(), inc, matrix, lda) };
+        unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) };
 
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sger failed!");
 }

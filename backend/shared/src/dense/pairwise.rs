@@ -1,57 +1,57 @@
-use crate::tensor::{backend::ops, Shape};
+use crate::{backend::ops, Shape, DenseMatrix};
 
-use super::DenseMatrix;
+pub fn pairwise(input: &DenseMatrix, output: &mut DenseMatrix, post_concat: bool) {
+    let mut rows = input.shape.rows();
+    let mut cols = input.shape.cols();
 
-impl DenseMatrix {
-    pub fn pairwise(input: &Self, output: &mut Self, post_concat: bool) {
-        let mut rows = input.shape.rows();
-        let mut cols = input.shape.cols();
-
-        if post_concat {
-            rows /= 2;
-            cols *= 2;
-        }
-
-        assert_eq!(rows % 2, 0);
-
-        let shape = Shape::new(input.shape.rows() / 2, input.shape.cols());
-        output.reshape_if_needed(shape);
-
-        unsafe {
-            ops::pairwiseMul(cols, rows / 2, input.buf.ptr(), output.buf.mut_ptr());
-        }
+    if post_concat {
+        rows /= 2;
+        cols *= 2;
     }
 
-    pub fn backprop_pairwise(input: &Self, output_grad: &Self, input_grad: &mut Self, post_concat: bool) {
-        let mut rows = input.shape.rows();
-        let mut cols = input.shape.cols();
+    assert_eq!(rows % 2, 0);
 
-        if post_concat {
-            rows /= 2;
-            cols *= 2;
-        }
+    let shape = Shape::new(input.shape.rows() / 2, input.shape.cols());
+    output.reshape_if_needed(shape);
 
-        input_grad.reshape_if_needed(input.shape);
+    unsafe {
+        ops::pairwiseMul(cols, rows / 2, input.buf.ptr(), output.buf.mut_ptr());
+    }
+}
 
-        unsafe {
-            ops::backpropPairwiseMul(cols, rows / 2, input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
-        }
+pub fn backprop_pairwise(input: &DenseMatrix, output_grad: &DenseMatrix, input_grad: &mut DenseMatrix, post_concat: bool) {
+    let mut rows = input.shape.rows();
+    let mut cols = input.shape.cols();
+
+    if post_concat {
+        rows /= 2;
+        cols *= 2;
+    }
+
+    input_grad.reshape_if_needed(input.shape);
+
+    unsafe {
+        ops::backpropPairwiseMul(cols, rows / 2, input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
-    use crate::tensor::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
-    fn pairwise() {
+    fn pairwise_no_concat() {
+        let device = Arc::new(ExecutionContext::default());
+
         let shape1 = Shape::new(4, 2);
         let shape2 = Shape::new(2, 2);
 
-        let mut input = DenseMatrix::default();
-        let mut input_grad = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         util::panic_if_device_error("Failed to initialise matrices!");
 
@@ -61,7 +61,7 @@ mod tests {
 
         util::panic_if_device_error("Failed to load data from CPU!");
 
-        DenseMatrix::pairwise(&input, &mut output, false);
+        pairwise(&input, &mut output, false);
 
         util::panic_if_device_error("Failed to calculate activation!");
 
@@ -73,7 +73,7 @@ mod tests {
 
         util::panic_if_device_error("Failed to write data to CPU!");
 
-        DenseMatrix::backprop_pairwise(&input, &output, &mut input_grad, false);
+        backprop_pairwise(&input, &output, &mut input_grad, false);
 
         util::panic_if_device_error("Failed to backprop activation!");
 
@@ -88,12 +88,14 @@ mod tests {
 
     #[test]
     fn pairwise_post_concat() {
+        let device = Arc::new(ExecutionContext::default());
+
         let shape1 = Shape::new(4, 2);
         let shape2 = Shape::new(2, 2);
 
-        let mut input = DenseMatrix::default();
-        let mut input_grad = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         util::panic_if_device_error("Failed to initialise matrices!");
 
@@ -103,7 +105,7 @@ mod tests {
 
         util::panic_if_device_error("Failed to load data from CPU!");
 
-        DenseMatrix::pairwise(&input, &mut output, true);
+        pairwise(&input, &mut output, true);
 
         util::panic_if_device_error("Failed to calculate activation!");
 
@@ -115,7 +117,7 @@ mod tests {
 
         util::panic_if_device_error("Failed to write data to CPU!");
 
-        DenseMatrix::backprop_pairwise(&input, &output, &mut input_grad, true);
+        backprop_pairwise(&input, &output, &mut input_grad, true);
 
         util::panic_if_device_error("Failed to backprop activation!");
 

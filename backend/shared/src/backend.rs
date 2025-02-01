@@ -13,8 +13,10 @@ pub use buffer::Buffer;
 pub struct ExecutionContext {
     cublas: cublasHandle_t,
     cudnn: cudnnHandle_t,
-    ones: Buffer<f32>,
 }
+
+unsafe impl Send for ExecutionContext {}
+unsafe impl Sync for ExecutionContext {}
 
 impl Drop for ExecutionContext {
     fn drop(&mut self) {
@@ -41,9 +43,6 @@ impl Default for ExecutionContext {
             assert_eq!(status, bindings::cudnnStatus_t::CUDNN_STATUS_SUCCESS);
         }
 
-        let mut ones = Buffer::new(1);
-        ones.load_from_slice(&[1.0]);
-
-        Self { cublas, cudnn, ones }
+        Self { cublas, cudnn }
     }
 }

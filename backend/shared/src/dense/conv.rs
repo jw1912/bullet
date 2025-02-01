@@ -1,65 +1,62 @@
-use crate::tensor::{
-    backend::{
-        conv::{self, ConvolutionCudnnDescription, ConvolutionDescription},
-        ExecutionContext,
-    },
+use bullet_core::device::DeviceBuffer;
+
+use crate::{
+    backend::conv::{self, ConvolutionCudnnDescription, ConvolutionDescription},
     Shape,
+    DenseMatrix
 };
 
-use super::DenseMatrix;
+pub fn convolution_forward(
+    desc: &ConvolutionDescription,
+    filters: &DenseMatrix,
+    input: &DenseMatrix,
+    output: &mut DenseMatrix,
+) {
+    assert_eq!(filters.shape.rows(), desc.filter_shape.size());
+    assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
+    assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
 
-impl DenseMatrix {
-    pub fn convolution_forward(
-        ctx: &mut ExecutionContext,
-        desc: &ConvolutionDescription,
-        filters: &DenseMatrix,
-        input: &DenseMatrix,
-        output: &mut DenseMatrix,
-    ) {
-        assert_eq!(filters.shape.rows(), desc.filter_shape.size());
-        assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
-        assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
+    let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
 
-        let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
+    output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));
 
-        output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));
+    unsafe {
+        conv::conv_fwd(input.buf.device().as_ref(), &cudnn_desc, input.buf.ptr(), filters.buf.ptr(), output.buf.mut_ptr());
+    }
+}
+
+pub fn convolution_backward(
+    desc: &ConvolutionDescription,
+    filters: &DenseMatrix,
+    filters_grad: Option<&mut DenseMatrix>,
+    input: &DenseMatrix,
+    input_grad: Option<&mut DenseMatrix>,
+    output_grad: &DenseMatrix,
+) {
+    assert_eq!(filters.shape.rows(), desc.filter_shape.size());
+    assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
+    assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
+    assert_eq!(output_grad.shape.rows(), desc.output_shape.size() * desc.output_channels);
+    assert_eq!(output_grad.shape.cols(), input.shape.cols());
+
+    let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
+
+    let device = filters.buf.device();
+    let ctx = device.as_ref();
+
+    if let Some(grad) = filters_grad {
+        grad.reshape_if_needed(filters.shape);
 
         unsafe {
-            conv::conv_fwd(ctx, &cudnn_desc, input.buf.ptr(), filters.buf.ptr(), output.buf.mut_ptr());
+            conv::conv_bwd_filter(ctx, &cudnn_desc, input.buf.ptr(), output_grad.buf.ptr(), grad.buf.mut_ptr());
         }
     }
 
-    pub fn convolution_backward(
-        ctx: &mut ExecutionContext,
-        desc: &ConvolutionDescription,
-        filters: &Self,
-        filters_grad: Option<&mut Self>,
-        input: &Self,
-        input_grad: Option<&mut Self>,
-        output_grad: &Self,
-    ) {
-        assert_eq!(filters.shape.rows(), desc.filter_shape.size());
-        assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
-        assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
-        assert_eq!(output_grad.shape.rows(), desc.output_shape.size() * desc.output_channels);
-        assert_eq!(output_grad.shape.cols(), input.shape.cols());
+    if let Some(grad) = input_grad {
+        grad.reshape_if_needed(input.shape);
 
-        let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
-
-        if let Some(grad) = filters_grad {
-            grad.reshape_if_needed(filters.shape);
-
-            unsafe {
-                conv::conv_bwd_filter(ctx, &cudnn_desc, input.buf.ptr(), output_grad.buf.ptr(), grad.buf.mut_ptr());
-            }
-        }
-
-        if let Some(grad) = input_grad {
-            grad.reshape_if_needed(input.shape);
-
-            unsafe {
-                conv::conv_bwd_data(ctx, &cudnn_desc, filters.buf.ptr(), output_grad.buf.ptr(), grad.buf.mut_ptr());
-            }
+        unsafe {
+            conv::conv_bwd_data(ctx, &cudnn_desc, filters.buf.ptr(), output_grad.buf.ptr(), grad.buf.mut_ptr());
         }
     }
 }
@@ -67,7 +64,9 @@ impl DenseMatrix {
 #[cfg(feature = "cudnn")]
 #[cfg(test)]
 mod tests {
-    use crate::tensor::{backend::util::panic_if_device_error, Shape};
+    use std::sync::Arc;
+
+    use crate::{backend::util::panic_if_device_error, ExecutionContext, Shape};
 
     use super::*;
 
@@ -75,11 +74,11 @@ mod tests {
     #[test]
     fn conv() {
         println!("start");
-        let mut ctx = ExecutionContext::default();
+        let device = Arc::new(ExecutionContext::default());
 
-        let mut filters = DenseMatrix::default();
-        let mut input = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut filters = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         let input_shape = Shape::new(4, 4);
         let input_channels = 1;
@@ -127,8 +126,7 @@ mod tests {
 
         panic_if_device_error("Failed to load!");
 
-        DenseMatrix::convolution_forward(
-            &mut ctx,
+        convolution_forward(
             &desc,
             &filters,
             &input,
@@ -167,11 +165,10 @@ mod tests {
             ],
         );
 
-        let mut filters_grad = DenseMatrix::default();
-        let mut input_grad = DenseMatrix::default();
+        let mut filters_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
-        DenseMatrix::convolution_backward(
-            &mut ctx,
+        convolution_backward(
             &desc,
             &filters,
             Some(&mut filters_grad),

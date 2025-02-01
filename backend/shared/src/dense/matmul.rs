@@ -1,96 +1,94 @@
-use crate::tensor::backend::{blas, ExecutionContext};
+use crate::{backend::{blas, ExecutionContext}, DenseMatrix};
 
-use super::DenseMatrix;
+pub(super) fn sgemm(
+    ctx: &ExecutionContext,
+    input_a: &DenseMatrix,
+    trans_a: bool,
+    input_b: &DenseMatrix,
+    trans_b: bool,
+    output: &mut DenseMatrix,
+    increment: bool,
+) {
+    let output_shape = input_a.shape.maybe_transpose(trans_a) * input_b.shape.maybe_transpose(trans_b);
+    output.reshape_if_needed(output_shape);
 
-impl DenseMatrix {
-    pub(super) fn sgemm(
-        ctx: &mut ExecutionContext,
-        input_a: &Self,
-        trans_a: bool,
-        input_b: &Self,
-        trans_b: bool,
-        output: &mut Self,
-        increment: bool,
-    ) {
-        let output_shape = input_a.shape.maybe_transpose(trans_a) * input_b.shape.maybe_transpose(trans_b);
-        output.reshape_if_needed(output_shape);
+    unsafe {
+        blas::sgemm(
+            ctx,
+            input_a.buf.ptr(),
+            input_a.shape.rows(),
+            input_a.shape.cols(),
+            trans_a,
+            input_b.buf.ptr(),
+            input_b.shape.rows(),
+            input_b.shape.cols(),
+            trans_b,
+            output.buf.mut_ptr(),
+            output.shape.rows(),
+            output.shape.cols(),
+            increment,
+        );
+    }
+}
 
-        unsafe {
-            blas::sgemm(
-                ctx,
-                input_a.buf.ptr(),
-                input_a.shape.rows(),
-                input_a.shape.cols(),
-                trans_a,
-                input_b.buf.ptr(),
-                input_b.shape.rows(),
-                input_b.shape.cols(),
-                trans_b,
-                output.buf.mut_ptr(),
-                output.shape.rows(),
-                output.shape.cols(),
-                increment,
-            );
+pub fn matmul(
+    ctx: &ExecutionContext,
+    input_a: &DenseMatrix,
+    trans_a: bool,
+    input_b: &DenseMatrix,
+    trans_b: bool,
+    output: &mut DenseMatrix,
+) {
+    sgemm(ctx, input_a, trans_a, input_b, trans_b, output, false);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn backprop_matmul(
+    ctx: &ExecutionContext,
+    input_a: &DenseMatrix,
+    input_a_grad: Option<&mut DenseMatrix>,
+    trans_a: bool,
+    input_b: &DenseMatrix,
+    input_b_grad: Option<&mut DenseMatrix>,
+    trans_b: bool,
+    output_grad: &DenseMatrix,
+) {
+    if let Some(grad_a) = input_a_grad {
+        if trans_a {
+            sgemm(ctx, input_b, trans_b, output_grad, true, grad_a, true);
+        } else {
+            sgemm(ctx, output_grad, false, input_b, !trans_b, grad_a, true);
         }
     }
 
-    pub fn matmul(
-        ctx: &mut ExecutionContext,
-        input_a: &Self,
-        trans_a: bool,
-        input_b: &Self,
-        trans_b: bool,
-        output: &mut Self,
-    ) {
-        Self::sgemm(ctx, input_a, trans_a, input_b, trans_b, output, false);
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn backprop_matmul(
-        ctx: &mut ExecutionContext,
-        input_a: &Self,
-        input_a_grad: Option<&mut Self>,
-        trans_a: bool,
-        input_b: &Self,
-        input_b_grad: Option<&mut Self>,
-        trans_b: bool,
-        output_grad: &Self,
-    ) {
-        if let Some(grad_a) = input_a_grad {
-            if trans_a {
-                Self::sgemm(ctx, input_b, trans_b, output_grad, true, grad_a, true);
-            } else {
-                Self::sgemm(ctx, output_grad, false, input_b, !trans_b, grad_a, true);
-            }
-        }
-
-        if let Some(grad_b) = input_b_grad {
-            if trans_b {
-                Self::sgemm(ctx, output_grad, true, input_a, trans_a, grad_b, true);
-            } else {
-                Self::sgemm(ctx, input_a, !trans_a, output_grad, false, grad_b, true);
-            }
+    if let Some(grad_b) = input_b_grad {
+        if trans_b {
+            sgemm(ctx, output_grad, true, input_a, trans_a, grad_b, true);
+        } else {
+            sgemm(ctx, input_a, !trans_a, output_grad, false, grad_b, true);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
-    use crate::tensor::{backend::util, Shape};
+    use crate::{backend::util, Shape};
 
     #[test]
-    fn matmul() {
-        let mut ctx = ExecutionContext::default();
+    fn test_matmul() {
+        let device = Arc::new(ExecutionContext::default());
 
         let shape1 = Shape::new(2, 3);
         let shape2 = Shape::new(3, 1);
 
-        let mut input1 = DenseMatrix::default();
-        let mut input2 = DenseMatrix::default();
-        let mut input1_grad = DenseMatrix::default();
-        let mut input2_grad = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut input1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input2 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input1_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input2_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         util::panic_if_device_error("Failed to initialise matrices!");
 
@@ -119,7 +117,7 @@ mod tests {
 
         // normal matmul
         {
-            DenseMatrix::matmul(&mut ctx, &input1, false, &input2, false, &mut output);
+            matmul(device.as_ref(), &input1, false, &input2, false, &mut output);
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
@@ -134,8 +132,8 @@ mod tests {
 
         // backprop normal matmul
         {
-            DenseMatrix::backprop_matmul(
-                &mut ctx,
+            backprop_matmul(
+                device.as_ref(),
                 &input1,
                 Some(&mut input1_grad),
                 false,
@@ -163,7 +161,7 @@ mod tests {
 
         // transposed matmul
         {
-            DenseMatrix::matmul(&mut ctx, &input2, true, &input1, true, &mut output);
+            matmul(device.as_ref(), &input2, true, &input1, true, &mut output);
 
             util::panic_if_device_error("Failed to calculate transposed matmul!");
 
@@ -181,8 +179,8 @@ mod tests {
             input1_grad.set_zero();
             input2_grad.set_zero();
 
-            DenseMatrix::backprop_matmul(
-                &mut ctx,
+            backprop_matmul(
+                device.as_ref(),
                 &input2,
                 Some(&mut input2_grad),
                 true,

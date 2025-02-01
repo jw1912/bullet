@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crate::graph::Operation;
-
 pub trait ValidType {}
 
 impl ValidType for f32 {}
@@ -10,11 +8,12 @@ impl ValidType for i32 {}
 pub trait Device: Sized {
     type IdType;
     type Buffer<T: ValidType>: DeviceBuffer<Self, T>;
-    type ReduceAcrossBatch: Default + Operation<Self>;
 
     fn new(id: Self::IdType) -> Self;
 
     fn synchronise(&self);
+
+    fn panic_if_device_error(&self);
 }
 
 pub trait DeviceBuffer<D: Device, T: ValidType> {

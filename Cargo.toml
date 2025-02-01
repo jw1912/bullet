@@ -15,7 +15,7 @@ hip = []
 gh-actions = []
 
 [dependencies]
-backend = { path = "backends/shared", package = "shared_backend"}
+backend = { path = "backend", package = "backend" }
 bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 rand = "0.8.5"
@@ -25,7 +25,7 @@ sfbinpack = "0.2.0"
 
 [workspace]
 resolver = "2"
-members = ["backends/shared", "core", "utils"]
+members = ["backend", "backend/shared", "core", "utils"]
 
 [workspace.package]
 license = "MIT"

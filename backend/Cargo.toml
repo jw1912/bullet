@@ -1,0 +1,8 @@
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
+
+[dependencies]
+shared_backend = { path = "shared" }

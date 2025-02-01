@@ -1,32 +1,28 @@
-use crate::tensor::backend::ops;
+use crate::{backend::ops, DenseMatrix};
 
-use super::DenseMatrix;
+pub fn abs_power_error(power: f32, input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
+    assert_eq!(input_a.shape, input_b.shape);
+    output.reshape_if_needed(input_a.shape);
 
-impl DenseMatrix {
-    pub fn abs_power_error(power: f32, input_a: &Self, input_b: &Self, output: &mut Self) {
-        assert_eq!(input_a.shape, input_b.shape);
-        output.reshape_if_needed(input_a.shape);
+    unsafe {
+        ops::powerError(input_a.shape.size(), input_a.buf.ptr(), input_b.buf.ptr(), output.buf.mut_ptr(), power);
+    }
+}
 
-        unsafe {
-            ops::powerError(input_a.shape.size(), input_a.buf.ptr(), input_b.buf.ptr(), output.buf.mut_ptr(), power);
-        }
+pub fn backprop_abs_power_error(
+    power: f32,
+    input_a: &DenseMatrix,
+    input_a_grad: Option<&mut DenseMatrix>,
+    input_b: &DenseMatrix,
+    input_b_grad: Option<&mut DenseMatrix>,
+    output_grad: &DenseMatrix,
+) {
+    if let Some(grd) = input_a_grad {
+        backprop_abs_power_error_single(power, input_a, input_b, output_grad, grd);
     }
 
-    pub fn backprop_abs_power_error(
-        power: f32,
-        input_a: &Self,
-        input_a_grad: Option<&mut Self>,
-        input_b: &Self,
-        input_b_grad: Option<&mut Self>,
-        output_grad: &Self,
-    ) {
-        if let Some(grd) = input_a_grad {
-            backprop_abs_power_error_single(power, input_a, input_b, output_grad, grd);
-        }
-
-        if let Some(grd) = input_b_grad {
-            backprop_abs_power_error_single(power, input_b, input_a, output_grad, grd);
-        }
+    if let Some(grd) = input_b_grad {
+        backprop_abs_power_error_single(power, input_b, input_a, output_grad, grd);
     }
 }
 
@@ -55,11 +51,13 @@ fn backprop_abs_power_error_single(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
-    use crate::tensor::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
-    fn abs_power_error() {
+    fn abs_power_error_basic() {
         abs_power_error_custom([-1.0, 4.0, 2.0], [1.0, 2.0, 3.0], [2.0, 2.0, 1.0], [-1.0, 1.0, -1.0], [1.0, -1.0, 1.0]);
     }
 
@@ -75,13 +73,14 @@ mod tests {
         grad_a: [f32; 3],
         grad_b: [f32; 3],
     ) {
+        let device = Arc::new(ExecutionContext::default());
         let shape = Shape::new(3, 1);
 
-        let mut input1 = DenseMatrix::default();
-        let mut input2 = DenseMatrix::default();
-        let mut input1_grad = DenseMatrix::default();
-        let mut input2_grad = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut input1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input2 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input1_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input2_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         util::panic_if_device_error("Failed to initialise matrices!");
 
@@ -99,7 +98,7 @@ mod tests {
 
         // power error
         {
-            DenseMatrix::abs_power_error(1.0, &input1, &input2, &mut output);
+            abs_power_error(1.0, &input1, &input2, &mut output);
 
             util::panic_if_device_error("Failed to add matrices!");
 
@@ -118,7 +117,7 @@ mod tests {
 
             util::panic_if_device_error("Failed to load data from CPU!");
 
-            DenseMatrix::backprop_abs_power_error(
+            backprop_abs_power_error(
                 1.0,
                 &input1,
                 Some(&mut input1_grad),

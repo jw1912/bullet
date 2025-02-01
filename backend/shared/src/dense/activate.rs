@@ -49,8 +49,10 @@ define_activation!(sigmoid, sigmoid_backward, activateSigmoid, backpropSigmoid);
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     fn activation_test(
         fwd: fn(&DenseMatrix, &mut DenseMatrix),
@@ -58,10 +60,12 @@ mod tests {
         fwd_expected: [f32; 4],
         bwd_expected: [f32; 4],
     ) {
+        let device = Arc::new(ExecutionContext::default());
+
         let shape = Shape::new(2, 2);
-        let mut input = DenseMatrix::default();
-        let mut input_grad = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         util::panic_if_device_error("Failed to initialise matrices!");
 
@@ -96,30 +100,30 @@ mod tests {
     }
 
     #[test]
-    fn relu() {
-        activation_test(DenseMatrix::relu, DenseMatrix::relu_backward, [0.0, 0.5, 2.0, 0.0], [0.0, 0.5, 2.0, 0.0]);
+    fn test_relu() {
+        activation_test(relu, relu_backward, [0.0, 0.5, 2.0, 0.0], [0.0, 0.5, 2.0, 0.0]);
     }
 
     #[test]
-    fn crelu() {
-        activation_test(DenseMatrix::crelu, DenseMatrix::crelu_backward, [0.0, 0.5, 1.0, 0.0], [0.0, 0.5, 0.0, 0.0]);
+    fn test_crelu() {
+        activation_test(crelu, crelu_backward, [0.0, 0.5, 1.0, 0.0], [0.0, 0.5, 0.0, 0.0]);
     }
 
     #[test]
-    fn screlu() {
+    fn test_screlu() {
         activation_test(
-            DenseMatrix::screlu,
-            DenseMatrix::screlu_backward,
+            screlu,
+            screlu_backward,
             [0.0, 0.25, 1.0, 0.0],
             [0.0, 0.25, 0.0, 0.0],
         );
     }
 
     #[test]
-    fn sqrrelu() {
+    fn test_sqrrelu() {
         activation_test(
-            DenseMatrix::sqrrelu,
-            DenseMatrix::sqrrelu_backward,
+            sqrrelu,
+            sqrrelu_backward,
             [0.0, 0.25, 4.0, 0.0],
             [0.0, 0.25, 16.0, 0.0],
         );

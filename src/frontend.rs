@@ -57,7 +57,8 @@ impl NetworkBuilder {
     }
 
     pub fn build(self, execution_context: ExecutionContext) -> Graph {
-        let builder = self.graph_builder.into_inner().unwrap();
+        let mut builder = self.graph_builder.into_inner().unwrap();
+        builder.create_result_of_operation(ReduceAcrossBatch, &[builder.root()]);
         let mut graph = builder.build(execution_context);
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {

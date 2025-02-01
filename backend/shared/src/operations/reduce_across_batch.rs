@@ -1,33 +1,3 @@
-mod backend;
-pub mod dense;
-mod operations;
-mod sparse;
-
-use backend::util;
-pub use dense::Activation;
-pub use backend::{ExecutionContext, Buffer};
-
-use bullet_core::{device::{Device, ValidType}, graph::Operation, shape::Shape, tensor};
-
-impl Device for ExecutionContext {
-    type Buffer<T: ValidType> = Buffer<T>;
-    type IdType = ();
-    type ReduceAcrossBatch = ReduceAcrossBatch;
-    
-    fn new(id: Self::IdType) -> Self {
-        Self::default()    
-    }
-
-    fn synchronise(&self) {
-        util::device_synchronise();
-    }
-}
-
-pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;
-pub type SparseMatrix = tensor::SparseMatrix<ExecutionContext>;
-pub type Matrix = tensor::Matrix<ExecutionContext>;
-pub type Tensor = tensor::Tensor<ExecutionContext>;
-
 #[derive(Debug, Default)]
 pub struct ReduceAcrossBatch;
 

@@ -68,8 +68,6 @@ impl<D: Device + 'static> GraphBuilder<D> {
     }
 
     pub fn create_input(&mut self, id: &str, shape: Shape) -> Node {
-        assert!(shape.batch_size().is_none(), "Can't define batch size ahead of time!");
-
         let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, false, &[]));
 
         self.inputs.insert(node);
@@ -78,8 +76,6 @@ impl<D: Device + 'static> GraphBuilder<D> {
     }
 
     pub fn create_weights(&mut self, id: &str, shape: Shape) -> Node {
-        assert!(shape.batch_size().is_none(), "Weights cannot be batched!");
-
         let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, true, &[]));
 
         self.weights.insert(node);
@@ -99,15 +95,17 @@ impl<D: Device + 'static> GraphBuilder<D> {
         }
     }
 
-    pub fn build(mut self, device: Arc<D>) -> Graph<D> {
+    pub fn root(&self) -> Node {
+        assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
+        *self.roots.iter().next().unwrap()
+    }
+
+    pub fn build(self, device: Arc<D>) -> Graph<D> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
         assert!(self.get_node(root).requires_grad, "Output cannot be an input!");
         assert!(!self.weights.contains(&root), "Can't output trainable weights!");
-
-        let root = self.create_result_of_operation(D::ReduceAcrossBatch::default(), &[root]);
-
         assert_eq!(self.get_node(root).shape, Shape::new(1, 1), "Graph output must be scalar!");
 
         let nodes = self

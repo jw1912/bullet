@@ -1,4 +1,4 @@
-use crate::{backend::ops, DenseMatrix, SparseMatrix};
+use crate::{backend::ops, Activation, DenseMatrix, SparseMatrix};
 use bullet_core::shape::Shape;
 
 pub fn affine_dual(
@@ -10,7 +10,7 @@ pub fn affine_dual(
     activation: Activation,
 ) {
     assert_eq!(input_b1.shape, input_b2.shape);
-    assert_eq!(input_b1.max_active, input_b2.max_active);
+    assert_eq!(input_b1.nnz, input_b2.nnz);
     assert_eq!(input_c.shape.rows(), input_a.shape.rows());
     assert_eq!(input_c.shape.cols(), 1);
 
@@ -22,7 +22,7 @@ pub fn affine_dual(
     unsafe {
         ops::sparseAffineDualForward(
             input_b1.shape.cols(),
-            input_b1.max_active,
+            input_b1.nnz,
             input_a.shape().rows(),
             input_a.buf.ptr(),
             input_c.buf.ptr(),
@@ -46,7 +46,7 @@ pub fn backprop_affine_dual(
     activation: Activation,
 ) {
     assert_eq!(input_b1.shape, input_b2.shape);
-    assert_eq!(input_b1.max_active, input_b2.max_active);
+    assert_eq!(input_b1.nnz, input_b2.nnz);
     assert_eq!(outputs.shape, output_grad.shape);
 
     input_a_grad.reshape_if_needed(input_a.shape());
@@ -54,7 +54,7 @@ pub fn backprop_affine_dual(
     unsafe {
         ops::sparseAffineDualBackward(
             input_b1.shape.cols(),
-            input_b1.max_active,
+            input_b1.nnz,
             input_a.shape.rows(),
             input_a_grad.buf.mut_ptr(),
             input_c_grad.buf.mut_ptr(),
@@ -69,22 +69,26 @@ pub fn backprop_affine_dual(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
-    use crate::backend::util;
+    use crate::{backend::util, ExecutionContext};
     use bullet_core::shape::Shape;
 
     #[test]
-    fn affine_dual() {
+    fn test_affine_dual() {
+        let device = Arc::new(ExecutionContext::default());
+
         let shape1 = Shape::new(2, 3);
         let shape2 = Shape::new(3, 3);
 
-        let mut input1 = DenseMatrix::default();
-        let mut input2 = SparseMatrix::default();
-        let mut input3 = SparseMatrix::default();
-        let mut input4 = DenseMatrix::default();
-        let mut input1_grad = DenseMatrix::default();
-        let mut input4_grad = DenseMatrix::default();
-        let mut output = DenseMatrix::default();
+        let mut input1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input2 = SparseMatrix::zeroed(device.clone(), Shape::new(1, 1), 1);
+        let mut input3 = SparseMatrix::zeroed(device.clone(), Shape::new(1, 1), 1);
+        let mut input4 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input1_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut input4_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
+        let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
 
         util::panic_if_device_error("Failed to initialise matrices!");
 
@@ -113,7 +117,7 @@ mod tests {
 
         // sparse linear
         {
-            SparseMatrix::affine_dual(&input1, &input2, &input3, &input4, &mut output, Activation::Identity);
+            affine_dual(&input1, &input2, &input3, &input4, &mut output, Activation::Identity);
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
@@ -128,7 +132,7 @@ mod tests {
 
         // backprop sparse linear
         {
-            SparseMatrix::backprop_affine_dual(
+            backprop_affine_dual(
                 &input1,
                 &mut input1_grad,
                 &input2,

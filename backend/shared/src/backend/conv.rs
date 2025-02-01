@@ -16,7 +16,7 @@ use super::{
 use bullet_core::shape::Shape;
 
 pub unsafe fn conv_fwd(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     desc: &ConvolutionCudnnDescription,
     input: *const f32,
     filters: *const f32,
@@ -43,7 +43,7 @@ pub unsafe fn conv_fwd(
 }
 
 pub unsafe fn conv_bwd_filter(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     desc: &ConvolutionCudnnDescription,
     input: *const f32,
     output_grad: *const f32,
@@ -70,7 +70,7 @@ pub unsafe fn conv_bwd_filter(
 }
 
 pub unsafe fn conv_bwd_data(
-    ctx: &mut ExecutionContext,
+    ctx: &ExecutionContext,
     desc: &ConvolutionCudnnDescription,
     filters: *const f32,
     output_grad: *const f32,

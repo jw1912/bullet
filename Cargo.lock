@@ -56,6 +56,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
+name = "backend"
+version = "0.1.0"
+dependencies = [
+ "shared_backend",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,13 +97,13 @@ dependencies = [
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
+ "backend",
  "bullet_core",
  "bulletformat",
  "montyformat",
  "rand",
  "rand_distr",
  "sfbinpack",
- "shared_backend",
 ]
 
 [[package]]
