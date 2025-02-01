@@ -7,9 +7,7 @@ use std::{
 use bullet_backend::operations;
 use bullet_core::graph::{Graph, GraphBuilder, Node, Operation};
 
-use crate::{
-    Activation, ConvolutionDescription, ExecutionContext, Shape,
-};
+use crate::{Activation, ConvolutionDescription, ExecutionContext, Shape};
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {

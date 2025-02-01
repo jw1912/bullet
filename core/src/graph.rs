@@ -1,8 +1,12 @@
 use std::{
-    cell::RefCell, collections::{HashMap, HashSet}, fmt::Debug, sync::Arc, time::Instant
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    sync::Arc,
+    time::Instant,
 };
 
-use crate::{device::Device, tensor::Tensor, shape::Shape, };
+use crate::{device::Device, shape::Shape, tensor::Tensor};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node(pub(crate) usize);
@@ -116,7 +120,8 @@ impl<D: Device + 'static> GraphBuilder<D> {
             .map(|node_data| RefCell::new(Tensor::new(device.clone(), node_data.shape, node_data.requires_grad)))
             .collect::<Vec<_>>();
 
-        let inputs = self.inputs.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
+        let inputs =
+            self.inputs.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
         let weights =
             self.weights.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();

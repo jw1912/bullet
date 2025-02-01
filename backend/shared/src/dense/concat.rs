@@ -1,10 +1,6 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::{
-    backend::blas,
-    Shape,
-    DenseMatrix,
-};
+use crate::{backend::blas, DenseMatrix, Shape};
 
 pub fn concat(input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
     let cols = input_a.shape.cols();
@@ -137,13 +133,7 @@ mod tests {
         {
             input1_grad.load_from_slice(shape1, &[1.0; 9]);
 
-            backprop_concat(
-                &input1,
-                Some(&mut input1_grad),
-                &input2,
-                Some(&mut input2_grad),
-                &output,
-            );
+            backprop_concat(&input1, Some(&mut input1_grad), &input2, Some(&mut input2_grad), &output);
 
             util::panic_if_device_error("Failed to de-concat!");
 

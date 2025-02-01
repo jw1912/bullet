@@ -36,8 +36,8 @@ pub use softmax::*;
 pub use softmax_sparse::*;
 pub use submatrix_product::*;
 
-use bullet_core::shape::Shape;
 use crate::backend::{DenseMatrix, Tensor};
+use bullet_core::shape::Shape;
 
 fn setup_ones(tensor: &mut Tensor, batch_size: usize) {
     if let Some(ones) = tensor.internal.get_mut("ones") {

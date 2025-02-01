@@ -1,6 +1,6 @@
-use bullet_core::{shape::Shape, graph::Operation};
+use bullet_core::{graph::Operation, shape::Shape};
 
-use crate::backend::{sparse, Activation, ExecutionContext, Tensor, Matrix};
+use crate::backend::{sparse, Activation, ExecutionContext, Matrix, Tensor};
 
 #[derive(Debug)]
 pub struct AffineDualActivate(pub Activation);

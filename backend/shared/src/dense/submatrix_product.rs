@@ -1,10 +1,6 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::{
-    backend::blas,
-    Shape,
-    DenseMatrix,
-};
+use crate::{backend::blas, DenseMatrix, Shape};
 
 #[allow(clippy::too_many_arguments)]
 fn batched_sgemm(
@@ -46,12 +42,7 @@ fn batched_sgemm(
     }
 }
 
-pub fn submatrix_product(
-    key_size: usize,
-    input_a: &DenseMatrix,
-    input_b: &DenseMatrix,
-    output: &mut DenseMatrix,
-) {
+pub fn submatrix_product(key_size: usize, input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
     assert_eq!(input_a.shape.cols(), input_b.shape.cols());
     assert_eq!(input_a.shape.rows() % key_size, 0);
 

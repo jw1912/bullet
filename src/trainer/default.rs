@@ -38,13 +38,13 @@ use super::{
     LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{
-    optimiser::Optimiser,
-    save,
-};
+use crate::{optimiser::Optimiser, save};
 
 use bullet_backend::{sparse, ExecutionContext, SparseMatrix};
-use bullet_core::{graph::{Graph, Node}, shape::Shape};
+use bullet_core::{
+    graph::{Graph, Node},
+    shape::Shape,
+};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}

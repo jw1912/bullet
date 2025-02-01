@@ -3,17 +3,21 @@ pub mod dense;
 pub mod sparse;
 
 use backend::util;
+pub use backend::{conv::ConvolutionDescription, Buffer, ExecutionContext};
 pub use dense::Activation;
-pub use backend::{ExecutionContext, Buffer, conv::ConvolutionDescription};
 
-use bullet_core::{device::{Device, ValidType}, shape::Shape, tensor};
+use bullet_core::{
+    device::{Device, ValidType},
+    shape::Shape,
+    tensor,
+};
 
 impl Device for ExecutionContext {
     type Buffer<T: ValidType> = Buffer<T>;
     type IdType = ();
-    
+
     fn new(_: Self::IdType) -> Self {
-        Self::default()    
+        Self::default()
     }
 
     fn synchronise(&self) {

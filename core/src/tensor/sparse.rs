@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{device::{Device, DeviceBuffer}, shape::Shape};
+use crate::{
+    device::{Device, DeviceBuffer},
+    shape::Shape,
+};
 
 pub struct SparseMatrix<D: Device> {
     pub buf: D::Buffer<i32>,
@@ -10,11 +13,7 @@ pub struct SparseMatrix<D: Device> {
 
 impl<D: Device> SparseMatrix<D> {
     pub fn zeroed(device: Arc<D>, shape: Shape, nnz: usize) -> Self {
-        Self {
-            buf: D::Buffer::new(device, shape.size()),
-            shape,
-            nnz,
-        }
+        Self { buf: D::Buffer::new(device, shape.size()), shape, nnz }
     }
 
     pub fn shape(&self) -> Shape {

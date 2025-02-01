@@ -1,8 +1,6 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::{
-    backend::blas, Buffer, DenseMatrix, Shape
-};
+use crate::{backend::blas, Buffer, DenseMatrix, Shape};
 
 pub fn linear_comb(
     ones: &Buffer<f32>,
@@ -270,7 +268,7 @@ mod tests {
         input2_grad.set_zero();
 
         linear_comb_backward(
-            &ones, 
+            &ones,
             alpha,
             &input1,
             Some(&mut input1_grad),

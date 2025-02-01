@@ -1,10 +1,6 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::{
-    backend::blas,
-    Shape,
-    DenseMatrix,
-};
+use crate::{backend::blas, DenseMatrix, Shape};
 
 pub fn slice_rows(input: &DenseMatrix, start: usize, end: usize, output: &mut DenseMatrix) {
     assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");

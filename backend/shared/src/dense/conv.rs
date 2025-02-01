@@ -2,8 +2,7 @@ use bullet_core::device::DeviceBuffer;
 
 use crate::{
     backend::conv::{self, ConvolutionCudnnDescription, ConvolutionDescription},
-    Shape,
-    DenseMatrix
+    DenseMatrix, Shape,
 };
 
 pub fn convolution_forward(
@@ -21,7 +20,13 @@ pub fn convolution_forward(
     output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));
 
     unsafe {
-        conv::conv_fwd(input.buf.device().as_ref(), &cudnn_desc, input.buf.ptr(), filters.buf.ptr(), output.buf.mut_ptr());
+        conv::conv_fwd(
+            input.buf.device().as_ref(),
+            &cudnn_desc,
+            input.buf.ptr(),
+            filters.buf.ptr(),
+            output.buf.mut_ptr(),
+        );
     }
 }
 

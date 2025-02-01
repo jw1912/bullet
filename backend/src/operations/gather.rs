@@ -1,5 +1,5 @@
 use crate::backend::{sparse, ExecutionContext, Matrix, Tensor};
-use bullet_core::{shape::Shape, graph::Operation};
+use bullet_core::{graph::Operation, shape::Shape};
 
 #[derive(Debug)]
 pub struct Gather;
@@ -35,12 +35,7 @@ impl Operation<ExecutionContext> for Gather {
                 assert!(input2[0].gradients.as_ref().is_none());
 
                 if let Some(grad) = input1[0].gradients.as_mut() {
-                    sparse::backprop_gather(
-                        output.gradients.as_ref().unwrap(),
-                        sparse,
-                        input1[0].values.dense(),
-                        grad,
-                    );
+                    sparse::backprop_gather(output.gradients.as_ref().unwrap(), sparse, input1[0].values.dense(), grad);
                 }
             }
         }

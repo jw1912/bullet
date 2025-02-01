@@ -117,14 +117,7 @@ mod tests {
 
             util::panic_if_device_error("Failed to load data from CPU!");
 
-            backprop_abs_power_error(
-                1.0,
-                &input1,
-                Some(&mut input1_grad),
-                &input2,
-                Some(&mut input2_grad),
-                &output,
-            );
+            backprop_abs_power_error(1.0, &input1, Some(&mut input1_grad), &input2, Some(&mut input2_grad), &output);
 
             util::panic_if_device_error("Failed to backprop addition!");
 

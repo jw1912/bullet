@@ -1,7 +1,4 @@
-use crate::{
-    backend::ops, DenseMatrix, SparseMatrix,
-    Shape,
-};
+use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
 
 fn softmax_across_columns_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
     assert_eq!(input.shape, mask.shape);

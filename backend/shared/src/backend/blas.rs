@@ -188,20 +188,7 @@ pub unsafe fn reduce_add_cols(
     let inc = 1;
 
     let status = unsafe {
-        bindings::cublasSgemv_v2(
-            ctx.cublas,
-            CUBLAS_OP_N,
-            m,
-            n,
-            &alpha,
-            input,
-            lda,
-            ones,
-            inc,
-            &beta,
-            output,
-            1,
-        )
+        bindings::cublasSgemv_v2(ctx.cublas, CUBLAS_OP_N, m, n, &alpha, input, lda, ones, inc, &beta, output, 1)
     };
 
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemv failed!");
@@ -264,8 +251,7 @@ pub unsafe fn add_vector_to_matrix_columns(
     let lda = rows as c_int;
     let inc = 1;
 
-    let status =
-        unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) };
+    let status = unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) };
 
     assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sger failed!");
 }

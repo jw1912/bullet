@@ -1,7 +1,4 @@
-use crate::{
-    backend::ops, DenseMatrix, SparseMatrix,
-    Shape,
-};
+use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
 
 pub fn gather(inputs: &DenseMatrix, indices: &SparseMatrix, outputs: &mut DenseMatrix) {
     assert_eq!(indices.shape.cols(), 1);

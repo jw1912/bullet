@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{device::{Device, DeviceBuffer}, shape::Shape};
+use crate::{
+    device::{Device, DeviceBuffer},
+    shape::Shape,
+};
 
 pub struct DenseMatrix<D: Device> {
     pub buf: D::Buffer<f32>,

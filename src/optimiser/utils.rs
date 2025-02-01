@@ -61,7 +61,11 @@ pub fn write_weight_hashmap_to_file(map: &HashMap<String, DenseMatrix>, path: &s
 }
 
 /// Loads a set of labelled weights from a file into a `HashMap`.
-pub fn load_weight_hashmap_from_file(device: Arc<ExecutionContext>, map: &mut HashMap<String, DenseMatrix>, path: &str) {
+pub fn load_weight_hashmap_from_file(
+    device: Arc<ExecutionContext>,
+    map: &mut HashMap<String, DenseMatrix>,
+    path: &str,
+) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();

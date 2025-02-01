@@ -1,7 +1,8 @@
 use bullet_core::device::DeviceBuffer;
 
 use crate::{
-    backend::{blas, ops}, Buffer, DenseMatrix, Shape
+    backend::{blas, ops},
+    Buffer, DenseMatrix, Shape,
 };
 
 fn softmax_across_columns(input: &DenseMatrix, output: &mut DenseMatrix) {
@@ -142,14 +143,7 @@ mod tests {
 
         util::panic_if_device_error("Failed to load data from CPU!");
 
-        softmax_crossentropy_loss(
-            &ones,
-            &pred,
-            &target,
-            &mut output,
-            &mut softmaxed,
-            &mut individual_losses,
-        );
+        softmax_crossentropy_loss(&ones, &pred, &target, &mut output, &mut softmaxed, &mut individual_losses);
 
         util::panic_if_device_error("Failed to calculate activation!");
 

@@ -30,12 +30,7 @@ macro_rules! define_activation {
             assert_eq!(input.shape, output_grad.shape);
             input_grad.reshape_if_needed(input.shape);
             unsafe {
-                ops::$bwd_kernel(
-                    input.shape.size(),
-                    input.buf.ptr(),
-                    output_grad.buf.ptr(),
-                    input_grad.buf.mut_ptr(),
-                );
+                ops::$bwd_kernel(input.shape.size(), input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
             }
         }
     };
@@ -111,21 +106,11 @@ mod tests {
 
     #[test]
     fn test_screlu() {
-        activation_test(
-            screlu,
-            screlu_backward,
-            [0.0, 0.25, 1.0, 0.0],
-            [0.0, 0.25, 0.0, 0.0],
-        );
+        activation_test(screlu, screlu_backward, [0.0, 0.25, 1.0, 0.0], [0.0, 0.25, 0.0, 0.0]);
     }
 
     #[test]
     fn test_sqrrelu() {
-        activation_test(
-            sqrrelu,
-            sqrrelu_backward,
-            [0.0, 0.25, 4.0, 0.0],
-            [0.0, 0.25, 16.0, 0.0],
-        );
+        activation_test(sqrrelu, sqrrelu_backward, [0.0, 0.25, 4.0, 0.0], [0.0, 0.25, 16.0, 0.0]);
     }
 }

@@ -1,4 +1,4 @@
-use crate::{backend::ops, Shape, DenseMatrix};
+use crate::{backend::ops, DenseMatrix, Shape};
 
 pub fn pairwise(input: &DenseMatrix, output: &mut DenseMatrix, post_concat: bool) {
     let mut rows = input.shape.rows();
@@ -19,7 +19,12 @@ pub fn pairwise(input: &DenseMatrix, output: &mut DenseMatrix, post_concat: bool
     }
 }
 
-pub fn backprop_pairwise(input: &DenseMatrix, output_grad: &DenseMatrix, input_grad: &mut DenseMatrix, post_concat: bool) {
+pub fn backprop_pairwise(
+    input: &DenseMatrix,
+    output_grad: &DenseMatrix,
+    input_grad: &mut DenseMatrix,
+    post_concat: bool,
+) {
     let mut rows = input.shape.rows();
     let mut cols = input.shape.cols();
 

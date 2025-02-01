@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::backend::{dense, ExecutionContext, Tensor};
-use bullet_core::{shape::Shape, graph::Operation};
+use bullet_core::{graph::Operation, shape::Shape};
 
 #[derive(Debug)]
 pub struct SoftmaxCrossEntropyLoss;

@@ -1,7 +1,4 @@
-use crate::{
-    backend::ops, DenseMatrix, SparseMatrix,
-    Shape,
-};
+use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
 
 pub fn select(input: &DenseMatrix, indices: &SparseMatrix, output: &mut DenseMatrix) {
     let rows = input.shape.rows();

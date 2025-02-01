@@ -32,13 +32,7 @@ pub(super) fn sgemm(
     }
 }
 
-pub fn matmul(
-    input_a: &DenseMatrix,
-    trans_a: bool,
-    input_b: &DenseMatrix,
-    trans_b: bool,
-    output: &mut DenseMatrix,
-) {
+pub fn matmul(input_a: &DenseMatrix, trans_a: bool, input_b: &DenseMatrix, trans_b: bool, output: &mut DenseMatrix) {
     sgemm(input_a, trans_a, input_b, trans_b, output, false);
 }
 
@@ -131,15 +125,7 @@ mod tests {
 
         // backprop normal matmul
         {
-            backprop_matmul(
-                &input1,
-                Some(&mut input1_grad),
-                false,
-                &input2,
-                Some(&mut input2_grad),
-                false,
-                &output,
-            );
+            backprop_matmul(&input1, Some(&mut input1_grad), false, &input2, Some(&mut input2_grad), false, &output);
 
             util::panic_if_device_error("Failed to backprop matmul!");
 
@@ -177,15 +163,7 @@ mod tests {
             input1_grad.set_zero();
             input2_grad.set_zero();
 
-            backprop_matmul(
-                &input2,
-                Some(&mut input2_grad),
-                true,
-                &input1,
-                Some(&mut input1_grad),
-                true,
-                &output,
-            );
+            backprop_matmul(&input2, Some(&mut input2_grad), true, &input1, Some(&mut input1_grad), true, &output);
 
             util::panic_if_device_error("Failed to backprop transposed matmul!");
 

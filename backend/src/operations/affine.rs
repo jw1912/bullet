@@ -1,5 +1,5 @@
 use crate::backend::{dense, sparse, ExecutionContext, Matrix, Tensor};
-use bullet_core::{shape::Shape, graph::Operation};
+use bullet_core::{graph::Operation, shape::Shape};
 
 use super::linear::Linear;
 

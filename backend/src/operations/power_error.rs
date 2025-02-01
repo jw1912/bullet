@@ -1,5 +1,5 @@
 use crate::backend::{dense, ExecutionContext, Tensor};
-use bullet_core::{shape::Shape, graph::Operation};
+use bullet_core::{graph::Operation, shape::Shape};
 
 #[derive(Debug)]
 pub struct AbsPowerError(pub f32);
@@ -14,12 +14,7 @@ impl Operation<ExecutionContext> for AbsPowerError {
     }
 
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
-        dense::abs_power_error(
-            self.0,
-            inputs[0].values.dense(),
-            inputs[1].values.dense(),
-            output.values.dense_mut(),
-        );
+        dense::abs_power_error(self.0, inputs[0].values.dense(), inputs[1].values.dense(), output.values.dense_mut());
     }
 
     fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {

@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use crate::{device::{Device, DeviceBuffer}, shape::Shape, tensor::{dense::DenseMatrix, sparse::SparseMatrix}};
+use crate::{
+    device::{Device, DeviceBuffer},
+    shape::Shape,
+    tensor::{dense::DenseMatrix, sparse::SparseMatrix},
+};
 
 pub enum Matrix<D: Device> {
     Dense(DenseMatrix<D>),
