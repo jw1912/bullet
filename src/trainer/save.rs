@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
+use bullet_backend::DenseMatrix;
 use bullet_core::shape::Shape;
-use backend::DenseMatrix;
 
 #[derive(Clone)]
 pub struct SavedFormat {

@@ -15,7 +15,7 @@ use super::{
     AdditionalTrainerInputs, Trainer,
 };
 
-use backend::SparseMatrix;
+use bullet_backend::SparseMatrix;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Loss {

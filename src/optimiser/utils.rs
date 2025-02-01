@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use bullet_backend::{DenseMatrix, ExecutionContext};
 use bullet_core::{graph::Graph, shape::Shape};
-use backend::{DenseMatrix, ExecutionContext};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.

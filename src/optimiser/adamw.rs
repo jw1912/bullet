@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use bullet_backend::{dense, DenseMatrix, ExecutionContext};
 use bullet_core::graph::Graph;
-use backend::{dense, DenseMatrix, ExecutionContext};
 
 use super::{utils, Optimiser, OptimiserType};
 

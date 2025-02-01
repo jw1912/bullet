@@ -4,8 +4,8 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
+use bullet_backend::operations;
 use bullet_core::graph::{Graph, GraphBuilder, Node, Operation};
-use backend::operations;
 
 use crate::{
     Activation, ConvolutionDescription, ExecutionContext, Shape,

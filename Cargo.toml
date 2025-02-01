@@ -15,7 +15,7 @@ hip = []
 gh-actions = []
 
 [dependencies]
-backend = { path = "backend", package = "backend" }
+bullet_backend = { path = "backend" }
 bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 rand = "0.8.5"

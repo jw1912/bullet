@@ -43,8 +43,8 @@ use crate::{
     save,
 };
 
+use bullet_backend::{sparse, ExecutionContext, SparseMatrix};
 use bullet_core::{graph::{Graph, Node}, shape::Shape};
-use backend::{sparse, ExecutionContext, SparseMatrix};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}

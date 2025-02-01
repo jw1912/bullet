@@ -56,14 +56,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
-name = "backend"
-version = "0.1.0"
-dependencies = [
- "bullet_core",
- "shared_backend",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -87,6 +79,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bullet_backend"
+version = "0.1.0"
+dependencies = [
+ "bullet_core",
+ "bullet_shared_backend",
+]
+
+[[package]]
 name = "bullet_core"
 version = "0.1.0"
 dependencies = [
@@ -98,13 +98,21 @@ dependencies = [
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
- "backend",
+ "bullet_backend",
  "bullet_core",
  "bulletformat",
  "montyformat",
  "rand",
  "rand_distr",
  "sfbinpack",
+]
+
+[[package]]
+name = "bullet_shared_backend"
+version = "0.1.0"
+dependencies = [
+ "bullet_core",
+ "cc",
 ]
 
 [[package]]
@@ -762,14 +770,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20d1c02db05e63b9d3b048f682a2a372cab9a8686f0e0c2f5489959e8aaa3b03"
 dependencies = [
  "thiserror 2.0.9",
-]
-
-[[package]]
-name = "shared_backend"
-version = "0.1.0"
-dependencies = [
- "bullet_core",
- "cc",
 ]
 
 [[package]]
