@@ -1,12 +1,10 @@
-use crate::{
-    autograd::Operation,
-    tensor::{DenseMatrix, ExecutionContext, Shape, Tensor},
-};
+use crate::backend::{dense, ExecutionContext, Tensor};
+use bullet_core::{shape::Shape, graph::Operation};
 
 #[derive(Debug)]
 pub struct SliceRows(pub usize, pub usize);
 
-impl Operation for SliceRows {
+impl Operation<ExecutionContext> for SliceRows {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs.len() == 1 {
             if self.1 > self.0 {
@@ -23,13 +21,12 @@ impl Operation for SliceRows {
         }
     }
 
-    fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-        DenseMatrix::slice_rows(ctx, inputs[0].values.dense(), self.0, self.1, output.values.dense_mut());
+    fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
+        dense::slice_rows(inputs[0].values.dense(), self.0, self.1, output.values.dense_mut());
     }
 
-    fn backward(&self, ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
-        DenseMatrix::backprop_slice_rows(
-            ctx,
+    fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
+        dense::backprop_slice_rows(
             inputs[0].values.dense(),
             inputs[0].gradients.as_mut(),
             self.0,

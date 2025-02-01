@@ -1,4 +1,3 @@
-mod autograd;
 mod frontend;
 mod rng;
 
@@ -26,11 +25,11 @@ pub use trainer::{
 /// `NetworkBuilder`, and then compiled into an executable `Graph`
 pub mod nn {
     pub use super::{
-        autograd::{Graph, Node},
         frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode},
         optimiser,
     };
 
-    pub use bullet_core::shape::Shape;
+    pub use bullet_core::{shape::Shape, graph::Node};
+    pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
     pub use backend::{Activation, ConvolutionDescription, ExecutionContext};
 }

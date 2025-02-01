@@ -1,7 +1,7 @@
 use bullet_core::device::DeviceBuffer;
 
 use crate::{
-    backend::{blas, ExecutionContext}, Buffer, DenseMatrix, Shape
+    backend::blas, Buffer, DenseMatrix, Shape
 };
 
 pub fn linear_comb(
@@ -13,14 +13,12 @@ pub fn linear_comb(
     output: &mut DenseMatrix,
 ) {
     assert_eq!(input_a.shape.rows(), input_b.shape.rows());
-    let device = ones.device();
-    let ctx = device.as_ref();
 
     if input_a.shape == input_b.shape {
         output.reshape_if_needed(input_a.shape);
         unsafe {
             blas::linear_comb_matrices(
-                ctx,
+                output.buf.device().as_ref(),
                 output.shape.rows(),
                 output.shape.cols(),
                 alpha,
@@ -32,10 +30,10 @@ pub fn linear_comb(
         }
     } else if input_a.shape.cols() == 1 {
         copy_into_scaled(beta, input_b, output);
-        add_assign_vector_to_matrix_columns_scaled(ctx, ones, alpha, input_a, output);
+        add_assign_vector_to_matrix_columns_scaled(ones, alpha, input_a, output);
     } else if input_b.shape.cols() == 1 {
         copy_into_scaled(alpha, input_a, output);
-        add_assign_vector_to_matrix_columns_scaled(ctx, ones, beta, input_b, output);
+        add_assign_vector_to_matrix_columns_scaled(ones, beta, input_b, output);
     } else {
         panic!("Invalid shape pairs!")
     };
@@ -96,7 +94,6 @@ pub fn add_assign_scaled(alpha: f32, input: &DenseMatrix, output: &mut DenseMatr
 }
 
 pub fn add_assign_vector_to_matrix_columns_scaled(
-    ctx: &ExecutionContext,
     ones: &Buffer<f32>,
     alpha: f32,
     input: &DenseMatrix,
@@ -108,7 +105,7 @@ pub fn add_assign_vector_to_matrix_columns_scaled(
 
     unsafe {
         blas::add_vector_to_matrix_columns(
-            ctx,
+            output.buf.device().as_ref(),
             output.shape.rows(),
             output.shape.cols(),
             alpha,
@@ -150,7 +147,7 @@ pub fn backprop_add_single(
     };
 }
 
-pub fn reduce_add_cols(ctx: &ExecutionContext, ones: &Buffer<f32>, input: &DenseMatrix, output: &mut DenseMatrix) {
+pub fn reduce_add_cols(ones: &Buffer<f32>, input: &DenseMatrix, output: &mut DenseMatrix) {
     let shape = Shape::new(input.shape.rows(), 1);
     output.reshape_if_needed(shape);
 
@@ -158,7 +155,7 @@ pub fn reduce_add_cols(ctx: &ExecutionContext, ones: &Buffer<f32>, input: &Dense
 
     unsafe {
         blas::reduce_add_cols(
-            ctx,
+            input.buf.device().as_ref(),
             input.shape.rows(),
             input.shape.cols(),
             ones.ptr(),
@@ -175,7 +172,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
     fn test_linear_comb() {
@@ -311,7 +308,7 @@ mod tests {
 
         input.load_from_slice(Shape::new(1, 9), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
 
-        reduce_add_cols(device.as_ref(), &ones, &input, &mut output);
+        reduce_add_cols(&ones, &input, &mut output);
 
         assert_eq!(output.shape, Shape::new(1, 1));
         let mut buf = [0.0];

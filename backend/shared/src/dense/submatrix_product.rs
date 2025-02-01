@@ -1,12 +1,13 @@
+use bullet_core::device::DeviceBuffer;
+
 use crate::{
-    backend::{blas, ExecutionContext},
+    backend::blas,
     Shape,
     DenseMatrix,
 };
 
 #[allow(clippy::too_many_arguments)]
 fn batched_sgemm(
-    ctx: &ExecutionContext,
     input_a: &DenseMatrix,
     shape_a: Shape,
     trans_a: bool,
@@ -27,7 +28,7 @@ fn batched_sgemm(
 
     unsafe {
         blas::batched_sgemm(
-            ctx,
+            input_a.buf.device().as_ref(),
             batch_size,
             input_a.buf.ptr(),
             shape_a.rows(),
@@ -46,7 +47,6 @@ fn batched_sgemm(
 }
 
 pub fn submatrix_product(
-    ctx: &ExecutionContext,
     key_size: usize,
     input_a: &DenseMatrix,
     input_b: &DenseMatrix,
@@ -58,11 +58,10 @@ pub fn submatrix_product(
     let shape_a = Shape::new(key_size, input_a.shape.rows() / key_size);
     let shape_b = Shape::new(key_size, input_b.shape.rows() / key_size);
 
-    batched_sgemm(ctx, input_a, shape_a, true, input_b, shape_b, false, output, false);
+    batched_sgemm(input_a, shape_a, true, input_b, shape_b, false, output, false);
 }
 
 pub fn backprop_submatrix_product(
-    ctx: &ExecutionContext,
     key_size: usize,
     input_a: &DenseMatrix,
     input_a_grad: Option<&mut DenseMatrix>,
@@ -80,11 +79,11 @@ pub fn backprop_submatrix_product(
     assert_eq!(output_grad.shape.rows(), output_shape.size());
 
     if let Some(grad_a) = input_a_grad {
-        batched_sgemm(ctx, input_b, shape_b, false, output_grad, output_shape, true, grad_a, true);
+        batched_sgemm(input_b, shape_b, false, output_grad, output_shape, true, grad_a, true);
     }
 
     if let Some(grad_b) = input_b_grad {
-        batched_sgemm(ctx, input_a, shape_a, false, output_grad, output_shape, false, grad_b, true);
+        batched_sgemm(input_a, shape_a, false, output_grad, output_shape, false, grad_b, true);
     }
 }
 
@@ -93,7 +92,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
     fn test_submatrix_product() {
@@ -124,7 +123,7 @@ mod tests {
 
         // normal matmul
         {
-            submatrix_product(device.as_ref(), key_size, &input1, &input2, &mut output);
+            submatrix_product(key_size, &input1, &input2, &mut output);
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
@@ -140,7 +139,6 @@ mod tests {
         // backprop normal matmul
         {
             backprop_submatrix_product(
-                device.as_ref(),
                 key_size,
                 &input1,
                 Some(&mut input1_grad),

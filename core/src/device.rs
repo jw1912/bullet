@@ -13,7 +13,7 @@ pub trait Device: Sized {
 
     fn synchronise(&self);
 
-    fn panic_if_device_error(&self);
+    fn panic_if_device_error(&self, msg: &str);
 }
 
 pub trait DeviceBuffer<D: Device, T: ValidType> {

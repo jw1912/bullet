@@ -1,10 +1,12 @@
+use bullet_core::device::DeviceBuffer;
+
 use crate::{
-    backend::{blas, ExecutionContext},
+    backend::blas,
     Shape,
     DenseMatrix,
 };
 
-pub fn slice_rows(ctx: &ExecutionContext, input: &DenseMatrix, start: usize, end: usize, output: &mut DenseMatrix) {
+pub fn slice_rows(input: &DenseMatrix, start: usize, end: usize, output: &mut DenseMatrix) {
     assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");
     assert!(
         end <= input.shape.rows(),
@@ -17,7 +19,7 @@ pub fn slice_rows(ctx: &ExecutionContext, input: &DenseMatrix, start: usize, end
 
     unsafe {
         blas::copy_strided(
-            ctx,
+            input.buf.device().as_ref(),
             output_shape.rows(),
             input.shape.cols(),
             input.shape.rows(),
@@ -30,7 +32,6 @@ pub fn slice_rows(ctx: &ExecutionContext, input: &DenseMatrix, start: usize, end
 }
 
 pub fn backprop_slice_rows(
-    ctx: &ExecutionContext,
     input: &DenseMatrix,
     input_grad: Option<&mut DenseMatrix>,
     start: usize,
@@ -46,7 +47,7 @@ pub fn backprop_slice_rows(
 
         unsafe {
             blas::copy_strided(
-                ctx,
+                output_grad.buf.device().as_ref(),
                 output_shape.rows(),
                 output_shape.cols(),
                 output_shape.rows(),
@@ -64,7 +65,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
     fn slice() {
@@ -89,7 +90,7 @@ mod tests {
 
         // concat
         {
-            slice_rows(device.as_ref(), &input, 0, 2, &mut output);
+            slice_rows(&input, 0, 2, &mut output);
 
             util::panic_if_device_error("Failed to concat matrices!");
 
@@ -106,7 +107,7 @@ mod tests {
         {
             input_grad.load_from_slice(shape, &[1.0; 9]);
 
-            backprop_slice_rows(device.as_ref(), &input, Some(&mut input_grad), 0, 2, &output);
+            backprop_slice_rows(&input, Some(&mut input_grad), 0, 2, &output);
 
             util::panic_if_device_error("Failed to backprop slice!");
 

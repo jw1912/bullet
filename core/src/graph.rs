@@ -100,13 +100,15 @@ impl<D: Device + 'static> GraphBuilder<D> {
         *self.roots.iter().next().unwrap()
     }
 
-    pub fn build(self, device: Arc<D>) -> Graph<D> {
+    pub fn build(self, device: D) -> Graph<D> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
         assert!(self.get_node(root).requires_grad, "Output cannot be an input!");
         assert!(!self.weights.contains(&root), "Can't output trainable weights!");
         assert_eq!(self.get_node(root).shape, Shape::new(1, 1), "Graph output must be scalar!");
+
+        let device = Arc::new(device);
 
         let nodes = self
             .nodes
@@ -240,6 +242,18 @@ impl<D: Device + 'static> Graph<D> {
         }
 
         println!("-----------------------------------------------------------------");
+    }
+
+    pub fn synchronise(&self) {
+        self.device.synchronise();
+    }
+
+    pub fn panic_if_device_error(&self, msg: &str) {
+        self.device.panic_if_device_error(msg);
+    }
+
+    pub fn device(&self) -> Arc<D> {
+        self.device.clone()
     }
 }
 

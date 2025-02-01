@@ -1,7 +1,8 @@
-use crate::{backend::{blas, ExecutionContext}, DenseMatrix};
+use bullet_core::device::DeviceBuffer;
+
+use crate::{backend::blas, DenseMatrix};
 
 pub(super) fn sgemm(
-    ctx: &ExecutionContext,
     input_a: &DenseMatrix,
     trans_a: bool,
     input_b: &DenseMatrix,
@@ -14,7 +15,7 @@ pub(super) fn sgemm(
 
     unsafe {
         blas::sgemm(
-            ctx,
+            input_a.buf.device().as_ref(),
             input_a.buf.ptr(),
             input_a.shape.rows(),
             input_a.shape.cols(),
@@ -32,19 +33,17 @@ pub(super) fn sgemm(
 }
 
 pub fn matmul(
-    ctx: &ExecutionContext,
     input_a: &DenseMatrix,
     trans_a: bool,
     input_b: &DenseMatrix,
     trans_b: bool,
     output: &mut DenseMatrix,
 ) {
-    sgemm(ctx, input_a, trans_a, input_b, trans_b, output, false);
+    sgemm(input_a, trans_a, input_b, trans_b, output, false);
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn backprop_matmul(
-    ctx: &ExecutionContext,
     input_a: &DenseMatrix,
     input_a_grad: Option<&mut DenseMatrix>,
     trans_a: bool,
@@ -55,17 +54,17 @@ pub fn backprop_matmul(
 ) {
     if let Some(grad_a) = input_a_grad {
         if trans_a {
-            sgemm(ctx, input_b, trans_b, output_grad, true, grad_a, true);
+            sgemm(input_b, trans_b, output_grad, true, grad_a, true);
         } else {
-            sgemm(ctx, output_grad, false, input_b, !trans_b, grad_a, true);
+            sgemm(output_grad, false, input_b, !trans_b, grad_a, true);
         }
     }
 
     if let Some(grad_b) = input_b_grad {
         if trans_b {
-            sgemm(ctx, output_grad, true, input_a, trans_a, grad_b, true);
+            sgemm(output_grad, true, input_a, trans_a, grad_b, true);
         } else {
-            sgemm(ctx, input_a, !trans_a, output_grad, false, grad_b, true);
+            sgemm(input_a, !trans_a, output_grad, false, grad_b, true);
         }
     }
 }
@@ -75,7 +74,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
     fn test_matmul() {
@@ -117,7 +116,7 @@ mod tests {
 
         // normal matmul
         {
-            matmul(device.as_ref(), &input1, false, &input2, false, &mut output);
+            matmul(&input1, false, &input2, false, &mut output);
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
@@ -133,7 +132,6 @@ mod tests {
         // backprop normal matmul
         {
             backprop_matmul(
-                device.as_ref(),
                 &input1,
                 Some(&mut input1_grad),
                 false,
@@ -161,7 +159,7 @@ mod tests {
 
         // transposed matmul
         {
-            matmul(device.as_ref(), &input2, true, &input1, true, &mut output);
+            matmul(&input2, true, &input1, true, &mut output);
 
             util::panic_if_device_error("Failed to calculate transposed matmul!");
 
@@ -180,7 +178,6 @@ mod tests {
             input2_grad.set_zero();
 
             backprop_matmul(
-                device.as_ref(),
                 &input2,
                 Some(&mut input2_grad),
                 true,

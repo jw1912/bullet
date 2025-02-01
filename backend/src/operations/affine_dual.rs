@@ -1,6 +1,6 @@
 use bullet_core::{shape::Shape, graph::Operation};
 
-use crate::{Activation, ExecutionContext, Tensor, SparseMatrix, Matrix};
+use crate::backend::{sparse, Activation, ExecutionContext, Tensor, Matrix};
 
 #[derive(Debug)]
 pub struct AffineDualActivate(pub Activation);
@@ -24,7 +24,7 @@ impl Operation<ExecutionContext> for AffineDualActivate {
         let out = output.values.dense_mut();
 
         if let (Matrix::Sparse(stm), Matrix::Sparse(ntm)) = (&inputs[1].values, &inputs[2].values) {
-            SparseMatrix::affine_dual(weights, stm, ntm, biases, out, self.0);
+            sparse::affine_dual(weights, stm, ntm, biases, out, self.0);
         } else {
             panic!("Inputs must be sparse!");
         }
@@ -36,7 +36,7 @@ impl Operation<ExecutionContext> for AffineDualActivate {
         let (input3, input4) = inputs3.split_at_mut(1);
 
         if let (Matrix::Sparse(stm), Matrix::Sparse(ntm)) = (&input2[0].values, &input3[0].values) {
-            SparseMatrix::backprop_affine_dual(
+            sparse::backprop_affine_dual(
                 input1[0].values.dense(),
                 input1[0].gradients.as_mut().unwrap(),
                 stm,

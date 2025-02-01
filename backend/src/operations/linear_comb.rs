@@ -1,12 +1,10 @@
-use crate::{
-    autograd::Operation,
-    tensor::{DenseMatrix, ExecutionContext, Shape, Tensor},
-};
+use crate::backend::{dense, ExecutionContext, Tensor};
+use bullet_core::{shape::Shape, graph::Operation};
 
 #[derive(Debug)]
 pub struct LinearCombination(pub f32, pub f32);
 
-impl Operation for LinearCombination {
+impl Operation<ExecutionContext> for LinearCombination {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         if inputs.len() == 2 && inputs[0] == inputs[1] {
             Ok(inputs[0])
@@ -15,9 +13,13 @@ impl Operation for LinearCombination {
         }
     }
 
-    fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-        DenseMatrix::linear_comb(
-            ctx,
+    fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
+        let batch_size = inputs[0].shape().cols().max(inputs[1].shape().cols());
+        super::setup_ones(output, batch_size);
+        let ones = output.internal.get("ones").unwrap().borrow();
+
+        dense::linear_comb(
+            &ones.buf,
             self.0,
             inputs[0].values.dense(),
             self.1,
@@ -26,11 +28,14 @@ impl Operation for LinearCombination {
         );
     }
 
-    fn backward(&self, ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
+    fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
+        let batch_size = inputs[0].shape().cols().max(inputs[1].shape().cols());
         let (input1, input2) = inputs.split_at_mut(1);
+        let ones = output.internal.get("ones").unwrap().borrow();
+        assert!(ones.shape.size() >= batch_size);
 
-        DenseMatrix::linear_comb_backward(
-            ctx,
+        dense::linear_comb_backward(
+            &ones.buf,
             self.0,
             input1[0].values.dense(),
             input1[0].gradients.as_mut(),

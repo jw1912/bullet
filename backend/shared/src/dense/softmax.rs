@@ -1,7 +1,7 @@
 use bullet_core::device::DeviceBuffer;
 
 use crate::{
-    backend::{blas, ops}, Buffer, DenseMatrix, ExecutionContext, Shape
+    backend::{blas, ops}, Buffer, DenseMatrix, Shape
 };
 
 fn softmax_across_columns(input: &DenseMatrix, output: &mut DenseMatrix) {
@@ -25,7 +25,6 @@ fn crossentropy(pred: &DenseMatrix, target: &DenseMatrix, output: &mut DenseMatr
 }
 
 pub fn softmax_crossentropy_loss(
-    ctx: &ExecutionContext,
     ones: &Buffer<f32>,
     input: &DenseMatrix,
     target: &DenseMatrix,
@@ -45,7 +44,7 @@ pub fn softmax_crossentropy_loss(
 
     unsafe {
         blas::reduce_add_cols(
-            ctx,
+            input.buf.device().as_ref(),
             1,
             input.shape.size(),
             ones.ptr(),
@@ -84,7 +83,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
     fn softmax() {
@@ -144,7 +143,6 @@ mod tests {
         util::panic_if_device_error("Failed to load data from CPU!");
 
         softmax_crossentropy_loss(
-            device.as_ref(),
             &ones,
             &pred,
             &target,

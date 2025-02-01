@@ -1,12 +1,10 @@
-use crate::{
-    autograd::Operation,
-    tensor::{DenseMatrix, ExecutionContext, Shape, Tensor},
-};
+use crate::backend::{dense, ExecutionContext, Tensor};
+use bullet_core::{shape::Shape, graph::Operation};
 
 #[derive(Debug)]
 pub struct SubmatrixProduct(pub usize);
 
-impl Operation for SubmatrixProduct {
+impl Operation<ExecutionContext> for SubmatrixProduct {
     fn output_tensor(&self, inputs: &[Shape]) -> Result<Shape, String> {
         let m = self.0;
         if inputs.len() == 2 {
@@ -31,9 +29,8 @@ impl Operation for SubmatrixProduct {
         }
     }
 
-    fn forward(&self, ctx: &mut ExecutionContext, inputs: &[&Tensor], output: &mut Tensor) {
-        DenseMatrix::submatrix_product(
-            ctx,
+    fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
+        dense::submatrix_product(
             self.0,
             inputs[0].values.dense(),
             inputs[1].values.dense(),
@@ -41,11 +38,10 @@ impl Operation for SubmatrixProduct {
         );
     }
 
-    fn backward(&self, ctx: &mut ExecutionContext, output: &Tensor, inputs: &mut [&mut Tensor]) {
+    fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
         let (input1, input2) = inputs.split_at_mut(1);
 
-        DenseMatrix::backprop_submatrix_product(
-            ctx,
+        dense::backprop_submatrix_product(
             self.0,
             input1[0].values.dense(),
             input1[0].gradients.as_mut(),

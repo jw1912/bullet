@@ -1,11 +1,10 @@
 mod backend;
 pub mod dense;
-//pub mod operations;
 pub mod sparse;
 
 use backend::util;
 pub use dense::Activation;
-pub use backend::{ExecutionContext, Buffer};
+pub use backend::{ExecutionContext, Buffer, conv::ConvolutionDescription};
 
 use bullet_core::{device::{Device, ValidType}, shape::Shape, tensor};
 
@@ -21,8 +20,8 @@ impl Device for ExecutionContext {
         util::device_synchronise();
     }
 
-    fn panic_if_device_error(&self) {
-        util::panic_if_device_error("An error occurred on the device!");
+    fn panic_if_device_error(&self, msg: &str) {
+        util::panic_if_device_error(msg);
     }
 }
 

@@ -5,4 +5,5 @@ edition = "2021"
 authors = ["Jamie Whiting"]
 
 [dependencies]
-shared_backend = { path = "shared" }
+bullet_core = { workspace = true }
+shared_backend = { path = "shared", package = "shared_backend"}

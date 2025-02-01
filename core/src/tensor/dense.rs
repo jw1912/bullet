@@ -12,6 +12,12 @@ impl<D: Device> DenseMatrix<D> {
         Self { buf: D::Buffer::new(device, shape.size()), shape }
     }
 
+    pub fn ones(device: Arc<D>, shape: Shape) -> Self {
+        let mut res = Self { buf: D::Buffer::new(device, shape.size()), shape };
+        res.load_from_slice(shape, &vec![1.0; shape.size()]);
+        res
+    }
+
     pub fn shape(&self) -> Shape {
         self.shape
     }

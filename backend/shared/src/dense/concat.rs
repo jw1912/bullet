@@ -1,10 +1,12 @@
+use bullet_core::device::DeviceBuffer;
+
 use crate::{
-    backend::{blas, ExecutionContext},
+    backend::blas,
     Shape,
     DenseMatrix,
 };
 
-pub fn concat(device: &ExecutionContext, input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
+pub fn concat(input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
     let cols = input_a.shape.cols();
     assert_eq!(cols, input_b.shape.cols());
 
@@ -13,7 +15,7 @@ pub fn concat(device: &ExecutionContext, input_a: &DenseMatrix, input_b: &DenseM
 
     unsafe {
         blas::copy_strided(
-            device,
+            input_a.buf.device().as_ref(),
             input_a.shape.rows(),
             cols,
             input_a.shape.rows(),
@@ -24,7 +26,7 @@ pub fn concat(device: &ExecutionContext, input_a: &DenseMatrix, input_b: &DenseM
         );
 
         blas::copy_strided(
-            device,
+            input_a.buf.device().as_ref(),
             input_b.shape.rows(),
             cols,
             input_b.shape.rows(),
@@ -37,7 +39,6 @@ pub fn concat(device: &ExecutionContext, input_a: &DenseMatrix, input_b: &DenseM
 }
 
 pub fn backprop_concat(
-    device: &ExecutionContext,
     input_a: &DenseMatrix,
     input_a_grad: Option<&mut DenseMatrix>,
     input_b: &DenseMatrix,
@@ -53,7 +54,7 @@ pub fn backprop_concat(
 
         unsafe {
             blas::copy_strided(
-                device,
+                grad.buf.device().as_ref(),
                 grad.shape.rows(),
                 grad.shape.cols(),
                 output_grad.shape.rows(),
@@ -70,7 +71,7 @@ pub fn backprop_concat(
 
         unsafe {
             blas::copy_strided(
-                device,
+                grad.buf.device().as_ref(),
                 grad.shape.rows(),
                 grad.shape.cols(),
                 output_grad.shape.rows(),
@@ -88,7 +89,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{backend::util, Shape};
+    use crate::{backend::util, ExecutionContext, Shape};
 
     #[test]
     fn test_concat() {
@@ -119,7 +120,7 @@ mod tests {
 
         // concat
         {
-            concat(device.as_ref(), &input1, &input2, &mut output);
+            concat(&input1, &input2, &mut output);
 
             util::panic_if_device_error("Failed to concat matrices!");
 
@@ -137,7 +138,6 @@ mod tests {
             input1_grad.load_from_slice(shape1, &[1.0; 9]);
 
             backprop_concat(
-                device.as_ref(),
                 &input1,
                 Some(&mut input1_grad),
                 &input2,
