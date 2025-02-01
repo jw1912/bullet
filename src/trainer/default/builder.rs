@@ -5,7 +5,6 @@ use crate::{
     nn::InitSettings,
     optimiser::{self, Optimiser, OptimiserType},
     rng,
-    tensor::SparseMatrix,
     trainer::save::QuantTarget,
     Activation, ExecutionContext, Shape,
 };
@@ -15,6 +14,8 @@ use super::{
     outputs::{self, OutputBuckets},
     AdditionalTrainerInputs, Trainer,
 };
+
+use bullet_backend::SparseMatrix;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Loss {
@@ -365,6 +366,8 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             }
         });
 
+        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), Shape::new(1, 1), 1);
+
         let mut trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
             input_getter: input_getter.clone(),
@@ -378,7 +381,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             },
             saved_format: saved_format.clone(),
             factorised_weights,
-            sparse_scratch_space: SparseMatrix::default(),
+            sparse_scratch_space,
         };
 
         let graph = trainer.optimiser.graph_mut();

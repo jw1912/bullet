@@ -10,29 +10,29 @@ repository = "https://github.com/jw1912/bullet"
 readme = "README.md"
 
 [features]
-cudnn = []
-hip = []
-gh-actions = []
+cudnn = ["bullet_backend/cudnn"]
+hip = ["bullet_backend/hip"]
+gh-actions = ["bullet_backend/gh-actions"]
 
 [dependencies]
+bullet_backend = { path = "backend" }
+bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 rand = "0.8.5"
 rand_distr = "0.4.3"
 montyformat = { workspace = true }
 sfbinpack = "0.2.0"
 
-[build-dependencies]
-cc = "1.2.5"
-
 [workspace]
 resolver = "2"
-members = ["utils"]
+members = ["backend", "backend/shared", "core", "utils"]
 
 [workspace.package]
 license = "MIT"
 authors = ["Jamie Whiting"]
 
 [workspace.dependencies]
+bullet_core = { path = "core" }
 bulletformat = "1.7.0"
 montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.7.0" }
 

@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::{nn::Graph, tensor::DenseMatrix};
+use bullet_backend::{DenseMatrix, ExecutionContext};
+use bullet_core::{graph::Graph, shape::Shape};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.
-pub fn write_graph_weights_to_file(graph: &Graph, path: &str) {
+pub fn write_graph_weights_to_file(graph: &Graph<ExecutionContext>, path: &str) {
     use std::{fs::File, io::Write};
 
     let weight_ids = graph.weight_ids();
@@ -24,7 +25,7 @@ pub fn write_graph_weights_to_file(graph: &Graph, path: &str) {
 
 /// Loads the weights of a graph from a file. If `gradients` is true,
 /// it will instead load the gradients of those weights.
-pub fn load_graph_weights_from_file(graph: &mut Graph, path: &str) {
+pub fn load_graph_weights_from_file(graph: &mut Graph<ExecutionContext>, path: &str) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -32,7 +33,7 @@ pub fn load_graph_weights_from_file(graph: &mut Graph, path: &str) {
     file.read_to_end(&mut buf).unwrap();
 
     let mut offset = 0;
-    let mut matrix_buffer = DenseMatrix::default();
+    let mut matrix_buffer = DenseMatrix::zeroed(graph.device(), Shape::new(1, 1));
 
     while offset < buf.len() {
         let (id, bytes_read) = matrix_buffer.read_from_byte_buffer(&buf[offset..]);
@@ -60,7 +61,11 @@ pub fn write_weight_hashmap_to_file(map: &HashMap<String, DenseMatrix>, path: &s
 }
 
 /// Loads a set of labelled weights from a file into a `HashMap`.
-pub fn load_weight_hashmap_from_file(map: &mut HashMap<String, DenseMatrix>, path: &str) {
+pub fn load_weight_hashmap_from_file(
+    device: Arc<ExecutionContext>,
+    map: &mut HashMap<String, DenseMatrix>,
+    path: &str,
+) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -68,7 +73,7 @@ pub fn load_weight_hashmap_from_file(map: &mut HashMap<String, DenseMatrix>, pat
     file.read_to_end(&mut buf).unwrap();
 
     let mut offset = 0;
-    let mut matrix_buffer = DenseMatrix::default();
+    let mut matrix_buffer = DenseMatrix::zeroed(device, Shape::new(1, 1));
 
     while offset < buf.len() {
         let (id, bytes_read) = matrix_buffer.read_from_byte_buffer(&buf[offset..]);

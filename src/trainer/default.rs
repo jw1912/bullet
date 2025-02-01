@@ -38,11 +38,12 @@ use super::{
     LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{
-    autograd::{Graph, Node},
-    optimiser::Optimiser,
-    save,
-    tensor::SparseMatrix,
+use crate::{optimiser::Optimiser, save};
+
+use bullet_backend::{sparse, ExecutionContext, SparseMatrix};
+use bullet_core::{
+    graph::{Graph, Node},
+    shape::Shape,
 };
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
@@ -84,12 +85,12 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             if self.additional_inputs.dense_inputs {
                 let input = &prepared.stm;
                 self.sparse_scratch_space.load_from_slice(input.shape, input.max_active, &input.value);
-                self.sparse_scratch_space.copy_into_dense(graph.get_input_mut("stm").values.dense_mut());
+                sparse::copy_into_dense(&self.sparse_scratch_space, graph.get_input_mut("stm").values.dense_mut());
 
                 if self.additional_inputs.nstm {
                     let input = &prepared.nstm;
                     self.sparse_scratch_space.load_from_slice(input.shape, input.max_active, &input.value);
-                    self.sparse_scratch_space.copy_into_dense(graph.get_input_mut("nstm").values.dense_mut());
+                    sparse::copy_into_dense(&self.sparse_scratch_space, graph.get_input_mut("nstm").values.dense_mut());
                 }
             } else {
                 let input = &prepared.stm;
@@ -136,7 +137,7 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
 
 impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
     pub fn new(
-        graph: Graph,
+        graph: Graph<ExecutionContext>,
         output_node: Node,
         params: Opt::Params,
         input_getter: Inp,
@@ -165,6 +166,8 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             println!("WARNING: The network graph contains an unexpected number of inputs!")
         };
 
+        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), Shape::new(1, 1), 1);
+
         Self {
             optimiser: Opt::new(graph, params),
             input_getter,
@@ -173,7 +176,7 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
             additional_inputs: AdditionalTrainerInputs { nstm, output_buckets, wdl, dense_inputs },
             saved_format,
             factorised_weights: None,
-            sparse_scratch_space: SparseMatrix::default(),
+            sparse_scratch_space,
         }
     }
 

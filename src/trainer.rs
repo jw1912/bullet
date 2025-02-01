@@ -17,7 +17,7 @@ use std::{
     time::Instant,
 };
 
-use crate::{optimiser::Optimiser, tensor::util};
+use crate::optimiser::Optimiser;
 
 pub trait NetworkTrainer {
     type PreparedData;
@@ -29,7 +29,7 @@ pub trait NetworkTrainer {
     /// Trains for a single step on a batch that has been previously
     /// loaded using `load_batch`.
     fn train_on_batch(&mut self, gf: f32, lr: f32) -> f32 {
-        util::device_synchronise();
+        self.optimiser().graph().synchronise();
         self.optimiser_mut().graph_mut().zero_grads();
 
         let error = self.optimiser_mut().graph_mut().forward();
@@ -38,8 +38,8 @@ pub trait NetworkTrainer {
 
         self.optimiser_mut().update(gf, lr);
 
-        util::device_synchronise();
-        util::panic_if_device_error("Something went wrong!");
+        self.optimiser().graph().synchronise();
+        self.optimiser().graph().panic_if_device_error("Something went wrong!");
 
         error
     }
@@ -85,7 +85,7 @@ pub trait NetworkTrainer {
 
         std::fs::create_dir(out_dir).unwrap_or(());
 
-        util::device_synchronise();
+        self.optimiser().graph().synchronise();
 
         let steps = schedule.steps;
         let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
@@ -147,7 +147,7 @@ pub trait NetworkTrainer {
             if curr_batch % validation_freq == 0 {
                 if let Some(Ok(test_batch)) = test_receiver.as_ref().map(Receiver::recv) {
                     let this_batch_size = self.load_batch(&test_batch);
-                    util::device_synchronise();
+                    self.optimiser().graph().synchronise();
                     let error = self.optimiser_mut().graph_mut().forward();
                     let error = error / this_batch_size as f32;
 

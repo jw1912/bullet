@@ -4,10 +4,10 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
-use crate::{
-    autograd::{Graph, GraphBuilder, Node, Operation},
-    operations, Activation, ConvolutionDescription, ExecutionContext, Shape,
-};
+use bullet_backend::operations;
+use bullet_core::graph::{Graph, GraphBuilder, Node, Operation};
+
+use crate::{Activation, ConvolutionDescription, ExecutionContext, Shape};
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
@@ -18,12 +18,12 @@ pub enum InitSettings {
 
 #[derive(Default)]
 pub struct NetworkBuilder {
-    graph_builder: Mutex<GraphBuilder>,
+    graph_builder: Mutex<GraphBuilder<ExecutionContext>>,
     init_data: Mutex<HashMap<String, InitSettings>>,
 }
 
 impl NetworkBuilder {
-    fn builder(&self) -> MutexGuard<GraphBuilder> {
+    fn builder(&self) -> MutexGuard<GraphBuilder<ExecutionContext>> {
         self.graph_builder.try_lock().unwrap()
     }
 
@@ -51,13 +51,14 @@ impl NetworkBuilder {
         Affine { weights: weights.node, bias: bias.node }
     }
 
-    pub fn apply<'a>(&'a self, operation: impl Operation, inputs: &[Node]) -> NetworkBuilderNode<'a> {
+    pub fn apply<'a>(&'a self, operation: impl Operation<ExecutionContext>, inputs: &[Node]) -> NetworkBuilderNode<'a> {
         let node = self.builder().create_result_of_operation(operation, inputs);
         NetworkBuilderNode { node, builder: self }
     }
 
-    pub fn build(self, execution_context: ExecutionContext) -> Graph {
-        let builder = self.graph_builder.into_inner().unwrap();
+    pub fn build(self, execution_context: ExecutionContext) -> Graph<ExecutionContext> {
+        let mut builder = self.graph_builder.into_inner().unwrap();
+        builder.create_result_of_operation(operations::ReduceAcrossBatch, &[builder.root()]);
         let mut graph = builder.build(execution_context);
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
@@ -100,7 +101,7 @@ impl NetworkBuilderNode<'_> {
     }
 
     pub fn activate(self, activation: Activation) -> Self {
-        self.builder.apply(activation, &[self.node])
+        self.builder.apply(operations::Activate(activation), &[self.node])
     }
 
     pub fn select(self, buckets: Self) -> Self {
@@ -160,7 +161,7 @@ impl NetworkBuilderNode<'_> {
     }
 
     pub fn convolution(self, filters: Self, desc: ConvolutionDescription) -> Self {
-        self.builder.apply(desc, &[filters.node, self.node])
+        self.builder.apply(operations::Convolution(desc), &[filters.node, self.node])
     }
 }
 

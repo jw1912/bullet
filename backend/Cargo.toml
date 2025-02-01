@@ -1,0 +1,14 @@
+[package]
+name = "bullet_backend"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
+
+[dependencies]
+bullet_core = { workspace = true }
+bullet_shared_backend = { path = "shared", package = "bullet_shared_backend"}
+
+[features]
+cudnn = ["bullet_shared_backend/cudnn"]
+hip = ["bullet_shared_backend/hip"]
+gh-actions = ["bullet_shared_backend/gh-actions"]

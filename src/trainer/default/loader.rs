@@ -3,6 +3,7 @@ mod montybinpack;
 mod sfbinpack;
 mod text;
 
+use bullet_core::shape::Shape;
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
@@ -11,7 +12,7 @@ pub use text::InMemoryTextLoader;
 
 use super::{inputs::SparseInputType, outputs::OutputBuckets};
 
-use crate::{tensor::Shape, trainer::DataPreparer};
+use crate::trainer::DataPreparer;
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
