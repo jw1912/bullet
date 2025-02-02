@@ -42,3 +42,72 @@ impl Operation<ExecutionContext> for Activate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::backend::Matrix;
+    use bullet_core::device::Device;
+
+    fn activation_test(act: Activation, fwd_expected: [f32; 4], bwd_expected: [f32; 4]) {
+        let device = Arc::new(ExecutionContext::default());
+
+        let shape = Shape::new(2, 2);
+
+        let mut input = Tensor::new(device.clone(), shape, true);
+        let mut output = Tensor::new(device.clone(), shape, true);
+
+        device.panic_if_device_error("Failed to initialise matrices!");
+        input.load_dense_from_slice(shape, &[-1.0, 0.5, 2.0, -2.0]);
+        assert_eq!(input.shape(), shape);
+
+        device.panic_if_device_error("Failed to load data from CPU!");
+
+        Activate(act).forward(&[&input], &mut output);
+
+        if let Matrix::Dense(vals) = &output.values {
+            vals.copy_into(output.gradients.as_mut().unwrap());
+        }
+
+        device.panic_if_device_error("Failed to calculate activation!");
+
+        assert_eq!(output.shape(), input.shape());
+
+        let buf = output.get_dense_vals().unwrap();
+        assert_eq!(&buf, &fwd_expected);
+
+        device.panic_if_device_error("Failed to write data to CPU!");
+
+        Activate(act).backward(&output, &mut [&mut input]);
+
+        device.panic_if_device_error("Failed to backprop activation!");
+
+        let mut buf = [0.0; 4];
+        input.gradients.unwrap().write_to_slice(&mut buf);
+        assert_eq!(buf, bwd_expected);
+
+        device.panic_if_device_error("Failed to write data to CPU!");
+    }
+
+    #[test]
+    fn relu() {
+        activation_test(Activation::ReLU, [0.0, 0.5, 2.0, 0.0], [0.0, 0.5, 2.0, 0.0]);
+    }
+
+    #[test]
+    fn crelu() {
+        activation_test(Activation::CReLU, [0.0, 0.5, 1.0, 0.0], [0.0, 0.5, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn screlu() {
+        activation_test(Activation::SCReLU, [0.0, 0.25, 1.0, 0.0], [0.0, 0.25, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn sqrrelu() {
+        activation_test(Activation::SqrReLU, [0.0, 0.25, 4.0, 0.0], [0.0, 0.25, 16.0, 0.0]);
+    }
+}
