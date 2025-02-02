@@ -15,7 +15,7 @@ impl Operation<ExecutionContext> for ReduceAcrossBatch {
 
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         let input = inputs[0].values.dense();
-        super::setup_ones(output, inputs[0].shape().cols());
+        super::setup_ones(output, inputs[0].shape().batch_size().unwrap_or(1));
         let ones = output.internal.get("ones").unwrap().borrow();
 
         dense::reduce_add_batch(&ones.buf, input, output.values.dense_mut());

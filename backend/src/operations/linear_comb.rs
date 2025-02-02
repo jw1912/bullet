@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use crate::backend::{dense, ExecutionContext, Tensor};
 use bullet_core::{graph::Operation, shape::Shape};
 
@@ -14,7 +16,8 @@ impl Operation<ExecutionContext> for LinearCombination {
     }
 
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
-        let batch_size = inputs[0].shape().cols().max(inputs[1].shape().cols());
+        let batch_size = Shape::get_batch_size(&inputs[0].shape(), &inputs[1].shape());
+        let batch_size = batch_size.map(NonZeroUsize::get).unwrap_or(1);
         super::setup_ones(output, batch_size);
         let ones = output.internal.get("ones").unwrap().borrow();
 

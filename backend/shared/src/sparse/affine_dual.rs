@@ -22,8 +22,6 @@ pub fn affine_dual(
     let mut output_shape = input_a.shape * input_b1.shape;
     output_shape = Shape::from_raw(output_shape.rows() * 2, output_shape.cols(), output_shape.batch_size());
 
-    println!("{output_shape}");
-
     output.reshape_if_needed(output_shape);
 
     unsafe {
