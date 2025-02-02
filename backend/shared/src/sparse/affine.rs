@@ -1,17 +1,21 @@
 use crate::{backend::ops, DenseMatrix, SparseMatrix};
 
 pub fn affine(input_a: &DenseMatrix, input_b: &SparseMatrix, input_c: Option<&DenseMatrix>, output: &mut DenseMatrix) {
+    assert!(input_a.shape.batch_size().is_none());
+    assert_eq!(input_b.shape.cols(), 1);
+
     let output_shape = input_a.shape * input_b.shape;
     output.reshape_if_needed(output_shape);
 
     if let Some(c) = input_c {
+        assert!(c.shape.batch_size().is_none());
         assert_eq!(c.shape.rows(), output_shape.rows());
         assert_eq!(c.shape.cols(), 1);
     }
 
     unsafe {
         ops::sparseAffineForward(
-            input_b.shape.cols(),
+            input_b.shape.batch_size().unwrap_or(1),
             input_b.nnz,
             output.shape().rows(),
             input_a.buf.ptr(),
@@ -31,18 +35,23 @@ pub fn backprop_affine(
     outputs: &DenseMatrix,
     output_grad: &DenseMatrix,
 ) {
-    input_a_grad.reshape_if_needed(input_a.shape());
+    assert!(input_a.shape.batch_size().is_none());
+    assert_eq!(input_b.shape.cols(), 1);
+    assert_eq!(outputs.shape, output_grad.shape);
 
     let c_ptr = if let Some(grad) = input_c_grad {
+        assert!(input_c.unwrap().shape.batch_size().is_none());
         grad.reshape_if_needed(input_c.unwrap().shape);
         grad.buf.mut_ptr()
     } else {
         std::ptr::null_mut()
     };
 
+    input_a_grad.reshape_if_needed(input_a.shape());
+
     unsafe {
         ops::sparseAffineBackward(
-            input_b.shape.cols(),
+            input_b.shape.batch_size().unwrap_or(1),
             input_b.nnz,
             output_grad.shape.rows(),
             input_a_grad.buf.mut_ptr(),
@@ -80,7 +89,7 @@ mod tests {
         let device = Arc::new(ExecutionContext::default());
 
         let shape1 = Shape::new(2, 3);
-        let shape2 = Shape::new(3, 3);
+        let shape2 = Shape::new_batched(3, 1, 3);
 
         let mut input1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut input2 = SparseMatrix::zeroed(device.clone(), Shape::new(1, 1), 1);
@@ -114,7 +123,7 @@ mod tests {
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
-            assert_eq!(output.shape(), Shape::new(2, 3));
+            assert_eq!(output.shape(), Shape::new_batched(2, 1, 3));
 
             let mut buf = [0.0; 6];
             output.write_to_slice(&mut buf);
@@ -143,7 +152,7 @@ mod tests {
     fn aligned_matches_unaligned() {
         let device = Arc::new(ExecutionContext::default());
 
-        let input_shape = Shape::new(4, 3);
+        let input_shape = Shape::new_batched(4, 1, 3);
         let shape1 = Shape::new(256, 4);
         let mut inputs1 = SparseMatrix::zeroed(device.clone(), Shape::new(1, 1), 1);
         let mut weights1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));

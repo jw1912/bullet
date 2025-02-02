@@ -41,6 +41,7 @@ impl Operation<ExecutionContext> for AffineDualActivate {
                 input1[0].gradients.as_mut().unwrap(),
                 stm,
                 ntm,
+                input4[0].values.dense(),
                 input4[0].gradients.as_mut().unwrap(),
                 output.values.dense(),
                 output.gradients.as_ref().unwrap(),

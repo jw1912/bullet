@@ -13,6 +13,7 @@ pub struct SparseMatrix<D: Device> {
 
 impl<D: Device> SparseMatrix<D> {
     pub fn zeroed(device: Arc<D>, shape: Shape, nnz: usize) -> Self {
+        assert_eq!(shape.cols(), 1);
         Self { buf: D::Buffer::new(device, shape.size()), shape, nnz }
     }
 
@@ -25,8 +26,10 @@ impl<D: Device> SparseMatrix<D> {
     }
 
     pub fn reshape_if_needed(&mut self, shape: Shape, nnz: usize) {
-        if nnz * shape.cols() > self.allocated_size() {
-            self.buf = D::Buffer::new(self.buf.device(), shape.size());
+        assert_eq!(shape.cols(), 1, "{shape}");
+        let new_size = nnz * shape.batch_size().unwrap_or(1);
+        if new_size > self.allocated_size() {
+            self.buf = D::Buffer::new(self.buf.device(), new_size);
         } else if self.shape != shape {
             self.buf.set_zero();
         }
@@ -37,13 +40,14 @@ impl<D: Device> SparseMatrix<D> {
 
     /// #### Safety
     /// It is the responsibility of the user to ensure all indices fall within the given shape.
-    pub unsafe fn load_from_slice(&mut self, shape: Shape, max_active: usize, buf: &[i32]) {
-        self.reshape_if_needed(shape, max_active);
+    pub unsafe fn load_from_slice(&mut self, shape: Shape, nnz: usize, buf: &[i32]) {
+        assert_eq!(nnz * shape.batch_size().unwrap_or(1), buf.len());
+        self.reshape_if_needed(shape, nnz);
         self.buf.load_from_slice(buf);
     }
 
     pub fn copy_into(&self, dest: &mut Self) {
         dest.reshape_if_needed(self.shape, self.nnz);
-        dest.buf.load_from_device(&self.buf, self.nnz * self.shape.cols());
+        dest.buf.load_from_device(&self.buf, self.nnz * self.shape.batch_size().unwrap_or(1));
     }
 }
