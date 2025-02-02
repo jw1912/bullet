@@ -17,7 +17,7 @@ impl Operation<ExecutionContext> for SoftmaxCrossEntropyLoss {
 
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         super::setup_softmax(output);
-        super::setup_ones(output, inputs[0].shape().batch_size().unwrap_or(1));
+        super::setup_ones(output, inputs[0].shape().size());
 
         let ones = output.internal.get("ones").unwrap().borrow();
         let mut smax = output.internal.get("softmaxed").unwrap().borrow_mut();
@@ -55,5 +55,65 @@ impl Operation<ExecutionContext> for SoftmaxCrossEntropyLoss {
                 grad,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use bullet_core::device::Device;
+
+    #[test]
+    fn softmax_crossentropy() {
+        let device = Arc::new(ExecutionContext::default());
+
+        let shape = Shape::new_batched(2, 2, 3);
+
+        let mut pred = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut target = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut output = Tensor::new(device.clone(), Shape::new(1, 1), true);
+
+        device.panic_if_device_error("Failed to initialise matrices!");
+
+        pred.load_dense_from_slice(shape, &[1.0, 2.0, 1.0, 2.0, -4.0, -1.0, -1.0, -1.0, 0.0, 0.0, 1.0, 0.0]);
+        assert_eq!(pred.shape(), shape);
+
+        target.load_dense_from_slice(shape, &[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
+        assert_eq!(target.shape(), shape);
+
+        device.panic_if_device_error("Failed to load data from CPU!");
+
+        SoftmaxCrossEntropyLoss.forward(&[&pred, &target], &mut output);
+
+        device.panic_if_device_error("Failed to calculate activation!");
+
+        assert_eq!(output.shape(), Shape::new(1, 1));
+
+        let buf = output.get_dense_vals().unwrap();
+        assert!((buf[0] - 3.865).abs() < 0.001);
+
+        device.panic_if_device_error("Failed to load data from CPU!");
+
+        output.gradients.as_mut().unwrap().load_from_slice(Shape::new(1, 1), &[1.0]);
+
+        SoftmaxCrossEntropyLoss.backward(&output, &mut [&mut pred, &mut target]);
+
+        device.panic_if_device_error("Failed to calculate activation!");
+
+        let mut buf = [0.0; 12];
+        pred.gradients.as_ref().unwrap().write_to_slice(&mut buf);
+        let expected =
+            [-0.8655, 0.3655, 0.1345, 0.3655, 0.0163, -0.6721, 0.3279, 0.3279, 0.1749, 0.1749, -0.5246, 0.1749];
+
+        let mut total = 0.0;
+        for (p, e) in buf.iter().zip(expected.iter()) {
+            total += (p - e).abs();
+        }
+
+        assert!(total < 0.01);
+
+        device.panic_if_device_error("Failed to write data to CPU!");
     }
 }

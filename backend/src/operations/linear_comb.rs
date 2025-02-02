@@ -49,3 +49,86 @@ impl Operation<ExecutionContext> for LinearCombination {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::backend::Matrix;
+    use bullet_core::device::Device;
+
+    #[test]
+    fn linear_comb() {
+        let device = Arc::new(ExecutionContext::default());
+
+        let comb = LinearCombination(2.0, -1.0);
+
+        let shape1 = Shape::new_batched(3, 1, 3);
+        let shape2 = Shape::new(3, 1);
+
+        let mut input1 = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut input2 = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut output = Tensor::new(device.clone(), Shape::new(1, 1), true);
+
+        device.panic_if_device_error("Failed to initialise matrices!");
+
+        // load matrices from CPU
+        {
+            input1.load_dense_from_slice(shape1, &[-1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 1.0, 1.0, 1.0]);
+
+            input2.load_dense_from_slice(shape2, &[1.0, 2.0, 3.0]);
+
+            assert_eq!(input1.shape(), shape1);
+            assert_eq!(input2.shape(), shape2);
+
+            device.panic_if_device_error("Failed to load data from CPU!");
+        }
+
+        let expected_fwd =
+            [[-3.0, 6.0, 1.0, -5.0, -2.0, -9.0, 1.0, 0.0, -1.0], [3.0, 0.0, 4.0, 4.0, 4.0, 9.0, 1.0, 3.0, 5.0]];
+
+        let expected_bwd1 = [
+            [-6.0, 12.0, 2.0, -10.0, -4.0, -18.0, 2.0, 0.0, -2.0],
+            [-3.0, 0.0, -4.0, -4.0, -4.0, -9.0, -1.0, -3.0, -5.0],
+        ];
+
+        let expected_bwd2 = [[7.0, -4.0, 9.0], [16.0, 14.0, 36.0]];
+
+        let mut test_linear_comb = |i: &mut Tensor, j: &mut Tensor, num: usize| {
+            comb.forward(&[i, j], &mut output);
+
+            device.panic_if_device_error("Failed to add matrices!");
+
+            assert_eq!(output.shape(), Shape::new_batched(3, 1, 3));
+
+            let buf = output.get_dense_vals().unwrap();
+            assert_eq!(buf, expected_fwd[num], "{num}");
+
+            device.panic_if_device_error("Failed to write data to CPU!");
+
+            i.gradients.as_mut().unwrap().set_zero();
+            j.gradients.as_mut().unwrap().set_zero();
+
+            if let Matrix::Dense(vals) = &output.values {
+                vals.copy_into(output.gradients.as_mut().unwrap());
+            }
+
+            comb.backward(&output, &mut [i, j]);
+
+            device.panic_if_device_error("Failed to backprop addition!");
+
+            let mut grads = [vec![0.0; 9], vec![0.0; 3]];
+            i.gradients.as_ref().unwrap().write_to_slice(&mut grads[num]);
+            j.gradients.as_ref().unwrap().write_to_slice(&mut grads[1 - num]);
+
+            assert_eq!(&grads[0], &expected_bwd1[num], "{num}");
+            assert_eq!(&grads[1], &expected_bwd2[num], "{num}");
+
+            device.panic_if_device_error("Failed to write data to CPU!");
+        };
+
+        test_linear_comb(&mut input1, &mut input2, 0);
+        test_linear_comb(&mut input2, &mut input1, 1);
+    }
+}

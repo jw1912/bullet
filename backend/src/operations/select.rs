@@ -38,3 +38,76 @@ impl Operation<ExecutionContext> for Select {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::backend::Matrix;
+    use bullet_core::device::Device;
+
+    #[test]
+    fn test_select() {
+        let device = Arc::new(ExecutionContext::default());
+
+        let shape1 = Shape::new_batched(8, 1, 3);
+        let shape2 = Shape::new_batched(4, 1, 3);
+
+        let mut input1 = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut input2 = Tensor::new(device.clone(), Shape::new(1, 1), false);
+        let mut output = Tensor::new(device.clone(), Shape::new(1, 1), true);
+
+        device.panic_if_device_error("Failed to initialise matrices!");
+
+        input1.load_dense_from_slice(
+            shape1,
+            &[
+                -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0, -1.0, 4.0, 2.0, -2.0, 0.0, -3.0, 0.0, -3.0, -1.0, 4.0, 2.0,
+                -2.0, 0.0, -3.0, 0.0, -3.0,
+            ],
+        );
+
+        unsafe {
+            input2.load_sparse_from_slice(shape2, 1, &[0, 1, 2]);
+        }
+
+        assert_eq!(input1.shape(), shape1);
+        assert_eq!(input2.shape(), shape2);
+
+        device.panic_if_device_error("Failed to load data from CPU!");
+
+        Select.forward(&[&input1, &input2], &mut output);
+
+        device.panic_if_device_error("Failed to calculate matmul!");
+
+        assert_eq!(output.shape(), Shape::new_batched(2, 1, 3));
+
+        let buf = output.get_dense_vals().unwrap();
+        assert_eq!(&buf, &[-1.0, 4.0, 2.0, -2.0, 0.0, -3.0]);
+
+        device.panic_if_device_error("Failed to write data to CPU!");
+
+        if let Matrix::Dense(vals) = &output.values {
+            vals.copy_into(output.gradients.as_mut().unwrap());
+        }
+
+        Select.backward(&output, &mut [&mut input1, &mut input2]);
+
+        device.panic_if_device_error("Failed to backprop matmul!");
+
+        assert_eq!(input1.gradients.as_ref().unwrap().shape(), shape1);
+
+        let mut grad1 = [0.0; 24];
+        input1.gradients.as_ref().unwrap().write_to_slice(&mut grad1);
+        assert_eq!(
+            grad1,
+            [
+                -1.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, -3.0, 0.0, 0.0,
+            ],
+        );
+
+        device.panic_if_device_error("Failed to write data to CPU!");
+    }
+}

@@ -31,3 +31,25 @@ impl Operation<ExecutionContext> for ReduceAcrossBatch {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+
+    #[test]
+    fn reduce_add_cols() {
+        let device = Arc::new(ExecutionContext::default());
+
+        let mut input = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut output = Tensor::new(device.clone(), Shape::new(1, 1), true);
+
+        input.load_dense_from_slice(Shape::new_batched(1, 1, 9), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+
+        ReduceAcrossBatch.forward(&[&input], &mut output);
+
+        assert_eq!(output.shape(), Shape::new(1, 1));
+        assert_eq!(&output.get_dense_vals().unwrap(), &[45.0]);
+    }
+}

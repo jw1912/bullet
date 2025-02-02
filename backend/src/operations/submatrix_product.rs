@@ -46,3 +46,76 @@ impl Operation<ExecutionContext> for SubmatrixProduct {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::backend::Matrix;
+    use bullet_core::device::Device;
+
+    #[test]
+    fn test_submatrix_product() {
+        let device = Arc::new(ExecutionContext::default());
+
+        let shape = Shape::new_batched(2, 1, 3);
+        let key_size = 1;
+
+        let mut input1 = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut input2 = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut output = Tensor::new(device.clone(), Shape::new(1, 1), true);
+
+        device.panic_if_device_error("Failed to initialise matrices!");
+
+        // load matrices from CPU
+        {
+            input1.load_dense_from_slice(shape, &[1.0; 6]);
+
+            input2.load_dense_from_slice(shape, &[2.0, 1.0, 4.0, 3.0, 0.0, 4.0]);
+
+            assert_eq!(input1.shape(), shape);
+            assert_eq!(input2.shape(), shape);
+
+            device.panic_if_device_error("Failed to load data from CPU!");
+        }
+
+        // normal matmul
+        {
+            SubmatrixProduct(key_size).forward(&[&input1, &input2], &mut output);
+
+            device.panic_if_device_error("Failed to calculate matmul!");
+
+            assert_eq!(output.shape(), Shape::new_batched(4, 1, 3));
+
+            let buf = output.get_dense_vals().unwrap();
+            assert_eq!(&buf, &[2.0, 2.0, 1.0, 1.0, 4.0, 4.0, 3.0, 3.0, 0.0, 0.0, 4.0, 4.0]);
+
+            device.panic_if_device_error("Failed to write data to CPU!");
+        }
+
+        if let Matrix::Dense(vals) = &output.values {
+            vals.copy_into(output.gradients.as_mut().unwrap());
+        }
+
+        // backprop normal matmul
+        {
+            SubmatrixProduct(key_size).backward(&output, &mut [&mut input1, &mut input2]);
+
+            device.panic_if_device_error("Failed to backprop matmul!");
+
+            assert_eq!(input1.gradients.as_ref().unwrap().shape(), shape);
+            assert_eq!(input2.gradients.as_ref().unwrap().shape(), shape);
+
+            let mut grad1 = [0.0; 6];
+            input1.gradients.as_ref().unwrap().write_to_slice(&mut grad1);
+            assert_eq!(grad1, [5.0, 5.0, 25.0, 25.0, 16.0, 16.0]);
+
+            let mut grad2 = [0.0; 6];
+            input2.gradients.as_ref().unwrap().write_to_slice(&mut grad2);
+            assert_eq!(grad2, [4.0, 2.0, 8.0, 6.0, 0.0, 8.0]);
+
+            device.panic_if_device_error("Failed to write data to CPU!");
+        }
+    }
+}

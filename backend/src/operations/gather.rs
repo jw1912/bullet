@@ -41,3 +41,42 @@ impl Operation<ExecutionContext> for Gather {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::backend::Matrix;
+
+    #[test]
+    fn test_gather() {
+        let device = Arc::new(ExecutionContext::default());
+
+        let shape1 = Shape::new_batched(3, 1, 3);
+
+        let mut inputs = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut output = Tensor::new(device.clone(), Shape::new(1, 1), true);
+        let mut indices = Tensor::new(device.clone(), Shape::new(1, 1), false);
+
+        inputs.load_dense_from_slice(shape1, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+        unsafe {
+            indices.load_sparse_from_slice(Shape::new(5, 1), 5, &[-1, 0, 2, 1, 2]);
+        }
+
+        Gather.forward(&[&inputs, &indices], &mut output);
+
+        let buf = output.get_dense_vals().unwrap();
+        assert_eq!(&buf, &[0.0, 1.0, 3.0, 2.0, 3.0, 0.0, 4.0, 6.0, 5.0, 6.0, 0.0, 7.0, 9.0, 8.0, 9.0]);
+
+        if let Matrix::Dense(vals) = &output.values {
+            vals.copy_into(output.gradients.as_mut().unwrap())
+        }
+
+        Gather.backward(&output, &mut [&mut inputs, &mut indices]);
+
+        let mut buf = [0.0; 9];
+        inputs.gradients.as_ref().unwrap().write_to_slice(&mut buf);
+        assert_eq!(buf, [1.0, 2.0, 6.0, 4.0, 5.0, 12.0, 7.0, 8.0, 18.0,]);
+    }
+}
