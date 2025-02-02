@@ -109,10 +109,8 @@ mod tests {
             vals.copy_into(output.gradients.as_mut().unwrap());
         }
 
-        AffineDualActivate(Activation::Identity).backward(
-            &output,
-            &mut [&mut input1, &mut input2, &mut input3, &mut input4]
-        );
+        AffineDualActivate(Activation::Identity)
+            .backward(&output, &mut [&mut input1, &mut input2, &mut input3, &mut input4]);
 
         device.panic_if_device_error("Failed to backprop matmul!");
 

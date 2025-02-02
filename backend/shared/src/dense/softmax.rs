@@ -88,9 +88,9 @@ pub fn backprop_softmax_crossentropy_loss(
 mod tests {
     use std::sync::Arc;
 
-    use bullet_core::device::Device;
-    use crate::ExecutionContext;
     use super::*;
+    use crate::ExecutionContext;
+    use bullet_core::device::Device;
 
     #[test]
     fn softmax() {

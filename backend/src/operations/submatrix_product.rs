@@ -98,7 +98,6 @@ mod tests {
             vals.copy_into(output.gradients.as_mut().unwrap());
         }
 
-
         // backprop normal matmul
         {
             SubmatrixProduct(key_size).backward(&output, &mut [&mut input1, &mut input2]);
@@ -120,4 +119,3 @@ mod tests {
         }
     }
 }
-
