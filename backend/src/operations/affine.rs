@@ -19,7 +19,7 @@ impl Operation<ExecutionContext> for Affine {
         let weights = inputs[0].values.dense();
         let biases = inputs[2].values.dense();
 
-        let batch_size = inputs[1].values.shape().cols();
+        let batch_size = inputs[1].values.shape().batch_size().unwrap_or(1);
         super::setup_ones(output, batch_size);
         let ones = output.internal.get("ones").unwrap().borrow();
         let out = output.values.dense_mut();
@@ -28,7 +28,7 @@ impl Operation<ExecutionContext> for Affine {
             Matrix::Sparse(sparse) => sparse::affine(weights, sparse, Some(biases), out),
             Matrix::Dense(dense) => {
                 dense::matmul(weights, false, dense, false, out);
-                dense::add_assign_vector_to_matrix_columns_scaled(&ones.buf, 1.0, biases, out);
+                dense::add_assign_single_to_batched_scaled(&ones.buf, 1.0, biases, out);
             }
         }
     }

@@ -11,13 +11,18 @@ pub fn convolution_forward(
     input: &DenseMatrix,
     output: &mut DenseMatrix,
 ) {
+    assert!(filters.shape.batch_size().is_none());
     assert_eq!(filters.shape.rows(), desc.filter_shape.size());
     assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
     assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
 
-    let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
+    let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.batch_size().unwrap_or(1));
 
-    output.reshape_if_needed(Shape::new(desc.output_shape.size() * desc.output_channels, input.shape.cols()));
+    output.reshape_if_needed(Shape::from_raw(
+        desc.output_shape.size() * desc.output_channels,
+        1,
+        input.shape.batch_size(),
+    ));
 
     unsafe {
         conv::conv_fwd(
@@ -38,13 +43,15 @@ pub fn convolution_backward(
     input_grad: Option<&mut DenseMatrix>,
     output_grad: &DenseMatrix,
 ) {
+    assert!(filters.shape.batch_size().is_none());
+
     assert_eq!(filters.shape.rows(), desc.filter_shape.size());
     assert_eq!(filters.shape.cols(), desc.input_channels * desc.output_channels);
     assert_eq!(input.shape.rows(), desc.input_shape.size() * desc.input_channels);
     assert_eq!(output_grad.shape.rows(), desc.output_shape.size() * desc.output_channels);
     assert_eq!(output_grad.shape.cols(), input.shape.cols());
 
-    let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.cols());
+    let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.batch_size().unwrap_or(1));
 
     let device = filters.buf.device();
     let ctx = device.as_ref();
@@ -115,7 +122,7 @@ mod tests {
         );
 
         input.load_from_slice(
-            Shape::new(16, 2),
+            Shape::new_batched(16, 1, 2),
             &[
                 1.0, 2.0, 3.0, 4.0,
                 5.0, 6.0, 7.0, 8.0,
@@ -138,7 +145,7 @@ mod tests {
             &mut output,
         );
 
-        assert_eq!(output.shape(), Shape::new(32, 2));
+        assert_eq!(output.shape(), Shape::new_batched(32, 1, 2));
 
         panic_if_device_error("Failed conv fwd!");
 

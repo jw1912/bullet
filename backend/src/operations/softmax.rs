@@ -17,7 +17,7 @@ impl Operation<ExecutionContext> for SoftmaxCrossEntropyLoss {
 
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         super::setup_softmax(output);
-        super::setup_ones(output, inputs[0].shape().cols());
+        super::setup_ones(output, inputs[0].shape().batch_size().unwrap_or(1));
 
         let ones = output.internal.get("ones").unwrap().borrow();
         let mut smax = output.internal.get("softmaxed").unwrap().borrow_mut();

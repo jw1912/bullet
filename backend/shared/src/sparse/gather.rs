@@ -1,17 +1,20 @@
 use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
 
 pub fn gather(inputs: &DenseMatrix, indices: &SparseMatrix, outputs: &mut DenseMatrix) {
+    assert!(indices.shape.batch_size().is_none());
     assert_eq!(indices.shape.cols(), 1);
     assert_eq!(indices.shape.rows(), indices.nnz);
+    assert_eq!(inputs.shape.cols(), 1);
 
-    outputs.reshape_if_needed(Shape::new(indices.shape.rows(), inputs.shape.cols()));
+    let output_shape = Shape::from_raw(indices.shape.rows(), 1, inputs.shape.batch_size());
+    outputs.reshape_if_needed(output_shape);
     outputs.set_zero();
 
     unsafe {
         ops::gather(
             inputs.shape.rows(),
-            outputs.shape.rows(),
-            outputs.shape.cols(),
+            output_shape.rows(),
+            output_shape.batch_size().unwrap_or(1),
             inputs.buf.ptr(),
             indices.buf.ptr(),
             outputs.buf.mut_ptr(),
@@ -25,8 +28,13 @@ pub fn backprop_gather(
     inputs: &DenseMatrix,
     input_grads: &mut DenseMatrix,
 ) {
+    assert!(indices.shape.batch_size().is_none());
     assert_eq!(indices.shape.cols(), 1);
-    assert_eq!(output_grads.shape.cols(), inputs.shape.cols());
+    assert_eq!(indices.shape.rows(), indices.nnz);
+
+    assert_eq!(inputs.shape.cols(), 1);
+    assert_eq!(output_grads.shape.cols(), 1);
+    assert_eq!(output_grads.shape.batch_size(), inputs.shape.batch_size());
     assert_eq!(output_grads.shape.rows(), indices.shape.rows());
 
     input_grads.reshape_if_needed(inputs.shape);
@@ -35,7 +43,7 @@ pub fn backprop_gather(
         ops::gather_backprop(
             inputs.shape.rows(),
             output_grads.shape.rows(),
-            output_grads.shape.cols(),
+            output_grads.shape.batch_size().unwrap_or(1),
             output_grads.buf.ptr(),
             indices.buf.ptr(),
             input_grads.buf.mut_ptr(),
@@ -54,7 +62,7 @@ mod tests {
     fn test_gather() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape1 = Shape::new(3, 3);
+        let shape1 = Shape::new_batched(3, 1, 3);
 
         let mut inputs = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));

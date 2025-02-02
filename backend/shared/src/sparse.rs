@@ -21,7 +21,7 @@ pub fn copy_into_dense(sparse: &SparseMatrix, dense: &mut DenseMatrix) {
     unsafe {
         ops::sparse_to_dense(
             sparse.shape.rows(),
-            sparse.shape.cols(),
+            sparse.shape.batch_size().unwrap_or(1),
             sparse.nnz,
             sparse.buf.ptr(),
             dense.buf.mut_ptr(),
@@ -43,7 +43,7 @@ mod tests {
     fn sparse_to_dense() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape = Shape::new(3, 3);
+        let shape = Shape::new_batched(3, 1, 3);
 
         let mut input = SparseMatrix::zeroed(device.clone(), Shape::new(1, 1), 1);
         let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));

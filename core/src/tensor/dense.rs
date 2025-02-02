@@ -45,6 +45,7 @@ impl<D: Device> DenseMatrix<D> {
     }
 
     pub fn load_from_slice(&mut self, shape: Shape, buf: &[f32]) {
+        assert_eq!(shape.size(), buf.len());
         self.reshape_if_needed(shape);
         self.buf.load_from_slice(buf);
     }

@@ -3,17 +3,19 @@ use bullet_core::device::DeviceBuffer;
 use crate::{backend::blas, DenseMatrix, Shape};
 
 pub fn concat(input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
-    let cols = input_a.shape.cols();
-    assert_eq!(cols, input_b.shape.cols());
+    assert_eq!(input_a.shape.cols(), 1);
+    assert_eq!(input_b.shape.cols(), 1);
+    assert_eq!(input_a.shape.batch_size(), input_b.shape.batch_size());
 
-    let output_shape = Shape::new(input_a.shape.rows() + input_b.shape.rows(), cols);
+    let output_rows = input_a.shape.rows() + input_b.shape.rows();
+    let output_shape = Shape::from_raw(output_rows, 1, input_a.shape.batch_size());
     output.reshape_if_needed(output_shape);
 
     unsafe {
         blas::copy_strided(
             input_a.buf.device().as_ref(),
             input_a.shape.rows(),
-            cols,
+            input_a.shape.batch_size().unwrap_or(1),
             input_a.shape.rows(),
             input_a.buf.ptr(),
             output_shape.rows(),
@@ -22,9 +24,9 @@ pub fn concat(input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMa
         );
 
         blas::copy_strided(
-            input_a.buf.device().as_ref(),
+            input_b.buf.device().as_ref(),
             input_b.shape.rows(),
-            cols,
+            input_b.shape.batch_size().unwrap_or(1),
             input_b.shape.rows(),
             input_b.buf.ptr(),
             output_shape.rows(),
@@ -41,9 +43,11 @@ pub fn backprop_concat(
     input_b_grad: Option<&mut DenseMatrix>,
     output_grad: &DenseMatrix,
 ) {
-    let cols = input_a.shape.cols();
-    assert_eq!(cols, input_b.shape.cols());
-    assert_eq!(cols, output_grad.shape.cols());
+    assert_eq!(input_a.shape.cols(), 1);
+    assert_eq!(input_b.shape.cols(), 1);
+    assert_eq!(output_grad.shape.cols(), 1);
+    assert_eq!(input_a.shape.batch_size(), input_b.shape.batch_size());
+    assert_eq!(input_a.shape.batch_size(), output_grad.shape.batch_size());
 
     if let Some(grad) = input_a_grad {
         grad.reshape_if_needed(input_a.shape);
@@ -52,7 +56,7 @@ pub fn backprop_concat(
             blas::copy_strided(
                 grad.buf.device().as_ref(),
                 grad.shape.rows(),
-                grad.shape.cols(),
+                grad.shape.batch_size().unwrap_or(1),
                 output_grad.shape.rows(),
                 output_grad.buf.ptr(),
                 grad.shape.rows(),
@@ -69,7 +73,7 @@ pub fn backprop_concat(
             blas::copy_strided(
                 grad.buf.device().as_ref(),
                 grad.shape.rows(),
-                grad.shape.cols(),
+                grad.shape.batch_size().unwrap_or(1),
                 output_grad.shape.rows(),
                 output_grad.buf.ptr().add(input_a.shape.rows()),
                 grad.shape.rows(),
@@ -91,8 +95,8 @@ mod tests {
     fn test_concat() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape1 = Shape::new(3, 3);
-        let shape2 = Shape::new(1, 3);
+        let shape1 = Shape::new_batched(3, 1, 3);
+        let shape2 = Shape::new_batched(1, 1, 3);
 
         let mut input1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut input2 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
@@ -120,7 +124,7 @@ mod tests {
 
             util::panic_if_device_error("Failed to concat matrices!");
 
-            assert_eq!(output.shape(), Shape::new(4, 3));
+            assert_eq!(output.shape(), Shape::new_batched(4, 1, 3));
 
             let mut buf = [0.0; 12];
             output.write_to_slice(&mut buf);

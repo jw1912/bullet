@@ -149,7 +149,7 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
 
         let output_size = if wdl { 3 } else { 1 };
 
-        let shape = Shape::new(input_size, batch_size);
+        let shape = Shape::new_batched(input_size, 1, batch_size);
         let sparse_size = max_active * batch_size;
 
         let mut prep = Self {
@@ -159,12 +159,12 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
             stm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
             nstm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
             buckets: SparseInput {
-                shape: Shape::new(O::BUCKETS, batch_size),
+                shape: Shape::new_batched(O::BUCKETS, 1, batch_size),
                 max_active: 1,
                 value: vec![0; batch_size],
             },
             targets: DenseInput {
-                shape: Shape::new(output_size, batch_size),
+                shape: Shape::new_batched(output_size, 1, batch_size),
                 value: vec![0.0; output_size * batch_size],
             },
         };

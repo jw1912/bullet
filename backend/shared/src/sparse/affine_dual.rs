@@ -9,19 +9,24 @@ pub fn affine_dual(
     output: &mut DenseMatrix,
     activation: Activation,
 ) {
+    assert!(input_a.shape.batch_size().is_none());
+    assert!(input_c.shape.batch_size().is_none());
+
     assert_eq!(input_b1.shape, input_b2.shape);
+    assert_eq!(input_b1.shape.cols(), 1);
     assert_eq!(input_b1.nnz, input_b2.nnz);
+
     assert_eq!(input_c.shape.rows(), input_a.shape.rows());
     assert_eq!(input_c.shape.cols(), 1);
 
     let mut output_shape = input_a.shape * input_b1.shape;
-    output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
+    output_shape = Shape::from_raw(output_shape.rows() * 2, output_shape.cols(), output_shape.batch_size());
 
     output.reshape_if_needed(output_shape);
 
     unsafe {
         ops::sparseAffineDualForward(
-            input_b1.shape.cols(),
+            input_b1.shape.batch_size().unwrap_or(1),
             input_b1.nnz,
             input_a.shape().rows(),
             input_a.buf.ptr(),
@@ -40,20 +45,26 @@ pub fn backprop_affine_dual(
     input_a_grad: &mut DenseMatrix,
     input_b1: &SparseMatrix,
     input_b2: &SparseMatrix,
+    input_c: &DenseMatrix,
     input_c_grad: &mut DenseMatrix,
     outputs: &DenseMatrix,
     output_grad: &DenseMatrix,
     activation: Activation,
 ) {
+    assert!(input_a.shape.batch_size().is_none());
+    assert!(input_c.shape.batch_size().is_none());
+
     assert_eq!(input_b1.shape, input_b2.shape);
+    assert_eq!(input_b1.shape.cols(), 1);
     assert_eq!(input_b1.nnz, input_b2.nnz);
     assert_eq!(outputs.shape, output_grad.shape);
 
     input_a_grad.reshape_if_needed(input_a.shape());
+    input_c_grad.reshape_if_needed(input_c.shape());
 
     unsafe {
         ops::sparseAffineDualBackward(
-            input_b1.shape.cols(),
+            input_b1.shape.batch_size().unwrap_or(1),
             input_b1.nnz,
             input_a.shape.rows(),
             input_a_grad.buf.mut_ptr(),
@@ -80,7 +91,7 @@ mod tests {
         let device = Arc::new(ExecutionContext::default());
 
         let shape1 = Shape::new(2, 3);
-        let shape2 = Shape::new(3, 3);
+        let shape2 = Shape::new_batched(3, 1, 3);
 
         let mut input1 = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut input2 = SparseMatrix::zeroed(device.clone(), Shape::new(1, 1), 1);
@@ -121,7 +132,7 @@ mod tests {
 
             util::panic_if_device_error("Failed to calculate matmul!");
 
-            assert_eq!(output.shape(), Shape::new(4, 3));
+            assert_eq!(output.shape(), Shape::new_batched(4, 1, 3));
 
             let mut buf = [0.0; 12];
             output.write_to_slice(&mut buf);
@@ -137,6 +148,7 @@ mod tests {
                 &mut input1_grad,
                 &input2,
                 &input3,
+                &input4,
                 &mut input4_grad,
                 &output,
                 &output,

@@ -54,6 +54,8 @@ impl<D: Device + 'static> GraphBuilder<D> {
     }
 
     fn create_node(&mut self, mut data: NodeData<D>) -> Node {
+        assert!(data.shape.batch_size().is_none(), "Cannot specify batch size in graph builder!");
+
         if let Some(id) = data.id.as_ref() {
             assert!(self.ids.insert(id.to_string()))
         }

@@ -1,14 +1,17 @@
 use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
 
-fn softmax_across_columns_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
+fn softmax_across_batch_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
     assert_eq!(input.shape, mask.shape);
-    output.reshape_if_needed(Shape::new(mask.nnz, mask.shape.cols()));
+    assert_eq!(mask.shape.cols(), 1);
+
+    let output_shape = Shape::from_raw(mask.nnz, 1, mask.shape.batch_size());
+    output.reshape_if_needed(output_shape);
 
     unsafe {
         ops::softmax_across_columns_masked(
             mask.nnz,
             mask.shape.rows(),
-            mask.shape.cols(),
+            mask.shape.batch_size().unwrap_or(1),
             mask.buf.ptr(),
             input.buf.ptr(),
             output.buf.mut_ptr(),
@@ -24,8 +27,10 @@ fn crossentropy_masked(
     error: &mut DenseMatrix,
 ) {
     assert_eq!(pred.shape, target.shape);
-    assert_eq!(mask.shape.cols(), pred.shape.cols());
+    assert_eq!(pred.shape.cols(), 1);
+    assert_eq!(mask.shape.batch_size(), pred.shape.batch_size());
     assert_eq!(mask.nnz, pred.shape.rows());
+    assert_eq!(mask.shape.cols(), 1);
 
     output.reshape_if_needed(pred.shape);
     error.reshape_if_needed(Shape::new(1, 1));
@@ -34,7 +39,7 @@ fn crossentropy_masked(
     unsafe {
         ops::crossentropy_masked(
             mask.nnz,
-            mask.shape.cols(),
+            mask.shape.batch_size().unwrap_or(1),
             mask.buf.ptr(),
             pred.buf.ptr(),
             target.buf.ptr(),
@@ -53,10 +58,11 @@ pub fn softmax_crossentropy_loss_masked(
     individual_losses: &mut DenseMatrix,
 ) {
     assert_eq!(mask.shape, input.shape);
-    assert_eq!(mask.shape.cols(), target.shape().cols());
+    assert_eq!(mask.shape.cols(), 1);
+    assert_eq!(mask.shape.batch_size(), target.shape().batch_size());
     assert_eq!(mask.nnz, target.shape().rows());
 
-    softmax_across_columns_masked(mask, input, softmaxed);
+    softmax_across_batch_masked(mask, input, softmaxed);
 
     crossentropy_masked(mask, softmaxed, target, individual_losses, output);
 }
@@ -68,7 +74,9 @@ pub fn backprop_softmax_crossentropy_loss_masked(
     output_grad: &DenseMatrix,
     input_grad: &mut DenseMatrix,
 ) {
-    assert_eq!(mask.shape.cols(), target.shape().cols());
+    assert_eq!(mask.shape.cols(), 1);
+    assert_eq!(target.shape.cols(), 1);
+    assert_eq!(mask.shape.batch_size(), target.shape().batch_size());
     assert_eq!(mask.nnz, target.shape().rows());
     assert_eq!(softmaxed.shape(), target.shape());
     assert_eq!(output_grad.shape, Shape::new(1, 1));
@@ -79,7 +87,7 @@ pub fn backprop_softmax_crossentropy_loss_masked(
         ops::backprop_softmax_cross_entropy_masked(
             mask.nnz,
             mask.shape.rows(),
-            mask.shape.cols(),
+            mask.shape.batch_size().unwrap_or(1),
             mask.buf.ptr(),
             softmaxed.buf.ptr(),
             target.buf.ptr(),

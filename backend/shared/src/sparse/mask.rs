@@ -3,6 +3,8 @@ use crate::{backend::ops, DenseMatrix, SparseMatrix};
 pub fn mask(inputs: &DenseMatrix, masks: &SparseMatrix, outputs: &mut DenseMatrix) {
     let shape = inputs.shape;
     assert_eq!(shape, masks.shape);
+    assert_eq!(shape.cols(), 1);
+    assert!(masks.nnz <= shape.rows());
 
     outputs.reshape_if_needed(shape);
     outputs.set_zero();
@@ -10,7 +12,7 @@ pub fn mask(inputs: &DenseMatrix, masks: &SparseMatrix, outputs: &mut DenseMatri
     unsafe {
         ops::sparse_mask(
             shape.rows(),
-            shape.cols(),
+            shape.batch_size().unwrap_or(1),
             masks.nnz,
             inputs.buf.ptr(),
             masks.buf.ptr(),
@@ -22,13 +24,15 @@ pub fn mask(inputs: &DenseMatrix, masks: &SparseMatrix, outputs: &mut DenseMatri
 pub fn backprop_mask(output_grads: &DenseMatrix, masks: &SparseMatrix, input_grads: &mut DenseMatrix) {
     let shape = output_grads.shape;
     assert_eq!(shape, masks.shape);
+    assert_eq!(shape.cols(), 1);
+    assert!(masks.nnz <= shape.rows());
 
     input_grads.reshape_if_needed(shape);
 
     unsafe {
         ops::sparse_mask_backprop(
             shape.rows(),
-            shape.cols(),
+            shape.batch_size().unwrap_or(1),
             masks.nnz,
             output_grads.buf.ptr(),
             masks.buf.ptr(),
@@ -48,7 +52,7 @@ mod tests {
     fn test_mask() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape = Shape::new(3, 4);
+        let shape = Shape::new_batched(3, 1, 4);
 
         let vals = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0];
 
