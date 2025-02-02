@@ -9,7 +9,11 @@ impl Operation<ExecutionContext> for SliceRows {
         if inputs.len() == 1 {
             if self.1 > self.0 {
                 if self.1 <= inputs[0].rows() {
-                    Ok(Shape::new(self.1 - self.0, inputs[0].cols()))
+                    if inputs[0].cols() == 1 {
+                        Ok(Shape::new(self.1 - self.0, 1))
+                    } else {
+                        unimplemented!("Cannot slice matrices yet!")
+                    }
                 } else {
                     Err(format!("Invalid slice indices! end = {} > rows = {}", self.1, inputs[0].rows()))
                 }
@@ -22,11 +26,11 @@ impl Operation<ExecutionContext> for SliceRows {
     }
 
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
-        dense::slice_rows(inputs[0].values.dense(), self.0, self.1, output.values.dense_mut());
+        dense::slice_vector_batched(inputs[0].values.dense(), self.0, self.1, output.values.dense_mut());
     }
 
     fn backward(&self, output: &Tensor, inputs: &mut [&mut Tensor]) {
-        dense::backprop_slice_rows(
+        dense::backprop_slice_vector_batched(
             inputs[0].values.dense(),
             inputs[0].gradients.as_mut(),
             self.0,

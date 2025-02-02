@@ -2,7 +2,8 @@ use bullet_core::device::DeviceBuffer;
 
 use crate::{backend::blas, DenseMatrix, Shape};
 
-pub fn slice_rows(input: &DenseMatrix, start: usize, end: usize, output: &mut DenseMatrix) {
+pub fn slice_vector_batched(input: &DenseMatrix, start: usize, end: usize, output: &mut DenseMatrix) {
+    assert_eq!(input.shape.cols(), 1);
     assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");
     assert!(
         end <= input.shape.rows(),
@@ -10,14 +11,14 @@ pub fn slice_rows(input: &DenseMatrix, start: usize, end: usize, output: &mut De
         input.shape.rows()
     );
 
-    let output_shape = Shape::new(end - start, input.shape.cols());
+    let output_shape = Shape::from_raw(end - start, 1, input.shape.batch_size());
     output.reshape_if_needed(output_shape);
 
     unsafe {
         blas::copy_strided(
             input.buf.device().as_ref(),
             output_shape.rows(),
-            input.shape.cols(),
+            input.shape.batch_size().unwrap_or(1),
             input.shape.rows(),
             input.buf.ptr().add(start),
             output_shape.rows(),
@@ -27,15 +28,21 @@ pub fn slice_rows(input: &DenseMatrix, start: usize, end: usize, output: &mut De
     }
 }
 
-pub fn backprop_slice_rows(
+pub fn backprop_slice_vector_batched(
     input: &DenseMatrix,
     input_grad: Option<&mut DenseMatrix>,
     start: usize,
     end: usize,
     output_grad: &DenseMatrix,
 ) {
+    assert_eq!(input.shape.cols(), 1);
     assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");
-    let output_shape = Shape::new(end - start, input.shape.cols());
+    assert!(
+        end <= input.shape.rows(),
+        "Slice index out of bounds! Number of rows is {} but slice endpoint is {end}!",
+        input.shape.rows()
+    );
+    let output_shape = Shape::from_raw(end - start, 1, input.shape.batch_size());
     assert_eq!(output_shape, output_grad.shape);
 
     if let Some(grad) = input_grad {
@@ -45,7 +52,7 @@ pub fn backprop_slice_rows(
             blas::copy_strided(
                 output_grad.buf.device().as_ref(),
                 output_shape.rows(),
-                output_shape.cols(),
+                output_shape.batch_size().unwrap_or(1),
                 output_shape.rows(),
                 output_grad.buf.ptr(),
                 grad.shape.rows(),
@@ -67,7 +74,7 @@ mod tests {
     fn slice() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape = Shape::new(3, 3);
+        let shape = Shape::new_batched(3, 1, 3);
 
         let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
@@ -86,11 +93,11 @@ mod tests {
 
         // concat
         {
-            slice_rows(&input, 0, 2, &mut output);
+            slice_vector_batched(&input, 0, 2, &mut output);
 
             util::panic_if_device_error("Failed to concat matrices!");
 
-            assert_eq!(output.shape(), Shape::new(2, 3));
+            assert_eq!(output.shape(), Shape::new_batched(2, 1, 3));
 
             let mut buf = [0.0; 6];
             output.write_to_slice(&mut buf);
@@ -103,7 +110,7 @@ mod tests {
         {
             input_grad.load_from_slice(shape, &[1.0; 9]);
 
-            backprop_slice_rows(&input, Some(&mut input_grad), 0, 2, &output);
+            backprop_slice_vector_batched(&input, Some(&mut input_grad), 0, 2, &output);
 
             util::panic_if_device_error("Failed to backprop slice!");
 

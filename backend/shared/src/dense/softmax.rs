@@ -5,13 +5,18 @@ use crate::{
     Buffer, DenseMatrix, Shape,
 };
 
-fn softmax_across_columns(input: &DenseMatrix, output: &mut DenseMatrix) {
+fn softmax_across_batch(input: &DenseMatrix, output: &mut DenseMatrix) {
     assert!(input.shape.size() > 0);
 
     output.reshape_if_needed(input.shape);
 
     unsafe {
-        ops::softmax_across_columns(input.shape.rows(), input.shape.cols(), input.buf.ptr(), output.buf.mut_ptr());
+        ops::softmax_across_columns(
+            input.shape.without_batch_size().size(),
+            input.shape.batch_size().unwrap_or(1),
+            input.buf.ptr(),
+            output.buf.mut_ptr(),
+        );
     }
 }
 
@@ -37,7 +42,7 @@ pub fn softmax_crossentropy_loss(
 
     assert!(input.shape.size() <= ones.size());
 
-    softmax_across_columns(input, softmaxed);
+    softmax_across_batch(input, softmaxed);
 
     crossentropy(softmaxed, target, individual_losses);
 
@@ -90,7 +95,7 @@ mod tests {
     fn softmax() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape = Shape::new(4, 3);
+        let shape = Shape::new_batched(2, 2, 3);
 
         let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut output = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
@@ -103,7 +108,7 @@ mod tests {
 
         util::panic_if_device_error("Failed to load data from CPU!");
 
-        softmax_across_columns(&input, &mut output);
+        softmax_across_batch(&input, &mut output);
 
         util::panic_if_device_error("Failed to calculate activation!");
 
@@ -121,7 +126,7 @@ mod tests {
     fn softmax_crossentropy() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape = Shape::new(4, 3);
+        let shape = Shape::new_batched(2, 2, 3);
 
         let mut ones = Buffer::new(device.clone(), shape.size());
         ones.load_from_slice(&vec![1.0; shape.size()]);

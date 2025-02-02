@@ -1,21 +1,22 @@
 use crate::{backend::ops, DenseMatrix, Shape};
 
 pub fn pairwise(input: &DenseMatrix, output: &mut DenseMatrix, post_concat: bool) {
+    assert_eq!(input.shape.cols(), 1);
     let mut rows = input.shape.rows();
-    let mut cols = input.shape.cols();
+    let mut batch_size = input.shape.batch_size().unwrap_or(1);
+
+    let shape = Shape::new_batched(rows / 2, 1, batch_size);
 
     if post_concat {
         rows /= 2;
-        cols *= 2;
+        batch_size *= 2;
     }
 
     assert_eq!(rows % 2, 0);
-
-    let shape = Shape::new(input.shape.rows() / 2, input.shape.cols());
     output.reshape_if_needed(shape);
 
     unsafe {
-        ops::pairwiseMul(cols, rows / 2, input.buf.ptr(), output.buf.mut_ptr());
+        ops::pairwiseMul(batch_size, rows / 2, input.buf.ptr(), output.buf.mut_ptr());
     }
 }
 
@@ -25,18 +26,25 @@ pub fn backprop_pairwise(
     input_grad: &mut DenseMatrix,
     post_concat: bool,
 ) {
+    assert_eq!(input.shape.cols(), 1);
     let mut rows = input.shape.rows();
-    let mut cols = input.shape.cols();
+    let mut batch_size = input.shape.batch_size().unwrap_or(1);
 
     if post_concat {
         rows /= 2;
-        cols *= 2;
+        batch_size *= 2;
     }
 
     input_grad.reshape_if_needed(input.shape);
 
     unsafe {
-        ops::backpropPairwiseMul(cols, rows / 2, input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
+        ops::backpropPairwiseMul(
+            batch_size,
+            rows / 2,
+            input.buf.ptr(),
+            output_grad.buf.ptr(),
+            input_grad.buf.mut_ptr(),
+        );
     }
 }
 
@@ -51,8 +59,8 @@ mod tests {
     fn pairwise_no_concat() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape1 = Shape::new(4, 2);
-        let shape2 = Shape::new(2, 2);
+        let shape1 = Shape::new_batched(4, 1, 2);
+        let shape2 = Shape::new_batched(2, 1, 2);
 
         let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
@@ -95,8 +103,8 @@ mod tests {
     fn pairwise_post_concat() {
         let device = Arc::new(ExecutionContext::default());
 
-        let shape1 = Shape::new(4, 2);
-        let shape2 = Shape::new(2, 2);
+        let shape1 = Shape::new_batched(4, 1, 2);
+        let shape2 = Shape::new_batched(2, 1, 2);
 
         let mut input = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));
         let mut input_grad = DenseMatrix::zeroed(device.clone(), Shape::new(1, 1));

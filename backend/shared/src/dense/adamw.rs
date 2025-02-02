@@ -14,6 +14,7 @@ pub fn adamw(
     gradient_factor: f32,
     learning_rate: f32,
 ) {
+    assert!(params.shape.batch_size().is_none());
     assert_eq!(params.shape, gradient.shape);
     assert_eq!(params.shape, momentum.shape);
     assert_eq!(params.shape, velocity.shape);
