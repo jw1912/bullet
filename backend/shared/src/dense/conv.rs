@@ -18,7 +18,11 @@ pub fn convolution_forward(
 
     let cudnn_desc = ConvolutionCudnnDescription::new(desc, input.shape.batch_size().unwrap_or(1));
 
-    output.reshape_if_needed(Shape::from_raw(desc.output_shape.size() * desc.output_channels, 1, input.shape.batch_size()));
+    output.reshape_if_needed(Shape::from_raw(
+        desc.output_shape.size() * desc.output_channels,
+        1,
+        input.shape.batch_size(),
+    ));
 
     unsafe {
         conv::conv_fwd(
