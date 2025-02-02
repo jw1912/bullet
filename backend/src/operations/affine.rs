@@ -28,7 +28,7 @@ impl Operation<ExecutionContext> for Affine {
             Matrix::Sparse(sparse) => sparse::affine(weights, sparse, Some(biases), out),
             Matrix::Dense(dense) => {
                 dense::matmul(weights, false, dense, false, out);
-                dense::add_assign_vector_to_matrix_columns_scaled(&ones.buf, 1.0, biases, out);
+                dense::add_assign_single_to_batched_scaled(&ones.buf, 1.0, biases, out);
             }
         }
     }

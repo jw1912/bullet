@@ -18,7 +18,7 @@ impl Operation<ExecutionContext> for ReduceAcrossBatch {
         super::setup_ones(output, inputs[0].shape().cols());
         let ones = output.internal.get("ones").unwrap().borrow();
 
-        dense::reduce_add_cols(&ones.buf, input, output.values.dense_mut());
+        dense::reduce_add_batch(&ones.buf, input, output.values.dense_mut());
     }
 
     fn backward(&self, output_grad: &Tensor, inputs: &mut [&mut Tensor]) {
@@ -27,12 +27,7 @@ impl Operation<ExecutionContext> for ReduceAcrossBatch {
 
         if let Some(grad) = &mut inputs[0].gradients {
             grad.reshape_if_needed(inputs[0].values.shape());
-            dense::add_assign_vector_to_matrix_columns_scaled(
-                &ones.buf,
-                1.0,
-                output_grad.gradients.as_ref().unwrap(),
-                grad,
-            );
+            dense::add_assign_single_to_batched_scaled(&ones.buf, 1.0, output_grad.gradients.as_ref().unwrap(), grad);
         }
     }
 }
