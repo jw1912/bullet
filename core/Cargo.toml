@@ -7,3 +7,7 @@ authors = ["Jamie Whiting"]
 [dependencies]
 rand = "0.8.5"
 rand_distr = "0.4.3"
+cudarc = { workspace = true, optional = true }
+
+[features]
+cuda = ["cudarc"]

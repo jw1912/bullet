@@ -1,5 +1,5 @@
-use crate::backend::{dense, sparse, ExecutionContext, Matrix, Tensor};
-use bullet_core::{graph::Operation, shape::Shape};
+use crate::backend::{sparse, ExecutionContext, Matrix, Tensor};
+use bullet_core::{graph::Operation, matmul::Matmul, shape::Shape};
 
 #[derive(Debug)]
 pub struct Linear;
@@ -16,7 +16,7 @@ impl Operation<ExecutionContext> for Linear {
     fn forward(&self, inputs: &[&Tensor], output: &mut Tensor) {
         match &inputs[1].values {
             Matrix::Dense(dense) => {
-                dense::matmul(inputs[0].values.dense(), false, dense, false, output.values.dense_mut());
+                ExecutionContext::matmul(inputs[0].values.dense(), false, dense, false, output.values.dense_mut());
             }
             Matrix::Sparse(sparse) => {
                 sparse::linear(inputs[0].values.dense(), sparse, output.values.dense_mut());
@@ -29,7 +29,7 @@ impl Operation<ExecutionContext> for Linear {
 
         match &input2[0].values {
             Matrix::Dense(dense) => {
-                dense::backprop_matmul(
+                ExecutionContext::backprop_matmul(
                     input1[0].values.dense(),
                     input1[0].gradients.as_mut(),
                     false,
@@ -62,7 +62,7 @@ mod tests {
 
     use super::*;
     use crate::backend::Matrix;
-    use bullet_core::device::Device;
+    use bullet_core::{device::Device, matmul::Matmul};
 
     #[test]
     fn single_matmul() {
@@ -149,7 +149,7 @@ mod tests {
         if shape2.batch_size().is_none() {
             // transposed matmul
             {
-                dense::matmul(input2.values.dense(), true, input1.values.dense(), true, output.values.dense_mut());
+                ExecutionContext::matmul(input2.values.dense(), true, input1.values.dense(), true, output.values.dense_mut());
 
                 device.panic_if_device_error("Failed to calculate transposed matmul!");
 
@@ -166,7 +166,7 @@ mod tests {
                 input1.gradients.as_mut().unwrap().set_zero();
                 input2.gradients.as_mut().unwrap().set_zero();
 
-                dense::backprop_matmul(
+                ExecutionContext::backprop_matmul(
                     input2.values.dense(),
                     input2.gradients.as_mut(),
                     true,

@@ -1,5 +1,5 @@
 use crate::backend::{dense, sparse, ExecutionContext, Matrix, Tensor};
-use bullet_core::{graph::Operation, shape::Shape};
+use bullet_core::{graph::Operation, matmul::Matmul, shape::Shape};
 
 use super::linear::Linear;
 
@@ -27,7 +27,7 @@ impl Operation<ExecutionContext> for Affine {
         match &inputs[1].values {
             Matrix::Sparse(sparse) => sparse::affine(weights, sparse, Some(biases), out),
             Matrix::Dense(dense) => {
-                dense::matmul(weights, false, dense, false, out);
+                ExecutionContext::matmul(weights, false, dense, false, out);
                 dense::add_assign_single_to_batched_scaled(&ones.buf, 1.0, biases, out);
             }
         }

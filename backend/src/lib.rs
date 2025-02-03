@@ -1,9 +1,10 @@
 pub mod operations;
 
-pub use bullet_shared_backend as backend;
+use bullet_shared_backend as backend;
 
+pub use bullet_core::conv::ConvolutionDescription;
 pub use backend::{
-    dense, sparse, Activation, ConvolutionDescription, DenseMatrix, ExecutionContext, Matrix, SparseMatrix, Tensor,
+    dense, sparse, Activation, DenseMatrix, ExecutionContext, Matrix, SparseMatrix, Tensor,
 };
 
 #[cfg(test)]

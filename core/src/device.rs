@@ -1,9 +1,22 @@
 use std::sync::Arc;
 
-pub trait ValidType {}
+#[cfg(feature = "cuda")]
+use cudarc::driver::{DeviceRepr, ValidAsZeroBits};
 
-impl ValidType for f32 {}
-impl ValidType for i32 {}
+#[cfg(feature = "cuda")]
+/// # Safety
+/// Must be representable on all devices and valid
+/// as zeroed bits
+pub unsafe trait ValidType: DeviceRepr + ValidAsZeroBits {}
+
+#[cfg(not(feature = "cuda"))]
+/// # Safety
+/// Must be representable on all devices and valid
+/// as zeroed bits
+pub unsafe trait ValidType {}
+
+unsafe impl ValidType for f32 {}
+unsafe impl ValidType for i32 {}
 
 pub trait Device: Sized {
     type IdType;

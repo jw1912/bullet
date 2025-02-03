@@ -1,7 +1,7 @@
-use bullet_core::device::DeviceBuffer;
+use bullet_core::{conv::ConvolutionDescription, device::DeviceBuffer};
 
 use crate::{
-    backend::conv::{self, ConvolutionCudnnDescription, ConvolutionDescription},
+    backend::conv::{self, ConvolutionCudnnDescription},
     DenseMatrix, Shape,
 };
 
