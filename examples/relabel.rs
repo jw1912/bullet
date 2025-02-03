@@ -6,14 +6,15 @@ use std::{fs::File, io::BufWriter, time::Instant};
 
 use bullet_lib::{
     nn::{
-        optimiser::utils::load_graph_weights_from_file,
-        Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape,
+        optimiser::utils::load_graph_weights_from_file, Activation, ExecutionContext, Graph, NetworkBuilder, Node,
+        Shape,
     },
     trainer::default::{
         formats::bulletformat::{ChessBoard, DataLoader},
-        loader::DefaultDataPreparer,
-        inputs::{self, SparseInputType}, outputs,
+        inputs::{self, SparseInputType},
         load_into_graph,
+        loader::DefaultDataPreparer,
+        outputs,
     },
 };
 use bulletformat::BulletFormat;
@@ -24,14 +25,7 @@ const OUTPUT_PATH: &str = "data/relabled.data";
 
 fn main() {
     let inputs = inputs::ChessBucketsMirrored::new([
-        0, 0, 1, 1,
-        2, 2, 2, 2,
-        3, 3, 3, 3,
-        3, 3, 3, 3,
-        3, 3, 3, 3,
-        3, 3, 3, 3,
-        3, 3, 3, 3,
-        3, 3, 3, 3,
+        0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
     ]);
     let output_buckets = outputs::Single;
     let hl_size = 1024;
