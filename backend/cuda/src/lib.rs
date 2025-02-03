@@ -10,10 +10,7 @@ use bullet_core::{
     tensor,
 };
 
-use cudarc::{
-    cublas::CudaBlas,
-    driver::CudaDevice,
-};
+use cudarc::{cublas::CudaBlas, driver::CudaDevice};
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;
 pub type SparseMatrix = tensor::SparseMatrix<ExecutionContext>;

@@ -23,13 +23,29 @@ pub trait Matmul: Device {
         increment: bool,
     );
 
-    fn matmul(input_a: &DenseMatrix<Self>, trans_a: bool, input_b: &DenseMatrix<Self>, trans_b: bool, output: &mut DenseMatrix<Self>) {
+    fn matmul(
+        input_a: &DenseMatrix<Self>,
+        trans_a: bool,
+        input_b: &DenseMatrix<Self>,
+        trans_b: bool,
+        output: &mut DenseMatrix<Self>,
+    ) {
         let output_shape = input_a.shape.maybe_transpose(trans_a) * input_b.shape.maybe_transpose(trans_b);
 
         match (input_a.shape.batch_size(), input_b.shape.batch_size()) {
             (Some(_), Some(_)) => Self::sgemm_batched(input_a, trans_a, input_b, trans_b, output, false),
             (None, None) => {
-                Self::sgemm(input_a, input_a.shape, trans_a, input_b, input_b.shape, trans_b, output, output_shape, false);
+                Self::sgemm(
+                    input_a,
+                    input_a.shape,
+                    trans_a,
+                    input_b,
+                    input_b.shape,
+                    trans_b,
+                    output,
+                    output_shape,
+                    false,
+                );
             }
             (None, Some(x)) => {
                 let shape_b = Shape::new(input_b.shape.rows(), x);
@@ -91,7 +107,6 @@ pub trait Matmul: Device {
         }
     }
 }
-
 
 #[allow(clippy::too_many_arguments)]
 fn backprop_single_matmul<D: Matmul>(

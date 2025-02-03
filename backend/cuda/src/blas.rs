@@ -1,6 +1,9 @@
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
-use cudarc::{cublas::{sys::cublasOperation_t::*, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig}, driver::{CudaView, CudaViewMut}};
+use cudarc::{
+    cublas::{sys::cublasOperation_t::*, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig},
+    driver::{CudaView, CudaViewMut},
+};
 
 pub unsafe fn sgemm(
     ctx: &CudaBlas,
@@ -44,28 +47,9 @@ pub unsafe fn sgemm(
     let ldb = input_b_rows as i32;
     let ldc = output_rows as i32;
 
-    let cfg = GemmConfig {
-        alpha,
-        beta,
-        transa,
-        transb,
-        m,
-        n,
-        k,
-        lda,
-        ldb,
-        ldc,
-    };
+    let cfg = GemmConfig { alpha, beta, transa, transb, m, n, k, lda, ldb, ldc };
 
-    unsafe {
-        CudaBlas::gemm(
-            ctx,
-            cfg,
-            input_a,
-            input_b,
-            output,
-        ).unwrap()
-    }
+    unsafe { CudaBlas::gemm(ctx, cfg, input_a, input_b, output).unwrap() }
 }
 
 pub unsafe fn batched_sgemm(
@@ -115,34 +99,11 @@ pub unsafe fn batched_sgemm(
     let stride_b = (input_b_rows * input_b_cols) as i64;
     let stride_c = (output_rows * output_cols) as i64;
 
-    let gemm = GemmConfig {
-        alpha,
-        beta,
-        transa,
-        transb,
-        m,
-        n,
-        k,
-        lda,
-        ldb,
-        ldc,
-    };
+    let gemm = GemmConfig { alpha, beta, transa, transb, m, n, k, lda, ldb, ldc };
 
-    let cfg = StridedBatchedConfig {
-        gemm,
-        batch_size: batch_size as i32,
-        stride_a,
-        stride_b,
-        stride_c,
-    };
+    let cfg = StridedBatchedConfig { gemm, batch_size: batch_size as i32, stride_a, stride_b, stride_c };
 
     unsafe {
-        CudaBlas::gemm_strided_batched(
-            ctx,
-            cfg,
-            input_a,
-            input_b,
-            output,
-        ).unwrap();
+        CudaBlas::gemm_strided_batched(ctx, cfg, input_a, input_b, output).unwrap();
     }
 }

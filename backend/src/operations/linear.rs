@@ -149,7 +149,13 @@ mod tests {
         if shape2.batch_size().is_none() {
             // transposed matmul
             {
-                ExecutionContext::matmul(input2.values.dense(), true, input1.values.dense(), true, output.values.dense_mut());
+                ExecutionContext::matmul(
+                    input2.values.dense(),
+                    true,
+                    input1.values.dense(),
+                    true,
+                    output.values.dense_mut(),
+                );
 
                 device.panic_if_device_error("Failed to calculate transposed matmul!");
 

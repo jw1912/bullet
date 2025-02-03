@@ -3,8 +3,8 @@ pub mod dense;
 mod matmul;
 pub mod sparse;
 
-use backend::{util, Buffer};
 pub use backend::ExecutionContext;
+use backend::{util, Buffer};
 pub use dense::Activation;
 
 use bullet_core::{
