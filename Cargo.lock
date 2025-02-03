@@ -89,9 +89,9 @@ dependencies = [
 
 [[package]]
 name = "bulletformat"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5261a2681e729de3d341e007d038465ee3cacb62ee87487e0b3dbeb31aec3c2"
+checksum = "6d171953264e8dc3aa62757255e602e507fdd358a94e3cdacb9e481ff3a1c6b0"
 
 [[package]]
 name = "cc"
