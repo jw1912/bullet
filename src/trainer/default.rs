@@ -441,3 +441,30 @@ where
 }
 
 type PairedLoaders<Inp, Out, D, D2> = (DefaultDataLoader<Inp, Out, D>, Option<DefaultDataLoader<Inp, Out, D2>>);
+
+/// # Safety
+///
+/// The graph needs to take sparse `stm` and optionally `nstm` inputs
+/// in the correct format
+pub unsafe fn load_into_graph<Inp, Out>(graph: &mut Graph<ExecutionContext>, prepared: &DefaultDataPreparer<Inp, Out>)
+where
+    Inp: SparseInputType,
+    Out: OutputBuckets<Inp::RequiredDataType>,
+{
+    unsafe {
+        let input = &prepared.stm;
+        graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+
+        if graph.input_ids().contains(&"nstm".to_string()) {
+            let input = &prepared.nstm;
+            graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+        }
+    }
+
+    if graph.input_ids().contains(&"buckets".to_string()) {
+        let input = &prepared.buckets;
+        graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+    }
+
+    graph.get_input_mut("targets").load_dense_from_slice(prepared.targets.shape, &prepared.targets.value);
+}

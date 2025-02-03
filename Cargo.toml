@@ -33,7 +33,7 @@ authors = ["Jamie Whiting"]
 
 [workspace.dependencies]
 bullet_core = { path = "core" }
-bulletformat = "1.7.0"
+bulletformat = "1.8.0"
 montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.7.0" }
 
 [profile.release]
