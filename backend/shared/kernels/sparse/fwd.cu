@@ -1,4 +1,3 @@
-#include <iostream>
 #include "../util.cu"
 #ifdef __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime.h>
@@ -188,7 +187,6 @@ extern "C" void sparseAffineDualForward(
             sparseAffineDualForwardInternal<sigmoid>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
             break;
         default:
-            std::cout << "Invalid activation function!" << std::endl;
             std::abort();
     }
 }

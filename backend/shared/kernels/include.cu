@@ -1,4 +1,4 @@
-#include "stdint.h"
+//#include "stdint.h"
 #include "util.cu"
 #include "activate.cu"
 #include "adamw.cu"
