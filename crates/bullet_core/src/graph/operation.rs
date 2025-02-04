@@ -3,7 +3,6 @@ use crate::{
     device::Device,
     graph::{GraphBuilder, Node},
     shape::Shape,
-    tensor::Tensor,
 };
 
 /// List of supported activation functions.
@@ -138,67 +137,3 @@ impl Operation {
         }
     }
 }
-
-type T<'a, D> = &'a Tensor<D>;
-type Tm<'a, D> = &'a mut Tensor<D>;
-
-pub enum OperationForward<'a, D: Device> {
-    Activate(T<'a, D>, Activation),
-    Affine(T<'a, D>, T<'a, D>, T<'a, D>),
-    AffineDual(T<'a, D>, T<'a, D>, T<'a, D>, T<'a, D>),
-    Concat(T<'a, D>, T<'a, D>),
-    Convolution(T<'a, D>, T<'a, D>, ConvolutionDescription),
-    Gather(T<'a, D>, T<'a, D>),
-    LinearCombination(f32, T<'a, D>, f32, T<'a, D>),
-    Mask(T<'a, D>, T<'a, D>),
-    PairwiseMul(T<'a, D>, bool),
-    Select(T<'a, D>, T<'a, D>),
-    Slice(T<'a, D>, usize, usize),
-    MaskedSoftmaxCrossEntropyLoss(T<'a, D>, T<'a, D>, T<'a, D>),
-    SoftmaxCrossEntropyLoss(T<'a, D>, T<'a, D>),
-    SubmatrixProduct(T<'a, D>, T<'a, D>, usize),
-}
-
-pub enum OperationBackward<'a, D: Device> {
-    Activate(Tm<'a, D>, Activation),
-    Affine(Tm<'a, D>, Tm<'a, D>, Tm<'a, D>),
-    AffineDual(Tm<'a, D>, Tm<'a, D>, Tm<'a, D>, Tm<'a, D>),
-    Concat(Tm<'a, D>, Tm<'a, D>),
-    Convolution(Tm<'a, D>, Tm<'a, D>, ConvolutionDescription),
-    Gather(Tm<'a, D>, Tm<'a, D>),
-    LinearCombination(f32, Tm<'a, D>, f32, Tm<'a, D>),
-    Mask(Tm<'a, D>, Tm<'a, D>),
-    PairwiseMul(Tm<'a, D>, bool),
-    Select(Tm<'a, D>, Tm<'a, D>),
-    Slice(Tm<'a, D>, usize, usize),
-    MaskedSoftmaxCrossEntropyLoss(Tm<'a, D>, Tm<'a, D>, Tm<'a, D>),
-    SoftmaxCrossEntropyLoss(Tm<'a, D>, Tm<'a, D>),
-    SubmatrixProduct(Tm<'a, D>, Tm<'a, D>, usize),
-}
-
-/*
-impl<'a, D: Device> OperationExecute<'a, D> {
-    pub fn from_op(op: &Operation, graph: &'a Graph<D>) -> Self {
-        use Operation::*;
-
-        let t = |node: &Node| graph.get_node(*node);
-
-        match op {
-            Activate(i, a) => Self::Activate(t(i), *a),
-            Affine(w, i, b) => Self::Affine(t(w), t(i), t(b)),
-            AffineDual(w, s, n, b) => Self::AffineDual(t(w), t(s), t(n), t(b))
-            Concat(a, b) => Self::Concat(t(a), t(b)),
-            Convolution(f, i, d) => Self::Convolution(t(f), t(i), *d),
-            Gather(i, m) => Self::Gather(t(i), t(m)),
-            LinearCombination(alpha, a, beta, b) => Self::LinearCombination(*alpha, t(a), *beta, t(b)),
-            Mask(i, m) => Self::Mask(t(i), t(m)),
-            PairwiseMul(x, b) => Self::PairwiseMul(t(x), *b),
-            Select(i, b) => Self::Select(t(i), t(b)),
-            Slice(x, s, e) => Self::Slice(t(x), *s, *e),
-            MaskedSoftmaxCrossEntropyLoss(a, b, m) => Self::MaskedSoftmaxCrossEntropyLoss(t(a), t(b), t(m)),
-            SoftmaxCrossEntropyLoss(a, b) => Self::SoftmaxCrossEntropyLoss(t(a), t(b)),
-            SubmatrixProduct(a, b, m) => Self::SubmatrixProduct(t(a), t(b), *m),
-        }
-    }
-}
-*/

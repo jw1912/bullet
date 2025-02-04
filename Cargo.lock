@@ -55,7 +55,7 @@ name = "bullet_backend"
 version = "0.1.0"
 dependencies = [
  "bullet_core",
- "bullet_shared_backend",
+ "bullet_hip_backend",
 ]
 
 [[package]]
@@ -76,6 +76,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bullet_hip_backend"
+version = "0.1.0"
+dependencies = [
+ "bullet_core",
+ "cc",
+]
+
+[[package]]
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
@@ -86,14 +94,6 @@ dependencies = [
  "rand",
  "rand_distr",
  "sfbinpack",
-]
-
-[[package]]
-name = "bullet_shared_backend"
-version = "0.1.0"
-dependencies = [
- "bullet_core",
- "cc",
 ]
 
 [[package]]

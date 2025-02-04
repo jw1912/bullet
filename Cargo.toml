@@ -12,8 +12,8 @@ members = [
     "crates/bullet_backend",
     "crates/bullet_core",
     "crates/bullet_cuda_backend",
+    "crates/bullet_hip_backend",
     "crates/bullet_lib",
-    "crates/bullet_shared_backend",
     "crates/bullet_utils",
 ]
 
@@ -21,11 +21,10 @@ members = [
 bullet_backend = { path = "crates/bullet_backend"  }
 bullet_core = { path = "crates/bullet_core" }
 bullet_cuda_backend = { path = "crates/bullet_cuda_backend" }
-bullet_shared_backend = { path = "crates/bullet_shared_backend" }
-bullet_utils = { path = "crates/bullet_utils" }
+bullet_hip_backend = { path = "crates/bullet_hip_backend" }
 bulletformat = "1.8.0"
-montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.7.0" }
 cudarc = { version = "0.13.4", features = ["cuda-version-from-build-system"] }
+montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.7.0" }
 
 [profile.release]
 debug = true

@@ -10,9 +10,9 @@ edition = { workspace = true }
 
 [dependencies]
 bullet_core = { workspace = true }
-bullet_shared_backend = { workspace = true, package = "bullet_shared_backend"}
+bullet_hip_backend = { workspace = true }
 
 [features]
-cudnn = ["bullet_shared_backend/cudnn"]
-hip = ["bullet_shared_backend/hip"]
-gh-actions = ["bullet_shared_backend/gh-actions"]
+cudnn = ["bullet_hip_backend/cudnn"]
+hip = ["bullet_hip_backend/hip"]
+gh-actions = ["bullet_hip_backend/gh-actions"]
