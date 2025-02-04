@@ -1,0 +1,18 @@
+[package]
+name = "bullet_backend"
+version = "0.1.0"
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bullet_core = { workspace = true }
+bullet_shared_backend = { workspace = true, package = "bullet_shared_backend"}
+
+[features]
+cudnn = ["bullet_shared_backend/cudnn"]
+hip = ["bullet_shared_backend/hip"]
+gh-actions = ["bullet_shared_backend/gh-actions"]
