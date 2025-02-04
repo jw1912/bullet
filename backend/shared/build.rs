@@ -6,7 +6,7 @@ use std::{
 
 fn main() {
     if !cfg!(feature = "gh-actions") {
-        let out_path = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+        let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
 
         println!("cargo:rerun-if-changed=./kernels");
 
@@ -98,6 +98,7 @@ fn build_hip(out_path: &Path) {
         .flag(format!("--offload-arch={gcn_arch_name}"))
         .flag("-munsafe-fp-atomics")
         .define("__HIP_PLATFORM_AMD__", None)
+        .out_dir(out_path)
         .files(&[KERNELS])
         .compile("libkernels.a");
 }
