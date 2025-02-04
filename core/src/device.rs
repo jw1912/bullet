@@ -18,7 +18,7 @@ pub unsafe trait ValidType {}
 unsafe impl ValidType for f32 {}
 unsafe impl ValidType for i32 {}
 
-pub trait Device: Sized {
+pub trait Device: Sized + 'static {
     type IdType;
     type Buffer<T: ValidType>: DeviceBuffer<Self, T>;
 

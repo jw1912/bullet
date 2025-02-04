@@ -11,7 +11,7 @@ use crate::{device::Device, shape::Shape, tensor::Tensor};
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node(pub(crate) usize);
 
-struct NodeData<D: Device> {
+pub(crate) struct NodeData<D: Device> {
     own: Node,
     id: Option<String>,
     shape: Shape,
@@ -37,6 +37,10 @@ impl<D: Device> NodeData<D> {
             parent_nodes: parents.to_vec(),
         }
     }
+
+    pub fn shape(&self) -> Shape {
+        self.shape
+    }
 }
 
 #[derive(Default)]
@@ -48,8 +52,8 @@ pub struct GraphBuilder<D: Device> {
     ids: HashSet<String>,
 }
 
-impl<D: Device + 'static> GraphBuilder<D> {
-    fn get_node(&self, index: Node) -> &NodeData<D> {
+impl<D: Device> GraphBuilder<D> {
+    pub(crate) fn get_node(&self, index: Node) -> &NodeData<D> {
         &self.nodes[index.0]
     }
 
@@ -149,7 +153,7 @@ pub struct Graph<D: Device> {
     device: Arc<D>,
 }
 
-impl<D: Device + 'static> Graph<D> {
+impl<D: Device> Graph<D> {
     pub fn forward(&mut self) -> f32 {
         self.compiled_graph.execute_fwd(&self.device, &mut self.nodes);
         self.nodes[self.root.0].borrow().get_scalar().unwrap()
@@ -293,7 +297,7 @@ impl<D: Device> Default for OperationQueue<D> {
     }
 }
 
-impl<D: Device + 'static> OperationQueue<D> {
+impl<D: Device> OperationQueue<D> {
     pub fn push(&mut self, operation: Box<dyn Operation<D>>, inputs: &[Node], output: Node) {
         self.queue.push(OperationPayload { operation, inputs: inputs.to_vec(), output, time_spent: None });
     }
