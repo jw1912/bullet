@@ -1,4 +1,4 @@
-use bullet_core::{conv::ConvolutionDescription, device::DeviceBuffer};
+use bullet_core::{device::DeviceBuffer, graph::operation::ConvolutionDescription};
 
 use crate::{
     backend::conv::{self, ConvolutionCudnnDescription},

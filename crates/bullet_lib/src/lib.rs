@@ -30,6 +30,6 @@ pub mod nn {
     };
 
     pub use bullet_backend::{Activation, ConvolutionDescription, ExecutionContext};
-    pub use bullet_core::{graph::Node, shape::Shape};
+    pub use bullet_core::{graph::builder::Node, shape::Shape};
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 }

@@ -3,7 +3,7 @@ pub mod operations;
 use bullet_hip_backend as backend;
 
 pub use backend::{dense, sparse, Activation, DenseMatrix, ExecutionContext, Matrix, SparseMatrix, Tensor};
-pub use bullet_core::conv::ConvolutionDescription;
+pub use bullet_core::graph::operation::ConvolutionDescription;
 
 #[cfg(test)]
 mod tests {

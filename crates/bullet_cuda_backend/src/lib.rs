@@ -7,6 +7,8 @@ use std::sync::Arc;
 use buffer::CudaBuffer;
 use bullet_core::{
     device::{Device, ValidType},
+    graph::operation::Activation,
+    shape::Shape,
     tensor,
 };
 
@@ -39,4 +41,33 @@ impl Device for ExecutionContext {
 
     // using `cudarc` we handle all errors at time of occurrence
     fn panic_if_device_error(&self, _: &str) {}
+
+    fn activate(_input: &DenseMatrix, _output: &mut DenseMatrix, _activation: Activation) {
+        unimplemented!()
+    }
+
+    fn sgemm(
+        input_a: &DenseMatrix,
+        shape_a: Shape,
+        trans_a: bool,
+        input_b: &DenseMatrix,
+        shape_b: Shape,
+        trans_b: bool,
+        output: &mut DenseMatrix,
+        output_shape: Shape,
+        increment: bool,
+    ) {
+        matmul::sgemm(input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, output_shape, increment);
+    }
+
+    fn sgemm_batched(
+        input_a: &DenseMatrix,
+        trans_a: bool,
+        input_b: &DenseMatrix,
+        trans_b: bool,
+        output: &mut DenseMatrix,
+        increment: bool,
+    ) {
+        matmul::sgemm_batched(input_a, trans_a, input_b, trans_b, output, increment);
+    }
 }

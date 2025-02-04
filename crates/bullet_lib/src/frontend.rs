@@ -5,7 +5,10 @@ use std::{
 };
 
 use bullet_backend::operations;
-use bullet_core::graph::{Graph, GraphBuilder, Node, Operation};
+use bullet_core::graph::{
+    builder::{GraphBuilder, Node},
+    Graph, Operation,
+};
 
 use crate::{Activation, ConvolutionDescription, ExecutionContext, Shape};
 

@@ -1,5 +1,5 @@
 use crate::backend::{dense, ExecutionContext, Tensor};
-use bullet_core::{conv::ConvolutionDescription, graph::Operation, shape::Shape};
+use bullet_core::{graph::operation::ConvolutionDescription, graph::Operation, shape::Shape};
 
 #[derive(Debug)]
 pub struct Convolution(pub ConvolutionDescription);

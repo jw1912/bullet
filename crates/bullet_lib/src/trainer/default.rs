@@ -42,7 +42,7 @@ use crate::{optimiser::Optimiser, save};
 
 use bullet_backend::{sparse, ExecutionContext, SparseMatrix};
 use bullet_core::{
-    graph::{Graph, Node},
+    graph::{builder::Node, Graph},
     shape::Shape,
 };
 

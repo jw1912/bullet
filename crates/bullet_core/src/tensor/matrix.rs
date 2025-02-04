@@ -42,6 +42,14 @@ impl<D: Device> Matrix<D> {
         }
     }
 
+    pub fn sparse(&self) -> &SparseMatrix<D> {
+        if let Self::Sparse(matrix) = self {
+            matrix
+        } else {
+            panic!("This matrix is not sparse!")
+        }
+    }
+
     pub fn copy_into(&self, dest: &mut Self) {
         match self {
             Self::Dense(src) => {

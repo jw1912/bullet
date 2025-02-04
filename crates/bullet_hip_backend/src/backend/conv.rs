@@ -13,7 +13,7 @@ use super::{
     ExecutionContext,
 };
 
-use bullet_core::conv::ConvolutionDescription;
+use bullet_core::graph::operation::ConvolutionDescription;
 
 pub unsafe fn conv_fwd(
     ctx: &ExecutionContext,
