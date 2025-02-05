@@ -53,6 +53,13 @@ pub trait Device: Sized + 'static {
 
     fn activate(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>, activation: Activation);
 
+    fn backprop_activate(
+        input: &DenseMatrix<Self>,
+        input_grad: &mut DenseMatrix<Self>,
+        output_grad: &DenseMatrix<Self>,
+        activation: Activation,
+    );
+
     fn sgemm(
         input_a: &DenseMatrix<Self>,
         shape_a: Shape,

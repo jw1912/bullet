@@ -2,7 +2,7 @@ mod concat;
 mod conv;
 mod matmul;
 
-use std::{cell::RefCell, collections::HashMap, ops::Deref, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::{
     device::{Device, DeviceBuffer},
@@ -30,13 +30,12 @@ pub enum Activation {
 #[derive(Clone, Copy, Debug)]
 pub enum Operation {
     Activate(Node, Activation),
-    Affine(Node, Node, Node),
+    Affine(Node, Node, Option<Node>),
     AffineDualActivate(Node, Node, Node, Node, Activation),
     Concat(Node, Node),
     Convolution(Node, Node, ConvolutionDescription),
     Gather(Node, Node),
     LinearCombination(f32, Node, f32, Node),
-    Linear(Node, Node),
     Mask(Node, Node),
     PairwiseMul(Node, bool),
     PowerError(Node, Node, f32),
@@ -84,8 +83,9 @@ impl Operation {
         match self {
             Activate(node, _) => Ok(shape(node)),
             Affine(w, i, b) => {
-                let valid = shape(w) * shape(i) == shape(b);
-                ret(valid, shape(b), mismatch(&[w, i, b]))
+                let out = shape(w) * shape(i);
+                let valid = b.is_none() || out == shape(&b.unwrap());
+                ret(valid, out, mismatch(&[w, i]))
             }
             AffineDualActivate(w, s, n, b, _) => {
                 let valid = shape(s) == shape(n) && shape(w) * shape(s) == shape(b);
@@ -112,7 +112,6 @@ impl Operation {
                 ret(valid, shape(mask), mismatch(&[input, mask]))
             }
             LinearCombination(_, a, _, b) => ret(shape(a) == shape(b), shape(a), mismatch(&[a, b])),
-            Linear(a, b) => ret(true, shape(a) * shape(b), mismatch(&[a, b])),
             Mask(input, mask) => ret(shape(input) == shape(mask), shape(input), mismatch(&[input, mask])),
             PairwiseMul(input, post_concat) => {
                 let is = shape(input);
@@ -171,11 +170,15 @@ impl<D: Device> Graph<D> {
                 let i = get(*i);
                 let w = get(*w);
                 let w = w.values.dense();
-                let bs = i.values.shape().batch_size().unwrap_or(1);
-                setup_ones(w.buf.device(), internal, bs);
-                let ones = &internal.get("ones").unwrap().borrow().buf;
-                matmul::linear(w, &*i, output);
-                D::add_assign_single_to_batched_scaled(ones, 1.0, get(*b).values.dense(), output);
+
+                if let Some(b) = b {
+                    let bs = i.values.shape().batch_size().unwrap_or(1);
+                    setup_ones(w.buf.device(), internal, bs);
+                    let ones = &internal.get("ones").unwrap().borrow().buf;
+                    matmul::affine(w, &*i, Some((get(*b).values.dense(), ones)), output);
+                } else {
+                    matmul::affine(w, &*i, None, output);
+                }
             }
             AffineDualActivate(w, s, n, b, act) => {
                 D::sparse_affine_dual_activate(
@@ -200,7 +203,6 @@ impl<D: Device> Graph<D> {
             }
             Gather(input, mask) => D::gather(get(*input).values.dense(), get(*mask).values.sparse(), output),
             Concat(a, b) => concat::concat(get(*a).values.dense(), get(*b).values.dense(), output),
-            Linear(a, b) => matmul::linear(get(*a).values.dense(), get(*b).deref(), output),
             Mask(input, mask) => D::mask(get(*input).values.dense(), get(*mask).values.sparse(), output),
             PairwiseMul(input, post_concat) => D::pairwise(get(*input).values.dense(), output, *post_concat),
             PowerError(a, b, p) => D::power_error(*p, get(*a).values.dense(), get(*b).values.dense(), output),
@@ -237,6 +239,194 @@ impl<D: Device> Graph<D> {
             }
             SubmatrixProduct(a, b, m) => {
                 matmul::submatrix_product(*m, get(*a).values.dense(), get(*b).values.dense(), output)
+            }
+        }
+    }
+}
+
+impl<D: Device> Graph<D> {
+    pub fn backward_node(&mut self, output_node: Node, op: &Operation) {
+        use Operation::*;
+
+        let get = |node: Node| self.nodes[node.0].borrow_mut();
+
+        let output_tensor = &mut *self.nodes[output_node.0].borrow_mut();
+        let internal = &mut output_tensor.internal;
+        let output_grad = if let Some(grad) = output_tensor.gradients.as_ref() {
+            grad
+        } else {
+            return;
+        };
+
+        match op {
+            Activate(node, act) => {
+                let node = &mut *get(*node);
+                if let Some(grad) = node.gradients.as_mut() {
+                    D::backprop_activate(node.values.dense(), grad, output_grad, *act);
+                }
+            }
+            Affine(w, i, b) => {
+                let i = &mut *get(*i);
+                let w = &mut *get(*w);
+                let o = output_tensor.values.dense();
+
+                if let Some(b) = b {
+                    let bs = i.values.shape().batch_size().unwrap_or(1);
+                    setup_ones(w.values.dense().buf.device(), internal, bs);
+                    let ones = &internal.get("ones").unwrap().borrow().buf;
+                    matmul::backprop_affine(w, i, Some((&mut *get(*b), ones)), o, output_grad);
+                } else {
+                    matmul::backprop_affine(w, i, None, o, output_grad);
+                }
+            }
+            AffineDualActivate(w, s, n, b, act) => {
+                let w = &mut *get(*w);
+                let b = &mut *get(*b);
+                D::backprop_sparse_affine_dual_activate(
+                    w.values.dense(),
+                    w.gradients.as_mut().unwrap(),
+                    get(*s).values.sparse(),
+                    get(*n).values.sparse(),
+                    b.values.dense(),
+                    b.gradients.as_mut().unwrap(),
+                    output_tensor.values.dense(),
+                    output_grad,
+                    *act,
+                );
+            }
+            LinearCombination(alpha, a, beta, b) => {
+                let a = &mut *get(*a);
+                let b = &mut *get(*b);
+
+                let abs = a.shape().batch_size().unwrap_or(1);
+                let bbs = b.shape().batch_size().unwrap_or(1);
+                let bs = abs.max(bbs);
+                setup_ones(a.values.dense().buf.device(), internal, bs);
+                let ones = &internal.get("ones").unwrap().borrow().buf;
+
+                if let Some(grd) = a.gradients.as_mut() {
+                    D::backprop_add_single_scaled(ones, *alpha, a.values.dense(), grd, output_grad);
+                }
+
+                if let Some(grd) = b.gradients.as_mut() {
+                    D::backprop_add_single_scaled(ones, *beta, b.values.dense(), grd, output_grad);
+                }
+            }
+            Convolution(filters, inputs, desc) => {
+                let filters = &mut *get(*filters);
+                let inputs = &mut *get(*inputs);
+                D::convolution_backward(
+                    desc,
+                    filters.values.dense(),
+                    filters.gradients.as_mut(),
+                    inputs.values.dense(),
+                    inputs.gradients.as_mut(),
+                    output_grad,
+                );
+            }
+            Gather(input, mask) => {
+                let input = &mut *get(*input);
+                let mask = &mut *get(*mask);
+
+                if let Some(grd) = input.gradients.as_mut() {
+                    D::backprop_gather(output_grad, mask.values.sparse(), input.values.dense(), grd);
+                }
+            }
+            Concat(a, b) => {
+                let a = &mut *get(*a);
+                let b = &mut *get(*b);
+                concat::backprop_concat(
+                    a.values.dense(),
+                    a.gradients.as_mut(),
+                    b.values.dense(),
+                    b.gradients.as_mut(),
+                    output_grad,
+                );
+            }
+            Mask(input, mask) => {
+                if let Some(grd) = get(*input).gradients.as_mut() {
+                    D::backprop_mask(output_grad, get(*mask).values.sparse(), grd);
+                }
+            }
+            PairwiseMul(input, post_concat) => {
+                let input = &mut *get(*input);
+                if let Some(grd) = input.gradients.as_mut() {
+                    D::backprop_pairwise(input.values.dense(), output_grad, grd, *post_concat);
+                }
+            }
+            PowerError(a, b, p) => {
+                let a = &mut *get(*a);
+                let b = &mut *get(*b);
+
+                if let Some(grd) = a.gradients.as_mut() {
+                    D::backprop_abs_power_error_single(*p, a.values.dense(), b.values.dense(), output_grad, grd);
+                }
+
+                if let Some(grd) = b.gradients.as_mut() {
+                    D::backprop_abs_power_error_single(*p, b.values.dense(), a.values.dense(), output_grad, grd);
+                }
+            }
+            ReduceAcrossBatch(input) => {
+                let input = &mut *get(*input);
+                setup_ones(input.values.dense().buf.device(), internal, input.shape().batch_size().unwrap_or(1));
+                let ones = &internal.get("ones").unwrap().borrow().buf;
+                if let Some(grd) = input.gradients.as_mut() {
+                    D::add_assign_single_to_batched_scaled(ones, 1.0, output_grad, grd);
+                }
+            }
+            Select(input, buckets) => {
+                let input = &mut *get(*input);
+                if let Some(grd) = input.gradients.as_mut() {
+                    D::select_backprop(input.values.dense(), get(*buckets).values.sparse(), output_grad, grd);
+                }
+            }
+            Slice(input, start, end) => {
+                let input = &mut *get(*input);
+                if let Some(grd) = input.gradients.as_mut() {
+                    D::backprop_slice_vector_batched(input.values.dense(), grd, *start, *end, output_grad);
+                }
+            }
+            MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
+                let mask = &*get(*mask);
+                let mask = mask.values.sparse();
+                let input = &mut *get(*input);
+                let target = &mut *get(*target);
+
+                let smax = internal.get("softmaxed").unwrap().borrow();
+
+                if let Some(grd) = input.gradients.as_mut() {
+                    D::backprop_softmax_crossentropy_loss_masked(mask, &smax, target.values.dense(), output_grad, grd);
+                }
+        
+                if let Some(grd) = target.gradients.as_mut() {
+                    D::backprop_softmax_crossentropy_loss_masked(mask, &smax, input.values.dense(), output_grad, grd);
+                }
+            }
+            SoftmaxCrossEntropyLoss(a, b) => {
+                let a = &mut *get(*a);
+                let b = &mut *get(*b);
+
+                let smax = internal.get("softmaxed").unwrap().borrow();
+
+                if let Some(grd) = a.gradients.as_mut() {
+                    D::backprop_softmax_crossentropy_loss(&smax, b.values.dense(), output_grad, grd);
+                }
+                
+                if let Some(grd) = b.gradients.as_mut() {
+                    D::backprop_softmax_crossentropy_loss(&smax, a.values.dense(), output_grad, grd);
+                }
+            }
+            SubmatrixProduct(a, b, m) => {
+                let a = &mut *get(*a);
+                let b = &mut *get(*b);
+                matmul::backprop_submatrix_product(
+                    *m,
+                    a.values.dense(),
+                    a.gradients.as_mut(),
+                    b.values.dense(),
+                    b.gradients.as_mut(),
+                    output_grad,
+                );
             }
         }
     }

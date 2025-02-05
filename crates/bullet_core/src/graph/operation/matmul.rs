@@ -4,10 +4,60 @@ use crate::{
     tensor::{DenseMatrix, Matrix, Tensor},
 };
 
-pub fn linear<D: Device>(a: &DenseMatrix<D>, b: &Tensor<D>, out: &mut DenseMatrix<D>) {
+pub fn affine<D: Device>(
+    a: &DenseMatrix<D>,
+    b: &Tensor<D>,
+    c: Option<(&DenseMatrix<D>, &D::Buffer<f32>)>,
+    out: &mut DenseMatrix<D>,
+) {
     match &b.values {
-        Matrix::Dense(dense) => matmul(a, false, dense, false, out),
-        Matrix::Sparse(_) => unimplemented!(),
+        Matrix::Dense(dense) => {
+            matmul(a, false, dense, false, out);
+            if let Some((c, ones)) = c {
+                D::add_assign_single_to_batched_scaled(ones, 1.0, c, out);
+            }
+        }
+        Matrix::Sparse(sparse) => D::sparse_affine(a, sparse, c.map(|x| x.0), out),
+    }
+}
+
+pub fn backprop_affine<D: Device>(
+    a: &mut Tensor<D>,
+    b: &mut Tensor<D>,
+    c: Option<(&mut Tensor<D>, &D::Buffer<f32>)>,
+    output: &DenseMatrix<D>,
+    output_grad: &DenseMatrix<D>,
+) {
+    match &b.values {
+        Matrix::Dense(dense) => {
+            backprop_matmul(
+                a.values.dense(),
+                a.gradients.as_mut(),
+                false,
+                dense,
+                b.gradients.as_mut(),
+                false,
+                output_grad,
+            );
+
+            if let Some((c, ones)) = c {
+                if let Some(grad) = c.gradients.as_mut() {
+                    D::backprop_add_single_scaled(ones, 1.0, c.values.dense(), grad, output_grad);
+                }
+            }
+        }
+        Matrix::Sparse(sparse) => {
+            assert!(b.gradients.is_none());
+
+            if let Some(agrd) = a.gradients.as_mut() {
+                let (c, cgrd) = c.map(|x| (Some(x.0.values.dense()), x.0.gradients.as_mut())).unwrap_or((None, None));
+                D::backprop_sparse_affine(a.values.dense(), agrd, sparse, c, cgrd, output, output_grad)
+            } else if let Some((c, ones)) = c {
+                if let Some(grad) = c.gradients.as_mut() {
+                    D::backprop_add_single_scaled(ones, 1.0, c.values.dense(), grad, output_grad);
+                }
+            }
+        }
     }
 }
 
