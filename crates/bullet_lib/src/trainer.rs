@@ -5,6 +5,8 @@ pub mod save;
 pub mod schedule;
 pub mod settings;
 
+use bullet_core::optimiser::Optimiser;
+use bullet_hip_backend::ExecutionContext;
 pub use preparer::DataPreparer;
 use save::SavedFormat;
 use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
@@ -17,11 +19,9 @@ use std::{
     time::Instant,
 };
 
-use crate::optimiser::Optimiser;
-
 pub trait NetworkTrainer {
     type PreparedData;
-    type Optimiser: Optimiser;
+    type Optimiser: Optimiser<ExecutionContext>;
 
     /// Load prepared data onto the GPU, return batch size
     fn load_batch(&mut self, prepared: &Self::PreparedData) -> usize;
@@ -59,15 +59,15 @@ pub trait NetworkTrainer {
         self.optimiser().write_to_checkpoint(&optimiser_path);
     }
 
-    fn train_custom<D, D2, LR, WDL, F>(
+    fn train_custom<D1, D2, LR, WDL, F>(
         &mut self,
-        preparer: &D,
+        preparer: &D1,
         test_preparer: &Option<D2>,
         schedule: &TrainingSchedule<LR, WDL>,
         settings: &LocalSettings,
         mut callback: F,
     ) where
-        D: DataPreparer<PreparedData = Self::PreparedData> + 'static,
+        D1: DataPreparer<PreparedData = Self::PreparedData> + 'static,
         D2: DataPreparer<PreparedData = Self::PreparedData> + 'static,
         LR: LrScheduler,
         WDL: WdlScheduler,
@@ -90,7 +90,7 @@ pub trait NetworkTrainer {
         let steps = schedule.steps;
         let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
 
-        let (sender, receiver) = mpsc::sync_channel::<D::PreparedData>(settings.batch_queue_size);
+        let (sender, receiver) = mpsc::sync_channel::<D1::PreparedData>(settings.batch_queue_size);
 
         let dataloader =
             preparer::create_dataloader(preparer.clone(), sender, steps, schedule.wdl_scheduler.clone(), threads);
@@ -105,7 +105,7 @@ pub trait NetworkTrainer {
         let (test_dataloader, test_receiver) = settings
             .test_set
             .map(|_| {
-                let (sender, receiver) = mpsc::sync_channel::<D::PreparedData>(2);
+                let (sender, receiver) = mpsc::sync_channel::<D1::PreparedData>(2);
                 let steps = schedule.steps_for_validation(validation_freq);
                 let dataloader = preparer::create_dataloader(
                     test_preparer.clone().unwrap(),

@@ -1,20 +1,20 @@
 mod adamw;
 pub mod utils;
 
-pub use adamw::{AdamW, AdamWOptimiser, AdamWParams};
+pub use adamw::{AdamW, AdamWParams};
 
-use crate::nn::Graph;
+use crate::{device::Device, graph::Graph};
 
-pub trait Optimiser {
+pub trait Optimiser<D: Device> {
     type Params: Clone + std::fmt::Debug + Default;
 
-    fn new(graph: Graph, params: Self::Params) -> Self;
+    fn new(graph: Graph<D>, params: Self::Params) -> Self;
 
     fn update(&mut self, gradient_factor: f32, learning_rate: f32);
 
-    fn graph(&self) -> &Graph;
+    fn graph(&self) -> &Graph<D>;
 
-    fn graph_mut(&mut self) -> &mut Graph;
+    fn graph_mut(&mut self) -> &mut Graph<D>;
 
     fn load_from_checkpoint(&mut self, path: &str);
 
@@ -27,9 +27,4 @@ pub trait Optimiser {
             self.set_params_for_weight(&id, params.clone());
         }
     }
-}
-
-/// This is for use in `TrainerBuilder`
-pub trait OptimiserType: Default {
-    type Optimiser: Optimiser;
 }

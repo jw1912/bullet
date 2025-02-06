@@ -38,10 +38,11 @@ use super::{
     LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{optimiser::Optimiser, save};
+use crate::save;
 
 use bullet_core::{
     graph::{builder::Node, Graph},
+    optimiser::Optimiser,
     shape::Shape,
 };
 use bullet_hip_backend::{sparse, ExecutionContext, SparseMatrix};
@@ -70,7 +71,7 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     sparse_scratch_space: SparseMatrix,
 }
 
-impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
+impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
     for Trainer<Opt, Inp, Out>
 {
     type Optimiser = Opt;
@@ -135,7 +136,9 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
     }
 }
 
-impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out> {
+impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
+    Trainer<Opt, Inp, Out>
+{
     pub fn new(
         graph: Graph<ExecutionContext>,
         output_node: Node,
@@ -377,7 +380,8 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
     }
 }
 
-impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> Trainer<Opt, Inp, Out>
+impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
+    Trainer<Opt, Inp, Out>
 where
     Inp::RequiredDataType: CanBeDirectlySequentiallyLoaded,
 {

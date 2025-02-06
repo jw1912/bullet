@@ -1,11 +1,14 @@
-use crate::{backend::ops, DenseMatrix};
+use bullet_core::device::DeviceBuffer;
+
+use crate::backend::{ops, Buffer};
 
 #[allow(clippy::too_many_arguments)]
 pub fn adamw(
-    params: &mut DenseMatrix,
-    gradient: &DenseMatrix,
-    momentum: &mut DenseMatrix,
-    velocity: &mut DenseMatrix,
+    size: usize,
+    params: &mut Buffer<f32>,
+    gradient: &Buffer<f32>,
+    momentum: &mut Buffer<f32>,
+    velocity: &mut Buffer<f32>,
     beta1: f32,
     beta2: f32,
     min_weight: f32,
@@ -14,16 +17,16 @@ pub fn adamw(
     gradient_factor: f32,
     learning_rate: f32,
 ) {
-    assert!(params.shape.batch_size().is_none());
-    assert_eq!(params.shape, gradient.shape);
-    assert_eq!(params.shape, momentum.shape);
-    assert_eq!(params.shape, velocity.shape);
+    assert!(size <= params.size());
+    assert!(size <= gradient.size());
+    assert!(size <= momentum.size());
+    assert!(size <= velocity.size());
 
     let decay = 1.0 - learning_rate * decay;
 
     unsafe {
         ops::AdamW(
-            params.shape.size(),
+            size,
             decay,
             beta1,
             beta2,
@@ -31,10 +34,10 @@ pub fn adamw(
             max_weight,
             gradient_factor,
             learning_rate,
-            params.buf.mut_ptr(),
-            momentum.buf.mut_ptr(),
-            velocity.buf.mut_ptr(),
-            gradient.buf.ptr(),
+            params.mut_ptr(),
+            momentum.mut_ptr(),
+            velocity.mut_ptr(),
+            gradient.ptr(),
         );
     }
 }

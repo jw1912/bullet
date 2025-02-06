@@ -320,4 +320,21 @@ impl Device for ExecutionContext {
     ) {
         unimplemented!()
     }
+
+    fn adamw(
+        size: usize,
+        params: &mut Self::BufferF32,
+        gradient: &Self::BufferF32,
+        momentum: &mut Self::BufferF32,
+        velocity: &mut Self::BufferF32,
+        beta1: f32,
+        beta2: f32,
+        min_weight: f32,
+        max_weight: f32,
+        decay: f32,
+        gradient_factor: f32,
+        learning_rate: f32,
+    ) {
+        unimplemented!()
+    }
 }

@@ -2,8 +2,10 @@ use crate::{
     default::{Layout, SavedFormat},
     frontend::NetworkBuilder,
     logger,
-    nn::InitSettings,
-    optimiser::{self, Optimiser, OptimiserType},
+    nn::{
+        optimiser::{self, OptimiserType},
+        InitSettings,
+    },
     rng,
     trainer::save::QuantTarget,
     Activation, ExecutionContext, Shape,
@@ -15,6 +17,7 @@ use super::{
     AdditionalTrainerInputs, Trainer,
 };
 
+use bullet_core::optimiser::Optimiser;
 use bullet_hip_backend::SparseMatrix;
 
 #[derive(Clone, Copy, Debug)]

@@ -1,11 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_core::{graph::Graph, shape::Shape};
-use bullet_hip_backend::{DenseMatrix, ExecutionContext};
+use crate::{device::Device, graph::Graph, shape::Shape, tensor::DenseMatrix};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.
-pub fn write_graph_weights_to_file(graph: &Graph<ExecutionContext>, path: &str) {
+pub fn write_graph_weights_to_file<D: Device>(graph: &Graph<D>, path: &str) {
     use std::{fs::File, io::Write};
 
     let weight_ids = graph.weight_ids();
@@ -25,7 +24,7 @@ pub fn write_graph_weights_to_file(graph: &Graph<ExecutionContext>, path: &str) 
 
 /// Loads the weights of a graph from a file. If `gradients` is true,
 /// it will instead load the gradients of those weights.
-pub fn load_graph_weights_from_file(graph: &mut Graph<ExecutionContext>, path: &str) {
+pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -46,7 +45,7 @@ pub fn load_graph_weights_from_file(graph: &mut Graph<ExecutionContext>, path: &
 }
 
 /// Write a set of labelled weights from a `HashMap` into a file.
-pub fn write_weight_hashmap_to_file(map: &HashMap<String, DenseMatrix>, path: &str) {
+pub fn write_weight_hashmap_to_file<D: Device>(map: &HashMap<String, DenseMatrix<D>>, path: &str) {
     use std::{fs::File, io::Write};
 
     let mut buf = Vec::new();
@@ -61,11 +60,7 @@ pub fn write_weight_hashmap_to_file(map: &HashMap<String, DenseMatrix>, path: &s
 }
 
 /// Loads a set of labelled weights from a file into a `HashMap`.
-pub fn load_weight_hashmap_from_file(
-    device: Arc<ExecutionContext>,
-    map: &mut HashMap<String, DenseMatrix>,
-    path: &str,
-) {
+pub fn load_weight_hashmap_from_file<D: Device>(device: Arc<D>, map: &mut HashMap<String, DenseMatrix<D>>, path: &str) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();

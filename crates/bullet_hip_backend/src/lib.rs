@@ -344,4 +344,34 @@ impl Device for ExecutionContext {
     ) {
         sparse::affine_dual(input_a, input_b1, input_b2, input_c, output, activation);
     }
+
+    fn adamw(
+        size: usize,
+        params: &mut Self::BufferF32,
+        gradient: &Self::BufferF32,
+        momentum: &mut Self::BufferF32,
+        velocity: &mut Self::BufferF32,
+        beta1: f32,
+        beta2: f32,
+        min_weight: f32,
+        max_weight: f32,
+        decay: f32,
+        gradient_factor: f32,
+        learning_rate: f32,
+    ) {
+        dense::adamw(
+            size,
+            params,
+            gradient,
+            momentum,
+            velocity,
+            beta1,
+            beta2,
+            min_weight,
+            max_weight,
+            decay,
+            gradient_factor,
+            learning_rate,
+        );
+    }
 }

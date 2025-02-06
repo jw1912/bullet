@@ -5,10 +5,6 @@ mod rng;
 /// as well as the `default` impl of the trait for training value networks
 pub mod trainer;
 
-/// Contains the `Optimiser` trait, for implementing custom optimisers, as well as all premade
-/// optimisers that are commonly used (e.g. `AdamW`)
-pub mod optimiser;
-
 // TODO: Remove these re-exports as they are exported in the `nn` module
 pub use bullet_core::{
     graph::operation::{Activation, ConvolutionDescription},
@@ -27,10 +23,7 @@ pub use trainer::{
 /// Contains the Graph API, by which neural networks are created with
 /// `NetworkBuilder`, and then compiled into an executable `Graph`
 pub mod nn {
-    pub use super::{
-        frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode},
-        optimiser,
-    };
+    pub use super::frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode};
 
     pub use bullet_core::{
         graph::{
@@ -41,4 +34,22 @@ pub mod nn {
     };
     pub use bullet_hip_backend::ExecutionContext;
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
+
+    pub mod optimiser {
+        use bullet_core::optimiser::{self, Optimiser};
+        use bullet_hip_backend::ExecutionContext;
+
+        pub type AdamWOptimiser = optimiser::AdamW<ExecutionContext>;
+        pub use optimiser::AdamWParams;
+
+        pub trait OptimiserType: Default {
+            type Optimiser: Optimiser<ExecutionContext>;
+        }
+
+        #[derive(Default)]
+        pub struct AdamW;
+        impl OptimiserType for AdamW {
+            type Optimiser = AdamWOptimiser;
+        }
+    }
 }
