@@ -5,7 +5,7 @@ use crate::{
     Buffer, DenseMatrix, Shape,
 };
 
-fn softmax_across_batch(input: &DenseMatrix, output: &mut DenseMatrix) {
+pub fn softmax_across_batch(input: &DenseMatrix, output: &mut DenseMatrix) {
     assert!(input.shape.size() > 0);
 
     output.reshape_if_needed(input.shape);
@@ -30,19 +30,16 @@ fn crossentropy(pred: &DenseMatrix, target: &DenseMatrix, output: &mut DenseMatr
     }
 }
 
-pub fn softmax_crossentropy_loss(
+pub fn crossentropy_loss(
     ones: &Buffer<f32>,
-    input: &DenseMatrix,
+    softmaxed: &DenseMatrix,
     target: &DenseMatrix,
     output: &mut DenseMatrix,
-    softmaxed: &mut DenseMatrix,
     individual_losses: &mut DenseMatrix,
 ) {
-    assert_eq!(input.shape, target.shape);
+    assert_eq!(softmaxed.shape, target.shape);
 
-    assert!(input.shape.size() <= ones.size());
-
-    softmax_across_batch(input, softmaxed);
+    assert!(softmaxed.shape.size() <= ones.size());
 
     crossentropy(softmaxed, target, individual_losses);
 
@@ -50,9 +47,9 @@ pub fn softmax_crossentropy_loss(
 
     unsafe {
         blas::reduce_add_cols(
-            input.buf.device().as_ref(),
+            softmaxed.buf.device().as_ref(),
             1,
-            input.shape.size(),
+            softmaxed.shape.size(),
             ones.ptr(),
             individual_losses.buf.ptr(),
             output.buf.mut_ptr(),

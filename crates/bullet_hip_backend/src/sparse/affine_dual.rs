@@ -1,5 +1,5 @@
-use crate::{backend::ops, Activation, DenseMatrix, SparseMatrix};
-use bullet_core::shape::Shape;
+use crate::{backend::ops, DenseMatrix, SparseMatrix};
+use bullet_core::{graph::operation::Activation, shape::Shape};
 
 pub fn affine_dual(
     input_a: &DenseMatrix,

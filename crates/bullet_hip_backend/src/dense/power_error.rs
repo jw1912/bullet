@@ -9,24 +9,7 @@ pub fn abs_power_error(power: f32, input_a: &DenseMatrix, input_b: &DenseMatrix,
     }
 }
 
-pub fn backprop_abs_power_error(
-    power: f32,
-    input_a: &DenseMatrix,
-    input_a_grad: Option<&mut DenseMatrix>,
-    input_b: &DenseMatrix,
-    input_b_grad: Option<&mut DenseMatrix>,
-    output_grad: &DenseMatrix,
-) {
-    if let Some(grd) = input_a_grad {
-        backprop_abs_power_error_single(power, input_a, input_b, output_grad, grd);
-    }
-
-    if let Some(grd) = input_b_grad {
-        backprop_abs_power_error_single(power, input_b, input_a, output_grad, grd);
-    }
-}
-
-fn backprop_abs_power_error_single(
+pub fn backprop_abs_power_error_single(
     power: f32,
     input_a: &DenseMatrix,
     input_b: &DenseMatrix,

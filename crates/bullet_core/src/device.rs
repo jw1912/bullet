@@ -1,7 +1,5 @@
-use std::sync::Arc;
-
-#[cfg(feature = "cuda")]
-use cudarc::driver::{DeviceRepr, ValidAsZeroBits};
+mod buffer;
+mod tests;
 
 use crate::{
     graph::operation::{Activation, ConvolutionDescription},
@@ -9,41 +7,13 @@ use crate::{
     tensor::{DenseMatrix, SparseMatrix},
 };
 
-#[cfg(feature = "cuda")]
-/// # Safety
-/// Must be representable on all devices and valid
-/// as zeroed bits
-pub unsafe trait ValidType: DeviceRepr + ValidAsZeroBits {}
-
-#[cfg(not(feature = "cuda"))]
-/// # Safety
-/// Must be representable on all devices and valid
-/// as zeroed bits
-pub unsafe trait ValidType {}
-
-unsafe impl ValidType for f32 {}
-unsafe impl ValidType for i32 {}
-
-pub trait DeviceBuffer<D: Device, T: ValidType> {
-    fn new(device: Arc<D>, size: usize) -> Self;
-
-    fn size(&self) -> usize;
-
-    fn device(&self) -> Arc<D>;
-
-    fn set_zero(&mut self);
-
-    fn load_from_device(&mut self, buf: &Self, bytes: usize);
-
-    fn load_from_slice(&mut self, buf: &[T]);
-
-    fn write_into_slice(&self, buf: &mut [T], bytes: usize);
-}
+pub use buffer::DeviceBuffer;
 
 #[allow(clippy::too_many_arguments)]
 pub trait Device: Sized + 'static {
     type IdType;
-    type Buffer<T: ValidType>: DeviceBuffer<Self, T>;
+    type BufferI32: DeviceBuffer<Self, i32>;
+    type BufferF32: DeviceBuffer<Self, f32>;
 
     fn new(id: Self::IdType) -> Self;
 
@@ -93,14 +63,14 @@ pub trait Device: Sized + 'static {
     );
 
     fn add_assign_single_to_batched_scaled(
-        ones: &Self::Buffer<f32>,
+        ones: &Self::BufferF32,
         alpha: f32,
         input: &DenseMatrix<Self>,
         output: &mut DenseMatrix<Self>,
     );
 
     fn linear_comb(
-        ones: &Self::Buffer<f32>,
+        ones: &Self::BufferF32,
         alpha: f32,
         input_a: &DenseMatrix<Self>,
         beta: f32,
@@ -109,14 +79,14 @@ pub trait Device: Sized + 'static {
     );
 
     fn backprop_add_single_scaled(
-        ones: &Self::Buffer<f32>,
+        ones: &Self::BufferF32,
         alpha: f32,
         input: &DenseMatrix<Self>,
         input_grad: &mut DenseMatrix<Self>,
         output_grad: &DenseMatrix<Self>,
     );
 
-    fn reduce_add_batch(ones: &Self::Buffer<f32>, input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
+    fn reduce_add_batch(ones: &Self::BufferF32, input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
 
     fn sparse_affine(
         input_a: &DenseMatrix<Self>,
@@ -159,10 +129,10 @@ pub trait Device: Sized + 'static {
     fn copy_or_add_strided(
         rows: usize,
         cols: usize,
-        input: &Self::Buffer<f32>,
+        input: &Self::BufferF32,
         input_offset: usize,
         input_stride: usize,
-        output: &mut Self::Buffer<f32>,
+        output: &mut Self::BufferF32,
         output_offset: usize,
         output_stride: usize,
         add: bool,
@@ -188,16 +158,6 @@ pub trait Device: Sized + 'static {
         indices: &SparseMatrix<Self>,
         output_grad: &DenseMatrix<Self>,
         input_grad: &mut DenseMatrix<Self>,
-    );
-
-    fn slice_vector_batched(input: &DenseMatrix<Self>, start: usize, end: usize, output: &mut DenseMatrix<Self>);
-
-    fn backprop_slice_vector_batched(
-        input: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
-        start: usize,
-        end: usize,
-        output_grad: &DenseMatrix<Self>,
     );
 
     fn gather(inputs: &DenseMatrix<Self>, indices: &SparseMatrix<Self>, outputs: &mut DenseMatrix<Self>);
@@ -244,7 +204,7 @@ pub trait Device: Sized + 'static {
     fn softmax_across_batch(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
 
     fn crossentropy_loss(
-        ones: &Self::Buffer<f32>,
+        ones: &Self::BufferF32,
         softmaxed: &DenseMatrix<Self>,
         target: &DenseMatrix<Self>,
         individual_losses: &mut DenseMatrix<Self>,

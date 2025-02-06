@@ -6,17 +6,17 @@ use crate::{
 };
 
 pub struct DenseMatrix<D: Device> {
-    pub buf: D::Buffer<f32>,
+    pub buf: D::BufferF32,
     pub shape: Shape,
 }
 
 impl<D: Device> DenseMatrix<D> {
     pub fn zeroed(device: Arc<D>, shape: Shape) -> Self {
-        Self { buf: D::Buffer::new(device, shape.size()), shape }
+        Self { buf: D::BufferF32::new(device, shape.size()), shape }
     }
 
     pub fn ones(device: Arc<D>, shape: Shape) -> Self {
-        let mut res = Self { buf: D::Buffer::new(device, shape.size()), shape };
+        let mut res = Self { buf: D::BufferF32::new(device, shape.size()), shape };
         res.load_from_slice(shape, &vec![1.0; shape.size()]);
         res
     }
@@ -36,7 +36,7 @@ impl<D: Device> DenseMatrix<D> {
     /// unintentional side effects.
     pub fn reshape_if_needed(&mut self, shape: Shape) {
         if shape.size() > self.allocated_size() {
-            self.buf = D::Buffer::new(self.buf.device(), shape.size());
+            self.buf = D::BufferF32::new(self.buf.device(), shape.size());
         } else if self.shape != shape {
             self.buf.set_zero();
         }

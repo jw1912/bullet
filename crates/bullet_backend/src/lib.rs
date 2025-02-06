@@ -2,8 +2,8 @@ pub mod operations;
 
 use bullet_hip_backend as backend;
 
-pub use backend::{dense, sparse, Activation, DenseMatrix, ExecutionContext, Matrix, SparseMatrix, Tensor};
-pub use bullet_core::graph::operation::ConvolutionDescription;
+pub use backend::{dense, sparse, DenseMatrix, ExecutionContext, Matrix, SparseMatrix, Tensor};
+pub use bullet_core::graph::operation::{Activation, ConvolutionDescription};
 
 #[cfg(test)]
 mod tests {

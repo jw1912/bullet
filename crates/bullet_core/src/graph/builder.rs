@@ -5,37 +5,23 @@ use std::{
     sync::Arc,
 };
 
-use super::{Graph, Operation, OperationQueue};
+use super::{operation::Operation, Graph};
 use crate::{device::Device, shape::Shape, tensor::Tensor};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node(pub(crate) usize);
 
-pub(crate) struct NodeData<D: Device> {
+pub(crate) struct NodeData {
     own: Node,
     id: Option<String>,
     shape: Shape,
     requires_grad: bool,
-    parent_operation: Option<Box<dyn Operation<D>>>,
-    parent_nodes: Vec<Node>,
+    parent_operation: Option<Operation>,
 }
 
-impl<D: Device> NodeData<D> {
-    pub fn new(
-        id: Option<String>,
-        operation: Option<Box<dyn Operation<D>>>,
-        shape: Shape,
-        requires_grad: bool,
-        parents: &[Node],
-    ) -> Self {
-        Self {
-            id,
-            own: Node(usize::MAX),
-            shape,
-            requires_grad,
-            parent_operation: operation,
-            parent_nodes: parents.to_vec(),
-        }
+impl NodeData {
+    pub fn new(id: Option<String>, operation: Option<Operation>, shape: Shape, requires_grad: bool) -> Self {
+        Self { id, own: Node(usize::MAX), shape, requires_grad, parent_operation: operation }
     }
 
     pub fn shape(&self) -> Shape {
@@ -44,20 +30,20 @@ impl<D: Device> NodeData<D> {
 }
 
 #[derive(Default)]
-pub struct GraphBuilder<D: Device> {
-    nodes: Vec<NodeData<D>>,
+pub struct GraphBuilder {
+    nodes: Vec<NodeData>,
     roots: HashSet<Node>,
     inputs: HashSet<Node>,
     weights: HashSet<Node>,
     ids: HashSet<String>,
 }
 
-impl<D: Device> GraphBuilder<D> {
-    pub(crate) fn get_node(&self, index: Node) -> &NodeData<D> {
+impl GraphBuilder {
+    pub(crate) fn get_node(&self, index: Node) -> &NodeData {
         &self.nodes[index.0]
     }
 
-    fn create_node(&mut self, mut data: NodeData<D>) -> Node {
+    fn create_node(&mut self, mut data: NodeData) -> Node {
         assert!(data.shape.batch_size().is_none(), "Cannot specify batch size in graph builder!");
 
         if let Some(id) = data.id.as_ref() {
@@ -67,8 +53,10 @@ impl<D: Device> GraphBuilder<D> {
         let node = Node(self.nodes.len());
         data.own = node;
 
-        for parent in &data.parent_nodes {
-            self.roots.remove(parent);
+        if let Some(op) = &data.parent_operation {
+            for parent in &op.nodes() {
+                self.roots.remove(parent);
+            }
         }
 
         self.nodes.push(data);
@@ -78,7 +66,7 @@ impl<D: Device> GraphBuilder<D> {
     }
 
     pub fn create_input(&mut self, id: &str, shape: Shape) -> Node {
-        let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, false, &[]));
+        let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, false));
 
         self.inputs.insert(node);
 
@@ -86,22 +74,17 @@ impl<D: Device> GraphBuilder<D> {
     }
 
     pub fn create_weights(&mut self, id: &str, shape: Shape) -> Node {
-        let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, true, &[]));
+        let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, true));
 
         self.weights.insert(node);
 
         node
     }
 
-    pub fn create_result_of_operation(&mut self, operation: impl Operation<D>, inputs: &[Node]) -> Node {
-        let mut set = HashSet::new();
-        assert!(inputs.iter().all(|node| set.insert(node)), "An operation will alias nodes on backprop!");
-
-        let input_shape = inputs.iter().map(|node| self.get_node(*node).shape).collect::<Vec<_>>();
-
-        match operation.output_tensor(&input_shape) {
-            Ok(shape) => self.create_node(NodeData::new(None, Some(Box::new(operation)), shape, true, inputs)),
-            Err(s) => panic!("{s}"),
+    pub fn create_result_of_operation(&mut self, operation: Operation) -> Node {
+        match operation.output_shape(self) {
+            Ok(shape) => self.create_node(NodeData::new(None, Some(operation), shape, true)),
+            Err(s) => panic!("{s:?}"),
         }
     }
 
@@ -110,7 +93,7 @@ impl<D: Device> GraphBuilder<D> {
         *self.roots.iter().next().unwrap()
     }
 
-    pub fn build(self, device: D) -> Graph<D> {
+    pub fn build<D: Device>(self, device: D) -> Graph<D> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
@@ -123,7 +106,14 @@ impl<D: Device> GraphBuilder<D> {
         let nodes = self
             .nodes
             .iter()
-            .map(|node_data| RefCell::new(Tensor::new(device.clone(), node_data.shape, node_data.requires_grad)))
+            .map(|node_data| {
+                RefCell::new(Tensor::new(
+                    device.clone(),
+                    node_data.shape,
+                    node_data.requires_grad,
+                    node_data.parent_operation,
+                ))
+            })
             .collect::<Vec<_>>();
 
         let inputs =
@@ -132,14 +122,6 @@ impl<D: Device> GraphBuilder<D> {
         let weights =
             self.weights.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
-        let mut compiled_graph = OperationQueue::default();
-
-        for node in self.nodes {
-            if let Some(operation) = node.parent_operation {
-                compiled_graph.push(operation, &node.parent_nodes, node.own);
-            }
-        }
-
-        Graph { nodes, root, inputs, weights, compiled_graph, device }
+        Graph { nodes, root, inputs, weights, device }
     }
 }

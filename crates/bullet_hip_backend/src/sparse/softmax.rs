@@ -1,6 +1,6 @@
 use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
 
-fn softmax_across_batch_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
+pub fn softmax_across_batch_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
     assert_eq!(input.shape, mask.shape);
     assert_eq!(mask.shape.cols(), 1);
 
@@ -19,7 +19,7 @@ fn softmax_across_batch_masked(mask: &SparseMatrix, input: &DenseMatrix, output:
     }
 }
 
-fn crossentropy_masked(
+pub fn crossentropy_loss_masked(
     mask: &SparseMatrix,
     pred: &DenseMatrix,
     target: &DenseMatrix,
@@ -47,24 +47,6 @@ fn crossentropy_masked(
             error.buf.mut_ptr(),
         );
     }
-}
-
-pub fn softmax_crossentropy_loss_masked(
-    mask: &SparseMatrix,
-    input: &DenseMatrix,
-    target: &DenseMatrix,
-    output: &mut DenseMatrix,
-    softmaxed: &mut DenseMatrix,
-    individual_losses: &mut DenseMatrix,
-) {
-    assert_eq!(mask.shape, input.shape);
-    assert_eq!(mask.shape.cols(), 1);
-    assert_eq!(mask.shape.batch_size(), target.shape().batch_size());
-    assert_eq!(mask.nnz, target.shape().rows());
-
-    softmax_across_batch_masked(mask, input, softmaxed);
-
-    crossentropy_masked(mask, softmaxed, target, individual_losses, output);
 }
 
 pub fn backprop_softmax_crossentropy_loss_masked(

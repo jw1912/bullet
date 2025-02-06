@@ -7,7 +7,7 @@ use crate::{
 pub fn affine<D: Device>(
     a: &DenseMatrix<D>,
     b: &Tensor<D>,
-    c: Option<(&DenseMatrix<D>, &D::Buffer<f32>)>,
+    c: Option<(&DenseMatrix<D>, &D::BufferF32)>,
     out: &mut DenseMatrix<D>,
 ) {
     match &b.values {
@@ -24,7 +24,7 @@ pub fn affine<D: Device>(
 pub fn backprop_affine<D: Device>(
     a: &mut Tensor<D>,
     b: &mut Tensor<D>,
-    c: Option<(&mut Tensor<D>, &D::Buffer<f32>)>,
+    c: Option<(&mut Tensor<D>, &D::BufferF32)>,
     output: &DenseMatrix<D>,
     output_grad: &DenseMatrix<D>,
 ) {

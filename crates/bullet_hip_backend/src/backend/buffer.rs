@@ -1,8 +1,14 @@
 use std::sync::Arc;
 
-use bullet_core::device::{DeviceBuffer, ValidType};
+use bullet_core::device::DeviceBuffer;
 
 use super::ExecutionContext;
+
+/// # Safety
+/// Don't impl this for anything else
+pub unsafe trait ValidType {}
+unsafe impl ValidType for f32 {}
+unsafe impl ValidType for i32 {}
 
 /// Managed memory buffer of `T` on the device.
 #[derive(Debug)]

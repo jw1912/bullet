@@ -62,7 +62,6 @@ dependencies = [
 name = "bullet_core"
 version = "0.1.0"
 dependencies = [
- "cudarc",
  "rand",
  "rand_distr",
 ]
@@ -87,8 +86,8 @@ dependencies = [
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
- "bullet_backend",
  "bullet_core",
+ "bullet_hip_backend",
  "bulletformat",
  "montyformat",
  "rand",

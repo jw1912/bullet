@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub struct SparseMatrix<D: Device> {
-    pub buf: D::Buffer<i32>,
+    pub buf: D::BufferI32,
     pub shape: Shape,
     pub nnz: usize,
 }
@@ -14,7 +14,7 @@ pub struct SparseMatrix<D: Device> {
 impl<D: Device> SparseMatrix<D> {
     pub fn zeroed(device: Arc<D>, shape: Shape, nnz: usize) -> Self {
         assert_eq!(shape.cols(), 1);
-        Self { buf: D::Buffer::new(device, shape.size()), shape, nnz }
+        Self { buf: D::BufferI32::new(device, shape.size()), shape, nnz }
     }
 
     pub fn shape(&self) -> Shape {
@@ -29,7 +29,7 @@ impl<D: Device> SparseMatrix<D> {
         assert_eq!(shape.cols(), 1, "{shape}");
         let new_size = nnz * shape.batch_size().unwrap_or(1);
         if new_size > self.allocated_size() {
-            self.buf = D::Buffer::new(self.buf.device(), new_size);
+            self.buf = D::BufferI32::new(self.buf.device(), new_size);
         } else if self.shape != shape {
             self.buf.set_zero();
         }

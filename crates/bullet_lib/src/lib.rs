@@ -10,8 +10,11 @@ pub mod trainer;
 pub mod optimiser;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use bullet_backend::{Activation, ConvolutionDescription, ExecutionContext};
-pub use bullet_core::shape::Shape;
+pub use bullet_core::{
+    graph::operation::{Activation, ConvolutionDescription},
+    shape::Shape,
+};
+pub use bullet_hip_backend::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
@@ -29,7 +32,13 @@ pub mod nn {
         optimiser,
     };
 
-    pub use bullet_backend::{Activation, ConvolutionDescription, ExecutionContext};
-    pub use bullet_core::{graph::builder::Node, shape::Shape};
+    pub use bullet_core::{
+        graph::{
+            builder::Node,
+            operation::{Activation, ConvolutionDescription},
+        },
+        shape::Shape,
+    };
+    pub use bullet_hip_backend::ExecutionContext;
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 }

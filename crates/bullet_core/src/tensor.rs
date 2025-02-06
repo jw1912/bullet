@@ -8,20 +8,22 @@ pub use dense::DenseMatrix;
 pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
-use crate::{device::Device, rng, shape::Shape};
+use crate::{device::Device, graph::operation::Operation, rng, shape::Shape};
 
 pub struct Tensor<D: Device> {
     pub values: Matrix<D>,
     pub gradients: Option<DenseMatrix<D>>,
     pub internal: HashMap<String, RefCell<DenseMatrix<D>>>,
+    pub operation: Option<Operation>,
 }
 
 impl<D: Device> Tensor<D> {
-    pub fn new(device: Arc<D>, shape: Shape, requires_grad: bool) -> Self {
+    pub fn new(device: Arc<D>, shape: Shape, requires_grad: bool, operation: Option<Operation>) -> Self {
         Self {
             values: Matrix::Dense(DenseMatrix::zeroed(device.clone(), shape)),
             gradients: requires_grad.then(|| DenseMatrix::zeroed(device, shape)),
             internal: HashMap::new(),
+            operation,
         }
     }
 
