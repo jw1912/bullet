@@ -22,8 +22,9 @@ loop with data loading performed asynchronously from device calculations
 - Contains both the HIP and CUDA backends
 #### [bullet_lib](crates/bullet_lib)
 - Does not follow any particular versioning
-- API subject to breaking changes on a commit-to-commit basis
+- API is sometimes subject to breaking changes
 - Contains `Trainer`, which implements `NetworkTrainer` for value network training
+- Contains `TrainerBuilder`, which streamlines the process of constructing a `Trainer` for the most common network architectures
 - Lots of NNUE and chess engine specific tooling
     - Input feature types
     - Output buckets
