@@ -4,10 +4,10 @@ use std::{
     sync::mpsc::{self, SyncSender},
 };
 
-use crate::{
-    default::{formats::bulletformat::ChessBoard, loader::DataLoader},
-    rng::SimpleRand,
-};
+use crate::default::{formats::bulletformat::ChessBoard, loader::DataLoader};
+
+use super::rng::SimpleRand;
+
 use montyformat::{
     chess::{Move, Position},
     FastDeserialise, MontyValueFormat,

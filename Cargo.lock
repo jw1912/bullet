@@ -82,8 +82,6 @@ dependencies = [
  "bullet_hip_backend",
  "bulletformat",
  "montyformat",
- "rand",
- "rand_distr",
  "sfbinpack",
 ]
 

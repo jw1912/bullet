@@ -19,8 +19,6 @@ gh-actions = ["bullet_hip_backend/gh-actions"]
 bullet_hip_backend = { workspace = true }
 bullet_core = { workspace = true }
 bulletformat = { workspace = true }
-rand = "0.8.5"
-rand_distr = "0.4.3"
 montyformat = { workspace = true }
 sfbinpack = "0.2.0"
 

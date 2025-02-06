@@ -1,5 +1,6 @@
 mod direct;
 mod montybinpack;
+mod rng;
 mod sfbinpack;
 mod text;
 

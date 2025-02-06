@@ -6,7 +6,6 @@ use crate::{
         optimiser::{self, OptimiserType},
         InitSettings,
     },
-    rng,
     trainer::save::QuantTarget,
     Activation, ExecutionContext, Shape,
 };
@@ -394,10 +393,9 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             let shape = w.values.shape();
             let stdev = 1.0 / (shape.cols() as f32).sqrt();
 
-            let wv = rng::vec_f32(w.values.shape().size(), 0.0, stdev, true);
-            w.load_from_slice(&wv);
-            let wb = rng::vec_f32(w.values.shape().rows(), 0.0, stdev, true);
-            graph.get_weights_mut(&format!("l{l}b")).load_from_slice(&wb);
+            w.seed_random(0.0, stdev, true);
+            let wb = graph.get_weights_mut(&format!("l{l}b"));
+            wb.seed_random(0.0, stdev, true);
         }
 
         logger::clear_colours();

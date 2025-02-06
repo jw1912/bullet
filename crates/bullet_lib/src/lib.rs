@@ -1,5 +1,4 @@
 mod frontend;
-mod rng;
 
 /// Contains the `NetworkTrainer` trait and associated structs for its use
 /// as well as the `default` impl of the trait for training value networks
