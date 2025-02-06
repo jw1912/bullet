@@ -1,5 +1,6 @@
 mod dense;
 mod matrix;
+mod rng;
 mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
@@ -8,13 +9,13 @@ pub use dense::DenseMatrix;
 pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
-use crate::{device::Device, graph::operation::Operation, rng, shape::Shape};
+use crate::{device::Device, graph::operation::Operation, shape::Shape};
 
 pub struct Tensor<D: Device> {
     pub values: Matrix<D>,
     pub gradients: Option<DenseMatrix<D>>,
-    pub internal: HashMap<String, RefCell<DenseMatrix<D>>>,
-    pub operation: Option<Operation>,
+    pub(crate) internal: HashMap<String, RefCell<DenseMatrix<D>>>,
+    pub(crate) operation: Option<Operation>,
 }
 
 impl<D: Device> Tensor<D> {

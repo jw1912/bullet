@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
-use bullet_core::device::{DeviceBuffer, ValidType};
+use bullet_core::device::DeviceBuffer;
 
-use cudarc::driver::{CudaSlice, DeviceSlice};
+use cudarc::driver::{CudaSlice, DeviceRepr, DeviceSlice, ValidAsZeroBits};
 
 use crate::ExecutionContext;
 
-pub struct CudaBuffer<T: ValidType> {
+pub struct CudaBuffer<T> {
     pub(crate) buffer: CudaSlice<T>,
     pub(crate) device: Arc<ExecutionContext>,
 }
 
-impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for CudaBuffer<T> {
+impl<T: DeviceRepr + ValidAsZeroBits> DeviceBuffer<ExecutionContext, T> for CudaBuffer<T> {
     fn new(device: Arc<ExecutionContext>, size: usize) -> Self {
         Self { buffer: device.device.alloc_zeros(size).unwrap(), device }
     }

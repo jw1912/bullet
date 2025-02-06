@@ -1,4 +1,6 @@
-use crate::{backend::ops, DenseMatrix};
+use bullet_core::device::DeviceBuffer;
+
+use crate::{backend::ops, Buffer};
 
 macro_rules! define_activation {
     (
@@ -7,18 +9,22 @@ macro_rules! define_activation {
         $fwd_kernel:ident,
         $bwd_kernel:ident
     ) => {
-        pub fn $fwd(input: &DenseMatrix, output: &mut DenseMatrix) {
-            output.reshape_if_needed(input.shape);
+        pub fn $fwd(size: usize, input: &Buffer<f32>, output: &mut Buffer<f32>) {
+            assert!(size <= input.size());
+            assert!(size <= output.size());
+
             unsafe {
-                ops::$fwd_kernel(output.shape.size(), input.buf.ptr(), output.buf.mut_ptr());
+                ops::$fwd_kernel(size, input.ptr(), output.mut_ptr());
             }
         }
 
-        pub fn $bwd(input: &DenseMatrix, input_grad: &mut DenseMatrix, output_grad: &DenseMatrix) {
-            assert_eq!(input.shape, output_grad.shape);
-            input_grad.reshape_if_needed(input.shape);
+        pub fn $bwd(size: usize, input: &Buffer<f32>, input_grad: &mut Buffer<f32>, output_grad: &Buffer<f32>) {
+            assert!(size <= input.size());
+            assert!(size <= input_grad.size());
+            assert!(size <= output_grad.size());
+
             unsafe {
-                ops::$bwd_kernel(input.shape.size(), input.buf.ptr(), output_grad.buf.ptr(), input_grad.buf.mut_ptr());
+                ops::$bwd_kernel(size, input.ptr(), output_grad.ptr(), input_grad.mut_ptr());
             }
         }
     };

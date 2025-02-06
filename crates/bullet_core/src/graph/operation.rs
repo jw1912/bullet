@@ -197,7 +197,13 @@ impl<D: Device> Graph<D> {
         let output = output_tensor.values.dense_mut();
 
         match op {
-            Activate(node, act) => D::activate(get(*node).values.dense(), output, *act),
+            Activate(node, act) => {
+                let node = get(*node);
+                let node = node.values.dense();
+                assert_eq!(output.shape.without_batch_size(), node.shape.without_batch_size());
+                output.set_batch_size(node.batch_size());
+                D::activate(node.size(), &node.buf, &mut output.buf, *act);
+            }
             Affine(w, i, b) => {
                 let i = get(*i);
                 let w = get(*w);
@@ -295,7 +301,11 @@ impl<D: Device> Graph<D> {
             Activate(node, act) => {
                 let node = &mut *get(*node);
                 if let Some(grad) = node.gradients.as_mut() {
-                    D::backprop_activate(node.values.dense(), grad, output_grad, *act);
+                    let node = node.values.dense();
+                    assert_eq!(output_grad.shape, node.shape());
+                    assert_eq!(output_grad.batch_size(), node.batch_size());
+                    grad.set_batch_size(output_grad.batch_size());
+                    D::backprop_activate(node.size(), &node.buf, &mut grad.buf, &output_grad.buf, *act);
                 }
             }
             Affine(w, i, b) => {
@@ -401,12 +411,27 @@ impl<D: Device> Graph<D> {
             }
             ReduceAcrossBatch(input) => {
                 let input = &mut *get(*input);
-                let vals = input.values.dense();
-                setup_ones(vals.buf.device(), internal, input.shape().batch_size().unwrap_or(1));
-                let ones = &internal.get("ones").unwrap().borrow().buf;
                 if let Some(grd) = input.gradients.as_mut() {
-                    grd.reshape_if_needed(vals.shape);
-                    D::add_assign_single_to_batched_scaled(ones, 1.0, output_grad, grd);
+                    let vals = input.values.dense();
+                    let bs = vals.batch_size();
+                    let ss = vals.shape.without_batch_size().size();
+
+                    setup_ones(vals.buf.device(), internal, bs.unwrap_or(1));
+                    let ones = &internal.get("ones").unwrap().borrow().buf;
+
+                    assert!(output_grad.batch_size().is_none());
+                    assert_eq!(vals.single_size(), output_grad.single_size());
+                    assert_eq!(vals.single_size(), grd.single_size());
+
+                    grd.set_batch_size(bs);
+                    D::add_assign_single_to_batched_scaled(
+                        ss,
+                        bs.unwrap_or(1),
+                        ones,
+                        1.0,
+                        &output_grad.buf,
+                        &mut grd.buf,
+                    );
                 }
             }
             Select(input, buckets) => {

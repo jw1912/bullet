@@ -70,6 +70,10 @@ impl Shape {
         Self { rows: self.rows, cols: self.cols, batch_size: None }
     }
 
+    pub fn with_batch_size(&self, batch_size: Option<usize>) -> Self {
+        Self { cols: self.rows, rows: self.cols, batch_size: batch_size.map(|x| NonZeroUsize::new(x).unwrap()) }
+    }
+
     pub fn reshape(&mut self, rows: usize, cols: usize) {
         assert_eq!(self.rows * self.cols, cols * rows, "Invalid reshape!");
         self.cols = cols;

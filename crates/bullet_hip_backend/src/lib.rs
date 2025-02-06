@@ -35,40 +35,43 @@ impl Device for ExecutionContext {
         util::panic_if_device_error(msg);
     }
 
-    fn activate(input: &DenseMatrix, output: &mut DenseMatrix, activation: Activation) {
+    fn activate(size: usize, input: &Self::BufferF32, output: &mut Self::BufferF32, activation: Activation) {
         match activation {
             Activation::Identity => panic!("No-op!"),
-            Activation::ReLU => dense::relu(input, output),
-            Activation::CReLU => dense::crelu(input, output),
-            Activation::SCReLU => dense::screlu(input, output),
-            Activation::SqrReLU => dense::sqrrelu(input, output),
-            Activation::Sigmoid => dense::sigmoid(input, output),
+            Activation::ReLU => dense::relu(size, input, output),
+            Activation::CReLU => dense::crelu(size, input, output),
+            Activation::SCReLU => dense::screlu(size, input, output),
+            Activation::SqrReLU => dense::sqrrelu(size, input, output),
+            Activation::Sigmoid => dense::sigmoid(size, input, output),
         }
     }
 
     fn backprop_activate(
-        input: &DenseMatrix,
-        input_grad: &mut DenseMatrix,
-        output_grad: &DenseMatrix,
+        size: usize,
+        input: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
+        output_grad: &Self::BufferF32,
         activation: Activation,
     ) {
         match activation {
             Activation::Identity => panic!("No-op!"),
-            Activation::ReLU => dense::relu_backward(input, input_grad, output_grad),
-            Activation::CReLU => dense::crelu_backward(input, input_grad, output_grad),
-            Activation::SCReLU => dense::screlu_backward(input, input_grad, output_grad),
-            Activation::SqrReLU => dense::sqrrelu_backward(input, input_grad, output_grad),
-            Activation::Sigmoid => dense::sigmoid_backward(input, input_grad, output_grad),
+            Activation::ReLU => dense::relu_backward(size, input, input_grad, output_grad),
+            Activation::CReLU => dense::crelu_backward(size, input, input_grad, output_grad),
+            Activation::SCReLU => dense::screlu_backward(size, input, input_grad, output_grad),
+            Activation::SqrReLU => dense::sqrrelu_backward(size, input, input_grad, output_grad),
+            Activation::Sigmoid => dense::sigmoid_backward(size, input, input_grad, output_grad),
         }
     }
 
     fn add_assign_single_to_batched_scaled(
+        single_size: usize,
+        batch_size: usize,
         ones: &Self::BufferF32,
         alpha: f32,
-        input: &DenseMatrix,
-        output: &mut DenseMatrix,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
     ) {
-        dense::add_assign_single_to_batched_scaled(ones, alpha, input, output);
+        dense::add_assign_single_to_batched_scaled(single_size, batch_size, ones, alpha, input, output);
     }
 
     fn backprop_add_single_scaled(

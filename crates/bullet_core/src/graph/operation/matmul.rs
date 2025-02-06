@@ -14,7 +14,8 @@ pub fn affine<D: Device>(
         Matrix::Dense(dense) => {
             matmul(a, false, dense, false, out);
             if let Some((c, ones)) = c {
-                D::add_assign_single_to_batched_scaled(ones, 1.0, c, out);
+                let bs = out.batch_size().unwrap_or(1);
+                D::add_assign_single_to_batched_scaled(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf);
             }
         }
         Matrix::Sparse(sparse) => D::sparse_affine(a, sparse, c.map(|x| x.0), out),

@@ -44,6 +44,29 @@ impl<D: Device> DenseMatrix<D> {
         self.shape = shape;
     }
 
+    pub fn size(&self) -> usize {
+        self.single_size() * self.batch_size().unwrap_or(1)
+    }
+
+    pub fn single_size(&self) -> usize {
+        self.shape.without_batch_size().size()
+    }
+
+    pub fn batch_size(&self) -> Option<usize> {
+        self.shape.batch_size()
+    }
+
+    pub fn set_batch_size(&mut self, batch_size: Option<usize>) {
+        let new_size = self.shape.without_batch_size().size() * batch_size.unwrap_or(1);
+        if new_size > self.allocated_size() {
+            self.buf = D::BufferF32::new(self.buf.device(), new_size);
+        } else if batch_size != self.batch_size() {
+            self.buf.set_zero();
+        }
+
+        self.shape = self.shape.with_batch_size(batch_size);
+    }
+
     pub fn load_from_slice(&mut self, shape: Shape, buf: &[f32]) {
         assert_eq!(shape.size(), buf.len());
         self.reshape_if_needed(shape);

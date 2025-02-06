@@ -21,12 +21,13 @@ pub trait Device: Sized + 'static {
 
     fn panic_if_device_error(&self, msg: &str);
 
-    fn activate(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>, activation: Activation);
+    fn activate(size: usize, input: &Self::BufferF32, output: &mut Self::BufferF32, activation: Activation);
 
     fn backprop_activate(
-        input: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
+        size: usize,
+        input: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
+        output_grad: &Self::BufferF32,
         activation: Activation,
     );
 
@@ -63,10 +64,12 @@ pub trait Device: Sized + 'static {
     );
 
     fn add_assign_single_to_batched_scaled(
+        single_size: usize,
+        batch_size: usize,
         ones: &Self::BufferF32,
         alpha: f32,
-        input: &DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
     );
 
     fn linear_comb(

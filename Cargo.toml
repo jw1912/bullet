@@ -9,7 +9,6 @@ edition = "2021"
 [workspace]
 resolver = "2"
 members = [
-    "crates/bullet_backend",
     "crates/bullet_core",
     "crates/bullet_cuda_backend",
     "crates/bullet_hip_backend",
@@ -18,10 +17,10 @@ members = [
 ]
 
 [workspace.dependencies]
-bullet_backend = { path = "crates/bullet_backend"  }
-bullet_core = { path = "crates/bullet_core" }
-bullet_cuda_backend = { path = "crates/bullet_cuda_backend" }
-bullet_hip_backend = { path = "crates/bullet_hip_backend" }
+bullet_backend = { path = "crates/bullet_backend", version = "0.1.0"}
+bullet_core = { path = "crates/bullet_core", version = "0.1.0"}
+bullet_cuda_backend = { path = "crates/bullet_cuda_backend", version = "0.1.0"}
+bullet_hip_backend = { path = "crates/bullet_hip_backend", version = "0.1.0"}
 bulletformat = "1.8.0"
 cudarc = { version = "0.13.4", features = ["cuda-version-from-build-system"] }
 montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.7.0" }

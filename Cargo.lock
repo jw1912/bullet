@@ -51,14 +51,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bullet_backend"
-version = "0.1.0"
-dependencies = [
- "bullet_core",
- "bullet_hip_backend",
-]
-
-[[package]]
 name = "bullet_core"
 version = "0.1.0"
 dependencies = [

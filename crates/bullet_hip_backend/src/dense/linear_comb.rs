@@ -10,7 +10,10 @@ pub fn linear_comb(
     input_b: &DenseMatrix,
     output: &mut DenseMatrix,
 ) {
-    assert_eq!(input_a.shape.without_batch_size(), input_b.shape.without_batch_size());
+    let single_shape = input_a.shape.without_batch_size();
+    assert_eq!(single_shape, input_b.shape.without_batch_size());
+
+    let single_size = single_shape.size();
 
     match (input_a.shape.batch_size(), input_b.shape.batch_size()) {
         (Some(x), Some(y)) => {
@@ -29,13 +32,14 @@ pub fn linear_comb(
                 );
             }
         }
-        (None, Some(_)) => {
+        (None, Some(bs)) => {
             copy_into_scaled(beta, input_b, output);
-            add_assign_single_to_batched_scaled(ones, alpha, input_a, output);
+            add_assign_single_to_batched_scaled(single_size, bs, ones, alpha, &input_a.buf, &mut output.buf);
         }
         (_, None) => {
+            let bs = input_a.shape.batch_size().unwrap_or(1);
             copy_into_scaled(alpha, input_a, output);
-            add_assign_single_to_batched_scaled(ones, beta, input_b, output);
+            add_assign_single_to_batched_scaled(single_size, bs, ones, beta, &input_b.buf, &mut output.buf);
         }
     }
 }
@@ -95,24 +99,26 @@ fn add_assign_scaled(alpha: f32, input: &DenseMatrix, output: &mut DenseMatrix) 
 }
 
 pub fn add_assign_single_to_batched_scaled(
+    single_size: usize,
+    batch_size: usize,
     ones: &Buffer<f32>,
     alpha: f32,
-    input: &DenseMatrix,
-    output: &mut DenseMatrix,
+    input: &Buffer<f32>,
+    output: &mut Buffer<f32>,
 ) {
-    assert_eq!(input.shape.batch_size().unwrap_or(1), 1);
-    assert_eq!(input.shape.without_batch_size(), output.shape.without_batch_size());
-    assert!(output.shape.batch_size().unwrap_or(1) <= ones.size());
+    assert!(single_size <= input.size());
+    assert!(single_size * batch_size <= output.size());
+    assert!(batch_size <= ones.size());
 
     unsafe {
         blas::add_vector_to_matrix_columns(
-            output.buf.device().as_ref(),
-            output.shape.without_batch_size().size(),
-            output.shape.batch_size().unwrap_or(1),
+            output.device().as_ref(),
+            single_size,
+            batch_size,
             alpha,
             ones.ptr(),
-            input.buf.ptr(),
-            output.buf.mut_ptr(),
+            input.ptr(),
+            output.mut_ptr(),
         );
     }
 }

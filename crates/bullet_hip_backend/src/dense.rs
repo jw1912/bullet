@@ -1,6 +1,5 @@
 mod activate;
 mod adamw;
-mod concat;
 mod conv;
 mod linear_comb;
 mod pairwise;
@@ -11,7 +10,6 @@ mod submatrix_product;
 
 pub use activate::*;
 pub use adamw::*;
-pub use concat::*;
 pub use conv::*;
 pub use linear_comb::*;
 pub use pairwise::*;
