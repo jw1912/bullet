@@ -1,53 +1,51 @@
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
-use crate::{
-    device::{Device, DeviceBuffer},
-    shape::Shape,
-};
+use crate::device::{Device, DeviceBuffer};
 
 pub struct SparseMatrix<D: Device> {
-    pub buf: D::BufferI32,
-    pub shape: Shape,
-    pub nnz: usize,
+    pub(crate) buf: D::BufferI32,
+    pub(crate) nnz: usize,
+    pub(crate) single_size: usize,
+    pub(crate) batch_size: Option<NonZeroUsize>,
 }
 
 impl<D: Device> SparseMatrix<D> {
-    pub fn zeroed(device: Arc<D>, shape: Shape, nnz: usize) -> Self {
-        assert_eq!(shape.cols(), 1);
-        Self { buf: D::BufferI32::new(device, shape.size()), shape, nnz }
-    }
-
-    pub fn shape(&self) -> Shape {
-        self.shape
+    pub fn zeroed(device: Arc<D>, single_size: usize, nnz: usize) -> Self {
+        Self { buf: D::BufferI32::new(device, nnz), single_size, nnz, batch_size: None }
     }
 
     pub fn allocated_size(&self) -> usize {
         self.buf.size()
     }
 
-    pub fn reshape_if_needed(&mut self, shape: Shape, nnz: usize) {
-        assert_eq!(shape.cols(), 1, "{shape}");
-        let new_size = nnz * shape.batch_size().unwrap_or(1);
+    pub fn set_batch_size(&mut self, batch_size: Option<usize>) {
+        let new_size = self.nnz * batch_size.unwrap_or(1);
         if new_size > self.allocated_size() {
             self.buf = D::BufferI32::new(self.buf.device(), new_size);
-        } else if self.shape != shape {
+        } else if batch_size != self.batch_size() {
             self.buf.set_zero();
         }
 
-        self.shape = shape;
-        self.nnz = nnz;
+        self.batch_size = batch_size.map(|x| NonZeroUsize::new(x).unwrap());
+    }
+
+    pub fn single_size(&self) -> usize {
+        self.single_size
+    }
+
+    pub fn batch_size(&self) -> Option<usize> {
+        self.batch_size.map(NonZeroUsize::get)
+    }
+
+    pub fn size(&self) -> usize {
+        self.single_size * self.batch_size().unwrap_or(1)
     }
 
     /// #### Safety
     /// It is the responsibility of the user to ensure all indices fall within the given shape.
-    pub unsafe fn load_from_slice(&mut self, shape: Shape, nnz: usize, buf: &[i32]) {
-        assert_eq!(nnz * shape.batch_size().unwrap_or(1), buf.len());
-        self.reshape_if_needed(shape, nnz);
+    pub unsafe fn load_from_slice(&mut self, nnz: usize, batch_size: Option<usize>, buf: &[i32]) {
+        assert_eq!(nnz * batch_size.unwrap_or(1), buf.len());
+        self.set_batch_size(batch_size);
         self.buf.load_from_slice(buf);
-    }
-
-    pub fn copy_into(&self, dest: &mut Self) {
-        dest.reshape_if_needed(self.shape, self.nnz);
-        dest.buf.load_from_device(&self.buf, self.nnz * self.shape.batch_size().unwrap_or(1));
     }
 }

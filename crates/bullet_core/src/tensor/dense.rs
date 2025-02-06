@@ -1,47 +1,27 @@
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
-use crate::{
-    device::{Device, DeviceBuffer},
-    shape::Shape,
-};
+use crate::device::{Device, DeviceBuffer};
 
 pub struct DenseMatrix<D: Device> {
-    pub buf: D::BufferF32,
-    pub shape: Shape,
+    pub(crate) buf: D::BufferF32,
+    pub(crate) single_size: usize,
+    pub(crate) batch_size: Option<NonZeroUsize>,
 }
 
 impl<D: Device> DenseMatrix<D> {
-    pub fn zeroed(device: Arc<D>, shape: Shape) -> Self {
-        Self { buf: D::BufferF32::new(device, shape.size()), shape }
+    pub fn zeroed(device: Arc<D>, single_size: usize) -> Self {
+        let buf = D::BufferF32::new(device, single_size);
+        Self { buf, single_size, batch_size: None }
     }
 
-    pub fn ones(device: Arc<D>, shape: Shape) -> Self {
-        let mut res = Self { buf: D::BufferF32::new(device, shape.size()), shape };
-        res.load_from_slice(shape, &vec![1.0; shape.size()]);
+    pub fn ones(device: Arc<D>, size: usize) -> Self {
+        let mut res = Self { buf: D::BufferF32::new(device, size), single_size: size, batch_size: None };
+        res.load_from_slice(None, &vec![1.0; size]);
         res
-    }
-
-    pub fn shape(&self) -> Shape {
-        self.shape
     }
 
     pub fn allocated_size(&self) -> usize {
         self.buf.size()
-    }
-
-    /// - If the provided `shape` matches the matrix's current shape, nothing is done.
-    /// - If it doesn't, the matrix is reshaped into this shape, and its values are zeroed.
-    /// #### WARNING
-    /// This is a function for internal use only, with potentially
-    /// unintentional side effects.
-    pub fn reshape_if_needed(&mut self, shape: Shape) {
-        if shape.size() > self.allocated_size() {
-            self.buf = D::BufferF32::new(self.buf.device(), shape.size());
-        } else if self.shape != shape {
-            self.buf.set_zero();
-        }
-
-        self.shape = shape;
     }
 
     pub fn size(&self) -> usize {
@@ -49,27 +29,27 @@ impl<D: Device> DenseMatrix<D> {
     }
 
     pub fn single_size(&self) -> usize {
-        self.shape.without_batch_size().size()
+        self.single_size
     }
 
     pub fn batch_size(&self) -> Option<usize> {
-        self.shape.batch_size()
+        self.batch_size.map(NonZeroUsize::get)
     }
 
     pub fn set_batch_size(&mut self, batch_size: Option<usize>) {
-        let new_size = self.shape.without_batch_size().size() * batch_size.unwrap_or(1);
+        let new_size = self.single_size() * batch_size.unwrap_or(1);
         if new_size > self.allocated_size() {
             self.buf = D::BufferF32::new(self.buf.device(), new_size);
         } else if batch_size != self.batch_size() {
             self.buf.set_zero();
         }
 
-        self.shape = self.shape.with_batch_size(batch_size);
+        self.batch_size = batch_size.map(|x| NonZeroUsize::new(x).unwrap());
     }
 
-    pub fn load_from_slice(&mut self, shape: Shape, buf: &[f32]) {
-        assert_eq!(shape.size(), buf.len());
-        self.reshape_if_needed(shape);
+    pub fn load_from_slice(&mut self, batch_size: Option<usize>, buf: &[f32]) {
+        assert_eq!(self.single_size() * batch_size.unwrap_or(1), buf.len());
+        self.set_batch_size(batch_size);
         self.buf.load_from_slice(buf);
     }
 
@@ -77,16 +57,11 @@ impl<D: Device> DenseMatrix<D> {
         self.buf.set_zero();
     }
 
-    pub fn copy_into(&self, dest: &mut Self) {
-        dest.reshape_if_needed(self.shape);
-        dest.buf.load_from_device(&self.buf, self.shape.size());
-    }
-
     /// Writes the contents of this matrix into a buffer,
     /// returns number of values written.
     pub fn write_to_slice(&self, buf: &mut [f32]) -> usize {
-        assert!(self.shape.size() <= buf.len());
-        self.buf.write_into_slice(buf, self.shape.size());
+        assert!(self.size() <= buf.len());
+        self.buf.write_into_slice(buf, self.size());
         self.allocated_size()
     }
 
@@ -94,6 +69,10 @@ impl<D: Device> DenseMatrix<D> {
     /// along with an ID tag.
     pub fn write_to_byte_buffer(&self, id: &str) -> std::io::Result<Vec<u8>> {
         use std::io::{Error, ErrorKind, Write};
+
+        if self.batch_size.is_some() {
+            return Err(Error::new(ErrorKind::InvalidInput, "Cannot write batched!"));
+        }
 
         if !id.is_ascii() {
             return Err(Error::new(ErrorKind::InvalidInput, "IDs may not contain non-ASCII characters!"));
@@ -110,10 +89,9 @@ impl<D: Device> DenseMatrix<D> {
         let mut buf = Vec::new();
 
         buf.write_all(&id_bytes)?;
-        buf.write_all(&usize::to_le_bytes(self.shape.rows()))?;
-        buf.write_all(&usize::to_le_bytes(self.shape.cols()))?;
+        buf.write_all(&usize::to_le_bytes(self.single_size))?;
 
-        let mut values = vec![0.0; self.shape.size()];
+        let mut values = vec![0.0; self.single_size];
         self.write_to_slice(&mut values);
 
         for val in values {
@@ -125,7 +103,7 @@ impl<D: Device> DenseMatrix<D> {
 
     /// Reads a matrix from a byte buffer, returning how many bytes were read
     /// and the matrix ID that was read.
-    pub fn read_from_byte_buffer(&mut self, bytes: &[u8]) -> (String, usize) {
+    pub fn read_from_byte_buffer(device: Arc<D>, bytes: &[u8]) -> (Self, String, usize) {
         const USIZE: usize = std::mem::size_of::<usize>();
 
         let mut offset = 0;
@@ -142,21 +120,15 @@ impl<D: Device> DenseMatrix<D> {
             id.push(char::from(ch));
         }
 
-        let mut rows = [0u8; USIZE];
-        rows.copy_from_slice(&bytes[offset..offset + USIZE]);
+        let mut single_size = [0u8; USIZE];
+        single_size.copy_from_slice(&bytes[offset..offset + USIZE]);
         offset += USIZE;
 
-        let mut cols = [0u8; USIZE];
-        cols.copy_from_slice(&bytes[offset..offset + USIZE]);
-        offset += USIZE;
+        let single_size = usize::from_le_bytes(single_size);
+        let total_read = offset + single_size * 4;
 
-        let rows = usize::from_le_bytes(rows);
-        let cols = usize::from_le_bytes(cols);
-
-        let shape = Shape::new(rows, cols);
-        let total_read = offset + shape.size() * 4;
-
-        let mut values = vec![0.0; shape.size()];
+        let mut values = vec![0.0; single_size];
+        let mut res = Self::zeroed(device, single_size);
 
         for (word, val) in bytes[offset..total_read].chunks_exact(4).zip(values.iter_mut()) {
             let mut buf = [0; 4];
@@ -164,8 +136,8 @@ impl<D: Device> DenseMatrix<D> {
             *val = f32::from_le_bytes(buf);
         }
 
-        self.load_from_slice(shape, &values);
+        res.load_from_slice(None, &values);
 
-        (id, total_read)
+        (res, id, total_read)
     }
 }

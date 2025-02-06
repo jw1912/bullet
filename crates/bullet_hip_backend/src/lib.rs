@@ -85,41 +85,30 @@ impl Device for ExecutionContext {
     }
 
     fn sgemm(
-        input_a: &DenseMatrix,
+        input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
-        input_b: &DenseMatrix,
+        input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
-        output: &mut DenseMatrix,
-        output_shape: Shape,
+        output: &mut Self::BufferF32,
         increment: bool,
     ) {
-        matmul::sgemm(input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, output_shape, increment);
+        matmul::sgemm(input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment);
     }
 
     fn sgemm_batched(
-        input_a: &DenseMatrix,
-        trans_a: bool,
-        input_b: &DenseMatrix,
-        trans_b: bool,
-        output: &mut DenseMatrix,
-        increment: bool,
-    ) {
-        matmul::sgemm_batched(input_a, trans_a, input_b, trans_b, output, increment);
-    }
-
-    fn sgemm_batched_reshaped(
-        input_a: &DenseMatrix,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
-        input_b: &DenseMatrix,
+        input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
-        output: &mut DenseMatrix,
+        output: &mut Self::BufferF32,
         increment: bool,
     ) {
-        dense::batched_sgemm(input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment);
+        matmul::sgemm_batched(batch_size, input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment);
     }
 
     fn backprop_abs_power_error_single(

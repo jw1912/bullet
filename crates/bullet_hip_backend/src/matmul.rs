@@ -1,38 +1,36 @@
 use bullet_core::{device::DeviceBuffer, shape::Shape};
 
-use crate::{backend::blas, DenseMatrix};
+use crate::backend::{blas, Buffer};
 
 #[allow(clippy::too_many_arguments)]
 pub fn sgemm(
-    input_a: &DenseMatrix,
+    input_a: &Buffer<f32>,
     shape_a: Shape,
     trans_a: bool,
-    input_b: &DenseMatrix,
+    input_b: &Buffer<f32>,
     shape_b: Shape,
     trans_b: bool,
-    output: &mut DenseMatrix,
-    output_shape: Shape,
+    output: &mut Buffer<f32>,
     increment: bool,
 ) {
-    assert!(shape_a.batch_size().is_none());
-    assert!(shape_b.batch_size().is_none());
-
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
-    output.reshape_if_needed(output_shape);
-    assert_eq!(output_shape.size(), shape_o.size());
+
+    assert!(shape_a.size() <= input_a.size());
+    assert!(shape_b.size() <= input_b.size());
+    assert!(shape_o.size() <= output.size());
 
     unsafe {
         blas::sgemm(
-            input_a.buf.device().as_ref(),
-            input_a.buf.ptr(),
+            input_a.device().as_ref(),
+            input_a.ptr(),
             shape_a.rows(),
             shape_a.cols(),
             trans_a,
-            input_b.buf.ptr(),
+            input_b.ptr(),
             shape_b.rows(),
             shape_b.cols(),
             trans_b,
-            output.buf.mut_ptr(),
+            output.mut_ptr(),
             shape_o.rows(),
             shape_o.cols(),
             increment,
@@ -41,34 +39,37 @@ pub fn sgemm(
 }
 
 pub fn sgemm_batched(
-    input_a: &DenseMatrix,
+    batch_size: usize,
+    input_a: &Buffer<f32>,
+    shape_a: Shape,
     trans_a: bool,
-    input_b: &DenseMatrix,
+    input_b: &Buffer<f32>,
+    shape_b: Shape,
     trans_b: bool,
-    output: &mut DenseMatrix,
+    output: &mut Buffer<f32>,
     increment: bool,
 ) {
-    assert_eq!(input_a.shape.batch_size(), input_b.shape.batch_size());
+    let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
-    let output_shape = input_a.shape.maybe_transpose(trans_a) * input_b.shape.maybe_transpose(trans_b);
-    let batch_size = input_a.shape.batch_size().unwrap_or(1);
-    output.reshape_if_needed(output_shape);
+    assert!(batch_size * shape_a.size() <= input_a.size());
+    assert!(batch_size * shape_b.size() <= input_b.size());
+    assert!(batch_size * shape_o.size() <= output.size());
 
     unsafe {
         blas::batched_sgemm(
-            input_a.buf.device().as_ref(),
+            input_a.device().as_ref(),
             batch_size,
-            input_a.buf.ptr(),
-            input_a.shape.rows(),
-            input_a.shape.cols(),
+            input_a.ptr(),
+            shape_a.rows(),
+            shape_a.cols(),
             trans_a,
-            input_b.buf.ptr(),
-            input_b.shape.rows(),
-            input_b.shape.cols(),
+            input_b.ptr(),
+            shape_b.rows(),
+            shape_b.cols(),
             trans_b,
-            output.buf.mut_ptr(),
-            output_shape.rows(),
-            output_shape.cols(),
+            output.mut_ptr(),
+            shape_o.rows(),
+            shape_o.cols(),
             increment,
         );
     }

@@ -9,22 +9,23 @@ use super::{operation::Operation, Graph};
 use crate::{device::Device, shape::Shape, tensor::Tensor};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct Node(pub(crate) usize);
+pub struct Node {
+    pub idx: usize,
+    pub shape: Shape,
+}
 
 pub(crate) struct NodeData {
     id: Option<String>,
-    shape: Shape,
+    size: usize,
     requires_grad: bool,
     parent_operation: Option<Operation>,
+    own: Node,
 }
 
 impl NodeData {
-    pub fn new(id: Option<String>, operation: Option<Operation>, shape: Shape, requires_grad: bool) -> Self {
-        Self { id, shape, requires_grad, parent_operation: operation }
-    }
-
-    pub fn shape(&self) -> Shape {
-        self.shape
+    fn new(id: Option<String>, parent_operation: Option<Operation>, size: usize, requires_grad: bool) -> Self {
+        let own = Node { idx: usize::MAX, shape: Shape::new(usize::MAX, usize::MAX) };
+        Self { id, size, requires_grad, parent_operation, own }
     }
 }
 
@@ -38,18 +39,17 @@ pub struct GraphBuilder {
 }
 
 impl GraphBuilder {
-    pub(crate) fn get_node(&self, index: Node) -> &NodeData {
-        &self.nodes[index.0]
+    pub(crate) fn get_node(&self, node: Node) -> &NodeData {
+        &self.nodes[node.idx]
     }
 
-    fn create_node(&mut self, data: NodeData) -> Node {
-        assert!(data.shape.batch_size().is_none(), "Cannot specify batch size in graph builder!");
-
+    fn create_node(&mut self, mut data: NodeData, shape: Shape) -> Node {
         if let Some(id) = data.id.as_ref() {
             assert!(self.ids.insert(id.to_string()))
         }
 
-        let node = Node(self.nodes.len());
+        let node = Node { idx: self.nodes.len(), shape };
+        data.own = node;
 
         if let Some(op) = &data.parent_operation {
             for parent in &op.nodes() {
@@ -64,7 +64,8 @@ impl GraphBuilder {
     }
 
     pub fn create_input(&mut self, id: &str, shape: Shape) -> Node {
-        let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, false));
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false);
+        let node = self.create_node(data, shape);
 
         self.inputs.insert(node);
 
@@ -72,7 +73,8 @@ impl GraphBuilder {
     }
 
     pub fn create_weights(&mut self, id: &str, shape: Shape) -> Node {
-        let node = self.create_node(NodeData::new(Some(id.to_string()), None, shape, true));
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), true);
+        let node = self.create_node(data, shape);
 
         self.weights.insert(node);
 
@@ -80,8 +82,11 @@ impl GraphBuilder {
     }
 
     pub fn create_result_of_operation(&mut self, operation: Operation) -> Node {
-        match operation.output_shape(self) {
-            Ok(shape) => self.create_node(NodeData::new(None, Some(operation), shape, true)),
+        match operation.output_shape() {
+            Ok(shape) => {
+                let data = NodeData::new(None, Some(operation), shape.size(), true);
+                self.create_node(data, shape)
+            }
             Err(s) => panic!("{s:?}"),
         }
     }
@@ -97,7 +102,8 @@ impl GraphBuilder {
         let root = *self.roots.iter().next().unwrap();
         assert!(self.get_node(root).requires_grad, "Output cannot be an input!");
         assert!(!self.weights.contains(&root), "Can't output trainable weights!");
-        assert_eq!(self.get_node(root).shape, Shape::new(1, 1), "Graph output must be scalar!");
+        assert_eq!(root.shape, Shape::new(1, 1), "Graph output must be scalar!");
+        assert_eq!(self.get_node(root).size, 1);
 
         let device = Arc::new(device);
 
@@ -107,9 +113,10 @@ impl GraphBuilder {
             .map(|node_data| {
                 RefCell::new(Tensor::new(
                     device.clone(),
-                    node_data.shape,
+                    node_data.size,
                     node_data.requires_grad,
                     node_data.parent_operation,
+                    node_data.own,
                 ))
             })
             .collect::<Vec<_>>();

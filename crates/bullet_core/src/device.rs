@@ -32,34 +32,25 @@ pub trait Device: Sized + 'static {
     );
 
     fn sgemm(
-        input_a: &DenseMatrix<Self>,
+        input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
-        input_b: &DenseMatrix<Self>,
+        input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
-        output: &mut DenseMatrix<Self>,
-        output_shape: Shape,
+        output: &mut Self::BufferF32,
         increment: bool,
     );
 
     fn sgemm_batched(
-        input_a: &DenseMatrix<Self>,
-        trans_a: bool,
-        input_b: &DenseMatrix<Self>,
-        trans_b: bool,
-        output: &mut DenseMatrix<Self>,
-        increment: bool,
-    );
-
-    fn sgemm_batched_reshaped(
-        input_a: &DenseMatrix<Self>,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
-        input_b: &DenseMatrix<Self>,
+        input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
-        output: &mut DenseMatrix<Self>,
+        output: &mut Self::BufferF32,
         increment: bool,
     );
 

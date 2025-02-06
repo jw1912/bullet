@@ -18,30 +18,20 @@ pub struct Graph<D: Device> {
 impl<D: Device> Graph<D> {
     pub fn forward(&mut self) -> f32 {
         for node in 0..self.nodes.len() {
-            self.forward_node(Node(node));
+            let node = { self.nodes[node].borrow().own };
+            self.forward_node(node);
         }
 
-        self.nodes[self.root.0].borrow().get_scalar().unwrap()
+        self.nodes[self.root.idx].borrow().get_scalar().unwrap()
     }
 
     pub fn backward(&mut self) {
-        self.nodes[self.root.0].get_mut().set_grad_to_unit();
+        self.nodes[self.root.idx].get_mut().set_grad_to_unit();
 
         for node in (0..self.nodes.len()).rev() {
-            self.backward_node(Node(node));
+            let node = { self.nodes[node].borrow().own };
+            self.backward_node(node);
         }
-    }
-
-    fn store_values(&mut self, node: Node, data: &Tensor<D>) {
-        data.copy_values_into(self.nodes[node.0].get_mut());
-    }
-
-    pub fn store_input(&mut self, input: &str, data: &Tensor<D>) {
-        self.store_values(self.inputs[input], data);
-    }
-
-    pub fn store_weights(&mut self, weights: &str, data: &Tensor<D>) {
-        self.store_values(self.weights[weights], data);
     }
 
     pub fn zero_grads(&mut self) {
@@ -59,30 +49,30 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_input(&self, id: &str) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[self.inputs[id].0].borrow()
+        self.nodes[self.inputs[id].idx].borrow()
     }
 
     pub fn get_input_mut(&mut self, id: &str) -> &mut Tensor<D> {
-        self.nodes[self.inputs[id].0].get_mut()
+        self.nodes[self.inputs[id].idx].get_mut()
     }
 
     pub fn get_weights(&self, id: &str) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[self.weights[id].0].borrow()
+        self.nodes[self.weights[id].idx].borrow()
     }
 
     pub fn get_weights_mut(&mut self, id: &str) -> &mut Tensor<D> {
-        self.nodes[self.weights[id].0].get_mut()
+        self.nodes[self.weights[id].idx].get_mut()
     }
 
     pub fn get_node(&self, node: Node) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[node.0].borrow()
+        self.nodes[node.idx].borrow()
     }
 
     pub fn get_num_params(&self) -> usize {
         let mut total = 0;
 
         for weight in self.weight_ids() {
-            total += self.get_weights(&weight).values.shape().size();
+            total += self.get_weights(&weight).values.size();
         }
 
         total

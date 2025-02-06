@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{device::Device, graph::Graph, shape::Shape, tensor::DenseMatrix};
+use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.
@@ -32,13 +32,10 @@ pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str)
     file.read_to_end(&mut buf).unwrap();
 
     let mut offset = 0;
-    let mut matrix_buffer = DenseMatrix::zeroed(graph.device(), Shape::new(1, 1));
 
     while offset < buf.len() {
-        let (id, bytes_read) = matrix_buffer.read_from_byte_buffer(&buf[offset..]);
-
-        let weights = graph.get_weights_mut(&id);
-        matrix_buffer.copy_into(weights.values.dense_mut());
+        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(graph.device(), &buf[offset..]);
+        *graph.get_weights_mut(&id).values.dense_mut() = buffer;
 
         offset += bytes_read;
     }
@@ -68,12 +65,11 @@ pub fn load_weight_hashmap_from_file<D: Device>(device: Arc<D>, map: &mut HashMa
     file.read_to_end(&mut buf).unwrap();
 
     let mut offset = 0;
-    let mut matrix_buffer = DenseMatrix::zeroed(device, Shape::new(1, 1));
 
     while offset < buf.len() {
-        let (id, bytes_read) = matrix_buffer.read_from_byte_buffer(&buf[offset..]);
+        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(device.clone(), &buf[offset..]);
 
-        matrix_buffer.copy_into(map.get_mut(&id).unwrap());
+        *map.get_mut(&id).unwrap() = buffer;
 
         offset += bytes_read;
     }

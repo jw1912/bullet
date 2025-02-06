@@ -1,35 +1,45 @@
 use crate::{device::Device, shape::Shape, tensor::DenseMatrix};
 
-pub fn concat<D: Device>(input_a: &DenseMatrix<D>, input_b: &DenseMatrix<D>, output: &mut DenseMatrix<D>) {
-    assert_eq!(input_a.shape.cols(), 1);
-    assert_eq!(input_b.shape.cols(), 1);
-    assert_eq!(input_a.shape.batch_size(), input_b.shape.batch_size());
+pub fn concat<D: Device>(
+    input_a: &DenseMatrix<D>,
+    shape_a: Shape,
+    input_b: &DenseMatrix<D>,
+    shape_b: Shape,
+    output: &mut DenseMatrix<D>,
+) {
+    assert_eq!(shape_a.cols(), 1);
+    assert_eq!(shape_b.cols(), 1);
+    assert_eq!(input_a.batch_size(), input_b.batch_size());
 
-    let output_rows = input_a.shape.rows() + input_b.shape.rows();
-    let output_shape = Shape::from_raw(output_rows, 1, input_a.shape.batch_size());
-    output.reshape_if_needed(output_shape);
+    let shape_o = Shape::new(shape_a.rows() + shape_b.rows(), 1);
+
+    assert_eq!(shape_a.size(), input_a.single_size());
+    assert_eq!(shape_b.size(), input_b.single_size());
+    assert_eq!(shape_o.size(), output.single_size());
+
+    output.set_batch_size(input_a.batch_size());
 
     D::copy_or_add_strided(
-        input_a.shape.rows(),
-        input_a.shape.batch_size().unwrap_or(1),
+        shape_a.rows(),
+        input_a.batch_size().unwrap_or(1),
         &input_a.buf,
         0,
-        input_a.shape.rows(),
+        shape_a.rows(),
         &mut output.buf,
         0,
-        output_shape.rows(),
+        shape_o.rows(),
         false,
     );
 
     D::copy_or_add_strided(
-        input_b.shape.rows(),
-        input_b.shape.batch_size().unwrap_or(1),
+        shape_b.rows(),
+        input_b.batch_size().unwrap_or(1),
         &input_b.buf,
         0,
-        input_b.shape.rows(),
+        shape_b.rows(),
         &mut output.buf,
-        input_a.shape.rows(),
-        output_shape.rows(),
+        shape_a.rows(),
+        shape_o.rows(),
         false,
     );
 }
@@ -37,44 +47,53 @@ pub fn concat<D: Device>(input_a: &DenseMatrix<D>, input_b: &DenseMatrix<D>, out
 pub fn backprop_concat<D: Device>(
     input_a: &DenseMatrix<D>,
     input_a_grad: Option<&mut DenseMatrix<D>>,
+    shape_a: Shape,
     input_b: &DenseMatrix<D>,
     input_b_grad: Option<&mut DenseMatrix<D>>,
+    shape_b: Shape,
     output_grad: &DenseMatrix<D>,
 ) {
-    assert_eq!(input_a.shape.cols(), 1);
-    assert_eq!(input_b.shape.cols(), 1);
-    assert_eq!(output_grad.shape.cols(), 1);
-    assert_eq!(input_a.shape.batch_size(), input_b.shape.batch_size());
-    assert_eq!(input_a.shape.batch_size(), output_grad.shape.batch_size());
+    assert_eq!(shape_a.cols(), 1);
+    assert_eq!(shape_b.cols(), 1);
+    assert_eq!(input_a.batch_size(), input_b.batch_size());
+    assert_eq!(input_a.batch_size(), output_grad.batch_size());
+
+    let shape_o = Shape::new(shape_a.rows() + shape_b.rows(), 1);
+
+    assert_eq!(shape_a.size(), input_a.single_size());
+    assert_eq!(shape_b.size(), input_b.single_size());
+    assert_eq!(shape_o.size(), output_grad.single_size());
 
     if let Some(grad) = input_a_grad {
-        grad.reshape_if_needed(input_a.shape);
+        assert_eq!(grad.single_size(), input_a.single_size());
+        grad.set_batch_size(input_a.batch_size());
 
         D::copy_or_add_strided(
-            grad.shape.rows(),
-            grad.shape.batch_size().unwrap_or(1),
+            shape_a.rows(),
+            grad.batch_size().unwrap_or(1),
             &output_grad.buf,
             0,
-            output_grad.shape.rows(),
+            shape_o.rows(),
             &mut grad.buf,
             0,
-            grad.shape.rows(),
+            shape_a.rows(),
             true,
         );
     }
 
     if let Some(grad) = input_b_grad {
-        grad.reshape_if_needed(input_b.shape);
+        assert_eq!(grad.single_size(), input_b.single_size());
+        grad.set_batch_size(input_b.batch_size());
 
         D::copy_or_add_strided(
-            grad.shape.rows(),
-            grad.shape.batch_size().unwrap_or(1),
+            shape_b.rows(),
+            grad.batch_size().unwrap_or(1),
             &output_grad.buf,
-            input_a.shape.rows(),
-            output_grad.shape.rows(),
+            shape_a.rows(),
+            shape_o.rows(),
             &mut grad.buf,
             0,
-            grad.shape.rows(),
+            shape_b.rows(),
             true,
         );
     }

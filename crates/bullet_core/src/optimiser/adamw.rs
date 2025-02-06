@@ -37,12 +37,14 @@ impl<D: Device> Optimiser<D> for AdamW<D> {
         let mut params = HashMap::new();
 
         for id in weight_ids {
-            let shape = graph.get_weights(&id).values.shape();
+            let w = graph.get_weights(&id);
+            assert!(w.values.batch_size().is_none());
+            let size = w.values.size();
 
-            let old = momentum.insert(id.clone(), DenseMatrix::zeroed(graph.device(), shape));
+            let old = momentum.insert(id.clone(), DenseMatrix::zeroed(graph.device(), size));
             assert!(old.is_none());
 
-            let old = velocity.insert(id.clone(), DenseMatrix::zeroed(graph.device(), shape));
+            let old = velocity.insert(id.clone(), DenseMatrix::zeroed(graph.device(), size));
             assert!(old.is_none());
 
             let old = params.insert(id, default_params);
@@ -69,12 +71,14 @@ impl<D: Device> Optimiser<D> for AdamW<D> {
                 let momentum = self.momentum.get_mut(id).unwrap();
                 let velocity = self.velocity.get_mut(id).unwrap();
 
-                assert!(weights.values.shape().batch_size().is_none());
-                assert_eq!(weights.values.shape(), momentum.shape());
-                assert_eq!(weights.values.shape(), velocity.shape());
+                assert!(weights.values.batch_size().is_none());
+                assert!(momentum.batch_size().is_none());
+                assert!(velocity.batch_size().is_none());
+                assert_eq!(weights.values.size(), momentum.size());
+                assert_eq!(weights.values.size(), velocity.size());
 
                 D::adamw(
-                    weights.values.shape().size(),
+                    weights.values.size(),
                     &mut weights.values.dense_mut().buf,
                     &grads.buf,
                     &mut momentum.buf,
