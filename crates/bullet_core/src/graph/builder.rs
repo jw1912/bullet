@@ -12,7 +12,6 @@ use crate::{device::Device, shape::Shape, tensor::Tensor};
 pub struct Node(pub(crate) usize);
 
 pub(crate) struct NodeData {
-    own: Node,
     id: Option<String>,
     shape: Shape,
     requires_grad: bool,
@@ -21,7 +20,7 @@ pub(crate) struct NodeData {
 
 impl NodeData {
     pub fn new(id: Option<String>, operation: Option<Operation>, shape: Shape, requires_grad: bool) -> Self {
-        Self { id, own: Node(usize::MAX), shape, requires_grad, parent_operation: operation }
+        Self { id, shape, requires_grad, parent_operation: operation }
     }
 
     pub fn shape(&self) -> Shape {
@@ -43,7 +42,7 @@ impl GraphBuilder {
         &self.nodes[index.0]
     }
 
-    fn create_node(&mut self, mut data: NodeData) -> Node {
+    fn create_node(&mut self, data: NodeData) -> Node {
         assert!(data.shape.batch_size().is_none(), "Cannot specify batch size in graph builder!");
 
         if let Some(id) = data.id.as_ref() {
@@ -51,7 +50,6 @@ impl GraphBuilder {
         }
 
         let node = Node(self.nodes.len());
-        data.own = node;
 
         if let Some(op) = &data.parent_operation {
             for parent in &op.nodes() {
