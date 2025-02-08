@@ -6,7 +6,6 @@ mod pairwise;
 mod power_error;
 mod slice;
 mod softmax;
-mod submatrix_product;
 
 pub use activate::*;
 pub use adamw::*;
@@ -16,4 +15,3 @@ pub use pairwise::*;
 pub use power_error::*;
 pub use slice::*;
 pub use softmax::*;
-pub use submatrix_product::*;

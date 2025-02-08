@@ -1,49 +1,42 @@
-use crate::{backend::ops, DenseMatrix, Shape};
+use crate::backend::{ops, Buffer};
 
-pub fn pairwise(input: &DenseMatrix, output: &mut DenseMatrix, post_concat: bool) {
-    assert_eq!(input.shape.cols(), 1);
-    let mut rows = input.shape.rows();
-    let mut batch_size = input.shape.batch_size().unwrap_or(1);
-
-    let shape = Shape::new_batched(rows / 2, 1, batch_size);
-
+pub fn pairwise(
+    mut single_size: usize,
+    mut batch_size: usize,
+    input: &Buffer<f32>,
+    output: &mut Buffer<f32>,
+    post_concat: bool,
+) {
     if post_concat {
-        rows /= 2;
+        assert_eq!(single_size % 2, 0);
+        single_size /= 2;
         batch_size *= 2;
     }
 
-    assert_eq!(rows % 2, 0);
-    output.reshape_if_needed(shape);
+    assert_eq!(single_size % 2, 0);
 
     unsafe {
-        ops::pairwiseMul(batch_size, rows / 2, input.buf.ptr(), output.buf.mut_ptr());
+        ops::pairwiseMul(batch_size, single_size / 2, input.ptr(), output.mut_ptr());
     }
 }
 
 pub fn backprop_pairwise(
-    input: &DenseMatrix,
-    output_grad: &DenseMatrix,
-    input_grad: &mut DenseMatrix,
+    mut single_size: usize,
+    mut batch_size: usize,
+    input: &Buffer<f32>,
+    output_grad: &Buffer<f32>,
+    input_grad: &mut Buffer<f32>,
     post_concat: bool,
 ) {
-    assert_eq!(input.shape.cols(), 1);
-    let mut rows = input.shape.rows();
-    let mut batch_size = input.shape.batch_size().unwrap_or(1);
-
     if post_concat {
-        rows /= 2;
+        assert_eq!(single_size % 2, 0);
+        single_size /= 2;
         batch_size *= 2;
     }
 
-    input_grad.reshape_if_needed(input.shape);
+    assert_eq!(single_size % 2, 0);
 
     unsafe {
-        ops::backpropPairwiseMul(
-            batch_size,
-            rows / 2,
-            input.buf.ptr(),
-            output_grad.buf.ptr(),
-            input_grad.buf.mut_ptr(),
-        );
+        ops::backpropPairwiseMul(batch_size, single_size / 2, input.ptr(), output_grad.ptr(), input_grad.mut_ptr());
     }
 }

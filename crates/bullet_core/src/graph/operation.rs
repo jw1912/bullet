@@ -1,7 +1,9 @@
 mod concat;
 mod conv;
+mod linear_comb;
 mod matmul;
 mod slice;
+mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
@@ -199,32 +201,38 @@ impl<D: Device> Graph<D> {
                 let w = get(*wn);
                 let w = w.values.dense();
 
-                if let Some(b) = bn {
+                if let Some(bn) = bn {
                     let bs = i.values.batch_size().unwrap_or(1);
                     setup_ones(w.buf.device(), internal, bs);
                     let ones = &internal.get("ones").unwrap().borrow().buf;
-                    matmul::affine(w, wn.shape, &*i, inp.shape, Some((get(*b).values.dense(), ones)), output);
+                    let b = get(*bn);
+                    let b = Some((b.values.dense(), ones, bn.shape));
+                    matmul::affine(w, wn.shape, &*i, inp.shape, b, output);
                 } else {
                     matmul::affine(w, wn.shape, &*i, inp.shape, None, output);
                 }
             }
-            AffineDualActivate(w, s, n, b, act) => {
-                D::sparse_affine_dual_activate(
-                    get(*w).values.dense(),
-                    get(*s).values.sparse(),
-                    get(*n).values.sparse(),
-                    get(*b).values.dense(),
+            AffineDualActivate(wn, sn, nn, bn, act) => {
+                assert_eq!(sn.shape, nn.shape);
+                sparse::sparse_affine_dual(
+                    get(*wn).values.dense(),
+                    wn.shape,
+                    get(*sn).values.sparse(),
+                    get(*nn).values.sparse(),
+                    sn.shape,
+                    get(*bn).values.dense(),
+                    bn.shape,
                     output,
                     *act,
                 );
             }
-            LinearCombination(alpha, a, beta, b) => {
-                let a = get(*a);
+            LinearCombination(alpha, an, beta, bn) => {
+                let a = get(*an);
                 let a = a.values.dense();
                 let bs = a.batch_size().unwrap_or(1);
                 setup_ones(a.buf.device(), internal, bs);
                 let ones = &internal.get("ones").unwrap().borrow().buf;
-                D::linear_comb(ones, *alpha, a, *beta, get(*b).values.dense(), output);
+                linear_comb::linear_comb(ones, *alpha, a, an.shape, *beta, get(*bn).values.dense(), bn.shape, output);
             }
             Convolution(filters, inputs, desc) => {
                 D::convolution_forward(desc, get(*filters).values.dense(), get(*inputs).values.dense(), output)
@@ -232,16 +240,62 @@ impl<D: Device> Graph<D> {
             Gather(input, mask) => D::gather(get(*input).values.dense(), get(*mask).values.sparse(), output),
             Concat(a, b) => concat::concat(get(*a).values.dense(), a.shape, get(*b).values.dense(), b.shape, output),
             Mask(input, mask) => D::mask(get(*input).values.dense(), get(*mask).values.sparse(), output),
-            PairwiseMul(input, post_concat) => D::pairwise(get(*input).values.dense(), output, *post_concat),
+            PairwiseMul(node, post_concat) => {
+                let input = get(*node);
+                let input = &input.values;
+                assert_eq!(node.shape.cols(), 1);
+                assert_eq!(node.shape.size(), input.single_size());
+                assert_eq!(node.shape.size() % 2, 0);
+                assert_eq!(node.shape.size(), output.single_size());
+                output.set_batch_size(input.batch_size());
+                D::pairwise(
+                    input.single_size(),
+                    input.batch_size().unwrap_or(1),
+                    &input.dense().buf,
+                    &mut output.buf,
+                    *post_concat,
+                )
+            }
             PowerError(a, b, p) => D::power_error(*p, get(*a).values.dense(), get(*b).values.dense(), output),
-            ReduceAcrossBatch(input) => {
-                let input = get(*input);
+            ReduceAcrossBatch(node) => {
+                let input = get(*node);
                 let input = input.values.dense();
                 setup_ones(input.buf.device(), internal, input.batch_size().unwrap_or(1));
                 let ones = internal.get("ones").unwrap().borrow();
-                D::reduce_add_batch(&ones.buf, input, output);
+                assert_eq!(input.single_size(), node.shape.size());
+                D::reduce_add(
+                    &ones.buf,
+                    input.single_size(),
+                    input.batch_size().unwrap_or(1),
+                    &input.buf,
+                    &mut output.buf,
+                );
             }
-            Select(input, buckets) => D::select(get(*input).values.dense(), get(*buckets).values.sparse(), output),
+            Select(input, buckets) => {
+                let rows = input.shape.rows();
+                let num_buckets = buckets.shape.rows();
+
+                assert_eq!(input.shape.cols(), 1);
+                assert_eq!(buckets.shape.cols(), 1);
+                assert_eq!(rows % num_buckets, 0, "Cannot divide vector evenly among buckets!");
+
+                let input = get(*input);
+                let input = input.values.dense();
+                let buckets = get(*buckets);
+                let buckets = buckets.values.sparse();
+                let batch_size = input.batch_size();
+                let output_rows = rows / num_buckets;
+
+                assert_eq!(batch_size, buckets.batch_size());
+                assert_eq!(buckets.nnz, 1);
+                assert_eq!(rows, input.single_size());
+                assert_eq!(num_buckets, buckets.single_size());
+                assert_eq!(output_rows, output.single_size());
+
+                output.set_batch_size(batch_size);
+
+                D::select(batch_size.unwrap_or(1), rows, output_rows, &input.buf, &buckets.buf, &mut output.buf);
+            }
             Slice(input, start, end) => {
                 slice::slice_vector_batched(input.shape, get(*input).values.dense(), *start, *end, output)
             }
@@ -313,16 +367,20 @@ impl<D: Device> Graph<D> {
                     matmul::backprop_affine(w, wn.shape, i, inp.shape, None, o, output_grad);
                 }
             }
-            AffineDualActivate(w, s, n, b, act) => {
-                let w = &mut *get(*w);
-                let b = &mut *get(*b);
-                D::backprop_sparse_affine_dual_activate(
+            AffineDualActivate(wn, sn, nn, bn, act) => {
+                let w = &mut *get(*wn);
+                let b = &mut *get(*bn);
+                assert_eq!(sn.shape, nn.shape);
+                sparse::backprop_sparse_affine_dual_activate(
                     w.values.dense(),
-                    w.gradients.as_mut().unwrap(),
-                    get(*s).values.sparse(),
-                    get(*n).values.sparse(),
+                    w.gradients.as_mut(),
+                    wn.shape,
+                    get(*sn).values.sparse(),
+                    get(*nn).values.sparse(),
+                    sn.shape,
                     b.values.dense(),
-                    b.gradients.as_mut().unwrap(),
+                    b.gradients.as_mut(),
+                    bn.shape,
                     output_tensor.values.dense(),
                     output_grad,
                     *act,
@@ -338,13 +396,16 @@ impl<D: Device> Graph<D> {
                 setup_ones(a.values.dense().buf.device(), internal, bs);
                 let ones = &internal.get("ones").unwrap().borrow().buf;
 
-                if let Some(grd) = a.gradients.as_mut() {
-                    D::backprop_add_single_scaled(ones, *alpha, a.values.dense(), grd, output_grad);
-                }
-
-                if let Some(grd) = b.gradients.as_mut() {
-                    D::backprop_add_single_scaled(ones, *beta, b.values.dense(), grd, output_grad);
-                }
+                linear_comb::linear_comb_backward(
+                    ones,
+                    *alpha,
+                    a.values.dense(),
+                    a.gradients.as_mut(),
+                    *beta,
+                    b.values.dense(),
+                    b.gradients.as_mut(),
+                    output_grad,
+                );
             }
             Convolution(filters, inputs, desc) => {
                 let filters = &mut *get(*filters);
@@ -384,10 +445,23 @@ impl<D: Device> Graph<D> {
                     D::backprop_mask(output_grad, get(*mask).values.sparse(), grd);
                 }
             }
-            PairwiseMul(input, post_concat) => {
-                let input = &mut *get(*input);
+            PairwiseMul(node, post_concat) => {
+                let input = &mut *get(*node);
                 if let Some(grd) = input.gradients.as_mut() {
-                    D::backprop_pairwise(input.values.dense(), output_grad, grd, *post_concat);
+                    let input = &input.values;
+                    assert_eq!(node.shape.size(), input.single_size());
+                    assert_eq!(node.shape.size(), output_grad.single_size());
+                    assert_eq!(node.shape.size(), grd.single_size());
+                    assert_eq!(input.batch_size(), output_grad.batch_size());
+                    grd.set_batch_size(input.batch_size());
+                    D::backprop_pairwise(
+                        input.single_size(),
+                        input.batch_size().unwrap_or(1),
+                        &input.dense().buf,
+                        &output_grad.buf,
+                        &mut grd.buf,
+                        *post_concat,
+                    );
                 }
             }
             PowerError(a, b, p) => {
@@ -428,9 +502,40 @@ impl<D: Device> Graph<D> {
                 }
             }
             Select(input, buckets) => {
+                let rows = input.shape.rows();
+                let num_buckets = buckets.shape.rows();
+
+                assert_eq!(input.shape.cols(), 1);
+                assert_eq!(buckets.shape.cols(), 1);
+                assert_eq!(rows % num_buckets, 0, "Cannot divide vector evenly among buckets!");
+
                 let input = &mut *get(*input);
+
                 if let Some(grd) = input.gradients.as_mut() {
-                    D::select_backprop(input.values.dense(), get(*buckets).values.sparse(), output_grad, grd);
+                    let input = input.values.dense();
+                    let buckets = get(*buckets);
+                    let buckets = buckets.values.sparse();
+                    let batch_size = input.batch_size();
+                    let output_rows = rows / num_buckets;
+
+                    assert_eq!(rows, input.single_size());
+                    assert_eq!(num_buckets, buckets.single_size());
+                    assert_eq!(batch_size, buckets.batch_size());
+                    assert_eq!(batch_size, output_grad.batch_size());
+                    assert_eq!(buckets.nnz, 1);
+                    assert_eq!(output_rows, output_grad.single_size());
+
+                    grd.set_batch_size(batch_size);
+
+                    D::select_backprop(
+                        batch_size.unwrap_or(1),
+                        rows,
+                        output_rows,
+                        &input.buf,
+                        &buckets.buf,
+                        &output_grad.buf,
+                        &mut grd.buf,
+                    );
                 }
             }
             Slice(node, start, end) => {

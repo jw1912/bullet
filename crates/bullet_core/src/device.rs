@@ -63,60 +63,78 @@ pub trait Device: Sized + 'static {
         output: &mut Self::BufferF32,
     );
 
-    fn linear_comb(
+    fn reduce_add(
         ones: &Self::BufferF32,
+        size: usize,
+        batch_size: usize,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
+    );
+
+    /// If `input_a = None`, then take `input_a = output`, i.e. perform the
+    /// in place operation `output = alpha * output + beta * input_b`.
+    ///
+    /// If `input_b = None` then this is equivalent to a scaling operation.
+    fn linear_comb_single(
+        size: usize,
         alpha: f32,
-        input_a: &DenseMatrix<Self>,
+        input_a: Option<&Self::BufferF32>,
         beta: f32,
-        input_b: &DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
+        input_b: Option<&Self::BufferF32>,
+        output: &mut Self::BufferF32,
     );
-
-    fn backprop_add_single_scaled(
-        ones: &Self::BufferF32,
-        alpha: f32,
-        input: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
-    );
-
-    fn reduce_add_batch(ones: &Self::BufferF32, input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
 
     fn sparse_affine(
-        input_a: &DenseMatrix<Self>,
-        input_b: &SparseMatrix<Self>,
-        input_c: Option<&DenseMatrix<Self>>,
-        output: &mut DenseMatrix<Self>,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        shape_a: Shape,
+        input_b: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: Option<&Self::BufferF32>,
+        output: &mut Self::BufferF32,
     );
 
     fn backprop_sparse_affine(
-        input_a: &DenseMatrix<Self>,
-        input_a_grad: &mut DenseMatrix<Self>,
-        input_b: &SparseMatrix<Self>,
-        input_c: Option<&DenseMatrix<Self>>,
-        input_c_grad: Option<&mut DenseMatrix<Self>>,
-        outputs: &DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        input_a_grad: &mut Self::BufferF32,
+        shape_a: Shape,
+        input_b: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: Option<&Self::BufferF32>,
+        input_c_grad: Option<&mut Self::BufferF32>,
+        outputs: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
     );
 
     fn sparse_affine_dual_activate(
-        input_a: &DenseMatrix<Self>,
-        input_b1: &SparseMatrix<Self>,
-        input_b2: &SparseMatrix<Self>,
-        input_c: &DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        shape_a: Shape,
+        input_b1: &Self::BufferI32,
+        input_b2: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: &Self::BufferF32,
+        output: &mut Self::BufferF32,
         activation: Activation,
     );
 
     fn backprop_sparse_affine_dual_activate(
-        input_a: &DenseMatrix<Self>,
-        input_a_grad: &mut DenseMatrix<Self>,
-        input_b1: &SparseMatrix<Self>,
-        input_b2: &SparseMatrix<Self>,
-        input_c: &DenseMatrix<Self>,
-        input_c_grad: &mut DenseMatrix<Self>,
-        outputs: &DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        input_a_grad: &mut Self::BufferF32,
+        shape_a: Shape,
+        input_b1: &Self::BufferI32,
+        input_b2: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: &Self::BufferF32,
+        input_c_grad: &mut Self::BufferF32,
+        outputs: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
         activation: Activation,
     );
 
@@ -136,22 +154,40 @@ pub trait Device: Sized + 'static {
 
     fn backprop_mask(output_grads: &DenseMatrix<Self>, masks: &SparseMatrix<Self>, input_grads: &mut DenseMatrix<Self>);
 
-    fn pairwise(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>, post_concat: bool);
-
-    fn backprop_pairwise(
-        input: &DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
+    fn pairwise(
+        single_size: usize,
+        batch_size: usize,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
         post_concat: bool,
     );
 
-    fn select(input: &DenseMatrix<Self>, indices: &SparseMatrix<Self>, output: &mut DenseMatrix<Self>);
+    fn backprop_pairwise(
+        single_size: usize,
+        batch_size: usize,
+        input: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
+        post_concat: bool,
+    );
+
+    fn select(
+        batch_size: usize,
+        input_size: usize,
+        output_size: usize,
+        input: &Self::BufferF32,
+        indices: &Self::BufferI32,
+        output: &mut Self::BufferF32,
+    );
 
     fn select_backprop(
-        input: &DenseMatrix<Self>,
-        indices: &SparseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
+        batch_size: usize,
+        input_size: usize,
+        output_size: usize,
+        input: &Self::BufferF32,
+        indices: &Self::BufferI32,
+        output_grad: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
     );
 
     fn gather(inputs: &DenseMatrix<Self>, indices: &SparseMatrix<Self>, outputs: &mut DenseMatrix<Self>);

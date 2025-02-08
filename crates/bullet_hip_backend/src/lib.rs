@@ -74,16 +74,6 @@ impl Device for ExecutionContext {
         dense::add_assign_single_to_batched_scaled(single_size, batch_size, ones, alpha, input, output);
     }
 
-    fn backprop_add_single_scaled(
-        ones: &Self::BufferF32,
-        alpha: f32,
-        input: &DenseMatrix,
-        input_grad: &mut DenseMatrix,
-        output_grad: &DenseMatrix,
-    ) {
-        dense::backprop_add_single(ones, alpha, input, input_grad, output_grad);
-    }
-
     fn sgemm(
         input_a: &Self::BufferF32,
         shape_a: Shape,
@@ -135,12 +125,14 @@ impl Device for ExecutionContext {
     }
 
     fn backprop_pairwise(
-        input: &DenseMatrix,
-        output_grad: &DenseMatrix,
-        input_grad: &mut DenseMatrix,
+        single_size: usize,
+        batch_size: usize,
+        input: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
         post_concat: bool,
     ) {
-        dense::backprop_pairwise(input, output_grad, input_grad, post_concat);
+        dense::backprop_pairwise(single_size, batch_size, input, output_grad, input_grad, post_concat);
     }
 
     fn backprop_softmax_crossentropy_loss(
@@ -163,33 +155,57 @@ impl Device for ExecutionContext {
     }
 
     fn backprop_sparse_affine(
-        input_a: &DenseMatrix,
-        input_a_grad: &mut DenseMatrix,
-        input_b: &SparseMatrix,
-        input_c: Option<&DenseMatrix>,
-        input_c_grad: Option<&mut DenseMatrix>,
-        outputs: &DenseMatrix,
-        output_grad: &DenseMatrix,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        input_a_grad: &mut Self::BufferF32,
+        shape_a: Shape,
+        input_b: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: Option<&Self::BufferF32>,
+        input_c_grad: Option<&mut Self::BufferF32>,
+        outputs: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
     ) {
-        sparse::backprop_affine(input_a, input_a_grad, input_b, input_c, input_c_grad, outputs, output_grad);
+        sparse::backprop_sparse_affine(
+            batch_size,
+            input_a,
+            input_a_grad,
+            shape_a,
+            input_b,
+            shape_b,
+            nnz,
+            input_c,
+            input_c_grad,
+            outputs,
+            output_grad,
+        );
     }
 
     fn backprop_sparse_affine_dual_activate(
-        input_a: &DenseMatrix,
-        input_a_grad: &mut DenseMatrix,
-        input_b1: &SparseMatrix,
-        input_b2: &SparseMatrix,
-        input_c: &DenseMatrix,
-        input_c_grad: &mut DenseMatrix,
-        outputs: &DenseMatrix,
-        output_grad: &DenseMatrix,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        input_a_grad: &mut Self::BufferF32,
+        shape_a: Shape,
+        input_b1: &Self::BufferI32,
+        input_b2: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: &Self::BufferF32,
+        input_c_grad: &mut Self::BufferF32,
+        outputs: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
         activation: Activation,
     ) {
-        sparse::backprop_affine_dual(
+        sparse::backprop_sparse_affine_dual_activate(
+            batch_size,
             input_a,
             input_a_grad,
+            shape_a,
             input_b1,
             input_b2,
+            shape_b,
+            nnz,
             input_c,
             input_c_grad,
             outputs,
@@ -266,31 +282,22 @@ impl Device for ExecutionContext {
         sparse::gather(inputs, indices, outputs);
     }
 
-    fn linear_comb(
-        ones: &Self::BufferF32,
-        alpha: f32,
-        input_a: &DenseMatrix,
-        beta: f32,
-        input_b: &DenseMatrix,
-        output: &mut DenseMatrix,
-    ) {
-        dense::linear_comb(ones, alpha, input_a, beta, input_b, output);
-    }
-
     fn mask(inputs: &DenseMatrix, masks: &SparseMatrix, outputs: &mut DenseMatrix) {
         sparse::mask(inputs, masks, outputs);
     }
 
-    fn pairwise(input: &DenseMatrix, output: &mut DenseMatrix, post_concat: bool) {
-        dense::pairwise(input, output, post_concat);
+    fn pairwise(
+        single_size: usize,
+        batch_size: usize,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
+        post_concat: bool,
+    ) {
+        dense::pairwise(single_size, batch_size, input, output, post_concat);
     }
 
     fn power_error(power: f32, input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
         dense::abs_power_error(power, input_a, input_b, output);
-    }
-
-    fn reduce_add_batch(ones: &Self::BufferF32, input: &DenseMatrix, output: &mut DenseMatrix) {
-        dense::reduce_add_batch(ones, input, output);
     }
 
     fn select(input: &DenseMatrix, indices: &SparseMatrix, output: &mut DenseMatrix) {
@@ -315,23 +322,33 @@ impl Device for ExecutionContext {
     }
 
     fn sparse_affine(
-        input_a: &DenseMatrix,
-        input_b: &SparseMatrix,
-        input_c: Option<&DenseMatrix>,
-        output: &mut DenseMatrix,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        shape_a: Shape,
+        input_b: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: Option<&Self::BufferF32>,
+        output: &mut Self::BufferF32,
     ) {
-        sparse::affine(input_a, input_b, input_c, output);
+        sparse::sparse_affine(batch_size, input_a, shape_a, input_b, shape_b, nnz, input_c, output);
     }
 
     fn sparse_affine_dual_activate(
-        input_a: &DenseMatrix,
-        input_b1: &SparseMatrix,
-        input_b2: &SparseMatrix,
-        input_c: &DenseMatrix,
-        output: &mut DenseMatrix,
+        batch_size: usize,
+        input_a: &Self::BufferF32,
+        shape_a: Shape,
+        input_b1: &Self::BufferI32,
+        input_b2: &Self::BufferI32,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: &Self::BufferF32,
+        output: &mut Self::BufferF32,
         activation: Activation,
     ) {
-        sparse::affine_dual(input_a, input_b1, input_b2, input_c, output, activation);
+        sparse::sparse_affine_dual_activate(
+            batch_size, input_a, shape_a, input_b1, input_b2, shape_b, nnz, input_c, output, activation,
+        );
     }
 
     fn adamw(
@@ -362,5 +379,26 @@ impl Device for ExecutionContext {
             gradient_factor,
             learning_rate,
         );
+    }
+
+    fn linear_comb_single(
+        size: usize,
+        alpha: f32,
+        input_a: Option<&Self::BufferF32>,
+        beta: f32,
+        input_b: Option<&Self::BufferF32>,
+        output: &mut Self::BufferF32,
+    ) {
+        dense::linear_comb_single(size, alpha, input_a, beta, input_b, output);
+    }
+
+    fn reduce_add(
+        ones: &Self::BufferF32,
+        size: usize,
+        batch_size: usize,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
+    ) {
+        dense::reduce_add(ones, size, batch_size, input, output);
     }
 }

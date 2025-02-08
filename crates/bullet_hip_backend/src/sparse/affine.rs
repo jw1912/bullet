@@ -1,78 +1,71 @@
-use crate::{backend::ops, DenseMatrix, SparseMatrix};
+use bullet_core::{device::DeviceBuffer, shape::Shape};
 
-pub fn affine(input_a: &DenseMatrix, input_b: &SparseMatrix, input_c: Option<&DenseMatrix>, output: &mut DenseMatrix) {
-    assert!(input_a.shape.batch_size().is_none());
-    assert_eq!(input_b.shape.cols(), 1);
+use crate::backend::{ops, Buffer};
 
-    let output_shape = input_a.shape * input_b.shape;
-    output.reshape_if_needed(output_shape);
+pub fn sparse_affine(
+    batch_size: usize,
+    input_a: &Buffer<f32>,
+    shape_a: Shape,
+    input_b: &Buffer<i32>,
+    shape_b: Shape,
+    nnz: usize,
+    input_c: Option<&Buffer<f32>>,
+    output: &mut Buffer<f32>,
+) {
+    let shape_o = shape_a * shape_b;
 
-    if let Some(c) = input_c {
-        assert!(c.shape.batch_size().is_none());
-        assert_eq!(c.shape.rows(), output_shape.rows());
-        assert_eq!(c.shape.cols(), 1);
-    }
+    assert!(batch_size * shape_a.size() <= input_a.size());
+    assert!(batch_size * nnz <= input_b.size());
+    assert!(batch_size * shape_o.size() <= output.size());
 
     unsafe {
         ops::sparseAffineForward(
-            input_b.shape.batch_size().unwrap_or(1),
-            input_b.nnz,
-            output.shape().rows(),
-            input_a.buf.ptr(),
-            input_c.map(|c| c.buf.ptr()).unwrap_or(std::ptr::null()),
-            input_b.buf.ptr(),
-            output.buf.mut_ptr(),
+            batch_size,
+            nnz,
+            shape_o.rows(),
+            input_a.ptr(),
+            input_c.map(|c| c.ptr()).unwrap_or(std::ptr::null()),
+            input_b.ptr(),
+            output.mut_ptr(),
         );
     }
 }
 
-pub fn backprop_affine(
-    input_a: &DenseMatrix,
-    input_a_grad: &mut DenseMatrix,
-    input_b: &SparseMatrix,
-    input_c: Option<&DenseMatrix>,
-    input_c_grad: Option<&mut DenseMatrix>,
-    outputs: &DenseMatrix,
-    output_grad: &DenseMatrix,
+pub fn backprop_sparse_affine(
+    batch_size: usize,
+    input_a: &Buffer<f32>,
+    input_a_grad: &mut Buffer<f32>,
+    shape_a: Shape,
+    input_b: &Buffer<i32>,
+    shape_b: Shape,
+    nnz: usize,
+    _input_c: Option<&Buffer<f32>>,
+    input_c_grad: Option<&mut Buffer<f32>>,
+    outputs: &Buffer<f32>,
+    output_grad: &Buffer<f32>,
 ) {
-    assert!(input_a.shape.batch_size().is_none());
-    assert_eq!(input_b.shape.cols(), 1);
-    assert_eq!(outputs.shape, output_grad.shape);
+    let shape_o = shape_a * shape_b;
 
-    let c_ptr = if let Some(grad) = input_c_grad {
-        assert!(input_c.unwrap().shape.batch_size().is_none());
-        grad.reshape_if_needed(input_c.unwrap().shape);
-        grad.buf.mut_ptr()
-    } else {
-        std::ptr::null_mut()
-    };
+    assert_eq!(shape_b.cols(), 1);
+    assert_eq!(shape_o.cols(), 1);
+    assert!(batch_size * shape_a.size() <= input_a.size());
+    assert!(shape_a.size() <= input_a_grad.size());
+    assert!(batch_size * nnz <= input_b.size());
+    assert!(batch_size * shape_o.size() <= outputs.size());
+    assert!(batch_size * shape_o.size() <= output_grad.size());
 
-    input_a_grad.reshape_if_needed(input_a.shape());
+    let c_ptr = if let Some(grad) = input_c_grad { grad.mut_ptr() } else { std::ptr::null_mut() };
 
     unsafe {
         ops::sparseAffineBackward(
-            input_b.shape.batch_size().unwrap_or(1),
-            input_b.nnz,
-            output_grad.shape.rows(),
-            input_a_grad.buf.mut_ptr(),
+            batch_size,
+            nnz,
+            shape_o.rows(),
+            input_a_grad.mut_ptr(),
             c_ptr,
-            input_b.buf.ptr(),
-            outputs.buf.ptr(),
-            output_grad.buf.ptr(),
+            input_b.ptr(),
+            outputs.ptr(),
+            output_grad.ptr(),
         );
     }
-}
-
-pub fn linear(input_a: &DenseMatrix, input_b: &SparseMatrix, output: &mut DenseMatrix) {
-    affine(input_a, input_b, None, output);
-}
-
-pub fn backprop_linear(
-    input_a: &DenseMatrix,
-    input_a_grad: &mut DenseMatrix,
-    input_b: &SparseMatrix,
-    outputs: &DenseMatrix,
-    output_grad: &DenseMatrix,
-) {
-    backprop_affine(input_a, input_a_grad, input_b, None, None, outputs, output_grad);
 }

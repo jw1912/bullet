@@ -1,78 +1,83 @@
-use crate::{backend::ops, DenseMatrix, SparseMatrix};
-use bullet_core::{graph::operation::Activation, shape::Shape};
+use crate::backend::{ops, Buffer};
+use bullet_core::{device::DeviceBuffer, graph::operation::Activation, shape::Shape};
 
-pub fn affine_dual(
-    input_a: &DenseMatrix,
-    input_b1: &SparseMatrix,
-    input_b2: &SparseMatrix,
-    input_c: &DenseMatrix,
-    output: &mut DenseMatrix,
+pub fn sparse_affine_dual_activate(
+    batch_size: usize,
+    input_a: &Buffer<f32>,
+    shape_a: Shape,
+    input_b1: &Buffer<i32>,
+    input_b2: &Buffer<i32>,
+    shape_b: Shape,
+    nnz: usize,
+    input_c: &Buffer<f32>,
+    output: &mut Buffer<f32>,
     activation: Activation,
 ) {
-    assert!(input_a.shape.batch_size().is_none());
-    assert!(input_c.shape.batch_size().is_none());
+    let mut output_shape = shape_a * shape_b;
+    assert!(output_shape.size() <= input_c.size());
 
-    assert_eq!(input_b1.shape, input_b2.shape);
-    assert_eq!(input_b1.shape.cols(), 1);
-    assert_eq!(input_b1.nnz, input_b2.nnz);
+    output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
 
-    assert_eq!(input_c.shape.rows(), input_a.shape.rows());
-    assert_eq!(input_c.shape.cols(), 1);
-
-    let mut output_shape = input_a.shape * input_b1.shape;
-    output_shape = Shape::from_raw(output_shape.rows() * 2, output_shape.cols(), output_shape.batch_size());
-
-    output.reshape_if_needed(output_shape);
+    assert!(shape_a.size() <= input_a.size());
+    assert!(batch_size * nnz <= input_b1.size());
+    assert!(batch_size * nnz <= input_b2.size());
+    assert!(batch_size * output_shape.size() <= output.size());
 
     unsafe {
         ops::sparseAffineDualForward(
-            input_b1.shape.batch_size().unwrap_or(1),
-            input_b1.nnz,
-            input_a.shape().rows(),
-            input_a.buf.ptr(),
-            input_c.buf.ptr(),
-            input_b1.buf.ptr(),
-            input_b2.buf.ptr(),
-            output.buf.mut_ptr(),
+            batch_size,
+            nnz,
+            shape_a.rows(),
+            input_a.ptr(),
+            input_c.ptr(),
+            input_b1.ptr(),
+            input_b2.ptr(),
+            output.mut_ptr(),
             activation as i32,
         );
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn backprop_affine_dual(
-    input_a: &DenseMatrix,
-    input_a_grad: &mut DenseMatrix,
-    input_b1: &SparseMatrix,
-    input_b2: &SparseMatrix,
-    input_c: &DenseMatrix,
-    input_c_grad: &mut DenseMatrix,
-    outputs: &DenseMatrix,
-    output_grad: &DenseMatrix,
+pub fn backprop_sparse_affine_dual_activate(
+    batch_size: usize,
+    input_a: &Buffer<f32>,
+    input_a_grad: &mut Buffer<f32>,
+    shape_a: Shape,
+    input_b1: &Buffer<i32>,
+    input_b2: &Buffer<i32>,
+    shape_b: Shape,
+    nnz: usize,
+    input_c: &Buffer<f32>,
+    input_c_grad: &mut Buffer<f32>,
+    outputs: &Buffer<f32>,
+    output_grad: &Buffer<f32>,
     activation: Activation,
 ) {
-    assert!(input_a.shape.batch_size().is_none());
-    assert!(input_c.shape.batch_size().is_none());
+    let mut output_shape = shape_a * shape_b;
+    assert!(output_shape.size() <= input_c.size());
+    assert!(output_shape.size() <= input_c_grad.size());
 
-    assert_eq!(input_b1.shape, input_b2.shape);
-    assert_eq!(input_b1.shape.cols(), 1);
-    assert_eq!(input_b1.nnz, input_b2.nnz);
-    assert_eq!(outputs.shape, output_grad.shape);
+    output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
 
-    input_a_grad.reshape_if_needed(input_a.shape());
-    input_c_grad.reshape_if_needed(input_c.shape());
+    assert!(shape_a.size() <= input_a.size());
+    assert!(shape_a.size() <= input_a_grad.size());
+    assert!(batch_size * nnz <= input_b1.size());
+    assert!(batch_size * nnz <= input_b2.size());
+    assert!(batch_size * output_shape.size() <= outputs.size());
+    assert!(batch_size * output_shape.size() <= output_grad.size());
 
     unsafe {
         ops::sparseAffineDualBackward(
-            input_b1.shape.batch_size().unwrap_or(1),
-            input_b1.nnz,
-            input_a.shape.rows(),
-            input_a_grad.buf.mut_ptr(),
-            input_c_grad.buf.mut_ptr(),
-            input_b1.buf.ptr(),
-            input_b2.buf.ptr(),
-            outputs.buf.ptr(),
-            output_grad.buf.ptr(),
+            batch_size,
+            nnz,
+            shape_a.rows(),
+            input_a_grad.mut_ptr(),
+            input_c_grad.mut_ptr(),
+            input_b1.ptr(),
+            input_b2.ptr(),
+            outputs.ptr(),
+            output_grad.ptr(),
             activation as i32,
         );
     }
