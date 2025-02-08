@@ -2,6 +2,8 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use crate::device::{Device, DeviceBuffer};
 
+use super::DenseMatrix;
+
 pub struct SparseMatrix<D: Device> {
     pub(crate) buf: D::BufferI32,
     pub(crate) nnz: usize,
@@ -47,5 +49,13 @@ impl<D: Device> SparseMatrix<D> {
         assert_eq!(nnz * batch_size.unwrap_or(1), buf.len());
         self.set_batch_size(batch_size);
         self.buf.load_from_slice(buf);
+    }
+
+    pub fn copy_into_dense(&self, dst: &mut DenseMatrix<D>) {
+        let batch_size = self.batch_size();
+        let size = self.single_size();
+        assert_eq!(size, dst.single_size());
+        dst.set_batch_size(batch_size);
+        D::sparse_to_dense(batch_size.unwrap_or(1), size, self.nnz, &self.buf, &mut dst.buf);
     }
 }

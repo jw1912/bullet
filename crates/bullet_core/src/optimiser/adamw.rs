@@ -95,6 +95,13 @@ impl<D: Device> Optimiser<D> for AdamW<D> {
         }
     }
 
+    fn reset_state(&mut self) {
+        for id in self.graph.weight_ids() {
+            self.momentum.get_mut(&id).unwrap().set_zero();
+            self.velocity.get_mut(&id).unwrap().set_zero();
+        }
+    }
+
     fn write_to_checkpoint(&self, path: &str) {
         utils::write_graph_weights_to_file(&self.graph, &format!("{path}/weights.bin"));
         utils::write_weight_hashmap_to_file(&self.momentum, &format!("{path}/momentum.bin"));

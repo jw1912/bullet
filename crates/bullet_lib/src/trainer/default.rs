@@ -83,16 +83,15 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
 
         unsafe {
             if self.additional_inputs.dense_inputs {
-                unimplemented!()
-                //let input = &prepared.stm;
-                //self.sparse_scratch_space.load_from_slice(input.max_active, Some(batch_size), &input.value);
-                //ExecutionContext::sparse_to_dense(&self.sparse_scratch_space, graph.get_input_mut("stm").values.dense_mut());
+                let input = &prepared.stm;
+                self.sparse_scratch_space.load_from_slice(input.max_active, Some(batch_size), &input.value);
+                self.sparse_scratch_space.copy_into_dense(graph.get_input_mut("stm").values.dense_mut());
 
-                //if self.additional_inputs.nstm {
-                //    let input = &prepared.nstm;
-                //    self.sparse_scratch_space.load_from_slice(input.max_active, Some(batch_size), &input.value);
-                //    sparse::copy_into_dense(&self.sparse_scratch_space, graph.get_input_mut("nstm").values.dense_mut());
-                //}
+                if self.additional_inputs.nstm {
+                    let input = &prepared.nstm;
+                    self.sparse_scratch_space.load_from_slice(input.max_active, Some(batch_size), &input.value);
+                    self.sparse_scratch_space.copy_into_dense(graph.get_input_mut("nstm").values.dense_mut());
+                }
             } else {
                 let input = &prepared.stm;
                 graph.get_input_mut("stm").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value);

@@ -12,6 +12,8 @@ pub trait Optimiser<D: Device> {
 
     fn update(&mut self, gradient_factor: f32, learning_rate: f32);
 
+    fn reset_state(&mut self);
+
     fn graph(&self) -> &Graph<D>;
 
     fn graph_mut(&mut self) -> &mut Graph<D>;
