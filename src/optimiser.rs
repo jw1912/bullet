@@ -16,7 +16,7 @@ pub trait Optimiser {
 
     fn graph_mut(&mut self) -> &mut Graph;
 
-    fn load_from_checkpoint(&mut self, path: &str);
+    fn load_from_checkpoint(&mut self, path: &str, load_optimiser_state: bool);
 
     fn write_to_checkpoint(&self, path: &str);
 

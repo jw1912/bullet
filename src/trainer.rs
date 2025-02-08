@@ -48,8 +48,8 @@ pub trait NetworkTrainer {
 
     fn optimiser_mut(&mut self) -> &mut Self::Optimiser;
 
-    fn load_from_checkpoint(&mut self, path: &str) {
-        self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"));
+    fn load_from_checkpoint(&mut self, path: &str, load_optimiser_state: bool) {
+        self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"), load_optimiser_state);
     }
 
     fn save_to_checkpoint(&self, path: &str) {

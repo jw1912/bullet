@@ -180,8 +180,8 @@ impl<Opt: Optimiser, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataT
         }
     }
 
-    pub fn load_from_checkpoint(&mut self, path: &str) {
-        <Self as NetworkTrainer>::load_from_checkpoint(self, path);
+    pub fn load_from_checkpoint(&mut self, path: &str, load_optimiser_state: bool) {
+        <Self as NetworkTrainer>::load_from_checkpoint(self, path, load_optimiser_state);
     }
 
     pub fn save_to_checkpoint(&self, path: &str) {

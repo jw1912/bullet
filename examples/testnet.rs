@@ -22,7 +22,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    trainer.load_from_checkpoint("checkpoints/testnet");
+    trainer.load_from_checkpoint("checkpoints/testnet", true);
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),

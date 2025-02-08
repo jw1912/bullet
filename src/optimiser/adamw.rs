@@ -95,10 +95,13 @@ impl Optimiser for AdamWOptimiser {
         utils::write_weight_hashmap_to_file(&self.velocity, &format!("{path}/velocity.bin"));
     }
 
-    fn load_from_checkpoint(&mut self, path: &str) {
+    fn load_from_checkpoint(&mut self, path: &str, load_optimiser_state: bool) {
         utils::load_graph_weights_from_file(&mut self.graph, &format!("{path}/weights.bin"));
-        utils::load_weight_hashmap_from_file(self.graph.device(), &mut self.momentum, &format!("{path}/momentum.bin"));
-        utils::load_weight_hashmap_from_file(self.graph.device(), &mut self.velocity, &format!("{path}/velocity.bin"));
+
+        if load_optimiser_state {
+            utils::load_weight_hashmap_from_file(self.graph.device(), &mut self.momentum, &format!("{path}/momentum.bin"));
+            utils::load_weight_hashmap_from_file(self.graph.device(), &mut self.velocity, &format!("{path}/velocity.bin"));
+        }
     }
 
     fn set_params_for_weight(&mut self, id: &str, params: Self::Params) {
