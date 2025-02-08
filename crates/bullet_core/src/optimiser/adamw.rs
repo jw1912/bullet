@@ -102,9 +102,7 @@ impl<D: Device> Optimiser<D> for AdamW<D> {
     }
 
     fn load_from_checkpoint(&mut self, path: &str) {
-        utils::load_graph_weights_from_file(&mut self.graph, &format!("{path}/weights.bin"));
-        utils::load_weight_hashmap_from_file(self.graph.device(), &mut self.momentum, &format!("{path}/momentum.bin"));
-        utils::load_weight_hashmap_from_file(self.graph.device(), &mut self.velocity, &format!("{path}/velocity.bin"));
+        self.load_from_checkpoint_(path, false);
     }
 
     fn set_params_for_weight(&mut self, id: &str, params: Self::Params) {
@@ -114,6 +112,26 @@ impl<D: Device> Optimiser<D> for AdamW<D> {
 
 impl<D: Device> AdamW<D> {
     pub fn load_weights_from_file(&mut self, path: &str) {
-        utils::load_graph_weights_from_file(&mut self.graph, path);
+        self.load_weights_from_file_(path, false);
+    }
+
+    pub fn load_from_old_format_checkpoint(&mut self, path: &str) {
+        self.load_from_checkpoint_(path, true);
+    }
+
+    pub fn load_old_format_weights_from_file(&mut self, path: &str) {
+        self.load_weights_from_file_(path, true);
+    }
+
+    fn load_weights_from_file_(&mut self, path: &str, old_format: bool) {
+        utils::load_graph_weights_from_file(&mut self.graph, path, old_format);
+    }
+
+    fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) {
+        let device = self.graph.device();
+        let paths = [format!("{path}/weights.bin"), format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
+        utils::load_graph_weights_from_file(&mut self.graph, &paths[0], old_format);
+        utils::load_weight_hashmap_from_file(device.clone(), &mut self.momentum, &paths[1], old_format);
+        utils::load_weight_hashmap_from_file(device, &mut self.velocity, &paths[2], old_format);
     }
 }

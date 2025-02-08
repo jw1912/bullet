@@ -152,11 +152,12 @@ pub fn matmul<D: Device>(
             D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false);
         }
         (None, Some(x)) => {
-            let shape_b = Shape::new(shape_b.rows(), x);
             if trans_b || shape_b.cols() > 1 {
+                println!("{trans_b}, {shape_b}");
                 unimplemented!()
             }
 
+            let shape_b = Shape::new(shape_b.rows(), x);
             output.set_batch_size(Some(x));
             D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false);
         }
@@ -205,11 +206,11 @@ pub fn backprop_matmul<D: Device>(
             );
         }
         (None, Some(x)) => {
-            let shape_b = Shape::new(shape_b.rows(), x);
             if trans_b || shape_b.cols() > 1 {
                 unimplemented!()
             }
 
+            let shape_b = Shape::new(shape_b.rows(), x);
             backprop_single_matmul(
                 input_a,
                 shape_a,

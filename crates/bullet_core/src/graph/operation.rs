@@ -1,5 +1,4 @@
 mod concat;
-mod conv;
 mod linear_comb;
 mod matmul;
 mod slice;
@@ -13,8 +12,6 @@ use crate::{
     shape::Shape,
     tensor::DenseMatrix,
 };
-
-pub use conv::ConvolutionDescription;
 
 use super::Graph;
 
@@ -36,17 +33,16 @@ pub enum Operation {
     Affine(Node, Node, Option<Node>),
     AffineDualActivate(Node, Node, Node, Node, Activation),
     Concat(Node, Node),
-    Convolution(Node, Node, ConvolutionDescription),
-    Gather(Node, Node),
+    //Gather(Node, Node),
     LinearCombination(f32, Node, f32, Node),
-    Mask(Node, Node),
+    //Mask(Node, Node),
     PairwiseMul(Node, bool),
     PowerError(Node, Node, f32),
     ReduceAcrossBatch(Node),
     Select(Node, Node),
     Slice(Node, usize, usize),
-    MaskedSoftmaxCrossEntropyLoss(Node, Node, Node),
-    SoftmaxCrossEntropyLoss(Node, Node),
+    //MaskedSoftmaxCrossEntropyLoss(Node, Node, Node),
+    //SoftmaxCrossEntropyLoss(Node, Node),
 }
 
 #[derive(Clone, Debug)]
@@ -100,20 +96,12 @@ impl Operation {
                 let out = Shape::new(a.shape.rows() + b.shape.rows(), a.shape.cols());
                 ret(a.shape.cols() == b.shape.cols(), out, mismatch(&[a, b]))
             }
-            Convolution(filters, inputs, desc) => {
-                let valid = inputs.shape.cols() == 1
-                    && inputs.shape.size() == desc.input_shape.size() * desc.input_channels
-                    && filters.shape.rows() == desc.filter_shape.size()
-                    && filters.shape.cols() == desc.input_channels * desc.output_channels;
-                let out = Shape::new(desc.output_shape.size() * desc.output_channels, 1);
-                ret(valid, out, mismatch(&[filters, inputs]))
-            }
-            Gather(input, mask) => {
-                let valid = input.shape.cols() == 1 && mask.shape.cols() == 1;
-                ret(valid, mask.shape, mismatch(&[input, mask]))
-            }
+            //Gather(input, mask) => {
+            //    let valid = input.shape.cols() == 1 && mask.shape.cols() == 1;
+            //    ret(valid, mask.shape, mismatch(&[input, mask]))
+            //}
             LinearCombination(_, a, _, b) => ret(a.shape == b.shape, a.shape, mismatch(&[a, b])),
-            Mask(input, mask) => ret(input.shape == mask.shape, input.shape, mismatch(&[input, mask])),
+            //Mask(input, mask) => ret(input.shape == mask.shape, input.shape, mismatch(&[input, mask])),
             PairwiseMul(input, post_concat) => {
                 let is = input.shape;
                 let min = 2 + 2 * usize::from(*post_concat);
@@ -137,13 +125,12 @@ impl Operation {
                 let valid = end > start && *end <= is.rows() && is.cols() == 1;
                 let out = Shape::new(end - start, 1);
                 ret(valid, out, OperationError::new(self, OutOfBounds(is, [*start, *end])))
-            }
-            MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
-                let is = input.shape;
-                let valid = mask.shape == is && is.cols() == 1 && target.shape.cols() == 1;
-                ret(valid, Shape::new(1, 1), mismatch(&[mask, input, target]))
-            }
-            SoftmaxCrossEntropyLoss(a, b) => ret(a.shape == b.shape, Shape::new(1, 1), mismatch(&[a, b])),
+            } //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
+              //    let is = input.shape;
+              //    let valid = mask.shape == is && is.cols() == 1 && target.shape.cols() == 1;
+              //    ret(valid, Shape::new(1, 1), mismatch(&[mask, input, target]))
+              //}
+              //SoftmaxCrossEntropyLoss(a, b) => ret(a.shape == b.shape, Shape::new(1, 1), mismatch(&[a, b])),
         }
     }
 
@@ -161,17 +148,16 @@ impl Operation {
             }
             AffineDualActivate(w, s, n, b, _) => vec![w, s, n, b],
             Concat(a, b) => vec![a, b],
-            Convolution(filters, inputs, _) => vec![filters, inputs],
-            Gather(input, mask) => vec![input, mask],
+            //Gather(input, mask) => vec![input, mask],
             LinearCombination(_, a, _, b) => vec![a, b],
-            Mask(input, mask) => vec![input, mask],
+            //Mask(input, mask) => vec![input, mask],
             PairwiseMul(input, _) => vec![input],
             PowerError(a, b, _) => vec![a, b],
             ReduceAcrossBatch(node) => vec![node],
             Select(input, buckets) => vec![input, buckets],
             Slice(input, _, _) => vec![input],
-            MaskedSoftmaxCrossEntropyLoss(mask, input, target) => vec![mask, input, target],
-            SoftmaxCrossEntropyLoss(a, b) => vec![a, b],
+            //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => vec![mask, input, target],
+            //SoftmaxCrossEntropyLoss(a, b) => vec![a, b],
         }
     }
 }
@@ -234,12 +220,9 @@ impl<D: Device> Graph<D> {
                 let ones = &internal.get("ones").unwrap().borrow().buf;
                 linear_comb::linear_comb(ones, *alpha, a, an.shape, *beta, get(*bn).values.dense(), bn.shape, output);
             }
-            Convolution(filters, inputs, desc) => {
-                D::convolution_forward(desc, get(*filters).values.dense(), get(*inputs).values.dense(), output)
-            }
-            Gather(input, mask) => D::gather(get(*input).values.dense(), get(*mask).values.sparse(), output),
+            //Gather(input, mask) => D::gather(get(*input).values.dense(), get(*mask).values.sparse(), output),
             Concat(a, b) => concat::concat(get(*a).values.dense(), a.shape, get(*b).values.dense(), b.shape, output),
-            Mask(input, mask) => D::mask(get(*input).values.dense(), get(*mask).values.sparse(), output),
+            //Mask(input, mask) => D::mask(get(*input).values.dense(), get(*mask).values.sparse(), output),
             PairwiseMul(node, post_concat) => {
                 let input = get(*node);
                 let input = &input.values;
@@ -256,7 +239,25 @@ impl<D: Device> Graph<D> {
                     *post_concat,
                 )
             }
-            PowerError(a, b, p) => D::power_error(*p, get(*a).values.dense(), get(*b).values.dense(), output),
+            PowerError(a, b, p) => {
+                let size = a.shape.size();
+                assert_eq!(a.shape, b.shape);
+
+                let a = get(*a);
+                let a = a.values.dense();
+                let b = get(*b);
+                let b = b.values.dense();
+
+                assert_eq!(size, a.single_size());
+                assert_eq!(size, b.single_size());
+                assert_eq!(size, output.single_size());
+
+                let batch_size = a.batch_size();
+                assert_eq!(batch_size, b.batch_size());
+                output.set_batch_size(batch_size);
+
+                D::abs_power_error(*p, size * batch_size.unwrap_or(1), &a.buf, &b.buf, &mut output.buf);
+            }
             ReduceAcrossBatch(node) => {
                 let input = get(*node);
                 let input = input.values.dense();
@@ -298,29 +299,28 @@ impl<D: Device> Graph<D> {
             }
             Slice(input, start, end) => {
                 slice::slice_vector_batched(input.shape, get(*input).values.dense(), *start, *end, output)
-            }
-            MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
-                let input = get(*input);
-                let input = input.values.dense();
-                let mask = get(*mask);
-                let mask = mask.values.sparse();
-                setup_softmax(input.buf.device(), internal, input.single_size());
-                let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
-                let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
-                D::softmax_across_batch_masked(mask, input, &mut smax);
-                D::crossentropy_loss_masked(mask, &smax, get(*target).values.dense(), &mut indv, output);
-            }
-            SoftmaxCrossEntropyLoss(an, bn) => {
-                let a = get(*an);
-                let a = a.values.dense();
-                setup_softmax(a.buf.device(), internal, a.single_size());
-                setup_ones(a.buf.device(), internal, an.shape.size());
-                let ones = internal.get("ones").unwrap().borrow();
-                let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
-                let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
-                D::softmax_across_batch(a, &mut smax);
-                D::crossentropy_loss(&ones.buf, &smax, get(*bn).values.dense(), &mut indv, output);
-            }
+            } //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
+              //    let input = get(*input);
+              //    let input = input.values.dense();
+              //    let mask = get(*mask);
+              //    let mask = mask.values.sparse();
+              //    setup_softmax(input.buf.device(), internal, input.single_size());
+              //    let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
+              //    let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
+              //    D::softmax_across_batch_masked(mask, input, &mut smax);
+              //    D::crossentropy_loss_masked(mask, &smax, get(*target).values.dense(), &mut indv, output);
+              //}
+              //SoftmaxCrossEntropyLoss(an, bn) => {
+              //    let a = get(*an);
+              //    let a = a.values.dense();
+              //    setup_softmax(a.buf.device(), internal, a.single_size());
+              //    setup_ones(a.buf.device(), internal, an.shape.size());
+              //    let ones = internal.get("ones").unwrap().borrow();
+              //    let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
+              //    let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
+              //    D::softmax_across_batch(a, &mut smax);
+              //    D::crossentropy_loss(&ones.buf, &smax, get(*bn).values.dense(), &mut indv, output);
+              //}
         }
     }
 }
@@ -407,26 +407,13 @@ impl<D: Device> Graph<D> {
                     output_grad,
                 );
             }
-            Convolution(filters, inputs, desc) => {
-                let filters = &mut *get(*filters);
-                let inputs = &mut *get(*inputs);
-                D::convolution_backward(
-                    desc,
-                    filters.values.dense(),
-                    filters.gradients.as_mut(),
-                    inputs.values.dense(),
-                    inputs.gradients.as_mut(),
-                    output_grad,
-                );
-            }
-            Gather(input, mask) => {
-                let input = &mut *get(*input);
-                let mask = &mut *get(*mask);
-
-                if let Some(grd) = input.gradients.as_mut() {
-                    D::backprop_gather(output_grad, mask.values.sparse(), input.values.dense(), grd);
-                }
-            }
+            //Gather(input, mask) => {
+            //    let input = &mut *get(*input);
+            //    let mask = &mut *get(*mask);
+            //    if let Some(grd) = input.gradients.as_mut() {
+            //        D::backprop_gather(output_grad, mask.values.sparse(), input.values.dense(), grd);
+            //    }
+            //}
             Concat(an, bn) => {
                 let a = &mut *get(*an);
                 let b = &mut *get(*bn);
@@ -440,11 +427,11 @@ impl<D: Device> Graph<D> {
                     output_grad,
                 );
             }
-            Mask(input, mask) => {
-                if let Some(grd) = get(*input).gradients.as_mut() {
-                    D::backprop_mask(output_grad, get(*mask).values.sparse(), grd);
-                }
-            }
+            //Mask(input, mask) => {
+            //    if let Some(grd) = get(*input).gradients.as_mut() {
+            //        D::backprop_mask(output_grad, get(*mask).values.sparse(), grd);
+            //    }
+            //}
             PairwiseMul(node, post_concat) => {
                 let input = &mut *get(*node);
                 if let Some(grd) = input.gradients.as_mut() {
@@ -465,15 +452,44 @@ impl<D: Device> Graph<D> {
                 }
             }
             PowerError(a, b, p) => {
+                let size = a.shape.size();
+                assert_eq!(a.shape, b.shape);
+
                 let a = &mut *get(*a);
                 let b = &mut *get(*b);
 
+                assert_eq!(size, a.values.single_size());
+                assert_eq!(size, b.values.single_size());
+                assert_eq!(size, output_grad.single_size());
+
+                let batch_size = a.values.batch_size();
+                assert_eq!(batch_size, b.values.batch_size());
+                assert_eq!(batch_size, output_grad.batch_size());
+
                 if let Some(grd) = a.gradients.as_mut() {
-                    D::backprop_abs_power_error_single(*p, a.values.dense(), b.values.dense(), output_grad, grd);
+                    assert_eq!(size, grd.single_size());
+                    grd.set_batch_size(batch_size);
+                    D::backprop_abs_power_error_single(
+                        *p,
+                        size * batch_size.unwrap_or(1),
+                        &a.values.dense().buf,
+                        &b.values.dense().buf,
+                        &output_grad.buf,
+                        &mut grd.buf,
+                    );
                 }
 
                 if let Some(grd) = b.gradients.as_mut() {
-                    D::backprop_abs_power_error_single(*p, b.values.dense(), a.values.dense(), output_grad, grd);
+                    assert_eq!(size, grd.single_size());
+                    grd.set_batch_size(batch_size);
+                    D::backprop_abs_power_error_single(
+                        *p,
+                        size * batch_size.unwrap_or(1),
+                        &b.values.dense().buf,
+                        &a.values.dense().buf,
+                        &output_grad.buf,
+                        &mut grd.buf,
+                    );
                 }
             }
             ReduceAcrossBatch(input) => {
@@ -531,7 +547,6 @@ impl<D: Device> Graph<D> {
                         batch_size.unwrap_or(1),
                         rows,
                         output_rows,
-                        &input.buf,
                         &buckets.buf,
                         &output_grad.buf,
                         &mut grd.buf,
@@ -550,37 +565,36 @@ impl<D: Device> Graph<D> {
                         output_grad,
                     );
                 }
-            }
-            MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
-                let mask = &*get(*mask);
-                let mask = mask.values.sparse();
-                let input = &mut *get(*input);
-                let target = &mut *get(*target);
-
-                let smax = internal.get("softmaxed").unwrap().borrow();
-
-                if let Some(grd) = input.gradients.as_mut() {
-                    D::backprop_softmax_crossentropy_loss_masked(mask, &smax, target.values.dense(), output_grad, grd);
-                }
-
-                if let Some(grd) = target.gradients.as_mut() {
-                    D::backprop_softmax_crossentropy_loss_masked(mask, &smax, input.values.dense(), output_grad, grd);
-                }
-            }
-            SoftmaxCrossEntropyLoss(a, b) => {
-                let a = &mut *get(*a);
-                let b = &mut *get(*b);
-
-                let smax = internal.get("softmaxed").unwrap().borrow();
-
-                if let Some(grd) = a.gradients.as_mut() {
-                    D::backprop_softmax_crossentropy_loss(&smax, b.values.dense(), output_grad, grd);
-                }
-
-                if let Some(grd) = b.gradients.as_mut() {
-                    D::backprop_softmax_crossentropy_loss(&smax, a.values.dense(), output_grad, grd);
-                }
-            }
+            } //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
+              //    let mask = &*get(*mask);
+              //    let mask = mask.values.sparse();
+              //    let input = &mut *get(*input);
+              //    let target = &mut *get(*target);
+              //
+              //    let smax = internal.get("softmaxed").unwrap().borrow();
+              //
+              //    if let Some(grd) = input.gradients.as_mut() {
+              //        D::backprop_softmax_crossentropy_loss_masked(mask, &smax, target.values.dense(), output_grad, grd);
+              //    }
+              //
+              //    if let Some(grd) = target.gradients.as_mut() {
+              //        D::backprop_softmax_crossentropy_loss_masked(mask, &smax, input.values.dense(), output_grad, grd);
+              //    }
+              //}
+              //SoftmaxCrossEntropyLoss(a, b) => {
+              //    let a = &mut *get(*a);
+              //    let b = &mut *get(*b);
+              //
+              //    let smax = internal.get("softmaxed").unwrap().borrow();
+              //
+              //    if let Some(grd) = a.gradients.as_mut() {
+              //        D::backprop_softmax_crossentropy_loss(&smax, b.values.dense(), output_grad, grd);
+              //    }
+              //
+              //    if let Some(grd) = b.gradients.as_mut() {
+              //        D::backprop_softmax_crossentropy_loss(&smax, a.values.dense(), output_grad, grd);
+              //    }
+              //}
         }
     }
 }
@@ -596,15 +610,15 @@ fn setup_ones<D: Device>(device: Arc<D>, internal: &mut HashMap<String, RefCell<
     }
 }
 
-fn setup_softmax<D: Device>(
-    device: Arc<D>,
-    internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>,
-    single_size: usize,
-) {
-    if !internal.contains_key("softmaxed") {
-        let zeros = RefCell::new(DenseMatrix::zeroed(device.clone(), single_size));
-        internal.insert("softmaxed".to_string(), zeros);
-        let zeros = RefCell::new(DenseMatrix::zeroed(device, single_size));
-        internal.insert("individual_losses".to_string(), zeros);
-    }
-}
+//fn setup_softmax<D: Device>(
+//    device: Arc<D>,
+//    internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>,
+//    single_size: usize,
+//) {
+//    if !internal.contains_key("softmaxed") {
+//        let zeros = RefCell::new(DenseMatrix::zeroed(device.clone(), single_size));
+//        internal.insert("softmaxed".to_string(), zeros);
+//        let zeros = RefCell::new(DenseMatrix::zeroed(device, single_size));
+//        internal.insert("individual_losses".to_string(), zeros);
+//    }
+//}

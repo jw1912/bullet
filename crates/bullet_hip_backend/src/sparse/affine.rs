@@ -2,6 +2,7 @@ use bullet_core::{device::DeviceBuffer, shape::Shape};
 
 use crate::backend::{ops, Buffer};
 
+#[allow(clippy::too_many_arguments)]
 pub fn sparse_affine(
     batch_size: usize,
     input_a: &Buffer<f32>,
@@ -31,6 +32,7 @@ pub fn sparse_affine(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn backprop_sparse_affine(
     batch_size: usize,
     input_a: &Buffer<f32>,

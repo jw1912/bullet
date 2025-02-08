@@ -8,6 +8,7 @@ use bullet_lib::{
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
+    NetworkTrainer,
 };
 
 fn main() {
@@ -22,7 +23,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    trainer.load_from_checkpoint("checkpoints/testnet");
+    trainer.optimiser_mut().load_from_old_format_checkpoint("checkpoints/testnet/optimiser_state");
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),

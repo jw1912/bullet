@@ -103,7 +103,7 @@ impl<D: Device> DenseMatrix<D> {
 
     /// Reads a matrix from a byte buffer, returning how many bytes were read
     /// and the matrix ID that was read.
-    pub fn read_from_byte_buffer(device: Arc<D>, bytes: &[u8]) -> (Self, String, usize) {
+    pub fn read_from_byte_buffer(device: Arc<D>, bytes: &[u8], old_format: bool) -> (Self, String, usize) {
         const USIZE: usize = std::mem::size_of::<usize>();
 
         let mut offset = 0;
@@ -124,7 +124,15 @@ impl<D: Device> DenseMatrix<D> {
         single_size.copy_from_slice(&bytes[offset..offset + USIZE]);
         offset += USIZE;
 
-        let single_size = usize::from_le_bytes(single_size);
+        let mut single_size = usize::from_le_bytes(single_size);
+
+        if old_format {
+            let mut cols = [0u8; USIZE];
+            cols.copy_from_slice(&bytes[offset..offset + USIZE]);
+            offset += USIZE;
+            single_size *= usize::from_le_bytes(cols);
+        }
+
         let total_read = offset + single_size * 4;
 
         let mut values = vec![0.0; single_size];

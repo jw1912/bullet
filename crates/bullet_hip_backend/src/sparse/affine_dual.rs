@@ -1,6 +1,7 @@
 use crate::backend::{ops, Buffer};
 use bullet_core::{device::DeviceBuffer, graph::operation::Activation, shape::Shape};
 
+#[allow(clippy::too_many_arguments)]
 pub fn sparse_affine_dual_activate(
     batch_size: usize,
     input_a: &Buffer<f32>,

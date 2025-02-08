@@ -11,6 +11,5 @@ bullet_core = { workspace = true }
 cc = "1.2.5"
 
 [features]
-cudnn = []
 hip = []
 gh-actions = []

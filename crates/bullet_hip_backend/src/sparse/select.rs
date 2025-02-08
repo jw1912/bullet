@@ -1,61 +1,40 @@
-use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
+use bullet_core::device::DeviceBuffer;
 
-pub fn select(input: &DenseMatrix, indices: &SparseMatrix, output: &mut DenseMatrix) {
-    let rows = input.shape.rows();
-    let buckets = indices.shape.rows();
+use crate::backend::{ops, Buffer};
 
-    assert_eq!(input.shape.batch_size(), indices.shape.batch_size());
-    assert_eq!(input.shape.cols(), 1);
-    assert_eq!(indices.shape.cols(), 1);
-    assert_eq!(indices.nnz, 1);
-
-    assert_eq!(rows % buckets, 0, "Cannot divide vector evenly among buckets!");
-    let output_rows = rows / buckets;
-    let shape = Shape::from_raw(output_rows, 1, input.shape.batch_size());
-    output.reshape_if_needed(shape);
+pub fn select(
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    input: &Buffer<f32>,
+    indices: &Buffer<i32>,
+    output: &mut Buffer<f32>,
+) {
+    assert!(batch_size * input_size <= input.size());
+    assert!(batch_size <= indices.size());
+    assert!(batch_size * output_size <= output.size());
 
     unsafe {
-        ops::selectForward(
-            input.shape.batch_size().unwrap_or(1),
-            rows,
-            output_rows,
-            indices.buf.ptr(),
-            input.buf.ptr(),
-            output.buf.mut_ptr(),
-        );
+        ops::selectForward(batch_size, input_size, output_size, indices.ptr(), input.ptr(), output.mut_ptr());
     }
 }
 
 pub fn select_backprop(
-    input: &DenseMatrix,
-    indices: &SparseMatrix,
-    output_grad: &DenseMatrix,
-    input_grad: &mut DenseMatrix,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    indices: &Buffer<i32>,
+    output_grad: &Buffer<f32>,
+    input_grad: &mut Buffer<f32>,
 ) {
-    let rows = input.shape.rows();
-    let buckets = indices.shape.rows();
-
-    assert_eq!(input.shape.batch_size(), indices.shape.batch_size());
-    assert_eq!(input.shape.batch_size(), output_grad.shape.batch_size());
-    assert_eq!(input.shape.cols(), 1);
-    assert_eq!(output_grad.shape.cols(), 1);
-    assert_eq!(indices.shape.cols(), 1);
-    assert_eq!(indices.nnz, 1);
-
-    assert_eq!(rows % buckets, 0, "Cannot divide vector evenly among buckets!");
-    let output_rows = rows / buckets;
-    assert_eq!(output_rows, output_grad.shape.rows());
-
-    input_grad.reshape_if_needed(input.shape);
-
     unsafe {
         ops::selectBackprop(
-            input.shape.batch_size().unwrap_or(1),
-            rows,
-            output_rows,
-            indices.buf.ptr(),
-            output_grad.buf.ptr(),
-            input_grad.buf.mut_ptr(),
+            batch_size,
+            input_size,
+            output_size,
+            indices.ptr(),
+            output_grad.ptr(),
+            input_grad.mut_ptr(),
         );
     }
 }

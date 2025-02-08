@@ -1,11 +1,7 @@
 mod buffer;
 mod tests;
 
-use crate::{
-    graph::operation::{Activation, ConvolutionDescription},
-    shape::Shape,
-    tensor::{DenseMatrix, SparseMatrix},
-};
+use crate::{graph::operation::Activation, shape::Shape};
 
 pub use buffer::DeviceBuffer;
 
@@ -150,9 +146,9 @@ pub trait Device: Sized + 'static {
         add: bool,
     );
 
-    fn mask(inputs: &DenseMatrix<Self>, masks: &SparseMatrix<Self>, outputs: &mut DenseMatrix<Self>);
+    //fn mask(inputs: &DenseMatrix<Self>, masks: &SparseMatrix<Self>, outputs: &mut DenseMatrix<Self>);
 
-    fn backprop_mask(output_grads: &DenseMatrix<Self>, masks: &SparseMatrix<Self>, input_grads: &mut DenseMatrix<Self>);
+    //fn backprop_mask(output_grads: &DenseMatrix<Self>, masks: &SparseMatrix<Self>, input_grads: &mut DenseMatrix<Self>);
 
     fn pairwise(
         single_size: usize,
@@ -184,91 +180,75 @@ pub trait Device: Sized + 'static {
         batch_size: usize,
         input_size: usize,
         output_size: usize,
-        input: &Self::BufferF32,
         indices: &Self::BufferI32,
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
     );
 
-    fn gather(inputs: &DenseMatrix<Self>, indices: &SparseMatrix<Self>, outputs: &mut DenseMatrix<Self>);
+    //fn gather(inputs: &DenseMatrix<Self>, indices: &SparseMatrix<Self>, outputs: &mut DenseMatrix<Self>);
 
-    fn backprop_gather(
-        output_grads: &DenseMatrix<Self>,
-        indices: &SparseMatrix<Self>,
-        inputs: &DenseMatrix<Self>,
-        input_grads: &mut DenseMatrix<Self>,
-    );
+    //fn backprop_gather(
+    //    output_grads: &DenseMatrix<Self>,
+    //    indices: &SparseMatrix<Self>,
+    //    inputs: &DenseMatrix<Self>,
+    //    input_grads: &mut DenseMatrix<Self>,
+    //);
 
-    fn power_error(
+    fn abs_power_error(
         power: f32,
-        input_a: &DenseMatrix<Self>,
-        input_b: &DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
+        size: usize,
+        input_a: &Self::BufferF32,
+        input_b: &Self::BufferF32,
+        output: &mut Self::BufferF32,
     );
 
     fn backprop_abs_power_error_single(
         power: f32,
-        input_a: &DenseMatrix<Self>,
-        input_b: &DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
-        input_a_grad: &mut DenseMatrix<Self>,
+        size: usize,
+        input_a: &Self::BufferF32,
+        input_b: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+        input_a_grad: &mut Self::BufferF32,
     );
 
-    fn convolution_forward(
-        desc: &ConvolutionDescription,
-        filters: &DenseMatrix<Self>,
-        input: &DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
-    );
+    //fn softmax_across_batch(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
 
-    // could maybe split into separate filter and input grads?
-    fn convolution_backward(
-        desc: &ConvolutionDescription,
-        filters: &DenseMatrix<Self>,
-        filters_grad: Option<&mut DenseMatrix<Self>>,
-        input: &DenseMatrix<Self>,
-        input_grad: Option<&mut DenseMatrix<Self>>,
-        output_grad: &DenseMatrix<Self>,
-    );
+    //fn crossentropy_loss(
+    //    ones: &Self::BufferF32,
+    //    softmaxed: &DenseMatrix<Self>,
+    //    target: &DenseMatrix<Self>,
+    //    individual_losses: &mut DenseMatrix<Self>,
+    //    output: &mut DenseMatrix<Self>,
+    //);
 
-    fn softmax_across_batch(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
+    //fn backprop_softmax_crossentropy_loss(
+    //    softmaxed: &DenseMatrix<Self>,
+    //    target: &DenseMatrix<Self>,
+    //    output_grad: &DenseMatrix<Self>,
+    //    input_grad: &mut DenseMatrix<Self>,
+    //);
 
-    fn crossentropy_loss(
-        ones: &Self::BufferF32,
-        softmaxed: &DenseMatrix<Self>,
-        target: &DenseMatrix<Self>,
-        individual_losses: &mut DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
-    );
+    //fn softmax_across_batch_masked(
+    //    mask: &SparseMatrix<Self>,
+    //    input: &DenseMatrix<Self>,
+    //    output: &mut DenseMatrix<Self>,
+    //);
 
-    fn backprop_softmax_crossentropy_loss(
-        softmaxed: &DenseMatrix<Self>,
-        target: &DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
-    );
+    //fn crossentropy_loss_masked(
+    //    mask: &SparseMatrix<Self>,
+    //    softmaxed: &DenseMatrix<Self>,
+    //    target: &DenseMatrix<Self>,
+    //    individual_losses: &mut DenseMatrix<Self>,
+    //    output: &mut DenseMatrix<Self>,
+    //);
 
-    fn softmax_across_batch_masked(
-        mask: &SparseMatrix<Self>,
-        input: &DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
-    );
-
-    fn crossentropy_loss_masked(
-        mask: &SparseMatrix<Self>,
-        softmaxed: &DenseMatrix<Self>,
-        target: &DenseMatrix<Self>,
-        individual_losses: &mut DenseMatrix<Self>,
-        output: &mut DenseMatrix<Self>,
-    );
-
-    fn backprop_softmax_crossentropy_loss_masked(
-        mask: &SparseMatrix<Self>,
-        softmaxed: &DenseMatrix<Self>,
-        target: &DenseMatrix<Self>,
-        output_grad: &DenseMatrix<Self>,
-        input_grad: &mut DenseMatrix<Self>,
-    );
+    //fn backprop_softmax_crossentropy_loss_masked(
+    //    mask: &SparseMatrix<Self>,
+    //    softmaxed: &DenseMatrix<Self>,
+    //    target: &DenseMatrix<Self>,
+    //    output_grad: &DenseMatrix<Self>,
+    //    input_grad: &mut DenseMatrix<Self>,
+    //);
 
     fn adamw(
         size: usize,
@@ -283,5 +263,13 @@ pub trait Device: Sized + 'static {
         decay: f32,
         gradient_factor: f32,
         learning_rate: f32,
+    );
+
+    fn sparse_to_dense(
+        batch_size: usize,
+        size: usize,
+        nnz: usize,
+        sparse: &Self::BufferI32,
+        dense: &mut Self::BufferF32,
     );
 }

@@ -16,12 +16,13 @@ impl SavedFormat {
     }
 
     pub fn write_to_byte_buffer(&self, weights: &DenseMatrix) -> io::Result<Vec<u8>> {
-        let mut weight_buf = vec![0.0; weights.shape().size()];
+        let mut weight_buf = vec![0.0; weights.single_size()];
         let written = weights.write_to_slice(&mut weight_buf);
-        assert_eq!(written, weights.shape().size());
+        assert_eq!(written, weights.single_size());
 
-        if let Layout::Transposed = self.layout {
-            weight_buf = transpose(weights.shape(), &weight_buf);
+        if let Layout::Transposed(shape) = self.layout {
+            assert_eq!(shape.size(), weights.size());
+            weight_buf = transpose(shape, &weight_buf);
         }
 
         self.quant.quantise(&weight_buf)
@@ -33,7 +34,7 @@ pub enum Layout {
     /// Column-major
     Normal,
     /// Row-major
-    Transposed,
+    Transposed(Shape),
 }
 
 #[derive(Clone, Copy)]

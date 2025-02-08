@@ -56,16 +56,6 @@ fn build_cuda(out_path: &Path) {
     link_search(&cuda_path);
     println!("cargo:rerun-if-changed={}", include_path_str);
 
-    if cfg!(feature = "cudnn") {
-        println!("cargo:rustc-link-lib=dylib=cudart");
-        println!("cargo:rustc-link-lib=dylib=cudnn");
-        let cudnn_path = get_var_path("CUDNN_PATH");
-        let include_path = cudnn_path.join("include");
-        let include_path_str = include_path.to_str().unwrap();
-        link_search(&cudnn_path);
-        println!("cargo:rerun-if-changed={}", include_path_str);
-    }
-
     cc::Build::new()
         .cargo_warnings(false)
         .cuda(true)

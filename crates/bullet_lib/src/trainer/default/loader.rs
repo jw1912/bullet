@@ -4,7 +4,6 @@ mod rng;
 mod sfbinpack;
 mod text;
 
-use bullet_core::shape::Shape;
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
@@ -102,21 +101,13 @@ where
 }
 
 pub(crate) struct DenseInput {
-    pub shape: Shape,
     pub value: Vec<f32>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct SparseInput {
-    pub shape: Shape,
     pub value: Vec<i32>,
     pub max_active: usize,
-}
-
-impl Default for SparseInput {
-    fn default() -> Self {
-        Self { shape: Shape::new(0, 0), value: Vec::new(), max_active: 0 }
-    }
 }
 
 /// A batch of data, in the correct format for the GPU.
@@ -145,29 +136,18 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
         let batch_size = data.len();
         let max_active = input_getter.max_active();
         let chunk_size = batch_size.div_ceil(threads);
-
         let input_size = input_getter.num_inputs();
-
         let output_size = if wdl { 3 } else { 1 };
-
-        let shape = Shape::new_batched(input_size, 1, batch_size);
         let sparse_size = max_active * batch_size;
 
         let mut prep = Self {
             input_getter,
             output_getter,
             batch_size,
-            stm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
-            nstm: SparseInput { shape, max_active, value: vec![0; sparse_size] },
-            buckets: SparseInput {
-                shape: Shape::new_batched(O::BUCKETS, 1, batch_size),
-                max_active: 1,
-                value: vec![0; batch_size],
-            },
-            targets: DenseInput {
-                shape: Shape::new_batched(output_size, 1, batch_size),
-                value: vec![0.0; output_size * batch_size],
-            },
+            stm: SparseInput { max_active, value: vec![0; sparse_size] },
+            nstm: SparseInput { max_active, value: vec![0; sparse_size] },
+            buckets: SparseInput { max_active: 1, value: vec![0; batch_size] },
+            targets: DenseInput { value: vec![0.0; output_size * batch_size] },
         };
 
         let sparse_chunk_size = max_active * chunk_size;

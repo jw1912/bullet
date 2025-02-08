@@ -43,9 +43,8 @@ use crate::save;
 use bullet_core::{
     graph::{builder::Node, Graph},
     optimiser::Optimiser,
-    shape::Shape,
 };
-use bullet_hip_backend::{sparse, ExecutionContext, SparseMatrix};
+use bullet_hip_backend::{ExecutionContext, SparseMatrix};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
@@ -84,32 +83,37 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
 
         unsafe {
             if self.additional_inputs.dense_inputs {
-                let input = &prepared.stm;
-                self.sparse_scratch_space.load_from_slice(input.shape, input.max_active, &input.value);
-                sparse::copy_into_dense(&self.sparse_scratch_space, graph.get_input_mut("stm").values.dense_mut());
+                unimplemented!()
+                //let input = &prepared.stm;
+                //self.sparse_scratch_space.load_from_slice(input.max_active, Some(batch_size), &input.value);
+                //ExecutionContext::sparse_to_dense(&self.sparse_scratch_space, graph.get_input_mut("stm").values.dense_mut());
 
-                if self.additional_inputs.nstm {
-                    let input = &prepared.nstm;
-                    self.sparse_scratch_space.load_from_slice(input.shape, input.max_active, &input.value);
-                    sparse::copy_into_dense(&self.sparse_scratch_space, graph.get_input_mut("nstm").values.dense_mut());
-                }
+                //if self.additional_inputs.nstm {
+                //    let input = &prepared.nstm;
+                //    self.sparse_scratch_space.load_from_slice(input.max_active, Some(batch_size), &input.value);
+                //    sparse::copy_into_dense(&self.sparse_scratch_space, graph.get_input_mut("nstm").values.dense_mut());
+                //}
             } else {
                 let input = &prepared.stm;
-                graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+                graph.get_input_mut("stm").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value);
 
                 if self.additional_inputs.nstm {
                     let input = &prepared.nstm;
-                    graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+                    graph.get_input_mut("nstm").load_sparse_from_slice(
+                        input.max_active,
+                        Some(batch_size),
+                        &input.value,
+                    );
                 }
             }
 
             if self.additional_inputs.output_buckets {
                 let input = &prepared.buckets;
-                graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+                graph.get_input_mut("buckets").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value);
             }
         }
 
-        graph.get_input_mut("targets").load_dense_from_slice(prepared.targets.shape, &prepared.targets.value);
+        graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value);
 
         batch_size
     }
@@ -158,7 +162,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         let output_buckets = inputs.contains("buckets");
         let expected = 2 + usize::from(nstm) + usize::from(output_buckets);
 
-        let output_shape = graph.get_node(output_node).values.shape();
+        let output_shape = output_node.shape;
 
         assert_eq!(output_shape.cols(), 1, "Output cannot have >1 column!");
         assert!(output_shape.rows() == 1 || output_shape.rows() == 3, "Only supports 1 or 3 outputs!");
@@ -169,7 +173,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
             println!("WARNING: The network graph contains an unexpected number of inputs!")
         };
 
-        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), Shape::new(1, 1), 1);
+        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1);
 
         Self {
             optimiser: Opt::new(graph, params),
@@ -212,7 +216,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
 
         let eval = self.optimiser.graph().get_node(self.output_node);
 
-        let mut vals = vec![0.0; eval.values.dense().shape().size()];
+        let mut vals = vec![0.0; eval.values.dense().size()];
         eval.values.dense().write_to_slice(&mut vals);
         vals
     }
@@ -247,12 +251,6 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         }
 
         for weight in weights {
-            let shape = self.optimiser.graph().get_weights(weight).shape();
-            assert_eq!(
-                shape.cols(),
-                self.input_getter.num_inputs(),
-                "Weights cannot be factorised, wrong number of columns!"
-            );
             self.factorised_weights.as_mut().unwrap().push(weight.to_string());
         }
     }
@@ -266,16 +264,16 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
             let weights = self.optimiser.graph().get_weights(id);
             let weights = weights.values.dense();
 
-            let mut weight_buf = vec![0.0; weights.shape().size()];
+            let mut weight_buf = vec![0.0; weights.size()];
             let written = weights.write_to_slice(&mut weight_buf);
-            assert_eq!(written, weights.shape().size());
+            assert_eq!(written, weights.size());
 
             if let Some(factorised) = &self.factorised_weights {
                 if factorised.contains(id) {
                     assert!(self.input_getter.is_factorised(), "Attempting to merge in unfactorised weights!");
                     weight_buf = self.input_getter.merge_factoriser(weight_buf);
 
-                    if *layout == Layout::Transposed {
+                    if let Layout::Transposed(_) = layout {
                         unimplemented!(
                             "Transposing post-factoriser merge is not currently supported - why do you want to do this?"
                         );
@@ -283,8 +281,9 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
                 }
             }
 
-            if let Layout::Transposed = layout {
-                weight_buf = save::transpose(weights.shape(), &weight_buf);
+            if let Layout::Transposed(shape) = layout {
+                assert_eq!(shape.size(), weights.size());
+                weight_buf = save::transpose(*shape, &weight_buf);
             }
 
             let quantised = quant.quantise(&weight_buf)?;
@@ -314,9 +313,9 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
             let weights = self.optimiser.graph().get_weights(id);
             let weights = weights.values.dense();
 
-            let mut weight_buf = vec![0.0; weights.shape().size()];
+            let mut weight_buf = vec![0.0; weights.size()];
             let written = weights.write_to_slice(&mut weight_buf);
-            assert_eq!(written, weights.shape().size());
+            assert_eq!(written, weights.size());
 
             let quantised = QuantTarget::Float.quantise(&weight_buf)?;
             buf.extend_from_slice(&quantised);
@@ -439,20 +438,22 @@ where
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
+    let batch_size = prepared.batch_size;
+
     unsafe {
         let input = &prepared.stm;
-        graph.get_input_mut("stm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+        graph.get_input_mut("stm").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value);
 
         if graph.input_ids().contains(&"nstm".to_string()) {
             let input = &prepared.nstm;
-            graph.get_input_mut("nstm").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+            graph.get_input_mut("nstm").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value);
         }
     }
 
     if graph.input_ids().contains(&"buckets".to_string()) {
         let input = &prepared.buckets;
-        graph.get_input_mut("buckets").load_sparse_from_slice(input.shape, input.max_active, &input.value);
+        graph.get_input_mut("buckets").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value);
     }
 
-    graph.get_input_mut("targets").load_dense_from_slice(prepared.targets.shape, &prepared.targets.value);
+    graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value);
 }

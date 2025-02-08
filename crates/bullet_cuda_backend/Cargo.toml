@@ -11,6 +11,3 @@ edition = { workspace = true }
 [dependencies]
 bullet_core = { workspace = true }
 cudarc = { workspace = true }
-
-[features]
-cudnn = []

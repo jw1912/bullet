@@ -38,6 +38,7 @@ pub fn sgemm(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sgemm_batched(
     batch_size: usize,
     input_a: &Buffer<f32>,

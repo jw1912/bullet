@@ -1,33 +1,37 @@
-use crate::{backend::ops, DenseMatrix};
+use bullet_core::device::DeviceBuffer;
 
-pub fn abs_power_error(power: f32, input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
-    assert_eq!(input_a.shape, input_b.shape);
-    output.reshape_if_needed(input_a.shape);
+use crate::backend::{ops, Buffer};
+
+pub fn abs_power_error(
+    power: f32,
+    size: usize,
+    input_a: &Buffer<f32>,
+    input_b: &Buffer<f32>,
+    output: &mut Buffer<f32>,
+) {
+    assert!(size <= input_a.size());
+    assert!(size <= input_b.size());
+    assert!(size <= output.size());
 
     unsafe {
-        ops::powerError(input_a.shape.size(), input_a.buf.ptr(), input_b.buf.ptr(), output.buf.mut_ptr(), power);
+        ops::powerError(size, input_a.ptr(), input_b.ptr(), output.mut_ptr(), power);
     }
 }
 
 pub fn backprop_abs_power_error_single(
     power: f32,
-    input_a: &DenseMatrix,
-    input_b: &DenseMatrix,
-    output_grad: &DenseMatrix,
-    input_a_grad: &mut DenseMatrix,
+    size: usize,
+    input_a: &Buffer<f32>,
+    input_b: &Buffer<f32>,
+    output_grad: &Buffer<f32>,
+    input_a_grad: &mut Buffer<f32>,
 ) {
-    assert_eq!(input_a.shape, input_b.shape);
-    assert_eq!(output_grad.shape, input_a.shape);
-    input_a_grad.reshape_if_needed(input_a.shape);
+    assert!(size <= input_a.size());
+    assert!(size <= input_b.size());
+    assert!(size <= output_grad.size());
+    assert!(size <= input_a_grad.size());
 
     unsafe {
-        ops::backpropPowerError(
-            input_a.shape.size(),
-            input_a.buf.ptr(),
-            input_b.buf.ptr(),
-            output_grad.buf.ptr(),
-            input_a_grad.buf.mut_ptr(),
-            power,
-        );
+        ops::backpropPowerError(size, input_a.ptr(), input_b.ptr(), output_grad.ptr(), input_a_grad.mut_ptr(), power);
     }
 }

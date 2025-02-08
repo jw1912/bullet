@@ -24,7 +24,7 @@ pub fn write_graph_weights_to_file<D: Device>(graph: &Graph<D>, path: &str) {
 
 /// Loads the weights of a graph from a file. If `gradients` is true,
 /// it will instead load the gradients of those weights.
-pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str) {
+pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str, old_format: bool) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -34,7 +34,7 @@ pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str)
     let mut offset = 0;
 
     while offset < buf.len() {
-        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(graph.device(), &buf[offset..]);
+        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(graph.device(), &buf[offset..], old_format);
         *graph.get_weights_mut(&id).values.dense_mut() = buffer;
 
         offset += bytes_read;
@@ -57,7 +57,12 @@ pub fn write_weight_hashmap_to_file<D: Device>(map: &HashMap<String, DenseMatrix
 }
 
 /// Loads a set of labelled weights from a file into a `HashMap`.
-pub fn load_weight_hashmap_from_file<D: Device>(device: Arc<D>, map: &mut HashMap<String, DenseMatrix<D>>, path: &str) {
+pub fn load_weight_hashmap_from_file<D: Device>(
+    device: Arc<D>,
+    map: &mut HashMap<String, DenseMatrix<D>>,
+    path: &str,
+    old_format: bool,
+) {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -67,7 +72,7 @@ pub fn load_weight_hashmap_from_file<D: Device>(device: Arc<D>, map: &mut HashMa
     let mut offset = 0;
 
     while offset < buf.len() {
-        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(device.clone(), &buf[offset..]);
+        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(device.clone(), &buf[offset..], old_format);
 
         *map.get_mut(&id).unwrap() = buffer;
 

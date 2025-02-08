@@ -5,10 +5,7 @@ mod frontend;
 pub mod trainer;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use bullet_core::{
-    graph::operation::{Activation, ConvolutionDescription},
-    shape::Shape,
-};
+pub use bullet_core::{graph::operation::Activation, shape::Shape};
 pub use bullet_hip_backend::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
@@ -25,10 +22,7 @@ pub mod nn {
     pub use super::frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode};
 
     pub use bullet_core::{
-        graph::{
-            builder::Node,
-            operation::{Activation, ConvolutionDescription},
-        },
+        graph::{builder::Node, operation::Activation},
         shape::Shape,
     };
     pub use bullet_hip_backend::ExecutionContext;

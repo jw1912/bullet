@@ -6,12 +6,7 @@ pub mod sparse;
 pub use backend::ExecutionContext;
 use backend::{util, Buffer};
 
-use bullet_core::{
-    device::Device,
-    graph::operation::{Activation, ConvolutionDescription},
-    shape::Shape,
-    tensor,
-};
+use bullet_core::{device::Device, graph::operation::Activation, shape::Shape, tensor};
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;
 pub type SparseMatrix = tensor::SparseMatrix<ExecutionContext>;
@@ -103,25 +98,13 @@ impl Device for ExecutionContext {
 
     fn backprop_abs_power_error_single(
         power: f32,
-        input_a: &DenseMatrix,
-        input_b: &DenseMatrix,
-        output_grad: &DenseMatrix,
-        input_a_grad: &mut DenseMatrix,
+        size: usize,
+        input_a: &Self::BufferF32,
+        input_b: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+        input_a_grad: &mut Self::BufferF32,
     ) {
-        dense::backprop_abs_power_error_single(power, input_a, input_b, output_grad, input_a_grad);
-    }
-
-    fn backprop_gather(
-        output_grads: &DenseMatrix,
-        indices: &SparseMatrix,
-        inputs: &DenseMatrix,
-        input_grads: &mut DenseMatrix,
-    ) {
-        sparse::backprop_gather(output_grads, indices, inputs, input_grads);
-    }
-
-    fn backprop_mask(output_grads: &DenseMatrix, masks: &SparseMatrix, input_grads: &mut DenseMatrix) {
-        sparse::backprop_mask(output_grads, masks, input_grads);
+        dense::backprop_abs_power_error_single(power, size, input_a, input_b, output_grad, input_a_grad);
     }
 
     fn backprop_pairwise(
@@ -133,25 +116,6 @@ impl Device for ExecutionContext {
         post_concat: bool,
     ) {
         dense::backprop_pairwise(single_size, batch_size, input, output_grad, input_grad, post_concat);
-    }
-
-    fn backprop_softmax_crossentropy_loss(
-        softmaxed: &DenseMatrix,
-        target: &DenseMatrix,
-        output_grad: &DenseMatrix,
-        input_grad: &mut DenseMatrix,
-    ) {
-        dense::backprop_softmax_crossentropy_loss(softmaxed, target, output_grad, input_grad);
-    }
-
-    fn backprop_softmax_crossentropy_loss_masked(
-        mask: &SparseMatrix,
-        softmaxed: &DenseMatrix,
-        target: &DenseMatrix,
-        output_grad: &DenseMatrix,
-        input_grad: &mut DenseMatrix,
-    ) {
-        sparse::backprop_softmax_crossentropy_loss_masked(mask, softmaxed, target, output_grad, input_grad);
     }
 
     fn backprop_sparse_affine(
@@ -214,26 +178,6 @@ impl Device for ExecutionContext {
         );
     }
 
-    fn convolution_backward(
-        desc: &ConvolutionDescription,
-        filters: &DenseMatrix,
-        filters_grad: Option<&mut DenseMatrix>,
-        input: &DenseMatrix,
-        input_grad: Option<&mut DenseMatrix>,
-        output_grad: &DenseMatrix,
-    ) {
-        dense::convolution_backward(desc, filters, filters_grad, input, input_grad, output_grad);
-    }
-
-    fn convolution_forward(
-        desc: &ConvolutionDescription,
-        filters: &DenseMatrix,
-        input: &DenseMatrix,
-        output: &mut DenseMatrix,
-    ) {
-        dense::convolution_forward(desc, filters, input, output);
-    }
-
     fn copy_or_add_strided(
         rows: usize,
         cols: usize,
@@ -258,34 +202,6 @@ impl Device for ExecutionContext {
         );
     }
 
-    fn crossentropy_loss(
-        ones: &Self::BufferF32,
-        softmaxed: &DenseMatrix,
-        target: &DenseMatrix,
-        individual_losses: &mut DenseMatrix,
-        output: &mut DenseMatrix,
-    ) {
-        dense::crossentropy_loss(ones, softmaxed, target, output, individual_losses);
-    }
-
-    fn crossentropy_loss_masked(
-        mask: &SparseMatrix,
-        softmaxed: &DenseMatrix,
-        target: &DenseMatrix,
-        individual_losses: &mut DenseMatrix,
-        output: &mut DenseMatrix,
-    ) {
-        sparse::crossentropy_loss_masked(mask, softmaxed, target, individual_losses, output);
-    }
-
-    fn gather(inputs: &DenseMatrix, indices: &SparseMatrix, outputs: &mut DenseMatrix) {
-        sparse::gather(inputs, indices, outputs);
-    }
-
-    fn mask(inputs: &DenseMatrix, masks: &SparseMatrix, outputs: &mut DenseMatrix) {
-        sparse::mask(inputs, masks, outputs);
-    }
-
     fn pairwise(
         single_size: usize,
         batch_size: usize,
@@ -296,29 +212,14 @@ impl Device for ExecutionContext {
         dense::pairwise(single_size, batch_size, input, output, post_concat);
     }
 
-    fn power_error(power: f32, input_a: &DenseMatrix, input_b: &DenseMatrix, output: &mut DenseMatrix) {
-        dense::abs_power_error(power, input_a, input_b, output);
-    }
-
-    fn select(input: &DenseMatrix, indices: &SparseMatrix, output: &mut DenseMatrix) {
-        sparse::select(input, indices, output);
-    }
-
-    fn select_backprop(
-        input: &DenseMatrix,
-        indices: &SparseMatrix,
-        output_grad: &DenseMatrix,
-        input_grad: &mut DenseMatrix,
+    fn abs_power_error(
+        power: f32,
+        size: usize,
+        input_a: &Self::BufferF32,
+        input_b: &Self::BufferF32,
+        output: &mut Self::BufferF32,
     ) {
-        sparse::select_backprop(input, indices, output_grad, input_grad);
-    }
-
-    fn softmax_across_batch(input: &DenseMatrix, output: &mut DenseMatrix) {
-        dense::softmax_across_batch(input, output);
-    }
-
-    fn softmax_across_batch_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
-        sparse::softmax_across_batch_masked(mask, input, output);
+        dense::abs_power_error(power, size, input_a, input_b, output);
     }
 
     fn sparse_affine(
@@ -400,5 +301,37 @@ impl Device for ExecutionContext {
         output: &mut Self::BufferF32,
     ) {
         dense::reduce_add(ones, size, batch_size, input, output);
+    }
+
+    fn select(
+        batch_size: usize,
+        input_size: usize,
+        output_size: usize,
+        input: &Self::BufferF32,
+        indices: &Self::BufferI32,
+        output: &mut Self::BufferF32,
+    ) {
+        sparse::select(batch_size, input_size, output_size, input, indices, output);
+    }
+
+    fn select_backprop(
+        batch_size: usize,
+        input_size: usize,
+        output_size: usize,
+        indices: &Self::BufferI32,
+        output_grad: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
+    ) {
+        sparse::select_backprop(batch_size, input_size, output_size, indices, output_grad, input_grad);
+    }
+
+    fn sparse_to_dense(
+        batch_size: usize,
+        size: usize,
+        nnz: usize,
+        sparse: &Self::BufferI32,
+        dense: &mut Self::BufferF32,
+    ) {
+        sparse::sparse_to_dense(batch_size, size, nnz, sparse, dense);
     }
 }

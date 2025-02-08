@@ -191,12 +191,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         self
     }
 
-    fn push_saved_format(&self, layer: usize, saved_format: &mut Vec<SavedFormat>, net_quant: &mut i16) {
+    fn push_saved_format(&self, layer: usize, shape: Shape, saved_format: &mut Vec<SavedFormat>, net_quant: &mut i16) {
         let w = format!("l{layer}w");
         let b = format!("l{layer}b");
 
         let layout = if self.allow_transpose && layer > 0 && U::BUCKETS > 1 {
-            Layout::Transposed
+            Layout::Transposed(shape)
         } else {
             Layout::Normal
         };
@@ -266,7 +266,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             pst.matmul(out)
         });
 
-        self.push_saved_format(0, &mut saved_format, &mut net_quant);
+        self.push_saved_format(0, l0.weights.shape, &mut saved_format, &mut net_quant);
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
@@ -303,7 +303,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
                     let l = builder.new_affine(&format!("l{layer}"), prev_size, raw_size);
 
-                    self.push_saved_format(layer, &mut saved_format, &mut net_quant);
+                    self.push_saved_format(layer, l.weights.shape, &mut saved_format, &mut net_quant);
 
                     layer += 1;
 
@@ -368,9 +368,9 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             }
         });
 
-        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), Shape::new(1, 1), 1);
+        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1);
 
-        let mut trainer = Trainer {
+        let trainer = Trainer {
             optimiser: O::Optimiser::new(graph, Default::default()),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
@@ -385,18 +385,6 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             factorised_weights,
             sparse_scratch_space,
         };
-
-        let graph = trainer.optimiser.graph_mut();
-
-        for l in 0..layer {
-            let w = graph.get_weights_mut(&format!("l{l}w"));
-            let shape = w.values.shape();
-            let stdev = 1.0 / (shape.cols() as f32).sqrt();
-
-            w.seed_random(0.0, stdev, true);
-            let wb = graph.get_weights_mut(&format!("l{l}b"));
-            wb.seed_random(0.0, stdev, true);
-        }
 
         logger::clear_colours();
         println!("{}", logger::ansi("Built Trainer", "34;1"));
