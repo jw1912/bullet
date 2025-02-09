@@ -1,5 +1,6 @@
 pub mod builder;
 pub mod operation;
+pub mod tests;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 

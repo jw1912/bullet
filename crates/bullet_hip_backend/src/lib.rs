@@ -3,6 +3,9 @@ pub mod dense;
 mod matmul;
 pub mod sparse;
 
+#[cfg(test)]
+mod tests;
+
 pub use backend::ExecutionContext;
 use backend::{util, Buffer};
 

@@ -15,9 +15,13 @@ pub fn sparse_affine(
 ) {
     let shape_o = shape_a * shape_b;
 
-    assert!(batch_size * shape_a.size() <= input_a.size());
+    assert!(shape_a.size() <= input_a.size());
     assert!(batch_size * nnz <= input_b.size());
     assert!(batch_size * shape_o.size() <= output.size());
+
+    if let Some(c) = input_c {
+        assert!(shape_o.size() <= c.size());
+    }
 
     unsafe {
         ops::sparseAffineForward(
@@ -50,7 +54,7 @@ pub fn backprop_sparse_affine(
 
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(shape_o.cols(), 1);
-    assert!(batch_size * shape_a.size() <= input_a.size());
+    assert!(shape_a.size() <= input_a.size());
     assert!(shape_a.size() <= input_a_grad.size());
     assert!(batch_size * nnz <= input_b.size());
     assert!(batch_size * shape_o.size() <= outputs.size());
