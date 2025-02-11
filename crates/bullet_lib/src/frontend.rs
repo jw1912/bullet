@@ -139,25 +139,21 @@ impl NetworkBuilderNode<'_> {
         self.builder.apply(Operation::PairwiseMul(self.node, true))
     }
 
-    //pub fn mask(self, mask: Self) -> Self {
-    //    self.builder.apply(Operation::Mask(self.node, mask.node))
-    //}
+    pub fn mask(self, mask: Self) -> Self {
+        self.builder.apply(Operation::Mask(self.node, mask.node))
+    }
 
-    //pub fn gather(self, indices: Self) -> Self {
-    //    self.builder.apply(Operation::Gather(self.node, indices.node))
-    //}
-
-    //pub fn submatrix_product(self, rhs: Self, size: usize) -> Self {
-    //    self.builder.apply(Operation::SubmatrixProduct(self.node, rhs.node, size))
-    //}
+    pub fn gather(self, indices: Self) -> Self {
+        self.builder.apply(Operation::Gather(self.node, indices.node))
+    }
 
     pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
         self.builder.apply(Operation::SoftmaxCrossEntropyLoss(self.node, targets.node))
     }
 
-    //pub fn masked_softmax_crossentropy_loss(self, targets: Self, mask: Self) -> Self {
-    //    self.builder.apply(Operation::MaskedSoftmaxCrossEntropyLoss(mask.node, self.node, targets.node))
-    //}
+    pub fn masked_softmax_crossentropy_loss(self, targets: Self, mask: Self) -> Self {
+        self.builder.apply(Operation::MaskedSoftmaxCrossEntropyLoss(mask.node, self.node, targets.node))
+    }
 
     pub fn slice_rows(self, start: usize, end: usize) -> Self {
         self.builder.apply(Operation::Slice(self.node, start, end))
