@@ -1,3 +1,5 @@
+use bullet_core::device::DeviceBuffer;
+
 use crate::backend::{ops, Buffer};
 
 pub fn softmax_across_batch_masked(
@@ -24,6 +26,7 @@ pub fn crossentropy_masked(
     output: &mut Buffer<f32>,
     error: &mut Buffer<f32>,
 ) {
+    error.set_zero();
     unsafe {
         ops::crossentropy_masked(
             nnz,
