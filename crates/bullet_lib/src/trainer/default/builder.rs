@@ -335,15 +335,13 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         }
 
         let output_node = out.node();
-        let predicted = out.activate(Activation::Sigmoid);
-
         let output_size = prev_size;
         let targets = builder.new_input("targets", Shape::new(output_size, 1));
         match self.loss {
             Loss::None => panic!("No loss function specified!"),
-            Loss::SigmoidMSE => predicted.mse(targets),
-            Loss::SigmoidMPE(power) => predicted.mpe(targets, power),
-            Loss::SoftmaxCrossEntropy => predicted.softmax_crossentropy_loss(targets),
+            Loss::SigmoidMSE => out.activate(Activation::Sigmoid).mse(targets),
+            Loss::SigmoidMPE(power) => out.activate(Activation::Sigmoid).mpe(targets, power),
+            Loss::SoftmaxCrossEntropy => out.softmax_crossentropy_loss(targets),
         };
 
         let ctx = ExecutionContext::default();
