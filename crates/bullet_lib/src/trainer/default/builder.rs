@@ -24,6 +24,7 @@ pub enum Loss {
     None,
     SigmoidMSE,
     SigmoidMPE(f32),
+    SoftmaxCrossEntropy,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -237,7 +238,6 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let input_shape = Shape::new(input_size, 1);
 
         let mut out = builder.new_input("stm", input_shape);
-        let targets = builder.new_input("targets", Shape::new(1, 1));
         let buckets = output_buckets.then(|| builder.new_input("buckets", Shape::new(U::BUCKETS, 1)));
         let l0 = builder.new_affine("l0", input_size, self.ft_out_size);
 
@@ -337,10 +337,13 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let output_node = out.node();
         let predicted = out.activate(Activation::Sigmoid);
 
+        let output_size = prev_size;
+        let targets = builder.new_input("targets", Shape::new(output_size, 1));
         match self.loss {
             Loss::None => panic!("No loss function specified!"),
             Loss::SigmoidMSE => predicted.mse(targets),
             Loss::SigmoidMPE(power) => predicted.mpe(targets, power),
+            Loss::SoftmaxCrossEntropy => predicted.softmax_crossentropy_loss(targets),
         };
 
         let ctx = ExecutionContext::default();
@@ -378,7 +381,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             additional_inputs: AdditionalTrainerInputs {
                 nstm: self.perspective,
                 output_buckets,
-                wdl: false,
+                wdl: output_size == 3,
                 dense_inputs: false,
             },
             saved_format: saved_format.clone(),

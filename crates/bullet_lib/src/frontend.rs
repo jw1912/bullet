@@ -151,9 +151,9 @@ impl NetworkBuilderNode<'_> {
     //    self.builder.apply(Operation::SubmatrixProduct(self.node, rhs.node, size))
     //}
 
-    //pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
-    //    self.builder.apply(Operation::SoftmaxCrossEntropyLoss(self.node, targets.node))
-    //}
+    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
+        self.builder.apply(Operation::SoftmaxCrossEntropyLoss(self.node, targets.node))
+    }
 
     //pub fn masked_softmax_crossentropy_loss(self, targets: Self, mask: Self) -> Self {
     //    self.builder.apply(Operation::MaskedSoftmaxCrossEntropyLoss(mask.node, self.node, targets.node))

@@ -626,16 +626,16 @@ impl<D: Device> Graph<D> {
                 let smax = internal.get("softmaxed").unwrap().borrow();
                 let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
 
-                let batch_size = a.values.batch_size().unwrap_or(1);
+                let batch_size = a.values.batch_size();
                 let single_size = a.values.single_size();
-                let size = single_size * batch_size;
+                let size = single_size * batch_size.unwrap_or(1);
 
                 D::sgemm(
                     &ones.buf,
                     Shape::new(single_size, 1),
-                    true,
+                    false,
                     &output_grad.buf,
-                    Shape::new(1, batch_size),
+                    Shape::new(1, batch_size.unwrap_or(1)),
                     false,
                     &mut indv.buf,
                     false,
@@ -645,10 +645,12 @@ impl<D: Device> Graph<D> {
                 let indv = &indv.buf;
 
                 if let Some(grd) = a.gradients.as_mut() {
+                    grd.set_batch_size(batch_size);
                     D::backprop_softmax_crossentropy(size, smax, &b.values.dense().buf, indv, &mut grd.buf);
                 }
 
                 if let Some(grd) = b.gradients.as_mut() {
+                    grd.set_batch_size(batch_size);
                     D::backprop_softmax_crossentropy(size, smax, &a.values.dense().buf, indv, &mut grd.buf);
                 }
             }
