@@ -42,7 +42,7 @@ pub enum Operation {
     Select(Node, Node),
     Slice(Node, usize, usize),
     //MaskedSoftmaxCrossEntropyLoss(Node, Node, Node),
-    //SoftmaxCrossEntropyLoss(Node, Node),
+    SoftmaxCrossEntropyLoss(Node, Node),
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +89,7 @@ impl Operation {
                 ret(valid, Shape::new(2 * shb.rows(), shb.cols()), mismatch(&[w, s, n, b]))
             }
             Concat(a, b) => {
-                if a.shape.rows() != 1 {
+                if a.shape.cols() != 1 {
                     return Err(OperationError::new(self, InvalidInputShape(a.shape)));
                 }
 
@@ -126,11 +126,11 @@ impl Operation {
                 let out = Shape::new(end - start, 1);
                 ret(valid, out, OperationError::new(self, OutOfBounds(is, [*start, *end])))
             } //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
-              //    let is = input.shape;
-              //    let valid = mask.shape == is && is.cols() == 1 && target.shape.cols() == 1;
-              //    ret(valid, Shape::new(1, 1), mismatch(&[mask, input, target]))
-              //}
-              //SoftmaxCrossEntropyLoss(a, b) => ret(a.shape == b.shape, Shape::new(1, 1), mismatch(&[a, b])),
+            //    let is = input.shape;
+            //    let valid = mask.shape == is && is.cols() == 1 && target.shape.cols() == 1;
+            //    ret(valid, Shape::new(1, 1), mismatch(&[mask, input, target]))
+            //}
+            SoftmaxCrossEntropyLoss(a, b) => ret(a.shape == b.shape, Shape::new(1, 1), mismatch(&[a, b])),
         }
     }
 
@@ -157,7 +157,7 @@ impl Operation {
             Select(input, buckets) => vec![input, buckets],
             Slice(input, _, _) => vec![input],
             //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => vec![mask, input, target],
-            //SoftmaxCrossEntropyLoss(a, b) => vec![a, b],
+            SoftmaxCrossEntropyLoss(a, b) => vec![a, b],
         }
     }
 }
@@ -299,28 +299,56 @@ impl<D: Device> Graph<D> {
             }
             Slice(input, start, end) => {
                 slice::slice_vector_batched(input.shape, get(*input).values.dense(), *start, *end, output)
-            } //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
-              //    let input = get(*input);
-              //    let input = input.values.dense();
-              //    let mask = get(*mask);
-              //    let mask = mask.values.sparse();
-              //    setup_softmax(input.buf.device(), internal, input.single_size());
-              //    let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
-              //    let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
-              //    D::softmax_across_batch_masked(mask, input, &mut smax);
-              //    D::crossentropy_loss_masked(mask, &smax, get(*target).values.dense(), &mut indv, output);
-              //}
-              //SoftmaxCrossEntropyLoss(an, bn) => {
-              //    let a = get(*an);
-              //    let a = a.values.dense();
-              //    setup_softmax(a.buf.device(), internal, a.single_size());
-              //    setup_ones(a.buf.device(), internal, an.shape.size());
-              //    let ones = internal.get("ones").unwrap().borrow();
-              //    let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
-              //    let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
-              //    D::softmax_across_batch(a, &mut smax);
-              //    D::crossentropy_loss(&ones.buf, &smax, get(*bn).values.dense(), &mut indv, output);
-              //}
+            }
+            //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
+            //    let input = get(*input);
+            //    let input = input.values.dense();
+            //    let mask = get(*mask);
+            //    let mask = mask.values.sparse();
+            //    setup_softmax(input.buf.device(), internal, input.single_size());
+            //    let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
+            //    let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
+            //    D::softmax_across_batch_masked(mask, input, &mut smax);
+            //    D::crossentropy_loss_masked(mask, &smax, get(*target).values.dense(), &mut indv, output);
+            //}
+            SoftmaxCrossEntropyLoss(an, bn) => {
+                let a = get(*an);
+                let b = get(*bn);
+                let a = a.values.dense();
+                let b = b.values.dense();
+
+                assert_eq!(an.shape, bn.shape);
+                assert_eq!(an.shape.cols(), 1);
+                assert_eq!(an.shape.size(), a.single_size());
+                assert_eq!(bn.shape.size(), b.single_size());
+                assert_eq!(a.batch_size(), b.batch_size());
+                assert_eq!(output.single_size(), 1);
+
+                let batch_size = a.batch_size().unwrap_or(1);
+                let single_size = a.single_size();
+
+                setup_softmax(a.buf.device(), internal, single_size * batch_size);
+                setup_ones(a.buf.device(), internal, single_size);
+
+                let ones = internal.get("ones").unwrap().borrow();
+                let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
+                let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
+
+                D::softmax_across_batch(batch_size, single_size, &a.buf, &mut smax.buf);
+                D::crossentropy(batch_size * single_size, &smax.buf, &b.buf, &mut indv.buf);
+
+                output.set_batch_size(a.batch_size());
+                D::sgemm(
+                    &ones.buf,
+                    Shape::new(1, single_size),
+                    false,
+                    &indv.buf,
+                    Shape::new(single_size, batch_size),
+                    false,
+                    &mut output.buf,
+                    false,
+                );
+            }
         }
     }
 }
@@ -565,36 +593,65 @@ impl<D: Device> Graph<D> {
                         output_grad,
                     );
                 }
-            } //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
-              //    let mask = &*get(*mask);
-              //    let mask = mask.values.sparse();
-              //    let input = &mut *get(*input);
-              //    let target = &mut *get(*target);
-              //
-              //    let smax = internal.get("softmaxed").unwrap().borrow();
-              //
-              //    if let Some(grd) = input.gradients.as_mut() {
-              //        D::backprop_softmax_crossentropy_loss_masked(mask, &smax, target.values.dense(), output_grad, grd);
-              //    }
-              //
-              //    if let Some(grd) = target.gradients.as_mut() {
-              //        D::backprop_softmax_crossentropy_loss_masked(mask, &smax, input.values.dense(), output_grad, grd);
-              //    }
-              //}
-              //SoftmaxCrossEntropyLoss(a, b) => {
-              //    let a = &mut *get(*a);
-              //    let b = &mut *get(*b);
-              //
-              //    let smax = internal.get("softmaxed").unwrap().borrow();
-              //
-              //    if let Some(grd) = a.gradients.as_mut() {
-              //        D::backprop_softmax_crossentropy_loss(&smax, b.values.dense(), output_grad, grd);
-              //    }
-              //
-              //    if let Some(grd) = b.gradients.as_mut() {
-              //        D::backprop_softmax_crossentropy_loss(&smax, a.values.dense(), output_grad, grd);
-              //    }
-              //}
+            }
+            //MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
+            //    let mask = &*get(*mask);
+            //    let mask = mask.values.sparse();
+            //    let input = &mut *get(*input);
+            //    let target = &mut *get(*target);
+            //
+            //    let smax = internal.get("softmaxed").unwrap().borrow();
+            //
+            //    if let Some(grd) = input.gradients.as_mut() {
+            //        D::backprop_softmax_crossentropy_loss_masked(mask, &smax, target.values.dense(), output_grad, grd);
+            //    }
+            //
+            //    if let Some(grd) = target.gradients.as_mut() {
+            //        D::backprop_softmax_crossentropy_loss_masked(mask, &smax, input.values.dense(), output_grad, grd);
+            //    }
+            //}
+            SoftmaxCrossEntropyLoss(an, bn) => {
+                let a = &mut *get(*an);
+                let b = &mut *get(*bn);
+
+                assert_eq!(an.shape, bn.shape);
+                assert_eq!(an.shape.cols(), 1);
+                assert_eq!(an.shape.size(), a.values.single_size());
+                assert_eq!(bn.shape.size(), b.values.single_size());
+                assert_eq!(a.values.batch_size(), b.values.batch_size());
+                assert_eq!(a.values.batch_size(), output_grad.batch_size());
+                assert_eq!(output_grad.single_size(), 1);
+
+                let ones = internal.get("ones").unwrap().borrow();
+                let smax = internal.get("softmaxed").unwrap().borrow();
+                let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
+
+                let batch_size = a.values.batch_size().unwrap_or(1);
+                let single_size = a.values.single_size();
+                let size = single_size * batch_size;
+
+                D::sgemm(
+                    &ones.buf,
+                    Shape::new(single_size, 1),
+                    true,
+                    &output_grad.buf,
+                    Shape::new(1, batch_size),
+                    false,
+                    &mut indv.buf,
+                    false,
+                );
+
+                let smax = &smax.buf;
+                let indv = &indv.buf;
+
+                if let Some(grd) = a.gradients.as_mut() {
+                    D::backprop_softmax_crossentropy(size, smax, &b.values.dense().buf, indv, &mut grd.buf);
+                }
+
+                if let Some(grd) = b.gradients.as_mut() {
+                    D::backprop_softmax_crossentropy(size, smax, &a.values.dense().buf, indv, &mut grd.buf);
+                }
+            }
         }
     }
 }
@@ -610,15 +667,11 @@ fn setup_ones<D: Device>(device: Arc<D>, internal: &mut HashMap<String, RefCell<
     }
 }
 
-//fn setup_softmax<D: Device>(
-//    device: Arc<D>,
-//    internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>,
-//    single_size: usize,
-//) {
-//    if !internal.contains_key("softmaxed") {
-//        let zeros = RefCell::new(DenseMatrix::zeroed(device.clone(), single_size));
-//        internal.insert("softmaxed".to_string(), zeros);
-//        let zeros = RefCell::new(DenseMatrix::zeroed(device, single_size));
-//        internal.insert("individual_losses".to_string(), zeros);
-//    }
-//}
+fn setup_softmax<D: Device>(device: Arc<D>, internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>, size: usize) {
+    if !internal.contains_key("softmaxed") {
+        let zeros = RefCell::new(DenseMatrix::zeroed(device.clone(), size));
+        internal.insert("softmaxed".to_string(), zeros);
+        let zeros = RefCell::new(DenseMatrix::zeroed(device, size));
+        internal.insert("individual_losses".to_string(), zeros);
+    }
+}

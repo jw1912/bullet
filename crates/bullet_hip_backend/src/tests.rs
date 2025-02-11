@@ -11,4 +11,5 @@ tests::make_tests! {
     crelu,
     screlu,
     sqrrelu,
+    concat,
 }

@@ -16,8 +16,10 @@ pub fn copy_or_add_strided(
 ) {
     assert!(cols > 0);
     assert!(rows > 0);
-    assert!(cols * input_stride + input_offset <= input.size());
-    assert!(cols * output_stride + output_offset <= output.size());
+    assert!(input_offset <= input_stride);
+    assert!(output_offset <= output_stride);
+    assert!(cols * input_stride <= input.size());
+    assert!(cols * output_stride <= output.size());
     assert!(rows <= output_stride);
 
     unsafe {

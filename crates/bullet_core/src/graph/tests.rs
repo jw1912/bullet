@@ -1,9 +1,11 @@
 mod activate;
 mod affine;
+mod concat;
 mod sparse_affine;
 
 pub use activate::*;
 pub use affine::*;
+pub use concat::*;
 pub use sparse_affine::*;
 
 #[macro_export]

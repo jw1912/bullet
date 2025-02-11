@@ -211,22 +211,22 @@ pub trait Device: Sized + 'static {
         input_a_grad: &mut Self::BufferF32,
     );
 
-    //fn softmax_across_batch(input: &DenseMatrix<Self>, output: &mut DenseMatrix<Self>);
+    fn softmax_across_batch(
+        batch_size: usize,
+        single_size: usize,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
+    );
 
-    //fn crossentropy_loss(
-    //    ones: &Self::BufferF32,
-    //    softmaxed: &DenseMatrix<Self>,
-    //    target: &DenseMatrix<Self>,
-    //    individual_losses: &mut DenseMatrix<Self>,
-    //    output: &mut DenseMatrix<Self>,
-    //);
+    fn crossentropy(size: usize, pred: &Self::BufferF32, target: &Self::BufferF32, output: &mut Self::BufferF32);
 
-    //fn backprop_softmax_crossentropy_loss(
-    //    softmaxed: &DenseMatrix<Self>,
-    //    target: &DenseMatrix<Self>,
-    //    output_grad: &DenseMatrix<Self>,
-    //    input_grad: &mut DenseMatrix<Self>,
-    //);
+    fn backprop_softmax_crossentropy(
+        size: usize,
+        softmaxed: &Self::BufferF32,
+        target: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
+    );
 
     //fn softmax_across_batch_masked(
     //    mask: &SparseMatrix<Self>,

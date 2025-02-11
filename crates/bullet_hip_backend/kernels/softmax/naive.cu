@@ -53,7 +53,7 @@ __global__ void backprop_softmax_cross_entropy_kernel(
     if (i >= size)
         return;
 
-    input_grad[i] += (softmaxed[i] - target[i]) * out_grad[0];
+    input_grad[i] += (softmaxed[i] - target[i]) * out_grad[i];
 }
 
 extern "C" void softmax_across_columns(const size_t rows, const size_t cols, const float* input, float* output)

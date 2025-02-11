@@ -337,4 +337,27 @@ impl Device for ExecutionContext {
     ) {
         sparse::sparse_to_dense(batch_size, size, nnz, sparse, dense);
     }
+
+    fn softmax_across_batch(
+        batch_size: usize,
+        single_size: usize,
+        input: &Self::BufferF32,
+        output: &mut Self::BufferF32,
+    ) {
+        dense::softmax_across_batch(batch_size, single_size, input, output);
+    }
+
+    fn crossentropy(size: usize, pred: &Self::BufferF32, target: &Self::BufferF32, output: &mut Self::BufferF32) {
+        dense::crossentropy(size, pred, target, output);
+    }
+
+    fn backprop_softmax_crossentropy(
+        size: usize,
+        softmaxed: &Self::BufferF32,
+        target: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+        input_grad: &mut Self::BufferF32,
+    ) {
+        dense::backprop_softmax_crossentropy(size, softmaxed, target, output_grad, input_grad);
+    }
 }
