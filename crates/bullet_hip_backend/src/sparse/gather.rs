@@ -1,52 +1,38 @@
-use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
+use bullet_core::device::DeviceBuffer;
 
-pub fn gather(inputs: &DenseMatrix, indices: &SparseMatrix, outputs: &mut DenseMatrix) {
-    assert!(indices.shape.batch_size().is_none());
-    assert_eq!(indices.shape.cols(), 1);
-    assert_eq!(indices.shape.rows(), indices.nnz);
-    assert_eq!(inputs.shape.cols(), 1);
+use crate::backend::{ops, Buffer};
 
-    let output_shape = Shape::from_raw(indices.shape.rows(), 1, inputs.shape.batch_size());
-    outputs.reshape_if_needed(output_shape);
+pub fn gather(
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    inputs: &Buffer<f32>,
+    indices: &Buffer<i32>,
+    outputs: &mut Buffer<f32>,
+) {
     outputs.set_zero();
 
     unsafe {
-        ops::gather(
-            inputs.shape.rows(),
-            output_shape.rows(),
-            output_shape.batch_size().unwrap_or(1),
-            inputs.buf.ptr(),
-            indices.buf.ptr(),
-            outputs.buf.mut_ptr(),
-        );
+        ops::gather(input_size, output_size, batch_size, inputs.ptr(), indices.ptr(), outputs.mut_ptr());
     }
 }
 
 pub fn backprop_gather(
-    output_grads: &DenseMatrix,
-    indices: &SparseMatrix,
-    inputs: &DenseMatrix,
-    input_grads: &mut DenseMatrix,
+    batch_size: usize,
+    input_size: usize,
+    output_size: usize,
+    output_grads: &Buffer<f32>,
+    indices: &Buffer<i32>,
+    input_grads: &mut Buffer<f32>,
 ) {
-    assert!(indices.shape.batch_size().is_none());
-    assert_eq!(indices.shape.cols(), 1);
-    assert_eq!(indices.shape.rows(), indices.nnz);
-
-    assert_eq!(inputs.shape.cols(), 1);
-    assert_eq!(output_grads.shape.cols(), 1);
-    assert_eq!(output_grads.shape.batch_size(), inputs.shape.batch_size());
-    assert_eq!(output_grads.shape.rows(), indices.shape.rows());
-
-    input_grads.reshape_if_needed(inputs.shape);
-
     unsafe {
         ops::gather_backprop(
-            inputs.shape.rows(),
-            output_grads.shape.rows(),
-            output_grads.shape.batch_size().unwrap_or(1),
-            output_grads.buf.ptr(),
-            indices.buf.ptr(),
-            input_grads.buf.mut_ptr(),
+            input_size,
+            output_size,
+            batch_size,
+            output_grads.ptr(),
+            indices.ptr(),
+            input_grads.mut_ptr(),
         );
     }
 }

@@ -74,7 +74,7 @@ __global__ void cross_entropy_masked_kernel(
 
         const float err = (this_target[i] == 0.0F) ? 0.0F : -this_target[i] * logf(this_pred[i]);
         this_out[i] = err;
-        atomicAdd(error, err);
+        atomicAdd(error + i, err);
     }
 }
 
@@ -93,6 +93,7 @@ __global__ void backprop_softmax_cross_entropy_masked_kernel(
     if (tid >= cols)
         return;
 
+    const float grd = out_grad[tid];
     const int32_t* this_mask = mask + max_active * tid;
     const float* this_smax = softmaxed + max_active * tid;
     const float* this_target = target + max_active * tid;
@@ -104,7 +105,7 @@ __global__ void backprop_softmax_cross_entropy_masked_kernel(
         if (idx == -1)
             break;
 
-        this_grad[idx] += (this_smax[i] - this_target[i]) * out_grad[0];
+        this_grad[idx] += (this_smax[i] - this_target[i]) * grd;
     }
 }
 
@@ -133,7 +134,7 @@ extern "C" void crossentropy_masked(
     cross_entropy_masked_kernel<<<grid_x, threadsPerBlock>>>(max_active, cols, mask, pred, target, out, error);
 }
 
-extern "C" void backprop_softmax_cross_entropy_masked(
+extern "C" void backprop_softmax_crossentropy_masked(
     const size_t max_active,
     const size_t rows,
     const size_t cols,

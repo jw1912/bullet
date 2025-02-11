@@ -1,80 +1,63 @@
-use crate::{backend::ops, DenseMatrix, Shape, SparseMatrix};
+use crate::backend::{ops, Buffer};
 
-pub fn softmax_across_batch_masked(mask: &SparseMatrix, input: &DenseMatrix, output: &mut DenseMatrix) {
-    assert_eq!(input.shape, mask.shape);
-    assert_eq!(mask.shape.cols(), 1);
-
-    let output_shape = Shape::from_raw(mask.nnz, 1, mask.shape.batch_size());
-    output.reshape_if_needed(output_shape);
-
+pub fn softmax_across_batch_masked(
+    batch_size: usize,
+    single_size: usize,
+    nnz: usize,
+    masks: &Buffer<i32>,
+    input: &Buffer<f32>,
+    output: &mut Buffer<f32>,
+) {
     unsafe {
-        ops::softmax_across_columns_masked(
-            mask.nnz,
-            mask.shape.rows(),
-            mask.shape.batch_size().unwrap_or(1),
-            mask.buf.ptr(),
-            input.buf.ptr(),
-            output.buf.mut_ptr(),
-        );
+        ops::softmax_across_columns_masked(nnz, single_size, batch_size, masks.ptr(), input.ptr(), output.mut_ptr());
     }
 }
 
-pub fn crossentropy_loss_masked(
-    mask: &SparseMatrix,
-    pred: &DenseMatrix,
-    target: &DenseMatrix,
-    output: &mut DenseMatrix,
-    error: &mut DenseMatrix,
+#[allow(clippy::too_many_arguments)]
+pub fn crossentropy_masked(
+    batch_size: usize,
+    _: usize,
+    nnz: usize,
+    masks: &Buffer<i32>,
+    pred: &Buffer<f32>,
+    target: &Buffer<f32>,
+    output: &mut Buffer<f32>,
+    error: &mut Buffer<f32>,
 ) {
-    assert_eq!(pred.shape, target.shape);
-    assert_eq!(pred.shape.cols(), 1);
-    assert_eq!(mask.shape.batch_size(), pred.shape.batch_size());
-    assert_eq!(mask.nnz, pred.shape.rows());
-    assert_eq!(mask.shape.cols(), 1);
-
-    output.reshape_if_needed(pred.shape);
-    error.reshape_if_needed(Shape::new(1, 1));
-    error.set_zero();
-
     unsafe {
         ops::crossentropy_masked(
-            mask.nnz,
-            mask.shape.batch_size().unwrap_or(1),
-            mask.buf.ptr(),
-            pred.buf.ptr(),
-            target.buf.ptr(),
-            output.buf.mut_ptr(),
-            error.buf.mut_ptr(),
+            nnz,
+            batch_size,
+            masks.ptr(),
+            pred.ptr(),
+            target.ptr(),
+            output.mut_ptr(),
+            error.mut_ptr(),
         );
     }
 }
 
-pub fn backprop_softmax_crossentropy_loss_masked(
-    mask: &SparseMatrix,
-    softmaxed: &DenseMatrix,
-    target: &DenseMatrix,
-    output_grad: &DenseMatrix,
-    input_grad: &mut DenseMatrix,
+#[allow(clippy::too_many_arguments)]
+pub fn backprop_softmax_crossentropy_masked(
+    batch_size: usize,
+    single_size: usize,
+    nnz: usize,
+    masks: &Buffer<i32>,
+    softmaxed: &Buffer<f32>,
+    target: &Buffer<f32>,
+    output_grad: &Buffer<f32>,
+    input_grad: &mut Buffer<f32>,
 ) {
-    assert_eq!(mask.shape.cols(), 1);
-    assert_eq!(target.shape.cols(), 1);
-    assert_eq!(mask.shape.batch_size(), target.shape().batch_size());
-    assert_eq!(mask.nnz, target.shape().rows());
-    assert_eq!(softmaxed.shape(), target.shape());
-    assert_eq!(output_grad.shape, Shape::new(1, 1));
-
-    input_grad.reshape_if_needed(mask.shape);
-
     unsafe {
-        ops::backprop_softmax_cross_entropy_masked(
-            mask.nnz,
-            mask.shape.rows(),
-            mask.shape.batch_size().unwrap_or(1),
-            mask.buf.ptr(),
-            softmaxed.buf.ptr(),
-            target.buf.ptr(),
-            output_grad.buf.ptr(),
-            input_grad.buf.mut_ptr(),
+        ops::backprop_softmax_crossentropy_masked(
+            nnz,
+            single_size,
+            batch_size,
+            masks.ptr(),
+            softmaxed.ptr(),
+            target.ptr(),
+            output_grad.ptr(),
+            input_grad.mut_ptr(),
         );
     }
 }

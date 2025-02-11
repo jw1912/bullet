@@ -1,42 +1,39 @@
-use crate::{backend::ops, DenseMatrix, SparseMatrix};
+use bullet_core::device::DeviceBuffer;
 
-pub fn mask(inputs: &DenseMatrix, masks: &SparseMatrix, outputs: &mut DenseMatrix) {
-    let shape = inputs.shape;
-    assert_eq!(shape, masks.shape);
-    assert_eq!(shape.cols(), 1);
-    assert!(masks.nnz <= shape.rows());
+use crate::backend::{ops, Buffer};
 
-    outputs.reshape_if_needed(shape);
+pub fn mask(
+    batch_size: usize,
+    single_size: usize,
+    inputs: &Buffer<f32>,
+    masks: &Buffer<i32>,
+    nnz: usize,
+    outputs: &mut Buffer<f32>,
+) {
+    assert!(batch_size * single_size <= inputs.size());
+    assert!(batch_size * single_size <= outputs.size());
+    assert!(batch_size * nnz <= masks.size());
+
     outputs.set_zero();
 
     unsafe {
-        ops::sparse_mask(
-            shape.rows(),
-            shape.batch_size().unwrap_or(1),
-            masks.nnz,
-            inputs.buf.ptr(),
-            masks.buf.ptr(),
-            outputs.buf.mut_ptr(),
-        );
+        ops::sparse_mask(single_size, batch_size, nnz, inputs.ptr(), masks.ptr(), outputs.mut_ptr());
     }
 }
 
-pub fn backprop_mask(output_grads: &DenseMatrix, masks: &SparseMatrix, input_grads: &mut DenseMatrix) {
-    let shape = output_grads.shape;
-    assert_eq!(shape, masks.shape);
-    assert_eq!(shape.cols(), 1);
-    assert!(masks.nnz <= shape.rows());
-
-    input_grads.reshape_if_needed(shape);
+pub fn backprop_mask(
+    batch_size: usize,
+    single_size: usize,
+    output_grads: &Buffer<f32>,
+    masks: &Buffer<i32>,
+    nnz: usize,
+    input_grads: &mut Buffer<f32>,
+) {
+    assert!(batch_size * single_size <= output_grads.size());
+    assert!(batch_size * single_size <= input_grads.size());
+    assert!(batch_size * nnz <= masks.size());
 
     unsafe {
-        ops::sparse_mask_backprop(
-            shape.rows(),
-            shape.batch_size().unwrap_or(1),
-            masks.nnz,
-            output_grads.buf.ptr(),
-            masks.buf.ptr(),
-            input_grads.buf.mut_ptr(),
-        );
+        ops::sparse_mask_backprop(single_size, batch_size, nnz, output_grads.ptr(), masks.ptr(), input_grads.mut_ptr());
     }
 }
