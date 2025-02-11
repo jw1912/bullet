@@ -265,7 +265,7 @@ impl<D: Device> Graph<D> {
                 assert_eq!(node.shape.cols(), 1);
                 assert_eq!(node.shape.size(), input.single_size());
                 assert_eq!(node.shape.size() % 2, 0);
-                assert_eq!(node.shape.size(), output.single_size());
+                assert_eq!(node.shape.size() / 2, output.single_size());
                 output.set_batch_size(input.batch_size());
                 D::pairwise(
                     input.single_size(),
@@ -557,8 +557,9 @@ impl<D: Device> Graph<D> {
                 let input = &mut *get(*node);
                 if let Some(grd) = input.gradients.as_mut() {
                     let input = &input.values;
+                    assert_eq!(node.shape.size() % 2, 0);
                     assert_eq!(node.shape.size(), input.single_size());
-                    assert_eq!(node.shape.size(), output_grad.single_size());
+                    assert_eq!(node.shape.size() / 2, output_grad.single_size());
                     assert_eq!(node.shape.size(), grd.single_size());
                     assert_eq!(input.batch_size(), output_grad.batch_size());
                     grd.set_batch_size(input.batch_size());
