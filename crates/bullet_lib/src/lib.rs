@@ -29,8 +29,10 @@ pub mod nn {
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 
     pub mod optimiser {
-        use bullet_core::optimiser::{self, Optimiser};
+        use bullet_core::optimiser;
         use bullet_hip_backend::ExecutionContext;
+
+        pub use bullet_core::optimiser::Optimiser;
 
         pub type AdamWOptimiser = optimiser::AdamW<ExecutionContext>;
         pub use optimiser::AdamWParams;
