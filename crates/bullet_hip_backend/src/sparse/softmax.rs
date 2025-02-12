@@ -18,7 +18,7 @@ pub fn softmax_across_batch_masked(
 #[allow(clippy::too_many_arguments)]
 pub fn crossentropy_masked(
     batch_size: usize,
-    _: usize,
+    single_size: usize,
     nnz: usize,
     masks: &Buffer<i32>,
     pred: &Buffer<f32>,
@@ -26,6 +26,11 @@ pub fn crossentropy_masked(
     output: &mut Buffer<f32>,
     error: &mut Buffer<f32>,
 ) {
+    assert!(batch_size * single_size <= pred.size());
+    assert!(batch_size * nnz <= masks.size());
+    assert!(batch_size * nnz <= target.size());
+    assert!(batch_size <= error.size());
+
     error.set_zero();
     unsafe {
         ops::crossentropy_masked(
@@ -51,6 +56,12 @@ pub fn backprop_softmax_crossentropy_masked(
     output_grad: &Buffer<f32>,
     input_grad: &mut Buffer<f32>,
 ) {
+    assert!(batch_size * single_size <= softmaxed.size());
+    assert!(batch_size * single_size <= input_grad.size());
+    assert!(batch_size * nnz <= masks.size());
+    assert!(batch_size * nnz <= target.size());
+    assert!(batch_size <= output_grad.size());
+
     unsafe {
         ops::backprop_softmax_crossentropy_masked(
             nnz,

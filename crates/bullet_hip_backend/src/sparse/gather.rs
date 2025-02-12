@@ -10,6 +10,10 @@ pub fn gather(
     indices: &Buffer<i32>,
     outputs: &mut Buffer<f32>,
 ) {
+    assert!(batch_size * input_size <= inputs.size());
+    assert!(batch_size * output_size <= indices.size());
+    assert!(batch_size * output_size <= outputs.size());
+
     outputs.set_zero();
 
     unsafe {
@@ -25,6 +29,10 @@ pub fn backprop_gather(
     indices: &Buffer<i32>,
     input_grads: &mut Buffer<f32>,
 ) {
+    assert!(batch_size * input_size <= input_grads.size());
+    assert!(batch_size * output_size <= indices.size());
+    assert!(batch_size * output_size <= output_grads.size());
+
     unsafe {
         ops::gather_backprop(
             input_size,

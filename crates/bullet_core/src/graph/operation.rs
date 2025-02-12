@@ -229,7 +229,6 @@ impl<D: Device> Graph<D> {
 
                 let batch_size = indices.batch_size();
                 assert_eq!(input.batch_size(), batch_size);
-                assert_eq!(input.single_size(), indices.single_size());
                 assert_eq!(indices.nnz, indices.single_size());
                 output.set_batch_size(batch_size);
 
@@ -508,8 +507,8 @@ impl<D: Device> Graph<D> {
                     let input_size = input.values.single_size();
                     assert_eq!(batch_size, input.values.batch_size());
                     assert_eq!(batch_size, output_grad.batch_size());
-                    assert_eq!(input_size, indices.single_size());
                     assert_eq!(indices.nnz, indices.single_size());
+                    assert_eq!(indices.nnz, output_grad.single_size());
 
                     grd.set_batch_size(batch_size);
                     D::backprop_gather(

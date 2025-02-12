@@ -27,6 +27,10 @@ pub fn select_backprop(
     output_grad: &Buffer<f32>,
     input_grad: &mut Buffer<f32>,
 ) {
+    assert!(batch_size * input_size <= input_grad.size());
+    assert!(batch_size <= indices.size());
+    assert!(batch_size * output_size <= output_grad.size());
+
     unsafe {
         ops::selectBackprop(
             batch_size,
