@@ -60,8 +60,8 @@ pub fn backprop_softmax_crossentropy_masked(
     output_grad: &Buffer<f32>,
     input_grad: &mut Buffer<f32>,
 ) {
-    assert!(batch_size * single_size <= softmaxed.size());
     assert!(batch_size * single_size <= input_grad.size());
+    assert!(batch_size * nnz <= softmaxed.size());
     assert!(batch_size * nnz <= masks.size());
     assert!(batch_size * nnz <= target.size());
     assert!(batch_size <= output_grad.size());
