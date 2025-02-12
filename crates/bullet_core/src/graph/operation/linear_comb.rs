@@ -22,7 +22,7 @@ pub fn linear_comb<D: Device>(
         (Some(x), Some(y)) => {
             assert_eq!(x, y, "Batch sizes do not match: {x} != {y}");
             output.set_batch_size(Some(x));
-            D::linear_comb_single(size, alpha, Some(&input_a.buf), beta, Some(&input_b.buf), &mut output.buf);
+            D::linear_comb_single(input_a.size(), alpha, Some(&input_a.buf), beta, Some(&input_b.buf), &mut output.buf);
         }
         (None, Some(bs)) => {
             output.set_batch_size(Some(bs));
@@ -61,14 +61,14 @@ pub fn linear_comb_backward<D: Device>(
 fn copy_into_scaled<D: Device>(alpha: f32, input: &DenseMatrix<D>, output: &mut DenseMatrix<D>) {
     assert_eq!(input.single_size(), output.single_size());
     output.set_batch_size(input.batch_size());
-    D::linear_comb_single(input.single_size(), alpha, Some(&input.buf), 0.0, None, &mut output.buf);
+    D::linear_comb_single(input.size(), alpha, Some(&input.buf), 0.0, None, &mut output.buf);
 }
 
 fn add_assign_scaled<D: Device>(alpha: f32, input: &DenseMatrix<D>, output: &mut DenseMatrix<D>) {
     assert_eq!(input.single_size(), output.single_size());
     output.set_batch_size(input.batch_size());
 
-    D::linear_comb_single(input.single_size(), 1.0, None, alpha, Some(&input.buf), &mut output.buf);
+    D::linear_comb_single(input.size(), 1.0, None, alpha, Some(&input.buf), &mut output.buf);
 }
 
 pub fn backprop_add_single_scaled<D: Device>(

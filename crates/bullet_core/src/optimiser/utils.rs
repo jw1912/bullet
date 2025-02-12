@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
 
@@ -34,8 +34,8 @@ pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str,
     let mut offset = 0;
 
     while offset < buf.len() {
-        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(graph.device(), &buf[offset..], old_format);
-        *graph.get_weights_mut(&id).values.dense_mut() = buffer;
+        let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
+        graph.get_weights_mut(&id).load_dense_from_slice(None, &buffer);
 
         offset += bytes_read;
     }
@@ -58,7 +58,6 @@ pub fn write_weight_hashmap_to_file<D: Device>(map: &HashMap<String, DenseMatrix
 
 /// Loads a set of labelled weights from a file into a `HashMap`.
 pub fn load_weight_hashmap_from_file<D: Device>(
-    device: Arc<D>,
     map: &mut HashMap<String, DenseMatrix<D>>,
     path: &str,
     old_format: bool,
@@ -72,10 +71,54 @@ pub fn load_weight_hashmap_from_file<D: Device>(
     let mut offset = 0;
 
     while offset < buf.len() {
-        let (buffer, id, bytes_read) = DenseMatrix::read_from_byte_buffer(device.clone(), &buf[offset..], old_format);
-
-        *map.get_mut(&id).unwrap() = buffer;
+        let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
+        map.get_mut(&id).unwrap().load_from_slice(None, &buffer);
 
         offset += bytes_read;
     }
+}
+
+/// Reads a matrix from a byte buffer, returning how many bytes were read
+/// and the matrix ID that was read.
+pub fn read_from_byte_buffer(bytes: &[u8], old_format: bool) -> (Vec<f32>, String, usize) {
+    const USIZE: usize = std::mem::size_of::<usize>();
+
+    let mut offset = 0;
+
+    let mut id = String::new();
+    loop {
+        let ch = bytes[offset];
+        offset += 1;
+
+        if ch == b'\n' {
+            break;
+        }
+
+        id.push(char::from(ch));
+    }
+
+    let mut single_size = [0u8; USIZE];
+    single_size.copy_from_slice(&bytes[offset..offset + USIZE]);
+    offset += USIZE;
+
+    let mut single_size = usize::from_le_bytes(single_size);
+
+    if old_format {
+        let mut cols = [0u8; USIZE];
+        cols.copy_from_slice(&bytes[offset..offset + USIZE]);
+        offset += USIZE;
+        single_size *= usize::from_le_bytes(cols);
+    }
+
+    let total_read = offset + single_size * 4;
+
+    let mut values = vec![0.0; single_size];
+
+    for (word, val) in bytes[offset..total_read].chunks_exact(4).zip(values.iter_mut()) {
+        let mut buf = [0; 4];
+        buf.copy_from_slice(word);
+        *val = f32::from_le_bytes(buf);
+    }
+
+    (values, id, total_read)
 }

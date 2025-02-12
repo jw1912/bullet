@@ -135,10 +135,9 @@ impl<D: Device> AdamW<D> {
     }
 
     fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) {
-        let device = self.graph.device();
         let paths = [format!("{path}/weights.bin"), format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
         utils::load_graph_weights_from_file(&mut self.graph, &paths[0], old_format);
-        utils::load_weight_hashmap_from_file(device.clone(), &mut self.momentum, &paths[1], old_format);
-        utils::load_weight_hashmap_from_file(device, &mut self.velocity, &paths[2], old_format);
+        utils::load_weight_hashmap_from_file(&mut self.momentum, &paths[1], old_format);
+        utils::load_weight_hashmap_from_file(&mut self.velocity, &paths[2], old_format);
     }
 }
