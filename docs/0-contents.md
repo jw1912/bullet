@@ -1,5 +1,7 @@
 # Bullet Documentation
 
+This is the documentation for the basic usage of `bullet_lib`.
+
 1. [NNUE Basics](1-basics.md)
     - [Simple Feed-Forward Network](1-basics.md#simple-feed-forward-network)
     - [Perspective Networks](1-basics.md#perspective-networks)

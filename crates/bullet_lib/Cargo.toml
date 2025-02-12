@@ -1,0 +1,50 @@
+[package]
+name = "bullet_lib"
+version = "1.0.0"
+description = "Neural Network Trainer"
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+
+[features]
+cuda = []
+hip = ["bullet_hip_backend/hip"]
+gh-actions = ["bullet_hip_backend/gh-actions"]
+
+[dependencies]
+bullet_hip_backend = { workspace = true }
+bullet_core = { workspace = true }
+bulletformat = { workspace = true }
+montyformat = { workspace = true }
+sfbinpack = "0.2.0"
+
+[[example]]
+name = "advanced"
+path = "../../examples/advanced.rs"
+
+[[example]]
+name = "akimbo-main"
+path = "../../examples/akimbo-main.rs"
+
+[[example]]
+name = "ataxx"
+path = "../../examples/ataxx.rs"
+
+[[example]]
+name = "morelayers"
+path = "../../examples/morelayers.rs"
+
+[[example]]
+name = "relabel"
+path = "../../examples/relabel.rs"
+
+[[example]]
+name = "simple"
+path = "../../examples/simple.rs"
+
+[[example]]
+name = "testnet"
+path = "../../examples/testnet.rs"

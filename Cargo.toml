@@ -1,39 +1,28 @@
-[package]
-name = "bullet_lib"
-version = "1.0.0"
-edition = "2021"
-rust-version = "1.83"
-description = "Neural Network Trainer"
+[workspace.package]
 authors = ["Jamie Whiting"]
 license = "MIT"
-repository = "https://github.com/jw1912/bullet"
 readme = "README.md"
-
-[features]
-cudnn = ["bullet_backend/cudnn"]
-hip = ["bullet_backend/hip"]
-gh-actions = ["bullet_backend/gh-actions"]
-
-[dependencies]
-bullet_backend = { path = "backend" }
-bullet_core = { workspace = true }
-bulletformat = { workspace = true }
-rand = "0.8.5"
-rand_distr = "0.4.3"
-montyformat = { workspace = true }
-sfbinpack = "0.2.0"
+repository = "https://github.com/jw1912/bullet"
+rust-version = "1.83"
+edition = "2021"
 
 [workspace]
 resolver = "2"
-members = ["backend", "backend/shared", "core", "utils"]
-
-[workspace.package]
-license = "MIT"
-authors = ["Jamie Whiting"]
+members = [
+    "crates/bullet_core",
+    #"crates/bullet_cuda_backend",
+    "crates/bullet_hip_backend",
+    "crates/bullet_lib",
+    "crates/bullet_utils",
+]
 
 [workspace.dependencies]
-bullet_core = { path = "core" }
+bullet_backend = { path = "crates/bullet_backend", version = "0.1.0" }
+bullet_core = { path = "crates/bullet_core", version = "0.1.0" }
+#bullet_cuda_backend = { path = "crates/bullet_cuda_backend", version = "0.1.0" }
+bullet_hip_backend = { path = "crates/bullet_hip_backend", version = "0.1.0" }
 bulletformat = "1.8.0"
+cudarc = { version = "0.13.4", features = ["cuda-version-from-build-system"] }
 montyformat = { git = 'https://github.com/official-monty/montyformat.git', tag = "v0.7.0" }
 
 [profile.release]

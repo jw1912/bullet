@@ -51,14 +51,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bullet_backend"
-version = "0.1.0"
-dependencies = [
- "bullet_core",
- "bullet_shared_backend",
-]
-
-[[package]]
 name = "bullet_core"
 version = "0.1.0"
 dependencies = [
@@ -67,24 +59,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "bullet_lib"
-version = "1.0.0"
-dependencies = [
- "bullet_backend",
- "bullet_core",
- "bulletformat",
- "montyformat",
- "rand",
- "rand_distr",
- "sfbinpack",
-]
-
-[[package]]
-name = "bullet_shared_backend"
+name = "bullet_hip_backend"
 version = "0.1.0"
 dependencies = [
  "bullet_core",
  "cc",
+]
+
+[[package]]
+name = "bullet_lib"
+version = "1.0.0"
+dependencies = [
+ "bullet_core",
+ "bullet_hip_backend",
+ "bulletformat",
+ "montyformat",
+ "sfbinpack",
 ]
 
 [[package]]
@@ -275,9 +265,9 @@ dependencies = [
 
 [[package]]
 name = "sfbinpack"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20d1c02db05e63b9d3b048f682a2a372cab9a8686f0e0c2f5489959e8aaa3b03"
+checksum = "3f35047a6cc0d3289e4c343ebd9c4db88e138e9dcd664fd64c18ee8449b8808a"
 dependencies = [
  "thiserror",
 ]
@@ -331,9 +321,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.91"
+version = "2.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d53cbcb5a243bd33b7858b1d7f4aca2153490815872d86d955d6ea29f743c035"
+checksum = "36147f1a48ae0ec2b5b3bc5b537d267457555a10dc06f3dbc8cb11ba3006d3b1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -351,22 +341,22 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.9"
+version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f072643fd0190df67a8bab670c20ef5d8737177d6ac6b2e9a236cb096206b2cc"
+checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.9"
+version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b50fa271071aae2e6ee85f842e2e28ba8cd2c5fb67f11fcb1fd70b276f9e7d4"
+checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.91",
+ "syn 2.0.98",
 ]
 
 [[package]]

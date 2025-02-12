@@ -4,11 +4,10 @@ Code to relabel a bulletformat dataset with a network
 
 use std::{fs::File, io::BufWriter, time::Instant};
 
+use bullet_core::optimiser::utils::load_graph_weights_from_file;
+
 use bullet_lib::{
-    nn::{
-        optimiser::utils::load_graph_weights_from_file, Activation, ExecutionContext, Graph, NetworkBuilder, Node,
-        Shape,
-    },
+    nn::{Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape},
     trainer::default::{
         formats::bulletformat::{ChessBoard, DataLoader},
         inputs::{self, SparseInputType},
@@ -49,7 +48,7 @@ fn main() {
 
     std::thread::spawn(move || {
         let (mut graph, output_node) = build_network(inputs.num_inputs(), hl_size);
-        load_graph_weights_from_file(&mut graph, NETWORK_PATH);
+        load_graph_weights_from_file::<ExecutionContext>(&mut graph, NETWORK_PATH, true);
 
         let mut error = 0.0;
         let mut batches = 0;
