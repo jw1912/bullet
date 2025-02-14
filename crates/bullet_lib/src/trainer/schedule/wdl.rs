@@ -59,7 +59,7 @@ impl<WDL: WdlScheduler> WdlScheduler for Warmup<WDL> {
         // batch loops within superbatches, so we must check we're
         // actually at the start of training to correctly implement
         // warmup.
-        if superbatch == 0 && batch < self.warmup_batches {
+        if superbatch == 1 && batch < self.warmup_batches {
             // linearly interpolate up from base_wdl / warmup_batches
             base_wdl / (self.warmup_batches - batch) as f32
         } else {
