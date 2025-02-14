@@ -111,6 +111,9 @@ impl InputType for TypoInputs {
             let mut pc = usize::from(piece & 7);
             let sq = usize::from(square);
 
+            let our_sq = ChessBucketsMirrored::get_sq(sq, usize::from(our_ksq));
+            let opp_sq = ChessBucketsMirrored::get_sq(sq, usize::from(opp_ksq)) ^ 56;
+
             // piece kind factoriser - no need for king
             if pc < 6 {
                 f(Self::PCKIND_OFFSET + [0, 6][c] + pc, Self::PCKIND_OFFSET + [6, 0][c] + pc);
@@ -118,15 +121,12 @@ impl InputType for TypoInputs {
 
             // opposite colour bishop
             if pc == 2 {
-                let oc = sq & 1;
-                f(Self::OCB_OFFSET + [0, 2][c] + oc, Self::OCB_OFFSET + [2, 0][c] + (oc ^ 1));
+                f(Self::OCB_OFFSET + [0, 2][c] + (our_sq & 1), Self::OCB_OFFSET + [2, 0][c] + (opp_sq & 1));
             }
 
             pc *= 64;
 
             // base feature factoriser
-            let our_sq = ChessBucketsMirrored::get_sq(sq, usize::from(our_ksq));
-            let opp_sq = ChessBucketsMirrored::get_sq(sq, usize::from(opp_ksq)) ^ 56;
             let base_wfeat = [0, 384][c] + pc + our_sq;
             let base_bfeat = [384, 0][c] + pc + opp_sq;
             f(Self::FEAT_OFFSET + base_wfeat, Self::FEAT_OFFSET + base_bfeat);
