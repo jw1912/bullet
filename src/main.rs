@@ -7,10 +7,10 @@ mod trainer;
 use trainer::{lr, wdl, DirectSequentialDataLoader, LocalSettings, Trainer, TrainingSchedule, TrainingSteps};
 
 // Network architecture settings
-pub type InputFeatures = inputs::Chess768;
-pub type OutputBuckets = outputs::Single;
+pub type InputFeatures = inputs::TypoInputs;
+pub type OutputBuckets = outputs::MaterialCount<4>;
 pub type Activation = activation::SCReLU;
-pub const HL_SIZE: usize = 128;
+pub const HL_SIZE: usize = 800;
 
 // Quantisations
 pub const QA: i16 = 255;
@@ -20,14 +20,14 @@ pub const QB: i16 = 64;
 /// Indexed from white POV, so index 0 corresponds to A1, 3 corresponds to D1.
 #[rustfmt::skip]
 pub const BUCKETS_MIRRORED: [usize; 32] = [
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    1, 1, 1, 1,
-    1, 1, 1, 1,
-    1, 1, 1, 1,
-    1, 1, 1, 1,
-    1, 1, 1, 1,
-    1, 1, 1, 1,
+    0, 0, 1, 1,
+    2, 2, 2, 2,
+    3, 3, 3, 3,
+    4, 4, 4, 4,
+    4, 4, 4, 4,
+    4, 4, 4, 4,
+    4, 4, 4, 4,
+    4, 4, 4, 4,
 ];
 
 fn main() {

@@ -7,7 +7,6 @@ use crate::{inputs::InputType, Activation, InputFeatures, OutputBuckets, HL_SIZE
 const INPUTS: usize = InputFeatures::SIZE;
 const HL: usize = HL_SIZE;
 const OUTPUT_BUCKETS: usize = OutputBuckets::NUM;
-const MAX_ACTIVE: usize = 32;
 
 pub struct Network {
     l1w: [Accumulator; INPUTS],
@@ -181,21 +180,13 @@ impl Network {
         activated: &mut [Accumulator; 2],
         features: &mut Features,
     ) -> (f32, usize) {
-        let mut idx = 0;
-
-        let kings = (pos.our_ksq(), pos.opp_ksq());
-
-        for feat in pos.into_iter() {
-            let (wfeat, bfeat) = InputFeatures::get_feature_indices(feat, kings);
-
+        <InputFeatures as InputType>::map_features(pos, |wfeat, bfeat| {
             features.push(wfeat, bfeat);
             accs[0].add(&self.l1w[wfeat]);
             accs[1].add(&self.l1w[bfeat]);
+        });
 
-            OutputBuckets::update_output_bucket(&mut idx, usize::from(feat.0 & 7));
-        }
-
-        let bucket = OutputBuckets::get_bucket(idx);
+        let bucket = OutputBuckets::get_bucket(pos);
 
         let mut eval = self.l2b[bucket];
 
@@ -295,14 +286,14 @@ impl Accumulator {
 
 #[derive(Debug)]
 pub struct Features {
-    features: [(usize, usize); MAX_ACTIVE],
+    features: [(usize, usize); InputFeatures::MAX_ACTIVE],
     len: usize,
     consumed: usize,
 }
 
 impl Default for Features {
     fn default() -> Self {
-        Self { features: [(0, 0); MAX_ACTIVE], len: 0, consumed: 0 }
+        Self { features: [(0, 0); InputFeatures::MAX_ACTIVE], len: 0, consumed: 0 }
     }
 }
 
