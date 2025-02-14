@@ -129,8 +129,10 @@ pub trait NetworkTrainer {
         while let Ok(prepared_data) = receiver.recv() {
             let lrate = schedule.lr(curr_batch, superbatch);
 
-            if lrate != prev_lr {
-                println!("LR Dropped to {}", logger::ansi(lrate, logger::num_cs()));
+            if lrate < prev_lr {
+                println!("LR dropped to {}", logger::ansi(lrate, logger::num_cs()));
+            } else if lrate > prev_lr {
+                println!("LR increased to {}", logger::ansi(lrate, logger::num_cs()));
             }
 
             prev_lr = lrate;
