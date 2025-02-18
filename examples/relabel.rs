@@ -2,8 +2,6 @@
 Code to relabel a bulletformat dataset with a network
 */
 
-use std::{fs::File, io::BufWriter, time::Instant};
-use bulletformat::BulletFormat;
 use bullet_core::optimiser::utils::load_graph_weights_from_file;
 use bullet_lib::{
     nn::{Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape},
@@ -15,6 +13,8 @@ use bullet_lib::{
         outputs,
     },
 };
+use bulletformat::BulletFormat;
+use std::{fs::File, io::BufWriter, time::Instant};
 
 const NETWORK_PATH: &str = "checkpoints/monty-datagen25-240/optimiser_state/weights.bin";
 const DATA_PATH: &str = "data/baseline.data";
