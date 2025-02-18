@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
 
-use super::{utils, Optimiser};
+use super::{utils, OptimiserState};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -20,24 +20,24 @@ impl Default for AdamWParams {
 }
 
 pub struct AdamW<D: Device> {
-    graph: Graph<D>,
+    ids: HashSet<String>,
     momentum: HashMap<String, DenseMatrix<D>>,
     velocity: HashMap<String, DenseMatrix<D>>,
     params: HashMap<String, AdamWParams>,
 }
 
-impl<D: Device> Optimiser<D> for AdamW<D> {
+impl<D: Device> OptimiserState<D> for AdamW<D> {
     type Params = AdamWParams;
 
-    fn new(graph: Graph<D>, default_params: Self::Params) -> Self {
+    fn new(graph: &Graph<D>, default_params: Self::Params) -> Self {
         let weight_ids = graph.weight_ids();
 
         let mut momentum = HashMap::new();
         let mut velocity = HashMap::new();
         let mut params = HashMap::new();
 
-        for id in weight_ids {
-            let w = graph.get_weights(&id);
+        for id in &weight_ids {
+            let w = graph.get_weights(id);
             assert!(w.values.batch_size().is_none());
             let size = w.values.size();
 
@@ -47,97 +47,66 @@ impl<D: Device> Optimiser<D> for AdamW<D> {
             let old = velocity.insert(id.clone(), DenseMatrix::zeroed(graph.device(), size));
             assert!(old.is_none());
 
-            let old = params.insert(id, default_params);
+            let old = params.insert(id.clone(), default_params);
             assert!(old.is_none());
         }
 
-        Self { graph, momentum, velocity, params }
+        Self { ids: weight_ids.into_iter().collect(), momentum, velocity, params }
     }
 
-    fn graph(&self) -> &Graph<D> {
-        &self.graph
+    fn update_single_weight(
+        &mut self,
+        weights: &mut DenseMatrix<D>,
+        grads: &mut DenseMatrix<D>,
+        id: &str,
+        gradient_factor: f32,
+        learning_rate: f32,
+    ) {
+        let params = self.params.get(id).unwrap();
+        let momentum = self.momentum.get_mut(id).unwrap();
+        let velocity = self.velocity.get_mut(id).unwrap();
+
+        assert!(weights.batch_size().is_none());
+        assert!(momentum.batch_size().is_none());
+        assert!(velocity.batch_size().is_none());
+        assert_eq!(weights.size(), momentum.size());
+        assert_eq!(weights.size(), velocity.size());
+
+        D::adamw(
+            weights.size(),
+            &mut weights.buf,
+            &grads.buf,
+            &mut momentum.buf,
+            &mut velocity.buf,
+            params.beta1,
+            params.beta2,
+            params.min_weight,
+            params.max_weight,
+            params.decay,
+            gradient_factor,
+            learning_rate,
+        );
     }
 
-    fn graph_mut(&mut self) -> &mut Graph<D> {
-        &mut self.graph
-    }
-
-    fn update(&mut self, gradient_factor: f32, learning_rate: f32) {
-        for id in &self.graph.weight_ids() {
-            let weights = self.graph.get_weights_mut(id);
-
-            if let Some(grads) = weights.gradients.as_ref() {
-                let params = self.params.get(id).unwrap();
-                let momentum = self.momentum.get_mut(id).unwrap();
-                let velocity = self.velocity.get_mut(id).unwrap();
-
-                assert!(weights.values.batch_size().is_none());
-                assert!(momentum.batch_size().is_none());
-                assert!(velocity.batch_size().is_none());
-                assert_eq!(weights.values.size(), momentum.size());
-                assert_eq!(weights.values.size(), velocity.size());
-
-                D::adamw(
-                    weights.values.size(),
-                    &mut weights.values.dense_mut().buf,
-                    &grads.buf,
-                    &mut momentum.buf,
-                    &mut velocity.buf,
-                    params.beta1,
-                    params.beta2,
-                    params.min_weight,
-                    params.max_weight,
-                    params.decay,
-                    gradient_factor,
-                    learning_rate,
-                );
-            }
-        }
-    }
-
-    fn reset_state(&mut self) {
-        for id in self.graph.weight_ids() {
-            self.momentum.get_mut(&id).unwrap().set_zero();
-            self.velocity.get_mut(&id).unwrap().set_zero();
+    fn reset(&mut self) {
+        for id in self.ids.iter() {
+            self.momentum.get_mut(id).unwrap().set_zero();
+            self.velocity.get_mut(id).unwrap().set_zero();
         }
     }
 
     fn write_to_checkpoint(&self, path: &str) {
-        utils::write_graph_weights_to_file(&self.graph, &format!("{path}/weights.bin"));
         utils::write_weight_hashmap_to_file(&self.momentum, &format!("{path}/momentum.bin"));
         utils::write_weight_hashmap_to_file(&self.velocity, &format!("{path}/velocity.bin"));
     }
 
-    fn load_from_checkpoint(&mut self, path: &str) {
-        self.load_from_checkpoint_(path, false);
+    fn load_from_checkpoint(&mut self, path: &str, old_format: bool) {
+        let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
+        utils::load_weight_hashmap_from_file(&mut self.momentum, &paths[0], old_format);
+        utils::load_weight_hashmap_from_file(&mut self.velocity, &paths[1], old_format);
     }
 
     fn set_params_for_weight(&mut self, id: &str, params: Self::Params) {
         *self.params.get_mut(id).unwrap() = params;
-    }
-}
-
-impl<D: Device> AdamW<D> {
-    pub fn load_weights_from_file(&mut self, path: &str) {
-        self.load_weights_from_file_(path, false);
-    }
-
-    pub fn load_from_old_format_checkpoint(&mut self, path: &str) {
-        self.load_from_checkpoint_(path, true);
-    }
-
-    pub fn load_old_format_weights_from_file(&mut self, path: &str) {
-        self.load_weights_from_file_(path, true);
-    }
-
-    fn load_weights_from_file_(&mut self, path: &str, old_format: bool) {
-        utils::load_graph_weights_from_file(&mut self.graph, path, old_format);
-    }
-
-    fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) {
-        let paths = [format!("{path}/weights.bin"), format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
-        utils::load_graph_weights_from_file(&mut self.graph, &paths[0], old_format);
-        utils::load_weight_hashmap_from_file(&mut self.momentum, &paths[1], old_format);
-        utils::load_weight_hashmap_from_file(&mut self.velocity, &paths[2], old_format);
     }
 }

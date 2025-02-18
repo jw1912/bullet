@@ -5,7 +5,7 @@ pub mod save;
 pub mod schedule;
 pub mod settings;
 
-use bullet_core::optimiser::Optimiser;
+use bullet_core::optimiser::{Optimiser, OptimiserState};
 use bullet_hip_backend::ExecutionContext;
 pub use preparer::DataPreparer;
 use save::SavedFormat;
@@ -21,7 +21,7 @@ use std::{
 
 pub trait NetworkTrainer {
     type PreparedData;
-    type Optimiser: Optimiser<ExecutionContext>;
+    type OptimiserState: OptimiserState<ExecutionContext>;
 
     /// Load prepared data onto the GPU, return batch size
     fn load_batch(&mut self, prepared: &Self::PreparedData) -> usize;
@@ -29,24 +29,24 @@ pub trait NetworkTrainer {
     /// Trains for a single step on a batch that has been previously
     /// loaded using `load_batch`.
     fn train_on_batch(&mut self, gf: f32, lr: f32) -> f32 {
-        self.optimiser().graph().synchronise();
-        self.optimiser_mut().graph_mut().zero_grads();
+        self.optimiser().graph.synchronise();
+        self.optimiser_mut().graph.zero_grads();
 
-        let error = self.optimiser_mut().graph_mut().forward();
+        let error = self.optimiser_mut().graph.forward();
 
-        self.optimiser_mut().graph_mut().backward();
+        self.optimiser_mut().graph.backward();
 
         self.optimiser_mut().update(gf, lr);
 
-        self.optimiser().graph().synchronise();
-        self.optimiser().graph().panic_if_device_error("Something went wrong!");
+        self.optimiser().graph.synchronise();
+        self.optimiser().graph.panic_if_device_error("Something went wrong!");
 
         error
     }
 
-    fn optimiser(&self) -> &Self::Optimiser;
+    fn optimiser(&self) -> &Optimiser<ExecutionContext, Self::OptimiserState>;
 
-    fn optimiser_mut(&mut self) -> &mut Self::Optimiser;
+    fn optimiser_mut(&mut self) -> &mut Optimiser<ExecutionContext, Self::OptimiserState>;
 
     fn load_from_checkpoint(&mut self, path: &str) {
         self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"));
@@ -85,7 +85,7 @@ pub trait NetworkTrainer {
 
         std::fs::create_dir(out_dir).unwrap_or(());
 
-        self.optimiser().graph().synchronise();
+        self.optimiser().graph.synchronise();
 
         let steps = schedule.steps;
         let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
@@ -151,8 +151,8 @@ pub trait NetworkTrainer {
             if curr_batch % validation_freq == 0 {
                 if let Some(Ok(test_batch)) = test_receiver.as_ref().map(Receiver::recv) {
                     let this_batch_size = self.load_batch(&test_batch);
-                    self.optimiser().graph().synchronise();
-                    let error = self.optimiser_mut().graph_mut().forward();
+                    self.optimiser().graph.synchronise();
+                    let error = self.optimiser_mut().graph.forward();
                     let error = error / this_batch_size as f32;
 
                     validation_record.push((superbatch, curr_batch, error));
@@ -238,7 +238,7 @@ pub trait NetworkTrainer {
         let mut buf = Vec::new();
 
         for fmt in weights {
-            let weights = self.optimiser().graph().get_weights(&fmt.id);
+            let weights = self.optimiser().graph.get_weights(&fmt.id);
             buf.extend_from_slice(&fmt.write_to_byte_buffer(weights.values.dense())?);
         }
 

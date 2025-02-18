@@ -50,6 +50,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     optimiser: O,
     psqt_subnet: bool,
     allow_transpose: bool,
+    ft_init_input_size: Option<usize>,
 }
 
 impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -65,6 +66,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             optimiser: O::default(),
             psqt_subnet: false,
             allow_transpose: true,
+            ft_init_input_size: None,
         }
     }
 }
@@ -189,6 +191,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
     /// The PSQT weights will be placed **before** all other network weights.
     pub fn psqt_subnet(mut self) -> Self {
         self.psqt_subnet = true;
+        self
+    }
+
+    pub fn with_ft_init_input_size(mut self, size: usize) -> Self {
+        assert!(size > 0);
+        self.ft_init_input_size = Some(size);
         self
     }
 
@@ -345,7 +353,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         };
 
         let ctx = ExecutionContext::default();
-        let graph = builder.build(ctx);
+        let mut graph = builder.build(ctx);
+
+        if let Some(size) = self.ft_init_input_size {
+            let stdev = 1.0 / (size as f32).sqrt();
+            graph.get_weights_mut("l0w").seed_random(0.0, stdev, true);
+        }
 
         let mut output_desc = format!("{}", layer_sizes[0]);
 
@@ -372,7 +385,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1);
 
         let trainer = Trainer {
-            optimiser: O::Optimiser::new(graph, Default::default()),
+            optimiser: Optimiser::<_, O::Optimiser>::new(graph, Default::default()),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
             output_node,
@@ -392,7 +405,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
         println!("Inputs                 : {}", input_getter.description());
 
-        let num_params = trainer.optimiser.graph().get_num_params();
+        let num_params = trainer.optimiser.graph.get_num_params();
         let fmt = if num_params >= 1_000_000 {
             format!("{:.2}m", num_params as f64 / 1_000_000.0)
         } else {

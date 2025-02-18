@@ -42,7 +42,7 @@ use crate::save;
 
 use bullet_core::{
     graph::{builder::Node, Graph},
-    optimiser::Optimiser,
+    optimiser::{Optimiser, OptimiserState},
 };
 use bullet_hip_backend::{ExecutionContext, SparseMatrix};
 
@@ -59,8 +59,8 @@ pub struct AdditionalTrainerInputs {
     dense_inputs: bool,
 }
 
-pub struct Trainer<Opt, Inp, Out = outputs::Single> {
-    optimiser: Opt,
+pub struct Trainer<Opt: OptimiserState<ExecutionContext>, Inp, Out = outputs::Single> {
+    optimiser: Optimiser<ExecutionContext, Opt>,
     input_getter: Inp,
     output_getter: Out,
     output_node: Node,
@@ -70,16 +70,16 @@ pub struct Trainer<Opt, Inp, Out = outputs::Single> {
     sparse_scratch_space: SparseMatrix,
 }
 
-impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>> NetworkTrainer
-    for Trainer<Opt, Inp, Out>
+impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
+    NetworkTrainer for Trainer<Opt, Inp, Out>
 {
-    type Optimiser = Opt;
+    type OptimiserState = Opt;
     type PreparedData = DefaultDataPreparer<Inp, Out>;
 
     fn load_batch(&mut self, prepared: &Self::PreparedData) -> usize {
         let batch_size = prepared.batch_size;
 
-        let graph = self.optimiser.graph_mut();
+        let graph = &mut self.optimiser.graph;
 
         unsafe {
             if self.additional_inputs.dense_inputs {
@@ -117,11 +117,11 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         batch_size
     }
 
-    fn optimiser(&self) -> &Self::Optimiser {
+    fn optimiser(&self) -> &Optimiser<ExecutionContext, Self::OptimiserState> {
         &self.optimiser
     }
 
-    fn optimiser_mut(&mut self) -> &mut Self::Optimiser {
+    fn optimiser_mut(&mut self) -> &mut Optimiser<ExecutionContext, Self::OptimiserState> {
         &mut self.optimiser
     }
 
@@ -139,7 +139,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
     }
 }
 
-impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
+impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
     Trainer<Opt, Inp, Out>
 {
     pub fn new(
@@ -175,7 +175,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1);
 
         Self {
-            optimiser: Opt::new(graph, params),
+            optimiser: Optimiser::new(graph, params),
             input_getter,
             output_getter,
             output_node,
@@ -211,9 +211,9 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         );
 
         self.load_batch(&prepared);
-        self.optimiser.graph_mut().forward();
+        self.optimiser.graph.forward();
 
-        let eval = self.optimiser.graph().get_node(self.output_node);
+        let eval = self.optimiser.graph.get_node(self.output_node);
 
         let mut vals = vec![0.0; eval.values.dense().size()];
         eval.values.dense().write_to_slice(&mut vals);
@@ -260,7 +260,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         let mut buf = Vec::new();
 
         for SavedFormat { id, quant, layout } in &self.saved_format {
-            let weights = self.optimiser.graph().get_weights(id);
+            let weights = self.optimiser.graph.get_weights(id);
             let weights = weights.values.dense();
 
             let mut weight_buf = vec![0.0; weights.size()];
@@ -309,7 +309,7 @@ impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<
         let mut buf = Vec::new();
 
         for SavedFormat { id, .. } in &self.saved_format {
-            let weights = self.optimiser.graph().get_weights(id);
+            let weights = self.optimiser.graph.get_weights(id);
             let weights = weights.values.dense();
 
             let mut weight_buf = vec![0.0; weights.size()];
@@ -378,7 +378,7 @@ fn display_total_positions<T, D: DataLoader<T>>(data_loader: &D, steps: Training
     }
 }
 
-impl<Opt: Optimiser<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
+impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
     Trainer<Opt, Inp, Out>
 where
     Inp::RequiredDataType: CanBeDirectlySequentiallyLoaded,
