@@ -372,7 +372,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1);
 
         let trainer = Trainer {
-            optimiser: O::Optimiser::new(graph, Default::default()),
+            optimiser: Optimiser::<_, O::Optimiser>::new(graph, Default::default()),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
             output_node,
@@ -392,7 +392,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         println!("Architecture           : {}", logger::ansi(format!("{ft_desc} -> {output_desc}"), "32;1"));
         println!("Inputs                 : {}", input_getter.description());
 
-        let num_params = trainer.optimiser.graph().get_num_params();
+        let num_params = trainer.optimiser.graph.get_num_params();
         let fmt = if num_params >= 1_000_000 {
             format!("{:.2}m", num_params as f64 / 1_000_000.0)
         } else {
