@@ -101,22 +101,12 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
     }
 
     fn load_from_checkpoint(&mut self, path: &str, old_format: bool) {
-        self.load_from_checkpoint_(path, old_format);
+        let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
+        utils::load_weight_hashmap_from_file(&mut self.momentum, &paths[0], old_format);
+        utils::load_weight_hashmap_from_file(&mut self.velocity, &paths[1], old_format);
     }
 
     fn set_params_for_weight(&mut self, id: &str, params: Self::Params) {
         *self.params.get_mut(id).unwrap() = params;
-    }
-}
-
-impl<D: Device> AdamW<D> {
-    pub fn load_from_old_format_checkpoint(&mut self, path: &str) {
-        self.load_from_checkpoint_(path, true);
-    }
-
-    fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) {
-        let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
-        utils::load_weight_hashmap_from_file(&mut self.momentum, &paths[0], old_format);
-        utils::load_weight_hashmap_from_file(&mut self.velocity, &paths[1], old_format);
     }
 }

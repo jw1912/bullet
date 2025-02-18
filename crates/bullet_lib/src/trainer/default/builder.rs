@@ -50,6 +50,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     optimiser: O,
     psqt_subnet: bool,
     allow_transpose: bool,
+    ft_init_input_size: Option<usize>,
 }
 
 impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -65,6 +66,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             optimiser: O::default(),
             psqt_subnet: false,
             allow_transpose: true,
+            ft_init_input_size: None,
         }
     }
 }
@@ -189,6 +191,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
     /// The PSQT weights will be placed **before** all other network weights.
     pub fn psqt_subnet(mut self) -> Self {
         self.psqt_subnet = true;
+        self
+    }
+
+    pub fn with_ft_init_input_size(mut self, size: usize) -> Self {
+        assert!(size > 0);
+        self.ft_init_input_size = Some(size);
         self
     }
 
@@ -345,7 +353,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         };
 
         let ctx = ExecutionContext::default();
-        let graph = builder.build(ctx);
+        let mut graph = builder.build(ctx);
+
+        if let Some(size) = self.ft_init_input_size {
+            let stdev = 1.0 / (size as f32).sqrt();
+            graph.get_weights_mut("l0w").seed_random(0.0, stdev, true);
+        }
 
         let mut output_desc = format!("{}", layer_sizes[0]);
 

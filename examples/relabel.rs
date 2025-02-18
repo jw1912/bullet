@@ -3,9 +3,8 @@ Code to relabel a bulletformat dataset with a network
 */
 
 use std::{fs::File, io::BufWriter, time::Instant};
-
+use bulletformat::BulletFormat;
 use bullet_core::optimiser::utils::load_graph_weights_from_file;
-
 use bullet_lib::{
     nn::{Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape},
     trainer::default::{
@@ -16,15 +15,22 @@ use bullet_lib::{
         outputs,
     },
 };
-use bulletformat::BulletFormat;
 
 const NETWORK_PATH: &str = "checkpoints/monty-datagen25-240/optimiser_state/weights.bin";
 const DATA_PATH: &str = "data/baseline.data";
 const OUTPUT_PATH: &str = "data/relabled.data";
 
 fn main() {
+    #[rustfmt::skip]
     let inputs = inputs::ChessBucketsMirrored::new([
-        0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        0, 0, 1, 1,
+        2, 2, 2, 2,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
     ]);
     let output_buckets = outputs::Single;
     let hl_size = 1024;
