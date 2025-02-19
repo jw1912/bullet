@@ -12,7 +12,7 @@ The main crate is `bullet_core`, which is an ML framework that is generic over b
 There are then crates for specific backend implementations, e.g. `bullet_hip_backend`.
 The crate `bullet_lib` provides a high-level wrapper around these crates specifically for training
 networks to do with chess (and other games e.g. Ataxx) easily. 
-here are various misc utilities mostly to do with handling data in `bullet-utils`.
+There are various misc utilities mostly to do with handling data in `bullet-utils`.
 
 ### Usage for NNUE/Value Network Training
 
