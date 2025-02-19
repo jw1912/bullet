@@ -2,6 +2,7 @@ pub mod adam;
 pub mod adamw;
 pub mod clip;
 pub mod decay;
+pub mod radam;
 pub mod utils;
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};

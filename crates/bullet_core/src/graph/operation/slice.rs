@@ -47,12 +47,12 @@ pub fn backprop_slice_vector_batched<D: Device>(
         shape.rows()
     );
 
+    let output_shape = Shape::new(end - start, 1);
+
     assert_eq!(input.single_size, shape.size());
-    assert_eq!(input.single_size, output_grad.single_size);
     assert_eq!(input.single_size, input_grad.single_size);
     assert_eq!(input.batch_size, output_grad.batch_size);
-
-    let output_shape = Shape::new(end - start, 1);
+    assert_eq!(output_grad.single_size, output_shape.size());
 
     input_grad.set_batch_size(input.batch_size());
 

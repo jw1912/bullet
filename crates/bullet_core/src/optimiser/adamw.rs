@@ -12,7 +12,7 @@ use super::{
 
 pub type AdamWClip<D> = WeightClipping<WeightDecay<Adam<D>>>;
 
-// The below code exists only for backwards-compatibility
+// The below code exists for backwards-compatibility
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
