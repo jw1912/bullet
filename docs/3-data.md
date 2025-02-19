@@ -1,14 +1,14 @@
 # Training Data
 
 Compile `bullet-utils` with `cargo b -r --package bullet-utils`, run with `./target/release/bullet-utils[.exe] help` to see usage instructions.
-
-Bullet generally functions by ingesting **binary** data formats (not text), so if you have a text format, you will need to convert it.
+These utilities can be used for shuffling and interleaving certain data type files.
 
 ## General Workflow
 
-1. Convert data files from your own format to `BulletFormat` compatible data
-2. Shuffle the individual converted files
-3. Interleave the shuffled files
+1. Store your data in some format (heavily recommended to use a binpack-like format) 
+2. Convert data files from your this format to a data format that `Trainer` can ingest if needed
+3. Shuffle the individual converted files
+4. Interleave the shuffled files
 
 ## Provided Data Types
 
@@ -20,33 +20,23 @@ Each provided binary data type implements `from_raw` which is recommended for us
 Generally speaking, other than getting data in the required format via the methods described below, you won't need to think
 about them at all unless you want to do custom inputs.
 
-### ChessBoard
+### ChessBoard aka "bulletformat"
+
+This data type can be loaded with `DirectSequentialDataLoader`.
 
 This is the standard data format for chess training, it is a fixed 32-byte record, with some spare bytes for storing custom info.
+It throws away information such as the side-to-move (the record is stored stm-relative), halfmove counter, castling rights, etc.
 
-You can convert a [Marlinformat](https://github.com/jnlt3/marlinflow) file.
+You can convert from a [Marlinformat](https://github.com/jnlt3/marlinflow) or text format file using `bullet-utils`.
 
-Additionally, you can convert text format, where
+Text Format:
 - each line is of the form `<FEN> | <score> | <result>`
 - `score` is white relative and in centipawns
 - `result` is white relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
 
-### AtaxxBoard
 
-This is the standard data format for ataxx training.
+### Stockfish & Monty Binpacks
 
-You can convert text format, where
-- each line is of the form `<FEN> | <score> | <result>`
-- `FEN` has 'x'/'r', 'o'/'b' and '-' for red, blue and gaps/blockers, respectively, in the same format as FEN for chess
-- `score` is red relative and an integer
-- `result` is red relative and of the form `1.0` for win, `0.5` for draw, `0.0` for loss
-
-## Custom Data Types
-
-Any type that implements the `BulletFormat` trait can be used in the trainer.
-For example, `MarlinFormat` is implemented in the `bulletformat` crate, so it can be easily used if preferred.
-
-## Custom Data Loading
-
-Your required data type `T: BulletFormat` can be loaded from any file format (e.g. text or binpack) by proiding a custom
-dataloader that implements the `DataLoader<T>` trait.
+These types can be loaded with `SfBinpackLoader` and `MontyBinpackLoader` respectively.
+There are utilities for interleaving Monty binpacks in `bullet-utils`.
+Stockfish contains tools for interleaving its own binpack format.
