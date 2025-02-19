@@ -1,8 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::HashMap, sync::Arc};
 
-use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
+use crate::{device::Device, tensor::DenseMatrix};
 
-use super::{utils, OptimiserState};
+use super::{
+    adam::{Adam, AdamParams},
+    clip::{WeightClipping, WeightClippingParams},
+    decay::{WeightDecay, WeightDecayParams},
+    utils::Placement,
+    OptimiserState,
+};
+
+pub type AdamWClip<D> = WeightClipping<WeightDecay<Adam<D>>>;
+
+// The below code exists for backwards-compatibility
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -19,94 +29,57 @@ impl Default for AdamWParams {
     }
 }
 
+impl From<AdamWParams> for WeightClippingParams<WeightDecayParams<AdamParams>> {
+    fn from(value: AdamWParams) -> Self {
+        WeightClippingParams {
+            inner: WeightDecayParams {
+                inner: AdamParams { beta1: value.beta1, beta2: value.beta2 },
+                decay: value.decay,
+                placement: Placement::Before,
+            },
+            min: value.min_weight,
+            max: value.max_weight,
+            placement: Placement::After,
+        }
+    }
+}
+
 pub struct AdamW<D: Device> {
-    ids: HashSet<String>,
-    momentum: HashMap<String, DenseMatrix<D>>,
-    velocity: HashMap<String, DenseMatrix<D>>,
-    params: HashMap<String, AdamWParams>,
+    inner: AdamWClip<D>,
 }
 
 impl<D: Device> OptimiserState<D> for AdamW<D> {
     type Params = AdamWParams;
 
-    fn new(graph: &Graph<D>, default_params: Self::Params) -> Self {
-        let weight_ids = graph.weight_ids();
-
-        let mut momentum = HashMap::new();
-        let mut velocity = HashMap::new();
-        let mut params = HashMap::new();
-
-        for id in &weight_ids {
-            let w = graph.get_weights(id);
-            assert!(w.values.batch_size().is_none());
-            let size = w.values.size();
-
-            let old = momentum.insert(id.clone(), DenseMatrix::zeroed(graph.device(), size));
-            assert!(old.is_none());
-
-            let old = velocity.insert(id.clone(), DenseMatrix::zeroed(graph.device(), size));
-            assert!(old.is_none());
-
-            let old = params.insert(id.clone(), default_params);
-            assert!(old.is_none());
-        }
-
-        Self { ids: weight_ids.into_iter().collect(), momentum, velocity, params }
+    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Self {
+        Self { inner: AdamWClip::new(device, size, params.into()) }
     }
 
-    fn update_single_weight(
+    fn update(
         &mut self,
         weights: &mut DenseMatrix<D>,
         grads: &mut DenseMatrix<D>,
-        id: &str,
         gradient_factor: f32,
         learning_rate: f32,
     ) {
-        let params = self.params.get(id).unwrap();
-        let momentum = self.momentum.get_mut(id).unwrap();
-        let velocity = self.velocity.get_mut(id).unwrap();
-
-        assert!(weights.batch_size().is_none());
-        assert!(momentum.batch_size().is_none());
-        assert!(velocity.batch_size().is_none());
-        assert_eq!(weights.size(), momentum.size());
-        assert_eq!(weights.size(), velocity.size());
-
-        D::adamw(
-            weights.size(),
-            &mut weights.buf,
-            &grads.buf,
-            &mut momentum.buf,
-            &mut velocity.buf,
-            params.beta1,
-            params.beta2,
-            params.min_weight,
-            params.max_weight,
-            params.decay,
-            gradient_factor,
-            learning_rate,
-        );
+        self.inner.update(weights, grads, gradient_factor, learning_rate);
     }
 
     fn reset(&mut self) {
-        for id in self.ids.iter() {
-            self.momentum.get_mut(id).unwrap().set_zero();
-            self.velocity.get_mut(id).unwrap().set_zero();
-        }
+        self.inner.reset();
     }
 
-    fn write_to_checkpoint(&self, path: &str) {
-        utils::write_weight_hashmap_to_file(&self.momentum, &format!("{path}/momentum.bin"));
-        utils::write_weight_hashmap_to_file(&self.velocity, &format!("{path}/velocity.bin"));
+    fn set_params(&mut self, params: Self::Params) {
+        self.inner.set_params(params.into());
     }
 
-    fn load_from_checkpoint(&mut self, path: &str, old_format: bool) {
-        let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
-        utils::load_weight_hashmap_from_file(&mut self.momentum, &paths[0], old_format);
-        utils::load_weight_hashmap_from_file(&mut self.velocity, &paths[1], old_format);
+    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str, old_format: bool) {
+        let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.inner)).collect();
+        AdamWClip::<D>::load_from_checkpoint(&mut map, path, old_format);
     }
 
-    fn set_params_for_weight(&mut self, id: &str, params: Self::Params) {
-        *self.params.get_mut(id).unwrap() = params;
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) {
+        let map = map.iter().map(|(id, single)| (id.clone(), &single.inner)).collect();
+        AdamWClip::<D>::write_to_checkpoint(&map, path);
     }
 }

@@ -255,7 +255,7 @@ impl Device for ExecutionContext {
         );
     }
 
-    fn adamw(
+    fn adam(
         size: usize,
         params: &mut Self::BufferF32,
         gradient: &Self::BufferF32,
@@ -263,26 +263,11 @@ impl Device for ExecutionContext {
         velocity: &mut Self::BufferF32,
         beta1: f32,
         beta2: f32,
-        min_weight: f32,
-        max_weight: f32,
-        decay: f32,
         gradient_factor: f32,
         learning_rate: f32,
+        denom: bool,
     ) {
-        dense::adamw(
-            size,
-            params,
-            gradient,
-            momentum,
-            velocity,
-            beta1,
-            beta2,
-            min_weight,
-            max_weight,
-            decay,
-            gradient_factor,
-            learning_rate,
-        );
+        dense::adam(size, params, gradient, momentum, velocity, beta1, beta2, gradient_factor, learning_rate, denom);
     }
 
     fn linear_comb_single(
@@ -449,5 +434,9 @@ impl Device for ExecutionContext {
             output_grad,
             input_grad,
         );
+    }
+
+    fn clip(size: usize, params: &mut Self::BufferF32, min: f32, max: f32) {
+        dense::clip(size, params, min, max);
     }
 }
