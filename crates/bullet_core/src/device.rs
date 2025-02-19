@@ -282,7 +282,7 @@ pub trait Device: Sized + 'static {
         input_grad: &mut Self::BufferF32,
     );
 
-    fn adamw(
+    fn adam(
         size: usize,
         params: &mut Self::BufferF32,
         gradient: &Self::BufferF32,
@@ -290,12 +290,12 @@ pub trait Device: Sized + 'static {
         velocity: &mut Self::BufferF32,
         beta1: f32,
         beta2: f32,
-        min_weight: f32,
-        max_weight: f32,
-        decay: f32,
         gradient_factor: f32,
         learning_rate: f32,
+        denom: bool,
     );
+
+    fn clip(size: usize, params: &mut Self::BufferF32, min: f32, max: f32);
 
     fn sparse_to_dense(
         batch_size: usize,

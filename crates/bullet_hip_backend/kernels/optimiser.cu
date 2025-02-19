@@ -5,15 +5,13 @@
 
 constexpr float Epsilon = 0.00000001F;
 
-__global__ void AdamWKernel(
+__global__ void AdamKernel(
     const size_t size,
-    const float decay,
     const float beta1,
     const float beta2,
-    const float minWeight,
-    const float maxWeight,
     const float adj,
     const float rate,
+    const bool denom,
     float* network,
     float* momentum,
     float* velocity,
@@ -25,46 +23,57 @@ __global__ void AdamWKernel(
         return;
 
     const float grad = adj * gradients[i];
-
-    float param = network[i];
-    param *= decay;
-
     momentum[i] = beta1 * momentum[i] + (1.0F - beta1) * grad;
     velocity[i] = beta2 * velocity[i] + (1.0F - beta2) * grad * grad;
 
-    param -= rate * momentum[i] / (sqrt(velocity[i]) + Epsilon);
-    param = min(max(param, minWeight), maxWeight);
-
-    network[i] = param;
+    float val = momentum[i];
+    if (denom)
+        val /= sqrt(velocity[i]) + Epsilon;
+    network[i] -= rate * val;
 }
 
-extern "C" void AdamW(
+__global__ void ClipKernel(const size_t size, float* params, const float min_weight, const float max_weight) {
+    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= size)
+        return;
+
+    params[i] = min(max(params[i], min_weight), max_weight);
+}
+
+extern "C" void Adam(
     const size_t size,
-    const float decay,
     const float beta1,
     const float beta2,
-    const float minWeight,
-    const float maxWeight,
     const float adj,
     const float rate,
+    const bool denom,
     float* network,
     float* momentum,
     float* velocity,
     const float* gradients)
 {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    AdamWKernel<<<numBlocks, threadsPerBlock>>>(
+    AdamKernel<<<numBlocks, threadsPerBlock>>>(
         size,
-        decay,
         beta1,
         beta2,
-        minWeight,
-        maxWeight,
         adj,
         rate,
+        denom,
         network,
         momentum,
         velocity,
         gradients
+    );
+}
+
+extern "C" void Clip(const size_t size, float* params, const float min_weight, const float max_weight) {
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    ClipKernel<<<numBlocks, threadsPerBlock>>>(
+        size,
+        params,
+        min_weight,
+        max_weight
     );
 }

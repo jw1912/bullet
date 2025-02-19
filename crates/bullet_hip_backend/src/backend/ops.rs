@@ -15,7 +15,7 @@ extern "C" {
     pub fn backpropSigmoid(size: usize, output: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn powerError(bufferSize: usize, inputs: *const f32, results: *const f32, output: *mut f32, power: f32);
     pub fn backpropPowerError(bufferSize: usize, inputs: *const f32, results: *const f32, output_grad: *const f32, input_grads: *mut f32, power: f32);
-    pub fn AdamW(size: usize, decay: f32, beta1: f32, beta2: f32, minWeight: f32, maxWeight: f32, adj: f32, rate: f32, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
+    pub fn Adam(size: usize, beta1: f32, beta2: f32, adj: f32, rate: f32, denom: bool, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
     pub fn sparseAffineForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, inputs: *const i32, outputs: *mut f32);
     pub fn sparseAffineBackward(batchSize: usize, maxInputSize: usize, outputSize: usize, weightsGrad: *mut f32, biasesGrad: *mut f32, inputs: *const i32, outputs: *const f32, errors: *const f32);
     pub fn sparseAffineDualForward(batchSize: usize, maxInputSize: usize, outputSize: usize, weights: *const f32, biases: *const f32, stm: *const i32, ntm: *const i32, outputs: *mut f32, activation: i32);
@@ -35,4 +35,5 @@ extern "C" {
     pub fn sparse_mask_backprop(rows: usize, cols: usize, max_active: usize, output_grads: *const f32, masks: *const i32, input_grads: *mut f32);
     pub fn gather(input_rows: usize, output_rows: usize, cols: usize, inputs: *const f32, indices: *const i32, outputs: *mut f32);
     pub fn gather_backprop(input_rows: usize, output_rows: usize, cols: usize, output_grads: *const f32, indices: *const i32, input_grads: *mut f32);
+    pub fn Clip(size: usize, params: *mut f32, min_weight: f32, max_weight: f32);
 }

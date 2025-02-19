@@ -1,4 +1,4 @@
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 
 use crate::device::{Device, DeviceBuffer};
 
@@ -6,6 +6,12 @@ pub struct DenseMatrix<D: Device> {
     pub(crate) buf: D::BufferF32,
     pub(crate) single_size: usize,
     pub(crate) batch_size: Option<NonZeroUsize>,
+}
+
+impl<D: Device> Debug for DenseMatrix<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}x{:?}", self.single_size, self.batch_size)
+    }
 }
 
 impl<D: Device> DenseMatrix<D> {

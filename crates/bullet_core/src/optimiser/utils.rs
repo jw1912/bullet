@@ -1,6 +1,10 @@
-use std::collections::HashMap;
-
 use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Placement {
+    Before,
+    After,
+}
 
 /// Writes the weights of a graph to a file. If `gradients` is true,
 /// it will instead write the gradients of those weights.
@@ -42,13 +46,13 @@ pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str,
 }
 
 /// Write a set of labelled weights from a `HashMap` into a file.
-pub fn write_weight_hashmap_to_file<D: Device>(map: &HashMap<String, DenseMatrix<D>>, path: &str) {
+pub fn write_weights_to_file<D: Device>(map: &[(impl AsRef<str>, &DenseMatrix<D>)], path: &str) {
     use std::{fs::File, io::Write};
 
     let mut buf = Vec::new();
 
     for (id, weights) in map {
-        let this_buf = weights.write_to_byte_buffer(id).unwrap();
+        let this_buf = weights.write_to_byte_buffer(id.as_ref()).unwrap();
         buf.extend_from_slice(&this_buf);
     }
 
@@ -57,11 +61,7 @@ pub fn write_weight_hashmap_to_file<D: Device>(map: &HashMap<String, DenseMatrix
 }
 
 /// Loads a set of labelled weights from a file into a `HashMap`.
-pub fn load_weight_hashmap_from_file<D: Device>(
-    map: &mut HashMap<String, DenseMatrix<D>>,
-    path: &str,
-    old_format: bool,
-) {
+pub fn load_weights_from_file(path: &str, old_format: bool) -> Vec<(String, Vec<f32>)> {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -70,12 +70,15 @@ pub fn load_weight_hashmap_from_file<D: Device>(
 
     let mut offset = 0;
 
+    let mut res = Vec::new();
+
     while offset < buf.len() {
         let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
-        map.get_mut(&id).unwrap().load_from_slice(None, &buffer);
-
+        res.push((id, buffer));
         offset += bytes_read;
     }
+
+    res
 }
 
 /// Reads a matrix from a byte buffer, returning how many bytes were read
