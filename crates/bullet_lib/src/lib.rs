@@ -34,7 +34,7 @@ pub mod nn {
 
         pub type AdamWOptimiser = optimiser::AdamW<ExecutionContext>;
         pub type RAdamOptimiser = clip::WeightClipping<decay::WeightDecay<radam::RAdam<ExecutionContext>>>;
-        pub use optimiser::AdamWParams;
+        pub use optimiser::{AdamWParams, Optimiser};
 
         pub trait OptimiserType: Default {
             type Optimiser: OptimiserState<ExecutionContext>;
