@@ -1,25 +1,25 @@
+use crate::DeviceError;
+
 use super::bindings;
 
-pub unsafe fn catch(status: bindings::cudaError_t, name: &str) {
-    if status != bindings::SUCCESS {
-        panic!("{name}: {status:?}");
-    }
+pub unsafe fn catch(status: bindings::cudaError_t) -> Result<(), DeviceError> {
+    Result::from(status)
 }
 
-pub fn device_synchronise() {
+pub unsafe fn catch_cublas(status: bindings::cublasStatus_t) -> Result<(), DeviceError> {
+    Result::from(status)
+}
+
+pub fn device_synchronise() -> Result<(), DeviceError> {
     // # Safety
     // This function cannot fail without raising an error
     // that will be caught.
-    unsafe {
-        catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
-    }
+    unsafe { catch(bindings::cudaDeviceSynchronize()) }
 }
 
-pub fn panic_if_device_error(msg: &str) {
+pub fn get_last_error() -> Result<(), DeviceError> {
     // # Safety
     // This function cannot fail without raising an error
     // that will be caught.
-    unsafe {
-        catch(bindings::cudaGetLastError(), msg);
-    }
+    unsafe { catch(bindings::cudaGetLastError()) }
 }

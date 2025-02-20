@@ -5,8 +5,16 @@ use std::{
     sync::Arc,
 };
 
-use super::{operation::Operation, Graph};
-use crate::{device::Device, shape::Shape, tensor::Tensor};
+use super::{
+    error::GraphError,
+    operation::{GraphBuilderError, Operation},
+    Graph,
+};
+use crate::{
+    device::{Device, OperationError},
+    shape::Shape,
+    tensor::Tensor,
+};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node {
@@ -43,7 +51,7 @@ impl GraphBuilder {
         &self.nodes[node.idx]
     }
 
-    fn create_node(&mut self, mut data: NodeData, shape: Shape) -> Node {
+    fn create_node(&mut self, mut data: NodeData, shape: Shape) -> Result<Node, GraphBuilderError> {
         if let Some(id) = data.id.as_ref() {
             assert!(self.ids.insert(id.to_string()))
         }
@@ -60,28 +68,28 @@ impl GraphBuilder {
         self.nodes.push(data);
         self.roots.insert(node);
 
-        node
+        Ok(node)
     }
 
-    pub fn create_input(&mut self, id: &str, shape: Shape) -> Node {
+    pub fn create_input(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
         let data = NodeData::new(Some(id.to_string()), None, shape.size(), false);
-        let node = self.create_node(data, shape);
+        let node = self.create_node(data, shape)?;
 
         self.inputs.insert(node);
 
-        node
+        Ok(node)
     }
 
-    pub fn create_weights(&mut self, id: &str, shape: Shape) -> Node {
+    pub fn create_weights(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
         let data = NodeData::new(Some(id.to_string()), None, shape.size(), true);
-        let node = self.create_node(data, shape);
+        let node = self.create_node(data, shape)?;
 
         self.weights.insert(node);
 
-        node
+        Ok(node)
     }
 
-    pub fn create_result_of_operation(&mut self, operation: Operation) -> Node {
+    pub fn create_result_of_operation(&mut self, operation: Operation) -> Result<Node, GraphBuilderError> {
         match operation.output_shape() {
             Ok(shape) => {
                 let data = NodeData::new(None, Some(operation), shape.size(), true);
@@ -96,7 +104,7 @@ impl GraphBuilder {
         *self.roots.iter().next().unwrap()
     }
 
-    pub fn build<D: Device>(self, device: D) -> Graph<D> {
+    pub fn build<D: Device>(self, device: D) -> Result<Graph<D>, GraphError<D::DeviceError>> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
@@ -107,19 +115,19 @@ impl GraphBuilder {
 
         let device = Arc::new(device);
 
-        let nodes = self
-            .nodes
-            .iter()
-            .map(|node_data| {
-                RefCell::new(Tensor::new(
-                    device.clone(),
-                    node_data.size,
-                    node_data.requires_grad,
-                    node_data.parent_operation,
-                    node_data.own,
-                ))
-            })
-            .collect::<Vec<_>>();
+        let mut nodes = Vec::new();
+        for node_data in &self.nodes {
+            let tensor = Tensor::new(
+                device.clone(),
+                node_data.size,
+                node_data.requires_grad,
+                node_data.parent_operation,
+                node_data.own,
+            );
+            let tensor = tensor.map_err(OperationError::from);
+
+            nodes.push(RefCell::new(tensor?));
+        }
 
         let inputs =
             self.inputs.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
@@ -127,6 +135,6 @@ impl GraphBuilder {
         let weights =
             self.weights.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
-        Graph { nodes, root, inputs, weights, device }
+        Ok(Graph { nodes, root, inputs, weights, device })
     }
 }

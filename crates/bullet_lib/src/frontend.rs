@@ -35,12 +35,12 @@ impl NetworkBuilder {
     }
 
     pub fn new_input<'a>(&'a self, id: &str, shape: Shape) -> NetworkBuilderNode<'a> {
-        let node = self.builder().create_input(id, shape);
+        let node = self.builder().create_input(id, shape).unwrap();
         NetworkBuilderNode { node, builder: self }
     }
 
     pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: InitSettings) -> NetworkBuilderNode<'a> {
-        let node = self.builder().create_weights(id, shape);
+        let node = self.builder().create_weights(id, shape).unwrap();
         self.init().insert(id.to_string(), init);
         NetworkBuilderNode { node, builder: self }
     }
@@ -55,20 +55,24 @@ impl NetworkBuilder {
     }
 
     pub fn apply(&self, operation: Operation) -> NetworkBuilderNode {
-        let node = self.builder().create_result_of_operation(operation);
+        let node = self.builder().create_result_of_operation(operation).unwrap();
         NetworkBuilderNode { node, builder: self }
     }
 
     pub fn build(self, execution_context: ExecutionContext) -> Graph<ExecutionContext> {
         let mut builder = self.graph_builder.into_inner().unwrap();
-        builder.create_result_of_operation(Operation::ReduceAcrossBatch(builder.root()));
-        let mut graph = builder.build(execution_context);
+        builder.create_result_of_operation(Operation::ReduceAcrossBatch(builder.root())).unwrap();
+        let mut graph = builder.build(execution_context).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
             match *init_data {
                 InitSettings::Zeroed => {}
-                InitSettings::Normal { mean, stdev } => graph.get_weights_mut(id).seed_random(mean, stdev, true),
-                InitSettings::Uniform { mean, stdev } => graph.get_weights_mut(id).seed_random(mean, stdev, false),
+                InitSettings::Normal { mean, stdev } => {
+                    graph.get_weights_mut(id).seed_random(mean, stdev, true).unwrap()
+                }
+                InitSettings::Uniform { mean, stdev } => {
+                    graph.get_weights_mut(id).seed_random(mean, stdev, false).unwrap()
+                }
             };
         }
 

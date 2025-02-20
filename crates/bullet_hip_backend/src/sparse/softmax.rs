@@ -1,6 +1,9 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::backend::{ops, Buffer};
+use crate::{
+    backend::{ops, Buffer},
+    OperationResult,
+};
 
 pub fn softmax_across_batch_masked(
     batch_size: usize,
@@ -9,7 +12,7 @@ pub fn softmax_across_batch_masked(
     masks: &Buffer<i32>,
     input: &Buffer<f32>,
     output: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     assert!(batch_size * single_size <= input.size());
     assert!(batch_size * nnz <= masks.size());
     assert!(batch_size * nnz <= output.size());
@@ -17,6 +20,8 @@ pub fn softmax_across_batch_masked(
     unsafe {
         ops::softmax_across_columns_masked(nnz, single_size, batch_size, masks.ptr(), input.ptr(), output.mut_ptr());
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -29,13 +34,13 @@ pub fn crossentropy_masked(
     target: &Buffer<f32>,
     output: &mut Buffer<f32>,
     error: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     assert!(batch_size * nnz <= pred.size());
     assert!(batch_size * nnz <= masks.size());
     assert!(batch_size * nnz <= target.size());
     assert!(batch_size <= error.size());
 
-    error.set_zero();
+    error.set_zero()?;
     unsafe {
         ops::crossentropy_masked(
             nnz,
@@ -47,6 +52,8 @@ pub fn crossentropy_masked(
             error.mut_ptr(),
         );
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -59,7 +66,7 @@ pub fn backprop_softmax_crossentropy_masked(
     target: &Buffer<f32>,
     output_grad: &Buffer<f32>,
     input_grad: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     assert!(batch_size * single_size <= input_grad.size());
     assert!(batch_size * nnz <= softmaxed.size());
     assert!(batch_size * nnz <= masks.size());
@@ -78,4 +85,6 @@ pub fn backprop_softmax_crossentropy_masked(
             input_grad.mut_ptr(),
         );
     }
+
+    Ok(())
 }

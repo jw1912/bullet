@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use bullet_core::device::DeviceBuffer;
 
+use crate::DeviceError;
+
 use super::ExecutionContext;
 
 /// # Safety
@@ -21,7 +23,7 @@ pub struct Buffer<T: ValidType> {
 impl<T: ValidType> Drop for Buffer<T> {
     fn drop(&mut self) {
         unsafe {
-            util::free(self.ptr, self.size);
+            util::free(self.ptr, self.size).unwrap();
         }
     }
 }
@@ -38,8 +40,8 @@ impl<T: ValidType> Buffer<T> {
 
 impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
     /// Creates a new **zeroed** buffer with the given number of elements.
-    fn new(ctx: Arc<ExecutionContext>, size: usize) -> Self {
-        Self { size, ptr: unsafe { util::calloc(size) }, ctx }
+    fn new(ctx: Arc<ExecutionContext>, size: usize) -> Result<Self, DeviceError> {
+        Ok(Self { size, ptr: unsafe { util::calloc(size) }?, ctx })
     }
 
     fn device(&self) -> Arc<ExecutionContext> {
@@ -50,40 +52,34 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
         self.size
     }
 
-    fn set_zero(&mut self) {
-        unsafe {
-            util::set_zero(self.ptr, self.size);
-        }
+    fn set_zero(&mut self) -> Result<(), DeviceError> {
+        unsafe { util::set_zero(self.ptr, self.size) }
     }
 
-    fn load_from_device(&mut self, buf: &Self, bytes: usize) {
+    fn load_from_device(&mut self, buf: &Self, bytes: usize) -> Result<(), DeviceError> {
         assert!(bytes <= buf.size);
         assert!(bytes <= self.size, "Overflow: {} > {}!", buf.size, self.size);
-        unsafe {
-            util::copy_on_device(self.ptr, buf.ptr, bytes);
-        }
+        unsafe { util::copy_on_device(self.ptr, buf.ptr, bytes) }
     }
 
-    fn load_from_slice(&mut self, buf: &[T]) {
+    fn load_from_slice(&mut self, buf: &[T]) -> Result<(), DeviceError> {
         assert!(buf.len() <= self.size, "Overflow!");
-        unsafe {
-            util::copy_to_device(self.ptr, buf.as_ptr(), buf.len());
-        }
+        unsafe { util::copy_to_device(self.ptr, buf.as_ptr(), buf.len()) }
     }
 
-    fn write_into_slice(&self, buf: &mut [T], bytes: usize) {
+    fn write_into_slice(&self, buf: &mut [T], bytes: usize) -> Result<(), DeviceError> {
         assert!(bytes <= self.size, "Overflow!");
-        unsafe {
-            util::copy_from_device(buf.as_mut_ptr(), self.ptr, bytes);
-        }
+        unsafe { util::copy_from_device(buf.as_mut_ptr(), self.ptr, bytes) }
     }
 }
 
 mod util {
+    use crate::DeviceError;
+
     use super::super::{bindings, util::catch};
     use std::ffi::c_void;
 
-    fn malloc<T>(num: usize) -> *mut T {
+    fn malloc<T>(num: usize) -> Result<*mut T, DeviceError> {
         let size = num * std::mem::size_of::<T>();
         let mut grad = std::ptr::null_mut::<T>();
         let grad_ptr = (&mut grad) as *mut *mut T;
@@ -91,55 +87,55 @@ mod util {
         assert!(!grad_ptr.is_null(), "null pointer");
 
         unsafe {
-            catch(bindings::cudaMalloc(grad_ptr.cast(), size), "Malloc");
-            catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
+            catch(bindings::cudaMalloc(grad_ptr.cast(), size))?;
+            catch(bindings::cudaDeviceSynchronize())?;
         }
 
-        grad
+        Ok(grad)
     }
 
     /// ### Safety
     /// Need to make sure not to double free.
-    pub unsafe fn free<T>(ptr: *mut T, _: usize) {
-        catch(bindings::cudaFree(ptr.cast()), "Free");
+    pub unsafe fn free<T>(ptr: *mut T, _: usize) -> Result<(), DeviceError> {
+        catch(bindings::cudaFree(ptr.cast()))
     }
 
     /// ### Safety
     /// Type needs to be zeroable.
-    pub unsafe fn calloc<T>(num: usize) -> *mut T {
+    pub unsafe fn calloc<T>(num: usize) -> Result<*mut T, DeviceError> {
         let size = num * std::mem::size_of::<T>();
-        let grad = malloc(num);
-        catch(bindings::cudaMemset(grad as *mut c_void, 0, size), "Memset");
-        catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
+        let grad = malloc(num)?;
+        catch(bindings::cudaMemset(grad as *mut c_void, 0, size))?;
+        catch(bindings::cudaDeviceSynchronize())?;
 
-        grad
+        Ok(grad)
     }
 
     /// ### Safety
     /// Type needs to be zeroable.
-    pub unsafe fn set_zero<T>(ptr: *mut T, num: usize) {
-        catch(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()), "memset");
-        catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
+    pub unsafe fn set_zero<T>(ptr: *mut T, num: usize) -> Result<(), DeviceError> {
+        catch(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()))?;
+        catch(bindings::cudaDeviceSynchronize())
     }
 
     /// # Safety
     /// Pointers need to be valid and `amt` need to be valid.
-    pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) {
-        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::H2D), "Memcpy");
-        catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
+    pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) -> Result<(), DeviceError> {
+        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::H2D))?;
+        catch(bindings::cudaDeviceSynchronize())
     }
 
     /// # Safety
     /// Pointers need to be valid and `amt` need to be valid.
-    pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) {
-        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::D2H), "Memcpy");
-        catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
+    pub unsafe fn copy_from_device<T>(dest: *mut T, src: *const T, amt: usize) -> Result<(), DeviceError> {
+        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::D2H))?;
+        catch(bindings::cudaDeviceSynchronize())
     }
 
     /// # Safety
     /// Pointers need to be valid and `amt` need to be valid.
-    pub unsafe fn copy_on_device<T>(dest: *mut T, src: *const T, amt: usize) {
-        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::D2D), "Memcpy");
-        catch(bindings::cudaDeviceSynchronize(), "DeviceSynchronize");
+    pub unsafe fn copy_on_device<T>(dest: *mut T, src: *const T, amt: usize) -> Result<(), DeviceError> {
+        catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::D2D))?;
+        catch(bindings::cudaDeviceSynchronize())
     }
 }

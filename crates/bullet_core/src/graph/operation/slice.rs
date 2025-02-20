@@ -1,4 +1,8 @@
-use crate::{device::Device, shape::Shape, tensor::DenseMatrix};
+use crate::{
+    device::{Device, OperationError},
+    shape::Shape,
+    tensor::DenseMatrix,
+};
 
 pub fn slice_vector_batched<D: Device>(
     shape: Shape,
@@ -6,7 +10,7 @@ pub fn slice_vector_batched<D: Device>(
     start: usize,
     end: usize,
     output: &mut DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(shape.cols(), 1);
     assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");
     assert!(
@@ -16,7 +20,7 @@ pub fn slice_vector_batched<D: Device>(
     );
 
     let output_shape = Shape::new(end - start, 1);
-    output.set_batch_size(input.batch_size());
+    output.set_batch_size(input.batch_size())?;
 
     D::copy_or_add_strided(
         output_shape.rows(),
@@ -28,7 +32,7 @@ pub fn slice_vector_batched<D: Device>(
         0,
         output_shape.rows(),
         false,
-    );
+    )
 }
 
 pub fn backprop_slice_vector_batched<D: Device>(
@@ -38,7 +42,7 @@ pub fn backprop_slice_vector_batched<D: Device>(
     start: usize,
     end: usize,
     output_grad: &DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(shape.cols(), 1);
     assert!(end > start, "Invalid slice indices! end = {end} > start = {start}");
     assert!(
@@ -54,7 +58,7 @@ pub fn backprop_slice_vector_batched<D: Device>(
     assert_eq!(input.batch_size, output_grad.batch_size);
     assert_eq!(output_grad.single_size, output_shape.size());
 
-    input_grad.set_batch_size(input.batch_size());
+    input_grad.set_batch_size(input.batch_size())?;
 
     D::copy_or_add_strided(
         output_shape.rows(),
@@ -66,5 +70,5 @@ pub fn backprop_slice_vector_batched<D: Device>(
         start,
         shape.rows(),
         true,
-    );
+    )
 }

@@ -1,6 +1,9 @@
-use bullet_core::device::DeviceBuffer;
+use bullet_core::device::{DeviceBuffer, OperationError};
 
-use crate::backend::{ops, Buffer};
+use crate::{
+    backend::{ops, Buffer},
+    OperationResult,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn adam(
@@ -14,11 +17,10 @@ pub fn adam(
     gradient_factor: f32,
     learning_rate: f32,
     denom: bool,
-) {
-    assert!(size <= params.size());
-    assert!(size <= gradient.size());
-    assert!(size <= momentum.size());
-    assert!(size <= velocity.size());
+) -> OperationResult {
+    if size > params.size() || size > gradient.size() || size > momentum.size() || size > velocity.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
         ops::Adam(
@@ -34,12 +36,18 @@ pub fn adam(
             gradient.ptr(),
         );
     }
+
+    Ok(())
 }
 
-pub fn clip(size: usize, params: &mut Buffer<f32>, min: f32, max: f32) {
-    assert!(size <= params.size());
+pub fn clip(size: usize, params: &mut Buffer<f32>, min: f32, max: f32) -> OperationResult {
+    if size > params.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
         ops::Clip(size, params.mut_ptr(), min, max);
     }
+
+    Ok(())
 }

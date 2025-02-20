@@ -1,6 +1,9 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::backend::{ops, Buffer};
+use crate::{
+    backend::{ops, Buffer},
+    OperationResult,
+};
 
 pub fn select(
     batch_size: usize,
@@ -9,7 +12,7 @@ pub fn select(
     input: &Buffer<f32>,
     indices: &Buffer<i32>,
     output: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     assert!(batch_size * input_size <= input.size());
     assert!(batch_size <= indices.size());
     assert!(batch_size * output_size <= output.size());
@@ -17,6 +20,8 @@ pub fn select(
     unsafe {
         ops::selectForward(batch_size, input_size, output_size, indices.ptr(), input.ptr(), output.mut_ptr());
     }
+
+    Ok(())
 }
 
 pub fn select_backprop(
@@ -26,7 +31,7 @@ pub fn select_backprop(
     indices: &Buffer<i32>,
     output_grad: &Buffer<f32>,
     input_grad: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     assert!(batch_size * input_size <= input_grad.size());
     assert!(batch_size <= indices.size());
     assert!(batch_size * output_size <= output_grad.size());
@@ -41,4 +46,6 @@ pub fn select_backprop(
             input_grad.mut_ptr(),
         );
     }
+
+    Ok(())
 }

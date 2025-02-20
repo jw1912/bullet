@@ -1,5 +1,5 @@
 use crate::{
-    device::Device,
+    device::{Device, OperationError},
     shape::Shape,
     tensor::{DenseMatrix, SparseMatrix},
 };
@@ -17,7 +17,7 @@ pub fn sparse_affine_dual<D: Device>(
     b_shape: Shape,
     output: &mut DenseMatrix<D>,
     activation: Activation,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     assert!(w.batch_size().is_none());
     assert!(b.batch_size().is_none());
     assert_eq!(s.batch_size(), n.batch_size());
@@ -27,7 +27,7 @@ pub fn sparse_affine_dual<D: Device>(
     assert_eq!(s_shape.size(), n.single_size());
     assert_eq!(b_shape.size(), b.single_size());
 
-    output.set_batch_size(s.batch_size());
+    output.set_batch_size(s.batch_size())?;
 
     D::sparse_affine_dual_activate(
         s.batch_size().unwrap_or(1),
@@ -40,7 +40,7 @@ pub fn sparse_affine_dual<D: Device>(
         &b.buf,
         &mut output.buf,
         activation,
-    );
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -57,7 +57,7 @@ pub fn backprop_sparse_affine_dual_activate<D: Device>(
     output: &DenseMatrix<D>,
     output_grad: &DenseMatrix<D>,
     activation: Activation,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     assert!(w.batch_size().is_none());
     assert!(b.batch_size().is_none());
     assert_eq!(s.batch_size(), n.batch_size());
@@ -85,6 +85,8 @@ pub fn backprop_sparse_affine_dual_activate<D: Device>(
             &output.buf,
             &output_grad.buf,
             activation,
-        );
+        )?;
     }
+
+    Ok(())
 }

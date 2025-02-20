@@ -14,7 +14,7 @@ macro_rules! make_tests {
         $(
             #[test]
             fn $id() {
-                tests::$id($dev);
+                tests::$id($dev).unwrap()
             }
         )+
     };

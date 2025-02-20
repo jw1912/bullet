@@ -1,6 +1,12 @@
-use bullet_core::{device::DeviceBuffer, shape::Shape};
+use bullet_core::{
+    device::{DeviceBuffer, OperationError},
+    shape::Shape,
+};
 
-use crate::backend::{ops, Buffer};
+use crate::{
+    backend::{ops, Buffer},
+    OperationResult,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn sparse_affine(
@@ -12,15 +18,20 @@ pub fn sparse_affine(
     nnz: usize,
     input_c: Option<&Buffer<f32>>,
     output: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     let shape_o = shape_a * shape_b;
 
-    assert!(shape_a.size() <= input_a.size());
-    assert!(batch_size * nnz <= input_b.size());
-    assert!(batch_size * shape_o.size() <= output.size());
+    if shape_a.size() > input_a.size()
+        || batch_size * nnz > input_b.size()
+        || batch_size * shape_o.size() > output.size()
+    {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     if let Some(c) = input_c {
-        assert!(shape_o.size() <= c.size());
+        if shape_o.size() > c.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
     }
 
     unsafe {
@@ -34,6 +45,8 @@ pub fn sparse_affine(
             output.mut_ptr(),
         );
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -49,18 +62,29 @@ pub fn backprop_sparse_affine(
     input_c_grad: Option<&mut Buffer<f32>>,
     outputs: &Buffer<f32>,
     output_grad: &Buffer<f32>,
-) {
+) -> OperationResult {
     let shape_o = shape_a * shape_b;
 
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(shape_o.cols(), 1);
-    assert!(shape_a.size() <= input_a.size());
-    assert!(shape_a.size() <= input_a_grad.size());
-    assert!(batch_size * nnz <= input_b.size());
-    assert!(batch_size * shape_o.size() <= outputs.size());
-    assert!(batch_size * shape_o.size() <= output_grad.size());
+    if shape_a.size() > input_a.size()
+        || shape_a.size() > input_a_grad.size()
+        || batch_size * nnz > input_b.size()
+        || batch_size * shape_o.size() > outputs.size()
+        || batch_size * shape_o.size() > output_grad.size()
+    {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
-    let c_ptr = if let Some(grad) = input_c_grad { grad.mut_ptr() } else { std::ptr::null_mut() };
+    let c_ptr = if let Some(grad) = input_c_grad {
+        if shape_o.size() > grad.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        grad.mut_ptr()
+    } else {
+        std::ptr::null_mut()
+    };
 
     unsafe {
         ops::sparseAffineBackward(
@@ -74,4 +98,6 @@ pub fn backprop_sparse_affine(
             output_grad.ptr(),
         );
     }
+
+    Ok(())
 }

@@ -28,7 +28,11 @@ pub fn write_graph_weights_to_file<D: Device>(graph: &Graph<D>, path: &str) {
 
 /// Loads the weights of a graph from a file. If `gradients` is true,
 /// it will instead load the gradients of those weights.
-pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str, old_format: bool) {
+pub fn load_graph_weights_from_file<D: Device>(
+    graph: &mut Graph<D>,
+    path: &str,
+    old_format: bool,
+) -> Result<(), D::DeviceError> {
     use std::{fs::File, io::Read};
 
     let mut buf = Vec::new();
@@ -39,14 +43,19 @@ pub fn load_graph_weights_from_file<D: Device>(graph: &mut Graph<D>, path: &str,
 
     while offset < buf.len() {
         let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
-        graph.get_weights_mut(&id).load_dense_from_slice(None, &buffer);
+        graph.get_weights_mut(&id).load_dense_from_slice(None, &buffer)?;
 
         offset += bytes_read;
     }
+
+    Ok(())
 }
 
 /// Write a set of labelled weights from a `HashMap` into a file.
-pub fn write_weights_to_file<D: Device>(map: &[(impl AsRef<str>, &DenseMatrix<D>)], path: &str) {
+pub fn write_weights_to_file<D: Device>(
+    map: &[(impl AsRef<str>, &DenseMatrix<D>)],
+    path: &str,
+) -> Result<(), D::DeviceError> {
     use std::{fs::File, io::Write};
 
     let mut buf = Vec::new();
@@ -58,6 +67,8 @@ pub fn write_weights_to_file<D: Device>(map: &[(impl AsRef<str>, &DenseMatrix<D>
 
     let mut file = File::create(path).unwrap();
     file.write_all(&buf).unwrap();
+
+    Ok(())
 }
 
 /// Loads a set of labelled weights from a file into a `HashMap`.

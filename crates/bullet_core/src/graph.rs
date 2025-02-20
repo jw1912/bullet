@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod error;
 pub mod operation;
 pub mod tests;
 
@@ -6,7 +7,10 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use builder::Node;
 
-use crate::{device::Device, tensor::Tensor};
+use crate::{
+    device::{Device, OperationError},
+    tensor::Tensor,
+};
 
 pub struct Graph<D: Device> {
     nodes: Vec<RefCell<Tensor<D>>>,
@@ -17,28 +21,32 @@ pub struct Graph<D: Device> {
 }
 
 impl<D: Device> Graph<D> {
-    pub fn forward(&mut self) -> f32 {
+    pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
         for node in 0..self.nodes.len() {
             let node = { self.nodes[node].borrow().own };
-            self.forward_node(node);
+            self.forward_node(node)?;
         }
 
-        self.nodes[self.root.idx].borrow().get_scalar().unwrap()
+        Ok(self.nodes[self.root.idx].borrow().get_scalar().unwrap())
     }
 
-    pub fn backward(&mut self) {
-        self.nodes[self.root.idx].get_mut().set_grad_to_unit();
+    pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
+        self.nodes[self.root.idx].get_mut().set_grad_to_unit()?;
 
         for node in (0..self.nodes.len()).rev() {
             let node = { self.nodes[node].borrow().own };
-            self.backward_node(node);
+            self.backward_node(node)?;
         }
+
+        Ok(())
     }
 
-    pub fn zero_grads(&mut self) {
+    pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
         for node in &mut self.nodes {
-            node.get_mut().zero_grad();
+            node.get_mut().zero_grad()?;
         }
+
+        Ok(())
     }
 
     pub fn input_ids(&self) -> Vec<String> {
@@ -79,12 +87,12 @@ impl<D: Device> Graph<D> {
         total
     }
 
-    pub fn synchronise(&self) {
-        self.device.synchronise();
+    pub fn synchronise(&self) -> Result<(), D::DeviceError> {
+        self.device.synchronise()
     }
 
-    pub fn panic_if_device_error(&self, msg: &str) {
-        self.device.panic_if_device_error(msg);
+    pub fn get_last_device_error(&self) -> Result<(), D::DeviceError> {
+        self.device.get_last_device_error()
     }
 
     pub fn device(&self) -> Arc<D> {

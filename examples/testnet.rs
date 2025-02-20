@@ -23,7 +23,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    trainer.optimiser_mut().load_from_old_format_checkpoint("checkpoints/testnet/optimiser_state");
+    trainer.optimiser_mut().load_from_old_format_checkpoint("checkpoints/testnet/optimiser_state").unwrap();
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),

@@ -2,7 +2,9 @@
 
 use std::ffi::c_int;
 
-use super::bindings::{self, CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_SUCCESS};
+use crate::backend::bindings::cublasStatus_t;
+
+use super::bindings::{self, CUBLAS_OP_N, CUBLAS_OP_T};
 
 use super::ExecutionContext;
 
@@ -20,7 +22,7 @@ pub unsafe fn sgemm(
     output_rows: usize,
     output_cols: usize,
     increment: bool,
-) {
+) -> cublasStatus_t {
     let alpha = 1.0;
     let beta = f32::from(increment);
 
@@ -48,13 +50,11 @@ pub unsafe fn sgemm(
     let ldb = input_b_rows as c_int;
     let ldo = output_rows as c_int;
 
-    let status = unsafe {
+    unsafe {
         bindings::cublasSgemm_v2(
             ctx.cublas, trans_a, trans_b, m, n, k, &alpha, input_a, lda, input_b, ldb, &beta, output, ldo,
         )
-    };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+    }
 }
 
 pub unsafe fn batched_sgemm(
@@ -72,7 +72,7 @@ pub unsafe fn batched_sgemm(
     output_rows: usize,
     output_cols: usize,
     increment: bool,
-) {
+) -> cublasStatus_t {
     let alpha = 1.0;
     let beta = f32::from(increment);
 
@@ -104,7 +104,7 @@ pub unsafe fn batched_sgemm(
     let stride_b = (input_b_rows * input_b_cols) as i64;
     let stride_o = (output_rows * output_cols) as i64;
 
-    let status = unsafe {
+    unsafe {
         bindings::cublasSgemmStridedBatched(
             ctx.cublas,
             trans_a,
@@ -125,9 +125,7 @@ pub unsafe fn batched_sgemm(
             stride_o,
             batch_size as i32,
         )
-    };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS sgemm failed!");
+    }
 }
 
 /// If `input_a = None` then it takes `input_a = output` (in-place operation).
@@ -140,7 +138,7 @@ pub unsafe fn linear_comb_matrices(
     beta: f32,
     input_b: *const f32,
     output: *mut f32,
-) {
+) -> cublasStatus_t {
     let m = rows as c_int;
     let n = cols as c_int;
 
@@ -148,7 +146,7 @@ pub unsafe fn linear_comb_matrices(
     let ldb = rows as c_int;
     let ldc = rows as c_int;
 
-    let status = unsafe {
+    unsafe {
         bindings::cublasSgeam(
             ctx.cublas,
             CUBLAS_OP_N,
@@ -164,9 +162,7 @@ pub unsafe fn linear_comb_matrices(
             output,
             ldc,
         )
-    };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemm failed!");
+    }
 }
 
 pub unsafe fn reduce_add_cols(
@@ -178,7 +174,7 @@ pub unsafe fn reduce_add_cols(
     output: *mut f32,
     alpha: f32,
     increment: bool,
-) {
+) -> cublasStatus_t {
     let beta = f32::from(increment);
 
     let m = rows as c_int;
@@ -187,11 +183,7 @@ pub unsafe fn reduce_add_cols(
     let lda = rows as c_int;
     let inc = 1;
 
-    let status = unsafe {
-        bindings::cublasSgemv_v2(ctx.cublas, CUBLAS_OP_N, m, n, &alpha, input, lda, ones, inc, &beta, output, 1)
-    };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemv failed!");
+    unsafe { bindings::cublasSgemv_v2(ctx.cublas, CUBLAS_OP_N, m, n, &alpha, input, lda, ones, inc, &beta, output, 1) }
 }
 
 pub unsafe fn copy_strided(
@@ -203,7 +195,7 @@ pub unsafe fn copy_strided(
     output_stride: usize,
     output: *mut f32,
     increment: bool,
-) {
+) -> cublasStatus_t {
     let alpha = 1.0;
     let beta = f32::from(increment);
 
@@ -215,7 +207,7 @@ pub unsafe fn copy_strided(
 
     let (ldb, bptr) = if increment { (ldc, output) } else { (rows as c_int, std::ptr::null_mut()) };
 
-    let status = unsafe {
+    unsafe {
         bindings::cublasSgeam(
             ctx.cublas,
             CUBLAS_OP_N,
@@ -231,9 +223,7 @@ pub unsafe fn copy_strided(
             output,
             ldc,
         )
-    };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sgemm failed!");
+    }
 }
 
 pub unsafe fn add_vector_to_matrix_columns(
@@ -244,14 +234,12 @@ pub unsafe fn add_vector_to_matrix_columns(
     ones: *const f32,
     vector: *const f32,
     matrix: *mut f32,
-) {
+) -> cublasStatus_t {
     let m = rows as c_int;
     let n = cols as c_int;
 
     let lda = rows as c_int;
     let inc = 1;
 
-    let status = unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) };
-
-    assert_eq!(status, CUBLAS_SUCCESS, "cuBLAS Sger failed!");
+    unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) }
 }

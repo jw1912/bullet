@@ -1,5 +1,5 @@
 use crate::{
-    device::Device,
+    device::{Device, OperationError},
     shape::Shape,
     tensor::{DenseMatrix, Matrix, Tensor},
 };
@@ -13,7 +13,7 @@ pub fn affine<D: Device>(
     shape_b: Shape,
     c: Option<(&DenseMatrix<D>, &D::BufferF32, Shape)>,
     out: &mut DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     let output_shape = shape_a * shape_b;
     if let Some((c, _, shape)) = c {
         assert_eq!(output_shape.size(), c.single_size());
@@ -23,11 +23,11 @@ pub fn affine<D: Device>(
 
     match &b.values {
         Matrix::Dense(dense) => {
-            matmul(a, shape_a, false, dense, shape_b, false, out);
+            matmul(a, shape_a, false, dense, shape_b, false, out)?;
 
             if let Some((c, ones, _)) = c {
                 let bs = out.batch_size().unwrap_or(1);
-                D::add_assign_single_to_batched_scaled(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf);
+                D::add_assign_single_to_batched_scaled(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf)?;
             }
         }
         Matrix::Sparse(sparse) => {
@@ -37,7 +37,7 @@ pub fn affine<D: Device>(
             assert!(a.batch_size().is_none());
 
             let bs = sparse.batch_size();
-            out.set_batch_size(bs);
+            out.set_batch_size(bs)?;
 
             D::sparse_affine(
                 bs.unwrap_or(1),
@@ -48,9 +48,11 @@ pub fn affine<D: Device>(
                 sparse.nnz,
                 c.map(|x| &x.0.buf),
                 &mut out.buf,
-            );
+            )?;
         }
     }
+
+    Ok(())
 }
 
 pub fn backprop_affine<D: Device>(
@@ -61,7 +63,7 @@ pub fn backprop_affine<D: Device>(
     c: Option<(&mut Tensor<D>, &D::BufferF32)>,
     output: &DenseMatrix<D>,
     output_grad: &DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     let output_shape = shape_a * shape_b;
     if let Some((c, _)) = &c {
         assert_eq!(output_shape.size(), c.values.single_size());
@@ -80,11 +82,11 @@ pub fn backprop_affine<D: Device>(
                 shape_b,
                 false,
                 output_grad,
-            );
+            )?;
 
             if let Some((c, ones)) = c {
                 if let Some(grad) = c.gradients.as_mut() {
-                    backprop_add_single_scaled(ones, 1.0, c.values.dense(), grad, output_grad);
+                    backprop_add_single_scaled(ones, 1.0, c.values.dense(), grad, output_grad)?;
                 }
             }
         }
@@ -119,14 +121,16 @@ pub fn backprop_affine<D: Device>(
                     cgrd,
                     &output.buf,
                     &output_grad.buf,
-                );
+                )?;
             } else if let Some((c, ones)) = c {
                 if let Some(grad) = c.gradients.as_mut() {
-                    backprop_add_single_scaled(ones, 1.0, c.values.dense(), grad, output_grad);
+                    backprop_add_single_scaled(ones, 1.0, c.values.dense(), grad, output_grad)?;
                 }
             }
         }
     }
+
+    Ok(())
 }
 
 pub fn matmul<D: Device>(
@@ -137,31 +141,31 @@ pub fn matmul<D: Device>(
     shape_b: Shape,
     trans_b: bool,
     output: &mut DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     let output_shape = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
     assert_eq!(output_shape.size(), output.single_size());
 
     match (input_a.batch_size(), input_b.batch_size()) {
         (Some(x), Some(y)) => {
             assert_eq!(x, y);
-            output.set_batch_size(Some(x));
+            output.set_batch_size(Some(x))?;
             D::sgemm_batched(x, &input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
         (None, None) => {
-            output.set_batch_size(None);
-            D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false);
+            output.set_batch_size(None)?;
+            D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
         (None, Some(x)) => {
             if trans_b || shape_b.cols() > 1 {
                 println!("{trans_b}, {shape_b}");
-                unimplemented!()
+                return Err(OperationError::UnsupportedOperation);
             }
 
             let shape_b = Shape::new(shape_b.rows(), x);
-            output.set_batch_size(Some(x));
-            D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false);
+            output.set_batch_size(Some(x))?;
+            D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
-        (Some(_), None) => unimplemented!(),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
 }
 
@@ -176,7 +180,7 @@ pub fn backprop_matmul<D: Device>(
     shape_b: Shape,
     trans_b: bool,
     output_grad: &DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     match (input_a.batch_size(), input_b.batch_size()) {
         (Some(x), Some(y)) => {
             assert_eq!(x, y);
@@ -190,21 +194,19 @@ pub fn backprop_matmul<D: Device>(
                 shape_b,
                 trans_b,
                 output_grad,
-            );
+            )
         }
-        (None, None) => {
-            backprop_single_matmul(
-                input_a,
-                shape_a,
-                input_a_grad,
-                trans_a,
-                input_b,
-                shape_b,
-                input_b_grad,
-                trans_b,
-                output_grad,
-            );
-        }
+        (None, None) => backprop_single_matmul(
+            input_a,
+            shape_a,
+            input_a_grad,
+            trans_a,
+            input_b,
+            shape_b,
+            input_b_grad,
+            trans_b,
+            output_grad,
+        ),
         (None, Some(x)) => {
             if trans_b || shape_b.cols() > 1 {
                 unimplemented!()
@@ -221,9 +223,9 @@ pub fn backprop_matmul<D: Device>(
                 input_b_grad,
                 trans_b,
                 output_grad,
-            );
+            )
         }
-        (Some(_), None) => unimplemented!(),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
 }
 
@@ -238,26 +240,28 @@ fn backprop_single_matmul<D: Device>(
     input_b_grad: Option<&mut DenseMatrix<D>>,
     trans_b: bool,
     output_grad: &DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
     if let Some(grad_a) = input_a_grad {
-        grad_a.set_batch_size(input_a.batch_size());
+        grad_a.set_batch_size(input_a.batch_size())?;
         if trans_a {
-            D::sgemm(&input_b.buf, shape_b, trans_b, &output_grad.buf, shape_o, true, &mut grad_a.buf, true);
+            D::sgemm(&input_b.buf, shape_b, trans_b, &output_grad.buf, shape_o, true, &mut grad_a.buf, true)?;
         } else {
-            D::sgemm(&output_grad.buf, shape_o, false, &input_b.buf, shape_b, !trans_b, &mut grad_a.buf, true);
+            D::sgemm(&output_grad.buf, shape_o, false, &input_b.buf, shape_b, !trans_b, &mut grad_a.buf, true)?;
         }
     }
 
     if let Some(grad_b) = input_b_grad {
-        grad_b.set_batch_size(input_b.batch_size());
+        grad_b.set_batch_size(input_b.batch_size())?;
         if trans_b {
-            D::sgemm(&output_grad.buf, shape_o, true, &input_a.buf, shape_a, trans_a, &mut grad_b.buf, true);
+            D::sgemm(&output_grad.buf, shape_o, true, &input_a.buf, shape_a, trans_a, &mut grad_b.buf, true)?;
         } else {
-            D::sgemm(&input_a.buf, shape_a, !trans_a, &output_grad.buf, shape_o, false, &mut grad_b.buf, true);
+            D::sgemm(&input_a.buf, shape_a, !trans_a, &output_grad.buf, shape_o, false, &mut grad_b.buf, true)?;
         }
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -271,7 +275,7 @@ fn backprop_batched_matmul<D: Device>(
     shape_b: Shape,
     trans_b: bool,
     output_grad: &DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
     assert_eq!(output_grad.single_size(), shape_o.size());
     assert_eq!(input_a.batch_size(), input_b.batch_size());
@@ -280,7 +284,7 @@ fn backprop_batched_matmul<D: Device>(
     let bs = input_a.batch_size().unwrap_or(1);
 
     if let Some(grad_a) = input_a_grad {
-        grad_a.set_batch_size(input_a.batch_size());
+        grad_a.set_batch_size(input_a.batch_size())?;
         if trans_a {
             D::sgemm_batched(
                 bs,
@@ -292,7 +296,7 @@ fn backprop_batched_matmul<D: Device>(
                 true,
                 &mut grad_a.buf,
                 true,
-            );
+            )?;
         } else {
             D::sgemm_batched(
                 bs,
@@ -304,12 +308,12 @@ fn backprop_batched_matmul<D: Device>(
                 !trans_b,
                 &mut grad_a.buf,
                 true,
-            );
+            )?;
         }
     }
 
     if let Some(grad_b) = input_b_grad {
-        grad_b.set_batch_size(input_b.batch_size());
+        grad_b.set_batch_size(input_b.batch_size())?;
         if trans_b {
             D::sgemm_batched(
                 bs,
@@ -321,7 +325,7 @@ fn backprop_batched_matmul<D: Device>(
                 trans_a,
                 &mut grad_b.buf,
                 true,
-            );
+            )?;
         } else {
             D::sgemm_batched(
                 bs,
@@ -333,7 +337,9 @@ fn backprop_batched_matmul<D: Device>(
                 false,
                 &mut grad_b.buf,
                 true,
-            );
+            )?;
         }
     }
+
+    Ok(())
 }

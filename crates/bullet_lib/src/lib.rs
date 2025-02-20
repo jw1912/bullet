@@ -25,7 +25,7 @@ pub mod nn {
         graph::{builder::Node, operation::Activation},
         shape::Shape,
     };
-    pub use bullet_hip_backend::ExecutionContext;
+    pub use bullet_hip_backend::{DeviceError, ExecutionContext};
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 
     pub mod optimiser {

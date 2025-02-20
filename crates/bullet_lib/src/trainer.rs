@@ -29,17 +29,31 @@ pub trait NetworkTrainer {
     /// Trains for a single step on a batch that has been previously
     /// loaded using `load_batch`.
     fn train_on_batch(&mut self, gf: f32, lr: f32) -> f32 {
-        self.optimiser().graph.synchronise();
-        self.optimiser_mut().graph.zero_grads();
+        self.optimiser().graph.synchronise().unwrap();
+        self.optimiser_mut().graph.zero_grads().unwrap();
 
-        let error = self.optimiser_mut().graph.forward();
+        let error = match self.optimiser_mut().graph.forward() {
+            Ok(error) => error,
+            Err(e) => {
+                println!();
+                println!("An unrecoverable error occurred:");
+                println!("{e}");
+                std::process::exit(1);
+            }
+        };
 
-        self.optimiser_mut().graph.backward();
+        self.optimiser_mut().graph.backward().unwrap();
 
-        self.optimiser_mut().update(gf, lr);
+        self.optimiser_mut().update(gf, lr).unwrap();
 
-        self.optimiser().graph.synchronise();
-        self.optimiser().graph.panic_if_device_error("Something went wrong!");
+        self.optimiser().graph.synchronise().unwrap();
+
+        if let Err(e) = self.optimiser().graph.get_last_device_error() {
+            println!();
+            println!("An unrecoverable error occurred:");
+            println!("{e:?}");
+            std::process::exit(1);
+        }
 
         error
     }
@@ -49,14 +63,14 @@ pub trait NetworkTrainer {
     fn optimiser_mut(&mut self) -> &mut Optimiser<ExecutionContext, Self::OptimiserState>;
 
     fn load_from_checkpoint(&mut self, path: &str) {
-        self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"));
+        self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state")).unwrap();
     }
 
     fn save_to_checkpoint(&self, path: &str) {
         std::fs::create_dir(path).unwrap_or(());
         let optimiser_path = format!("{path}/optimiser_state");
         std::fs::create_dir(optimiser_path.as_str()).unwrap_or(());
-        self.optimiser().write_to_checkpoint(&optimiser_path);
+        self.optimiser().write_to_checkpoint(&optimiser_path).unwrap();
     }
 
     fn train_custom<D1, D2, LR, WDL, F>(
@@ -85,7 +99,7 @@ pub trait NetworkTrainer {
 
         std::fs::create_dir(out_dir).unwrap_or(());
 
-        self.optimiser().graph.synchronise();
+        self.optimiser().graph.synchronise().unwrap();
 
         let steps = schedule.steps;
         let pos_per_sb = steps.batch_size * steps.batches_per_superbatch;
@@ -151,9 +165,17 @@ pub trait NetworkTrainer {
             if curr_batch % validation_freq == 0 {
                 if let Some(Ok(test_batch)) = test_receiver.as_ref().map(Receiver::recv) {
                     let this_batch_size = self.load_batch(&test_batch);
-                    self.optimiser().graph.synchronise();
-                    let error = self.optimiser_mut().graph.forward();
-                    let error = error / this_batch_size as f32;
+                    self.optimiser().graph.synchronise().unwrap();
+
+                    let error = match self.optimiser_mut().graph.forward() {
+                        Ok(error) => error / this_batch_size as f32,
+                        Err(e) => {
+                            println!();
+                            println!("An unrecoverable error occurred:");
+                            println!("{e}");
+                            std::process::exit(1);
+                        }
+                    };
 
                     validation_record.push((superbatch, curr_batch, error));
                 }

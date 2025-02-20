@@ -1,4 +1,8 @@
-use crate::{device::Device, shape::Shape, tensor::DenseMatrix};
+use crate::{
+    device::{Device, OperationError},
+    shape::Shape,
+    tensor::DenseMatrix,
+};
 
 pub fn concat<D: Device>(
     input_a: &DenseMatrix<D>,
@@ -6,7 +10,7 @@ pub fn concat<D: Device>(
     input_b: &DenseMatrix<D>,
     shape_b: Shape,
     output: &mut DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(shape_a.cols(), 1);
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(input_a.batch_size(), input_b.batch_size());
@@ -17,7 +21,7 @@ pub fn concat<D: Device>(
     assert_eq!(shape_b.size(), input_b.single_size());
     assert_eq!(shape_o.size(), output.single_size());
 
-    output.set_batch_size(input_a.batch_size());
+    output.set_batch_size(input_a.batch_size())?;
 
     D::copy_or_add_strided(
         shape_a.rows(),
@@ -29,7 +33,7 @@ pub fn concat<D: Device>(
         0,
         shape_o.rows(),
         false,
-    );
+    )?;
 
     D::copy_or_add_strided(
         shape_b.rows(),
@@ -41,7 +45,7 @@ pub fn concat<D: Device>(
         shape_a.rows(),
         shape_o.rows(),
         false,
-    );
+    )
 }
 
 pub fn backprop_concat<D: Device>(
@@ -52,7 +56,7 @@ pub fn backprop_concat<D: Device>(
     input_b_grad: Option<&mut DenseMatrix<D>>,
     shape_b: Shape,
     output_grad: &DenseMatrix<D>,
-) {
+) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(shape_a.cols(), 1);
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(input_a.batch_size(), input_b.batch_size());
@@ -66,7 +70,7 @@ pub fn backprop_concat<D: Device>(
 
     if let Some(grad) = input_a_grad {
         assert_eq!(grad.single_size(), input_a.single_size());
-        grad.set_batch_size(input_a.batch_size());
+        grad.set_batch_size(input_a.batch_size())?;
 
         D::copy_or_add_strided(
             shape_a.rows(),
@@ -78,12 +82,12 @@ pub fn backprop_concat<D: Device>(
             0,
             shape_a.rows(),
             true,
-        );
+        )?;
     }
 
     if let Some(grad) = input_b_grad {
         assert_eq!(grad.single_size(), input_b.single_size());
-        grad.set_batch_size(input_b.batch_size());
+        grad.set_batch_size(input_b.batch_size())?;
 
         D::copy_or_add_strided(
             shape_b.rows(),
@@ -95,6 +99,8 @@ pub fn backprop_concat<D: Device>(
             0,
             shape_b.rows(),
             true,
-        );
+        )?;
     }
+
+    Ok(())
 }
