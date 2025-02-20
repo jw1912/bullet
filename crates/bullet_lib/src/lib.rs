@@ -32,9 +32,12 @@ pub mod nn {
         use bullet_core::optimiser::{self, clip, decay, radam, utils::Placement, OptimiserState};
         use bullet_hip_backend::ExecutionContext;
 
-        pub type AdamWOptimiser = optimiser::AdamW<ExecutionContext>;
-        pub type RAdamOptimiser = clip::WeightClipping<decay::WeightDecay<radam::RAdam<ExecutionContext>>>;
-        pub use optimiser::{AdamWParams, Optimiser};
+        type ClipAndDecay<T> = clip::WeightClipping<decay::WeightDecay<T>>;
+
+        pub type AdamWOptimiser = optimiser::adam::AdamW<ExecutionContext>;
+        pub type RAdamOptimiser = ClipAndDecay<radam::RAdam<ExecutionContext>>;
+        pub type RangerOptimiser = optimiser::ranger::Ranger<ExecutionContext>;
+        pub use optimiser::{adam::AdamWParams, ranger::RangerParams, Optimiser};
 
         pub trait OptimiserType: Default {
             type Optimiser: OptimiserState<ExecutionContext>;
@@ -52,6 +55,12 @@ pub mod nn {
             type Optimiser = RAdamOptimiser;
         }
 
+        #[derive(Default)]
+        pub struct Ranger;
+        impl OptimiserType for Ranger {
+            type Optimiser = RangerOptimiser;
+        }
+
         #[derive(Clone, Copy, Debug)]
         pub struct RAdamParams {
             pub decay: f32,
@@ -61,7 +70,9 @@ pub mod nn {
             pub max_weight: f32,
         }
 
-        impl From<RAdamParams> for clip::WeightClippingParams<decay::WeightDecayParams<radam::RAdamParams>> {
+        type ClipAndDecayParams<T> = clip::WeightClippingParams<decay::WeightDecayParams<T>>;
+
+        impl From<RAdamParams> for ClipAndDecayParams<radam::RAdamParams> {
             fn from(value: RAdamParams) -> Self {
                 clip::WeightClippingParams {
                     inner: decay::WeightDecayParams {
