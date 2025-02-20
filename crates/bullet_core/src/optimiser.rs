@@ -1,13 +1,11 @@
 pub mod adam;
-pub mod adamw;
 pub mod clip;
 pub mod decay;
 pub mod radam;
+pub mod ranger;
 pub mod utils;
 
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
-
-pub use adamw::{AdamW, AdamWParams};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
 
@@ -115,5 +113,51 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
         self.load_weights_from_file_(&format!("{path}/weights.bin"), old_format);
         let mut map = self.state.iter_mut().map(|(id, single)| (id.clone(), single)).collect();
         S::load_from_checkpoint(&mut map, path, old_format);
+    }
+}
+
+pub struct WrapOptimiser<O, P> {
+    optimiser: O,
+    phantom_data: PhantomData<P>,
+}
+
+impl<D, O, P> OptimiserState<D> for WrapOptimiser<O, P>
+where
+    D: Device,
+    O: OptimiserState<D>,
+    P: Clone + Default + Debug + Into<O::Params>,
+{
+    type Params = P;
+
+    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Self {
+        Self { optimiser: O::new(device, size, params.into()), phantom_data: PhantomData }
+    }
+
+    fn update(
+        &mut self,
+        weights: &mut DenseMatrix<D>,
+        grads: &mut DenseMatrix<D>,
+        gradient_factor: f32,
+        learning_rate: f32,
+    ) {
+        self.optimiser.update(weights, grads, gradient_factor, learning_rate);
+    }
+
+    fn reset(&mut self) {
+        self.optimiser.reset();
+    }
+
+    fn set_params(&mut self, params: Self::Params) {
+        self.optimiser.set_params(params.into());
+    }
+
+    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str, old_format: bool) {
+        let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.optimiser)).collect();
+        O::load_from_checkpoint(&mut map, path, old_format);
+    }
+
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) {
+        let map = map.iter().map(|(id, single)| (id.clone(), &single.optimiser)).collect();
+        O::write_to_checkpoint(&map, path);
     }
 }

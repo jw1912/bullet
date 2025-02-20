@@ -38,6 +38,12 @@ impl<D: Device> DenseMatrix<D> {
         self.single_size
     }
 
+    pub fn copy_from(&mut self, other: &Self) {
+        assert_eq!(self.single_size, other.single_size);
+        self.set_batch_size(other.batch_size());
+        self.buf.load_from_device(&other.buf, other.size());
+    }
+
     pub fn batch_size(&self) -> Option<usize> {
         self.batch_size.map(NonZeroUsize::get)
     }

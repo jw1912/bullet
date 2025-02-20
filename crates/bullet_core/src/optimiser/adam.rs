@@ -2,7 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{device::Device, tensor::DenseMatrix};
 
-use super::{utils, OptimiserState};
+use super::{
+    clip::{WeightClipping, WeightClippingParams},
+    decay::{WeightDecay, WeightDecayParams},
+    utils::{self, Placement},
+    OptimiserState, WrapOptimiser,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamParams {
@@ -91,5 +96,38 @@ impl<D: Device> OptimiserState<D> for Adam<D> {
 
     fn set_params(&mut self, params: Self::Params) {
         self.params = params;
+    }
+}
+
+type AdamWClip<D> = WeightClipping<WeightDecay<Adam<D>>>;
+pub type AdamW<D> = WrapOptimiser<AdamWClip<D>, AdamWParams>;
+
+#[derive(Clone, Copy, Debug)]
+pub struct AdamWParams {
+    pub decay: f32,
+    pub beta1: f32,
+    pub beta2: f32,
+    pub min_weight: f32,
+    pub max_weight: f32,
+}
+
+impl Default for AdamWParams {
+    fn default() -> Self {
+        Self { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 }
+    }
+}
+
+impl From<AdamWParams> for WeightClippingParams<WeightDecayParams<AdamParams>> {
+    fn from(value: AdamWParams) -> Self {
+        WeightClippingParams {
+            inner: WeightDecayParams {
+                inner: AdamParams { beta1: value.beta1, beta2: value.beta2 },
+                decay: value.decay,
+                placement: Placement::Before,
+            },
+            min: value.min_weight,
+            max: value.max_weight,
+            placement: Placement::After,
+        }
     }
 }
