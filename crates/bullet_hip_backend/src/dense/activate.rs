@@ -1,6 +1,6 @@
-use bullet_core::device::DeviceBuffer;
+use bullet_core::device::{DeviceBuffer, OperationError};
 
-use crate::{backend::ops, Buffer};
+use crate::{backend::ops, Buffer, OperationResult};
 
 macro_rules! define_activation {
     (
@@ -9,23 +9,33 @@ macro_rules! define_activation {
         $fwd_kernel:ident,
         $bwd_kernel:ident
     ) => {
-        pub fn $fwd(size: usize, input: &Buffer<f32>, output: &mut Buffer<f32>) {
-            assert!(size <= input.size());
-            assert!(size <= output.size());
+        pub fn $fwd(size: usize, input: &Buffer<f32>, output: &mut Buffer<f32>) -> OperationResult {
+            if size > input.size() || size > output.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
 
             unsafe {
                 ops::$fwd_kernel(size, input.ptr(), output.mut_ptr());
             }
+
+            Ok(())
         }
 
-        pub fn $bwd(size: usize, input: &Buffer<f32>, input_grad: &mut Buffer<f32>, output_grad: &Buffer<f32>) {
-            assert!(size <= input.size());
-            assert!(size <= input_grad.size());
-            assert!(size <= output_grad.size());
+        pub fn $bwd(
+            size: usize,
+            input: &Buffer<f32>,
+            input_grad: &mut Buffer<f32>,
+            output_grad: &Buffer<f32>,
+        ) -> OperationResult {
+            if size > input.size() || size > input_grad.size() || size > output_grad.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
 
             unsafe {
                 ops::$bwd_kernel(size, input.ptr(), output_grad.ptr(), input_grad.mut_ptr());
             }
+
+            Ok(())
         }
     };
 }

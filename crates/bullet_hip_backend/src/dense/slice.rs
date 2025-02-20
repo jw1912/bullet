@@ -1,6 +1,9 @@
-use bullet_core::device::DeviceBuffer;
+use bullet_core::device::{DeviceBuffer, OperationError};
 
-use crate::backend::{blas, Buffer};
+use crate::{
+    backend::{blas, util::catch_cublas, Buffer},
+    OperationResult,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn copy_or_add_strided(
@@ -13,17 +16,21 @@ pub fn copy_or_add_strided(
     output_offset: usize,
     output_stride: usize,
     add: bool,
-) {
+) -> OperationResult {
     assert!(cols > 0);
     assert!(rows > 0);
-    assert!(input_offset <= input_stride);
-    assert!(output_offset <= output_stride);
-    assert!(cols * input_stride <= input.size());
-    assert!(cols * output_stride <= output.size());
-    assert!(rows <= output_stride);
+
+    if input_offset > input_stride
+        || output_offset > output_stride
+        || cols * input_stride > input.size()
+        || cols * output_stride > output.size()
+        || rows > output_stride
+    {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
-        blas::copy_strided(
+        let err = blas::copy_strided(
             input.device().as_ref(),
             rows,
             cols,
@@ -33,5 +40,7 @@ pub fn copy_or_add_strided(
             output.mut_ptr().add(output_offset),
             add,
         );
+
+        Ok(catch_cublas(err)?)
     }
 }

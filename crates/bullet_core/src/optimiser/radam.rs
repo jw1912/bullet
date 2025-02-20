@@ -5,7 +5,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{device::Device, tensor::DenseMatrix};
+use crate::{
+    device::{Device, OperationError},
+    tensor::DenseMatrix,
+};
 
 use super::{utils, OptimiserState};
 
@@ -32,13 +35,13 @@ pub struct RAdam<D: Device> {
 impl<D: Device> OptimiserState<D> for RAdam<D> {
     type Params = RAdamParams;
 
-    fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Self {
-        Self {
-            momentum: DenseMatrix::zeroed(device.clone(), size),
-            velocity: DenseMatrix::zeroed(device, size),
+    fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Result<Self, D::DeviceError> {
+        Ok(Self {
+            momentum: DenseMatrix::zeroed(device.clone(), size)?,
+            velocity: DenseMatrix::zeroed(device, size)?,
             params: default_params,
             step: 0,
-        }
+        })
     }
 
     fn update(
@@ -47,7 +50,7 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
         grads: &mut DenseMatrix<D>,
         gradient_factor: f32,
         learning_rate: f32,
-    ) {
+    ) -> Result<(), OperationError<D::DeviceError>> {
         assert!(weights.batch_size().is_none());
         assert!(self.momentum.batch_size().is_none());
         assert!(self.velocity.batch_size().is_none());
@@ -84,28 +87,34 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
             gradient_factor,
             learning_rate * step_size,
             n_sma > params.n_sma_threshold,
-        );
+        )
     }
 
-    fn reset(&mut self) {
-        self.momentum.set_zero();
-        self.velocity.set_zero();
+    fn reset(&mut self) -> Result<(), D::DeviceError> {
         self.step = 0;
+        self.momentum.set_zero()?;
+        self.velocity.set_zero()
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) {
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::DeviceError> {
         let momentum: Vec<_> = map.iter().map(|(id, single)| (id, &single.momentum)).collect();
         let velocity: Vec<_> = map.iter().map(|(id, single)| (id, &single.velocity)).collect();
-        utils::write_weights_to_file(&momentum, &format!("{path}/momentum.bin"));
-        utils::write_weights_to_file(&velocity, &format!("{path}/velocity.bin"));
+        utils::write_weights_to_file(&momentum, &format!("{path}/momentum.bin"))?;
+        utils::write_weights_to_file(&velocity, &format!("{path}/velocity.bin"))?;
 
         let mut file = File::create(format!("{path}/step.txt")).unwrap();
         for (id, single) in map.iter() {
             writeln!(file, "{id},{}", single.step).unwrap();
         }
+
+        Ok(())
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str, old_format: bool) {
+    fn load_from_checkpoint(
+        map: &mut HashMap<String, &mut Self>,
+        path: &str,
+        old_format: bool,
+    ) -> Result<(), D::DeviceError> {
         let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
         let mut momentum = utils::load_weights_from_file(&paths[0], old_format);
         let mut velocity = utils::load_weights_from_file(&paths[1], old_format);
@@ -130,10 +139,12 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
             assert_eq!(id1, id3);
 
             let single = map.get_mut(id1).unwrap();
-            single.momentum.load_from_slice(None, mom);
-            single.velocity.load_from_slice(None, vel);
+            single.momentum.load_from_slice(None, mom)?;
+            single.velocity.load_from_slice(None, vel)?;
             single.step = *step;
         }
+
+        Ok(())
     }
 
     fn set_params(&mut self, params: Self::Params) {

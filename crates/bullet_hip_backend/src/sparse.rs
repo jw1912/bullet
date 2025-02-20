@@ -12,10 +12,21 @@ pub use mask::*;
 pub use select::*;
 pub use softmax::*;
 
-use crate::backend::{ops, Buffer};
+use crate::{
+    backend::{ops, Buffer},
+    OperationResult,
+};
 
-pub fn sparse_to_dense(batch_size: usize, size: usize, nnz: usize, sparse: &Buffer<i32>, dense: &mut Buffer<f32>) {
+pub fn sparse_to_dense(
+    batch_size: usize,
+    size: usize,
+    nnz: usize,
+    sparse: &Buffer<i32>,
+    dense: &mut Buffer<f32>,
+) -> OperationResult {
     unsafe {
         ops::sparse_to_dense(size, batch_size, nnz, sparse.ptr(), dense.mut_ptr());
     }
+
+    Ok(())
 }

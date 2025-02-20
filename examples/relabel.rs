@@ -54,7 +54,7 @@ fn main() {
 
     std::thread::spawn(move || {
         let (mut graph, output_node) = build_network(inputs.num_inputs(), hl_size);
-        load_graph_weights_from_file::<ExecutionContext>(&mut graph, NETWORK_PATH, true);
+        load_graph_weights_from_file::<ExecutionContext>(&mut graph, NETWORK_PATH, true).unwrap();
 
         let mut error = 0.0;
         let mut batches = 0;
@@ -63,10 +63,10 @@ fn main() {
 
         while let Ok((mut batch, prepared)) = receiver.recv() {
             unsafe {
-                load_into_graph(&mut graph, &prepared);
+                load_into_graph(&mut graph, &prepared).unwrap();
             }
 
-            error += f64::from(graph.forward());
+            error += f64::from(graph.forward().unwrap());
             batches += 1;
             positions += batch.len();
 

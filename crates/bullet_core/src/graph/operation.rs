@@ -7,7 +7,7 @@ mod sparse;
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::{
-    device::{Device, DeviceBuffer},
+    device::{Device, DeviceBuffer, OperationError},
     graph::Node,
     shape::Shape,
     tensor::DenseMatrix,
@@ -46,32 +46,32 @@ pub enum Operation {
 }
 
 #[derive(Clone, Debug)]
-pub struct OperationError {
+pub struct GraphBuilderError {
     pub op: Box<Operation>,
-    pub ty: OperationErrorType,
+    pub ty: GraphBuilderErrorType,
 }
 
-impl OperationError {
-    pub fn new(op: &Operation, ty: OperationErrorType) -> Self {
+impl GraphBuilderError {
+    pub fn new(op: &Operation, ty: GraphBuilderErrorType) -> Self {
         Self { op: Box::new(*op), ty }
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum OperationErrorType {
+pub enum GraphBuilderErrorType {
     InvalidInputShape(Shape),
     MismatchedInputShapes(Vec<Shape>),
     OutOfBounds(Shape, [usize; 2]),
 }
 
 impl Operation {
-    pub fn output_shape(&self) -> Result<Shape, OperationError> {
+    pub fn output_shape(&self) -> Result<Shape, GraphBuilderError> {
+        use GraphBuilderErrorType::*;
         use Operation::*;
-        use OperationErrorType::*;
 
         let ret = |cond, ok, err| if cond { Ok(ok) } else { Err(err) };
 
-        let mismatch = |nodes: &[&Node]| OperationError {
+        let mismatch = |nodes: &[&Node]| GraphBuilderError {
             op: Box::new(*self),
             ty: MismatchedInputShapes(nodes.iter().map(|&x| x.shape).collect::<Vec<_>>()),
         };
@@ -90,7 +90,7 @@ impl Operation {
             }
             Concat(a, b) => {
                 if a.shape.cols() != 1 {
-                    return Err(OperationError::new(self, InvalidInputShape(a.shape)));
+                    return Err(GraphBuilderError::new(self, InvalidInputShape(a.shape)));
                 }
 
                 let out = Shape::new(a.shape.rows() + b.shape.rows(), a.shape.cols());
@@ -106,12 +106,12 @@ impl Operation {
                 let is = input.shape;
                 let min = 2 + 2 * usize::from(*post_concat);
                 let out = Shape::new(is.rows() / 2, is.cols());
-                ret(is.rows() % min == 0, out, OperationError::new(self, InvalidInputShape(is)))
+                ret(is.rows() % min == 0, out, GraphBuilderError::new(self, InvalidInputShape(is)))
             }
             PowerError(a, b, _) => ret(a.shape == b.shape, a.shape, mismatch(&[a, b])),
             ReduceAcrossBatch(node) => {
                 let is = node.shape;
-                ret(is == Shape::new(1, 1), is, OperationError::new(self, InvalidInputShape(is)))
+                ret(is == Shape::new(1, 1), is, GraphBuilderError::new(self, InvalidInputShape(is)))
             }
             Select(input, buckets) => {
                 let is = input.shape;
@@ -124,7 +124,7 @@ impl Operation {
                 let is = input.shape;
                 let valid = end > start && *end <= is.rows() && is.cols() == 1;
                 let out = Shape::new(end - start, 1);
-                ret(valid, out, OperationError::new(self, OutOfBounds(is, [*start, *end])))
+                ret(valid, out, GraphBuilderError::new(self, OutOfBounds(is, [*start, *end])))
             }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 let is = input.shape;
@@ -164,13 +164,13 @@ impl Operation {
 }
 
 impl<D: Device> Graph<D> {
-    pub(super) fn forward_node(&mut self, output_node: Node) {
+    pub(super) fn forward_node(&mut self, output_node: Node) -> Result<(), OperationError<D::DeviceError>> {
         use Operation::*;
 
         let get = |node: Node| self.nodes[node.idx].borrow();
 
         let output_tensor = &mut *self.nodes[output_node.idx].borrow_mut();
-        let op = if let Some(op) = &output_tensor.operation { op } else { return };
+        let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
         let internal = &mut output_tensor.internal;
         let output = output_tensor.values.dense_mut();
         let outn = output_tensor.own;
@@ -180,8 +180,8 @@ impl<D: Device> Graph<D> {
                 let input = get(*node);
                 let input = input.values.dense();
                 assert_eq!(outn.shape, node.shape);
-                output.set_batch_size(input.batch_size());
-                D::activate(input.size(), &input.buf, &mut output.buf, *act);
+                output.set_batch_size(input.batch_size())?;
+                D::activate(input.size(), &input.buf, &mut output.buf, *act)
             }
             Affine(wn, inp, bn) => {
                 let i = get(*inp);
@@ -190,13 +190,13 @@ impl<D: Device> Graph<D> {
 
                 if let Some(bn) = bn {
                     let bs = i.values.batch_size().unwrap_or(1);
-                    setup_ones(w.buf.device(), internal, bs);
+                    setup_ones(w.buf.device(), internal, bs)?;
                     let ones = &internal.get("ones").unwrap().borrow().buf;
                     let b = get(*bn);
                     let b = Some((b.values.dense(), ones, bn.shape));
-                    matmul::affine(w, wn.shape, &*i, inp.shape, b, output);
+                    matmul::affine(w, wn.shape, &*i, inp.shape, b, output)
                 } else {
-                    matmul::affine(w, wn.shape, &*i, inp.shape, None, output);
+                    matmul::affine(w, wn.shape, &*i, inp.shape, None, output)
                 }
             }
             AffineDualActivate(wn, sn, nn, bn, act) => {
@@ -211,15 +211,15 @@ impl<D: Device> Graph<D> {
                     bn.shape,
                     output,
                     *act,
-                );
+                )
             }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = get(*an);
                 let a = a.values.dense();
                 let bs = a.batch_size().unwrap_or(1);
-                setup_ones(a.buf.device(), internal, bs);
+                setup_ones(a.buf.device(), internal, bs)?;
                 let ones = &internal.get("ones").unwrap().borrow().buf;
-                linear_comb::linear_comb(ones, *alpha, a, an.shape, *beta, get(*bn).values.dense(), bn.shape, output);
+                linear_comb::linear_comb(ones, *alpha, a, an.shape, *beta, get(*bn).values.dense(), bn.shape, output)
             }
             Gather(input, indices) => {
                 let input = get(*input);
@@ -230,7 +230,7 @@ impl<D: Device> Graph<D> {
                 let batch_size = indices.batch_size();
                 assert_eq!(input.batch_size(), batch_size);
                 assert_eq!(indices.nnz, indices.single_size());
-                output.set_batch_size(batch_size);
+                output.set_batch_size(batch_size)?;
 
                 D::gather(
                     batch_size.unwrap_or(1),
@@ -239,7 +239,7 @@ impl<D: Device> Graph<D> {
                     &input.buf,
                     &indices.buf,
                     &mut output.buf,
-                );
+                )
             }
             Concat(a, b) => concat::concat(get(*a).values.dense(), a.shape, get(*b).values.dense(), b.shape, output),
             Mask(input, mask) => {
@@ -254,9 +254,9 @@ impl<D: Device> Graph<D> {
                 assert_eq!(input.single_size(), single_size);
                 assert!(mask.nnz <= single_size);
                 assert_eq!(output.single_size(), single_size);
-                output.set_batch_size(batch_size);
+                output.set_batch_size(batch_size)?;
 
-                D::mask(batch_size.unwrap_or(1), single_size, mask.nnz, &input.buf, &mask.buf, &mut output.buf);
+                D::mask(batch_size.unwrap_or(1), single_size, mask.nnz, &input.buf, &mask.buf, &mut output.buf)
             }
             PairwiseMul(node, post_concat) => {
                 let input = get(*node);
@@ -265,7 +265,7 @@ impl<D: Device> Graph<D> {
                 assert_eq!(node.shape.size(), input.single_size());
                 assert_eq!(node.shape.size() % 2, 0);
                 assert_eq!(node.shape.size() / 2, output.single_size());
-                output.set_batch_size(input.batch_size());
+                output.set_batch_size(input.batch_size())?;
                 D::pairwise(
                     input.single_size(),
                     input.batch_size().unwrap_or(1),
@@ -289,14 +289,14 @@ impl<D: Device> Graph<D> {
 
                 let batch_size = a.batch_size();
                 assert_eq!(batch_size, b.batch_size());
-                output.set_batch_size(batch_size);
+                output.set_batch_size(batch_size)?;
 
-                D::abs_power_error(*p, size * batch_size.unwrap_or(1), &a.buf, &b.buf, &mut output.buf);
+                D::abs_power_error(*p, size * batch_size.unwrap_or(1), &a.buf, &b.buf, &mut output.buf)
             }
             ReduceAcrossBatch(node) => {
                 let input = get(*node);
                 let input = input.values.dense();
-                setup_ones(input.buf.device(), internal, input.batch_size().unwrap_or(1));
+                setup_ones(input.buf.device(), internal, input.batch_size().unwrap_or(1))?;
                 let ones = internal.get("ones").unwrap().borrow();
                 assert_eq!(input.single_size(), node.shape.size());
                 D::reduce_add(
@@ -305,7 +305,7 @@ impl<D: Device> Graph<D> {
                     input.batch_size().unwrap_or(1),
                     &input.buf,
                     &mut output.buf,
-                );
+                )
             }
             Select(input, buckets) => {
                 let rows = input.shape.rows();
@@ -328,9 +328,9 @@ impl<D: Device> Graph<D> {
                 assert_eq!(num_buckets, buckets.single_size());
                 assert_eq!(output_rows, output.single_size());
 
-                output.set_batch_size(batch_size);
+                output.set_batch_size(batch_size)?;
 
-                D::select(batch_size.unwrap_or(1), rows, output_rows, &input.buf, &buckets.buf, &mut output.buf);
+                D::select(batch_size.unwrap_or(1), rows, output_rows, &input.buf, &buckets.buf, &mut output.buf)
             }
             Slice(input, start, end) => {
                 slice::slice_vector_batched(input.shape, get(*input).values.dense(), *start, *end, output)
@@ -357,13 +357,13 @@ impl<D: Device> Graph<D> {
                 let single_size = masks.single_size();
                 let nnz = masks.nnz;
 
-                setup_softmax(masks.buf.device(), internal, nnz * batch_size);
+                setup_softmax(masks.buf.device(), internal, nnz * batch_size)?;
 
                 let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
                 let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
 
-                output.set_batch_size(masks.batch_size());
-                D::softmax_across_batch_masked(batch_size, single_size, nnz, &masks.buf, &inputs.buf, &mut smax.buf);
+                output.set_batch_size(masks.batch_size())?;
+                D::softmax_across_batch_masked(batch_size, single_size, nnz, &masks.buf, &inputs.buf, &mut smax.buf)?;
                 D::crossentropy_masked(
                     batch_size,
                     single_size,
@@ -373,7 +373,7 @@ impl<D: Device> Graph<D> {
                     &targets.buf,
                     &mut indv.buf,
                     &mut output.buf,
-                );
+                )
             }
             SoftmaxCrossEntropyLoss(an, bn) => {
                 let a = get(*an);
@@ -391,17 +391,17 @@ impl<D: Device> Graph<D> {
                 let batch_size = a.batch_size().unwrap_or(1);
                 let single_size = a.single_size();
 
-                setup_softmax(a.buf.device(), internal, single_size * batch_size);
-                setup_ones(a.buf.device(), internal, single_size);
+                setup_softmax(a.buf.device(), internal, single_size * batch_size)?;
+                setup_ones(a.buf.device(), internal, single_size)?;
 
                 let ones = internal.get("ones").unwrap().borrow();
                 let mut smax = internal.get("softmaxed").unwrap().borrow_mut();
                 let mut indv = internal.get("individual_losses").unwrap().borrow_mut();
 
-                D::softmax_across_batch(batch_size, single_size, &a.buf, &mut smax.buf);
-                D::crossentropy(batch_size * single_size, &smax.buf, &b.buf, &mut indv.buf);
+                D::softmax_across_batch(batch_size, single_size, &a.buf, &mut smax.buf)?;
+                D::crossentropy(batch_size * single_size, &smax.buf, &b.buf, &mut indv.buf)?;
 
-                output.set_batch_size(a.batch_size());
+                output.set_batch_size(a.batch_size())?;
                 D::sgemm(
                     &ones.buf,
                     Shape::new(1, single_size),
@@ -411,24 +411,24 @@ impl<D: Device> Graph<D> {
                     false,
                     &mut output.buf,
                     false,
-                );
+                )
             }
         }
     }
 
-    pub(super) fn backward_node(&mut self, output_node: Node) {
+    pub(super) fn backward_node(&mut self, output_node: Node) -> Result<(), OperationError<D::DeviceError>> {
         use Operation::*;
 
         let get = |node: Node| self.nodes[node.idx].borrow_mut();
 
         let output_tensor = &mut *self.nodes[output_node.idx].borrow_mut();
-        let op = if let Some(op) = &output_tensor.operation { op } else { return };
+        let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
         let internal = &mut output_tensor.internal;
         let outn = output_tensor.own;
         let output_grad = if let Some(grad) = output_tensor.gradients.as_ref() {
             grad
         } else {
-            return;
+            return Ok(());
         };
 
         match op {
@@ -439,8 +439,8 @@ impl<D: Device> Graph<D> {
                     assert_eq!(outn.shape, node.shape);
                     assert_eq!(output_grad.size(), input.size());
                     assert_eq!(output_grad.batch_size(), input.batch_size());
-                    grad.set_batch_size(output_grad.batch_size());
-                    D::backprop_activate(input.size(), &input.buf, &mut grad.buf, &output_grad.buf, *act);
+                    grad.set_batch_size(output_grad.batch_size())?;
+                    D::backprop_activate(input.size(), &input.buf, &mut grad.buf, &output_grad.buf, *act)?;
                 }
             }
             Affine(wn, inp, bn) => {
@@ -450,11 +450,11 @@ impl<D: Device> Graph<D> {
 
                 if let Some(b) = bn {
                     let bs = i.values.batch_size().unwrap_or(1);
-                    setup_ones(w.values.dense().buf.device(), internal, bs);
+                    setup_ones(w.values.dense().buf.device(), internal, bs)?;
                     let ones = &internal.get("ones").unwrap().borrow().buf;
-                    matmul::backprop_affine(w, wn.shape, i, inp.shape, Some((&mut *get(*b), ones)), o, output_grad);
+                    matmul::backprop_affine(w, wn.shape, i, inp.shape, Some((&mut *get(*b), ones)), o, output_grad)?;
                 } else {
-                    matmul::backprop_affine(w, wn.shape, i, inp.shape, None, o, output_grad);
+                    matmul::backprop_affine(w, wn.shape, i, inp.shape, None, o, output_grad)?;
                 }
             }
             AffineDualActivate(wn, sn, nn, bn, act) => {
@@ -474,7 +474,7 @@ impl<D: Device> Graph<D> {
                     output_tensor.values.dense(),
                     output_grad,
                     *act,
-                );
+                )?;
             }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = &mut *get(*an);
@@ -483,7 +483,7 @@ impl<D: Device> Graph<D> {
                 let abs = a.values.batch_size().unwrap_or(1);
                 let bbs = b.values.batch_size().unwrap_or(1);
                 let bs = abs.max(bbs);
-                setup_ones(a.values.dense().buf.device(), internal, bs);
+                setup_ones(a.values.dense().buf.device(), internal, bs)?;
                 let ones = &internal.get("ones").unwrap().borrow().buf;
 
                 linear_comb::linear_comb_backward(
@@ -495,7 +495,7 @@ impl<D: Device> Graph<D> {
                     b.values.dense(),
                     b.gradients.as_mut(),
                     output_grad,
-                );
+                )?;
             }
             Gather(input, indices) => {
                 let input = &mut *get(*input);
@@ -510,7 +510,7 @@ impl<D: Device> Graph<D> {
                     assert_eq!(indices.nnz, indices.single_size());
                     assert_eq!(indices.nnz, output_grad.single_size());
 
-                    grd.set_batch_size(batch_size);
+                    grd.set_batch_size(batch_size)?;
                     D::backprop_gather(
                         batch_size.unwrap_or(1),
                         input_size,
@@ -518,7 +518,7 @@ impl<D: Device> Graph<D> {
                         &output_grad.buf,
                         &indices.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
             }
             Concat(an, bn) => {
@@ -532,7 +532,7 @@ impl<D: Device> Graph<D> {
                     b.gradients.as_mut(),
                     bn.shape,
                     output_grad,
-                );
+                )?;
             }
             Mask(input, mask) => {
                 if let Some(grd) = get(*input).gradients.as_mut() {
@@ -541,7 +541,7 @@ impl<D: Device> Graph<D> {
                     let batch_size = mask.batch_size();
                     let single_size = mask.single_size();
 
-                    grd.set_batch_size(batch_size);
+                    grd.set_batch_size(batch_size)?;
                     D::backprop_mask(
                         batch_size.unwrap_or(1),
                         single_size,
@@ -549,7 +549,7 @@ impl<D: Device> Graph<D> {
                         &output_grad.buf,
                         &mask.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
             }
             PairwiseMul(node, post_concat) => {
@@ -561,7 +561,7 @@ impl<D: Device> Graph<D> {
                     assert_eq!(node.shape.size() / 2, output_grad.single_size());
                     assert_eq!(node.shape.size(), grd.single_size());
                     assert_eq!(input.batch_size(), output_grad.batch_size());
-                    grd.set_batch_size(input.batch_size());
+                    grd.set_batch_size(input.batch_size())?;
                     D::backprop_pairwise(
                         input.single_size(),
                         input.batch_size().unwrap_or(1),
@@ -569,7 +569,7 @@ impl<D: Device> Graph<D> {
                         &output_grad.buf,
                         &mut grd.buf,
                         *post_concat,
-                    );
+                    )?;
                 }
             }
             PowerError(a, b, p) => {
@@ -589,7 +589,7 @@ impl<D: Device> Graph<D> {
 
                 if let Some(grd) = a.gradients.as_mut() {
                     assert_eq!(size, grd.single_size());
-                    grd.set_batch_size(batch_size);
+                    grd.set_batch_size(batch_size)?;
                     D::backprop_abs_power_error_single(
                         *p,
                         size * batch_size.unwrap_or(1),
@@ -597,12 +597,12 @@ impl<D: Device> Graph<D> {
                         &b.values.dense().buf,
                         &output_grad.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
 
                 if let Some(grd) = b.gradients.as_mut() {
                     assert_eq!(size, grd.single_size());
-                    grd.set_batch_size(batch_size);
+                    grd.set_batch_size(batch_size)?;
                     D::backprop_abs_power_error_single(
                         *p,
                         size * batch_size.unwrap_or(1),
@@ -610,7 +610,7 @@ impl<D: Device> Graph<D> {
                         &a.values.dense().buf,
                         &output_grad.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
             }
             ReduceAcrossBatch(input) => {
@@ -620,14 +620,14 @@ impl<D: Device> Graph<D> {
                     let bs = vals.batch_size();
                     let ss = vals.single_size();
 
-                    setup_ones(vals.buf.device(), internal, bs.unwrap_or(1));
+                    setup_ones(vals.buf.device(), internal, bs.unwrap_or(1))?;
                     let ones = &internal.get("ones").unwrap().borrow().buf;
 
                     assert!(output_grad.batch_size().is_none());
                     assert_eq!(vals.single_size(), output_grad.single_size());
                     assert_eq!(vals.single_size(), grd.single_size());
 
-                    grd.set_batch_size(bs);
+                    grd.set_batch_size(bs)?;
                     D::add_assign_single_to_batched_scaled(
                         ss,
                         bs.unwrap_or(1),
@@ -635,7 +635,7 @@ impl<D: Device> Graph<D> {
                         1.0,
                         &output_grad.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
             }
             Select(input, buckets) => {
@@ -662,7 +662,7 @@ impl<D: Device> Graph<D> {
                     assert_eq!(buckets.nnz, 1);
                     assert_eq!(output_rows, output_grad.single_size());
 
-                    grd.set_batch_size(batch_size);
+                    grd.set_batch_size(batch_size)?;
 
                     D::select_backprop(
                         batch_size.unwrap_or(1),
@@ -671,7 +671,7 @@ impl<D: Device> Graph<D> {
                         &buckets.buf,
                         &output_grad.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
             }
             Slice(node, start, end) => {
@@ -684,7 +684,7 @@ impl<D: Device> Graph<D> {
                         *start,
                         *end,
                         output_grad,
-                    );
+                    )?;
                 }
             }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
@@ -704,7 +704,7 @@ impl<D: Device> Graph<D> {
                 assert_eq!(batch_size, output_grad.batch_size());
 
                 if let Some(grd) = inputs.gradients.as_mut() {
-                    grd.set_batch_size(batch_size);
+                    grd.set_batch_size(batch_size)?;
                     D::backprop_softmax_crossentropy_masked(
                         batch_size.unwrap_or(1),
                         single_size,
@@ -714,7 +714,7 @@ impl<D: Device> Graph<D> {
                         &targets.buf,
                         &output_grad.buf,
                         &mut grd.buf,
-                    );
+                    )?;
                 }
             }
             SoftmaxCrossEntropyLoss(an, bn) => {
@@ -746,41 +746,55 @@ impl<D: Device> Graph<D> {
                     false,
                     &mut indv.buf,
                     false,
-                );
+                )?;
 
                 let smax = &smax.buf;
                 let indv = &indv.buf;
 
                 if let Some(grd) = a.gradients.as_mut() {
-                    grd.set_batch_size(batch_size);
-                    D::backprop_softmax_crossentropy(size, smax, &b.values.dense().buf, indv, &mut grd.buf);
+                    grd.set_batch_size(batch_size)?;
+                    D::backprop_softmax_crossentropy(size, smax, &b.values.dense().buf, indv, &mut grd.buf)?;
                 }
 
                 if let Some(grd) = b.gradients.as_mut() {
-                    grd.set_batch_size(batch_size);
-                    D::backprop_softmax_crossentropy(size, smax, &a.values.dense().buf, indv, &mut grd.buf);
+                    grd.set_batch_size(batch_size)?;
+                    D::backprop_softmax_crossentropy(size, smax, &a.values.dense().buf, indv, &mut grd.buf)?;
                 }
             }
         }
+
+        Ok(())
     }
 }
 
-fn setup_ones<D: Device>(device: Arc<D>, internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>, batch_size: usize) {
+fn setup_ones<D: Device>(
+    device: Arc<D>,
+    internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>,
+    batch_size: usize,
+) -> Result<(), D::DeviceError> {
     if let Some(ones) = internal.get_mut("ones") {
         if ones.borrow().size() < batch_size {
-            *ones = RefCell::new(DenseMatrix::ones(device, batch_size));
+            *ones = RefCell::new(DenseMatrix::ones(device, batch_size)?);
         }
     } else {
-        let ones = RefCell::new(DenseMatrix::ones(device, batch_size));
+        let ones = RefCell::new(DenseMatrix::ones(device, batch_size)?);
         internal.insert("ones".to_string(), ones);
     }
+
+    Ok(())
 }
 
-fn setup_softmax<D: Device>(device: Arc<D>, internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>, size: usize) {
+fn setup_softmax<D: Device>(
+    device: Arc<D>,
+    internal: &mut HashMap<String, RefCell<DenseMatrix<D>>>,
+    size: usize,
+) -> Result<(), D::DeviceError> {
     if !internal.contains_key("softmaxed") {
-        let zeros = RefCell::new(DenseMatrix::zeroed(device.clone(), size));
+        let zeros = RefCell::new(DenseMatrix::zeroed(device.clone(), size)?);
         internal.insert("softmaxed".to_string(), zeros);
-        let zeros = RefCell::new(DenseMatrix::zeroed(device, size));
+        let zeros = RefCell::new(DenseMatrix::zeroed(device, size)?);
         internal.insert("individual_losses".to_string(), zeros);
     }
+
+    Ok(())
 }

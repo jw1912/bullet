@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{device::Device, tensor::DenseMatrix};
+use crate::{
+    device::{Device, OperationError},
+    tensor::DenseMatrix,
+};
 
 use super::{
     clip::{WeightClipping, WeightClippingParams},
@@ -34,14 +37,14 @@ pub struct RangerLookahead<D: Device, S> {
 impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S> {
     type Params = RangerLookaheadParams<S::Params>;
 
-    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Self {
-        Self {
-            inner: S::new(device.clone(), size, params.inner.clone()),
-            slow_params: DenseMatrix::zeroed(device, size),
+    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Result<Self, D::DeviceError> {
+        Ok(Self {
+            inner: S::new(device.clone(), size, params.inner.clone())?,
+            slow_params: DenseMatrix::zeroed(device, size)?,
             alpha: params.alpha,
             k: params.k,
             step: 0,
-        }
+        })
     }
 
     fn update(
@@ -50,9 +53,9 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
         grads: &mut DenseMatrix<D>,
         gradient_factor: f32,
         learning_rate: f32,
-    ) {
+    ) -> Result<(), OperationError<D::DeviceError>> {
         self.step += 1;
-        self.inner.update(weights, grads, gradient_factor, learning_rate);
+        self.inner.update(weights, grads, gradient_factor, learning_rate)?;
 
         if self.step % self.k == 0 {
             assert_eq!(weights.single_size, self.slow_params.single_size);
@@ -65,15 +68,18 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
                 self.alpha,
                 Some(&weights.buf),
                 &mut self.slow_params.buf,
-            );
+            )?;
 
-            weights.copy_from(&self.slow_params);
+            weights.copy_from(&self.slow_params)?;
         }
+
+        Ok(())
     }
 
-    fn reset(&mut self) {
-        self.inner.reset();
+    fn reset(&mut self) -> Result<(), D::DeviceError> {
+        self.inner.reset()?;
         self.step = 0;
+        Ok(())
     }
 
     fn set_params(&mut self, params: Self::Params) {
@@ -83,14 +89,18 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
         self.step = 0;
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str, old_format: bool) {
+    fn load_from_checkpoint(
+        map: &mut HashMap<String, &mut Self>,
+        path: &str,
+        old_format: bool,
+    ) -> Result<(), D::DeviceError> {
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.inner)).collect();
-        S::load_from_checkpoint(&mut map, path, old_format);
+        S::load_from_checkpoint(&mut map, path, old_format)
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) {
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::DeviceError> {
         let map = map.iter().map(|(id, single)| (id.clone(), &single.inner)).collect();
-        S::write_to_checkpoint(&map, path);
+        S::write_to_checkpoint(&map, path)
     }
 }
 

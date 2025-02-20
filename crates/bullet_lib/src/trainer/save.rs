@@ -17,7 +17,7 @@ impl SavedFormat {
 
     pub fn write_to_byte_buffer(&self, weights: &DenseMatrix) -> io::Result<Vec<u8>> {
         let mut weight_buf = vec![0.0; weights.single_size()];
-        let written = weights.write_to_slice(&mut weight_buf);
+        let written = weights.write_to_slice(&mut weight_buf).unwrap();
         assert_eq!(written, weights.single_size());
 
         if let Layout::Transposed(shape) = self.layout {

@@ -1,6 +1,12 @@
-use bullet_core::{device::DeviceBuffer, shape::Shape};
+use bullet_core::{
+    device::{DeviceBuffer, OperationError},
+    shape::Shape,
+};
 
-use crate::backend::{blas, Buffer};
+use crate::{
+    backend::{blas, util::catch_cublas, Buffer},
+    OperationResult,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn sgemm(
@@ -12,15 +18,15 @@ pub fn sgemm(
     trans_b: bool,
     output: &mut Buffer<f32>,
     increment: bool,
-) {
+) -> OperationResult {
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
-    assert!(shape_a.size() <= input_a.size());
-    assert!(shape_b.size() <= input_b.size());
-    assert!(shape_o.size() <= output.size());
+    if shape_a.size() > input_a.size() || shape_b.size() > input_b.size() || shape_o.size() > output.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
-        blas::sgemm(
+        let err = blas::sgemm(
             input_a.device().as_ref(),
             input_a.ptr(),
             shape_a.rows(),
@@ -35,6 +41,8 @@ pub fn sgemm(
             shape_o.cols(),
             increment,
         );
+
+        Ok(catch_cublas(err)?)
     }
 }
 
@@ -49,15 +57,18 @@ pub fn sgemm_batched(
     trans_b: bool,
     output: &mut Buffer<f32>,
     increment: bool,
-) {
+) -> OperationResult {
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
-    assert!(batch_size * shape_a.size() <= input_a.size());
-    assert!(batch_size * shape_b.size() <= input_b.size());
-    assert!(batch_size * shape_o.size() <= output.size());
+    if batch_size * shape_a.size() > input_a.size()
+        || batch_size * shape_b.size() > input_b.size()
+        || batch_size * shape_o.size() > output.size()
+    {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
-        blas::batched_sgemm(
+        let err = blas::batched_sgemm(
             input_a.device().as_ref(),
             batch_size,
             input_a.ptr(),
@@ -73,5 +84,7 @@ pub fn sgemm_batched(
             shape_o.cols(),
             increment,
         );
+
+        Ok(catch_cublas(err)?)
     }
 }

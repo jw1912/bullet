@@ -357,7 +357,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         if let Some(size) = self.ft_init_input_size {
             let stdev = 1.0 / (size as f32).sqrt();
-            graph.get_weights_mut("l0w").seed_random(0.0, stdev, true);
+            graph.get_weights_mut("l0w").seed_random(0.0, stdev, true).unwrap();
         }
 
         let mut output_desc = format!("{}", layer_sizes[0]);
@@ -382,10 +382,10 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             }
         });
 
-        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1);
+        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1).unwrap();
 
         let trainer = Trainer {
-            optimiser: Optimiser::<_, O::Optimiser>::new(graph, Default::default()),
+            optimiser: Optimiser::new(graph, Default::default()).unwrap(),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
             output_node,

@@ -1,5 +1,12 @@
-use crate::backend::{ops, Buffer};
-use bullet_core::{device::DeviceBuffer, graph::operation::Activation, shape::Shape};
+use crate::{
+    backend::{ops, Buffer},
+    OperationResult,
+};
+use bullet_core::{
+    device::{DeviceBuffer, OperationError},
+    graph::operation::Activation,
+    shape::Shape,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn sparse_affine_dual_activate(
@@ -13,16 +20,21 @@ pub fn sparse_affine_dual_activate(
     input_c: &Buffer<f32>,
     output: &mut Buffer<f32>,
     activation: Activation,
-) {
+) -> OperationResult {
     let mut output_shape = shape_a * shape_b;
-    assert!(output_shape.size() <= input_c.size());
+    if output_shape.size() > input_c.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
 
-    assert!(shape_a.size() <= input_a.size());
-    assert!(batch_size * nnz <= input_b1.size());
-    assert!(batch_size * nnz <= input_b2.size());
-    assert!(batch_size * output_shape.size() <= output.size());
+    if shape_a.size() > input_a.size()
+        || batch_size * nnz > input_b1.size()
+        || batch_size * nnz > input_b2.size()
+        || batch_size * output_shape.size() > output.size()
+    {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
         ops::sparseAffineDualForward(
@@ -37,6 +49,8 @@ pub fn sparse_affine_dual_activate(
             activation as i32,
         );
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -54,19 +68,23 @@ pub fn backprop_sparse_affine_dual_activate(
     outputs: &Buffer<f32>,
     output_grad: &Buffer<f32>,
     activation: Activation,
-) {
+) -> OperationResult {
     let mut output_shape = shape_a * shape_b;
-    assert!(output_shape.size() <= input_c.size());
-    assert!(output_shape.size() <= input_c_grad.size());
+    if output_shape.size() > input_c.size() || output_shape.size() > input_c_grad.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     output_shape = Shape::new(output_shape.rows() * 2, output_shape.cols());
 
-    assert!(shape_a.size() <= input_a.size());
-    assert!(shape_a.size() <= input_a_grad.size());
-    assert!(batch_size * nnz <= input_b1.size());
-    assert!(batch_size * nnz <= input_b2.size());
-    assert!(batch_size * output_shape.size() <= outputs.size());
-    assert!(batch_size * output_shape.size() <= output_grad.size());
+    if shape_a.size() > input_a.size()
+        || shape_a.size() > input_a_grad.size()
+        || batch_size * nnz > input_b1.size()
+        || batch_size * nnz > input_b2.size()
+        || batch_size * output_shape.size() > outputs.size()
+        || batch_size * output_shape.size() > output_grad.size()
+    {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
         ops::sparseAffineDualBackward(
@@ -82,4 +100,6 @@ pub fn backprop_sparse_affine_dual_activate(
             activation as i32,
         );
     }
+
+    Ok(())
 }

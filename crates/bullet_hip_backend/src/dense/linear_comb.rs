@@ -1,6 +1,9 @@
-use bullet_core::device::DeviceBuffer;
+use bullet_core::device::{DeviceBuffer, OperationError};
 
-use crate::{backend::blas, Buffer};
+use crate::{
+    backend::{blas, util::catch_cublas},
+    Buffer, OperationResult,
+};
 
 pub fn linear_comb_single(
     size: usize,
@@ -9,7 +12,7 @@ pub fn linear_comb_single(
     beta: f32,
     input_b: Option<&Buffer<f32>>,
     output: &mut Buffer<f32>,
-) {
+) -> OperationResult {
     let aptr = input_a.map(|a| {
         assert!(size <= a.size());
         a.ptr()
@@ -23,7 +26,9 @@ pub fn linear_comb_single(
     };
 
     unsafe {
-        blas::linear_comb_matrices(output.device().as_ref(), size, 1, alpha, aptr, beta, bptr, output.mut_ptr());
+        let err =
+            blas::linear_comb_matrices(output.device().as_ref(), size, 1, alpha, aptr, beta, bptr, output.mut_ptr());
+        Ok(catch_cublas(err)?)
     }
 }
 
@@ -34,13 +39,13 @@ pub fn add_assign_single_to_batched_scaled(
     alpha: f32,
     input: &Buffer<f32>,
     output: &mut Buffer<f32>,
-) {
-    assert!(single_size <= input.size());
-    assert!(single_size * batch_size <= output.size());
-    assert!(batch_size <= ones.size());
+) -> OperationResult {
+    if single_size > input.size() || single_size * batch_size > output.size() || batch_size > ones.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
-        blas::add_vector_to_matrix_columns(
+        let err = blas::add_vector_to_matrix_columns(
             output.device().as_ref(),
             single_size,
             batch_size,
@@ -49,15 +54,24 @@ pub fn add_assign_single_to_batched_scaled(
             input.ptr(),
             output.mut_ptr(),
         );
+
+        Ok(catch_cublas(err)?)
     }
 }
 
-pub fn reduce_add(ones: &Buffer<f32>, size: usize, batch_size: usize, input: &Buffer<f32>, output: &mut Buffer<f32>) {
-    assert!(size * batch_size <= input.size());
-    assert!(size <= output.size());
+pub fn reduce_add(
+    ones: &Buffer<f32>,
+    size: usize,
+    batch_size: usize,
+    input: &Buffer<f32>,
+    output: &mut Buffer<f32>,
+) -> OperationResult {
+    if size * batch_size > input.size() || size > output.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
 
     unsafe {
-        blas::reduce_add_cols(
+        let err = blas::reduce_add_cols(
             input.device().as_ref(),
             size,
             batch_size,
@@ -67,5 +81,7 @@ pub fn reduce_add(ones: &Buffer<f32>, size: usize, batch_size: usize, input: &Bu
             1.0,
             false,
         );
+
+        Ok(catch_cublas(err)?)
     }
 }
