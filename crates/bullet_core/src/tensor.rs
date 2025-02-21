@@ -75,7 +75,7 @@ impl<D: Device> Tensor<D> {
                 let mut buf = vec![0; size];
                 sparse.buf.write_into_slice(&mut buf, size).unwrap();
                 Some(buf)
-            },
+            }
             Matrix::Dense(_) => None,
         }
     }
