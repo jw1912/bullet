@@ -10,7 +10,7 @@ pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
 use crate::{
-    device::Device,
+    device::{Device, DeviceBuffer},
     graph::{builder::Node, operation::Operation},
 };
 
@@ -65,6 +65,18 @@ impl<D: Device> Tensor<D> {
                 dense.write_to_slice(&mut buf).unwrap();
                 Some(buf)
             }
+        }
+    }
+
+    pub fn get_sparse_vals(&self) -> Option<Vec<i32>> {
+        match &self.values {
+            Matrix::Sparse(sparse) => {
+                let size = sparse.nnz * sparse.batch_size().unwrap_or(1);
+                let mut buf = vec![0; size];
+                sparse.buf.write_into_slice(&mut buf, size).unwrap();
+                Some(buf)
+            }
+            Matrix::Dense(_) => None,
         }
     }
 
