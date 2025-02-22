@@ -13,23 +13,14 @@ impl std::fmt::Display for Shape {
 impl std::ops::Mul<Shape> for Shape {
     type Output = Shape;
     fn mul(self, rhs: Shape) -> Self::Output {
-        assert_eq!(self.cols, rhs.rows, "{self} * {rhs} is not possible!");
-        Self { cols: rhs.cols, rows: self.rows }
+        self.matmul(rhs).unwrap()
     }
 }
 
 impl Shape {
-    //pub fn get_batch_size(a: &Self, b: &Self) -> Option<NonZeroUsize> {
-    //    match (a.batch_size, b.batch_size) {
-    //        (None, None) => None,
-    //        (None, Some(x)) => Some(x),
-    //        (Some(x), None) => Some(x),
-    //        (Some(x), Some(y)) => {
-    //            assert_eq!(x, y, "Invalid combination of batch sizes: {x} != {y}");
-    //            Some(x)
-    //        }
-    //    }
-    //}
+    pub fn matmul(self, rhs: Shape) -> Option<Self> {
+        (self.cols == rhs.rows).then_some(Self { cols: rhs.cols, rows: self.rows })
+    }
 
     pub fn new(rows: usize, cols: usize) -> Self {
         assert!(cols > 0, "Cannot have 0 columns!");

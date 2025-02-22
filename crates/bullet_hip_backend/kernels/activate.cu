@@ -97,6 +97,11 @@ extern "C" {
         buffer_backprop<primeSigmoid>(size, input, output_grad, input_grad);
     }
 
+    void backpropSquare(const size_t size, const float* input, const float* output_grad, float* input_grad)
+    {
+        buffer_backprop<primeSquare>(size, input, output_grad, input_grad);
+    }
+
     void activateReLU(const size_t size, const float* in, float* out)
     {
         buffer_operation<ReLU>(size, in, out);
@@ -120,5 +125,10 @@ extern "C" {
     void activateSigmoid(const size_t size, const float* in, float* out)
     {
         buffer_operation<sigmoid>(size, in, out);
+    }
+
+    void activateSquare(const size_t size, const float* in, float* out)
+    {
+        buffer_operation<square>(size, in, out);
     }
 }

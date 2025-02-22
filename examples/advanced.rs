@@ -77,7 +77,7 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
     // trainable weights
     let l0 = builder.new_affine("l0", num_inputs, hl);
     let l1 = builder.new_affine("l1", hl, num_buckets * 16);
-    let l2 = builder.new_affine("l2", 15, num_buckets * 32);
+    let l2 = builder.new_affine("l2", 30, num_buckets * 32);
     let l3 = builder.new_affine("l3", 32, num_buckets);
     let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
@@ -85,10 +85,13 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
     let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
 
     out = out.pairwise_mul_post_affine_dual();
-    out = l1.forward(out).select(buckets).activate(Activation::SCReLU);
+    out = l1.forward(out).select(buckets);
 
     let skip_neuron = out.slice_rows(15, 16);
     out = out.slice_rows(0, 15);
+
+    out = out.concat(out.activate(Activation::Square));
+    out = out.activate(Activation::CReLU);
 
     out = l2.forward(out).select(buckets).activate(Activation::SCReLU);
     out = l3.forward(out).select(buckets);

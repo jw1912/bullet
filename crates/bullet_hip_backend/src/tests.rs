@@ -7,6 +7,7 @@ tests::make_tests! {
     matmul,
     sparse_affine,
     sparse_affine_dual,
+    check_not_batched,
     relu,
     crelu,
     screlu,

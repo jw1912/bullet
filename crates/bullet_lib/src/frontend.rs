@@ -60,8 +60,13 @@ impl NetworkBuilder {
     }
 
     pub fn apply(&self, operation: Operation) -> NetworkBuilderNode {
-        let node = self.builder().create_result_of_operation(operation, true).unwrap();
-        NetworkBuilderNode { node, builder: self }
+        match self.builder().create_result_of_operation(operation, true) {
+            Ok(node) => NetworkBuilderNode { node, builder: self },
+            Err(e) => {
+                println!("{e:#?}");
+                panic!();
+            }
+        }
     }
 
     pub fn build(self, execution_context: ExecutionContext) -> Graph<ExecutionContext> {

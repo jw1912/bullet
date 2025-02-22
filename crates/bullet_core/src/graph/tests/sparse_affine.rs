@@ -3,16 +3,16 @@ use crate::{
     graph::{
         builder::GraphBuilder,
         error::GraphError,
-        operation::{Activation, Operation},
+        operation::{Activation, GraphBuilderError, GraphBuilderErrorType, Operation},
     },
     shape::Shape,
 };
 
 pub fn sparse_affine<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphBuilder::default();
-    let w = builder.create_weights("w", Shape::new(1, 3))?;
-    let b = builder.create_weights("b", Shape::new(1, 1))?;
-    let i = builder.create_sparse_input("i", Shape::new(3, 1), 2)?;
+    let w = builder.create_weights("w", Shape::new(1, 3)).unwrap();
+    let b = builder.create_weights("b", Shape::new(1, 1)).unwrap();
+    let i = builder.create_sparse_input("i", Shape::new(3, 1), 2).unwrap();
     let out = builder.create_result_of_operation(Operation::SparseAffine(w, i, Some(b)), true)?;
     builder.create_result_of_operation(Operation::ReduceAcrossBatch(out), true)?;
     let mut graph = builder.build(device)?;
@@ -45,11 +45,11 @@ pub fn sparse_affine<D: Device>(device: D) -> Result<(), GraphError<D::DeviceErr
 
 pub fn sparse_affine_dual<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphBuilder::default();
-    let w = builder.create_weights("w", Shape::new(1, 3))?;
-    let b = builder.create_weights("b", Shape::new(1, 1))?;
-    let i1 = builder.create_sparse_input("i1", Shape::new(3, 1), 2)?;
-    let i2 = builder.create_sparse_input("i2", Shape::new(3, 1), 2)?;
-    let dot = builder.create_dense_input("dot", Shape::new(1, 2))?;
+    let w = builder.create_weights("w", Shape::new(1, 3)).unwrap();
+    let b = builder.create_weights("b", Shape::new(1, 1)).unwrap();
+    let i1 = builder.create_sparse_input("i1", Shape::new(3, 1), 2).unwrap();
+    let i2 = builder.create_sparse_input("i2", Shape::new(3, 1), 2).unwrap();
+    let dot = builder.create_dense_input("dot", Shape::new(1, 2)).unwrap();
     let out = builder
         .create_result_of_operation(Operation::SparseAffineDualActivate(w, i1, i2, b, Activation::Identity), true)?;
     let out2 = builder.create_result_of_operation(Operation::Matmul(dot, false, out, false), true)?;
@@ -80,6 +80,21 @@ pub fn sparse_affine_dual<D: Device>(device: D) -> Result<(), GraphError<D::Devi
     let mut buf = [0.0];
     graph.get_weights("b").gradients.as_ref().unwrap().write_to_slice(&mut buf).map_err(OperationError::from)?;
     assert_eq!(buf, [4.0]);
+
+    Ok(())
+}
+
+pub fn check_not_batched<D: Device>(_device: D) -> Result<(), GraphBuilderError> {
+    let mut builder = GraphBuilder::default();
+    let w = builder.create_weights("w", Shape::new(1, 3)).unwrap();
+    let b = builder.create_dense_input("b", Shape::new(1, 1)).unwrap();
+    let i1 = builder.create_sparse_input("i1", Shape::new(3, 1), 2).unwrap();
+    let i2 = builder.create_sparse_input("i2", Shape::new(3, 1), 2).unwrap();
+
+    let op = Operation::SparseAffineDualActivate(w, i1, i2, b, Activation::Identity);
+    let out = builder.create_result_of_operation(op, true);
+
+    assert_eq!(out, Err(GraphBuilderError::new(&op, GraphBuilderErrorType::BatchedInputNotSupported)));
 
     Ok(())
 }
