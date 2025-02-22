@@ -273,7 +273,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             pst.matmul(out)
         });
 
-        self.push_saved_format(0, l0.weights.shape, &mut saved_format, &mut net_quant);
+        self.push_saved_format(0, l0.weights.shape(), &mut saved_format, &mut net_quant);
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
@@ -310,7 +310,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
                     let l = builder.new_affine(&format!("l{layer}"), prev_size, raw_size);
 
-                    self.push_saved_format(layer, l.weights.shape, &mut saved_format, &mut net_quant);
+                    self.push_saved_format(layer, l.weights.shape(), &mut saved_format, &mut net_quant);
 
                     layer += 1;
 

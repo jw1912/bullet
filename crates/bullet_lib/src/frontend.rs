@@ -112,6 +112,11 @@ impl NetworkBuilderNode<'_> {
         self.node
     }
 
+    pub fn reshape(mut self, shape: Shape) -> Self {
+        self.node = self.node.reshape(shape).unwrap();
+        self
+    }
+
     pub fn activate(self, activation: Activation) -> Self {
         self.builder.apply(Operation::Activate(self.node, activation))
     }
@@ -129,7 +134,7 @@ impl NetworkBuilderNode<'_> {
     }
 
     pub fn matmul(self, rhs: Self) -> Self {
-        if rhs.node.sparse.is_some() {
+        if rhs.node.is_sparse() {
             self.builder.apply(Operation::SparseAffine(self.node, rhs.node, None))
         } else {
             self.builder.apply(Operation::Matmul(self.node, false, rhs.node, false))
@@ -186,7 +191,7 @@ pub struct Affine {
 
 impl Affine {
     pub fn forward(self, input: NetworkBuilderNode<'_>) -> NetworkBuilderNode<'_> {
-        if input.node.sparse.is_some() {
+        if input.node.is_sparse() {
             input.builder.apply(Operation::SparseAffine(self.weights, input.node, Some(self.bias)))
         } else {
             let int = input.builder.apply(Operation::Matmul(self.weights, false, input.node, false));

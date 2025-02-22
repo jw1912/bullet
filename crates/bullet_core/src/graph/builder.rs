@@ -8,7 +8,7 @@ use std::{
 
 use super::{
     error::GraphError,
-    operation::{GraphBuilderError, Operation},
+    operation::{GraphBuilderError, GraphBuilderErrorType, Operation},
     Graph,
 };
 use crate::{
@@ -20,8 +20,27 @@ use crate::{
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node {
     pub idx: usize,
-    pub shape: Shape,
-    pub sparse: Option<NonZeroUsize>,
+    pub(crate) shape: Shape,
+    pub(crate) sparse: Option<NonZeroUsize>,
+}
+
+impl Node {
+    pub fn shape(&self) -> Shape {
+        self.shape
+    }
+
+    pub fn reshape(mut self, shape: Shape) -> Result<Self, GraphBuilderErrorType> {
+        if self.shape.size() == shape.size() {
+            self.shape = shape;
+            Ok(self)
+        } else {
+            Err(GraphBuilderErrorType::MismatchedInputShapes(vec![self.shape, shape]))
+        }
+    }
+
+    pub fn is_sparse(&self) -> bool {
+        self.sparse.is_some()
+    }
 }
 
 pub(crate) struct NodeData {

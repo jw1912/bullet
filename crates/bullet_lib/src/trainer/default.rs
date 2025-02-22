@@ -128,7 +128,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         let output_buckets = inputs.contains("buckets");
         let expected = 2 + usize::from(nstm) + usize::from(output_buckets);
 
-        let output_shape = output_node.shape;
+        let output_shape = output_node.shape();
 
         assert_eq!(output_shape.cols(), 1, "Output cannot have >1 column!");
         assert!(output_shape.rows() == 1 || output_shape.rows() == 3, "Only supports 1 or 3 outputs!");
