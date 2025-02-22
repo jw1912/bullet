@@ -6,8 +6,8 @@ use crate::{
 
 pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphBuilder::default();
-    let w1 = builder.create_weights("w1", Shape::new(1, 3))?;
-    let w2 = builder.create_weights("w2", Shape::new(3, 1))?;
+    let w1 = builder.create_weights("w1", Shape::new(1, 3)).unwrap();
+    let w2 = builder.create_weights("w2", Shape::new(3, 1)).unwrap();
     let out = builder.create_result_of_operation(Operation::Matmul(w1, false, w2, false), true)?;
     builder.create_result_of_operation(Operation::ReduceAcrossBatch(out), true)?;
     let mut graph = builder.build(device)?;

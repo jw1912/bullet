@@ -80,6 +80,7 @@ impl Device for ExecutionContext {
             Activation::SCReLU => dense::screlu(size, input, output),
             Activation::SqrReLU => dense::sqrrelu(size, input, output),
             Activation::Sigmoid => dense::sigmoid(size, input, output),
+            Activation::Square => dense::square(size, input, output),
         }
     }
 
@@ -97,6 +98,7 @@ impl Device for ExecutionContext {
             Activation::SCReLU => dense::screlu_backward(size, input, input_grad, output_grad),
             Activation::SqrReLU => dense::sqrrelu_backward(size, input, input_grad, output_grad),
             Activation::Sigmoid => dense::sigmoid_backward(size, input, input_grad, output_grad),
+            Activation::Square => dense::square_backward(size, input, input_grad, output_grad),
         }
     }
 

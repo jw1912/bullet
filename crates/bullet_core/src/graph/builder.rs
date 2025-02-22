@@ -22,6 +22,7 @@ pub struct Node {
     pub idx: usize,
     pub(crate) shape: Shape,
     pub(crate) sparse: Option<NonZeroUsize>,
+    pub(crate) can_be_batched: bool,
 }
 
 impl Node {
@@ -56,10 +57,11 @@ impl NodeData {
         id: Option<String>,
         parent_operation: Option<Operation>,
         size: usize,
+        can_be_batched: bool,
         requires_grad: bool,
         sparse: Option<NonZeroUsize>,
     ) -> Self {
-        let own = Node { idx: usize::MAX, shape: Shape::new(usize::MAX, usize::MAX), sparse };
+        let own = Node { idx: usize::MAX, shape: Shape::new(usize::MAX, usize::MAX), can_be_batched, sparse };
         Self { id, size, requires_grad, parent_operation, own }
     }
 }
@@ -83,12 +85,16 @@ impl GraphBuilder {
         mut data: NodeData,
         shape: Shape,
         sparse: Option<NonZeroUsize>,
-    ) -> Result<Node, GraphBuilderError> {
+    ) -> Result<Node, GraphBuilderErrorType> {
         if let Some(id) = data.id.as_ref() {
-            assert!(self.ids.insert(id.to_string()))
+            if self.ids.contains(id) {
+                return Err(GraphBuilderErrorType::NodeWithIdAlreadyExists);
+            }
+
+            self.ids.insert(id.to_string());
         }
 
-        let node = Node { idx: self.nodes.len(), shape, sparse };
+        let node = Node { idx: self.nodes.len(), shape, can_be_batched: data.own.can_be_batched, sparse };
         data.own = node;
 
         if let Some(op) = &data.parent_operation {
@@ -103,8 +109,8 @@ impl GraphBuilder {
         Ok(node)
     }
 
-    pub fn create_dense_input(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
-        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, None);
+    pub fn create_dense_input(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderErrorType> {
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), true, false, None);
         let node = self.create_node(data, shape, None)?;
 
         self.inputs.insert(node);
@@ -112,8 +118,8 @@ impl GraphBuilder {
         Ok(node)
     }
 
-    pub fn create_sparse_input(&mut self, id: &str, shape: Shape, nnz: usize) -> Result<Node, GraphBuilderError> {
-        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, None);
+    pub fn create_sparse_input(&mut self, id: &str, shape: Shape, nnz: usize) -> Result<Node, GraphBuilderErrorType> {
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), true, false, None);
         let node = self.create_node(data, shape, Some(NonZeroUsize::try_from(nnz).unwrap()))?;
 
         self.inputs.insert(node);
@@ -121,8 +127,23 @@ impl GraphBuilder {
         Ok(node)
     }
 
-    pub fn create_weights(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
-        let data = NodeData::new(Some(id.to_string()), None, shape.size(), true, None);
+    pub fn create_unbatched_input(
+        &mut self,
+        id: &str,
+        shape: Shape,
+        sparse: Option<usize>,
+    ) -> Result<Node, GraphBuilderErrorType> {
+        let sparse = sparse.map(|nnz| NonZeroUsize::try_from(nnz).unwrap());
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, false, sparse);
+        let node = self.create_node(data, shape, sparse)?;
+
+        self.inputs.insert(node);
+
+        Ok(node)
+    }
+
+    pub fn create_weights(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderErrorType> {
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, true, None);
         let node = self.create_node(data, shape, None)?;
 
         self.weights.insert(node);
@@ -137,10 +158,10 @@ impl GraphBuilder {
     ) -> Result<Node, GraphBuilderError> {
         match operation.output_shape() {
             Ok(shape) => {
-                let data = NodeData::new(None, Some(operation), shape.size(), requires_grad, None);
-                self.create_node(data, shape, None)
+                let data = NodeData::new(None, Some(operation), shape.size(), true, requires_grad, None);
+                self.create_node(data, shape, None).map_err(|e| GraphBuilderError::new(&operation, e))
             }
-            Err(s) => panic!("{s:#?}"),
+            Err(s) => Err(s),
         }
     }
 

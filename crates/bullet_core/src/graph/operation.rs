@@ -25,9 +25,10 @@ pub enum Activation {
     SCReLU = 3,
     SqrReLU = 4,
     Sigmoid = 5,
+    Square = 6,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Operation {
     Activate(Node, Activation),
     Affine(Node, Node, Node),
@@ -48,7 +49,7 @@ pub enum Operation {
     SoftmaxCrossEntropyLoss(Node, Node),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GraphBuilderError {
     pub op: Box<Operation>,
     pub ty: GraphBuilderErrorType,
@@ -60,12 +61,16 @@ impl GraphBuilderError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum GraphBuilderErrorType {
     InvalidInputShape(Shape),
     MismatchedInputShapes(Vec<Shape>),
     OutOfBounds(Shape, [usize; 2]),
     IncorrectDataLayout,
+    BatchedInputNotSupported,
+    InvalidMatmulDims,
+    ActivationCannotBeFused,
+    NodeWithIdAlreadyExists,
 }
 
 impl Operation {
@@ -88,6 +93,22 @@ impl Operation {
             }
         };
 
+        let check_not_batched = |node: &Node| {
+            if node.can_be_batched {
+                Err(GraphBuilderError::new(self, GraphBuilderErrorType::BatchedInputNotSupported))
+            } else {
+                Ok(())
+            }
+        };
+
+        let check_matmul = |a: Shape, b: Shape| {
+            if let Some(c) = a.matmul(b) {
+                Ok(c)
+            } else {
+                Err(GraphBuilderError::new(self, GraphBuilderErrorType::InvalidMatmulDims))
+            }
+        };
+
         match self {
             Activate(node, _) => {
                 check_dense_eq(node, true)?;
@@ -97,8 +118,10 @@ impl Operation {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, true)?;
                 check_dense_eq(b, true)?;
+                check_not_batched(w)?;
+                check_not_batched(b)?;
 
-                let out = w.shape * i.shape;
+                let out = check_matmul(w.shape, i.shape)?;
                 ret(out == b.shape, out, mismatch(&[w, i]))
             }
             Concat(a, b) => {
@@ -135,7 +158,7 @@ impl Operation {
                 check_dense_eq(a, true)?;
                 check_dense_eq(b, true)?;
 
-                let out = a.shape.maybe_transpose(*transa) * b.shape.maybe_transpose(*transb);
+                let out = check_matmul(a.shape.maybe_transpose(*transa), b.shape.maybe_transpose(*transb))?;
                 ret(true, out, mismatch(&[a, b]))
             }
             PairwiseMul(input, post_concat) => {
@@ -173,21 +196,31 @@ impl Operation {
             SparseAffine(w, i, b) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, false)?;
+                check_not_batched(w)?;
+
                 if let Some(b) = b {
                     check_dense_eq(b, true)?;
+                    check_not_batched(b)?;
                 }
 
-                let out = w.shape * i.shape;
-                let valid = b.is_none() || out == b.unwrap().shape;
-                ret(valid, out, mismatch(&[w, i]))
+                let out = check_matmul(w.shape, i.shape)?;
+                ret(b.is_none() || out == b.unwrap().shape, out, mismatch(&[w, i]))
             }
-            SparseAffineDualActivate(w, s, n, b, _) => {
+            SparseAffineDualActivate(w, s, n, b, act) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(b, true)?;
                 check_dense_eq(s, false)?;
                 check_dense_eq(n, false)?;
+                check_not_batched(w)?;
+                check_not_batched(b)?;
                 let shb = b.shape;
-                let valid = s.shape == n.shape && w.shape * s.shape == shb;
+
+                if *act == Activation::Square {
+                    return Err(GraphBuilderError::new(self, GraphBuilderErrorType::ActivationCannotBeFused));
+                }
+
+                let out = check_matmul(w.shape, s.shape)?;
+                let valid = s.shape == n.shape && out == shb;
                 ret(valid, Shape::new(2 * shb.rows(), shb.cols()), mismatch(&[w, s, n, b]))
             }
             ToDense(node) => {
