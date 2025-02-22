@@ -20,9 +20,10 @@ fn main() {
     let output_buckets = OutputBuckets::default();
 
     let num_inputs = <InputFeatures as inputs::SparseInputType>::num_inputs(&inputs);
+    let max_active = <InputFeatures as inputs::SparseInputType>::max_active(&inputs);
     let num_buckets = <OutputBuckets as outputs::OutputBuckets<_>>::BUCKETS;
 
-    let (graph, output_node) = build_network(num_inputs, num_buckets, HL_SIZE);
+    let (graph, output_node) = build_network(num_inputs, max_active, num_buckets, HL_SIZE);
 
     let mut trainer = Trainer::<AdamWOptimiser, _, _>::new(
         graph,
@@ -64,14 +65,14 @@ fn main() {
     println!("Eval: {eval:.3}cp");
 }
 
-fn build_network(num_inputs: usize, num_buckets: usize, hl: usize) -> (Graph, Node) {
+fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: usize) -> (Graph, Node) {
     let builder = NetworkBuilder::default();
 
     // inputs
-    let stm = builder.new_input("stm", Shape::new(num_inputs, 1));
-    let nstm = builder.new_input("nstm", Shape::new(num_inputs, 1));
-    let targets = builder.new_input("targets", Shape::new(1, 1));
-    let buckets = builder.new_input("buckets", Shape::new(num_buckets, 1));
+    let stm = builder.new_sparse_input("stm", Shape::new(num_inputs, 1), max_active);
+    let nstm = builder.new_sparse_input("nstm", Shape::new(num_inputs, 1), max_active);
+    let targets = builder.new_dense_input("targets", Shape::new(1, 1));
+    let buckets = builder.new_sparse_input("buckets", Shape::new(num_buckets, 1), 1);
 
     // trainable weights
     let l0 = builder.new_affine("l0", num_inputs, hl);

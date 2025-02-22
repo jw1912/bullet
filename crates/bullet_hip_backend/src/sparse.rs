@@ -7,6 +7,7 @@ mod softmax;
 
 pub use affine::*;
 pub use affine_dual::*;
+use bullet_core::device::{DeviceBuffer, OperationError};
 pub use gather::*;
 pub use mask::*;
 pub use select::*;
@@ -24,6 +25,12 @@ pub fn sparse_to_dense(
     sparse: &Buffer<i32>,
     dense: &mut Buffer<f32>,
 ) -> OperationResult {
+    if batch_size * nnz > sparse.size() || batch_size * size > dense.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
+
+    dense.set_zero()?;
+
     unsafe {
         ops::sparse_to_dense(size, batch_size, nnz, sparse.ptr(), dense.mut_ptr());
     }

@@ -12,9 +12,9 @@ pub fn sparse_affine<D: Device>(device: D) -> Result<(), GraphError<D::DeviceErr
     let mut builder = GraphBuilder::default();
     let w = builder.create_weights("w", Shape::new(1, 3))?;
     let b = builder.create_weights("b", Shape::new(1, 1))?;
-    let i = builder.create_input("i", Shape::new(3, 1))?;
-    let out = builder.create_result_of_operation(Operation::Affine(w, i, Some(b)))?;
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out))?;
+    let i = builder.create_sparse_input("i", Shape::new(3, 1), 2)?;
+    let out = builder.create_result_of_operation(Operation::SparseAffine(w, i, Some(b)), true)?;
+    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out), true)?;
     let mut graph = builder.build(device)?;
 
     graph.get_weights_mut("w").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();
@@ -47,12 +47,13 @@ pub fn sparse_affine_dual<D: Device>(device: D) -> Result<(), GraphError<D::Devi
     let mut builder = GraphBuilder::default();
     let w = builder.create_weights("w", Shape::new(1, 3))?;
     let b = builder.create_weights("b", Shape::new(1, 1))?;
-    let i1 = builder.create_input("i1", Shape::new(3, 1))?;
-    let i2 = builder.create_input("i2", Shape::new(3, 1))?;
-    let dot = builder.create_input("dot", Shape::new(1, 2))?;
-    let out = builder.create_result_of_operation(Operation::AffineDualActivate(w, i1, i2, b, Activation::Identity))?;
-    let out2 = builder.create_result_of_operation(Operation::Affine(dot, out, None))?;
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out2))?;
+    let i1 = builder.create_sparse_input("i1", Shape::new(3, 1), 2)?;
+    let i2 = builder.create_sparse_input("i2", Shape::new(3, 1), 2)?;
+    let dot = builder.create_dense_input("dot", Shape::new(1, 2))?;
+    let out = builder
+        .create_result_of_operation(Operation::SparseAffineDualActivate(w, i1, i2, b, Activation::Identity), true)?;
+    let out2 = builder.create_result_of_operation(Operation::Matmul(dot, false, out, false), true)?;
+    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out2), true)?;
     let mut graph = builder.build(device)?;
 
     graph.get_weights_mut("w").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();

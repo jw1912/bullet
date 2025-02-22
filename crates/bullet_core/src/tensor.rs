@@ -10,7 +10,7 @@ pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
 use crate::{
-    device::{Device, DeviceBuffer},
+    device::{Device, DeviceBuffer, OperationError},
     graph::{builder::Node, operation::Operation},
 };
 
@@ -30,8 +30,14 @@ impl<D: Device> Tensor<D> {
         operation: Option<Operation>,
         own: Node,
     ) -> Result<Self, D::DeviceError> {
+        let values = if let Some(nnz) = own.sparse.map(usize::from) {
+            Matrix::Sparse(SparseMatrix::zeroed(device.clone(), single_size, nnz)?)
+        } else {
+            Matrix::Dense(DenseMatrix::zeroed(device.clone(), single_size)?)
+        };
+
         Ok(Self {
-            values: Matrix::Dense(DenseMatrix::zeroed(device.clone(), single_size)?),
+            values,
             gradients: if requires_grad { Some(DenseMatrix::zeroed(device, single_size)?) } else { None },
             internal: HashMap::new(),
             operation,
@@ -50,33 +56,33 @@ impl<D: Device> Tensor<D> {
     pub fn get_scalar(&self) -> Option<f32> {
         if self.values.size() == 1 {
             let mut buf = [0.0];
-            self.values.dense().write_to_slice(&mut buf).unwrap();
+            self.values.dense().ok()?.write_to_slice(&mut buf).unwrap();
             Some(buf[0])
         } else {
             None
         }
     }
 
-    pub fn get_dense_vals(&self) -> Option<Vec<f32>> {
+    pub fn get_dense_vals(&self) -> Result<Vec<f32>, OperationError<D::DeviceError>> {
         match &self.values {
-            Matrix::Sparse(_) => None,
+            Matrix::Sparse(_) => Err(OperationError::InvalidTensorFormat),
             Matrix::Dense(dense) => {
                 let mut buf = vec![0.0; dense.size()];
-                dense.write_to_slice(&mut buf).unwrap();
-                Some(buf)
+                dense.write_to_slice(&mut buf)?;
+                Ok(buf)
             }
         }
     }
 
-    pub fn get_sparse_vals(&self) -> Option<Vec<i32>> {
+    pub fn get_sparse_vals(&self) -> Result<Vec<i32>, OperationError<D::DeviceError>> {
         match &self.values {
             Matrix::Sparse(sparse) => {
                 let size = sparse.nnz * sparse.batch_size().unwrap_or(1);
                 let mut buf = vec![0; size];
-                sparse.buf.write_into_slice(&mut buf, size).unwrap();
-                Some(buf)
+                sparse.buf.write_into_slice(&mut buf, size)?;
+                Ok(buf)
             }
-            Matrix::Dense(_) => None,
+            Matrix::Dense(_) => Err(OperationError::InvalidTensorFormat),
         }
     }
 
@@ -99,15 +105,12 @@ impl<D: Device> Tensor<D> {
         self.load_from_slice(self.values.batch_size(), &values)
     }
 
-    pub fn load_dense_from_slice(&mut self, batch_size: Option<usize>, values: &[f32]) -> Result<(), D::DeviceError> {
-        if let Matrix::Dense(dst) = &mut self.values {
-            dst.load_from_slice(batch_size, values)?;
-        } else {
-            let mut dst = DenseMatrix::zeroed(self.values.device(), self.values.single_size())?;
-            dst.load_from_slice(batch_size, values)?;
-            self.values = Matrix::Dense(dst);
-        }
-
+    pub fn load_dense_from_slice(
+        &mut self,
+        batch_size: Option<usize>,
+        values: &[f32],
+    ) -> Result<(), OperationError<D::DeviceError>> {
+        self.values.dense_mut()?.load_from_slice(batch_size, values)?;
         Ok(())
     }
 
@@ -118,15 +121,8 @@ impl<D: Device> Tensor<D> {
         nnz: usize,
         batch_size: Option<usize>,
         values: &[i32],
-    ) -> Result<(), D::DeviceError> {
-        if let Matrix::Sparse(dst) = &mut self.values {
-            dst.load_from_slice(nnz, batch_size, values)?;
-        } else {
-            let mut dst = SparseMatrix::zeroed(self.values.device(), self.values.single_size(), nnz)?;
-            dst.load_from_slice(nnz, batch_size, values)?;
-            self.values = Matrix::Sparse(dst);
-        }
-
+    ) -> Result<(), OperationError<D::DeviceError>> {
+        self.values.sparse_mut()?.load_from_slice(nnz, batch_size, values)?;
         Ok(())
     }
 }

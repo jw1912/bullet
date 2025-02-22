@@ -17,7 +17,6 @@ use super::{
 };
 
 use bullet_core::optimiser::Optimiser;
-use bullet_hip_backend::SparseMatrix;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Loss {
@@ -245,8 +244,8 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let input_size = input_getter.num_inputs();
         let input_shape = Shape::new(input_size, 1);
 
-        let mut out = builder.new_input("stm", input_shape);
-        let buckets = output_buckets.then(|| builder.new_input("buckets", Shape::new(U::BUCKETS, 1)));
+        let mut out = builder.new_sparse_input("stm", input_shape, input_getter.max_active());
+        let buckets = output_buckets.then(|| builder.new_sparse_input("buckets", Shape::new(U::BUCKETS, 1), 1));
         let l0 = builder.new_affine("l0", input_size, self.ft_out_size);
 
         let mut still_in_ft = true;
@@ -274,7 +273,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             pst.matmul(out)
         });
 
-        self.push_saved_format(0, l0.weights.shape, &mut saved_format, &mut net_quant);
+        self.push_saved_format(0, l0.weights.shape(), &mut saved_format, &mut net_quant);
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
@@ -290,7 +289,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
                 (0, Activation::Identity)
             };
 
-            let ntm = builder.new_input("nstm", input_shape);
+            let ntm = builder.new_sparse_input("nstm", input_shape, input_getter.max_active());
             out = l0.forward_sparse_dual_with_activation(out, ntm, activation);
             skip
         } else {
@@ -311,7 +310,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
                     let l = builder.new_affine(&format!("l{layer}"), prev_size, raw_size);
 
-                    self.push_saved_format(layer, l.weights.shape, &mut saved_format, &mut net_quant);
+                    self.push_saved_format(layer, l.weights.shape(), &mut saved_format, &mut net_quant);
 
                     layer += 1;
 
@@ -344,7 +343,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         let output_node = out.node();
         let output_size = prev_size;
-        let targets = builder.new_input("targets", Shape::new(output_size, 1));
+        let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
         match self.loss {
             Loss::None => panic!("No loss function specified!"),
             Loss::SigmoidMSE => out.activate(Activation::Sigmoid).mse(targets),
@@ -382,22 +381,14 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             }
         });
 
-        let sparse_scratch_space = SparseMatrix::zeroed(graph.device(), 1, 1).unwrap();
-
         let trainer = Trainer {
             optimiser: Optimiser::new(graph, Default::default()).unwrap(),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter,
             output_node,
-            additional_inputs: AdditionalTrainerInputs {
-                nstm: self.perspective,
-                output_buckets,
-                wdl: output_size == 3,
-                dense_inputs: false,
-            },
+            additional_inputs: AdditionalTrainerInputs { wdl: output_size == 3 },
             saved_format: saved_format.clone(),
             factorised_weights,
-            sparse_scratch_space,
         };
 
         logger::clear_colours();

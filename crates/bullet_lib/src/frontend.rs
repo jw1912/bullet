@@ -34,8 +34,13 @@ impl NetworkBuilder {
         self.init_data.try_lock().unwrap()
     }
 
-    pub fn new_input<'a>(&'a self, id: &str, shape: Shape) -> NetworkBuilderNode<'a> {
-        let node = self.builder().create_input(id, shape).unwrap();
+    pub fn new_dense_input<'a>(&'a self, id: &str, shape: Shape) -> NetworkBuilderNode<'a> {
+        let node = self.builder().create_dense_input(id, shape).unwrap();
+        NetworkBuilderNode { node, builder: self }
+    }
+
+    pub fn new_sparse_input<'a>(&'a self, id: &str, shape: Shape, nnz: usize) -> NetworkBuilderNode<'a> {
+        let node = self.builder().create_sparse_input(id, shape, nnz).unwrap();
         NetworkBuilderNode { node, builder: self }
     }
 
@@ -55,13 +60,13 @@ impl NetworkBuilder {
     }
 
     pub fn apply(&self, operation: Operation) -> NetworkBuilderNode {
-        let node = self.builder().create_result_of_operation(operation).unwrap();
+        let node = self.builder().create_result_of_operation(operation, true).unwrap();
         NetworkBuilderNode { node, builder: self }
     }
 
     pub fn build(self, execution_context: ExecutionContext) -> Graph<ExecutionContext> {
         let mut builder = self.graph_builder.into_inner().unwrap();
-        builder.create_result_of_operation(Operation::ReduceAcrossBatch(builder.root())).unwrap();
+        builder.create_result_of_operation(Operation::ReduceAcrossBatch(builder.root()), true).unwrap();
         let mut graph = builder.build(execution_context).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
@@ -107,6 +112,11 @@ impl NetworkBuilderNode<'_> {
         self.node
     }
 
+    pub fn reshape(mut self, shape: Shape) -> Self {
+        self.node = self.node.reshape(shape).unwrap();
+        self
+    }
+
     pub fn activate(self, activation: Activation) -> Self {
         self.builder.apply(Operation::Activate(self.node, activation))
     }
@@ -124,7 +134,11 @@ impl NetworkBuilderNode<'_> {
     }
 
     pub fn matmul(self, rhs: Self) -> Self {
-        self.builder.apply(Operation::Affine(self.node, rhs.node, None))
+        if rhs.node.is_sparse() {
+            self.builder.apply(Operation::SparseAffine(self.node, rhs.node, None))
+        } else {
+            self.builder.apply(Operation::Matmul(self.node, false, rhs.node, false))
+        }
     }
 
     pub fn mpe(self, targets: Self, power: f32) -> Self {
@@ -162,6 +176,11 @@ impl NetworkBuilderNode<'_> {
     pub fn slice_rows(self, start: usize, end: usize) -> Self {
         self.builder.apply(Operation::Slice(self.node, start, end))
     }
+
+    pub fn to_dense(self) -> Self {
+        let node = self.builder.builder().create_result_of_operation(Operation::ToDense(self.node), false).unwrap();
+        Self { node, builder: self.builder }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -172,7 +191,11 @@ pub struct Affine {
 
 impl Affine {
     pub fn forward(self, input: NetworkBuilderNode<'_>) -> NetworkBuilderNode<'_> {
-        input.builder.apply(Operation::Affine(self.weights, input.node, Some(self.bias)))
+        if input.node.is_sparse() {
+            input.builder.apply(Operation::SparseAffine(self.weights, input.node, Some(self.bias)))
+        } else {
+            input.builder.apply(Operation::Affine(self.weights, input.node, self.bias))
+        }
     }
 
     pub fn forward_sparse_dual_with_activation<'a>(
@@ -181,6 +204,6 @@ impl Affine {
         ntm: NetworkBuilderNode<'a>,
         activation: Activation,
     ) -> NetworkBuilderNode<'a> {
-        stm.builder.apply(Operation::AffineDualActivate(self.weights, stm.node, ntm.node, self.bias, activation))
+        stm.builder.apply(Operation::SparseAffineDualActivate(self.weights, stm.node, ntm.node, self.bias, activation))
     }
 }
