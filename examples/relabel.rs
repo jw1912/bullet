@@ -53,7 +53,7 @@ fn main() {
     let (sender2, receiver2) = std::sync::mpsc::sync_channel(2);
 
     std::thread::spawn(move || {
-        let (mut graph, output_node) = build_network(inputs.num_inputs(), hl_size);
+        let (mut graph, output_node) = build_network(inputs.num_inputs(), inputs.max_active(), hl_size);
         load_graph_weights_from_file::<ExecutionContext>(&mut graph, NETWORK_PATH, true).unwrap();
 
         let mut error = 0.0;
@@ -96,13 +96,13 @@ fn main() {
     }
 }
 
-fn build_network(num_inputs: usize, hl: usize) -> (Graph, Node) {
+fn build_network(num_inputs: usize, nnz: usize, hl: usize) -> (Graph, Node) {
     let builder = NetworkBuilder::default();
 
     // inputs
-    let stm = builder.new_input("stm", Shape::new(num_inputs, 1));
-    let nstm = builder.new_input("nstm", Shape::new(num_inputs, 1));
-    let targets = builder.new_input("targets", Shape::new(1, 1));
+    let stm = builder.new_sparse_input("stm", Shape::new(num_inputs, 1), nnz);
+    let nstm = builder.new_sparse_input("nstm", Shape::new(num_inputs, 1), nnz);
+    let targets = builder.new_dense_input("targets", Shape::new(1, 1));
 
     // trainable weights
     let l0 = builder.new_affine("l0", num_inputs, hl);

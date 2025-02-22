@@ -181,7 +181,7 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
                                 j += 1;
                             });
 
-                            if j < max_active {
+                            for j in j..max_active {
                                 stm_chunk[sparse_offset + j] = -1;
                                 nstm_chunk[sparse_offset + j] = -1;
                             }
