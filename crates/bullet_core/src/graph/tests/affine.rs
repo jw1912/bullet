@@ -8,8 +8,8 @@ pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphBuilder::default();
     let w1 = builder.create_weights("w1", Shape::new(1, 3))?;
     let w2 = builder.create_weights("w2", Shape::new(3, 1))?;
-    let out = builder.create_result_of_operation(Operation::Affine(w1, w2, None))?;
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out))?;
+    let out = builder.create_result_of_operation(Operation::Matmul(w1, false, w2, false), true)?;
+    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out), true)?;
     let mut graph = builder.build(device)?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();

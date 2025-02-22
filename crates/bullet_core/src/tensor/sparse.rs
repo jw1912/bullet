@@ -53,6 +53,7 @@ impl<D: Device> SparseMatrix<D> {
         batch_size: Option<usize>,
         buf: &[i32],
     ) -> Result<(), D::DeviceError> {
+        assert_eq!(self.nnz, nnz);
         assert_eq!(nnz * batch_size.unwrap_or(1), buf.len());
         self.set_batch_size(batch_size)?;
         self.buf.load_from_slice(buf)

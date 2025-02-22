@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    device::{Device, DeviceBuffer},
+    device::{Device, DeviceBuffer, OperationError},
     tensor::{dense::DenseMatrix, sparse::SparseMatrix},
 };
 
@@ -39,27 +39,35 @@ impl<D: Device> Matrix<D> {
         }
     }
 
-    pub fn dense(&self) -> &DenseMatrix<D> {
+    pub fn dense(&self) -> Result<&DenseMatrix<D>, OperationError<D::DeviceError>> {
         if let Self::Dense(matrix) = self {
-            matrix
+            Ok(matrix)
         } else {
-            panic!("This matrix is not dense!")
+            Err(OperationError::InvalidTensorFormat)
         }
     }
 
-    pub fn dense_mut(&mut self) -> &mut DenseMatrix<D> {
+    pub fn dense_mut(&mut self) -> Result<&mut DenseMatrix<D>, OperationError<D::DeviceError>> {
         if let Self::Dense(matrix) = self {
-            matrix
+            Ok(matrix)
         } else {
-            panic!("This matrix is not dense!")
+            Err(OperationError::InvalidTensorFormat)
         }
     }
 
-    pub fn sparse(&self) -> &SparseMatrix<D> {
+    pub fn sparse(&self) -> Result<&SparseMatrix<D>, OperationError<D::DeviceError>> {
         if let Self::Sparse(matrix) = self {
-            matrix
+            Ok(matrix)
         } else {
-            panic!("This matrix is not sparse!")
+            Err(OperationError::InvalidTensorFormat)
+        }
+    }
+
+    pub fn sparse_mut(&mut self) -> Result<&mut SparseMatrix<D>, OperationError<D::DeviceError>> {
+        if let Self::Sparse(matrix) = self {
+            Ok(matrix)
+        } else {
+            Err(OperationError::InvalidTensorFormat)
         }
     }
 }

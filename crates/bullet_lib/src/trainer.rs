@@ -261,7 +261,7 @@ pub trait NetworkTrainer {
 
         for fmt in weights {
             let weights = self.optimiser().graph.get_weights(&fmt.id);
-            buf.extend_from_slice(&fmt.write_to_byte_buffer(weights.values.dense())?);
+            buf.extend_from_slice(&fmt.write_to_byte_buffer(weights.values.dense().unwrap())?);
         }
 
         file.write_all(&buf)?;

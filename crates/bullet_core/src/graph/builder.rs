@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Debug,
+    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -20,6 +21,7 @@ use crate::{
 pub struct Node {
     pub idx: usize,
     pub shape: Shape,
+    pub sparse: Option<NonZeroUsize>,
 }
 
 pub(crate) struct NodeData {
@@ -31,8 +33,14 @@ pub(crate) struct NodeData {
 }
 
 impl NodeData {
-    fn new(id: Option<String>, parent_operation: Option<Operation>, size: usize, requires_grad: bool) -> Self {
-        let own = Node { idx: usize::MAX, shape: Shape::new(usize::MAX, usize::MAX) };
+    fn new(
+        id: Option<String>,
+        parent_operation: Option<Operation>,
+        size: usize,
+        requires_grad: bool,
+        sparse: Option<NonZeroUsize>,
+    ) -> Self {
+        let own = Node { idx: usize::MAX, shape: Shape::new(usize::MAX, usize::MAX), sparse };
         Self { id, size, requires_grad, parent_operation, own }
     }
 }
@@ -51,12 +59,17 @@ impl GraphBuilder {
         &self.nodes[node.idx]
     }
 
-    fn create_node(&mut self, mut data: NodeData, shape: Shape) -> Result<Node, GraphBuilderError> {
+    fn create_node(
+        &mut self,
+        mut data: NodeData,
+        shape: Shape,
+        sparse: Option<NonZeroUsize>,
+    ) -> Result<Node, GraphBuilderError> {
         if let Some(id) = data.id.as_ref() {
             assert!(self.ids.insert(id.to_string()))
         }
 
-        let node = Node { idx: self.nodes.len(), shape };
+        let node = Node { idx: self.nodes.len(), shape, sparse };
         data.own = node;
 
         if let Some(op) = &data.parent_operation {
@@ -71,9 +84,18 @@ impl GraphBuilder {
         Ok(node)
     }
 
-    pub fn create_input(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
-        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false);
-        let node = self.create_node(data, shape)?;
+    pub fn create_dense_input(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, None);
+        let node = self.create_node(data, shape, None)?;
+
+        self.inputs.insert(node);
+
+        Ok(node)
+    }
+
+    pub fn create_sparse_input(&mut self, id: &str, shape: Shape, nnz: usize) -> Result<Node, GraphBuilderError> {
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, None);
+        let node = self.create_node(data, shape, Some(NonZeroUsize::try_from(nnz).unwrap()))?;
 
         self.inputs.insert(node);
 
@@ -81,21 +103,25 @@ impl GraphBuilder {
     }
 
     pub fn create_weights(&mut self, id: &str, shape: Shape) -> Result<Node, GraphBuilderError> {
-        let data = NodeData::new(Some(id.to_string()), None, shape.size(), true);
-        let node = self.create_node(data, shape)?;
+        let data = NodeData::new(Some(id.to_string()), None, shape.size(), true, None);
+        let node = self.create_node(data, shape, None)?;
 
         self.weights.insert(node);
 
         Ok(node)
     }
 
-    pub fn create_result_of_operation(&mut self, operation: Operation) -> Result<Node, GraphBuilderError> {
+    pub fn create_result_of_operation(
+        &mut self,
+        operation: Operation,
+        requires_grad: bool,
+    ) -> Result<Node, GraphBuilderError> {
         match operation.output_shape() {
             Ok(shape) => {
-                let data = NodeData::new(None, Some(operation), shape.size(), true);
-                self.create_node(data, shape)
+                let data = NodeData::new(None, Some(operation), shape.size(), requires_grad, None);
+                self.create_node(data, shape, None)
             }
-            Err(s) => panic!("{s:?}"),
+            Err(s) => panic!("{s:#?}"),
         }
     }
 

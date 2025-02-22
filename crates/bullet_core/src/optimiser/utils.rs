@@ -17,7 +17,7 @@ pub fn write_graph_weights_to_file<D: Device>(graph: &Graph<D>, path: &str) {
 
     for id in &weight_ids {
         let weights = graph.get_weights(id);
-        let this_buf = weights.values.dense().write_to_byte_buffer(id).unwrap();
+        let this_buf = weights.values.dense().unwrap().write_to_byte_buffer(id).unwrap();
 
         buf.extend_from_slice(&this_buf);
     }
@@ -43,7 +43,7 @@ pub fn load_graph_weights_from_file<D: Device>(
 
     while offset < buf.len() {
         let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
-        graph.get_weights_mut(&id).load_dense_from_slice(None, &buffer)?;
+        graph.get_weights_mut(&id).load_dense_from_slice(None, &buffer).expect("This is guaranteed!");
 
         offset += bytes_read;
     }

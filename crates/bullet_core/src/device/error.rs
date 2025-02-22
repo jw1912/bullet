@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {
+    InvalidTensorFormat,
     IndexOutOfBounds,
     UnsupportedOperation,
     DeviceError(Box<T>),
