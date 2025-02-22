@@ -30,6 +30,7 @@ pub enum Activation {
 #[derive(Clone, Copy, Debug)]
 pub enum Operation {
     Activate(Node, Activation),
+    Affine(Node, Node, Node),
     SparseAffine(Node, Node, Option<Node>),
     SparseAffineDualActivate(Node, Node, Node, Node, Activation),
     Concat(Node, Node),
@@ -91,6 +92,14 @@ impl Operation {
             Activate(node, _) => {
                 check_dense_eq(node, true)?;
                 Ok(node.shape)
+            }
+            Affine(w, i, b) => {
+                check_dense_eq(w, true)?;
+                check_dense_eq(i, true)?;
+                check_dense_eq(b, true)?;
+
+                let out = w.shape * i.shape;
+                ret(out == b.shape, out, mismatch(&[w, i]))
             }
             Concat(a, b) => {
                 check_dense_eq(a, true)?;
@@ -208,6 +217,7 @@ impl Operation {
 
         match *self {
             Activate(node, _) => vec![node],
+            Affine(a, b, c) => vec![a, b, c],
             Concat(a, b) => vec![a, b],
             Gather(input, mask) => vec![input, mask],
             LinearCombination(_, a, _, b) => vec![a, b],
@@ -252,6 +262,19 @@ impl<D: Device> Graph<D> {
                 assert_eq!(outn.shape, node.shape);
                 output.set_batch_size(input.batch_size())?;
                 D::activate(input.size(), &input.buf, &mut output.buf, *act)
+            }
+            Affine(wn, inp, bn) => {
+                let w = get(*wn);
+                let i = get(*inp);
+                let b = get(*bn);
+                let w = w.values.dense()?;
+                let i = i.values.dense()?;
+                let b = b.values.dense()?;
+
+                let bs = i.batch_size().unwrap_or(1);
+                setup_ones(w.buf.device(), internal, bs)?;
+                let ones = &internal.get("ones").unwrap().borrow().buf;
+                matmul::dense_affine(w, wn.shape, i, inp.shape, b, bn.shape, ones, output)
             }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = get(*an);
@@ -519,6 +542,14 @@ impl<D: Device> Graph<D> {
                     grad.set_batch_size(output_grad.batch_size())?;
                     D::backprop_activate(input.size(), &input.buf, &mut grad.buf, &output_grad.buf, *act)?;
                 }
+            }
+            Affine(wn, inp, bn) => {
+                let i = &mut *get(*inp);
+                let w = &mut *get(*wn);
+                let bs = i.values.batch_size().unwrap_or(1);
+                setup_ones(w.values.dense()?.buf.device(), internal, bs)?;
+                let ones = &internal.get("ones").unwrap().borrow().buf;
+                matmul::backprop_dense_affine(w, wn.shape, i, inp.shape, &mut *get(*bn), ones, output_grad)?;
             }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = &mut *get(*an);

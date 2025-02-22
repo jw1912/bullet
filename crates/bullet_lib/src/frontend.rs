@@ -194,8 +194,7 @@ impl Affine {
         if input.node.is_sparse() {
             input.builder.apply(Operation::SparseAffine(self.weights, input.node, Some(self.bias)))
         } else {
-            let int = input.builder.apply(Operation::Matmul(self.weights, false, input.node, false));
-            input.builder.apply(Operation::LinearCombination(1.0, int.node, 1.0, self.bias))
+            input.builder.apply(Operation::Affine(self.weights, input.node, self.bias))
         }
     }
 

@@ -6,6 +6,60 @@ use crate::{
 
 use super::linear_comb::backprop_add_single_scaled;
 
+#[allow(clippy::too_many_arguments)]
+pub fn dense_affine<D: Device>(
+    a: &DenseMatrix<D>,
+    shape_a: Shape,
+    b: &DenseMatrix<D>,
+    shape_b: Shape,
+    c: &DenseMatrix<D>,
+    shape_c: Shape,
+    ones: &D::BufferF32,
+    out: &mut DenseMatrix<D>,
+) -> Result<(), OperationError<D::DeviceError>> {
+    let output_shape = shape_a * shape_b;
+    assert_eq!(output_shape.size(), c.single_size());
+    assert_eq!(output_shape, shape_c);
+    assert!(c.batch_size().is_none());
+
+    matmul(a, shape_a, false, b, shape_b, false, out)?;
+
+    let bs = out.batch_size().unwrap_or(1);
+    D::add_assign_single_to_batched_scaled(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf)
+}
+
+pub fn backprop_dense_affine<D: Device>(
+    a: &mut Tensor<D>,
+    shape_a: Shape,
+    b: &mut Tensor<D>,
+    shape_b: Shape,
+    c: &mut Tensor<D>,
+    ones: &D::BufferF32,
+    output_grad: &DenseMatrix<D>,
+) -> Result<(), OperationError<D::DeviceError>> {
+    let output_shape = shape_a * shape_b;
+    assert_eq!(output_shape.size(), c.values.single_size());
+    assert!(c.values.batch_size().is_none());
+
+    backprop_matmul(
+        a.values.dense()?,
+        a.gradients.as_mut(),
+        shape_a,
+        false,
+        b.values.dense()?,
+        b.gradients.as_mut(),
+        shape_b,
+        false,
+        output_grad,
+    )?;
+
+    if let Some(grad) = c.gradients.as_mut() {
+        backprop_add_single_scaled(ones, 1.0, c.values.dense()?, grad, output_grad)?;
+    }
+
+    Ok(())
+}
+
 pub fn sparse_affine<D: Device>(
     a: &DenseMatrix<D>,
     shape_a: Shape,
