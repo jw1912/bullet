@@ -14,9 +14,9 @@ use crate::{
 
 pub struct Graph<D: Device> {
     nodes: Vec<RefCell<Tensor<D>>>,
-    root: Node,
-    inputs: HashMap<String, Node>,
-    weights: HashMap<String, Node>,
+    root: usize,
+    inputs: HashMap<String, usize>,
+    weights: HashMap<String, usize>,
     device: Arc<D>,
 }
 
@@ -27,11 +27,11 @@ impl<D: Device> Graph<D> {
             self.forward_node(node)?;
         }
 
-        Ok(self.nodes[self.root.idx].borrow().get_scalar().unwrap())
+        Ok(self.nodes[self.root].borrow().get_scalar().unwrap())
     }
 
     pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
-        self.nodes[self.root.idx].get_mut().set_grad_to_unit()?;
+        self.nodes[self.root].get_mut().set_grad_to_unit()?;
 
         for node in (0..self.nodes.len()).rev() {
             let node = { self.nodes[node].borrow().own };
@@ -58,19 +58,19 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_input(&self, id: &str) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[self.inputs[id].idx].borrow()
+        self.nodes[self.inputs[id]].borrow()
     }
 
     pub fn get_input_mut(&mut self, id: &str) -> &mut Tensor<D> {
-        self.nodes[self.inputs[id].idx].get_mut()
+        self.nodes[self.inputs[id]].get_mut()
     }
 
     pub fn get_weights(&self, id: &str) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[self.weights[id].idx].borrow()
+        self.nodes[self.weights[id]].borrow()
     }
 
     pub fn get_weights_mut(&mut self, id: &str) -> &mut Tensor<D> {
-        self.nodes[self.weights[id].idx].get_mut()
+        self.nodes[self.weights[id]].get_mut()
     }
 
     pub fn get_node(&self, node: Node) -> std::cell::Ref<'_, Tensor<D>> {

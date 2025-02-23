@@ -1,20 +1,13 @@
-use std::fmt::{Debug, Display, Formatter, Result};
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {
     InvalidTensorFormat,
     IndexOutOfBounds,
-    UnsupportedOperation,
+    UnsupportedOperation(String),
+    MismatchedBatchSizes,
     DeviceError(Box<T>),
 }
-
-impl<T: Debug> Display for OperationError<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl<T: Debug> std::error::Error for OperationError<T> {}
 
 impl<T: Debug> From<T> for OperationError<T> {
     fn from(value: T) -> Self {

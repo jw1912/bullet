@@ -158,7 +158,10 @@ pub fn matmul<D: Device>(
 
     match (input_a.batch_size(), input_b.batch_size()) {
         (Some(x), Some(y)) => {
-            assert_eq!(x, y);
+            if x != y {
+                return Err(OperationError::MismatchedBatchSizes);
+            }
+
             output.set_batch_size(Some(x))?;
             D::sgemm_batched(x, &input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
@@ -168,15 +171,14 @@ pub fn matmul<D: Device>(
         }
         (None, Some(x)) => {
             if trans_b || shape_b.cols() > 1 {
-                println!("{trans_b}, {shape_b}");
-                return Err(OperationError::UnsupportedOperation);
+                return Err(OperationError::UnsupportedOperation("matmul trans_b || shape_b.cols() > 1".to_string()));
             }
 
             let shape_b = Shape::new(shape_b.rows(), x);
             output.set_batch_size(Some(x))?;
             D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation("matmul batched x single".to_string())),
     }
 }
 
@@ -236,7 +238,7 @@ pub fn backprop_matmul<D: Device>(
                 output_grad,
             )
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation("backprop matmul batched x single".to_string())),
     }
 }
 

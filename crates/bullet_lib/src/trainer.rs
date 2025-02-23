@@ -37,7 +37,7 @@ pub trait NetworkTrainer {
             Err(e) => {
                 println!();
                 println!("An unrecoverable error occurred:");
-                println!("{e}");
+                println!("{e:#?}");
                 std::process::exit(1);
             }
         };
@@ -172,7 +172,7 @@ pub trait NetworkTrainer {
                         Err(e) => {
                             println!();
                             println!("An unrecoverable error occurred:");
-                            println!("{e}");
+                            println!("{e:#?}");
                             std::process::exit(1);
                         }
                     };

@@ -146,6 +146,10 @@ impl NetworkBuilderNode<'_> {
         }
     }
 
+    pub fn gemm(self, transa: bool, rhs: Self, transb: bool) -> Self {
+        self.builder.apply(Operation::Matmul(self.node, transa, rhs.node, transb))
+    }
+
     pub fn mpe(self, targets: Self, power: f32) -> Self {
         self.builder.apply(Operation::PowerError(self.node, targets.node, power))
     }
