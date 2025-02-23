@@ -854,7 +854,7 @@ impl<D: Device> Graph<D> {
                     *act,
                 )?;
             }
-            ToDense(_) => return Err(OperationError::UnsupportedOperation),
+            ToDense(_) => return Err(OperationError::UnsupportedOperation("to_dense".to_string())),
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 let masks = &*get(*mask);
                 let masks = masks.values.sparse()?;

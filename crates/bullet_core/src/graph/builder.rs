@@ -69,15 +69,15 @@ impl NodeData {
 #[derive(Default)]
 pub struct GraphBuilder {
     nodes: Vec<NodeData>,
-    roots: HashSet<Node>,
-    inputs: HashSet<Node>,
-    weights: HashSet<Node>,
+    roots: HashSet<usize>,
+    inputs: HashSet<usize>,
+    weights: HashSet<usize>,
     ids: HashSet<String>,
 }
 
 impl GraphBuilder {
-    pub(crate) fn get_node(&self, node: Node) -> &NodeData {
-        &self.nodes[node.idx]
+    pub(crate) fn get(&self, idx: usize) -> &NodeData {
+        &self.nodes[idx]
     }
 
     fn create_node(
@@ -99,12 +99,12 @@ impl GraphBuilder {
 
         if let Some(op) = &data.parent_operation {
             for parent in &op.nodes() {
-                self.roots.remove(parent);
+                self.roots.remove(&parent.idx);
             }
         }
 
         self.nodes.push(data);
-        self.roots.insert(node);
+        self.roots.insert(node.idx);
 
         Ok(node)
     }
@@ -113,7 +113,7 @@ impl GraphBuilder {
         let data = NodeData::new(Some(id.to_string()), None, shape.size(), true, false, None);
         let node = self.create_node(data, shape, None)?;
 
-        self.inputs.insert(node);
+        self.inputs.insert(node.idx);
 
         Ok(node)
     }
@@ -122,7 +122,7 @@ impl GraphBuilder {
         let data = NodeData::new(Some(id.to_string()), None, shape.size(), true, false, None);
         let node = self.create_node(data, shape, Some(NonZeroUsize::try_from(nnz).unwrap()))?;
 
-        self.inputs.insert(node);
+        self.inputs.insert(node.idx);
 
         Ok(node)
     }
@@ -137,7 +137,7 @@ impl GraphBuilder {
         let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, false, sparse);
         let node = self.create_node(data, shape, sparse)?;
 
-        self.inputs.insert(node);
+        self.inputs.insert(node.idx);
 
         Ok(node)
     }
@@ -146,7 +146,7 @@ impl GraphBuilder {
         let data = NodeData::new(Some(id.to_string()), None, shape.size(), false, true, None);
         let node = self.create_node(data, shape, None)?;
 
-        self.weights.insert(node);
+        self.weights.insert(node.idx);
 
         Ok(node)
     }
@@ -167,17 +167,17 @@ impl GraphBuilder {
 
     pub fn root(&self) -> Node {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
-        *self.roots.iter().next().unwrap()
+        self.nodes[*self.roots.iter().next().unwrap()].own
     }
 
     pub fn build<D: Device>(self, device: D) -> Result<Graph<D>, GraphError<D::DeviceError>> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
-        assert!(self.get_node(root).requires_grad, "Output cannot be an input!");
+        assert!(self.get(root).requires_grad, "Output cannot be an input!");
         assert!(!self.weights.contains(&root), "Can't output trainable weights!");
-        assert_eq!(root.shape, Shape::new(1, 1), "Graph output must be scalar!");
-        assert_eq!(self.get_node(root).size, 1);
+        assert_eq!(self.nodes[root].own.shape, Shape::new(1, 1), "Graph output must be scalar!");
+        assert_eq!(self.get(root).size, 1);
 
         let device = Arc::new(device);
 
@@ -196,10 +196,10 @@ impl GraphBuilder {
         }
 
         let inputs =
-            self.inputs.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
+            self.inputs.iter().map(|&node| (self.get(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
         let weights =
-            self.weights.iter().map(|&node| (self.get_node(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
+            self.weights.iter().map(|&node| (self.get(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
 
         Ok(Graph { nodes, root, inputs, weights, device })
     }

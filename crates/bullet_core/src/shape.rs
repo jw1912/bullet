@@ -19,7 +19,8 @@ impl std::ops::Mul<Shape> for Shape {
 
 impl Shape {
     pub fn matmul(self, rhs: Shape) -> Option<Self> {
-        (self.cols == rhs.rows).then_some(Self { cols: rhs.cols, rows: self.rows })
+        let shape = Self { cols: rhs.cols, rows: self.rows };
+        (self.cols == rhs.rows).then_some(shape)
     }
 
     pub fn new(rows: usize, cols: usize) -> Self {
@@ -38,12 +39,6 @@ impl Shape {
         } else {
             *self
         }
-    }
-
-    pub fn reshape(&mut self, rows: usize, cols: usize) {
-        assert_eq!(self.rows * self.cols, cols * rows, "Invalid reshape!");
-        self.cols = cols;
-        self.rows = rows;
     }
 
     pub fn cols(&self) -> usize {
