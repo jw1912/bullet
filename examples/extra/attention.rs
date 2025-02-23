@@ -1,24 +1,16 @@
 use bullet_lib::{
-    nn::{
+        nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
         Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
-    },
-    trainer::{
-        default::{inputs, loader, outputs, Trainer},
+    }, trainer::{
+        default::{inputs::SparseInputType, loader, outputs, Trainer, formats::bulletformat::ChessBoard},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
-    },
+    }
 };
 
-type InputFeatures = inputs::Chess768;
-
 fn main() {
-    let inputs = InputFeatures::default();
-
-    let num_inputs = <InputFeatures as inputs::SparseInputType>::num_inputs(&inputs);
-    let max_active = <InputFeatures as inputs::SparseInputType>::max_active(&inputs);
-
-    let (graph, output_node) = build_network(num_inputs, max_active);
+    let (graph, output_node) = build_network();
 
     println!("Params: {}", graph.get_num_params());
 
@@ -26,7 +18,7 @@ fn main() {
         graph,
         output_node,
         AdamWParams::default(),
-        inputs,
+        Chess12x64,
         outputs::Single,
         Vec::new(),
         false,
@@ -56,31 +48,31 @@ fn main() {
     println!("Eval: {eval:.3}cp");
 }
 
-fn build_network(num_inputs: usize, max_active: usize) -> (Graph, Node) {
+fn build_network() -> (Graph, Node) {
     let builder = NetworkBuilder::default();
 
     let dim = 16;
 
     // inputs
     let targets = builder.new_dense_input("targets", Shape::new(1, 1));
-    let stm = builder.new_sparse_input("stm", Shape::new(num_inputs, 1), max_active);
-    let stm = stm.to_dense().reshape(Shape::new(64, 12));
+    let stm = builder.new_sparse_input("stm", Shape::new(768, 1), 32);
+    let stm = stm.to_dense().reshape(Shape::new(12, 64));
 
     // trainable weights
     let init = InitSettings::Normal { mean: 0.0, stdev: 1.0 / 8.0 };
-    let q = builder.new_weights("q", Shape::new(dim, 64), init);
-    let k = builder.new_weights("k", Shape::new(dim, 64), init);
-    let v = builder.new_weights("v", Shape::new(dim, 64), init);
-    let p = builder.new_weights("p", Shape::new(12, 12), init);
-    let o = builder.new_affine("o", 12 * dim, 1);
+    let q = builder.new_affine_custom("q", 12, dim, 64);
+    let k = builder.new_affine_custom("k", 12, dim, 64);
+    let v = builder.new_affine_custom("v", 12, dim, 64);
+    let p = builder.new_weights("p", Shape::new(64, 64), init);
+    let o = builder.new_affine("o", 64 * dim, 1);
 
-    let q = q.matmul(stm);
-    let k = k.matmul(stm);
-    let v = v.matmul(stm);
+    let q = q.forward(stm);
+    let k = k.forward(stm);
+    let v = v.forward(stm);
 
     let qkv = (q.gemm(true, k, false) + p).gemm(false, v, true);
 
-    let out = qkv.reshape(Shape::new(12 * dim, 1));
+    let out = qkv.reshape(Shape::new(64 * dim, 1));
     let out = out.activate(Activation::ReLU);
     let out = o.forward(out);
 
@@ -90,4 +82,42 @@ fn build_network(num_inputs: usize, max_active: usize) -> (Graph, Node) {
     // graph, output node
     let output_node = out.node();
     (builder.build(ExecutionContext::default()), output_node)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Chess12x64;
+impl SparseInputType for Chess12x64 {
+    type RequiredDataType = ChessBoard;
+
+    /// The total number of inputs
+    fn num_inputs(&self) -> usize {
+        768
+    }
+
+    /// The maximum number of active inputs
+    fn max_active(&self) -> usize {
+        32
+    }
+
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
+        for (piece, square) in pos.into_iter() {
+            let c = usize::from(piece & 8 > 0);
+            let pc = usize::from(piece & 7);
+            let sq = usize::from(square);
+
+            let stm = 12 * sq + [0, 6][c] + pc;
+            let ntm = 12 * (sq ^ 56) + [6, 0][c] + pc;
+            f(stm, ntm)
+        }
+    }
+
+    /// Shorthand for the input e.g. `768x4`
+    fn shorthand(&self) -> String {
+        "768".to_string()
+    }
+
+    /// Description of the input type
+    fn description(&self) -> String {
+        "Default psqt chess inputs".to_string()
+    }
 }
