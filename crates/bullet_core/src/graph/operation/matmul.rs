@@ -170,11 +170,11 @@ pub fn matmul<D: Device>(
             D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
         (None, Some(x)) => {
-            if trans_b || shape_b.cols() > 1 {
-                return Err(OperationError::UnsupportedOperation("matmul trans_b || shape_b.cols() > 1".to_string()));
+            if trans_b {
+                return Err(OperationError::UnsupportedOperation("matmul single x batched^T".to_string()));
             }
 
-            let shape_b = Shape::new(shape_b.rows(), x);
+            let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
             output.set_batch_size(Some(x))?;
             D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
@@ -221,11 +221,11 @@ pub fn backprop_matmul<D: Device>(
             output_grad,
         ),
         (None, Some(x)) => {
-            if trans_b || shape_b.cols() > 1 {
-                unimplemented!()
+            if trans_b {
+                return Err(OperationError::UnsupportedOperation("backprop matmul single x batched^T".to_string()));
             }
 
-            let shape_b = Shape::new(shape_b.rows(), x);
+            let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
             backprop_single_matmul(
                 input_a,
                 shape_a,
