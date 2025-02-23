@@ -29,6 +29,7 @@ pub enum Loss {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum OpType {
     Activate(Activation),
+    ActivateDual,
     Affine,
     PairwiseMul,
 }
@@ -186,6 +187,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         self.add(size, OpType::Activate(activation))
     }
 
+    /// Adds SF-style dual activation
+    pub fn add_dual_activation(self) -> Self {
+        let size = self.get_last_layer_size() * 2;
+        self.add(size, OpType::ActivateDual)
+    }
+
     /// Adds a PSQT subnet directly from inputs to output.
     /// The PSQT weights will be placed **before** all other network weights.
     pub fn psqt_subnet(mut self) -> Self {
@@ -304,6 +311,10 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         for &NodeType { size, op } in self.nodes.iter().skip(skip) {
             match op {
                 OpType::Activate(activation) => out = out.activate(activation),
+                OpType::ActivateDual => {
+                    out = out.concat(out.activate(Activation::Square)).activate(Activation::CReLU);
+                    prev_size = size;
+                }
                 OpType::Affine => {
                     still_in_ft = false;
                     let raw_size = size * U::BUCKETS;

@@ -37,6 +37,10 @@ fn main() {
             SavedFormat::new("l0b", QuantTarget::I16(255), Layout::Normal),
             SavedFormat::new("l1w", QuantTarget::I16(64), Layout::Normal),
             SavedFormat::new("l1b", QuantTarget::I16(64 * 255), Layout::Normal),
+            SavedFormat::new("l2w", QuantTarget::Float, Layout::Normal),
+            SavedFormat::new("l2b", QuantTarget::Float, Layout::Normal),
+            SavedFormat::new("l3w", QuantTarget::Float, Layout::Normal),
+            SavedFormat::new("l3b", QuantTarget::Float, Layout::Normal),
         ],
         false,
     );
