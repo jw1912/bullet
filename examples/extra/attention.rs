@@ -1,7 +1,7 @@
 use bullet_lib::{
         nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
+        Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape,
     }, trainer::{
         default::{inputs::SparseInputType, loader, outputs, Trainer, formats::bulletformat::ChessBoard},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
@@ -56,16 +56,20 @@ fn build_network() -> (Graph, Node) {
     // inputs
     let targets = builder.new_dense_input("targets", Shape::new(1, 1));
     let stm = builder.new_sparse_input("stm", Shape::new(768, 1), 32);
-    let stm = stm.to_dense().reshape(Shape::new(12, 64));
 
     // trainable weights
-    let init = InitSettings::Normal { mean: 0.0, stdev: 1.0 / 8.0 };
     let q = builder.new_affine_custom("q", 12, dim, 64);
     let k = builder.new_affine_custom("k", 12, dim, 64);
     let v = builder.new_affine_custom("v", 12, dim, 64);
-    let p = builder.new_weights("p", Shape::new(64, 64), init);
     let o = builder.new_affine("o", 64 * dim, 1);
 
+    let l0 = builder.new_affine("l0", 768, 256);
+    let l1 = builder.new_affine("l1", 256, 4096);
+
+    let p = l0.forward(stm).activate(Activation::SCReLU);
+    let p = l1.forward(p).reshape(Shape::new(64, 64));
+
+    let stm = stm.to_dense().reshape(Shape::new(12, 64));
     let q = q.forward(stm);
     let k = k.forward(stm);
     let v = v.forward(stm);
