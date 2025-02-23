@@ -26,25 +26,29 @@ name = "advanced"
 path = "../../examples/advanced.rs"
 
 [[example]]
-name = "akimbo-main"
-path = "../../examples/akimbo-main.rs"
-
-[[example]]
-name = "ataxx"
-path = "../../examples/ataxx.rs"
-
-[[example]]
-name = "morelayers"
-path = "../../examples/morelayers.rs"
-
-[[example]]
-name = "relabel"
-path = "../../examples/relabel.rs"
-
-[[example]]
 name = "simple"
 path = "../../examples/simple.rs"
 
 [[example]]
 name = "testnet"
 path = "../../examples/testnet.rs"
+
+[[example]]
+name = "morelayers"
+path = "../../examples/morelayers.rs"
+
+[[example]]
+name = "akimbo-main"
+path = "../../examples/extra/akimbo-main.rs"
+
+[[example]]
+name = "ataxx"
+path = "../../examples/extra/ataxx.rs"
+
+[[example]]
+name = "relabel"
+path = "../../examples/extra/relabel.rs"
+
+[[example]]
+name = "attention"
+path = "../../examples/extra/attention.rs"
