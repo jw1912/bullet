@@ -406,20 +406,39 @@ where
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
     let batch_size = prepared.batch_size;
+    let expected_inputs = prepared.input_getter.num_inputs();
 
     unsafe {
         let input = &prepared.stm;
-        graph.get_input_mut("stm").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+        let stm = graph.get_input_mut("stm");
+
+        if stm.values.single_size() != expected_inputs {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
 
         if graph.input_ids().contains(&"nstm".to_string()) {
             let input = &prepared.nstm;
-            graph.get_input_mut("nstm").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+            let ntm = graph.get_input_mut("nstm");
+
+            if ntm.values.single_size() != expected_inputs {
+                return Err(OperationError::InvalidTensorFormat);
+            }
+
+            ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
     }
 
     if graph.input_ids().contains(&"buckets".to_string()) {
         let input = &prepared.buckets;
-        graph.get_input_mut("buckets").load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+        let buckets = graph.get_input_mut("buckets");
+
+        if buckets.values.single_size() != Out::BUCKETS {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
     }
 
     graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;

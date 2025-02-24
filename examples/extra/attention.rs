@@ -1,12 +1,13 @@
 use bullet_lib::{
-        nn::{
+    nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, NetworkBuilder, Node, Shape,
-    }, trainer::{
-        default::{inputs::SparseInputType, loader, outputs, Trainer, formats::bulletformat::ChessBoard},
+        Activation, ExecutionContext, Graph, NetworkBuilder, NetworkBuilderNode, Node, Shape,
+    },
+    trainer::{
+        default::{inputs, loader, outputs, Trainer},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
-    }
+    },
 };
 
 fn main() {
@@ -18,8 +19,8 @@ fn main() {
         graph,
         output_node,
         AdamWParams::default(),
-        Chess12x64,
-        outputs::Single,
+        inputs::ChessBucketsMirrored::new([0; 32]),
+        outputs::MaterialCount::<8>,
         Vec::new(),
         false,
     );
@@ -51,35 +52,27 @@ fn main() {
 fn build_network() -> (Graph, Node) {
     let builder = NetworkBuilder::default();
 
-    let dim = 16;
+    let dim = 128;
+    let token_size = 64;
+    let tokens = 12;
+    let smolgen_size = 256;
 
     // inputs
     let targets = builder.new_dense_input("targets", Shape::new(1, 1));
-    let stm = builder.new_sparse_input("stm", Shape::new(768, 1), 32);
+    let stm = builder.new_sparse_input("stm", Shape::new(token_size * tokens, 1), 32);
 
-    // trainable weights
-    let q = builder.new_affine_custom("q", 12, dim, 64);
-    let k = builder.new_affine_custom("k", 12, dim, 64);
-    let v = builder.new_affine_custom("v", 12, dim, 64);
-    let o = builder.new_affine("o", 64 * dim, 1);
+    // weights
+    let o1 = builder.new_affine_custom("o1", dim, 1, tokens);
+    let o2 = builder.new_affine("o2", tokens, 1);
 
-    let l0 = builder.new_affine("l0", 768, 256);
-    let l1 = builder.new_affine("l1", 256, 4096);
+    let mut attn = AttentionDescription { dim, tokens, smolgen_size, id: 0, builder: &builder };
 
-    let p = l0.forward(stm).activate(Activation::SCReLU);
-    let p = l1.forward(p).reshape(Shape::new(64, 64));
-
-    let stm = stm.to_dense().reshape(Shape::new(12, 64));
-    let q = q.forward(stm);
-    let k = k.forward(stm);
-    let v = v.forward(stm);
-
-    let qkv = (q.gemm(true, k, false) + p).gemm(false, v, true);
-
-    let out = qkv.reshape(Shape::new(64 * dim, 1));
-    let out = out.activate(Activation::ReLU);
-    let out = o.forward(out);
-
+    // inference
+    let mut out = stm.to_dense().reshape(Shape::new(token_size, tokens));
+    out = attn.new_block(out).activate(Activation::ReLU);
+    out = o1.forward(out).activate(Activation::ReLU);
+    out = out.reshape(Shape::new(tokens, 1));
+    out = o2.forward(out);
     let pred = out.activate(Activation::Sigmoid);
     pred.mse(targets);
 
@@ -88,40 +81,39 @@ fn build_network() -> (Graph, Node) {
     (builder.build(ExecutionContext::default()), output_node)
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Chess12x64;
-impl SparseInputType for Chess12x64 {
-    type RequiredDataType = ChessBoard;
+#[derive(Clone, Copy)]
+struct AttentionDescription<'a> {
+    dim: usize,
+    tokens: usize,
+    smolgen_size: usize,
+    id: usize,
+    builder: &'a NetworkBuilder,
+}
 
-    /// The total number of inputs
-    fn num_inputs(&self) -> usize {
-        768
-    }
+impl<'a> AttentionDescription<'a> {
+    fn new_block(&mut self, input: NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a> {
+        let input_rows = input.node().shape().rows();
 
-    /// The maximum number of active inputs
-    fn max_active(&self) -> usize {
-        32
-    }
+        let AttentionDescription { dim, tokens, smolgen_size, id, builder } = *self;
 
-    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
-        for (piece, square) in pos.into_iter() {
-            let c = usize::from(piece & 8 > 0);
-            let pc = usize::from(piece & 7);
-            let sq = usize::from(square);
+        let id = |s| format!("attn{id}/{s}");
+        self.id += 1;
 
-            let stm = 12 * sq + [0, 6][c] + pc;
-            let ntm = 12 * (sq ^ 56) + [6, 0][c] + pc;
-            f(stm, ntm)
-        }
-    }
+        let pa = builder.new_affine(&id("pa"), tokens * input_rows, smolgen_size);
+        let pb = builder.new_affine(&id("pb"), smolgen_size, tokens * tokens);
+        let q = builder.new_affine_custom(&id("q"), input_rows, dim, tokens);
+        let k = builder.new_affine_custom(&id("k"), input_rows, dim, tokens);
+        let v = builder.new_affine_custom(&id("v"), input_rows, dim, tokens);
 
-    /// Shorthand for the input e.g. `768x4`
-    fn shorthand(&self) -> String {
-        "768".to_string()
-    }
+        let pa = pa.forward(input.reshape(Shape::new(tokens * input_rows, 1))).activate(Activation::ReLU);
+        let p = pb.forward(pa).reshape(Shape::new(tokens, tokens));
 
-    /// Description of the input type
-    fn description(&self) -> String {
-        "Default psqt chess inputs".to_string()
+        let q = q.forward(input);
+        let k = k.forward(input);
+        let v = v.forward(input);
+
+        // QKV inputs are transposed
+        let qk = k.gemm(true, q, false) + p;
+        v.matmul(qk)
     }
 }

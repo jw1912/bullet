@@ -112,8 +112,8 @@ pub(crate) struct SparseInput {
 
 /// A batch of data, in the correct format for the GPU.
 pub struct DefaultDataPreparer<I, O> {
-    input_getter: I,
-    output_getter: O,
+    pub(crate) input_getter: I,
+    pub(crate) output_getter: O,
     pub(crate) batch_size: usize,
     pub(crate) stm: SparseInput,
     pub(crate) nstm: SparseInput,
