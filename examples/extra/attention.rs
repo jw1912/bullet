@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
+        Activation, ExecutionContext, Graph, NetworkBuilder, NetworkBuilderNode, Node, Shape,
     },
     trainer::{
         default::{inputs, loader, outputs, Trainer},
@@ -10,15 +10,8 @@ use bullet_lib::{
     },
 };
 
-type InputFeatures = inputs::Chess768;
-
 fn main() {
-    let inputs = InputFeatures::default();
-
-    let num_inputs = <InputFeatures as inputs::SparseInputType>::num_inputs(&inputs);
-    let max_active = <InputFeatures as inputs::SparseInputType>::max_active(&inputs);
-
-    let (graph, output_node) = build_network(num_inputs, max_active);
+    let (graph, output_node) = build_network();
 
     println!("Params: {}", graph.get_num_params());
 
@@ -26,8 +19,8 @@ fn main() {
         graph,
         output_node,
         AdamWParams::default(),
-        inputs,
-        outputs::Single,
+        inputs::ChessBucketsMirrored::new([0; 32]),
+        outputs::MaterialCount::<8>,
         Vec::new(),
         false,
     );
@@ -56,38 +49,71 @@ fn main() {
     println!("Eval: {eval:.3}cp");
 }
 
-fn build_network(num_inputs: usize, max_active: usize) -> (Graph, Node) {
+fn build_network() -> (Graph, Node) {
     let builder = NetworkBuilder::default();
 
-    let dim = 16;
+    let dim = 128;
+    let token_size = 64;
+    let tokens = 12;
+    let smolgen_size = 256;
 
     // inputs
     let targets = builder.new_dense_input("targets", Shape::new(1, 1));
-    let stm = builder.new_sparse_input("stm", Shape::new(num_inputs, 1), max_active);
-    let stm = stm.to_dense().reshape(Shape::new(64, 12));
+    let stm = builder.new_sparse_input("stm", Shape::new(token_size * tokens, 1), 32);
 
-    // trainable weights
-    let init = InitSettings::Normal { mean: 0.0, stdev: 1.0 / 8.0 };
-    let q = builder.new_weights("q", Shape::new(dim, 64), init);
-    let k = builder.new_weights("k", Shape::new(dim, 64), init);
-    let v = builder.new_weights("v", Shape::new(dim, 64), init);
-    let p = builder.new_weights("p", Shape::new(12, 12), init);
-    let o = builder.new_affine("o", 12 * dim, 1);
+    // weights
+    let o1 = builder.new_affine_custom("o1", dim, 1, tokens);
+    let o2 = builder.new_affine("o2", tokens, 1);
 
-    let q = q.matmul(stm);
-    let k = k.matmul(stm);
-    let v = v.matmul(stm);
+    let mut attn = AttentionDescription { dim, tokens, smolgen_size, id: 0, builder: &builder };
 
-    let qkv = (q.gemm(true, k, false) + p).gemm(false, v, true);
-
-    let out = qkv.reshape(Shape::new(12 * dim, 1));
-    let out = out.activate(Activation::ReLU);
-    let out = o.forward(out);
-
+    // inference
+    let mut out = stm.to_dense().reshape(Shape::new(token_size, tokens));
+    out = attn.new_block(out).activate(Activation::ReLU);
+    out = o1.forward(out).activate(Activation::ReLU);
+    out = out.reshape(Shape::new(tokens, 1));
+    out = o2.forward(out);
     let pred = out.activate(Activation::Sigmoid);
     pred.mse(targets);
 
     // graph, output node
     let output_node = out.node();
     (builder.build(ExecutionContext::default()), output_node)
+}
+
+#[derive(Clone, Copy)]
+struct AttentionDescription<'a> {
+    dim: usize,
+    tokens: usize,
+    smolgen_size: usize,
+    id: usize,
+    builder: &'a NetworkBuilder,
+}
+
+impl<'a> AttentionDescription<'a> {
+    fn new_block(&mut self, input: NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a> {
+        let input_rows = input.node().shape().rows();
+
+        let AttentionDescription { dim, tokens, smolgen_size, id, builder } = *self;
+
+        let id = |s| format!("attn{id}/{s}");
+        self.id += 1;
+
+        let pa = builder.new_affine(&id("pa"), tokens * input_rows, smolgen_size);
+        let pb = builder.new_affine(&id("pb"), smolgen_size, tokens * tokens);
+        let q = builder.new_affine_custom(&id("q"), input_rows, dim, tokens);
+        let k = builder.new_affine_custom(&id("k"), input_rows, dim, tokens);
+        let v = builder.new_affine_custom(&id("v"), input_rows, dim, tokens);
+
+        let pa = pa.forward(input.reshape(Shape::new(tokens * input_rows, 1))).activate(Activation::ReLU);
+        let p = pb.forward(pa).reshape(Shape::new(tokens, tokens));
+
+        let q = q.forward(input);
+        let k = k.forward(input);
+        let v = v.forward(input);
+
+        // QKV inputs are transposed
+        let qk = k.gemm(true, q, false) + p;
+        v.matmul(qk)
+    }
 }
