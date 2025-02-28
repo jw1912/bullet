@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "util.cu"
 #include "activate.cu"
 #include "gather.cu"
