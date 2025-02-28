@@ -22,7 +22,6 @@ pub fn affine_activate<D: Device>(
     if let Some((c, shape)) = c {
         assert_eq!(output_shape.size(), c.single_size());
         assert_eq!(output_shape, shape);
-        assert!(c.batch_size().is_none());
     }
 
     assert_eq!(shape_b.cols(), 1);
@@ -43,7 +42,7 @@ pub fn affine_activate<D: Device>(
         shape_b,
         b.nnz,
         c.map(|x| &x.0.buf),
-        None,
+        c.map(|x| x.0.batch_size().is_some()).unwrap_or(false),
         &mut out.buf,
     )?;
 
@@ -65,7 +64,6 @@ pub fn backprop_affine_activate<D: Device>(
     let output_shape = shape_a * shape_b;
     if let Some((c, _)) = &c {
         assert_eq!(output_shape.size(), c.values.single_size());
-        assert!(c.values.batch_size().is_none());
     }
 
     assert_eq!(shape_b.cols(), 1);
@@ -76,15 +74,26 @@ pub fn backprop_affine_activate<D: Device>(
     assert_eq!(b.batch_size(), output_grad.batch_size());
 
     if let Some((c, _)) = &c {
-        assert!(c.values.batch_size().is_none());
         assert_eq!(c.values.single_size(), output_shape.size());
     }
 
     if let Some(agrd) = a.gradients.as_mut() {
-        let (c, cgrd) = if let Some((c, _)) = c {
-            (Some(&c.values.dense()?.buf), c.gradients.as_mut().map(|g| &mut g.buf))
+        let (c, cgrd, cb) = if let Some((c, _)) = c {
+            let cb = c.values.dense()?;
+
+            let cgrd = if let Some(grd) = c.gradients.as_mut() {
+                if cb.batch_size().is_some() {
+                    grd.set_batch_size(cb.batch_size())?;
+                }
+
+                Some(&mut grd.buf)
+            } else {
+                None
+            };
+
+            (Some(&cb.buf), cgrd, cb.batch_size().is_some())
         } else {
-            (None, None)
+            (None, None, false)
         };
 
         D::backprop_sparse_affine_activate(
@@ -99,7 +108,7 @@ pub fn backprop_affine_activate<D: Device>(
             b.nnz,
             c,
             cgrd,
-            None,
+            cb,
             &output.buf,
             &output_grad.buf,
         )?;

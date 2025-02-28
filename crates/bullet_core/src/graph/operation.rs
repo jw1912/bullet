@@ -200,7 +200,6 @@ impl Operation {
 
                 if let Some(b) = b {
                     check_dense_eq(b, true)?;
-                    check_not_batched(b)?;
                 }
 
                 let out = check_matmul(w.shape, i.shape)?;
@@ -212,7 +211,6 @@ impl Operation {
                 check_dense_eq(s, false)?;
                 check_dense_eq(n, false)?;
                 check_not_batched(w)?;
-                check_not_batched(b)?;
                 let shb = b.shape;
 
                 if *act == Activation::Square {

@@ -8,9 +8,9 @@ __global__ void sparse_affine_kernel(
     const int32_t stride,
     const int32_t nnz,
     const int32_t m,
+    const bool Bb,
     const float* A,
     const int32_t* X,
-    const int32_t* S,
     const float* B,
     float* Y)
 {
@@ -19,7 +19,7 @@ __global__ void sparse_affine_kernel(
     if (row >= m)
         return;
 
-    const int32_t offset = S == nullptr ? 0 : m * S[blockIdx.y];
+    const int32_t offset = Bb ? m * blockIdx.y : 0;
     float sum = B == nullptr ? 0.0F : B[offset + row];
 
     for (int32_t i = 0; i < nnz; i++) {
@@ -39,9 +39,9 @@ __global__ void sparse_affine_aligned_kernel(
     const int32_t stride,
     const int32_t nnz,
     const int32_t m,
+    const bool Bb,
     const float4* A,
     const int32_t* X,
-    const int32_t* S,
     const float4* B,
     float4* Y)
 {
@@ -61,7 +61,7 @@ __global__ void sparse_affine_aligned_kernel(
 
     __syncthreads();
 
-    const int32_t offset = S == nullptr ? 0 : m * S[blockIdx.y] / 4;
+    const int32_t offset = Bb ? m * blockIdx.y / 4 : 0;
     float4 val = B == nullptr ? make_float4(0.0F, 0.0F, 0.0F, 0.0F) : B[offset + row];
 
     for (size_t i = 0; i < nnz; i++) {
@@ -92,9 +92,9 @@ void sparse_affine_internal(
     const int32_t nnz,
     const int32_t m,
     const int32_t k,
+    const bool Bb,
     const float* A,
     const int32_t* X,
-    const int32_t* S,
     const float* B,
     float* Y)
 {
@@ -112,9 +112,9 @@ void sparse_affine_internal(
             stride,
             nnz,
             m,
+            Bb, 
             reinterpret_cast<const float4*>(A),
             X,
-            S,
             reinterpret_cast<const float4*>(B),
             reinterpret_cast<float4*>(Y)
         );
@@ -125,7 +125,7 @@ void sparse_affine_internal(
         const int32_t chunks = (m + threads - 1) / threads;
         dim3 grid(chunks, k);
 
-        sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, A, X, S, B, Y);
+        sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, A, X, B, Y);
     }
 }
 
@@ -136,31 +136,31 @@ extern "C" void sparse_affine(
     const size_t m,
     [[maybe_unused]] const size_t n,
     const size_t k,
+    const bool Bb,
     const float* A,
     const int32_t* X,
-    const int32_t* S,
     const float* B,
     float* Y)
 {
     switch (activation)
     {
         case 0:
-            sparse_affine_internal<Identity>(stride, nnz, m, k, A, X, S, B, Y);
+            sparse_affine_internal<Identity>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 1:
-            sparse_affine_internal<ReLU>(stride, nnz, m, k, A, X, S, B, Y);
+            sparse_affine_internal<ReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 2:
-            sparse_affine_internal<CReLU>(stride, nnz, m, k, A, X, S, B, Y);
+            sparse_affine_internal<CReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 3:
-            sparse_affine_internal<SCReLU>(stride, nnz, m, k, A, X, S, B, Y);
+            sparse_affine_internal<SCReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 4:
-            sparse_affine_internal<SqrReLU>(stride, nnz, m, k, A, X, S, B, Y);
+            sparse_affine_internal<SqrReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 5:
-            sparse_affine_internal<sigmoid>(stride, nnz, m, k, A, X, S, B, Y);
+            sparse_affine_internal<sigmoid>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         default:
             std::abort();

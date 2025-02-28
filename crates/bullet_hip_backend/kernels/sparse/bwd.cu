@@ -8,8 +8,8 @@ __global__ void sparse_affine_backward_kernel(
     const int32_t stride,
     const int32_t nnz,
     const int32_t m,
+    const bool Bb,
     const int32_t* X,
-    const int32_t* S,
     const float* Y,
     const float* Yg,
     float* Ag,
@@ -27,7 +27,7 @@ __global__ void sparse_affine_backward_kernel(
 
     if (Bg != nullptr)
     {   
-        const int32_t offset = S == nullptr ? 0 : m * S[blockIdx.y];
+        const int32_t offset = Bb ? m * blockIdx.y : 0;
         atomicAdd(&Bg[offset + row], tE);
     }
 
@@ -48,8 +48,8 @@ void sparse_affine_backward_internal(
     const int32_t nnz,
     const int32_t m,
     const int32_t k,
+    const bool Bb,
     const int32_t* X,
-    const int32_t* S,
     const float* Y,
     const float* Yg,
     float* Ag,
@@ -59,7 +59,7 @@ void sparse_affine_backward_internal(
     const int32_t threads = (chunks == 1) ? m : 1024;
     dim3 grid(chunks, k);
 
-    sparse_affine_backward_kernel<op><<<grid, threads>>>(stride, nnz, m, X, S, Y, Yg, Ag, Bg);
+    sparse_affine_backward_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, X, Y, Yg, Ag, Bg);
 }
 
 extern "C" void sparse_affine_backward(
@@ -69,8 +69,8 @@ extern "C" void sparse_affine_backward(
     const size_t m,
     [[maybe_unused]] const size_t n,
     const size_t k,
+    const bool Bb,
     const int32_t* X,
-    const int32_t* S,
     const float* Y,
     const float* Yg,
     float* Ag,
@@ -79,22 +79,22 @@ extern "C" void sparse_affine_backward(
     switch (activation)
     {
         case 0:
-            sparse_affine_backward_internal<primeInvIdentity>(stride, nnz, m, k, X, S, Y, Yg, Ag, Bg);
+            sparse_affine_backward_internal<primeInvIdentity>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 1:
-            sparse_affine_backward_internal<primeInvReLU>(stride, nnz, m, k, X, S, Y, Yg, Ag, Bg);
+            sparse_affine_backward_internal<primeInvReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 2:
-            sparse_affine_backward_internal<primeInvCReLU>(stride, nnz, m, k, X, S, Y, Yg, Ag, Bg);
+            sparse_affine_backward_internal<primeInvCReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 3:
-            sparse_affine_backward_internal<primeInvSCReLU>(stride, nnz, m, k, X, S, Y, Yg, Ag, Bg);
+            sparse_affine_backward_internal<primeInvSCReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 4:
-            sparse_affine_backward_internal<primeInvSqrReLU>(stride, nnz, m, k, X, S, Y, Yg, Ag, Bg);
+            sparse_affine_backward_internal<primeInvSqrReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 5:
-            sparse_affine_backward_internal<primeInvSigmoid>(stride, nnz, m, k, X, S, Y, Yg, Ag, Bg);
+            sparse_affine_backward_internal<primeInvSigmoid>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         default:
             std::abort();
