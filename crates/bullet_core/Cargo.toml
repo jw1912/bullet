@@ -9,5 +9,5 @@ rust-version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-rand = "0.8.5"
-rand_distr = "0.4.3"
+rand = "0.9"
+rand_distr = "0.5.1"

@@ -1,4 +1,4 @@
-use rand::{rngs::ThreadRng, thread_rng};
+use rand::rngs::ThreadRng;
 use rand_distr::{Distribution, Normal, Uniform};
 
 enum Dist {
@@ -11,7 +11,7 @@ impl Dist {
         if use_gaussian {
             Self::Normal(Normal::new(mean, stdev).unwrap())
         } else {
-            Self::Uniform(Uniform::new(mean - stdev, mean + stdev))
+            Self::Uniform(Uniform::new(mean - stdev, mean + stdev).unwrap())
         }
     }
 
@@ -26,7 +26,7 @@ impl Dist {
 pub fn vec_f32(length: usize, mean: f32, stdev: f32, use_gaussian: bool) -> Vec<f32> {
     let mut res = Vec::with_capacity(length);
 
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
     let dist = Dist::new(mean, stdev, use_gaussian);
 
     for _ in 0..length {
