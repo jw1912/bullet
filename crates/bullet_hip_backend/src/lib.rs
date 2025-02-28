@@ -174,6 +174,7 @@ impl Device for ExecutionContext {
         nnz: usize,
         input_c: Option<&Self::BufferF32>,
         input_c_grad: Option<&mut Self::BufferF32>,
+        input_c_buckets: Option<(&Buffer<i32>, usize)>,
         outputs: &Self::BufferF32,
         output_grad: &Self::BufferF32,
     ) -> OperationResult {
@@ -189,6 +190,7 @@ impl Device for ExecutionContext {
             nnz,
             input_c,
             input_c_grad,
+            input_c_buckets,
             outputs,
             output_grad,
         )
@@ -248,9 +250,22 @@ impl Device for ExecutionContext {
         shape_b: Shape,
         nnz: usize,
         input_c: Option<&Self::BufferF32>,
+        input_c_buckets: Option<(&Buffer<i32>, usize)>,
         output: &mut Self::BufferF32,
     ) -> OperationResult {
-        sparse::sparse_affine(batch_size, stride, activation, input_a, shape_a, input_b, shape_b, nnz, input_c, output)
+        sparse::sparse_affine(
+            batch_size,
+            stride,
+            activation,
+            input_a,
+            shape_a,
+            input_b,
+            shape_b,
+            nnz,
+            input_c,
+            input_c_buckets,
+            output,
+        )
     }
 
     fn adam(

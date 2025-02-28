@@ -43,6 +43,7 @@ pub fn affine_activate<D: Device>(
         shape_b,
         b.nnz,
         c.map(|x| &x.0.buf),
+        None,
         &mut out.buf,
     )?;
 
@@ -98,6 +99,7 @@ pub fn backprop_affine_activate<D: Device>(
             b.nnz,
             c,
             cgrd,
+            None,
             &output.buf,
             &output_grad.buf,
         )?;

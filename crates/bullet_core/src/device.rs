@@ -100,6 +100,7 @@ pub trait Device: Sized + 'static {
         shape_b: Shape,
         nnz: usize,
         input_c: Option<&Self::BufferF32>,
+        input_c_buckets: Option<(&Self::BufferI32, usize)>,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError>;
 
@@ -115,6 +116,7 @@ pub trait Device: Sized + 'static {
         nnz: usize,
         input_c: Option<&Self::BufferF32>,
         input_c_grad: Option<&mut Self::BufferF32>,
+        input_c_buckets: Option<(&Self::BufferI32, usize)>,
         outputs: &Self::BufferF32,
         output_grad: &Self::BufferF32,
     ) -> OperationResult<Self::DeviceError>;

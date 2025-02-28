@@ -20,6 +20,7 @@ pub fn sparse_affine(
     shape_b: Shape,
     nnz: usize,
     input_c: Option<&Buffer<f32>>,
+    input_c_buckets: Option<(&Buffer<i32>, usize)>,
     output: &mut Buffer<f32>,
 ) -> OperationResult {
     let shape_o = shape_a * shape_b;
@@ -33,11 +34,29 @@ pub fn sparse_affine(
         return Err(OperationError::IndexOutOfBounds);
     }
 
-    if let Some(c) = input_c {
-        if shape_o.size() > c.size() {
-            return Err(OperationError::IndexOutOfBounds);
-        }
-    }
+    let (c_ptr, s_ptr) = if let Some(c) = input_c {
+        let s_ptr = if let Some((buckets, num_buckets)) = input_c_buckets {
+            if num_buckets * shape_o.size() > c.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+
+            if batch_size > buckets.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+
+            buckets.ptr()
+        } else {
+            if shape_o.size() > c.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+
+            std::ptr::null()
+        };
+
+        (c.ptr(), s_ptr)
+    } else {
+        (std::ptr::null(), std::ptr::null())
+    };
 
     unsafe {
         ops::sparse_affine(
@@ -49,7 +68,8 @@ pub fn sparse_affine(
             batch_size,
             input_a.ptr(),
             input_b.ptr(),
-            input_c.map(|c| c.ptr()).unwrap_or(std::ptr::null()),
+            s_ptr,
+            c_ptr,
             output.mut_ptr().add(offset),
         );
     }
@@ -70,6 +90,7 @@ pub fn backprop_sparse_affine(
     nnz: usize,
     _input_c: Option<&Buffer<f32>>,
     input_c_grad: Option<&mut Buffer<f32>>,
+    input_c_buckets: Option<(&Buffer<i32>, usize)>,
     outputs: &Buffer<f32>,
     output_grad: &Buffer<f32>,
 ) -> OperationResult {
@@ -88,14 +109,28 @@ pub fn backprop_sparse_affine(
         return Err(OperationError::IndexOutOfBounds);
     }
 
-    let c_ptr = if let Some(grad) = input_c_grad {
-        if shape_o.size() > grad.size() {
-            return Err(OperationError::IndexOutOfBounds);
-        }
+    let (c_ptr, s_ptr) = if let Some(grad) = input_c_grad {
+        let s_ptr = if let Some((buckets, num_buckets)) = input_c_buckets {
+            if num_buckets * shape_o.size() > grad.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
 
-        grad.mut_ptr()
+            if batch_size > buckets.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+
+            buckets.ptr()
+        } else {
+            if shape_o.size() > grad.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+
+            std::ptr::null()
+        };
+
+        (grad.mut_ptr(), s_ptr)
     } else {
-        std::ptr::null_mut()
+        (std::ptr::null_mut(), std::ptr::null())
     };
 
     unsafe {
@@ -107,6 +142,7 @@ pub fn backprop_sparse_affine(
             shape_a.cols(),
             batch_size,
             input_b.ptr(),
+            s_ptr,
             outputs.ptr().add(offset),
             output_grad.ptr().add(offset),
             input_a_grad.mut_ptr(),

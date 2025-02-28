@@ -18,8 +18,8 @@ extern "C" {
     pub fn powerError(bufferSize: usize, inputs: *const f32, results: *const f32, output: *mut f32, power: f32);
     pub fn backpropPowerError(bufferSize: usize, inputs: *const f32, results: *const f32, output_grad: *const f32, input_grads: *mut f32, power: f32);
     pub fn Adam(size: usize, beta1: f32, beta2: f32, adj: f32, rate: f32, denom: bool, network: *mut f32, momentum: *mut f32, velocity: *mut f32, gradients: *const f32);
-    pub fn sparse_affine(activation: i32, stride: usize, nnz: usize, m: usize, n: usize, k: usize, a: *const f32, x: *const i32, b: *const f32, y: *mut f32);
-    pub fn sparse_affine_backward(activation: i32, stride: usize, nnz: usize, m: usize, n: usize, k: usize, x: *const i32, y: *const f32, yg: *const f32, ag: *mut f32, bg: *mut f32);
+    pub fn sparse_affine(activation: i32, stride: usize, nnz: usize, m: usize, n: usize, k: usize, a: *const f32, x: *const i32, s: *const i32, b: *const f32, y: *mut f32);
+    pub fn sparse_affine_backward(activation: i32, stride: usize, nnz: usize, m: usize, n: usize, k: usize, x: *const i32, s: *const i32, y: *const f32, yg: *const f32, ag: *mut f32, bg: *mut f32);
     pub fn pairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output: *mut f32);
     pub fn backpropPairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn selectForward(batchSize: usize, inputSize: usize, outputSize: usize, buckets: *const i32, inp: *const f32, out: *mut f32);
