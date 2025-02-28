@@ -200,7 +200,6 @@ impl Operation {
 
                 if let Some(b) = b {
                     check_dense_eq(b, true)?;
-                    check_not_batched(b)?;
                 }
 
                 let out = check_matmul(w.shape, i.shape)?;
@@ -212,7 +211,6 @@ impl Operation {
                 check_dense_eq(s, false)?;
                 check_dense_eq(n, false)?;
                 check_not_batched(w)?;
-                check_not_batched(b)?;
                 let shb = b.shape;
 
                 if *act == Activation::Square {
@@ -307,7 +305,7 @@ impl<D: Device> Graph<D> {
                 let bs = i.batch_size().unwrap_or(1);
                 setup_ones(w.buf.device(), internal, bs)?;
                 let ones = &internal.get("ones").unwrap().borrow().buf;
-                matmul::dense_affine(w, wn.shape, i, inp.shape, b, bn.shape, ones, output)
+                matmul::affine(w, wn.shape, i, inp.shape, b, bn.shape, ones, output)
             }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = get(*an);
@@ -448,14 +446,32 @@ impl<D: Device> Graph<D> {
                 if let Some(bn) = bn {
                     let b = get(*bn);
                     let b = Some((b.values.dense()?, bn.shape));
-                    matmul::sparse_affine(w, wn.shape, i.values.sparse()?, inp.shape, b, output)
+                    sparse::affine_activate(
+                        None,
+                        Activation::Identity,
+                        w,
+                        wn.shape,
+                        i.values.sparse()?,
+                        inp.shape,
+                        b,
+                        output,
+                    )
                 } else {
-                    matmul::sparse_affine(w, wn.shape, i.values.sparse()?, inp.shape, None, output)
+                    sparse::affine_activate(
+                        None,
+                        Activation::Identity,
+                        w,
+                        wn.shape,
+                        i.values.sparse()?,
+                        inp.shape,
+                        None,
+                        output,
+                    )
                 }
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {
                 assert_eq!(sn.shape, nn.shape);
-                sparse::sparse_affine_dual(
+                sparse::affine_dual(
                     get(*wn).values.dense()?,
                     wn.shape,
                     get(*sn).values.sparse()?,
@@ -582,7 +598,7 @@ impl<D: Device> Graph<D> {
                 let bs = i.values.batch_size().unwrap_or(1);
                 setup_ones(w.values.dense()?.buf.device(), internal, bs)?;
                 let ones = &internal.get("ones").unwrap().borrow().buf;
-                matmul::backprop_dense_affine(w, wn.shape, i, inp.shape, &mut *get(*bn), ones, output_grad)?;
+                matmul::backprop_affine(w, wn.shape, i, inp.shape, &mut *get(*bn), ones, output_grad)?;
             }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = &mut *get(*an);
@@ -822,33 +838,47 @@ impl<D: Device> Graph<D> {
                     let bs = i.batch_size().unwrap_or(1);
                     setup_ones(w.values.dense()?.buf.device(), internal, bs)?;
                     let ones = &internal.get("ones").unwrap().borrow().buf;
-                    matmul::backprop_sparse_affine(
+                    sparse::backprop_affine_activate(
+                        None,
+                        Activation::Identity,
                         w,
                         wn.shape,
                         i,
                         inp.shape,
-                        Some((&mut *get(*b), ones)),
+                        &mut Some((&mut *get(*b), ones)),
                         o,
                         output_grad,
                     )?;
                 } else {
-                    matmul::backprop_sparse_affine(w, wn.shape, i, inp.shape, None, o, output_grad)?;
+                    sparse::backprop_affine_activate(
+                        None,
+                        Activation::Identity,
+                        w,
+                        wn.shape,
+                        i,
+                        inp.shape,
+                        &mut None,
+                        o,
+                        output_grad,
+                    )?;
                 }
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {
                 let w = &mut *get(*wn);
                 let b = &mut *get(*bn);
+                let s = get(*sn);
+
+                let bs = s.values.batch_size().unwrap_or(1);
                 assert_eq!(sn.shape, nn.shape);
-                sparse::backprop_sparse_affine_dual_activate(
-                    w.values.dense()?,
-                    w.gradients.as_mut(),
+                setup_ones(w.values.dense()?.buf.device(), internal, bs)?;
+                let ones = &internal.get("ones").unwrap().borrow().buf;
+                sparse::backprop_affine_dual(
+                    w,
                     wn.shape,
-                    get(*sn).values.sparse()?,
+                    s.values.sparse()?,
                     get(*nn).values.sparse()?,
                     sn.shape,
-                    b.values.dense()?,
-                    b.gradients.as_mut(),
-                    bn.shape,
+                    &mut Some((b, ones)),
                     output_tensor.values.dense()?,
                     output_grad,
                     *act,

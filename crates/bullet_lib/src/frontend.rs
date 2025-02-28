@@ -219,4 +219,21 @@ impl Affine {
     ) -> NetworkBuilderNode<'a> {
         stm.builder.apply(Operation::SparseAffineDualActivate(self.weights, stm.node, ntm.node, self.bias, activation))
     }
+
+    pub fn forward_sparse_dual_with_activation_and_bias_buckets<'a>(
+        self,
+        stm: NetworkBuilderNode<'a>,
+        ntm: NetworkBuilderNode<'a>,
+        buckets: NetworkBuilderNode<'a>,
+        activation: Activation,
+    ) -> NetworkBuilderNode<'a> {
+        let biases = stm.builder.apply(Operation::SparseAffine(self.bias, buckets.node, None));
+        stm.builder.apply(Operation::SparseAffineDualActivate(
+            self.weights,
+            stm.node,
+            ntm.node,
+            biases.node,
+            activation,
+        ))
+    }
 }

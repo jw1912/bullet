@@ -3,77 +3,74 @@
 #include <hip/hip_runtime.h>
 #endif
 
-template<OpType op, size_t stride = 1>
-__global__ void sparseAffineForwardKernel(
-    const size_t max_active,
-    const size_t outputSize,
-    const float* weights,
-    const float* biases,
-    const int32_t* inputs,
-    float* outputs)
+template<OpType op>
+__global__ void sparse_affine_kernel(
+    const int32_t stride,
+    const int32_t nnz,
+    const int32_t m,
+    const bool Bb,
+    const float* A,
+    const int32_t* X,
+    const float* B,
+    float* Y)
 {
-    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
+    const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (elem >= outputSize)
+    if (row >= m)
         return;
 
-    const size_t inputIdx = max_active * blockIdx.y;
-    const int32_t* thisInput = inputs + inputIdx;
-    float* thisOutput = outputs + stride * outputSize * blockIdx.y + elem;
+    const int32_t offset = Bb ? m * blockIdx.y : 0;
+    float sum = B == nullptr ? 0.0F : B[offset + row];
 
-    float ourElementVal = biases == nullptr ? 0.0F : biases[elem];
+    for (int32_t i = 0; i < nnz; i++) {
+        const int32_t j = X[nnz * blockIdx.y + i];
 
-    for (size_t i = 0; i < max_active; i++) {
-        const int32_t inp = thisInput[i];
-
-        if (inp == -1)
+        if (j == -1)
             break;
 
-        const size_t ourIdx = static_cast<size_t>(inp) * outputSize + elem;
-        ourElementVal += weights[ourIdx];
+        sum += A[j * m + row];
     }
 
-    thisOutput[0] = op(ourElementVal);
+    Y[stride * m * blockIdx.y + row] = op(sum);
 }
 
-template<OpType op, size_t stride = 1>
-__global__ void sparseAffineForwardAlignedKernel(
-    const size_t max_active,
-    const size_t output_size,
-    const float* weights,
-    const float* biases,
-    const int32_t* inputs,
-    float* outputs)
+template<OpType op>
+__global__ void sparse_affine_aligned_kernel(
+    const int32_t stride,
+    const int32_t nnz,
+    const int32_t m,
+    const bool Bb,
+    const float4* A,
+    const int32_t* X,
+    const float4* B,
+    float4* Y)
 {
-    extern __shared__ int32_t shared_input_indices[];
-    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
+    extern __shared__ int32_t sX[];
+    const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (4 * elem >= output_size)
+    if (4 * row >= m)
         return;
 
-    if (threadIdx.x < max_active)
+    if (threadIdx.x < nnz)
     {
-        const size_t input_idx = max_active * blockIdx.y;
-        const int32_t* this_input = inputs + input_idx;
-
-        for (size_t i = threadIdx.x; i < max_active; i += blockDim.x)
+        for (int32_t i = threadIdx.x; i < nnz; i += blockDim.x)
         {
-            shared_input_indices[i] = this_input[i];
+            sX[i] = X[nnz * blockIdx.y + i];
         }
     }
 
     __syncthreads();
 
-    float4 val = biases == nullptr ? make_float4(0.0F, 0.0F, 0.0F, 0.0F) : ((const float4 *)biases)[elem];
+    const int32_t offset = Bb ? m * blockIdx.y / 4 : 0;
+    float4 val = B == nullptr ? make_float4(0.0F, 0.0F, 0.0F, 0.0F) : B[offset + row];
 
-    for (size_t i = 0; i < max_active; i++) {
-        const int32_t inp = shared_input_indices[i];
+    for (size_t i = 0; i < nnz; i++) {
+        const int32_t j = sX[i];
 
-        if (inp == -1)
+        if (j == -1)
             break;
 
-        const size_t our_idx = static_cast<size_t>(inp) * output_size / 4;
-        const float4 a = ((const float4 *)weights)[our_idx + elem];
+        const float4 a = A[j * m / 4 + row];
 
         val.x += a.x;
         val.y += a.y;
@@ -86,105 +83,84 @@ __global__ void sparseAffineForwardAlignedKernel(
     val.z = op(val.z);
     val.w = op(val.w);
 
-    ((float4 *)outputs)[stride * output_size * blockIdx.y / 4 + elem] = val;
-}
-
-extern "C" void sparseAffineForward(
-    const size_t batchSize,
-    const size_t maxInputSize,
-    const size_t outputSize,
-    const float* weights,
-    const float* biases,
-    const int32_t* inputs,
-    float* outputs)
-{
-    const size_t max_threads = 1024;
-    const size_t alloc = maxInputSize * sizeof(int32_t);
-
-    if ((outputSize % 4) == 0 && outputSize >= 128)
-    {
-        const size_t output4_size = (outputSize + 3) / 4; 
-        const size_t threads = min(output4_size, max_threads);
-        const size_t chunks = (output4_size + threads - 1) / threads;
-        dim3 grid(chunks, batchSize);
-
-        sparseAffineForwardAlignedKernel<Identity><<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
-    }
-    else
-    {
-        const size_t threads = min(outputSize, max_threads);
-        const size_t chunks = (outputSize + threads - 1) / threads;
-        dim3 grid(chunks, batchSize);
-
-        sparseAffineForwardKernel<Identity><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, inputs, outputs);
-    }
+    Y[stride * m * blockIdx.y / 4 + row] = val;
 }
 
 template<OpType op>
-void sparseAffineDualForwardInternal(
-    const size_t batchSize,
-    const size_t maxInputSize,
-    const size_t outputSize,
-    const float* weights,
-    const float* biases,
-    const int32_t* stm,
-    const int32_t* ntm,
-    float* outputs)
+void sparse_affine_internal(
+    const int32_t stride,
+    const int32_t nnz,
+    const int32_t m,
+    const int32_t k,
+    const bool Bb,
+    const float* A,
+    const int32_t* X,
+    const float* B,
+    float* Y)
 {
-    const size_t max_threads = 1024;
-    const size_t alloc = 2 * maxInputSize * sizeof(int32_t);
-    
-    if ((outputSize % 4) == 0 && outputSize >= 128)
-    {
-        const size_t output4_size = (outputSize + 3) / 4; 
-        const size_t threads = min(output4_size, max_threads);
-        const size_t chunks = (output4_size + threads - 1) / threads;
-        dim3 grid(chunks, batchSize);
+    const int32_t max_threads = 1024;
+    const int32_t alloc = nnz * sizeof(int32_t);
 
-        sparseAffineForwardAlignedKernel<op, 2><<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, stm, outputs);
-        sparseAffineForwardAlignedKernel<op, 2><<<grid, threads, alloc>>>(maxInputSize, outputSize, weights, biases, ntm, outputs + outputSize);
+    if ((m % 4) == 0 && m >= 128)
+    {
+        const int32_t m4_size = (m + 3) / 4; 
+        const int32_t threads = min(m4_size, max_threads);
+        const int32_t chunks = (m4_size + threads - 1) / threads;
+        dim3 grid(chunks, k);
+
+        sparse_affine_aligned_kernel<op><<<grid, threads, alloc>>>(
+            stride,
+            nnz,
+            m,
+            Bb, 
+            reinterpret_cast<const float4*>(A),
+            X,
+            reinterpret_cast<const float4*>(B),
+            reinterpret_cast<float4*>(Y)
+        );
     }
     else
     {
-        const size_t threads = min(outputSize, max_threads);
-        const size_t chunks = (outputSize + threads - 1) / threads;
-        dim3 grid(chunks, batchSize);
+        const int32_t threads = min(m, max_threads);
+        const int32_t chunks = (m + threads - 1) / threads;
+        dim3 grid(chunks, k);
 
-        sparseAffineForwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, stm, outputs);
-        sparseAffineForwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weights, biases, ntm, outputs + outputSize);
+        sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, A, X, B, Y);
     }
 }
 
-extern "C" void sparseAffineDualForward(
-    const size_t batchSize,
-    const size_t maxInputSize,
-    const size_t outputSize,
-    const float* weights,
-    const float* biases,
-    const int32_t* stm,
-    const int32_t* ntm,
-    float* outputs,
-    const int32_t activation)
+extern "C" void sparse_affine(
+    const int32_t activation,
+    const size_t stride,
+    const size_t nnz,
+    const size_t m,
+    [[maybe_unused]] const size_t n,
+    const size_t k,
+    const bool Bb,
+    const float* A,
+    const int32_t* X,
+    const float* B,
+    float* Y)
 {
     switch (activation)
     {
         case 0:
-            sparseAffineDualForwardInternal<Identity>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            sparse_affine_internal<Identity>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 1:
-            sparseAffineDualForwardInternal<ReLU>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            sparse_affine_internal<ReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 2:
-            sparseAffineDualForwardInternal<CReLU>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            sparse_affine_internal<CReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 3:
-            sparseAffineDualForwardInternal<SCReLU>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            sparse_affine_internal<SCReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 4:
-            sparseAffineDualForwardInternal<SqrReLU>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            sparse_affine_internal<SqrReLU>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         case 5:
-            sparseAffineDualForwardInternal<sigmoid>(batchSize, maxInputSize, outputSize, weights, biases, stm, ntm, outputs);
+            sparse_affine_internal<sigmoid>(stride, nnz, m, k, Bb, A, X, B, Y);
             break;
         default:
             std::abort();

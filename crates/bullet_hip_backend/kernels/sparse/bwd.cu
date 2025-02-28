@@ -3,113 +3,98 @@
 #include <hip/hip_runtime.h>
 #endif
 
-template<OpType op, size_t stride = 1>
-__global__ void sparseAffineBackwardKernel(
-    const size_t inputSize,
-    const size_t outputSize,
-    float* weightsGrad,
-    float* biasesGrad,
-    const int32_t* inputs,
-    const float* outputs,
-    const float* errors)
+template<OpType op>
+__global__ void sparse_affine_backward_kernel(
+    const int32_t stride,
+    const int32_t nnz,
+    const int32_t m,
+    const bool Bb,
+    const int32_t* X,
+    const float* Y,
+    const float* Yg,
+    float* Ag,
+    float* Bg)
 {
-    const size_t elem = blockIdx.x * blockDim.x + threadIdx.x;
+    const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (elem >= outputSize)
+    if (row >= m)
         return;
 
-    const int32_t* thisInput = inputs + inputSize * blockIdx.y;
-    const float* thisOutputs = outputs + stride * outputSize * blockIdx.y;
-    const float* thisErrors = errors + stride * outputSize * blockIdx.y;
+    const int32_t* tX = X + nnz * blockIdx.y;
+    const int32_t offset = stride * m * blockIdx.y;
 
-    const float ourError = op(thisOutputs[elem]) * thisErrors[elem];
+    const float tE = op(Y[offset + row]) * Yg[offset + row];
 
-    if (biasesGrad != nullptr)
-        atomicAdd(&biasesGrad[elem], ourError);
+    if (Bg != nullptr)
+    {   
+        const int32_t offset = Bb ? m * blockIdx.y : 0;
+        atomicAdd(&Bg[offset + row], tE);
+    }
 
-    for (size_t i = 0; i < inputSize; i++) {
-        const int32_t inp = thisInput[i];
+    for (int32_t i = 0; i < nnz; i++)
+    {
+        const int32_t j = tX[i];
 
-        if (inp == -1)
+        if (j == -1)
             break;
 
-        const size_t ourIdx = static_cast<size_t>(inp) * outputSize + elem;
-        atomicAdd(&weightsGrad[ourIdx], ourError);
+        atomicAdd(&Ag[j * m + row], tE);
     }
 }
 
-extern "C" void sparseAffineBackward(
-    const size_t batchSize,
-    const size_t maxInputSize,
-    const size_t outputSize,
-    float* weightsGrad,
-    float* biasesGrad,
-    const int32_t* inputs,
-    const float* outputs,
-    const float* errors)
-{
-    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
-
-    dim3 grid(numChunks, batchSize);
-
-    const size_t threads = (numChunks == 1) ? outputSize : 1024;
-
-    sparseAffineBackwardKernel<primeInvIdentity><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, inputs, outputs, errors);
-}
-
 template<OpType op>
-void sparseAffineDualBackwardInternal(
-    const size_t batchSize,
-    const size_t maxInputSize,
-    const size_t outputSize,
-    float* weightsGrad,
-    float* biasesGrad,
-    const int32_t* stm,
-    const int32_t* ntm,
-    const float* outputs,
-    const float* errors)
+void sparse_affine_backward_internal(
+    const int32_t stride,
+    const int32_t nnz,
+    const int32_t m,
+    const int32_t k,
+    const bool Bb,
+    const int32_t* X,
+    const float* Y,
+    const float* Yg,
+    float* Ag,
+    float* Bg)
 {
-    const size_t numChunks = (outputSize + static_cast<size_t>(1023)) / static_cast<size_t>(1024);
+    const int32_t chunks = (m + 1023) / 1024;
+    const int32_t threads = (chunks == 1) ? m : 1024;
+    dim3 grid(chunks, k);
 
-    dim3 grid(numChunks, batchSize);
-
-    const size_t threads = (numChunks == 1) ? outputSize : 1024;
-
-    sparseAffineBackwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, stm, outputs, errors);
-    sparseAffineBackwardKernel<op, 2><<<grid, threads>>>(maxInputSize, outputSize, weightsGrad, biasesGrad, ntm, outputs + outputSize, errors + outputSize);
+    sparse_affine_backward_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, X, Y, Yg, Ag, Bg);
 }
 
-extern "C" void sparseAffineDualBackward(
-    const size_t batchSize,
-    const size_t maxInputSize,
-    const size_t outputSize,
-    float* weightsGrad,
-    float* biasesGrad,
-    const int32_t* stm,
-    const int32_t* ntm,
-    const float* outputs,
-    const float* errors,
-    const int32_t activation)
+extern "C" void sparse_affine_backward(
+    const int32_t activation,
+    const size_t stride,
+    const size_t nnz,
+    const size_t m,
+    [[maybe_unused]] const size_t n,
+    const size_t k,
+    const bool Bb,
+    const int32_t* X,
+    const float* Y,
+    const float* Yg,
+    float* Ag,
+    float* Bg)
 {
     switch (activation)
     {
         case 0:
-            sparseAffineDualBackwardInternal<primeInvIdentity>(batchSize, maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            sparse_affine_backward_internal<primeInvIdentity>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 1:
-            sparseAffineDualBackwardInternal<primeInvReLU>(batchSize, maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            sparse_affine_backward_internal<primeInvReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 2:
-            sparseAffineDualBackwardInternal<primeInvCReLU>(batchSize, maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            sparse_affine_backward_internal<primeInvCReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 3:
-            sparseAffineDualBackwardInternal<primeInvSCReLU>(batchSize, maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            sparse_affine_backward_internal<primeInvSCReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 4:
-            sparseAffineDualBackwardInternal<primeInvSqrReLU>(batchSize, maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            sparse_affine_backward_internal<primeInvSqrReLU>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         case 5:
-            sparseAffineDualBackwardInternal<primeInvSigmoid>(batchSize, maxInputSize, outputSize, weightsGrad, biasesGrad, stm, ntm, outputs, errors);
+            sparse_affine_backward_internal<primeInvSigmoid>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
             break;
         default:
             std::abort();

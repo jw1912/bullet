@@ -1,12 +1,10 @@
 mod affine;
-mod affine_dual;
 mod gather;
 mod mask;
 mod select;
 mod softmax;
 
 pub use affine::*;
-pub use affine_dual::*;
 use bullet_core::device::{DeviceBuffer, OperationError};
 pub use gather::*;
 pub use mask::*;
