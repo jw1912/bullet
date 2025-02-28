@@ -162,8 +162,10 @@ impl Device for ExecutionContext {
         dense::backprop_pairwise(single_size, batch_size, input, output_grad, input_grad, post_concat)
     }
 
-    fn backprop_sparse_affine(
+    fn backprop_sparse_affine_activate(
         batch_size: usize,
+        stride: Option<bool>,
+        activation: Activation,
         input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -177,6 +179,8 @@ impl Device for ExecutionContext {
     ) -> OperationResult {
         sparse::backprop_sparse_affine(
             batch_size,
+            stride,
+            activation,
             input_a,
             input_a_grad,
             shape_a,
@@ -187,38 +191,6 @@ impl Device for ExecutionContext {
             input_c_grad,
             outputs,
             output_grad,
-        )
-    }
-
-    fn backprop_sparse_affine_dual_activate(
-        batch_size: usize,
-        input_a: &Self::BufferF32,
-        input_a_grad: &mut Self::BufferF32,
-        shape_a: Shape,
-        input_b1: &Self::BufferI32,
-        input_b2: &Self::BufferI32,
-        shape_b: Shape,
-        nnz: usize,
-        input_c: &Self::BufferF32,
-        input_c_grad: &mut Self::BufferF32,
-        outputs: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        activation: Activation,
-    ) -> OperationResult {
-        sparse::backprop_sparse_affine_dual_activate(
-            batch_size,
-            input_a,
-            input_a_grad,
-            shape_a,
-            input_b1,
-            input_b2,
-            shape_b,
-            nnz,
-            input_c,
-            input_c_grad,
-            outputs,
-            output_grad,
-            activation,
         )
     }
 
@@ -266,8 +238,10 @@ impl Device for ExecutionContext {
         dense::abs_power_error(power, size, input_a, input_b, output)
     }
 
-    fn sparse_affine(
+    fn sparse_affine_activate(
         batch_size: usize,
+        stride: Option<bool>,
+        activation: Activation,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
@@ -276,24 +250,7 @@ impl Device for ExecutionContext {
         input_c: Option<&Self::BufferF32>,
         output: &mut Self::BufferF32,
     ) -> OperationResult {
-        sparse::sparse_affine(batch_size, input_a, shape_a, input_b, shape_b, nnz, input_c, output)
-    }
-
-    fn sparse_affine_dual_activate(
-        batch_size: usize,
-        input_a: &Self::BufferF32,
-        shape_a: Shape,
-        input_b1: &Self::BufferI32,
-        input_b2: &Self::BufferI32,
-        shape_b: Shape,
-        nnz: usize,
-        input_c: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        activation: Activation,
-    ) -> OperationResult {
-        sparse::sparse_affine_dual_activate(
-            batch_size, input_a, shape_a, input_b1, input_b2, shape_b, nnz, input_c, output, activation,
-        )
+        sparse::sparse_affine(batch_size, stride, activation, input_a, shape_a, input_b, shape_b, nnz, input_c, output)
     }
 
     fn adam(

@@ -1,3 +1,6 @@
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#endif
 #include <cstdint>
 #include "util.cu"
 #include "activate.cu"

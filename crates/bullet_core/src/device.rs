@@ -90,8 +90,10 @@ pub trait Device: Sized + 'static {
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError>;
 
-    fn sparse_affine(
+    fn sparse_affine_activate(
         batch_size: usize,
+        stride: Option<bool>,
+        activation: Activation,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
@@ -101,8 +103,10 @@ pub trait Device: Sized + 'static {
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError>;
 
-    fn backprop_sparse_affine(
+    fn backprop_sparse_affine_activate(
         batch_size: usize,
+        stride: Option<bool>,
+        activation: Activation,
         input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -113,35 +117,6 @@ pub trait Device: Sized + 'static {
         input_c_grad: Option<&mut Self::BufferF32>,
         outputs: &Self::BufferF32,
         output_grad: &Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn sparse_affine_dual_activate(
-        batch_size: usize,
-        input_a: &Self::BufferF32,
-        shape_a: Shape,
-        input_b1: &Self::BufferI32,
-        input_b2: &Self::BufferI32,
-        shape_b: Shape,
-        nnz: usize,
-        input_c: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        activation: Activation,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn backprop_sparse_affine_dual_activate(
-        batch_size: usize,
-        input_a: &Self::BufferF32,
-        input_a_grad: &mut Self::BufferF32,
-        shape_a: Shape,
-        input_b1: &Self::BufferI32,
-        input_b2: &Self::BufferI32,
-        shape_b: Shape,
-        nnz: usize,
-        input_c: &Self::BufferF32,
-        input_c_grad: &mut Self::BufferF32,
-        outputs: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        activation: Activation,
     ) -> OperationResult<Self::DeviceError>;
 
     fn copy_or_add_strided(

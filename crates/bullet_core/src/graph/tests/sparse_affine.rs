@@ -62,20 +62,20 @@ pub fn sparse_affine_dual<D: Device>(device: D) -> Result<(), GraphError<D::Devi
 
     unsafe {
         graph.get_input_mut("i1").load_sparse_from_slice(2, Some(2), &[1, -1, 0, 2]).unwrap();
-        graph.get_input_mut("i2").load_sparse_from_slice(2, Some(2), &[2, -1, 1, 0]).unwrap();
+        graph.get_input_mut("i2").load_sparse_from_slice(2, Some(2), &[2, -1, 2, 0]).unwrap();
     }
 
     let err = graph.forward().unwrap();
-    assert_eq!(err, 14.0);
+    assert_eq!(err, 12.0);
 
     let output = graph.get_node(out).get_dense_vals().unwrap();
-    assert_eq!(&output, &[5.0, 3.0, 2.0, 4.0]);
+    assert_eq!(&output, &[5.0, 3.0, 2.0, 2.0]);
 
     graph.backward().unwrap();
 
     let mut buf = [0.0; 3];
     graph.get_weights("w").gradients.as_ref().unwrap().write_to_slice(&mut buf).map_err(OperationError::from)?;
-    assert_eq!(buf, [2.0, 2.0, 2.0]);
+    assert_eq!(buf, [2.0, 1.0, 3.0]);
 
     let mut buf = [0.0];
     graph.get_weights("b").gradients.as_ref().unwrap().write_to_slice(&mut buf).map_err(OperationError::from)?;
