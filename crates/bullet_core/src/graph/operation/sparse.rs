@@ -138,7 +138,6 @@ pub fn affine_dual<D: Device>(
     activation: Activation,
 ) -> Result<(), OperationError<D::DeviceError>> {
     assert!(w.batch_size().is_none());
-    assert!(b.batch_size().is_none());
     assert_eq!(s.batch_size(), n.batch_size());
     assert_eq!(s.nnz, n.nnz);
     assert_eq!(w_shape.size(), w.single_size());
