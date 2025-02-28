@@ -139,7 +139,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
     pub fn output_bucket_ft_biases(mut self) -> Self {
         assert!(U::BUCKETS > 1);
-        self.output_bucket_ft_biases = false;
+        self.output_bucket_ft_biases = true;
         self
     }
 
