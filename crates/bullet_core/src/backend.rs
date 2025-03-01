@@ -1,13 +1,32 @@
-mod buffer;
+pub mod activation;
 mod error;
+pub mod shape;
+pub mod tensor;
 mod tests;
 
-use crate::{graph::operation::Activation, shape::Shape};
+use activation::Activation;
+use shape::Shape;
+use std::sync::Arc;
 
-pub use buffer::DeviceBuffer;
 pub use error::OperationError;
 
 type OperationResult<T> = Result<(), OperationError<T>>;
+
+pub trait DeviceBuffer<D: Device, T>: Sized {
+    fn new(device: Arc<D>, size: usize) -> Result<Self, D::DeviceError>;
+
+    fn size(&self) -> usize;
+
+    fn device(&self) -> Arc<D>;
+
+    fn set_zero(&mut self) -> Result<(), D::DeviceError>;
+
+    fn load_from_device(&mut self, buf: &Self, num: usize) -> Result<(), D::DeviceError>;
+
+    fn load_from_slice(&mut self, buf: &[T]) -> Result<(), D::DeviceError>;
+
+    fn write_into_slice(&self, buf: &mut [T], num: usize) -> Result<(), D::DeviceError>;
+}
 
 #[allow(clippy::too_many_arguments)]
 pub trait Device: Sized + 'static {

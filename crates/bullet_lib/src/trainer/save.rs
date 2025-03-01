@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use bullet_core::shape::Shape;
+use bullet_core::backend::shape::Shape;
 use bullet_hip_backend::DenseMatrix;
 
 #[derive(Clone)]

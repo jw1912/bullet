@@ -9,12 +9,7 @@ mod tests;
 pub use backend::ExecutionContext;
 use backend::{bindings, util, Buffer};
 
-use bullet_core::{
-    device::{Device, OperationError},
-    graph::operation::Activation,
-    shape::Shape,
-    tensor,
-};
+use bullet_core::backend::{activation::Activation, shape::Shape, tensor, Device, OperationError};
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;
 pub type SparseMatrix = tensor::SparseMatrix<ExecutionContext>;

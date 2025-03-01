@@ -1,7 +1,4 @@
-use bullet_core::{
-    device::{DeviceBuffer, OperationError},
-    shape::Shape,
-};
+use bullet_core::backend::{shape::Shape, DeviceBuffer, OperationError};
 
 use crate::{
     backend::{blas, util::catch_cublas, Buffer},

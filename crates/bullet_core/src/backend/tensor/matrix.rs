@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use crate::{
-    device::{Device, DeviceBuffer, OperationError},
-    tensor::{dense::DenseMatrix, sparse::SparseMatrix},
-};
+use crate::backend::{Device, DeviceBuffer, OperationError};
+
+use super::{dense::DenseMatrix, sparse::SparseMatrix};
 
 pub enum Matrix<D: Device> {
     Dense(DenseMatrix<D>),

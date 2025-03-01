@@ -5,10 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    device::{Device, OperationError},
-    tensor::DenseMatrix,
-};
+use crate::backend::{tensor::DenseMatrix, Device, OperationError};
 
 use super::{utils, OptimiserState};
 

@@ -10,7 +10,7 @@ pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
 use crate::{
-    device::{Device, DeviceBuffer, OperationError},
+    backend::{Device, DeviceBuffer, OperationError},
     graph::{builder::Node, operation::Operation},
 };
 

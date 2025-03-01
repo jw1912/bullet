@@ -13,10 +13,7 @@ use std::{
 
 use builder::Node;
 
-use crate::{
-    device::{Device, OperationError},
-    tensor::Tensor,
-};
+use crate::backend::{tensor::Tensor, Device, OperationError};
 
 pub struct Graph<D: Device> {
     nodes: Vec<Option<RefCell<Tensor<D>>>>,

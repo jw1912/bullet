@@ -1,7 +1,7 @@
-use crate::{
-    device::{Device, OperationError},
+use crate::backend::{
     shape::Shape,
     tensor::{DenseMatrix, Tensor},
+    Device, OperationError,
 };
 
 use super::linear_comb::backprop_add_single_scaled;

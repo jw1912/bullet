@@ -1,8 +1,4 @@
-use crate::{
-    device::{Device, OperationError},
-    shape::Shape,
-    tensor::DenseMatrix,
-};
+use crate::backend::{shape::Shape, tensor::DenseMatrix, Device, OperationError};
 
 pub fn concat<D: Device>(
     input_a: &DenseMatrix<D>,

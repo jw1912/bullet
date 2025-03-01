@@ -1,7 +1,6 @@
 use crate::{
-    device::{Device, OperationError},
+    backend::{shape::Shape, Device, OperationError},
     graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
-    shape::Shape,
 };
 
 pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
