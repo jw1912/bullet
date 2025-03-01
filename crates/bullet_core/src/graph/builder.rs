@@ -68,7 +68,7 @@ impl NodeData {
 
 #[derive(Default)]
 pub struct GraphBuilder {
-    nodes: Vec<NodeData>,
+    nodes: Vec<Option<NodeData>>,
     roots: HashSet<usize>,
     inputs: HashSet<usize>,
     weights: HashSet<usize>,
@@ -76,8 +76,8 @@ pub struct GraphBuilder {
 }
 
 impl GraphBuilder {
-    pub(crate) fn get(&self, idx: usize) -> &NodeData {
-        &self.nodes[idx]
+    pub(crate) fn get(&self, idx: usize) -> Option<&NodeData> {
+        self.nodes[idx].as_ref()
     }
 
     fn create_node(
@@ -103,7 +103,7 @@ impl GraphBuilder {
             }
         }
 
-        self.nodes.push(data);
+        self.nodes.push(Some(data));
         self.roots.insert(node.idx);
 
         Ok(node)
@@ -167,39 +167,40 @@ impl GraphBuilder {
 
     pub fn root(&self) -> Node {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
-        self.nodes[*self.roots.iter().next().unwrap()].own
+        self.get(*self.roots.iter().next().unwrap()).unwrap().own
     }
 
     pub fn build<D: Device>(self, device: D) -> Result<Graph<D>, GraphError<D::DeviceError>> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
         let root = *self.roots.iter().next().unwrap();
-        assert!(self.get(root).requires_grad, "Output cannot be an input!");
+        let root_data = self.get(root).unwrap();
+
+        assert!(root_data.requires_grad, "Output cannot be an input!");
         assert!(!self.weights.contains(&root), "Can't output trainable weights!");
-        assert_eq!(self.nodes[root].own.shape, Shape::new(1, 1), "Graph output must be scalar!");
-        assert_eq!(self.get(root).size, 1);
+        assert_eq!(root_data.own.shape, Shape::new(1, 1), "Graph output must be scalar!");
+        assert_eq!(root_data.size, 1);
 
         let device = Arc::new(device);
 
         let mut nodes = Vec::new();
         for node_data in &self.nodes {
-            let tensor = Tensor::new(
-                device.clone(),
-                node_data.size,
-                node_data.requires_grad,
-                node_data.parent_operation,
-                node_data.own,
-            );
-            let tensor = tensor.map_err(OperationError::from);
+            if let Some(data) = node_data {
+                let tensor =
+                    Tensor::new(device.clone(), data.size, data.requires_grad, data.parent_operation, data.own);
+                let tensor = tensor.map_err(OperationError::from);
 
-            nodes.push(RefCell::new(tensor?));
+                nodes.push(Some(RefCell::new(tensor?)));
+            } else {
+                nodes.push(None);
+            }
         }
 
-        let inputs =
-            self.inputs.iter().map(|&node| (self.get(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
+        let id_idx_pair = |&node| self.get(node).map(|data| (data.id.clone().unwrap(), node));
 
-        let weights =
-            self.weights.iter().map(|&node| (self.get(node).id.clone().unwrap(), node)).collect::<HashMap<_, _>>();
+        let inputs = self.inputs.iter().filter_map(id_idx_pair).collect::<HashMap<_, _>>();
+
+        let weights = self.weights.iter().filter_map(id_idx_pair).collect::<HashMap<_, _>>();
 
         Ok(Graph { nodes, root, inputs, weights, device })
     }
