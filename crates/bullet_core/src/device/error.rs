@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {
+    TensorOptimisedOut,
     InvalidTensorFormat,
     IndexOutOfBounds,
     UnsupportedOperation(String),

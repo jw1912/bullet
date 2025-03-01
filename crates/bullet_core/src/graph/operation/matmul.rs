@@ -1,13 +1,13 @@
 use crate::{
     device::{Device, OperationError},
     shape::Shape,
-    tensor::{DenseMatrix, SparseMatrix, Tensor},
+    tensor::{DenseMatrix, Tensor},
 };
 
 use super::linear_comb::backprop_add_single_scaled;
 
 #[allow(clippy::too_many_arguments)]
-pub fn dense_affine<D: Device>(
+pub fn affine<D: Device>(
     a: &DenseMatrix<D>,
     shape_a: Shape,
     b: &DenseMatrix<D>,
@@ -28,7 +28,7 @@ pub fn dense_affine<D: Device>(
     D::add_assign_single_to_batched_scaled(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf)
 }
 
-pub fn backprop_dense_affine<D: Device>(
+pub fn backprop_affine<D: Device>(
     a: &mut Tensor<D>,
     shape_a: Shape,
     b: &mut Tensor<D>,
@@ -55,90 +55,6 @@ pub fn backprop_dense_affine<D: Device>(
 
     if let Some(grad) = c.gradients.as_mut() {
         backprop_add_single_scaled(ones, 1.0, c.values.dense()?, grad, output_grad)?;
-    }
-
-    Ok(())
-}
-
-pub fn sparse_affine<D: Device>(
-    a: &DenseMatrix<D>,
-    shape_a: Shape,
-    b: &SparseMatrix<D>,
-    shape_b: Shape,
-    c: Option<(&DenseMatrix<D>, Shape)>,
-    out: &mut DenseMatrix<D>,
-) -> Result<(), OperationError<D::DeviceError>> {
-    let output_shape = shape_a * shape_b;
-    if let Some((c, shape)) = c {
-        assert_eq!(output_shape.size(), c.single_size());
-        assert_eq!(output_shape, shape);
-        assert!(c.batch_size().is_none());
-    }
-
-    assert_eq!(shape_b.cols(), 1);
-    assert_eq!(a.single_size(), shape_a.size());
-    assert_eq!(b.single_size(), shape_b.size());
-    assert!(a.batch_size().is_none());
-
-    let bs = b.batch_size();
-    out.set_batch_size(bs)?;
-
-    D::sparse_affine(bs.unwrap_or(1), &a.buf, shape_a, &b.buf, shape_b, b.nnz, c.map(|x| &x.0.buf), &mut out.buf)?;
-
-    Ok(())
-}
-
-pub fn backprop_sparse_affine<D: Device>(
-    a: &mut Tensor<D>,
-    shape_a: Shape,
-    b: &SparseMatrix<D>,
-    shape_b: Shape,
-    c: Option<(&mut Tensor<D>, &D::BufferF32)>,
-    output: &DenseMatrix<D>,
-    output_grad: &DenseMatrix<D>,
-) -> Result<(), OperationError<D::DeviceError>> {
-    let output_shape = shape_a * shape_b;
-    if let Some((c, _)) = &c {
-        assert_eq!(output_shape.size(), c.values.single_size());
-        assert!(c.values.batch_size().is_none());
-    }
-
-    assert_eq!(shape_b.cols(), 1);
-    assert_eq!(a.values.single_size(), shape_a.size());
-    assert_eq!(b.single_size(), shape_b.size());
-    assert!(a.values.batch_size().is_none());
-    assert_eq!(b.batch_size(), output.batch_size());
-    assert_eq!(b.batch_size(), output_grad.batch_size());
-
-    if let Some((c, _)) = &c {
-        assert!(c.values.batch_size().is_none());
-        assert_eq!(c.values.single_size(), output_shape.size());
-    }
-
-    if let Some(agrd) = a.gradients.as_mut() {
-        let (c, cgrd) = if let Some((c, _)) = c {
-            (Some(&c.values.dense()?.buf), c.gradients.as_mut().map(|g| &mut g.buf))
-        } else {
-            (None, None)
-        };
-
-        D::backprop_sparse_affine(
-            output_grad.batch_size().unwrap_or(1),
-            &a.values.dense()?.buf,
-            &mut agrd.buf,
-            shape_a,
-            &b.buf,
-            shape_b,
-            b.nnz,
-            c,
-            cgrd,
-            &output.buf,
-            &output_grad.buf,
-        )?;
-    } else if let Some((c, ones)) = c {
-        if let Some(grad) = c.gradients.as_mut() {
-            backprop_add_single_scaled(ones, 1.0, c.values.dense()?, grad, output_grad)?;
-        }
     }
 
     Ok(())

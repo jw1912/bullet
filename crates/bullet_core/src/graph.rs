@@ -1,9 +1,15 @@
 pub mod builder;
+mod bwd;
 pub mod error;
+mod fwd;
 pub mod operation;
 pub mod tests;
 
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    collections::HashMap,
+    sync::Arc,
+};
 
 use builder::Node;
 
@@ -13,7 +19,7 @@ use crate::{
 };
 
 pub struct Graph<D: Device> {
-    nodes: Vec<RefCell<Tensor<D>>>,
+    nodes: Vec<Option<RefCell<Tensor<D>>>>,
     root: usize,
     inputs: HashMap<String, usize>,
     weights: HashMap<String, usize>,
@@ -21,20 +27,48 @@ pub struct Graph<D: Device> {
 }
 
 impl<D: Device> Graph<D> {
+    fn get_node_info(&self, idx: usize) -> Result<Node, OperationError<D::DeviceError>> {
+        if let Ok(node) = self.get(idx) {
+            Ok(node.own)
+        } else {
+            Err(OperationError::TensorOptimisedOut)
+        }
+    }
+
+    pub fn get_node(&self, node: Node) -> Ref<'_, Tensor<D>> {
+        self.get(node.idx).unwrap()
+    }
+
+    fn get(&self, idx: usize) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = &self.nodes[idx] {
+            Ok(tensor.borrow())
+        } else {
+            Err(OperationError::UnsupportedOperation(String::new()))
+        }
+    }
+
+    fn get_mut(&self, idx: usize) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = &self.nodes[idx] {
+            Ok(tensor.borrow_mut())
+        } else {
+            Err(OperationError::UnsupportedOperation(String::new()))
+        }
+    }
+
     pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
         for node in 0..self.nodes.len() {
-            let node = { self.nodes[node].borrow().own };
+            let node = self.get_node_info(node)?;
             self.forward_node(node)?;
         }
 
-        Ok(self.nodes[self.root].borrow().get_scalar().unwrap())
+        Ok(self.get(self.root)?.get_scalar().unwrap())
     }
 
     pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
-        self.nodes[self.root].get_mut().set_grad_to_unit()?;
+        self.get_mut(self.root)?.set_grad_to_unit()?;
 
         for node in (0..self.nodes.len()).rev() {
-            let node = { self.nodes[node].borrow().own };
+            let node = self.get_node_info(node)?;
             self.backward_node(node)?;
         }
 
@@ -43,7 +77,9 @@ impl<D: Device> Graph<D> {
 
     pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
         for node in &mut self.nodes {
-            node.get_mut().zero_grad()?;
+            if let Some(node) = node.as_mut() {
+                node.get_mut().zero_grad()?;
+            }
         }
 
         Ok(())
@@ -57,24 +93,20 @@ impl<D: Device> Graph<D> {
         self.weights.keys().cloned().collect()
     }
 
-    pub fn get_input(&self, id: &str) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[self.inputs[id]].borrow()
+    pub fn get_input(&self, id: &str) -> Ref<'_, Tensor<D>> {
+        self.get(self.inputs[id]).unwrap()
     }
 
-    pub fn get_input_mut(&mut self, id: &str) -> &mut Tensor<D> {
-        self.nodes[self.inputs[id]].get_mut()
+    pub fn get_input_mut(&mut self, id: &str) -> RefMut<'_, Tensor<D>> {
+        self.get_mut(self.inputs[id]).unwrap()
     }
 
-    pub fn get_weights(&self, id: &str) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[self.weights[id]].borrow()
+    pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
+        self.get(self.weights[id]).unwrap()
     }
 
-    pub fn get_weights_mut(&mut self, id: &str) -> &mut Tensor<D> {
-        self.nodes[self.weights[id]].get_mut()
-    }
-
-    pub fn get_node(&self, node: Node) -> std::cell::Ref<'_, Tensor<D>> {
-        self.nodes[node.idx].borrow()
+    pub fn get_weights_mut(&mut self, id: &str) -> RefMut<'_, Tensor<D>> {
+        self.get_mut(self.weights[id]).unwrap()
     }
 
     pub fn get_num_params(&self) -> usize {

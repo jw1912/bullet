@@ -51,6 +51,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     psqt_subnet: bool,
     allow_transpose: bool,
     ft_init_input_size: Option<usize>,
+    output_bucket_ft_biases: bool,
 }
 
 impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -67,6 +68,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             psqt_subnet: false,
             allow_transpose: true,
             ft_init_input_size: None,
+            output_bucket_ft_biases: false,
         }
     }
 }
@@ -132,6 +134,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
     pub fn disallow_transpose_in_quantised_network(mut self) -> Self {
         self.allow_transpose = false;
+        self
+    }
+
+    pub fn output_bucket_ft_biases(mut self) -> Self {
+        assert!(U::BUCKETS > 1);
+        self.output_bucket_ft_biases = true;
         self
     }
 
@@ -253,7 +261,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         let mut out = builder.new_sparse_input("stm", input_shape, input_getter.max_active());
         let buckets = output_buckets.then(|| builder.new_sparse_input("buckets", Shape::new(U::BUCKETS, 1), 1));
-        let l0 = builder.new_affine("l0", input_size, self.ft_out_size);
+        let l0 = builder.new_affine_custom(
+            "l0",
+            input_size,
+            self.ft_out_size,
+            if self.output_bucket_ft_biases { U::BUCKETS } else { 1 },
+        );
 
         let mut still_in_ft = true;
         let mut saved_format = Vec::new();
@@ -297,7 +310,13 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             };
 
             let ntm = builder.new_sparse_input("nstm", input_shape, input_getter.max_active());
-            out = l0.forward_sparse_dual_with_activation(out, ntm, activation);
+
+            if self.output_bucket_ft_biases {
+                out = l0.forward_sparse_dual_with_activation_and_bias_buckets(out, ntm, buckets.unwrap(), activation);
+            } else {
+                out = l0.forward_sparse_dual_with_activation(out, ntm, activation);
+            }
+
             skip
         } else {
             out = l0.forward(out);
