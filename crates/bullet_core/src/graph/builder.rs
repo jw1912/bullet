@@ -170,6 +170,30 @@ impl GraphBuilder {
         self.get(*self.roots.iter().next().unwrap()).unwrap().own
     }
 
+    fn try_fusion_pass(&mut self) -> bool {
+        for node in (0..self.nodes.len()).rev() {
+            if let Some(data) = self.get(node) {
+                let own = data.own.idx;
+
+                if let Some((eliminated, new_data)) = self.search_for_fusion(own) {
+                    for dead in eliminated {
+                        self.nodes[dead] = None;
+                    }
+
+                    self.nodes[node] = Some(new_data);
+
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn optimise(&mut self) {
+        while self.try_fusion_pass() {}
+    }
+
     pub fn build<D: Device>(self, device: D) -> Result<Graph<D>, GraphError<D::DeviceError>> {
         assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
 
@@ -203,5 +227,9 @@ impl GraphBuilder {
         let weights = self.weights.iter().filter_map(id_idx_pair).collect::<HashMap<_, _>>();
 
         Ok(Graph { nodes, root, inputs, weights, device })
+    }
+
+    fn search_for_fusion(&self, _node: usize) -> Option<(Vec<usize>, NodeData)> {
+        None
     }
 }
