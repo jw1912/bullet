@@ -1,10 +1,9 @@
 use crate::{
-    device::{Device, DeviceBuffer, OperationError},
+    backend::{activation::Activation, shape::Shape, Device, DeviceBuffer, OperationError},
     graph::{Graph, Node},
-    shape::Shape,
 };
 
-use super::operation::{concat, linear_comb, matmul, setup_ones, slice, sparse, Activation, Operation};
+use super::operation::{concat, linear_comb, matmul, setup_ones, slice, sparse, Operation};
 
 impl<D: Device> Graph<D> {
     pub(crate) fn backward_node(&mut self, output_node: Node) -> Result<(), OperationError<D::DeviceError>> {

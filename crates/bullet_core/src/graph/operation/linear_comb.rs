@@ -1,8 +1,4 @@
-use crate::{
-    device::{Device, DeviceBuffer, OperationError},
-    shape::Shape,
-    tensor::DenseMatrix,
-};
+use crate::backend::{shape::Shape, tensor::DenseMatrix, Device, DeviceBuffer, OperationError};
 
 #[allow(clippy::too_many_arguments)]
 pub fn linear_comb<D: Device>(

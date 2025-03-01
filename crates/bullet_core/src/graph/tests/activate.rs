@@ -1,11 +1,6 @@
 use crate::{
-    device::{Device, OperationError},
-    graph::{
-        builder::GraphBuilder,
-        error::GraphError,
-        operation::{Activation, Operation},
-    },
-    shape::Shape,
+    backend::{activation::Activation, shape::Shape, Device, OperationError},
+    graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
 };
 
 pub fn relu<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {

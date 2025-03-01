@@ -1,4 +1,7 @@
-use crate::{device::Device, graph::Graph, tensor::DenseMatrix};
+use crate::{
+    backend::{tensor::DenseMatrix, Device},
+    graph::Graph,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Placement {

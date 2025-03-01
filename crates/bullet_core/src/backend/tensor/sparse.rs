@@ -1,6 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
-use crate::device::{Device, DeviceBuffer, OperationError};
+use crate::backend::{Device, DeviceBuffer, OperationError};
 
 use super::DenseMatrix;
 

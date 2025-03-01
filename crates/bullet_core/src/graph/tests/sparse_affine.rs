@@ -1,11 +1,10 @@
 use crate::{
-    device::{Device, OperationError},
+    backend::{activation::Activation, shape::Shape, Device, OperationError},
     graph::{
         builder::GraphBuilder,
         error::GraphError,
-        operation::{Activation, GraphBuilderError, GraphBuilderErrorType, Operation},
+        operation::{GraphBuilderError, GraphBuilderErrorType, Operation},
     },
-    shape::Shape,
 };
 
 pub fn sparse_affine<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {

@@ -11,11 +11,7 @@ use super::{
     operation::{GraphBuilderError, GraphBuilderErrorType, Operation},
     Graph,
 };
-use crate::{
-    device::{Device, OperationError},
-    shape::Shape,
-    tensor::Tensor,
-};
+use crate::backend::{shape::Shape, tensor::Tensor, Device, OperationError};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Node {

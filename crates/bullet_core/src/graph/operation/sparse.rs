@@ -1,8 +1,10 @@
 use crate::{
-    device::{Device, OperationError},
+    backend::{
+        shape::Shape,
+        tensor::{DenseMatrix, SparseMatrix, Tensor},
+        Device, OperationError,
+    },
     graph::operation::linear_comb::backprop_add_single_scaled,
-    shape::Shape,
-    tensor::{DenseMatrix, SparseMatrix, Tensor},
 };
 
 use super::Activation;
