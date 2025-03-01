@@ -410,7 +410,7 @@ where
 
     unsafe {
         let input = &prepared.stm;
-        let stm = graph.get_input_mut("stm");
+        let mut stm = graph.get_input_mut("stm");
 
         if stm.values.single_size() != expected_inputs {
             return Err(OperationError::InvalidTensorFormat);
@@ -418,9 +418,12 @@ where
 
         stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
 
-        if graph.input_ids().contains(&"nstm".to_string()) {
+        drop(stm);
+        let input_ids = graph.input_ids();
+
+        if input_ids.contains(&"nstm".to_string()) {
             let input = &prepared.nstm;
-            let ntm = graph.get_input_mut("nstm");
+            let ntm = &mut *graph.get_input_mut("nstm");
 
             if ntm.values.single_size() != expected_inputs {
                 return Err(OperationError::InvalidTensorFormat);
@@ -432,7 +435,7 @@ where
 
     if graph.input_ids().contains(&"buckets".to_string()) {
         let input = &prepared.buckets;
-        let buckets = graph.get_input_mut("buckets");
+        let mut buckets = graph.get_input_mut("buckets");
 
         if buckets.values.single_size() != Out::BUCKETS {
             return Err(OperationError::InvalidTensorFormat);
