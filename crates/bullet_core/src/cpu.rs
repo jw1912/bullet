@@ -539,37 +539,21 @@ impl Device for CpuThread {
 #[allow(clippy::too_many_arguments)]
 fn sgemm(
     alpha: f32,
-    input_a: &[f32],
-    shape_a: Shape,
-    trans_a: bool,
-    input_b: &[f32],
-    shape_b: Shape,
-    trans_b: bool,
+    a: &[f32],
+    sha: Shape,
+    ta: bool,
+    b: &[f32],
+    shb: Shape,
+    tb: bool,
     beta: f32,
-    output: &mut [f32],
+    c: &mut [f32],
 ) -> OperationResult<CpuError> {
-    let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
-
-    if input_a.len() != shape_a.size() || input_b.len() != shape_b.size() || output.len() != shape_o.size() {
-        return Err(OperationError::IndexOutOfBounds);
+    match (ta, tb) {
+        (false, false) => mm::<false, false>(sha.rows(), sha.cols(), shb.cols(), alpha, a, b, beta, c),
+        (false, true) => mm::<false, true>(sha.rows(), sha.cols(), shb.rows(), alpha, a, b, beta, c),
+        (true, false) => mm::<true, false>(sha.cols(), sha.rows(), shb.cols(), alpha, a, b, beta, c),
+        (true, true) => mm::<true, true>(sha.cols(), sha.rows(), shb.rows(), alpha, a, b, beta, c),
     }
-
-    match (trans_a, trans_b) {
-        (false, false) => {
-            mm::<false, false>(shape_a.rows(), shape_a.cols(), shape_b.cols(), alpha, input_a, input_b, beta, output)
-        }
-        (false, true) => {
-            mm::<false, true>(shape_a.rows(), shape_a.cols(), shape_b.rows(), alpha, input_a, input_b, beta, output)
-        }
-        (true, false) => {
-            mm::<true, false>(shape_a.cols(), shape_a.rows(), shape_b.cols(), alpha, input_a, input_b, beta, output)
-        }
-        (true, true) => {
-            mm::<true, true>(shape_a.cols(), shape_a.rows(), shape_b.rows(), alpha, input_a, input_b, beta, output)
-        }
-    }
-
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -578,20 +562,26 @@ fn mm<const TA: bool, const TB: bool>(
     n: usize,
     k: usize,
     alpha: f32,
-    input_a: &[f32],
-    input_b: &[f32],
+    a: &[f32],
+    b: &[f32],
     beta: f32,
-    output: &mut [f32],
-) {
+    c: &mut [f32],
+) -> OperationResult<CpuError> {
+    if a.len() != m * n || b.len() != n * k || c.len() != m * k {
+        return Err(OperationError::IndexOutOfBounds);
+    }
+
     for ki in 0..k {
         for mi in 0..m {
             let mut sum = 0.0;
             for ni in 0..n {
                 let aidx = if TA { n * mi + ni } else { m * ni + mi };
                 let bidx = if TB { k * ni + ki } else { n * ki + ni };
-                sum += input_a[aidx] * input_b[bidx];
+                sum += a[aidx] * b[bidx];
             }
-            output[m * ki + mi] = alpha * sum + beta * output[m * ki + mi];
+            c[m * ki + mi] = alpha * sum + beta * c[m * ki + mi];
         }
     }
+
+    Ok(())
 }
