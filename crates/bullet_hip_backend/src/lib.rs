@@ -289,16 +289,6 @@ impl Device for ExecutionContext {
         dense::linear_comb_single(size, alpha, input_a, beta, input_b, output)
     }
 
-    fn reduce_add(
-        ones: &Self::BufferF32,
-        size: usize,
-        batch_size: usize,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::reduce_add(ones, size, batch_size, input, output)
-    }
-
     fn select(
         batch_size: usize,
         input_size: usize,

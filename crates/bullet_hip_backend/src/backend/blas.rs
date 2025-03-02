@@ -165,27 +165,6 @@ pub unsafe fn linear_comb_matrices(
     }
 }
 
-pub unsafe fn reduce_add_cols(
-    ctx: &ExecutionContext,
-    rows: usize,
-    cols: usize,
-    ones: *const f32,
-    input: *const f32,
-    output: *mut f32,
-    alpha: f32,
-    increment: bool,
-) -> cublasStatus_t {
-    let beta = f32::from(increment);
-
-    let m = rows as c_int;
-    let n = cols as c_int;
-
-    let lda = rows as c_int;
-    let inc = 1;
-
-    unsafe { bindings::cublasSgemv_v2(ctx.cublas, CUBLAS_OP_N, m, n, &alpha, input, lda, ones, inc, &beta, output, 1) }
-}
-
 pub unsafe fn copy_strided(
     ctx: &ExecutionContext,
     rows: usize,

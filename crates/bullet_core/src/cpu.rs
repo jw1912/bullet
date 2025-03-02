@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::sync::Arc;
 
 use crate::backend::{
@@ -125,16 +126,6 @@ impl Device for CpuThread {
         batch_size: usize,
         ones: &Self::BufferF32,
         alpha: f32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn reduce_add(
-        ones: &Self::BufferF32,
-        size: usize,
-        batch_size: usize,
         input: &Self::BufferF32,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {

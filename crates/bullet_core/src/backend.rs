@@ -86,14 +86,6 @@ pub trait Device: Sized + 'static {
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError>;
 
-    fn reduce_add(
-        ones: &Self::BufferF32,
-        size: usize,
-        batch_size: usize,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
     /// If `input_a = None`, then take `input_a = output`, i.e. perform the
     /// in place operation `output = alpha * output + beta * input_b`.
     ///

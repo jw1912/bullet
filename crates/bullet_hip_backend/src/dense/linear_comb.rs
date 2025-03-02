@@ -58,30 +58,3 @@ pub fn add_assign_single_to_batched_scaled(
         Ok(catch_cublas(err)?)
     }
 }
-
-pub fn reduce_add(
-    ones: &Buffer<f32>,
-    size: usize,
-    batch_size: usize,
-    input: &Buffer<f32>,
-    output: &mut Buffer<f32>,
-) -> OperationResult {
-    if size * batch_size > input.size() || size > output.size() {
-        return Err(OperationError::IndexOutOfBounds);
-    }
-
-    unsafe {
-        let err = blas::reduce_add_cols(
-            input.device().as_ref(),
-            size,
-            batch_size,
-            ones.ptr(),
-            input.ptr(),
-            output.mut_ptr(),
-            1.0,
-            false,
-        );
-
-        Ok(catch_cublas(err)?)
-    }
-}

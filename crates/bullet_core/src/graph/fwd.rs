@@ -133,7 +133,7 @@ impl<D: Device> Graph<D> {
                 setup_ones(input.buf.device(), internal, input.batch_size().unwrap_or(1))?;
                 let ones = internal.get("ones").unwrap().borrow();
                 assert_eq!(input.single_size(), node.shape.size());
-                D::reduce_add(
+                linear_comb::reduce_add::<D>(
                     &ones.buf,
                     input.single_size(),
                     input.batch_size().unwrap_or(1),
