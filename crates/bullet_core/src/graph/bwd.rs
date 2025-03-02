@@ -209,7 +209,7 @@ impl<D: Device> Graph<D> {
                     assert_eq!(vals.single_size(), grd.single_size());
 
                     grd.set_batch_size(bs)?;
-                    D::add_assign_single_to_batched_scaled(
+                    linear_comb::add_assign_single_to_batched_scaled::<D>(
                         ss,
                         bs.unwrap_or(1),
                         ones,
@@ -377,14 +377,15 @@ impl<D: Device> Graph<D> {
                 let size = single_size * batch_size.unwrap_or(1);
 
                 D::sgemm(
+                    1.0,
                     &ones.buf,
                     Shape::new(single_size, 1),
                     false,
                     &output_grad.buf,
                     Shape::new(1, batch_size.unwrap_or(1)),
                     false,
+                    0.0,
                     &mut indv.buf,
-                    false,
                 )?;
 
                 let smax = &smax.buf;

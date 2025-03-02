@@ -97,42 +97,33 @@ impl Device for ExecutionContext {
         }
     }
 
-    fn add_assign_single_to_batched_scaled(
-        single_size: usize,
-        batch_size: usize,
-        ones: &Self::BufferF32,
-        alpha: f32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::add_assign_single_to_batched_scaled(single_size, batch_size, ones, alpha, input, output)
-    }
-
     fn sgemm(
+        alpha: f32,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
         input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
+        beta: f32,
         output: &mut Self::BufferF32,
-        increment: bool,
     ) -> OperationResult {
-        matmul::sgemm(input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment)
+        matmul::sgemm(alpha, input_a, shape_a, trans_a, input_b, shape_b, trans_b, beta, output)
     }
 
     fn sgemm_batched(
         batch_size: usize,
+        alpha: f32,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
         input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
+        beta: f32,
         output: &mut Self::BufferF32,
-        increment: bool,
     ) -> OperationResult {
-        matmul::sgemm_batched(batch_size, input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment)
+        matmul::sgemm_batched(batch_size, alpha, input_a, shape_a, trans_a, input_b, shape_b, trans_b, beta, output)
     }
 
     fn backprop_abs_power_error_single(

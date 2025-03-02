@@ -283,14 +283,15 @@ impl<D: Device> Graph<D> {
 
                 output.set_batch_size(a.batch_size())?;
                 D::sgemm(
+                    1.0,
                     &ones.buf,
                     Shape::new(1, single_size),
                     false,
                     &indv.buf,
                     Shape::new(single_size, batch_size),
                     false,
+                    0.0,
                     &mut output.buf,
-                    false,
                 )
             }
         }

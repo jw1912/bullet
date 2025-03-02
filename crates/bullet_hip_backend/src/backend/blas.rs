@@ -10,6 +10,7 @@ use super::ExecutionContext;
 
 pub unsafe fn sgemm(
     ctx: &ExecutionContext,
+    alpha: f32,
     input_a: *const f32,
     input_a_rows: usize,
     input_a_cols: usize,
@@ -18,14 +19,11 @@ pub unsafe fn sgemm(
     input_b_rows: usize,
     input_b_cols: usize,
     trans_b: bool,
+    beta: f32,
     output: *mut f32,
     output_rows: usize,
     output_cols: usize,
-    increment: bool,
 ) -> cublasStatus_t {
-    let alpha = 1.0;
-    let beta = f32::from(increment);
-
     let m = if trans_a { input_a_cols } else { input_a_rows };
     let n = if trans_b { input_b_rows } else { input_b_cols };
     let k = if trans_a { input_a_rows } else { input_a_cols };
@@ -60,6 +58,7 @@ pub unsafe fn sgemm(
 pub unsafe fn batched_sgemm(
     ctx: &ExecutionContext,
     batch_size: usize,
+    alpha: f32,
     input_a: *const f32,
     input_a_rows: usize,
     input_a_cols: usize,
@@ -68,14 +67,11 @@ pub unsafe fn batched_sgemm(
     input_b_rows: usize,
     input_b_cols: usize,
     trans_b: bool,
+    beta: f32,
     output: *mut f32,
     output_rows: usize,
     output_cols: usize,
-    increment: bool,
 ) -> cublasStatus_t {
-    let alpha = 1.0;
-    let beta = f32::from(increment);
-
     let m = if trans_a { input_a_cols } else { input_a_rows };
     let n = if trans_b { input_b_rows } else { input_b_cols };
     let k = if trans_a { input_a_rows } else { input_a_cols };
