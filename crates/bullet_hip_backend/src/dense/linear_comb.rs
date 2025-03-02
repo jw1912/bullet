@@ -1,7 +1,7 @@
 use bullet_core::backend::{error::OperationError, DeviceBuffer};
 
 use crate::{
-    backend::{blas, util::catch_cublas},
+    backend::{blas, ops, util::catch_cublas},
     Buffer, OperationResult,
 };
 
@@ -13,6 +13,11 @@ pub fn linear_comb_single(
     input_b: Option<&Buffer<f32>>,
     output: &mut Buffer<f32>,
 ) -> OperationResult {
+    // cublas scale is super slow for some reason
+    if let (None, None) = (input_a, input_b) {
+        return scale(size, output, alpha);
+    }
+
     let aptr = input_a.map(|a| {
         assert!(size <= a.size());
         a.ptr()
@@ -57,4 +62,16 @@ pub fn add_assign_single_to_batched_scaled(
 
         Ok(catch_cublas(err)?)
     }
+}
+
+fn scale(size: usize, params: &mut Buffer<f32>, alpha: f32) -> OperationResult {
+    if size > params.size() {
+        return Err(OperationError::IndexOutOfBounds);
+    }
+
+    unsafe {
+        ops::scale(size, params.mut_ptr(), alpha);
+    }
+
+    Ok(())
 }

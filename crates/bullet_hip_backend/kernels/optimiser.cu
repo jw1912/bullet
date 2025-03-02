@@ -41,6 +41,15 @@ __global__ void ClipKernel(const size_t size, float* params, const float min_wei
     params[i] = min(max(params[i], min_weight), max_weight);
 }
 
+__global__ void ScaleKernel(const size_t size, float* params, const float alpha) {
+    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= size)
+        return;
+
+    params[i] = alpha * params[i];
+}
+
 extern "C" void Adam(
     const size_t size,
     const float beta1,
@@ -68,12 +77,12 @@ extern "C" void Adam(
     );
 }
 
-extern "C" void Clip(const size_t size, float* params, const float min_weight, const float max_weight) {
+extern "C" void clip(const size_t size, float* params, const float min_weight, const float max_weight) {
     const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    ClipKernel<<<numBlocks, threadsPerBlock>>>(
-        size,
-        params,
-        min_weight,
-        max_weight
-    );
+    ClipKernel<<<numBlocks, threadsPerBlock>>>(size, params, min_weight, max_weight);
+}
+
+extern "C" void scale(const size_t size, float* params, const float alpha) {
+    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+    ScaleKernel<<<numBlocks, threadsPerBlock>>>(size, params, alpha);
 }
