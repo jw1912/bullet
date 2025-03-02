@@ -1,7 +1,22 @@
 #include "util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
+
+#define ACTIVATE(name, op)\
+extern "C" void name(const size_t size, const float* in, float* out)\
+{\
+    const size_t threads = 512;\
+    const size_t float4_size = (size + 3) / 4;\
+    const size_t blocks = (float4_size + threads - 1) / threads;\
+    buffer_operation_kernel<op><<<blocks, threads>>>(size, in, out);\
+}\
+
+#define BACKPROP(name, op)\
+extern "C" void name(const size_t size, const float* input, const float* output_grad, float* input_grad)\
+{\
+    const size_t threads = 512;\
+    const size_t float4_size = (size + 3) / 4;\
+    const size_t blocks = (float4_size + threads - 1) / threads;\
+    buffer_backprop_kernel<op><<<blocks, threads>>>(size, input, output_grad, input_grad);\
+}\
 
 template<OpType op>
 __global__ void buffer_operation_kernel(const size_t size, const float* in, float* out)
@@ -21,15 +36,6 @@ __global__ void buffer_operation_kernel(const size_t size, const float* in, floa
             out[idx] = op(in[idx]);
         }
     }
-}
-
-template<OpType op>
-void buffer_operation(const size_t size, const float* in, float* out)
-{
-    const size_t threads = 512;
-    const size_t float4_size = (size + 3) / 4;
-    const size_t blocks = (float4_size + threads - 1) / threads;
-    buffer_operation_kernel<op><<<blocks, threads>>>(size, in, out);
 }
 
 template<OpType op>
@@ -62,73 +68,16 @@ __global__ void buffer_backprop_kernel(const size_t size, const float* input, co
     }
 }
 
-template<OpType op>
-void buffer_backprop(const size_t size, const float* input, const float* output_grad, float* input_grad)
-{
-    const size_t threads = 512;
-    const size_t float4_size = (size + 3) / 4;
-    const size_t blocks = (float4_size + threads - 1) / threads;
-    buffer_backprop_kernel<op><<<blocks, threads>>>(size, input, output_grad, input_grad);
-}
+ACTIVATE(activateReLU, ReLU)
+ACTIVATE(activateCReLU, CReLU)
+ACTIVATE(activateSCReLU, SCReLU)
+ACTIVATE(activateSqrReLU, SqrReLU)
+ACTIVATE(activateSigmoid, sigmoid)
+ACTIVATE(activateSquare, square)
 
-extern "C" {
-    void backpropReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
-    {
-        buffer_backprop<primeReLU>(size, input, output_grad, input_grad);
-    }
-
-    void backpropCReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
-    {
-        buffer_backprop<primeCReLU>(size, input, output_grad, input_grad);
-    }
-
-    void backpropSCReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
-    {
-        buffer_backprop<primeSCReLU>(size, input, output_grad, input_grad);
-    }
-
-    void backpropSqrReLU(const size_t size, const float* input, const float* output_grad, float* input_grad)
-    {
-        buffer_backprop<primeSqrReLU>(size, input, output_grad, input_grad);
-    }
-
-    void backpropSigmoid(const size_t size, const float* input, const float* output_grad, float* input_grad)
-    {
-        buffer_backprop<primeSigmoid>(size, input, output_grad, input_grad);
-    }
-
-    void backpropSquare(const size_t size, const float* input, const float* output_grad, float* input_grad)
-    {
-        buffer_backprop<primeSquare>(size, input, output_grad, input_grad);
-    }
-
-    void activateReLU(const size_t size, const float* in, float* out)
-    {
-        buffer_operation<ReLU>(size, in, out);
-    }
-
-    void activateCReLU(const size_t size, const float* in, float* out)
-    {
-        buffer_operation<CReLU>(size, in, out);
-    }
-
-    void activateSCReLU(const size_t size, const float* in, float* out)
-    {
-        buffer_operation<SCReLU>(size, in, out);
-    }
-
-    void activateSqrReLU(const size_t size, const float* in, float* out)
-    {
-        buffer_operation<SqrReLU>(size, in, out);
-    }
-
-    void activateSigmoid(const size_t size, const float* in, float* out)
-    {
-        buffer_operation<sigmoid>(size, in, out);
-    }
-
-    void activateSquare(const size_t size, const float* in, float* out)
-    {
-        buffer_operation<square>(size, in, out);
-    }
-}
+BACKPROP(backpropReLU, primeReLU)
+BACKPROP(backpropCReLU, primeCReLU)
+BACKPROP(backpropSCReLU, primeSCReLU)
+BACKPROP(backpropSqrReLU, primeSqrReLU)
+BACKPROP(backpropSigmoid, primeSigmoid)
+BACKPROP(backpropSquare, primeSquare)
