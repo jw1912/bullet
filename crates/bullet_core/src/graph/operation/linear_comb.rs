@@ -1,4 +1,4 @@
-use crate::backend::{shape::Shape, tensor::DenseMatrix, Device, DeviceBuffer, OperationError};
+use crate::backend::{error::OperationError, shape::Shape, tensor::DenseMatrix, Device, DeviceBuffer};
 
 #[allow(clippy::too_many_arguments)]
 pub fn linear_comb<D: Device>(
@@ -94,6 +94,6 @@ pub fn backprop_add_single_scaled<D: Device>(
             assert!(output_grad.batch_size().unwrap_or(1) <= ones.size());
             D::reduce_add(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf)
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation("backprop add".to_string())),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
 }

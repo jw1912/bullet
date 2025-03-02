@@ -1,4 +1,4 @@
-use bullet_core::backend::{DeviceBuffer, OperationError};
+use bullet_core::backend::{error::OperationError, DeviceBuffer};
 
 use crate::{
     backend::{blas, util::catch_cublas, Buffer},

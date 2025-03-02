@@ -1,5 +1,5 @@
 use crate::{
-    backend::{activation::Activation, shape::Shape, Device, DeviceBuffer, OperationError},
+    backend::{activation::Activation, error::OperationError, shape::Shape, Device, DeviceBuffer},
     graph::{Graph, Node},
 };
 
@@ -325,7 +325,7 @@ impl<D: Device> Graph<D> {
                     *act,
                 )?;
             }
-            ToDense(_) => return Err(OperationError::UnsupportedOperation("to_dense".to_string())),
+            ToDense(_) => return Err(OperationError::UnsupportedOperation),
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 let masks = &*get(*mask);
                 let masks = masks.values.sparse()?;

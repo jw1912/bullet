@@ -8,7 +8,7 @@ pub mod utils;
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use crate::{
-    backend::{tensor::DenseMatrix, Device, OperationError},
+    backend::{error::OperationError, tensor::DenseMatrix, Device},
     graph::Graph,
 };
 

@@ -1,7 +1,8 @@
 use crate::backend::{
+    error::OperationError,
     shape::Shape,
     tensor::{DenseMatrix, Tensor},
-    Device, OperationError,
+    Device,
 };
 
 use super::linear_comb::backprop_add_single_scaled;
@@ -87,14 +88,14 @@ pub fn matmul<D: Device>(
         }
         (None, Some(x)) => {
             if trans_b {
-                return Err(OperationError::UnsupportedOperation("matmul single x batched^T".to_string()));
+                return Err(OperationError::UnsupportedOperation);
             }
 
             let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
             output.set_batch_size(Some(x))?;
             D::sgemm(&input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, &mut output.buf, false)
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation("matmul batched x single".to_string())),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
 }
 
@@ -138,7 +139,7 @@ pub fn backprop_matmul<D: Device>(
         ),
         (None, Some(x)) => {
             if trans_b {
-                return Err(OperationError::UnsupportedOperation("backprop matmul single x batched^T".to_string()));
+                return Err(OperationError::UnsupportedOperation);
             }
 
             let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
@@ -154,7 +155,7 @@ pub fn backprop_matmul<D: Device>(
                 output_grad,
             )
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation("backprop matmul batched x single".to_string())),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
 }
 

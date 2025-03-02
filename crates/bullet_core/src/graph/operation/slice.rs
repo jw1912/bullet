@@ -1,4 +1,4 @@
-use crate::backend::{shape::Shape, tensor::DenseMatrix, Device, OperationError};
+use crate::backend::{error::OperationError, shape::Shape, tensor::DenseMatrix, Device};
 
 pub fn slice_vector_batched<D: Device>(
     shape: Shape,
