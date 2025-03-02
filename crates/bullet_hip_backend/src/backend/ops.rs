@@ -35,5 +35,6 @@ extern "C" {
     pub fn sparse_mask_backprop(rows: usize, cols: usize, max_active: usize, output_grads: *const f32, masks: *const i32, input_grads: *mut f32);
     pub fn gather(input_rows: usize, output_rows: usize, cols: usize, inputs: *const f32, indices: *const i32, outputs: *mut f32);
     pub fn gather_backprop(input_rows: usize, output_rows: usize, cols: usize, output_grads: *const f32, indices: *const i32, input_grads: *mut f32);
-    pub fn Clip(size: usize, params: *mut f32, min_weight: f32, max_weight: f32);
+    pub fn clip(size: usize, params: *mut f32, min_weight: f32, max_weight: f32);
+    pub fn scale(size: usize, params: *mut f32, alpha: f32);
 }

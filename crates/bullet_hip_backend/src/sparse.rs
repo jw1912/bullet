@@ -10,7 +10,7 @@ pub use mask::*;
 pub use select::*;
 pub use softmax::*;
 
-use bullet_core::backend::{DeviceBuffer, OperationError};
+use bullet_core::backend::{error::OperationError, DeviceBuffer};
 
 use crate::{
     backend::{ops, Buffer},

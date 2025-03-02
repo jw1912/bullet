@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::backend::OperationError;
+use crate::backend::error::OperationError;
 
 use super::operation::GraphBuilderError;
 

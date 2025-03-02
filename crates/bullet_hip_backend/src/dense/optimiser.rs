@@ -1,4 +1,4 @@
-use bullet_core::backend::{DeviceBuffer, OperationError};
+use bullet_core::backend::{error::OperationError, DeviceBuffer};
 
 use crate::{
     backend::{ops, Buffer},
@@ -46,7 +46,7 @@ pub fn clip(size: usize, params: &mut Buffer<f32>, min: f32, max: f32) -> Operat
     }
 
     unsafe {
-        ops::Clip(size, params.mut_ptr(), min, max);
+        ops::clip(size, params.mut_ptr(), min, max);
     }
 
     Ok(())

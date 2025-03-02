@@ -13,7 +13,7 @@ use std::{
 
 use builder::Node;
 
-use crate::backend::{tensor::Tensor, Device, OperationError};
+use crate::backend::{error::OperationError, tensor::Tensor, Device};
 
 pub struct Graph<D: Device> {
     nodes: Vec<Option<RefCell<Tensor<D>>>>,
@@ -40,7 +40,7 @@ impl<D: Device> Graph<D> {
         if let Some(tensor) = &self.nodes[idx] {
             Ok(tensor.borrow())
         } else {
-            Err(OperationError::UnsupportedOperation(String::new()))
+            Err(OperationError::UnsupportedOperation)
         }
     }
 
@@ -48,7 +48,7 @@ impl<D: Device> Graph<D> {
         if let Some(tensor) = &self.nodes[idx] {
             Ok(tensor.borrow_mut())
         } else {
-            Err(OperationError::UnsupportedOperation(String::new()))
+            Err(OperationError::UnsupportedOperation)
         }
     }
 

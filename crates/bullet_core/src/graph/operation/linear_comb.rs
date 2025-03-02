@@ -1,4 +1,9 @@
-use crate::backend::{shape::Shape, tensor::DenseMatrix, Device, DeviceBuffer, OperationError};
+use crate::backend::{
+    error::{OperationError, OperationResult},
+    shape::Shape,
+    tensor::DenseMatrix,
+    Device, DeviceBuffer,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn linear_comb<D: Device>(
@@ -23,13 +28,13 @@ pub fn linear_comb<D: Device>(
         (None, Some(bs)) => {
             output.set_batch_size(Some(bs))?;
             copy_into_scaled(beta, input_b, output)?;
-            D::add_assign_single_to_batched_scaled(size, bs, ones, alpha, &input_a.buf, &mut output.buf)
+            add_assign_single_to_batched_scaled::<D>(size, bs, ones, alpha, &input_a.buf, &mut output.buf)
         }
         (_, None) => {
             output.set_batch_size(input_a.batch_size())?;
             let bs = input_a.batch_size().unwrap_or(1);
             copy_into_scaled(alpha, input_a, output)?;
-            D::add_assign_single_to_batched_scaled(size, bs, ones, beta, &input_b.buf, &mut output.buf)
+            add_assign_single_to_batched_scaled::<D>(size, bs, ones, beta, &input_b.buf, &mut output.buf)
         }
     }
 }
@@ -92,8 +97,29 @@ pub fn backprop_add_single_scaled<D: Device>(
         (Some(_), Some(_)) | (None, None) => add_assign_scaled(alpha, output_grad, input_grad),
         (None, Some(x)) => {
             assert!(output_grad.batch_size().unwrap_or(1) <= ones.size());
-            D::reduce_add(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf)
+            reduce_add::<D>(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf)
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation("backprop add".to_string())),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
+}
+
+pub fn reduce_add<D: Device>(
+    ones: &D::BufferF32,
+    size: usize,
+    batch_size: usize,
+    input: &D::BufferF32,
+    output: &mut D::BufferF32,
+) -> OperationResult<D::DeviceError> {
+    D::sgemm(1.0, input, Shape::new(size, batch_size), false, ones, Shape::new(batch_size, 1), false, 0.0, output)
+}
+
+pub fn add_assign_single_to_batched_scaled<D: Device>(
+    single_size: usize,
+    batch_size: usize,
+    ones: &D::BufferF32,
+    alpha: f32,
+    input: &D::BufferF32,
+    output: &mut D::BufferF32,
+) -> OperationResult<D::DeviceError> {
+    D::sgemm(alpha, input, Shape::new(single_size, 1), false, ones, Shape::new(1, batch_size), false, 1.0, output)
 }

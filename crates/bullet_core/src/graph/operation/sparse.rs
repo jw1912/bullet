@@ -1,8 +1,9 @@
 use crate::{
     backend::{
+        error::OperationError,
         shape::Shape,
         tensor::{DenseMatrix, SparseMatrix, Tensor},
-        Device, OperationError,
+        Device,
     },
     graph::operation::linear_comb::backprop_add_single_scaled,
 };
@@ -119,7 +120,7 @@ pub fn backprop_affine_activate<D: Device>(
             if stride.is_none() {
                 backprop_add_single_scaled(*ones, 1.0, c.values.dense()?, grad, output_grad)?;
             } else {
-                return Err(OperationError::UnsupportedOperation("strided backprop add in sparse affine".to_string()));
+                return Err(OperationError::UnsupportedOperation);
             }
         }
     }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::backend::{tensor::DenseMatrix, Device, OperationError};
+use crate::backend::{error::OperationError, tensor::DenseMatrix, Device};
 
 use super::{utils::Placement, OptimiserState};
 

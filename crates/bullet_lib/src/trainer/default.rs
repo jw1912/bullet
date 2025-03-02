@@ -41,7 +41,7 @@ use super::{
 use crate::save;
 
 use bullet_core::{
-    backend::OperationError,
+    backend::error::OperationError,
     graph::{builder::Node, Graph},
     optimiser::{Optimiser, OptimiserState},
 };

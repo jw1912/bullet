@@ -1,5 +1,5 @@
 pub mod activation;
-mod error;
+pub mod error;
 pub mod shape;
 pub mod tensor;
 mod tests;
@@ -8,9 +8,7 @@ use activation::Activation;
 use shape::Shape;
 use std::sync::Arc;
 
-pub use error::OperationError;
-
-type OperationResult<T> = Result<(), OperationError<T>>;
+use error::{OperationError, OperationResult};
 
 pub trait DeviceBuffer<D: Device, T>: Sized {
     fn new(device: Arc<D>, size: usize) -> Result<Self, D::DeviceError>;
@@ -57,42 +55,27 @@ pub trait Device: Sized + 'static {
     ) -> OperationResult<Self::DeviceError>;
 
     fn sgemm(
+        alpha: f32,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
         input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
+        beta: f32,
         output: &mut Self::BufferF32,
-        increment: bool,
     ) -> OperationResult<Self::DeviceError>;
 
     fn sgemm_batched(
         batch_size: usize,
+        alpha: f32,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         trans_a: bool,
         input_b: &Self::BufferF32,
         shape_b: Shape,
         trans_b: bool,
-        output: &mut Self::BufferF32,
-        increment: bool,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn add_assign_single_to_batched_scaled(
-        single_size: usize,
-        batch_size: usize,
-        ones: &Self::BufferF32,
-        alpha: f32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn reduce_add(
-        ones: &Self::BufferF32,
-        size: usize,
-        batch_size: usize,
-        input: &Self::BufferF32,
+        beta: f32,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError>;
 
