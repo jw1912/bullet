@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::backend::{Device, DeviceBuffer, OperationError};
+use crate::backend::device::{Device, DeviceBuffer, OperationError};
 
 use super::{dense::DenseMatrix, sparse::SparseMatrix};
 

@@ -1,5 +1,9 @@
 use crate::{
-    backend::{activation::Activation, error::OperationError, shape::Shape, Device, DeviceBuffer},
+    backend::device::{
+        base::{Activation, BaseOperations},
+        blas::{BlasOperations, GemmConfig, Shape},
+        Device, DeviceBuffer, OperationError,
+    },
     graph::{Graph, Node},
 };
 
@@ -30,7 +34,7 @@ impl<D: Device> Graph<D> {
                     assert_eq!(output_grad.size(), input.size());
                     assert_eq!(output_grad.batch_size(), input.batch_size());
                     grad.set_batch_size(output_grad.batch_size())?;
-                    D::backprop_activate(input.size(), &input.buf, &mut grad.buf, &output_grad.buf, *act)?;
+                    grad.buf.activate_bwd(input.size(), &input.buf, &output_grad.buf, *act)?;
                 }
             }
             Affine(wn, inp, bn) => {
@@ -143,14 +147,15 @@ impl<D: Device> Graph<D> {
                     assert_eq!(node.shape.size(), grd.single_size());
                     assert_eq!(input.batch_size(), output_grad.batch_size());
                     grd.set_batch_size(input.batch_size())?;
-                    D::backprop_pairwise(
-                        input.single_size(),
-                        input.batch_size().unwrap_or(1),
-                        &input.dense()?.buf,
-                        &output_grad.buf,
-                        &mut grd.buf,
-                        *post_concat,
-                    )?;
+
+                    let mut single_size = input.single_size();
+                    let mut batch_size = input.batch_size().unwrap_or(1);
+                    if *post_concat {
+                        single_size /= 2;
+                        batch_size *= 2;
+                    }
+
+                    grd.buf.pairwise_bwd(single_size, batch_size, &input.dense()?.buf, &output_grad.buf)?;
                 }
             }
             PowerError(a, b, p) => {
@@ -171,26 +176,24 @@ impl<D: Device> Graph<D> {
                 if let Some(grd) = a.gradients.as_mut() {
                     assert_eq!(size, grd.single_size());
                     grd.set_batch_size(batch_size)?;
-                    D::backprop_abs_power_error_single(
+                    grd.buf.power_error_bwd(
                         *p,
                         size * batch_size.unwrap_or(1),
                         &a.values.dense()?.buf,
                         &b.values.dense()?.buf,
                         &output_grad.buf,
-                        &mut grd.buf,
                     )?;
                 }
 
                 if let Some(grd) = b.gradients.as_mut() {
                     assert_eq!(size, grd.single_size());
                     grd.set_batch_size(batch_size)?;
-                    D::backprop_abs_power_error_single(
+                    grd.buf.power_error_bwd(
                         *p,
                         size * batch_size.unwrap_or(1),
                         &b.values.dense()?.buf,
                         &a.values.dense()?.buf,
                         &output_grad.buf,
-                        &mut grd.buf,
                     )?;
                 }
             }
@@ -376,17 +379,15 @@ impl<D: Device> Graph<D> {
                 let single_size = a.values.single_size();
                 let size = single_size * batch_size.unwrap_or(1);
 
-                D::sgemm(
+                let cfg = GemmConfig::new(
                     1.0,
-                    &ones.buf,
+                    0.0,
                     Shape::new(single_size, 1),
                     false,
-                    &output_grad.buf,
                     Shape::new(1, batch_size.unwrap_or(1)),
                     false,
-                    0.0,
-                    &mut indv.buf,
-                )?;
+                );
+                indv.buf.gemm(&cfg, &ones.buf, &output_grad.buf)?;
 
                 let smax = &smax.buf;
                 let indv = &indv.buf;

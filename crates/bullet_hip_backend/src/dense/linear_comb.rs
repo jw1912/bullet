@@ -1,8 +1,8 @@
-use bullet_core::backend::{error::OperationError, DeviceBuffer};
+use bullet_core::backend::device::DeviceBuffer;
 
 use crate::{
     backend::{blas, ops, util::catch_cublas},
-    Buffer, OperationResult,
+    Buffer, DeviceError,
 };
 
 pub fn linear_comb_single(
@@ -12,7 +12,7 @@ pub fn linear_comb_single(
     beta: f32,
     input_b: Option<&Buffer<f32>>,
     output: &mut Buffer<f32>,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     // cublas scale is super slow for some reason
     if let (None, None) = (input_a, input_b) {
         return scale(size, output, alpha);
@@ -33,40 +33,13 @@ pub fn linear_comb_single(
     unsafe {
         let err =
             blas::linear_comb_matrices(output.device().as_ref(), size, 1, alpha, aptr, beta, bptr, output.mut_ptr());
-        Ok(catch_cublas(err)?)
+        catch_cublas(err)
     }
 }
 
-pub fn add_assign_single_to_batched_scaled(
-    single_size: usize,
-    batch_size: usize,
-    ones: &Buffer<f32>,
-    alpha: f32,
-    input: &Buffer<f32>,
-    output: &mut Buffer<f32>,
-) -> OperationResult {
-    if single_size > input.size() || single_size * batch_size > output.size() || batch_size > ones.size() {
-        return Err(OperationError::IndexOutOfBounds);
-    }
-
-    unsafe {
-        let err = blas::add_vector_to_matrix_columns(
-            output.device().as_ref(),
-            single_size,
-            batch_size,
-            alpha,
-            ones.ptr(),
-            input.ptr(),
-            output.mut_ptr(),
-        );
-
-        Ok(catch_cublas(err)?)
-    }
-}
-
-fn scale(size: usize, params: &mut Buffer<f32>, alpha: f32) -> OperationResult {
+fn scale(size: usize, params: &mut Buffer<f32>, alpha: f32) -> Result<(), DeviceError> {
     if size > params.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {

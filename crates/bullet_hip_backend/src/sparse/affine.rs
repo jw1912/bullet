@@ -1,4 +1,4 @@
-use bullet_core::backend::{activation::Activation, error::OperationError, shape::Shape, DeviceBuffer};
+use bullet_core::backend::device::{base::Activation, blas::Shape, DeviceBuffer, OperationError};
 
 use crate::{
     backend::{ops, Buffer},

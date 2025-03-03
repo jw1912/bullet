@@ -200,21 +200,3 @@ pub unsafe fn copy_strided(
         )
     }
 }
-
-pub unsafe fn add_vector_to_matrix_columns(
-    ctx: &ExecutionContext,
-    rows: usize,
-    cols: usize,
-    alpha: f32,
-    ones: *const f32,
-    vector: *const f32,
-    matrix: *mut f32,
-) -> cublasStatus_t {
-    let m = rows as c_int;
-    let n = cols as c_int;
-
-    let lda = rows as c_int;
-    let inc = 1;
-
-    unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) }
-}

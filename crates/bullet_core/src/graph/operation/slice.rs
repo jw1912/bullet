@@ -1,4 +1,7 @@
-use crate::backend::{error::OperationError, shape::Shape, tensor::DenseMatrix, Device};
+use crate::backend::{
+    device::{base::BaseOperations, blas::Shape, Device, OperationError},
+    tensor::DenseMatrix,
+};
 
 pub fn slice_vector_batched<D: Device>(
     shape: Shape,
@@ -18,17 +21,18 @@ pub fn slice_vector_batched<D: Device>(
     let output_shape = Shape::new(end - start, 1);
     output.set_batch_size(input.batch_size())?;
 
-    D::copy_or_add_strided(
+    output.buf.copy_or_add_strided(
+        false,
         output_shape.rows(),
         input.batch_size().unwrap_or(1),
+        0,
+        output_shape.rows(),
         &input.buf,
         start,
         shape.rows(),
-        &mut output.buf,
-        0,
-        output_shape.rows(),
-        false,
-    )
+    )?;
+
+    Ok(())
 }
 
 pub fn backprop_slice_vector_batched<D: Device>(
@@ -56,15 +60,16 @@ pub fn backprop_slice_vector_batched<D: Device>(
 
     input_grad.set_batch_size(input.batch_size())?;
 
-    D::copy_or_add_strided(
+    input_grad.buf.copy_or_add_strided(
+        true,
         output_shape.rows(),
         input.batch_size().unwrap_or(1),
+        start,
+        shape.rows(),
         &output_grad.buf,
         0,
         output_shape.rows(),
-        &mut input_grad.buf,
-        start,
-        shape.rows(),
-        true,
-    )
+    )?;
+
+    Ok(())
 }

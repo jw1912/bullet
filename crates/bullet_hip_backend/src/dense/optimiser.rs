@@ -1,8 +1,8 @@
-use bullet_core::backend::{error::OperationError, DeviceBuffer};
+use bullet_core::backend::device::DeviceBuffer;
 
 use crate::{
     backend::{ops, Buffer},
-    OperationResult,
+    DeviceError,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -17,9 +17,9 @@ pub fn adam(
     gradient_factor: f32,
     learning_rate: f32,
     denom: bool,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     if size > params.size() || size > gradient.size() || size > momentum.size() || size > velocity.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
@@ -40,9 +40,9 @@ pub fn adam(
     Ok(())
 }
 
-pub fn clip(size: usize, params: &mut Buffer<f32>, min: f32, max: f32) -> OperationResult {
+pub fn clip(size: usize, params: &mut Buffer<f32>, min: f32, max: f32) -> Result<(), DeviceError> {
     if size > params.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {

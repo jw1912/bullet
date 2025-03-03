@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::backend::{error::OperationError, tensor::DenseMatrix, Device};
+use crate::backend::{
+    device::{blas::BlasOperations, Device, OperationError},
+    tensor::DenseMatrix,
+};
 
 use super::{utils::Placement, OptimiserState};
 
@@ -44,13 +47,13 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for WeightDecay<S> {
         let factor = 1.0 - self.decay * learning_rate;
 
         if self.placement == Placement::Before {
-            D::linear_comb_single(weights.size(), factor, None, 0.0, None, &mut weights.buf)?;
+            weights.buf.geam(weights.size(), factor, None, 0.0, None)?;
         }
 
         self.inner.update(weights, grads, gradient_factor, learning_rate)?;
 
         if self.placement == Placement::After {
-            D::linear_comb_single(weights.size(), factor, None, 0.0, None, &mut weights.buf)?;
+            weights.buf.geam(weights.size(), factor, None, 0.0, None)?;
         }
 
         Ok(())

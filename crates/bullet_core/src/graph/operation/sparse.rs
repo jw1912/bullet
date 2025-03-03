@@ -1,9 +1,7 @@
 use crate::{
     backend::{
-        error::OperationError,
-        shape::Shape,
+        device::{blas::Shape, Device, OperationError},
         tensor::{DenseMatrix, SparseMatrix, Tensor},
-        Device,
     },
     graph::operation::linear_comb::backprop_add_single_scaled,
 };

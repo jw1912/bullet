@@ -1,5 +1,5 @@
 use crate::{
-    backend::{tensor::DenseMatrix, Device},
+    backend::{device::Device, tensor::DenseMatrix},
     graph::Graph,
 };
 

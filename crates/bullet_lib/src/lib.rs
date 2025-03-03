@@ -5,7 +5,7 @@ mod frontend;
 pub mod trainer;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use bullet_core::backend::{activation::Activation, shape::Shape};
+pub use bullet_core::backend::device::{base::Activation, blas::Shape};
 pub use bullet_hip_backend::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
@@ -25,7 +25,7 @@ pub mod nn {
     pub use super::frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode};
 
     pub use bullet_core::{
-        backend::{activation::Activation, shape::Shape},
+        backend::device::{base::Activation, blas::Shape},
         graph::builder::Node,
     };
     pub use bullet_hip_backend::{DeviceError, ExecutionContext};
