@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::backend::{
-    device::{base::BaseOperations, Device, DeviceBuffer, OperationError},
+    device::{base::BaseOperations, Device, OperationError},
     tensor::DenseMatrix,
 };
 
@@ -54,11 +54,7 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for WeightClipping<S> {
         self.inner.update(weights, grads, gradient_factor, learning_rate)?;
 
         if self.placement == Placement::After {
-            weights.buf.device().synchronise()?;
-            let t = std::time::Instant::now();
             weights.buf.clip(weights.size(), self.min, self.max)?;
-            weights.buf.device().synchronise()?;
-            print!("clip: {} - ", t.elapsed().as_micros());
         }
 
         Ok(())

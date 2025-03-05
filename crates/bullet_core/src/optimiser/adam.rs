@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::backend::{
     device::{
-        base::{AdamConfig, BaseOperations}, Device, DeviceBuffer, OperationError
+        base::{AdamConfig, BaseOperations}, Device, OperationError
     },
     tensor::DenseMatrix,
 };
@@ -56,14 +56,8 @@ impl<D: Device> OptimiserState<D> for Adam<D> {
         assert_eq!(weights.size(), self.momentum.size());
         assert_eq!(weights.size(), self.velocity.size());
 
-        weights.buf.device().synchronise()?;
-        let t = std::time::Instant::now();
-
         let cfg = AdamConfig::new(self.params.beta1, self.params.beta2, gradient_factor, learning_rate, true);
         weights.buf.adam(&cfg, weights.size(), &grads.buf, &mut self.momentum.buf, &mut self.velocity.buf)?;
-
-        weights.buf.device().synchronise()?;
-        print!("adam: {} - ", t.elapsed().as_micros());
 
         Ok(())
     }

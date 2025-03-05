@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::backend::{
-    device::{blas::BlasOperations, Device, DeviceBuffer, OperationError},
+    device::{blas::BlasOperations, Device, OperationError},
     tensor::DenseMatrix,
 };
 
@@ -47,11 +47,7 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for WeightDecay<S> {
         let factor = 1.0 - self.decay * learning_rate;
 
         if self.placement == Placement::Before {
-            weights.buf.device().synchronise()?;
-            let t = std::time::Instant::now();
             weights.buf.geam(weights.size(), factor, None, 0.0, None)?;
-            weights.buf.device().synchronise()?;
-            print!("decay: {} - ", t.elapsed().as_micros());
         }
 
         self.inner.update(weights, grads, gradient_factor, learning_rate)?;

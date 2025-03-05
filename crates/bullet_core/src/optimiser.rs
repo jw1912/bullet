@@ -72,9 +72,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
             let single = self.state.get_mut(id).unwrap();
 
             if let Some(grads) = weights.gradients.as_mut() {
-                print!("{id}: ");
                 single.update(weights.values.dense_mut()?, grads, gradient_factor, learning_rate)?;
-                println!();
             }
         }
 
