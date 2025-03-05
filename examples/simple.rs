@@ -28,7 +28,7 @@ const QB: i16 = 64;
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[QA, QB])
-        .optimiser(optimiser::Ranger)
+        .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
@@ -51,7 +51,7 @@ fn main() {
         save_rate: 10,
     };
 
-    //trainer.set_optimiser_params(optimiser::AdamWParams::default());
+    trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
