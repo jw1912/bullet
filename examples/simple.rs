@@ -20,7 +20,7 @@ use bullet_lib::{
     },
 };
 
-const HIDDEN_SIZE: usize = 512;
+const HIDDEN_SIZE: usize = 1536;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
@@ -30,7 +30,7 @@ fn main() {
         .quantisations(&[QA, QB])
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
-        .input(inputs::Chess768)
+        .input(inputs::ChessBucketsMirrored::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]))
         .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
         .activate(Activation::SCReLU)
