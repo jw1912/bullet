@@ -2,7 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::backend::{
     device::{
-        base::{AdamConfig, BaseOperations}, Device, OperationError
+        base::{AdamConfig, BaseOperations},
+        Device, OperationError,
     },
     tensor::DenseMatrix,
 };

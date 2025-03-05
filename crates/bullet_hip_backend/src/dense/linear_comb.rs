@@ -1,9 +1,6 @@
 use bullet_core::backend::device::DeviceBuffer;
 
-use crate::{
-    backend::{blas, ops, util::catch_cublas},
-    Buffer, DeviceError,
-};
+use crate::{backend::ops, Buffer, DeviceError};
 
 pub fn linear_comb_single(
     size: usize,
@@ -13,37 +10,43 @@ pub fn linear_comb_single(
     input_b: Option<&Buffer<f32>>,
     output: &mut Buffer<f32>,
 ) -> Result<(), DeviceError> {
-    // cublas scale is super slow for some reason
-    if let (None, None) = (input_a, input_b) {
-        return scale(size, output, alpha);
-    }
+    match (input_a, input_b) {
+        (None, None) => {
+            if size > output.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-    let aptr = input_a.map(|a| {
-        assert!(size <= a.size());
-        a.ptr()
-    });
+            unsafe {
+                ops::scale_assign(size, output.mut_ptr(), alpha);
+            }
+        }
+        (None, Some(b)) => {
+            if size > output.size() || size > b.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-    let bptr = if let Some(b) = input_b {
-        assert!(size <= b.size());
-        b.ptr()
-    } else {
-        std::ptr::null()
-    };
+            unsafe {
+                ops::scale_add_assign(size, alpha, output.mut_ptr(), beta, b.ptr());
+            }
+        }
+        (Some(a), Some(b)) => {
+            if size > output.size() || size > a.size() || size > b.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-    unsafe {
-        let err =
-            blas::linear_comb_matrices(output.device().as_ref(), size, 1, alpha, aptr, beta, bptr, output.mut_ptr());
-        catch_cublas(err)
-    }
-}
+            unsafe {
+                ops::linear_comb(size, alpha, a.ptr(), beta, b.ptr(), output.mut_ptr());
+            }
+        }
+        (Some(a), None) => {
+            if size > output.size() || size > a.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-fn scale(size: usize, params: &mut Buffer<f32>, alpha: f32) -> Result<(), DeviceError> {
-    if size > params.size() {
-        return Err(DeviceError::ExpectedIllegalAddressAccess);
-    }
-
-    unsafe {
-        ops::scale(size, params.mut_ptr(), alpha);
+            unsafe {
+                ops::scale(size, alpha, a.ptr(), output.mut_ptr());
+            }
+        }
     }
 
     Ok(())

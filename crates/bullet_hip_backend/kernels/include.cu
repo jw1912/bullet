@@ -4,6 +4,7 @@
 #include <cstdint>
 #include "util.cu"
 #include "base/activate.cu"
+#include "base/geam.cu"
 #include "base/optimiser.cu"
 #include "base/pairwise.cu"
 #include "base/power_error.cu"

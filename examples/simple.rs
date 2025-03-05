@@ -28,9 +28,12 @@ const QB: i16 = 64;
 fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[QA, QB])
-        .optimiser(optimiser::AdamW)
+        .optimiser(optimiser::Ranger)
         .loss_fn(Loss::SigmoidMSE)
-        .input(inputs::ChessBucketsMirrored::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]))
+        .input(inputs::ChessBucketsMirrored::new([
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+            29, 30, 31,
+        ]))
         .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
         .activate(Activation::SCReLU)
@@ -51,7 +54,7 @@ fn main() {
         save_rate: 10,
     };
 
-    trainer.set_optimiser_params(optimiser::AdamWParams::default());
+    //trainer.set_optimiser_params(optimiser::AdamWParams::default());
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 

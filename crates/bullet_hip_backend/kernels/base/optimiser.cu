@@ -60,8 +60,8 @@ __global__ void AdamKernel(
     }
 }
 
-__global__ void ClipKernel(const size_t size, float* params, const float min_weight, const float max_weight) {
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void ClipKernel(const int32_t size, float* params, const float min_weight, const float max_weight) {
+    const int32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (tid < size / 4)
     {
@@ -76,34 +76,10 @@ __global__ void ClipKernel(const size_t size, float* params, const float min_wei
     }
     else if (4 * tid < size)
     {
-        for (size_t i = 0; i < size - 4 * tid; i++)
+        for (int32_t i = 0; i < size - 4 * tid; i++)
         {
-            const size_t j = 4 * tid + i;
+            const int32_t j = 4 * tid + i;
             params[j] = min(max(params[j], min_weight), max_weight);
-        }
-    }
-}
-
-__global__ void ScaleKernel(const size_t size, float* params, const float alpha) {
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (tid < size / 4)
-    {
-        float4 a = ((float4 *)params)[tid];
-        
-        a.x *= alpha;
-        a.y *= alpha;
-        a.z *= alpha;
-        a.w *= alpha;
-
-        ((float4 *)params)[tid] = a;
-    }
-    else if (4 * tid < size)
-    {
-        for (size_t i = 0; i < size - 4 * tid; i++)
-        {
-            const size_t j = 4 * tid + i;
-            params[j] *= alpha;
         }
     }
 }
@@ -142,11 +118,4 @@ extern "C" void clip(const size_t size, float* params, const float min_weight, c
     const size_t float4_size = (size + 3) / 4;
     const size_t blocks = (float4_size + threads - 1) / threads;
     ClipKernel<<<blocks, threads>>>(size, params, min_weight, max_weight);
-}
-
-extern "C" void scale(const size_t size, float* params, const float alpha) {
-    const size_t threads = 1024;
-    const size_t float4_size = (size + 3) / 4;
-    const size_t blocks = (float4_size + threads - 1) / threads;
-    ScaleKernel<<<blocks, threads>>>(size, params, alpha);
 }
