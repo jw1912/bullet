@@ -3,11 +3,11 @@
 #endif
 #include <cstdint>
 #include "util.cu"
-#include "activate.cu"
+#include "base/activate.cu"
+#include "base/optimiser.cu"
+#include "base/pairwise.cu"
+#include "base/power_error.cu"
 #include "gather.cu"
-#include "optimiser.cu"
-#include "pairwise.cu"
-#include "power_error.cu"
 #include "select.cu"
 #include "softmax/masked.cu"
 #include "softmax/naive.cu"

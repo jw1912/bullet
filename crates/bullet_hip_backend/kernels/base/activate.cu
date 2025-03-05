@@ -1,4 +1,4 @@
-#include "util.cu"
+#include "../util.cu"
 
 #define ACTIVATE(name, op)\
 extern "C" void name(const size_t size, const float* in, float* out)\

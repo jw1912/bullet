@@ -1,12 +1,29 @@
-#include "util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
+#include "../util.cu"
 
 constexpr float Epsilon = 0.00000001F;
 
+__device__ __forceinline__ void adamOp(
+    const float beta1,
+    const float beta2,
+    const float adj,
+    const float rate,
+    const bool denom,
+    float* p,
+    float* m,
+    float* v,
+    const float* g)
+{
+    const float grad = adj * g[0];
+    m[0] = beta1 * m[0] + (1.0F - beta1) * grad;
+    v[0] = beta2 * v[0] + (1.0F - beta2) * grad * grad;
+
+    float val = m[0];
+    if (denom) val /= sqrt(v[0]) + Epsilon;
+    p[0] -= rate * val;
+}
+
 __global__ void AdamKernel(
-    const size_t size,
+    const int32_t size,
     const float beta1,
     const float beta2,
     const float adj,
@@ -17,19 +34,32 @@ __global__ void AdamKernel(
     float* velocity,
     const float* gradients)
 {
-    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i >= size)
-        return;
+    if (tid < size / 4)
+    {
+        float4 p = ((float4 *)network)[tid];
+        float4 m = ((float4 *)momentum)[tid];
+        float4 v = ((float4 *)velocity)[tid];
+        const float4 g = ((const float4 *)gradients)[tid];
 
-    const float grad = adj * gradients[i];
-    momentum[i] = beta1 * momentum[i] + (1.0F - beta1) * grad;
-    velocity[i] = beta2 * velocity[i] + (1.0F - beta2) * grad * grad;
+        adamOp(beta1, beta2, adj, rate, denom, &p.x, &m.x, &v.x, &g.x);
+        adamOp(beta1, beta2, adj, rate, denom, &p.y, &m.y, &v.y, &g.y);
+        adamOp(beta1, beta2, adj, rate, denom, &p.z, &m.z, &v.z, &g.z);
+        adamOp(beta1, beta2, adj, rate, denom, &p.w, &m.w, &v.w, &g.w);
 
-    float val = momentum[i];
-    if (denom)
-        val /= sqrt(velocity[i]) + Epsilon;
-    network[i] -= rate * val;
+        ((float4 *)network)[tid] = p;
+        ((float4 *)momentum)[tid] = m;
+        ((float4 *)velocity)[tid] = v;
+    }
+    else if (4 * tid < size)
+    {
+        for (int32_t i = 0; i < size - 4 * tid; i++)
+        {
+            const int32_t j = 4 * tid + i;
+            adamOp(beta1, beta2, adj, rate, denom, &network[j], &momentum[j], &velocity[j], &gradients[j]);
+        }
+    }
 }
 
 __global__ void ClipKernel(const size_t size, float* params, const float min_weight, const float max_weight) {
@@ -62,8 +92,10 @@ extern "C" void Adam(
     float* velocity,
     const float* gradients)
 {
-    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    AdamKernel<<<numBlocks, threadsPerBlock>>>(
+    const size_t threads = 512;
+    const size_t float4_size = (size + 3) / 4;
+    const size_t blocks = (float4_size + threads - 1) / threads;
+    AdamKernel<<<blocks, threads>>>(
         size,
         beta1,
         beta2,
