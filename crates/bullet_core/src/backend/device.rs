@@ -6,6 +6,8 @@ use std::{fmt::Debug, sync::Arc};
 use base::{Activation, BaseOperations};
 use blas::{BlasOperations, Shape};
 
+use super::cpu::CpuThread;
+
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {
     TensorOptimisedOut,
@@ -56,6 +58,16 @@ pub trait Device: Sized + 'static {
     fn synchronise(&self) -> Result<(), Self::DeviceError>;
 
     fn get_last_device_error(&self) -> Result<(), Self::DeviceError>;
+
+    fn sanity_check(self: Arc<Self>) {
+        println!("\x1b[34;1mRunning Sanity Checks\x1b[0m");
+        CpuThread::compare_geam(self.clone());
+        CpuThread::compare_gemm(self.clone());
+        CpuThread::compare_gebmm(self.clone());
+        CpuThread::compare_activate(self.clone());
+        CpuThread::compare_power_error(self.clone());
+        CpuThread::compare_adam(self.clone());
+    }
 
     fn sparse_affine_activate(
         batch_size: usize,

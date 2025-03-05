@@ -1,6 +1,6 @@
 mod dense;
 mod matrix;
-mod rng;
+pub mod rng;
 mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};

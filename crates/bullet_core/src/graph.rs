@@ -35,6 +35,10 @@ impl<D: Device> Graph<D> {
         }
     }
 
+    pub fn sanity_check(&self) {
+        self.device().sanity_check();
+    }
+
     pub fn get_node(&self, node: Node) -> Ref<'_, Tensor<D>> {
         self.get(node.idx).unwrap()
     }

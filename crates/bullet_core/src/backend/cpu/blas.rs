@@ -28,8 +28,8 @@ impl BlasOperations for CpuBuffer<f32> {
 
         for ((o, ia), ib) in self.buf[..shape_o.size() * batch_size]
             .chunks_exact_mut(shape_o.size())
-            .zip(a.buf[..shape_a.size() * batch_size].chunks_exact(shape_o.size()))
-            .zip(b.buf[..shape_b.size() * batch_size].chunks_exact(shape_o.size()))
+            .zip(a.buf[..shape_a.size() * batch_size].chunks_exact(shape_a.size()))
+            .zip(b.buf[..shape_b.size() * batch_size].chunks_exact(shape_b.size()))
         {
             sgemm(alpha, ia, shape_a, trans_a, ib, shape_b, trans_b, beta, o)?;
         }

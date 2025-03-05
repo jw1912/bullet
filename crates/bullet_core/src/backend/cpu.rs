@@ -1,6 +1,7 @@
 #![allow(unused)]
 pub mod base;
 pub mod blas;
+pub mod cmp;
 
 use std::sync::Arc;
 

@@ -41,4 +41,6 @@ fn main() {
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/batch1.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
+
+    trainer.sanity_check();
 }

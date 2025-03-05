@@ -39,31 +39,29 @@ __global__ void buffer_operation_kernel(const size_t size, const float* in, floa
 }
 
 template<OpType op>
-__global__ void buffer_backprop_kernel(const size_t size, const float* input, const float* output_grad, float* input_grad)
+__global__ void buffer_backprop_kernel(const int32_t size, const float* input, const float* output_grad, float* input_grad)
 {
-    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (tid < size / 4)
     {
         const float4 this_in = ((const float4 *)input)[tid];
         const float4 this_out_grad = ((const float4 *)output_grad)[tid];
-        const float4 curr_input_grad = ((const float4 *)input_grad)[tid];
+        float4 curr_input_grad = ((const float4 *)input_grad)[tid];
 
-        ((float4 *)input_grad)[tid] = make_float4(
-            curr_input_grad.x + op(this_in.x) * this_out_grad.x,
-            curr_input_grad.y + op(this_in.y) * this_out_grad.y,
-            curr_input_grad.z + op(this_in.z) * this_out_grad.z,
-            curr_input_grad.w + op(this_in.w) * this_out_grad.w
-        );
+        curr_input_grad.x += op(this_in.x) * this_out_grad.x;
+        curr_input_grad.y += op(this_in.y) * this_out_grad.y;
+        curr_input_grad.z += op(this_in.z) * this_out_grad.z;
+        curr_input_grad.w += op(this_in.w) * this_out_grad.w;
+
+        ((float4 *)input_grad)[tid] = curr_input_grad;
     }
     else if (4 * tid < size)
     {
-        for (size_t i = 0; i < size - 4 * tid; i++)
+        for (int32_t i = 0; i < size - 4 * tid; i++)
         {
-            const size_t idx = 4 * tid + i;
-            const float this_in = input[i];
-            const float this_out_grad = output_grad[i];
-            input_grad[idx] += op(this_in) * this_out_grad;
+            const int32_t j = 4 * tid + i;
+            input_grad[j] += op(input[j]) * output_grad[j];
         }
     }
 }

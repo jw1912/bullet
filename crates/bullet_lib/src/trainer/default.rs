@@ -209,6 +209,10 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         self.optimiser.set_params(params);
     }
 
+    pub fn sanity_check(&self) {
+        self.optimiser.graph.sanity_check();
+    }
+
     pub fn mark_weights_as_input_factorised(&mut self, weights: &[&str]) {
         if self.factorised_weights.is_none() {
             self.factorised_weights = Some(Vec::new())
