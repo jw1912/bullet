@@ -223,6 +223,14 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         }
     }
 
+    pub fn profile_node(&mut self, node: Node, id: &str) {
+        self.optimiser.graph.profile_node(node, id);
+    }
+
+    pub fn report_profiles(&self) {
+        self.optimiser.graph.report_profiles();
+    }
+
     pub fn save_quantised(&self, path: &str) -> io::Result<()> {
         let mut file = File::create(path).unwrap();
 

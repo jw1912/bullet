@@ -52,6 +52,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     allow_transpose: bool,
     ft_init_input_size: Option<usize>,
     output_bucket_ft_biases: bool,
+    profile_ft: bool,
 }
 
 impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -69,6 +70,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             allow_transpose: true,
             ft_init_input_size: None,
             output_bucket_ft_biases: false,
+            profile_ft: false,
         }
     }
 }
@@ -208,6 +210,11 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         self
     }
 
+    pub fn track_ft_profile(mut self) -> Self {
+        self.profile_ft = true;
+        self
+    }
+
     pub fn with_ft_init_input_size(mut self, size: usize) -> Self {
         assert!(size > 0);
         self.ft_init_input_size = Some(size);
@@ -323,6 +330,8 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             0
         };
 
+        let profile_node = self.profile_ft.then(|| out.node());
+
         let mut layer = 1;
         let mut layer_sizes = Vec::new();
         let mut prev_size = self.ft_out_size * if self.perspective { 2 } else { 1 };
@@ -410,6 +419,10 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
                 vec!["l0w".to_string()]
             }
         });
+
+        if let Some(node) = profile_node {
+            graph.profile_node(node, "Profile");
+        }
 
         let trainer = Trainer {
             optimiser: Optimiser::new(graph, Default::default()).unwrap(),
