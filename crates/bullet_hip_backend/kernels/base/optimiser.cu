@@ -92,7 +92,7 @@ extern "C" void Adam(
     float* velocity,
     const float* gradients)
 {
-    const size_t threads = 512;
+    const size_t threads = 1024;
     const size_t float4_size = (size + 3) / 4;
     const size_t blocks = (float4_size + threads - 1) / threads;
     AdamKernel<<<blocks, threads>>>(
