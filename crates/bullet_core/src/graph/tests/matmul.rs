@@ -1,5 +1,5 @@
 use crate::{
-    backend::{error::OperationError, shape::Shape, Device},
+    backend::device::{blas::Shape, Device, OperationError},
     graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
 };
 

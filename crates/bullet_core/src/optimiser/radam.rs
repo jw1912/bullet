@@ -5,7 +5,13 @@ use std::{
     sync::Arc,
 };
 
-use crate::backend::{error::OperationError, tensor::DenseMatrix, Device};
+use crate::backend::{
+    device::{
+        base::{AdamConfig, BaseOperations},
+        Device, OperationError,
+    },
+    tensor::DenseMatrix,
+};
 
 use super::{utils, OptimiserState};
 
@@ -73,18 +79,16 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
             1.0 / denom
         };
 
-        D::adam(
-            weights.size(),
-            &mut weights.buf,
-            &grads.buf,
-            &mut self.momentum.buf,
-            &mut self.velocity.buf,
+        let cfg = AdamConfig::new(
             self.params.beta1,
             self.params.beta2,
             gradient_factor,
             learning_rate * step_size,
             n_sma > params.n_sma_threshold,
-        )
+        );
+        weights.buf.adam(&cfg, weights.size(), &grads.buf, &mut self.momentum.buf, &mut self.velocity.buf)?;
+
+        Ok(())
     }
 
     fn reset(&mut self) -> Result<(), D::DeviceError> {

@@ -1,7 +1,4 @@
 #include "../util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
 
 template<OpType op>
 __global__ void sparse_affine_backward_kernel(

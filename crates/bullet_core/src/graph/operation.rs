@@ -7,7 +7,10 @@ pub mod sparse;
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::{
-    backend::{activation::Activation, shape::Shape, tensor::DenseMatrix, Device},
+    backend::{
+        device::{base::Activation, blas::Shape, Device},
+        tensor::DenseMatrix,
+    },
     graph::Node,
 };
 

@@ -1,9 +1,10 @@
 use crate::{
     backend::{
-        error::OperationError,
-        shape::Shape,
+        device::{
+            blas::{BlasOperations, GemmConfig, Shape},
+            Device, OperationError,
+        },
         tensor::{DenseMatrix, Tensor},
-        Device,
     },
     graph::operation::linear_comb,
 };
@@ -83,22 +84,13 @@ pub fn matmul<D: Device>(
             }
 
             output.set_batch_size(Some(x))?;
-            D::sgemm_batched(
-                x,
-                1.0,
-                &input_a.buf,
-                shape_a,
-                trans_a,
-                &input_b.buf,
-                shape_b,
-                trans_b,
-                0.0,
-                &mut output.buf,
-            )
+            let cfg = GemmConfig::new(1.0, 0.0, shape_a, trans_a, shape_b, trans_b);
+            output.buf.gebmm(&cfg, x, &input_a.buf, &input_b.buf)?;
         }
         (None, None) => {
             output.set_batch_size(None)?;
-            D::sgemm(1.0, &input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, 0.0, &mut output.buf)
+            let cfg = GemmConfig::new(1.0, 0.0, shape_a, trans_a, shape_b, trans_b);
+            output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
         }
         (None, Some(x)) => {
             if trans_b {
@@ -107,10 +99,13 @@ pub fn matmul<D: Device>(
 
             let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
             output.set_batch_size(Some(x))?;
-            D::sgemm(1.0, &input_a.buf, shape_a, trans_a, &input_b.buf, shape_b, trans_b, 0.0, &mut output.buf)
+            let cfg = GemmConfig::new(1.0, 0.0, shape_a, trans_a, shape_b, trans_b);
+            output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation),
+        (Some(_), None) => return Err(OperationError::UnsupportedOperation),
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -190,18 +185,22 @@ fn backprop_single_matmul<D: Device>(
     if let Some(grad_a) = input_a_grad {
         grad_a.set_batch_size(input_a.batch_size())?;
         if trans_a {
-            D::sgemm(1.0, &input_b.buf, shape_b, trans_b, &output_grad.buf, shape_o, true, 1.0, &mut grad_a.buf)?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_b, trans_b, shape_o, true);
+            grad_a.buf.gemm(&cfg, &input_b.buf, &output_grad.buf)?;
         } else {
-            D::sgemm(1.0, &output_grad.buf, shape_o, false, &input_b.buf, shape_b, !trans_b, 1.0, &mut grad_a.buf)?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_o, false, shape_b, !trans_b);
+            grad_a.buf.gemm(&cfg, &output_grad.buf, &input_b.buf)?;
         }
     }
 
     if let Some(grad_b) = input_b_grad {
         grad_b.set_batch_size(input_b.batch_size())?;
         if trans_b {
-            D::sgemm(1.0, &output_grad.buf, shape_o, true, &input_a.buf, shape_a, trans_a, 1.0, &mut grad_b.buf)?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_o, true, shape_a, trans_a);
+            grad_b.buf.gemm(&cfg, &output_grad.buf, &input_a.buf)?;
         } else {
-            D::sgemm(1.0, &input_a.buf, shape_a, !trans_a, &output_grad.buf, shape_o, false, 1.0, &mut grad_b.buf)?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_a, !trans_a, shape_o, false);
+            grad_b.buf.gemm(&cfg, &input_a.buf, &output_grad.buf)?;
         }
     }
 
@@ -230,62 +229,22 @@ fn backprop_batched_matmul<D: Device>(
     if let Some(grad_a) = input_a_grad {
         grad_a.set_batch_size(input_a.batch_size())?;
         if trans_a {
-            D::sgemm_batched(
-                bs,
-                1.0,
-                &input_b.buf,
-                shape_b,
-                trans_b,
-                &output_grad.buf,
-                shape_o,
-                true,
-                1.0,
-                &mut grad_a.buf,
-            )?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_b, trans_b, shape_o, true);
+            grad_a.buf.gebmm(&cfg, bs, &input_b.buf, &output_grad.buf)?;
         } else {
-            D::sgemm_batched(
-                bs,
-                1.0,
-                &output_grad.buf,
-                shape_o,
-                false,
-                &input_b.buf,
-                shape_b,
-                !trans_b,
-                1.0,
-                &mut grad_a.buf,
-            )?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_o, false, shape_b, !trans_b);
+            grad_a.buf.gebmm(&cfg, bs, &output_grad.buf, &input_b.buf)?;
         }
     }
 
     if let Some(grad_b) = input_b_grad {
         grad_b.set_batch_size(input_b.batch_size())?;
         if trans_b {
-            D::sgemm_batched(
-                bs,
-                1.0,
-                &output_grad.buf,
-                shape_o,
-                true,
-                &input_a.buf,
-                shape_a,
-                trans_a,
-                1.0,
-                &mut grad_b.buf,
-            )?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_o, true, shape_a, trans_a);
+            grad_b.buf.gebmm(&cfg, bs, &output_grad.buf, &input_a.buf)?;
         } else {
-            D::sgemm_batched(
-                bs,
-                1.0,
-                &input_a.buf,
-                shape_a,
-                !trans_a,
-                &output_grad.buf,
-                shape_o,
-                false,
-                1.0,
-                &mut grad_b.buf,
-            )?;
+            let cfg = GemmConfig::new(1.0, 1.0, shape_a, !trans_a, shape_o, false);
+            grad_b.buf.gebmm(&cfg, bs, &input_a.buf, &output_grad.buf)?;
         }
     }
 

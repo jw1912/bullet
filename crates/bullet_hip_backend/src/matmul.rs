@@ -1,26 +1,23 @@
-use bullet_core::backend::{error::OperationError, shape::Shape, DeviceBuffer};
+use bullet_core::backend::device::{blas::GemmConfig, DeviceBuffer};
 
 use crate::{
     backend::{blas, util::catch_cublas, Buffer},
-    OperationResult,
+    DeviceError,
 };
 
 #[allow(clippy::too_many_arguments)]
 pub fn sgemm(
-    alpha: f32,
+    cfg: &GemmConfig,
     input_a: &Buffer<f32>,
-    shape_a: Shape,
-    trans_a: bool,
     input_b: &Buffer<f32>,
-    shape_b: Shape,
-    trans_b: bool,
-    beta: f32,
     output: &mut Buffer<f32>,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
+    let GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b } = *cfg;
+
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
     if shape_a.size() > input_a.size() || shape_b.size() > input_b.size() || shape_o.size() > output.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
@@ -41,30 +38,26 @@ pub fn sgemm(
             shape_o.cols(),
         );
 
-        Ok(catch_cublas(err)?)
+        catch_cublas(err)
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn sgemm_batched(
+    cfg: &GemmConfig,
     batch_size: usize,
-    alpha: f32,
     input_a: &Buffer<f32>,
-    shape_a: Shape,
-    trans_a: bool,
     input_b: &Buffer<f32>,
-    shape_b: Shape,
-    trans_b: bool,
-    beta: f32,
     output: &mut Buffer<f32>,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
+    let GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b } = *cfg;
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
     if batch_size * shape_a.size() > input_a.size()
         || batch_size * shape_b.size() > input_b.size()
         || batch_size * shape_o.size() > output.size()
     {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
@@ -86,6 +79,6 @@ pub fn sgemm_batched(
             shape_o.cols(),
         );
 
-        Ok(catch_cublas(err)?)
+        catch_cublas(err)
     }
 }

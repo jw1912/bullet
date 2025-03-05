@@ -41,7 +41,7 @@ use super::{
 use crate::save;
 
 use bullet_core::{
-    backend::error::OperationError,
+    backend::device::OperationError,
     graph::{builder::Node, Graph},
     optimiser::{Optimiser, OptimiserState},
 };
@@ -207,6 +207,10 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
     pub fn set_optimiser_params(&mut self, params: Opt::Params) {
         self.optimiser.set_params(params);
+    }
+
+    pub fn sanity_check(&self) {
+        self.optimiser.graph.sanity_check();
     }
 
     pub fn mark_weights_as_input_factorised(&mut self, weights: &[&str]) {

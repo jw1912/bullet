@@ -20,7 +20,7 @@ use bullet_lib::{
     },
 };
 
-const HIDDEN_SIZE: usize = 512;
+const HIDDEN_SIZE: usize = 128;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
@@ -33,7 +33,7 @@ fn main() {
         .input(inputs::Chess768)
         .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
-        .activate(Activation::SCReLU)
+        .activate(Activation::CReLU)
         .add_layer(1)
         .build();
 

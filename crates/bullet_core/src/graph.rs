@@ -13,7 +13,10 @@ use std::{
 
 use builder::Node;
 
-use crate::backend::{error::OperationError, tensor::Tensor, Device};
+use crate::backend::{
+    device::{Device, OperationError},
+    tensor::Tensor,
+};
 
 pub struct Graph<D: Device> {
     nodes: Vec<Option<RefCell<Tensor<D>>>>,
@@ -30,6 +33,10 @@ impl<D: Device> Graph<D> {
         } else {
             Err(OperationError::TensorOptimisedOut)
         }
+    }
+
+    pub fn sanity_check(&self) {
+        self.device().sanity_check();
     }
 
     pub fn get_node(&self, node: Node) -> Ref<'_, Tensor<D>> {

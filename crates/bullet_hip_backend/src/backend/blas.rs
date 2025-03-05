@@ -124,43 +124,6 @@ pub unsafe fn batched_sgemm(
     }
 }
 
-/// If `input_a = None` then it takes `input_a = output` (in-place operation).
-pub unsafe fn linear_comb_matrices(
-    ctx: &ExecutionContext,
-    rows: usize,
-    cols: usize,
-    alpha: f32,
-    input_a: Option<*const f32>,
-    beta: f32,
-    input_b: *const f32,
-    output: *mut f32,
-) -> cublasStatus_t {
-    let m = rows as c_int;
-    let n = cols as c_int;
-
-    let lda = rows as c_int;
-    let ldb = rows as c_int;
-    let ldc = rows as c_int;
-
-    unsafe {
-        bindings::cublasSgeam(
-            ctx.cublas,
-            CUBLAS_OP_N,
-            CUBLAS_OP_N,
-            m,
-            n,
-            &alpha,
-            input_a.unwrap_or(output),
-            lda,
-            &beta,
-            input_b,
-            ldb,
-            output,
-            ldc,
-        )
-    }
-}
-
 pub unsafe fn copy_strided(
     ctx: &ExecutionContext,
     rows: usize,
@@ -199,22 +162,4 @@ pub unsafe fn copy_strided(
             ldc,
         )
     }
-}
-
-pub unsafe fn add_vector_to_matrix_columns(
-    ctx: &ExecutionContext,
-    rows: usize,
-    cols: usize,
-    alpha: f32,
-    ones: *const f32,
-    vector: *const f32,
-    matrix: *mut f32,
-) -> cublasStatus_t {
-    let m = rows as c_int;
-    let n = cols as c_int;
-
-    let lda = rows as c_int;
-    let inc = 1;
-
-    unsafe { bindings::cublasSger_v2(ctx.cublas, m, n, &alpha, vector, inc, ones, inc, matrix, lda) }
 }

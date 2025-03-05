@@ -1,6 +1,6 @@
 mod dense;
 mod matrix;
-mod rng;
+pub mod rng;
 mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
@@ -10,7 +10,7 @@ pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
 use crate::{
-    backend::{Device, DeviceBuffer, OperationError},
+    backend::device::{Device, DeviceBuffer, OperationError},
     graph::{builder::Node, operation::Operation},
 };
 
