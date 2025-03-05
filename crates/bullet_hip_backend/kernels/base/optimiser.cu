@@ -63,12 +63,27 @@ __global__ void AdamKernel(
 }
 
 __global__ void ClipKernel(const size_t size, float* params, const float min_weight, const float max_weight) {
-    const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i >= size)
-        return;
+    if (tid < size / 4)
+    {
+        float4 a = ((float4 *)params)[tid];
+        
+        a.x = min(max(a.x, min_weight), max_weight);
+        a.y = min(max(a.y, min_weight), max_weight);
+        a.z = min(max(a.z, min_weight), max_weight);
+        a.w = min(max(a.w, min_weight), max_weight);
 
-    params[i] = min(max(params[i], min_weight), max_weight);
+        ((float4 *)params)[tid] = a;
+    }
+    else if (4 * tid < size)
+    {
+        for (size_t i = 0; i < size - 4 * tid; i++)
+        {
+            const size_t j = 4 * tid + i;
+            params[j] = min(max(params[j], min_weight), max_weight);;
+        }
+    }
 }
 
 __global__ void ScaleKernel(const size_t size, float* params, const float alpha) {
@@ -110,8 +125,10 @@ extern "C" void Adam(
 }
 
 extern "C" void clip(const size_t size, float* params, const float min_weight, const float max_weight) {
-    const size_t numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    ClipKernel<<<numBlocks, threadsPerBlock>>>(size, params, min_weight, max_weight);
+    const size_t threads = 1024;
+    const size_t float4_size = (size + 3) / 4;
+    const size_t blocks = (float4_size + threads - 1) / threads;
+    ClipKernel<<<blocks, threads>>>(size, params, min_weight, max_weight);
 }
 
 extern "C" void scale(const size_t size, float* params, const float alpha) {
