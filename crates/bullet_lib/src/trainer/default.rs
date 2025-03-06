@@ -227,6 +227,10 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         self.optimiser.graph.profile_node(node, id);
     }
 
+    pub fn profile_all_nodes(&mut self) {
+        self.optimiser.graph.profile_all_nodes();
+    }
+
     pub fn report_profiles(&self) {
         self.optimiser.graph.report_profiles();
     }
