@@ -23,10 +23,10 @@ __global__ void sparse_affine_backward_kernel(
 
     const float tE = op(Y[offset + row]) * Yg[offset + row];
 
-    if (Bg != nullptr)
+    if (Bg != nullptr && tE != 0.0F)
     {   
-        const int32_t offset = Bb ? m * loc : 0;
-        atomicAdd(&Bg[offset + row], tE);
+        const int32_t offset2 = Bb ? m * loc : 0;
+        atomicAdd(&Bg[offset2 + row], tE);
     }
 
     for (int32_t i = 0; i < nnz; i++)
@@ -36,7 +36,8 @@ __global__ void sparse_affine_backward_kernel(
         if (j == -1)
             break;
 
-        atomicAdd(&Ag[j * m + row], tE);
+        if (tE != 0.0F)
+            atomicAdd(&Ag[j * m + row], tE);
     }
 }
 
