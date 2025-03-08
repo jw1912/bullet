@@ -132,7 +132,7 @@ impl<D: Device> Graph<D> {
                     let node = tensor.own;
                     let id = format!("{:?}", *op);
                     let id = id.split_once('(').unwrap();
-                    let name = format!("Node {} = {}", node.idx, id.0);
+                    let name = format!("Node {: >2} = {}", node.idx, id.0);
                     self.profile.insert(node, ProfileInformation { name, ..Default::default() });
                 }
             }
@@ -140,27 +140,39 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn report_profiles(&self) {
-        println!("=============== Profile =============== Fwd ===== Bwd");
         let mut vals = self.profile.values().cloned().collect::<Vec<_>>();
         vals.sort_by_key(|prof| prof.fwd_time + prof.bwd_time);
 
+        let mut fwd = 0;
+        let mut bwd = 0;
+
+        println!("+--------------- Profile ---------------- Fwd ------ Bwd -------+");
+
         for prof in vals.iter().rev() {
             if prof.fwd_count + prof.bwd_count > 0 {
-                print!("{: <40}", prof.name);
+                print!("| {: <40}", prof.name);
                 if prof.fwd_count > 0 {
-                    print!("{: <10}", prof.fwd_time / prof.fwd_count);
+                    let avg = prof.fwd_time / prof.fwd_count;
+                    fwd += avg;
+                    print!("{avg: <10} ");
                 } else {
-                    print!("N/A       ");
+                    print!("{: <10} ", "N/A");
                 }
 
                 if prof.bwd_count > 0 {
-                    println!("{: <10}", prof.bwd_time / prof.bwd_count);
+                    let avg = prof.bwd_time / prof.bwd_count;
+                    bwd += avg;
+                    println!("{avg: <10} |");
                 } else {
-                    println!("N/A");
+                    println!("{: <10} |", "N/A");
                 }
+
             }
         }
-        println!("=====================================================");
+
+        println!("+---------------------------------------------------------------+");
+        println!("| {: <40}{fwd: <10} {bwd: <10} |", "Total");
+        println!("+---------------------------------------------------------------+");
     }
 
     pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
