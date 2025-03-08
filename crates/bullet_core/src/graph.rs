@@ -166,7 +166,6 @@ impl<D: Device> Graph<D> {
                 } else {
                     println!("{: <10} |", "N/A");
                 }
-
             }
         }
 
