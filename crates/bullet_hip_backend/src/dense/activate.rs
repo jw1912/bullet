@@ -1,6 +1,6 @@
-use bullet_core::device::{DeviceBuffer, OperationError};
+use bullet_core::backend::device::DeviceBuffer;
 
-use crate::{backend::ops, Buffer, OperationResult};
+use crate::{backend::ops, Buffer, DeviceError};
 
 macro_rules! define_activation {
     (
@@ -9,9 +9,9 @@ macro_rules! define_activation {
         $fwd_kernel:ident,
         $bwd_kernel:ident
     ) => {
-        pub fn $fwd(size: usize, input: &Buffer<f32>, output: &mut Buffer<f32>) -> OperationResult {
+        pub fn $fwd(size: usize, input: &Buffer<f32>, output: &mut Buffer<f32>) -> Result<(), DeviceError> {
             if size > input.size() || size > output.size() {
-                return Err(OperationError::IndexOutOfBounds);
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
             }
 
             unsafe {
@@ -26,9 +26,9 @@ macro_rules! define_activation {
             input: &Buffer<f32>,
             input_grad: &mut Buffer<f32>,
             output_grad: &Buffer<f32>,
-        ) -> OperationResult {
+        ) -> Result<(), DeviceError> {
             if size > input.size() || size > input_grad.size() || size > output_grad.size() {
-                return Err(OperationError::IndexOutOfBounds);
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
             }
 
             unsafe {

@@ -1,7 +1,6 @@
 use crate::{
-    device::{Device, OperationError},
+    backend::device::{blas::Shape, Device, OperationError},
     graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
-    shape::Shape,
 };
 
 pub fn concat<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {

@@ -6,20 +6,13 @@ pub mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
-use crate::{device::Device, graph::Node, shape::Shape, tensor::DenseMatrix};
-
-/// List of supported activation functions.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Activation {
-    Identity = 0,
-    ReLU = 1,
-    CReLU = 2,
-    SCReLU = 3,
-    SqrReLU = 4,
-    Sigmoid = 5,
-    Square = 6,
-}
+use crate::{
+    backend::{
+        device::{base::Activation, blas::Shape, Device},
+        tensor::DenseMatrix,
+    },
+    graph::Node,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Operation {

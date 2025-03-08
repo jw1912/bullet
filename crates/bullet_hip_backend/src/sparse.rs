@@ -5,11 +5,12 @@ mod select;
 mod softmax;
 
 pub use affine::*;
-use bullet_core::device::{DeviceBuffer, OperationError};
 pub use gather::*;
 pub use mask::*;
 pub use select::*;
 pub use softmax::*;
+
+use bullet_core::backend::device::{DeviceBuffer, OperationError};
 
 use crate::{
     backend::{ops, Buffer},

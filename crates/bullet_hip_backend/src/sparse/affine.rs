@@ -1,8 +1,4 @@
-use bullet_core::{
-    device::{DeviceBuffer, OperationError},
-    graph::operation::Activation,
-    shape::Shape,
-};
+use bullet_core::backend::device::{base::Activation, blas::Shape, DeviceBuffer, OperationError};
 
 use crate::{
     backend::{ops, Buffer},

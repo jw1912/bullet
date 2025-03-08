@@ -1,7 +1,4 @@
 #include "../util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
 
 template<OpType op>
 __global__ void sparse_affine_backward_kernel(
@@ -15,20 +12,21 @@ __global__ void sparse_affine_backward_kernel(
     float* Ag,
     float* Bg)
 {
+    const int32_t loc = maximumBlocks * blockIdx.z + blockIdx.y;
     const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row >= m)
         return;
 
-    const int32_t* tX = X + nnz * blockIdx.y;
-    const int32_t offset = stride * m * blockIdx.y;
+    const int32_t* tX = X + nnz * loc;
+    const int32_t offset = stride * m * loc;
 
     const float tE = op(Y[offset + row]) * Yg[offset + row];
 
-    if (Bg != nullptr)
+    if (Bg != nullptr && tE != 0.0F)
     {   
-        const int32_t offset = Bb ? m * blockIdx.y : 0;
-        atomicAdd(&Bg[offset + row], tE);
+        const int32_t offset2 = Bb ? m * loc : 0;
+        atomicAdd(&Bg[offset2 + row], tE);
     }
 
     for (int32_t i = 0; i < nnz; i++)
@@ -38,7 +36,8 @@ __global__ void sparse_affine_backward_kernel(
         if (j == -1)
             break;
 
-        atomicAdd(&Ag[j * m + row], tE);
+        if (tE != 0.0F)
+            atomicAdd(&Ag[j * m + row], tE);
     }
 }
 
@@ -57,7 +56,10 @@ void sparse_affine_backward_internal(
 {
     const int32_t chunks = (m + 1023) / 1024;
     const int32_t threads = (chunks == 1) ? m : 1024;
-    dim3 grid(chunks, k);
+
+    int32_t ky = min(k, maximumBlocks);
+    int32_t kz = (k + maximumBlocks - 1) / maximumBlocks;
+    dim3 grid(chunks, ky, kz);
 
     sparse_affine_backward_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, X, Y, Yg, Ag, Bg);
 }

@@ -1,6 +1,8 @@
-use crate::{
-    device::{Device, DeviceBuffer, OperationError},
-    shape::Shape,
+use crate::backend::{
+    device::{
+        blas::{BlasOperations, GemmConfig, Shape},
+        Device, DeviceBuffer, OperationError, OperationResult,
+    },
     tensor::DenseMatrix,
 };
 
@@ -22,20 +24,22 @@ pub fn linear_comb<D: Device>(
         (Some(x), Some(y)) => {
             assert_eq!(x, y, "Batch sizes do not match: {x} != {y}");
             output.set_batch_size(Some(x))?;
-            D::linear_comb_single(input_a.size(), alpha, Some(&input_a.buf), beta, Some(&input_b.buf), &mut output.buf)
+            output.buf.geam(input_a.size(), alpha, Some(&input_a.buf), beta, Some(&input_b.buf))?;
         }
         (None, Some(bs)) => {
             output.set_batch_size(Some(bs))?;
             copy_into_scaled(beta, input_b, output)?;
-            D::add_assign_single_to_batched_scaled(size, bs, ones, alpha, &input_a.buf, &mut output.buf)
+            add_assign_single_to_batched_scaled::<D>(size, bs, ones, alpha, &input_a.buf, &mut output.buf)?;
         }
         (_, None) => {
             output.set_batch_size(input_a.batch_size())?;
             let bs = input_a.batch_size().unwrap_or(1);
             copy_into_scaled(alpha, input_a, output)?;
-            D::add_assign_single_to_batched_scaled(size, bs, ones, beta, &input_b.buf, &mut output.buf)
+            add_assign_single_to_batched_scaled::<D>(size, bs, ones, beta, &input_b.buf, &mut output.buf)?;
         }
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -67,7 +71,8 @@ fn copy_into_scaled<D: Device>(
 ) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(input.single_size(), output.single_size());
     output.set_batch_size(input.batch_size())?;
-    D::linear_comb_single(input.size(), alpha, Some(&input.buf), 0.0, None, &mut output.buf)
+    output.buf.geam(input.size(), alpha, Some(&input.buf), 0.0, None)?;
+    Ok(())
 }
 
 fn add_assign_scaled<D: Device>(
@@ -77,8 +82,8 @@ fn add_assign_scaled<D: Device>(
 ) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(input.single_size(), output.single_size());
     output.set_batch_size(input.batch_size())?;
-
-    D::linear_comb_single(input.size(), 1.0, None, alpha, Some(&input.buf), &mut output.buf)
+    output.buf.geam(input.size(), 1.0, None, alpha, Some(&input.buf))?;
+    Ok(())
 }
 
 pub fn backprop_add_single_scaled<D: Device>(
@@ -96,8 +101,33 @@ pub fn backprop_add_single_scaled<D: Device>(
         (Some(_), Some(_)) | (None, None) => add_assign_scaled(alpha, output_grad, input_grad),
         (None, Some(x)) => {
             assert!(output_grad.batch_size().unwrap_or(1) <= ones.size());
-            D::reduce_add(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf)
+            reduce_add::<D>(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf)
         }
-        (Some(_), None) => Err(OperationError::UnsupportedOperation("backprop add".to_string())),
+        (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
+}
+
+pub fn reduce_add<D: Device>(
+    ones: &D::BufferF32,
+    size: usize,
+    batch_size: usize,
+    input: &D::BufferF32,
+    output: &mut D::BufferF32,
+) -> OperationResult<D::DeviceError> {
+    let cfg = GemmConfig::new(1.0, 0.0, Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
+    output.gemm(&cfg, input, ones)?;
+    Ok(())
+}
+
+pub fn add_assign_single_to_batched_scaled<D: Device>(
+    single_size: usize,
+    batch_size: usize,
+    ones: &D::BufferF32,
+    alpha: f32,
+    input: &D::BufferF32,
+    output: &mut D::BufferF32,
+) -> OperationResult<D::DeviceError> {
+    let cfg = GemmConfig::new(alpha, 1.0, Shape::new(single_size, 1), false, Shape::new(1, batch_size), false);
+    output.gemm(&cfg, input, ones)?;
+    Ok(())
 }

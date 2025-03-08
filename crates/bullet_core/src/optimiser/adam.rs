@@ -1,7 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{
-    device::{Device, OperationError},
+use crate::backend::{
+    device::{
+        base::{AdamConfig, BaseOperations},
+        Device, OperationError,
+    },
     tensor::DenseMatrix,
 };
 
@@ -54,18 +57,10 @@ impl<D: Device> OptimiserState<D> for Adam<D> {
         assert_eq!(weights.size(), self.momentum.size());
         assert_eq!(weights.size(), self.velocity.size());
 
-        D::adam(
-            weights.size(),
-            &mut weights.buf,
-            &grads.buf,
-            &mut self.momentum.buf,
-            &mut self.velocity.buf,
-            self.params.beta1,
-            self.params.beta2,
-            gradient_factor,
-            learning_rate,
-            true,
-        )
+        let cfg = AdamConfig::new(self.params.beta1, self.params.beta2, gradient_factor, learning_rate, true);
+        weights.buf.adam(&cfg, weights.size(), &grads.buf, &mut self.momentum.buf, &mut self.velocity.buf)?;
+
+        Ok(())
     }
 
     fn reset(&mut self) -> Result<(), D::DeviceError> {

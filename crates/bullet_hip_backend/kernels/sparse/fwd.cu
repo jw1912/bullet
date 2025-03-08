@@ -1,7 +1,4 @@
 #include "../util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
 
 template<OpType op>
 __global__ void sparse_affine_kernel(
@@ -14,16 +11,17 @@ __global__ void sparse_affine_kernel(
     const float* B,
     float* Y)
 {
+    const int32_t loc = maximumBlocks * blockIdx.z + blockIdx.y;
     const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row >= m)
         return;
 
-    const int32_t offset = Bb ? m * blockIdx.y : 0;
+    const int32_t offset = Bb ? m * loc : 0;
     float sum = B == nullptr ? 0.0F : B[offset + row];
 
     for (int32_t i = 0; i < nnz; i++) {
-        const int32_t j = X[nnz * blockIdx.y + i];
+        const int32_t j = X[nnz * loc + i];
 
         if (j == -1)
             break;
@@ -31,7 +29,7 @@ __global__ void sparse_affine_kernel(
         sum += A[j * m + row];
     }
 
-    Y[stride * m * blockIdx.y + row] = op(sum);
+    Y[stride * m * loc + row] = op(sum);
 }
 
 template<OpType op>
@@ -46,6 +44,7 @@ __global__ void sparse_affine_aligned_kernel(
     float4* Y)
 {
     extern __shared__ int32_t sX[];
+    const int32_t loc = maximumBlocks * blockIdx.z + blockIdx.y;
     const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (4 * row >= m)
@@ -55,13 +54,13 @@ __global__ void sparse_affine_aligned_kernel(
     {
         for (int32_t i = threadIdx.x; i < nnz; i += blockDim.x)
         {
-            sX[i] = X[nnz * blockIdx.y + i];
+            sX[i] = X[nnz * loc + i];
         }
     }
 
     __syncthreads();
 
-    const int32_t offset = Bb ? m * blockIdx.y / 4 : 0;
+    const int32_t offset = Bb ? m * loc / 4 : 0;
     float4 val = B == nullptr ? make_float4(0.0F, 0.0F, 0.0F, 0.0F) : B[offset + row];
 
     for (size_t i = 0; i < nnz; i++) {
@@ -83,7 +82,7 @@ __global__ void sparse_affine_aligned_kernel(
     val.z = op(val.z);
     val.w = op(val.w);
 
-    Y[stride * m * blockIdx.y / 4 + row] = val;
+    Y[stride * m * loc / 4 + row] = val;
 }
 
 template<OpType op>
@@ -106,7 +105,10 @@ void sparse_affine_internal(
         const int32_t m4_size = (m + 3) / 4; 
         const int32_t threads = min(m4_size, max_threads);
         const int32_t chunks = (m4_size + threads - 1) / threads;
-        dim3 grid(chunks, k);
+
+        int32_t ky = min(k, maximumBlocks);
+        int32_t kz = (k + maximumBlocks - 1) / maximumBlocks;
+        dim3 grid(chunks, ky, kz);
 
         sparse_affine_aligned_kernel<op><<<grid, threads, alloc>>>(
             stride,
@@ -123,7 +125,9 @@ void sparse_affine_internal(
     {
         const int32_t threads = min(m, max_threads);
         const int32_t chunks = (m + threads - 1) / threads;
-        dim3 grid(chunks, k);
+        int32_t ky = min(k, maximumBlocks);
+        int32_t kz = (k + maximumBlocks - 1) / maximumBlocks;
+        dim3 grid(chunks, ky, kz);
 
         sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, A, X, B, Y);
     }

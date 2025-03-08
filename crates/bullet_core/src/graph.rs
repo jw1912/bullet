@@ -9,11 +9,12 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
     sync::Arc,
+    time::Instant,
 };
 
 use builder::Node;
 
-use crate::{
+use crate::backend::{
     device::{Device, OperationError},
     tensor::Tensor,
 };
@@ -24,6 +25,16 @@ pub struct Graph<D: Device> {
     inputs: HashMap<String, usize>,
     weights: HashMap<String, usize>,
     device: Arc<D>,
+    profile: HashMap<Node, ProfileInformation>,
+}
+
+#[derive(Default)]
+struct ProfileInformation {
+    name: String,
+    fwd_time: u128,
+    fwd_count: u128,
+    bwd_time: u128,
+    bwd_count: u128,
 }
 
 impl<D: Device> Graph<D> {
@@ -35,6 +46,10 @@ impl<D: Device> Graph<D> {
         }
     }
 
+    pub fn sanity_check(&self) {
+        self.device().sanity_check();
+    }
+
     pub fn get_node(&self, node: Node) -> Ref<'_, Tensor<D>> {
         self.get(node.idx).unwrap()
     }
@@ -43,7 +58,7 @@ impl<D: Device> Graph<D> {
         if let Some(tensor) = &self.nodes[idx] {
             Ok(tensor.borrow())
         } else {
-            Err(OperationError::UnsupportedOperation(String::new()))
+            Err(OperationError::UnsupportedOperation)
         }
     }
 
@@ -51,14 +66,29 @@ impl<D: Device> Graph<D> {
         if let Some(tensor) = &self.nodes[idx] {
             Ok(tensor.borrow_mut())
         } else {
-            Err(OperationError::UnsupportedOperation(String::new()))
+            Err(OperationError::UnsupportedOperation)
         }
     }
 
     pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
         for node in 0..self.nodes.len() {
             let node = self.get_node_info(node)?;
+
+            let t = if self.profile.contains_key(&node) {
+                self.device().synchronise()?;
+                Some(Instant::now())
+            } else {
+                None
+            };
+
             self.forward_node(node)?;
+
+            if let Some(t) = t {
+                self.device().synchronise()?;
+                let prof = self.profile.get_mut(&node).unwrap();
+                prof.fwd_time += t.elapsed().as_micros();
+                prof.fwd_count += 1;
+            }
         }
 
         Ok(self.get(self.root)?.get_scalar().unwrap())
@@ -69,10 +99,47 @@ impl<D: Device> Graph<D> {
 
         for node in (0..self.nodes.len()).rev() {
             let node = self.get_node_info(node)?;
+
+            let t = if self.profile.contains_key(&node) {
+                self.device().synchronise()?;
+                Some(Instant::now())
+            } else {
+                None
+            };
+
             self.backward_node(node)?;
+
+            if let Some(t) = t {
+                self.device().synchronise()?;
+                let prof = self.profile.get_mut(&node).unwrap();
+                prof.bwd_time += t.elapsed().as_micros();
+                prof.bwd_count += 1;
+            }
         }
 
         Ok(())
+    }
+
+    pub fn profile_node(&mut self, node: Node, id: &str) {
+        self.profile.insert(node, ProfileInformation { name: id.to_string(), ..Default::default() });
+    }
+
+    pub fn report_profiles(&self) {
+        for prof in self.profile.values() {
+            if prof.fwd_count + prof.bwd_count > 0 {
+                println!("=================");
+                println!("{}", prof.name);
+                if prof.fwd_count > 0 {
+                    println!("Forward Average: {}", prof.fwd_time / prof.fwd_count);
+                    println!("Forward Count  : {}", prof.fwd_count);
+                }
+                if prof.bwd_count > 0 {
+                    println!("Backward Average: {}", prof.bwd_time / prof.bwd_count);
+                    println!("Backward Count  : {}", prof.bwd_count);
+                }
+                println!("=================");
+            }
+        }
     }
 
     pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {

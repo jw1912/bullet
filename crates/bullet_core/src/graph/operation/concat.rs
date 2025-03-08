@@ -1,6 +1,5 @@
-use crate::{
-    device::{Device, OperationError},
-    shape::Shape,
+use crate::backend::{
+    device::{base::BaseOperations, blas::Shape, Device, OperationError},
     tensor::DenseMatrix,
 };
 
@@ -23,29 +22,29 @@ pub fn concat<D: Device>(
 
     output.set_batch_size(input_a.batch_size())?;
 
-    D::copy_or_add_strided(
+    output.buf.copy_or_add_strided(
+        false,
         shape_a.rows(),
         input_a.batch_size().unwrap_or(1),
+        0,
+        shape_o.rows(),
         &input_a.buf,
         0,
         shape_a.rows(),
-        &mut output.buf,
-        0,
-        shape_o.rows(),
-        false,
     )?;
 
-    D::copy_or_add_strided(
+    output.buf.copy_or_add_strided(
+        false,
         shape_b.rows(),
         input_b.batch_size().unwrap_or(1),
+        shape_a.rows(),
+        shape_o.rows(),
         &input_b.buf,
         0,
         shape_b.rows(),
-        &mut output.buf,
-        shape_a.rows(),
-        shape_o.rows(),
-        false,
-    )
+    )?;
+
+    Ok(())
 }
 
 pub fn backprop_concat<D: Device>(
@@ -72,16 +71,15 @@ pub fn backprop_concat<D: Device>(
         assert_eq!(grad.single_size(), input_a.single_size());
         grad.set_batch_size(input_a.batch_size())?;
 
-        D::copy_or_add_strided(
+        grad.buf.copy_or_add_strided(
+            true,
             shape_a.rows(),
             grad.batch_size().unwrap_or(1),
+            0,
+            shape_a.rows(),
             &output_grad.buf,
             0,
             shape_o.rows(),
-            &mut grad.buf,
-            0,
-            shape_a.rows(),
-            true,
         )?;
     }
 
@@ -89,16 +87,15 @@ pub fn backprop_concat<D: Device>(
         assert_eq!(grad.single_size(), input_b.single_size());
         grad.set_batch_size(input_b.batch_size())?;
 
-        D::copy_or_add_strided(
+        grad.buf.copy_or_add_strided(
+            true,
             shape_b.rows(),
             grad.batch_size().unwrap_or(1),
+            0,
+            shape_b.rows(),
             &output_grad.buf,
             shape_a.rows(),
             shape_o.rows(),
-            &mut grad.buf,
-            0,
-            shape_b.rows(),
-            true,
         )?;
     }
 

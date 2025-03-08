@@ -4,6 +4,7 @@
 typedef float(*OpType)(float);
 
 constexpr size_t threadsPerBlock = static_cast<size_t>(1024);
+constexpr int32_t maximumBlocks = 32768;
 
 __device__ float Identity([[maybe_unused]] float in) { return in; }
 __device__ float ReLU(float in) { return in > 0.0F ? in : 0.0F; }

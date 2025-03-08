@@ -1,10 +1,13 @@
 use crate::{
-    device::{Device, DeviceBuffer, OperationError},
+    backend::device::{
+        base::{Activation, BaseOperations},
+        blas::{BlasOperations, GemmConfig, Shape},
+        Device, DeviceBuffer, OperationError,
+    },
     graph::{Graph, Node},
-    shape::Shape,
 };
 
-use super::operation::{concat, linear_comb, matmul, setup_ones, setup_softmax, slice, sparse, Activation, Operation};
+use super::operation::{concat, linear_comb, matmul, setup_ones, setup_softmax, slice, sparse, Operation};
 
 impl<D: Device> Graph<D> {
     pub(crate) fn forward_node(&mut self, output_node: Node) -> Result<(), OperationError<D::DeviceError>> {
@@ -24,7 +27,8 @@ impl<D: Device> Graph<D> {
                 let input = input.values.dense()?;
                 assert_eq!(outn.shape, node.shape);
                 output.set_batch_size(input.batch_size())?;
-                D::activate(input.size(), &input.buf, &mut output.buf, *act)
+                output.buf.activate_fwd(input.size(), &input.buf, *act)?;
+                Ok(())
             }
             Affine(wn, inp, bn) => {
                 let w = get(*wn);
@@ -101,13 +105,16 @@ impl<D: Device> Graph<D> {
                 assert_eq!(node.shape.size() % 2, 0);
                 assert_eq!(node.shape.size() / 2, output.single_size());
                 output.set_batch_size(input.batch_size())?;
-                D::pairwise(
-                    input.single_size(),
-                    input.batch_size().unwrap_or(1),
-                    &input.dense()?.buf,
-                    &mut output.buf,
-                    *post_concat,
-                )
+
+                let mut single_size = input.single_size();
+                let mut batch_size = input.batch_size().unwrap_or(1);
+                if *post_concat {
+                    single_size /= 2;
+                    batch_size *= 2;
+                }
+
+                output.buf.pairwise_fwd(single_size, batch_size, &input.dense()?.buf)?;
+                Ok(())
             }
             PowerError(a, b, p) => {
                 let size = a.shape.size();
@@ -126,7 +133,8 @@ impl<D: Device> Graph<D> {
                 assert_eq!(batch_size, b.batch_size());
                 output.set_batch_size(batch_size)?;
 
-                D::abs_power_error(*p, size * batch_size.unwrap_or(1), &a.buf, &b.buf, &mut output.buf)
+                output.buf.power_error_fwd(*p, size * batch_size.unwrap_or(1), &a.buf, &b.buf)?;
+                Ok(())
             }
             ReduceAcrossBatch(node) => {
                 let input = get(*node);
@@ -134,7 +142,7 @@ impl<D: Device> Graph<D> {
                 setup_ones(input.buf.device(), internal, input.batch_size().unwrap_or(1))?;
                 let ones = internal.get("ones").unwrap().borrow();
                 assert_eq!(input.single_size(), node.shape.size());
-                D::reduce_add(
+                linear_comb::reduce_add::<D>(
                     &ones.buf,
                     input.single_size(),
                     input.batch_size().unwrap_or(1),
@@ -283,16 +291,16 @@ impl<D: Device> Graph<D> {
                 D::crossentropy(batch_size * single_size, &smax.buf, &b.buf, &mut indv.buf)?;
 
                 output.set_batch_size(a.batch_size())?;
-                D::sgemm(
-                    &ones.buf,
+                let cfg = GemmConfig::new(
+                    1.0,
+                    0.0,
                     Shape::new(1, single_size),
                     false,
-                    &indv.buf,
                     Shape::new(single_size, batch_size),
                     false,
-                    &mut output.buf,
-                    false,
-                )
+                );
+                output.buf.gemm(&cfg, &ones.buf, &indv.buf)?;
+                Ok(())
             }
         }
     }

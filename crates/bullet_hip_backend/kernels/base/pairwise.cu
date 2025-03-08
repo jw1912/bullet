@@ -1,7 +1,4 @@
-#include "util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
+#include "../util.cu"
 
 __global__ void pairwiseMulKernel(
     const size_t output_size,

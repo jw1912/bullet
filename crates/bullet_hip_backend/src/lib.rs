@@ -9,10 +9,12 @@ mod tests;
 pub use backend::ExecutionContext;
 use backend::{bindings, util, Buffer};
 
-use bullet_core::{
-    device::{Device, OperationError},
-    graph::operation::Activation,
-    shape::Shape,
+use bullet_core::backend::{
+    device::{
+        base::{Activation, AdamConfig, BaseOperations},
+        blas::{BlasOperations, GemmConfig, Shape},
+        Device, OperationError,
+    },
     tensor,
 };
 
@@ -25,6 +27,7 @@ pub type Tensor = tensor::Tensor<ExecutionContext>;
 pub enum DeviceError {
     Cuda(bindings::cudaError_t),
     Cublas(bindings::cublasStatus_t),
+    ExpectedIllegalAddressAccess,
 }
 
 impl From<bindings::cublasStatus_t> for Result<(), DeviceError> {
@@ -49,6 +52,110 @@ impl From<bindings::cudaError_t> for Result<(), DeviceError> {
 
 pub(crate) type OperationResult = Result<(), OperationError<DeviceError>>;
 
+impl BlasOperations for Buffer<f32> {
+    type BlasError = DeviceError;
+
+    fn gemm(&mut self, config: &GemmConfig, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
+        matmul::sgemm(config, a, b, self)
+    }
+
+    fn gebmm(&mut self, config: &GemmConfig, batch_size: usize, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
+        matmul::sgemm_batched(config, batch_size, a, b, self)
+    }
+
+    fn geam(
+        &mut self,
+        size: usize,
+        alpha: f32,
+        a: Option<&Self>,
+        beta: f32,
+        b: Option<&Self>,
+    ) -> Result<(), Self::BlasError> {
+        dense::linear_comb_single(size, alpha, a, beta, b, self)
+    }
+}
+
+impl BaseOperations for Buffer<f32> {
+    type BaseError = DeviceError;
+
+    fn activate_fwd(&mut self, size: usize, a: &Self, act: Activation) -> Result<(), Self::BaseError> {
+        match act {
+            Activation::Identity => panic!("No-op!"),
+            Activation::ReLU => dense::relu(size, a, self),
+            Activation::CReLU => dense::crelu(size, a, self),
+            Activation::SCReLU => dense::screlu(size, a, self),
+            Activation::SqrReLU => dense::sqrrelu(size, a, self),
+            Activation::Sigmoid => dense::sigmoid(size, a, self),
+            Activation::Square => dense::square(size, a, self),
+        }
+    }
+
+    fn activate_bwd(&mut self, size: usize, a: &Self, grd: &Self, act: Activation) -> Result<(), Self::BaseError> {
+        match act {
+            Activation::Identity => panic!("No-op!"),
+            Activation::ReLU => dense::relu_backward(size, a, self, grd),
+            Activation::CReLU => dense::crelu_backward(size, a, self, grd),
+            Activation::SCReLU => dense::screlu_backward(size, a, self, grd),
+            Activation::SqrReLU => dense::sqrrelu_backward(size, a, self, grd),
+            Activation::Sigmoid => dense::sigmoid_backward(size, a, self, grd),
+            Activation::Square => dense::square_backward(size, a, self, grd),
+        }
+    }
+
+    fn copy_or_add_strided(
+        &mut self,
+        add: bool,
+        rows: usize,
+        cols: usize,
+        offset: usize,
+        stride: usize,
+        a: &Self,
+        offset_a: usize,
+        stride_a: usize,
+    ) -> Result<(), Self::BaseError> {
+        dense::copy_or_add_strided(rows, cols, a, offset_a, stride_a, self, offset, stride, add)
+    }
+
+    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
+        dense::pairwise(size, batch_size, a, self)
+    }
+
+    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
+        dense::backprop_pairwise(size, batch_size, a, grd, self)
+    }
+
+    fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError> {
+        dense::abs_power_error(power, size, a, b, self)
+    }
+
+    fn power_error_bwd(
+        &mut self,
+        power: f32,
+        size: usize,
+        a: &Self,
+        b: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
+        dense::backprop_abs_power_error_single(power, size, a, b, grd, self)
+    }
+
+    fn adam(
+        &mut self,
+        config: &AdamConfig,
+        size: usize,
+        grd: &Self,
+        mom: &mut Self,
+        vel: &mut Self,
+    ) -> Result<(), Self::BaseError> {
+        let AdamConfig { beta1, beta2, gradient_factor, learning_rate, denom } = *config;
+        dense::adam(size, self, grd, mom, vel, beta1, beta2, gradient_factor, learning_rate, denom)
+    }
+
+    fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {
+        dense::clip(size, self, min, max)
+    }
+}
+
 impl Device for ExecutionContext {
     type BufferF32 = Buffer<f32>;
     type BufferI32 = Buffer<i32>;
@@ -65,101 +172,6 @@ impl Device for ExecutionContext {
 
     fn get_last_device_error(&self) -> Result<(), DeviceError> {
         util::get_last_error()
-    }
-
-    fn activate(
-        size: usize,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        activation: Activation,
-    ) -> OperationResult {
-        match activation {
-            Activation::Identity => panic!("No-op!"),
-            Activation::ReLU => dense::relu(size, input, output),
-            Activation::CReLU => dense::crelu(size, input, output),
-            Activation::SCReLU => dense::screlu(size, input, output),
-            Activation::SqrReLU => dense::sqrrelu(size, input, output),
-            Activation::Sigmoid => dense::sigmoid(size, input, output),
-            Activation::Square => dense::square(size, input, output),
-        }
-    }
-
-    fn backprop_activate(
-        size: usize,
-        input: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        activation: Activation,
-    ) -> OperationResult {
-        match activation {
-            Activation::Identity => panic!("No-op!"),
-            Activation::ReLU => dense::relu_backward(size, input, input_grad, output_grad),
-            Activation::CReLU => dense::crelu_backward(size, input, input_grad, output_grad),
-            Activation::SCReLU => dense::screlu_backward(size, input, input_grad, output_grad),
-            Activation::SqrReLU => dense::sqrrelu_backward(size, input, input_grad, output_grad),
-            Activation::Sigmoid => dense::sigmoid_backward(size, input, input_grad, output_grad),
-            Activation::Square => dense::square_backward(size, input, input_grad, output_grad),
-        }
-    }
-
-    fn add_assign_single_to_batched_scaled(
-        single_size: usize,
-        batch_size: usize,
-        ones: &Self::BufferF32,
-        alpha: f32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::add_assign_single_to_batched_scaled(single_size, batch_size, ones, alpha, input, output)
-    }
-
-    fn sgemm(
-        input_a: &Self::BufferF32,
-        shape_a: Shape,
-        trans_a: bool,
-        input_b: &Self::BufferF32,
-        shape_b: Shape,
-        trans_b: bool,
-        output: &mut Self::BufferF32,
-        increment: bool,
-    ) -> OperationResult {
-        matmul::sgemm(input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment)
-    }
-
-    fn sgemm_batched(
-        batch_size: usize,
-        input_a: &Self::BufferF32,
-        shape_a: Shape,
-        trans_a: bool,
-        input_b: &Self::BufferF32,
-        shape_b: Shape,
-        trans_b: bool,
-        output: &mut Self::BufferF32,
-        increment: bool,
-    ) -> OperationResult {
-        matmul::sgemm_batched(batch_size, input_a, shape_a, trans_a, input_b, shape_b, trans_b, output, increment)
-    }
-
-    fn backprop_abs_power_error_single(
-        power: f32,
-        size: usize,
-        input_a: &Self::BufferF32,
-        input_b: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        input_a_grad: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::backprop_abs_power_error_single(power, size, input_a, input_b, output_grad, input_a_grad)
-    }
-
-    fn backprop_pairwise(
-        single_size: usize,
-        batch_size: usize,
-        input: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-        post_concat: bool,
-    ) -> OperationResult {
-        dense::backprop_pairwise(single_size, batch_size, input, output_grad, input_grad, post_concat)
     }
 
     fn backprop_sparse_affine_activate(
@@ -196,50 +208,6 @@ impl Device for ExecutionContext {
         )
     }
 
-    fn copy_or_add_strided(
-        rows: usize,
-        cols: usize,
-        input: &Self::BufferF32,
-        input_offset: usize,
-        input_stride: usize,
-        output: &mut Self::BufferF32,
-        output_offset: usize,
-        output_stride: usize,
-        add: bool,
-    ) -> OperationResult {
-        dense::copy_or_add_strided(
-            rows,
-            cols,
-            input,
-            input_offset,
-            input_stride,
-            output,
-            output_offset,
-            output_stride,
-            add,
-        )
-    }
-
-    fn pairwise(
-        single_size: usize,
-        batch_size: usize,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        post_concat: bool,
-    ) -> OperationResult {
-        dense::pairwise(single_size, batch_size, input, output, post_concat)
-    }
-
-    fn abs_power_error(
-        power: f32,
-        size: usize,
-        input_a: &Self::BufferF32,
-        input_b: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::abs_power_error(power, size, input_a, input_b, output)
-    }
-
     fn sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
@@ -266,42 +234,6 @@ impl Device for ExecutionContext {
             input_c_batched,
             output,
         )
-    }
-
-    fn adam(
-        size: usize,
-        params: &mut Self::BufferF32,
-        gradient: &Self::BufferF32,
-        momentum: &mut Self::BufferF32,
-        velocity: &mut Self::BufferF32,
-        beta1: f32,
-        beta2: f32,
-        gradient_factor: f32,
-        learning_rate: f32,
-        denom: bool,
-    ) -> OperationResult {
-        dense::adam(size, params, gradient, momentum, velocity, beta1, beta2, gradient_factor, learning_rate, denom)
-    }
-
-    fn linear_comb_single(
-        size: usize,
-        alpha: f32,
-        input_a: Option<&Self::BufferF32>,
-        beta: f32,
-        input_b: Option<&Self::BufferF32>,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::linear_comb_single(size, alpha, input_a, beta, input_b, output)
-    }
-
-    fn reduce_add(
-        ones: &Self::BufferF32,
-        size: usize,
-        batch_size: usize,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        dense::reduce_add(ones, size, batch_size, input, output)
     }
 
     fn select(
@@ -452,9 +384,5 @@ impl Device for ExecutionContext {
             output_grad,
             input_grad,
         )
-    }
-
-    fn clip(size: usize, params: &mut Self::BufferF32, min: f32, max: f32) -> OperationResult {
-        dense::clip(size, params, min, max)
     }
 }

@@ -1,31 +1,24 @@
-use bullet_core::device::{DeviceBuffer, OperationError};
+use bullet_core::backend::device::DeviceBuffer;
 
 use crate::{
     backend::{ops, Buffer},
-    OperationResult,
+    DeviceError,
 };
 
 pub fn pairwise(
-    mut single_size: usize,
-    mut batch_size: usize,
+    single_size: usize,
+    batch_size: usize,
     input: &Buffer<f32>,
     output: &mut Buffer<f32>,
-    post_concat: bool,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     if single_size * batch_size > input.size() {
-        return Err(OperationError::IndexOutOfBounds);
-    }
-
-    if post_concat {
-        assert_eq!(single_size % 2, 0);
-        single_size /= 2;
-        batch_size *= 2;
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     assert_eq!(single_size % 2, 0);
 
     if (single_size / 2) * batch_size > output.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
@@ -36,27 +29,20 @@ pub fn pairwise(
 }
 
 pub fn backprop_pairwise(
-    mut single_size: usize,
-    mut batch_size: usize,
+    single_size: usize,
+    batch_size: usize,
     input: &Buffer<f32>,
     output_grad: &Buffer<f32>,
     input_grad: &mut Buffer<f32>,
-    post_concat: bool,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     if single_size * batch_size > input.size().max(input_grad.size()) {
-        return Err(OperationError::IndexOutOfBounds);
-    }
-
-    if post_concat {
-        assert_eq!(single_size % 2, 0);
-        single_size /= 2;
-        batch_size *= 2;
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     assert_eq!(single_size % 2, 0);
 
     if (single_size / 2) * batch_size > output_grad.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {

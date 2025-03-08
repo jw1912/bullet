@@ -8,9 +8,11 @@ pub mod utils;
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use crate::{
-    device::{Device, OperationError},
+    backend::{
+        device::{Device, OperationError},
+        tensor::DenseMatrix,
+    },
     graph::Graph,
-    tensor::DenseMatrix,
 };
 
 pub trait OptimiserState<D: Device>: Sized {

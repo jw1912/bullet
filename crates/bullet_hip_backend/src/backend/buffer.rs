@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bullet_core::device::DeviceBuffer;
+use bullet_core::backend::device::DeviceBuffer;
 
 use crate::DeviceError;
 
@@ -39,6 +39,8 @@ impl<T: ValidType> Buffer<T> {
 }
 
 impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
+    type BufferError = DeviceError;
+
     /// Creates a new **zeroed** buffer with the given number of elements.
     fn new(ctx: Arc<ExecutionContext>, size: usize) -> Result<Self, DeviceError> {
         Ok(Self { size, ptr: unsafe { util::calloc(size) }?, ctx })

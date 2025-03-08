@@ -1,9 +1,6 @@
-use bullet_core::device::{DeviceBuffer, OperationError};
+use bullet_core::backend::device::DeviceBuffer;
 
-use crate::{
-    backend::{blas, util::catch_cublas},
-    Buffer, OperationResult,
-};
+use crate::{backend::ops, Buffer, DeviceError};
 
 pub fn linear_comb_single(
     size: usize,
@@ -12,76 +9,45 @@ pub fn linear_comb_single(
     beta: f32,
     input_b: Option<&Buffer<f32>>,
     output: &mut Buffer<f32>,
-) -> OperationResult {
-    let aptr = input_a.map(|a| {
-        assert!(size <= a.size());
-        a.ptr()
-    });
+) -> Result<(), DeviceError> {
+    match (input_a, input_b) {
+        (None, None) => {
+            if size > output.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-    let bptr = if let Some(b) = input_b {
-        assert!(size <= b.size());
-        b.ptr()
-    } else {
-        std::ptr::null()
-    };
+            unsafe {
+                ops::scale_assign(size, output.mut_ptr(), alpha);
+            }
+        }
+        (None, Some(b)) => {
+            if size > output.size() || size > b.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-    unsafe {
-        let err =
-            blas::linear_comb_matrices(output.device().as_ref(), size, 1, alpha, aptr, beta, bptr, output.mut_ptr());
-        Ok(catch_cublas(err)?)
-    }
-}
+            unsafe {
+                ops::scale_add_assign(size, alpha, output.mut_ptr(), beta, b.ptr());
+            }
+        }
+        (Some(a), Some(b)) => {
+            if size > output.size() || size > a.size() || size > b.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-pub fn add_assign_single_to_batched_scaled(
-    single_size: usize,
-    batch_size: usize,
-    ones: &Buffer<f32>,
-    alpha: f32,
-    input: &Buffer<f32>,
-    output: &mut Buffer<f32>,
-) -> OperationResult {
-    if single_size > input.size() || single_size * batch_size > output.size() || batch_size > ones.size() {
-        return Err(OperationError::IndexOutOfBounds);
-    }
+            unsafe {
+                ops::linear_comb(size, alpha, a.ptr(), beta, b.ptr(), output.mut_ptr());
+            }
+        }
+        (Some(a), None) => {
+            if size > output.size() || size > a.size() {
+                return Err(DeviceError::ExpectedIllegalAddressAccess);
+            }
 
-    unsafe {
-        let err = blas::add_vector_to_matrix_columns(
-            output.device().as_ref(),
-            single_size,
-            batch_size,
-            alpha,
-            ones.ptr(),
-            input.ptr(),
-            output.mut_ptr(),
-        );
-
-        Ok(catch_cublas(err)?)
-    }
-}
-
-pub fn reduce_add(
-    ones: &Buffer<f32>,
-    size: usize,
-    batch_size: usize,
-    input: &Buffer<f32>,
-    output: &mut Buffer<f32>,
-) -> OperationResult {
-    if size * batch_size > input.size() || size > output.size() {
-        return Err(OperationError::IndexOutOfBounds);
+            unsafe {
+                ops::scale(size, alpha, a.ptr(), output.mut_ptr());
+            }
+        }
     }
 
-    unsafe {
-        let err = blas::reduce_add_cols(
-            input.device().as_ref(),
-            size,
-            batch_size,
-            ones.ptr(),
-            input.ptr(),
-            output.mut_ptr(),
-            1.0,
-            false,
-        );
-
-        Ok(catch_cublas(err)?)
-    }
+    Ok(())
 }

@@ -1,8 +1,8 @@
-use bullet_core::device::{DeviceBuffer, OperationError};
+use bullet_core::backend::device::DeviceBuffer;
 
 use crate::{
     backend::{blas, util::catch_cublas, Buffer},
-    OperationResult,
+    DeviceError,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -16,7 +16,7 @@ pub fn copy_or_add_strided(
     output_offset: usize,
     output_stride: usize,
     add: bool,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     assert!(cols > 0);
     assert!(rows > 0);
 
@@ -26,7 +26,7 @@ pub fn copy_or_add_strided(
         || cols * output_stride > output.size()
         || rows > output_stride
     {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
@@ -41,6 +41,6 @@ pub fn copy_or_add_strided(
             add,
         );
 
-        Ok(catch_cublas(err)?)
+        catch_cublas(err)
     }
 }

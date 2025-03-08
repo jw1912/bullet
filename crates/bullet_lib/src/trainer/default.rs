@@ -41,7 +41,7 @@ use super::{
 use crate::save;
 
 use bullet_core::{
-    device::OperationError,
+    backend::device::OperationError,
     graph::{builder::Node, Graph},
     optimiser::{Optimiser, OptimiserState},
 };
@@ -209,6 +209,10 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         self.optimiser.set_params(params);
     }
 
+    pub fn sanity_check(&self) {
+        self.optimiser.graph.sanity_check();
+    }
+
     pub fn mark_weights_as_input_factorised(&mut self, weights: &[&str]) {
         if self.factorised_weights.is_none() {
             self.factorised_weights = Some(Vec::new())
@@ -217,6 +221,14 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         for weight in weights {
             self.factorised_weights.as_mut().unwrap().push(weight.to_string());
         }
+    }
+
+    pub fn profile_node(&mut self, node: Node, id: &str) {
+        self.optimiser.graph.profile_node(node, id);
+    }
+
+    pub fn report_profiles(&self) {
+        self.optimiser.graph.report_profiles();
     }
 
     pub fn save_quantised(&self, path: &str) -> io::Result<()> {

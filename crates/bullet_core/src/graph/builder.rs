@@ -11,9 +11,8 @@ use super::{
     operation::{GraphBuilderError, GraphBuilderErrorType, Operation},
     Graph,
 };
-use crate::{
-    device::{Device, OperationError},
-    shape::Shape,
+use crate::backend::{
+    device::{blas::Shape, Device, OperationError},
     tensor::Tensor,
 };
 
@@ -226,7 +225,7 @@ impl GraphBuilder {
 
         let weights = self.weights.iter().filter_map(id_idx_pair).collect::<HashMap<_, _>>();
 
-        Ok(Graph { nodes, root, inputs, weights, device })
+        Ok(Graph { nodes, root, inputs, weights, device, profile: HashMap::new() })
     }
 
     fn search_for_fusion(&self, _node: usize) -> Option<(Vec<usize>, NodeData)> {

@@ -5,7 +5,7 @@ mod frontend;
 pub mod trainer;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use bullet_core::{graph::operation::Activation, shape::Shape};
+pub use bullet_core::backend::device::{base::Activation, blas::Shape};
 pub use bullet_hip_backend::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
@@ -16,14 +16,17 @@ pub use trainer::{
     DataPreparer, NetworkTrainer,
 };
 
+/// Re-export of `bullet_core`
+pub use bullet_core as core;
+
 /// Contains the Graph API, by which neural networks are created with
 /// `NetworkBuilder`, and then compiled into an executable `Graph`
 pub mod nn {
     pub use super::frontend::{Affine, InitSettings, NetworkBuilder, NetworkBuilderNode};
 
     pub use bullet_core::{
-        graph::{builder::Node, operation::Activation},
-        shape::Shape,
+        backend::device::{base::Activation, blas::Shape},
+        graph::builder::Node,
     };
     pub use bullet_hip_backend::{DeviceError, ExecutionContext};
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;

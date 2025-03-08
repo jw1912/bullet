@@ -54,7 +54,6 @@ __global__ void sparse_mask_backprop_kernel(
     }
 }
 
-
 extern "C" void sparse_mask(
     const size_t rows,
     const size_t cols,

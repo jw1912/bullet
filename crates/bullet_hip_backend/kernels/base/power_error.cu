@@ -1,7 +1,4 @@
-#include "util.cu"
-#ifdef __HIP_PLATFORM_AMD__
-#include <hip/hip_runtime.h>
-#endif
+#include "../util.cu"
 
 __global__ void powerErrorKernel(
     const size_t bufferSize,
@@ -32,7 +29,7 @@ __global__ void backpropPowerErrorKernel(
         return;
 
     const float diff = inputs[i] - results[i];
-    const float grad = power * powf(abs(diff), power - 1) * output_grad[i];
+    const float grad = power * powf(abs(diff), power - 1.0F) * output_grad[i];
     input_grads[i] += diff > 0.0F ? grad : -grad;
 }
 

@@ -1,8 +1,8 @@
-use bullet_core::device::{DeviceBuffer, OperationError};
+use bullet_core::backend::device::DeviceBuffer;
 
 use crate::{
     backend::{ops, Buffer},
-    OperationResult,
+    DeviceError,
 };
 
 pub fn abs_power_error(
@@ -11,9 +11,9 @@ pub fn abs_power_error(
     input_a: &Buffer<f32>,
     input_b: &Buffer<f32>,
     output: &mut Buffer<f32>,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     if size > input_a.size() || size > input_b.size() || size > output.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
@@ -30,9 +30,9 @@ pub fn backprop_abs_power_error_single(
     input_b: &Buffer<f32>,
     output_grad: &Buffer<f32>,
     input_a_grad: &mut Buffer<f32>,
-) -> OperationResult {
+) -> Result<(), DeviceError> {
     if size > input_a.size() || size > input_b.size() || size > output_grad.size() || size > input_a_grad.size() {
-        return Err(OperationError::IndexOutOfBounds);
+        return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
     unsafe {
