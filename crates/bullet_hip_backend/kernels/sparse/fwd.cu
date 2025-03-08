@@ -5,6 +5,7 @@ __global__ void sparse_affine_kernel(
     const int32_t stride,
     const int32_t nnz,
     const int32_t m,
+    const int32_t k,
     const bool Bb,
     const float* A,
     const int32_t* X,
@@ -14,7 +15,7 @@ __global__ void sparse_affine_kernel(
     const int32_t loc = maximumBlocks * blockIdx.z + blockIdx.y;
     const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row >= m)
+    if (row >= m || loc >= k)
         return;
 
     const int32_t offset = Bb ? m * loc : 0;
@@ -37,6 +38,7 @@ __global__ void sparse_affine_aligned_kernel(
     const int32_t stride,
     const int32_t nnz,
     const int32_t m,
+    const int32_t k,
     const bool Bb,
     const float4* A,
     const int32_t* X,
@@ -47,7 +49,7 @@ __global__ void sparse_affine_aligned_kernel(
     const int32_t loc = maximumBlocks * blockIdx.z + blockIdx.y;
     const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (4 * row >= m)
+    if (4 * row >= m || loc >= k)
         return;
 
     if (threadIdx.x < nnz)
@@ -114,6 +116,7 @@ void sparse_affine_internal(
             stride,
             nnz,
             m,
+            k,
             Bb, 
             reinterpret_cast<const float4*>(A),
             X,
@@ -129,7 +132,7 @@ void sparse_affine_internal(
         int32_t kz = (k + maximumBlocks - 1) / maximumBlocks;
         dim3 grid(chunks, ky, kz);
 
-        sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, A, X, B, Y);
+        sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, k, Bb, A, X, B, Y);
     }
 }
 

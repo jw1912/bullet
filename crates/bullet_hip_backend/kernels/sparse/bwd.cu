@@ -5,6 +5,7 @@ __global__ void sparse_affine_backward_kernel(
     const int32_t stride,
     const int32_t nnz,
     const int32_t m,
+    const int32_t k,
     const bool Bb,
     const int32_t* X,
     const float* Y,
@@ -15,7 +16,7 @@ __global__ void sparse_affine_backward_kernel(
     const int32_t loc = maximumBlocks * blockIdx.z + blockIdx.y;
     const int32_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row >= m)
+    if (row >= m || loc >= k)
         return;
 
     const int32_t* tX = X + nnz * loc;
@@ -61,7 +62,7 @@ void sparse_affine_backward_internal(
     int32_t kz = (k + maximumBlocks - 1) / maximumBlocks;
     dim3 grid(chunks, ky, kz);
 
-    sparse_affine_backward_kernel<op><<<grid, threads>>>(stride, nnz, m, Bb, X, Y, Yg, Ag, Bg);
+    sparse_affine_backward_kernel<op><<<grid, threads>>>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);
 }
 
 extern "C" void sparse_affine_backward(
