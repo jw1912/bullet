@@ -43,16 +43,15 @@ fn esc() -> &'static str {
 
 pub fn report_superbatch_progress(
     superbatch: usize,
-    batch_size: usize,
     batches: usize,
     finished_batches: usize,
     superbatch_timer: &Instant,
+    superbatch_positions: usize,
 ) {
     let num_cs = num_cs();
     let superbatch_time = superbatch_timer.elapsed().as_secs_f32();
     let pct = finished_batches as f32 / batches as f32;
-    let positions = finished_batches * batch_size;
-    let pos_per_sec = positions as f32 / superbatch_time;
+    let pos_per_sec = superbatch_positions as f32 / superbatch_time;
 
     let seconds = superbatch_time / pct - superbatch_time;
 
