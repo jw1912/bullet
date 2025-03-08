@@ -28,7 +28,7 @@ pub struct Graph<D: Device> {
     profile: HashMap<Node, ProfileInformation>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ProfileInformation {
     name: String,
     fwd_time: u128,
@@ -124,22 +124,54 @@ impl<D: Device> Graph<D> {
         self.profile.insert(node, ProfileInformation { name: id.to_string(), ..Default::default() });
     }
 
-    pub fn report_profiles(&self) {
-        for prof in self.profile.values() {
-            if prof.fwd_count + prof.bwd_count > 0 {
-                println!("=================");
-                println!("{}", prof.name);
-                if prof.fwd_count > 0 {
-                    println!("Forward Average: {}", prof.fwd_time / prof.fwd_count);
-                    println!("Forward Count  : {}", prof.fwd_count);
+    pub fn profile_all_nodes(&mut self) {
+        for node in 0..self.nodes.len() {
+            if let Some(tensor) = &self.nodes[node] {
+                let tensor = tensor.borrow();
+                if let Some(op) = tensor.operation.as_ref() {
+                    let node = tensor.own;
+                    let id = format!("{:?}", *op);
+                    let id = id.split_once('(').unwrap();
+                    let name = format!("Node {: >2} = {}", node.idx, id.0);
+                    self.profile.insert(node, ProfileInformation { name, ..Default::default() });
                 }
-                if prof.bwd_count > 0 {
-                    println!("Backward Average: {}", prof.bwd_time / prof.bwd_count);
-                    println!("Backward Count  : {}", prof.bwd_count);
-                }
-                println!("=================");
             }
         }
+    }
+
+    pub fn report_profiles(&self) {
+        let mut vals = self.profile.values().cloned().collect::<Vec<_>>();
+        vals.sort_by_key(|prof| prof.fwd_time + prof.bwd_time);
+
+        let mut fwd = 0;
+        let mut bwd = 0;
+
+        println!("+--------------- Profile ---------------- Fwd ------ Bwd -------+");
+
+        for prof in vals.iter().rev() {
+            if prof.fwd_count + prof.bwd_count > 0 {
+                print!("| {: <40}", prof.name);
+                if prof.fwd_count > 0 {
+                    let avg = prof.fwd_time / prof.fwd_count;
+                    fwd += avg;
+                    print!("{avg: <10} ");
+                } else {
+                    print!("{: <10} ", "N/A");
+                }
+
+                if prof.bwd_count > 0 {
+                    let avg = prof.bwd_time / prof.bwd_count;
+                    bwd += avg;
+                    println!("{avg: <10} |");
+                } else {
+                    println!("{: <10} |", "N/A");
+                }
+            }
+        }
+
+        println!("+---------------------------------------------------------------+");
+        println!("| {: <40}{fwd: <10} {bwd: <10} |", "Total");
+        println!("+---------------------------------------------------------------+");
     }
 
     pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
