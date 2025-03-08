@@ -111,7 +111,7 @@ pub trait NetworkTrainer {
 
         let mut validation_freq = settings.test_set.map_or(32, |test| test.freq);
 
-        if validation_freq < 32 {
+        if steps.batches_per_superbatch >= 32 && validation_freq < 32 {
             println!("Setting validation frequency to every 32 batches, come on ...");
             validation_freq = 32;
         }
