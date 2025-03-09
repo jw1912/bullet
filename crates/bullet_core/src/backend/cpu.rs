@@ -1,4 +1,3 @@
-#![allow(unused)]
 pub mod base;
 pub mod blas;
 pub mod cmp;
@@ -74,6 +73,7 @@ impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
     }
 }
 
+#[allow(unused)]
 impl Device for CpuThread {
     type BufferF32 = CpuBuffer<f32>;
     type BufferI32 = CpuBuffer<i32>;
