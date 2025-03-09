@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use crate::backend::{
     device::{
@@ -79,11 +79,31 @@ impl CpuThread {
         }
     }
 
+    pub fn compare_pairwise<D: Device>(device: Arc<D>) {
+        for size in [14, 34, 1022, 1028] {
+            print!("pairwise size={size} fwd... ");
+            display_passed(base_op_equal(device.clone(), size, BaseOp::Pairwise, true));
+            print!("pairwise size={size} bwd... ");
+            display_passed(base_op_equal(device.clone(), size, BaseOp::Pairwise, false));
+        }
+    }
+
     pub fn compare_adam<D: Device>(device: Arc<D>) {
         let config = AdamConfig::new(0.9, 0.999, 0.1, 0.1, true);
         for size in [13, 34, 1023, 1027] {
             print!("adam size={size}... ");
             display_passed(base_op_equal(device.clone(), size, BaseOp::Adam(config), true));
+        }
+    }
+
+    pub fn compare_copy_or_add_strided<D: Device>(device: Arc<D>) {
+        for add in [false, true] {
+            for rows in [1, 7, 64] {
+                for cols in [1023, 1027] {
+                    print!("copy_or_add_strided add={add} rows={rows} cols={cols}... ");
+                    display_passed(copy_strided_equal(device.clone(), add, rows, cols));
+                }
+            }
         }
     }
 }
@@ -153,9 +173,27 @@ fn gebmm_equal<D: Device>(device: Arc<D>, batch_size: usize, config: GemmConfig)
     approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
 }
 
+fn copy_strided_equal<D: Device>(device: Arc<D>, add: bool, rows: usize, cols: usize) -> bool {
+    let device = device;
+    let cpu = Arc::new(CpuThread);
+    let a = rng::vec_f32(2 * rows * cols, 1.0, 0.5, false);
+    let c = rng::vec_f32(rows * cols, 1.0, 0.5, false);
+
+    let acpu = load(cpu.clone(), &a);
+    let adev = load(device.clone(), &a);
+    let mut ccpu = load(cpu.clone(), &c);
+    let mut cdev = load(device.clone(), &c);
+
+    ccpu.copy_or_add_strided(add, rows, cols, 0, rows, &acpu, rows, 2 * rows).unwrap();
+    cdev.copy_or_add_strided(add, rows, cols, 0, rows, &adev, rows, 2 * rows).unwrap();
+
+    approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
+}
+
 enum BaseOp {
     Activate(Activation),
     PowerErr,
+    Pairwise,
     Adam(AdamConfig),
 }
 
@@ -181,6 +219,15 @@ fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) 
             } else {
                 ccpu.activate_bwd(size, &acpu, &bcpu, act).unwrap();
                 cdev.activate_bwd(size, &adev, &bdev, act).unwrap();
+            }
+        }
+        BaseOp::Pairwise => {
+            if fwd {
+                ccpu.pairwise_fwd(size, 1, &acpu).unwrap();
+                cdev.pairwise_fwd(size, 1, &adev).unwrap();
+            } else {
+                ccpu.pairwise_bwd(size, 1, &acpu, &bcpu).unwrap();
+                cdev.pairwise_bwd(size, 1, &adev, &bdev).unwrap();
             }
         }
         BaseOp::PowerErr => {
@@ -224,7 +271,7 @@ fn load_optional<D: Device>(device: Arc<D>, a: &Option<Vec<f32>>) -> Option<D::B
 
 fn load<D: Device>(device: Arc<D>, a: &[f32]) -> D::BufferF32 {
     let mut buf = D::BufferF32::new(device.clone(), a.len()).unwrap();
-    buf.load_from_slice(a);
+    buf.load_from_slice(a).unwrap();
     buf
 }
 
