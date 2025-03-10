@@ -390,6 +390,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             Loss::SoftmaxCrossEntropy => out.softmax_crossentropy_loss(targets),
         };
 
+        #[allow(clippy::default_constructed_unit_structs)]
         let ctx = ExecutionContext::default();
         let mut graph = builder.build(ctx);
 

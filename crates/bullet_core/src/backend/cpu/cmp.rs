@@ -106,6 +106,13 @@ impl CpuThread {
             }
         }
     }
+
+    pub fn compare_clip<D: Device>(device: Arc<D>) {
+        for size in [1023, 1027] {
+            print!("clip size={size}... ");
+            display_passed(base_op_equal(device.clone(), size, BaseOp::Clip(-1.98, 1.98), true));
+        }
+    }
 }
 
 fn geam_equal<D: Device>(device: Arc<D>, size: usize, alpha: f32, a: bool, beta: f32, b: bool) -> bool {
@@ -113,42 +120,40 @@ fn geam_equal<D: Device>(device: Arc<D>, size: usize, alpha: f32, a: bool, beta:
     let cpu = Arc::new(CpuThread);
     let a = a.then(|| rng::vec_f32(size, 1.0, 0.5, false));
     let b = b.then(|| rng::vec_f32(size, 1.0, 0.5, false));
+    let c = rng::vec_f32(size, 1.0, 0.5, false);
 
     let acpu = load_optional(cpu.clone(), &a);
     let bcpu = load_optional(cpu.clone(), &b);
-
     let adev = load_optional(device.clone(), &a);
     let bdev = load_optional(device.clone(), &b);
-
-    let mut ccpu = CpuBuffer::new(cpu.clone(), size).unwrap();
-    let mut cdev = D::BufferF32::new(device.clone(), size).unwrap();
+    let mut ccpu = load(cpu.clone(), &c);
+    let mut cdev = load(device.clone(), &c);
 
     ccpu.geam(size, alpha, acpu.as_ref(), beta, bcpu.as_ref()).unwrap();
     cdev.geam(size, alpha, adev.as_ref(), beta, bdev.as_ref()).unwrap();
 
-    approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
+    approx_equal::<D>(&ccpu, &cdev, 0.001).is_none()
 }
 
 fn gemm_equal<D: Device>(device: Arc<D>, config: GemmConfig) -> bool {
     let device = device;
     let cpu = Arc::new(CpuThread);
+
     let a = rng::vec_f32(config.shape_a.size(), 1.0, 0.5, false);
     let b = rng::vec_f32(config.shape_b.size(), 1.0, 0.5, false);
+    let c = rng::vec_f32(config.output_shape().size(), 1.0, 0.5, false);
 
     let acpu = load(cpu.clone(), &a);
     let bcpu = load(cpu.clone(), &b);
-
     let adev = load(device.clone(), &a);
     let bdev = load(device.clone(), &b);
-
-    let shape_o = config.output_shape();
-    let mut ccpu = CpuBuffer::new(cpu.clone(), shape_o.size()).unwrap();
-    let mut cdev = D::BufferF32::new(device.clone(), shape_o.size()).unwrap();
+    let mut ccpu = load(cpu.clone(), &c);
+    let mut cdev = load(device.clone(), &c);
 
     ccpu.gemm(&config, &acpu, &bcpu).unwrap();
     cdev.gemm(&config, &adev, &bdev).unwrap();
 
-    approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
+    approx_equal::<D>(&ccpu, &cdev, 0.01).is_none()
 }
 
 fn gebmm_equal<D: Device>(device: Arc<D>, batch_size: usize, config: GemmConfig) -> bool {
@@ -156,21 +161,19 @@ fn gebmm_equal<D: Device>(device: Arc<D>, batch_size: usize, config: GemmConfig)
     let cpu = Arc::new(CpuThread);
     let a = rng::vec_f32(batch_size * config.shape_a.size(), 1.0, 0.5, false);
     let b = rng::vec_f32(batch_size * config.shape_b.size(), 1.0, 0.5, false);
+    let c = rng::vec_f32(batch_size * config.output_shape().size(), 1.0, 0.5, false);
 
     let acpu = load(cpu.clone(), &a);
     let bcpu = load(cpu.clone(), &b);
-
     let adev = load(device.clone(), &a);
     let bdev = load(device.clone(), &b);
-
-    let size_o = batch_size * config.output_shape().size();
-    let mut ccpu = CpuBuffer::new(cpu.clone(), size_o).unwrap();
-    let mut cdev = D::BufferF32::new(device.clone(), size_o).unwrap();
+    let mut ccpu = load(cpu.clone(), &c);
+    let mut cdev = load(device.clone(), &c);
 
     ccpu.gebmm(&config, batch_size, &acpu, &bcpu).unwrap();
     cdev.gebmm(&config, batch_size, &adev, &bdev).unwrap();
 
-    approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
+    approx_equal::<D>(&ccpu, &cdev, 0.01).is_none()
 }
 
 fn copy_strided_equal<D: Device>(device: Arc<D>, add: bool, rows: usize, cols: usize) -> bool {
@@ -187,22 +190,23 @@ fn copy_strided_equal<D: Device>(device: Arc<D>, add: bool, rows: usize, cols: u
     ccpu.copy_or_add_strided(add, rows, cols, 0, rows, &acpu, rows, 2 * rows).unwrap();
     cdev.copy_or_add_strided(add, rows, cols, 0, rows, &adev, rows, 2 * rows).unwrap();
 
-    approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
+    approx_equal::<D>(&ccpu, &cdev, 0.001).is_none()
 }
 
 enum BaseOp {
     Activate(Activation),
     PowerErr,
     Pairwise,
+    Clip(f32, f32),
     Adam(AdamConfig),
 }
 
 fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) -> bool {
     let device = device;
     let cpu = Arc::new(CpuThread);
-    let a = rng::vec_f32(size, 0.5, 1.5, false);
-    let b = rng::vec_f32(size, 0.5, 1.5, false);
-    let c = rng::vec_f32(size, 0.5, 1.5, false);
+    let a = rng::vec_f32(size * 4, 0.5, 5.5, false);
+    let b = rng::vec_f32(size * 4, 0.5, 5.5, false);
+    let c = rng::vec_f32(size * 4, 0.5, 5.5, false);
 
     let acpu = load(cpu.clone(), &a);
     let adev = load(device.clone(), &a);
@@ -223,11 +227,11 @@ fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) 
         }
         BaseOp::Pairwise => {
             if fwd {
-                ccpu.pairwise_fwd(size, 1, &acpu).unwrap();
-                cdev.pairwise_fwd(size, 1, &adev).unwrap();
+                ccpu.pairwise_fwd(size, 4, &acpu).unwrap();
+                cdev.pairwise_fwd(size, 4, &adev).unwrap();
             } else {
-                ccpu.pairwise_bwd(size, 1, &acpu, &bcpu).unwrap();
-                cdev.pairwise_bwd(size, 1, &adev, &bdev).unwrap();
+                ccpu.pairwise_bwd(size, 4, &acpu, &bcpu).unwrap();
+                cdev.pairwise_bwd(size, 4, &adev, &bdev).unwrap();
             }
         }
         BaseOp::PowerErr => {
@@ -239,24 +243,35 @@ fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) 
                 cdev.power_error_bwd(2.0, size, &adev, &bdev, &bdev).unwrap();
             }
         }
+        BaseOp::Clip(a, b) => {
+            ccpu.clip(size, a, b).unwrap();
+            cdev.clip(size, a, b).unwrap();
+        }
         BaseOp::Adam(config) => {
-            let mut dcpu = CpuBuffer::new(cpu.clone(), size).unwrap();
-            let mut ddev = D::BufferF32::new(device.clone(), size).unwrap();
+            let d = rng::vec_f32(size, 0.5, 1.5, false);
+            let mut dcpu = load(cpu.clone(), &d);
+            let mut ddev = load(device.clone(), &d);
             dcpu.adam(&config, size, &acpu, &mut bcpu, &mut ccpu).unwrap();
             ddev.adam(&config, size, &adev, &mut bdev, &mut cdev).unwrap();
+
+            assert!(approx_equal::<D>(&bcpu, &bdev, 0.001).is_none());
+            assert!(approx_equal::<D>(&dcpu, &ddev, 0.001).is_none());
         }
     }
 
-    approx_equal(&write::<CpuThread>(&ccpu), &write::<D>(&cdev)).is_none()
+    approx_equal::<D>(&ccpu, &cdev, 0.001).is_none()
 }
 
-fn approx_equal(a: &[f32], b: &[f32]) -> Option<usize> {
+fn approx_equal<D: Device>(a: &CpuBuffer<f32>, b: &D::BufferF32, err: f32) -> Option<usize> {
+    let a = write::<CpuThread>(a);
+    let b = write::<D>(b);
+
     if a.len() != b.len() {
         return Some(usize::MAX);
     }
 
     for (i, (&a, &b)) in a.iter().zip(b.iter()).enumerate() {
-        if (a - b).abs() > 0.01 {
+        if (a - b).abs() > err {
             print!("a={a} b={b} err={} ", (a - b).abs());
             return Some(i);
         }
