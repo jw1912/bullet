@@ -41,7 +41,7 @@ impl BaseOperations for CpuBuffer<f32> {
         }
 
         match act {
-            Activation::Identity => apply(size, a, grd, self, |x| 1.0),
+            Activation::Identity => apply(size, a, grd, self, |_| 1.0),
             Activation::ReLU => apply(size, a, grd, self, |x| f32::from(x > 0.0)),
             Activation::CReLU => apply(size, a, grd, self, |x| f32::from(x > 0.0 && x < 1.0)),
             Activation::SCReLU => apply(size, a, grd, self, |x| if x > 0.0 && x < 1.0 { 2.0 * x } else { 0.0 }),
@@ -57,9 +57,10 @@ impl BaseOperations for CpuBuffer<f32> {
     }
 
     fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
-        for (o, a) in self.buf.chunks_exact_mut(size / 2).zip(a.buf.chunks_exact(size)) {
-            for i in 0..size / 2 {
-                o[i] = a[i] * a[i + size / 2];
+        for i in 0..batch_size {
+            for j in 0..size / 2 {
+                let k = i * size + j;
+                self.buf[i * size / 2 + j] = a.buf[k] * a.buf[k + size / 2];
             }
         }
 
@@ -67,12 +68,12 @@ impl BaseOperations for CpuBuffer<f32> {
     }
 
     fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
-        for ((o, a), g) in
-            self.buf.chunks_exact_mut(size).zip(a.buf.chunks_exact(size)).zip(grd.buf.chunks_exact(size / 2))
-        {
-            for i in 0..size / 2 {
-                o[i] = g[i] * a[i + size / 2];
-                o[i + size / 2] = g[i] * a[i]
+        for i in 0..batch_size {
+            for j in 0..size / 2 {
+                let g = grd.buf[i * size / 2 + j];
+                let k = i * size + j;
+                self.buf[k] += g * a.buf[k + size / 2];
+                self.buf[k + size / 2] += g * a.buf[k];
             }
         }
 
@@ -120,7 +121,6 @@ impl BaseOperations for CpuBuffer<f32> {
         #[allow(clippy::too_many_arguments)]
         fn internal<const ADD: bool>(
             out: &mut CpuBuffer<f32>,
-            add: bool,
             rows: usize,
             cols: usize,
             offset: usize,
@@ -143,9 +143,9 @@ impl BaseOperations for CpuBuffer<f32> {
         }
 
         if add {
-            internal::<true>(self, add, rows, cols, offset, stride, a, offset_a, stride_a);
+            internal::<true>(self, rows, cols, offset, stride, a, offset_a, stride_a);
         } else {
-            internal::<false>(self, add, rows, cols, offset, stride, a, offset_a, stride_a);
+            internal::<false>(self, rows, cols, offset, stride, a, offset_a, stride_a);
         }
 
         Ok(())
@@ -180,7 +180,7 @@ impl BaseOperations for CpuBuffer<f32> {
 
             let mut val = *m;
             if denom {
-                val /= (*v + 0.00000001).sqrt();
+                val /= v.sqrt() + 0.00000001;
             }
 
             *p -= learning_rate * val;

@@ -32,7 +32,6 @@ pub fn sparse_affine(
 
     let c_ptr = if let Some(c) = input_c {
         if shape_o.size() * if input_c_batched { batch_size } else { 1 } > c.size() {
-            println!("FUCK 1");
             return Err(OperationError::IndexOutOfBounds);
         }
 
@@ -94,7 +93,6 @@ pub fn backprop_sparse_affine(
 
     let c_ptr = if let Some(grad) = input_c_grad {
         if shape_o.size() * if input_c_batched { batch_size } else { 1 } > grad.size() {
-            println!("FUCK 2 {} {} {}", shape_o.size(), grad.size(), input_c_batched);
             return Err(OperationError::IndexOutOfBounds);
         }
 

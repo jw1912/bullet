@@ -1,7 +1,7 @@
-#![allow(unused)]
 pub mod base;
 pub mod blas;
 pub mod cmp;
+pub mod sparse;
 
 use std::sync::Arc;
 
@@ -28,6 +28,7 @@ tests::make_tests! {
 #[derive(Debug)]
 pub struct CpuError;
 
+#[derive(Default)]
 pub struct CpuThread;
 
 pub struct CpuBuffer<T> {
@@ -74,6 +75,7 @@ impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
     }
 }
 
+#[allow(unused)]
 impl Device for CpuThread {
     type BufferF32 = CpuBuffer<f32>;
     type BufferI32 = CpuBuffer<i32>;
@@ -107,7 +109,48 @@ impl Device for CpuThread {
         input_c_batched: bool,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        let shape_o = shape_a * shape_b;
+
+        let (stride, offset) = if let Some(b) = stride { (2, if b { shape_a.rows() } else { 0 }) } else { (1, 0) };
+
+        if shape_a.size() > input_a.size()
+            || batch_size * nnz > input_b.size()
+            || batch_size * shape_o.size() * stride > output.size()
+        {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        if let Some(c) = input_c {
+            if shape_o.size() * if input_c_batched { batch_size } else { 1 } > c.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+        }
+
+        let m = shape_a.rows();
+        let k = batch_size;
+        let a = &input_a.buf;
+        let x = &input_b.buf;
+        let b = input_c.map(|c| &*c.buf);
+        let bb = input_c_batched;
+        let y = &mut output.buf;
+
+        match activation {
+            Activation::Identity => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x),
+            Activation::ReLU => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0)),
+            Activation::CReLU => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0)),
+            Activation::SCReLU => {
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2))
+            }
+            Activation::SqrReLU => {
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0).powi(2))
+            }
+            Activation::Sigmoid => {
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| 1.0 / (1.0 + (-x).exp()))
+            }
+            Activation::Square => return Err(OperationError::UnsupportedOperation),
+        }
+
+        Ok(())
     }
 
     fn backprop_sparse_affine_activate(
@@ -126,7 +169,65 @@ impl Device for CpuThread {
         outputs: &Self::BufferF32,
         output_grad: &Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        let shape_o = shape_a * shape_b;
+
+        let (stride, offset) = if let Some(b) = stride { (2, if b { shape_a.rows() } else { 0 }) } else { (1, 0) };
+
+        assert_eq!(shape_b.cols(), 1);
+        assert_eq!(shape_o.cols(), 1);
+        if shape_a.size() > input_a.size()
+            || shape_a.size() > input_a_grad.size()
+            || batch_size * nnz > input_b.size()
+            || batch_size * shape_o.size() > outputs.size()
+            || batch_size * shape_o.size() * stride > output_grad.size()
+        {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        if let Some(ref grad) = input_c_grad {
+            if shape_o.size() * if input_c_batched { batch_size } else { 1 } > grad.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+        }
+
+        let m = shape_a.rows();
+        let k = batch_size;
+        let x = &input_b.buf;
+        let y = &outputs.buf;
+        let yg = &output_grad.buf;
+        let bb = input_c_batched;
+        let ag = &mut input_a_grad.buf;
+        let bg = input_c_grad.map(|x| &mut *x.buf);
+
+        match activation {
+            Activation::Identity => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 1.0),
+            Activation::ReLU => {
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| f32::from(x > 0.0))
+            }
+            Activation::CReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
+                if x > 0.0 && x < 1.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }),
+            Activation::SCReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
+                if x > 0.0 && x < 1.0 {
+                    2.0 * x.sqrt()
+                } else {
+                    0.0
+                }
+            }),
+            Activation::SqrReLU => {
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt())
+            }
+            Activation::Sigmoid => {
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| x * (1.0 - x))
+            }
+            Activation::Square => return Err(OperationError::UnsupportedOperation),
+        }
+
+        Ok(())
     }
 
     fn mask(

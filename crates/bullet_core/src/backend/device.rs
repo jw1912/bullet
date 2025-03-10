@@ -66,7 +66,10 @@ pub trait Device: Sized + 'static {
         CpuThread::compare_gebmm(self.clone());
         CpuThread::compare_activate(self.clone());
         CpuThread::compare_power_error(self.clone());
+        CpuThread::compare_pairwise(self.clone());
+        CpuThread::compare_clip(self.clone());
         CpuThread::compare_adam(self.clone());
+        CpuThread::compare_copy_or_add_strided(self.clone());
     }
 
     fn sparse_affine_activate(
