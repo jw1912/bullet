@@ -42,5 +42,5 @@ fn main() {
 
     trainer.run(&schedule, &settings, &data_loader);
 
-    //trainer.sanity_check();
+    trainer.sanity_check();
 }

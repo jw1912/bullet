@@ -180,7 +180,7 @@ impl BaseOperations for CpuBuffer<f32> {
 
             let mut val = *m;
             if denom {
-                val /= (*v + 0.00000001).sqrt();
+                val /= v.sqrt() + 0.00000001;
             }
 
             *p -= learning_rate * val;
