@@ -38,14 +38,13 @@ use super::{
     LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::save;
+use crate::{nn::DeviceError, save, ExecutionContext};
 
 use bullet_core::{
     backend::device::OperationError,
     graph::{builder::Node, Graph},
     optimiser::{Optimiser, OptimiserState},
 };
-use bullet_hip_backend::{DeviceError, ExecutionContext};
 
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
 unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}

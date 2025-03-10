@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
-use bullet_core::backend::device::blas::Shape;
-use bullet_hip_backend::DenseMatrix;
+use crate::ExecutionContext;
+use bullet_core::backend::{device::blas::Shape, tensor::DenseMatrix};
 
 #[derive(Clone)]
 pub struct SavedFormat {
@@ -15,7 +15,7 @@ impl SavedFormat {
         SavedFormat { id: id.to_string(), quant, layout }
     }
 
-    pub fn write_to_byte_buffer(&self, weights: &DenseMatrix) -> io::Result<Vec<u8>> {
+    pub fn write_to_byte_buffer(&self, weights: &DenseMatrix<ExecutionContext>) -> io::Result<Vec<u8>> {
         let mut weight_buf = vec![0.0; weights.single_size()];
         let written = weights.write_to_slice(&mut weight_buf).unwrap();
         assert_eq!(written, weights.single_size());

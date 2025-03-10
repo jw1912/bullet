@@ -6,11 +6,12 @@ pub mod schedule;
 pub mod settings;
 
 use bullet_core::optimiser::{Optimiser, OptimiserState};
-use bullet_hip_backend::ExecutionContext;
 pub use preparer::DataPreparer;
 use save::SavedFormat;
 use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 use settings::LocalSettings;
+
+use crate::ExecutionContext;
 
 use std::{
     fs::File,
@@ -47,13 +48,6 @@ pub trait NetworkTrainer {
         self.optimiser_mut().update(gf, lr).unwrap();
 
         self.optimiser().graph.synchronise().unwrap();
-
-        if let Err(e) = self.optimiser().graph.get_last_device_error() {
-            println!();
-            println!("An unrecoverable error occurred:");
-            println!("{e:?}");
-            std::process::exit(1);
-        }
 
         error
     }

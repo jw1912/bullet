@@ -6,7 +6,7 @@ pub mod trainer;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
 pub use bullet_core::backend::device::{base::Activation, blas::Shape};
-pub use bullet_hip_backend::ExecutionContext;
+pub use nn::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
@@ -28,12 +28,17 @@ pub mod nn {
         backend::device::{base::Activation, blas::Shape},
         graph::builder::Node,
     };
-    pub use bullet_hip_backend::{DeviceError, ExecutionContext};
     pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 
+    #[cfg(feature = "cpu")]
+    pub use bullet_core::backend::cpu::{CpuError as DeviceError, CpuThread as ExecutionContext};
+
+    #[cfg(not(feature = "cpu"))]
+    pub use bullet_hip_backend::{DeviceError, ExecutionContext};
+
     pub mod optimiser {
+        use crate::nn::ExecutionContext;
         use bullet_core::optimiser::{self, clip, decay, radam, utils::Placement, OptimiserState};
-        use bullet_hip_backend::ExecutionContext;
 
         type ClipAndDecay<T> = clip::WeightClipping<decay::WeightDecay<T>>;
 
