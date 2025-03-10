@@ -3,12 +3,14 @@ mod montybinpack;
 mod rng;
 mod sfbinpack;
 mod text;
+mod viribinpack;
 
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
 pub use sfbinpack::SfBinpackLoader;
 pub use text::InMemoryTextLoader;
+pub use viribinpack::ViriBinpackLoader;
 
 use super::{inputs::SparseInputType, outputs::OutputBuckets};
 
