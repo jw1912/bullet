@@ -33,3 +33,11 @@ jobs:
           with:
             component: rustfmt
         - run: cargo fmt -- --check
+
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - run: cargo test --package bullet_core
