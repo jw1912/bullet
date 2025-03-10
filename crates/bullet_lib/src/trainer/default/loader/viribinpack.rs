@@ -128,12 +128,7 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
     }
 }
 
-fn convert_buffer(
-    threads: usize,
-    sender: &SyncSender<Vec<ChessBoard>>,
-    games: &[Game],
-    filter: &Filter,
-) {
+fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Game], filter: &Filter) {
     let chunk_size = games.len().div_ceil(threads);
 
     std::thread::scope(|s| {
@@ -152,12 +147,15 @@ fn convert_buffer(
     });
 }
 
-fn parse_into_buffer(
-    game: &Game,
-    buffer: &mut Vec<ChessBoard>,
-    filter: &Filter,
-) {
-    game.splat_to_bulletformat(|board| {buffer.push(board); Ok(())}, filter).unwrap();
+fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &Filter) {
+    game.splat_to_bulletformat(
+        |board| {
+            buffer.push(board);
+            Ok(())
+        },
+        filter,
+    )
+    .unwrap();
 }
 
 fn shuffle(data: &mut [ChessBoard]) {
