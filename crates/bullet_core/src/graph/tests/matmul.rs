@@ -1,7 +1,7 @@
 use crate::{
     backend::device::{blas::Shape, Device, OperationError},
     graph::{
-        ir::{op::GraphIROp, GraphIR},
+        ir::{args::GraphIRCompileArgs, op::GraphIROp, GraphIR},
         GraphError,
     },
 };
@@ -12,7 +12,7 @@ pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let w2 = builder.add_weights("w2", Shape::new(3, 1)).unwrap();
     let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
-    let mut graph = builder.compile(device)?;
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();
     graph.get_weights_mut("w2").load_dense_from_slice(Some(2), &[1.0, 2.0, 3.0, 1.0, 2.0, 3.0]).unwrap();
@@ -45,7 +45,7 @@ pub fn matmul2<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let a = out.reshape(Shape::new(4, 1)).unwrap();
     let err = builder.add_op(GraphIROp::Matmul(dot, false, a, false), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(err), true)?;
-    let mut graph = builder.compile(device)?;
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0, 1.0]).unwrap();
     graph.get_weights_mut("w2").load_dense_from_slice(Some(2), &[1.0, 2.0, 3.0, 4.0, 1.0, 3.0, 2.0, 4.0]).unwrap();

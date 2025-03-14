@@ -1,7 +1,7 @@
 use crate::{
     backend::device::{base::Activation, blas::Shape, Device, OperationError},
     graph::{
-        ir::{op::GraphIROp, GraphIR},
+        ir::{args::GraphIRCompileArgs, op::GraphIROp, GraphIR},
         GraphError,
     },
 };
@@ -32,7 +32,7 @@ fn activate<D: Device>(
     let w = builder.add_weights("w", Shape::new(1, 1)).unwrap();
     let out = builder.add_op(GraphIROp::Activate(w, activation), true).unwrap();
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true).unwrap();
-    let mut graph = builder.compile(device).unwrap();
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default()).unwrap();
 
     graph.get_weights_mut("w").load_dense_from_slice(Some(4), &[-1.0, 0.5, 2.0, -2.0]).unwrap();
 

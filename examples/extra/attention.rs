@@ -92,7 +92,7 @@ struct AttentionDescription<'a> {
 
 impl<'a> AttentionDescription<'a> {
     fn new_block(&mut self, input: NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a> {
-        let input_rows = input.node().shape().rows();
+        let input_rows = input.node().shape.rows();
 
         let AttentionDescription { dim, tokens, smolgen_size, id, builder } = *self;
 
