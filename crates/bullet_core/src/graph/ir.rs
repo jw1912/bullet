@@ -201,20 +201,16 @@ impl GraphIR {
     }
 
     pub fn optimise(&mut self, args: &GraphIRCompileArgs) {
-        let mut pass = 0;
+        let mut fusions = 0;
 
         if args.allow_fusion {
             while self.optimisation_pass(fusion::fusion_pass) {
-                pass += 1;
-
-                if args.emit_ir {
-                    println!("Pass {pass}:");
-                    print!("{self}");
-                }
+                fusions += 1;
             }
 
             if args.emit_ir {
-                println!("Fusions: {pass}");
+                println!("Fusions: {fusions}");
+                print!("{self}");
             }
         }
     }
