@@ -6,7 +6,7 @@ use super::node::AnnotatedNode;
 pub enum GraphIROp {
     Activate(AnnotatedNode, Activation),
     Affine(AnnotatedNode, AnnotatedNode, AnnotatedNode),
-    SparseAffine(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>),
+    SparseAffineActivate(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, Activation),
     SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, AnnotatedNode, Activation),
     Concat(AnnotatedNode, AnnotatedNode),
     Gather(AnnotatedNode, AnnotatedNode),
@@ -167,13 +167,17 @@ impl GraphIROp {
                 let out = Shape::new(end - start, 1);
                 ret(valid, out, GraphIROpError::new(self, OutOfBounds(is, [*start, *end])))
             }
-            SparseAffine(w, i, b) => {
+            SparseAffineActivate(w, i, b, act) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, false)?;
                 check_not_batched(w)?;
 
                 if let Some(b) = b {
                     check_dense_eq(b, true)?;
+                }
+
+                if *act == Activation::Square {
+                    return Err(GraphIROpError::new(self, GraphIROpErrorType::ActivationCannotBeFused));
                 }
 
                 let out = check_matmul(w.shape, i.shape)?;
@@ -233,7 +237,7 @@ impl GraphIROp {
             ReduceAcrossBatch(node) => vec![node],
             Select(input, buckets) => vec![input, buckets],
             Slice(input, _, _) => vec![input],
-            SparseAffine(w, i, b) => {
+            SparseAffineActivate(w, i, b, _) => {
                 if let Some(b) = b {
                     vec![w, i, b]
                 } else {

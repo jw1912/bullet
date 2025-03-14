@@ -1,5 +1,6 @@
 pub mod args;
 pub mod emit;
+pub mod fusion;
 pub mod node;
 pub mod op;
 
@@ -22,6 +23,7 @@ pub struct GraphIRNode {
     pub size: usize,
     pub requires_grad: bool,
     pub parent_operation: Option<GraphIROp>,
+    pub num_children: usize,
     pub own: AnnotatedNode,
 }
 
@@ -89,11 +91,15 @@ impl GraphIR {
             size: shape.size(),
             requires_grad,
             own: AnnotatedNode { idx: self.nodes.len(), shape, can_be_batched, sparse },
+            num_children: 0,
         };
 
         if let Some(op) = &node.parent_operation {
             for parent in &op.nodes() {
                 self.roots.remove(&parent.idx);
+                if let Some(ir_node) = self.nodes[parent.idx].as_mut() {
+                    ir_node.num_children += 1;
+                }
             }
         }
 
@@ -145,10 +151,12 @@ impl GraphIR {
         self.get(*self.roots.iter().next().unwrap()).unwrap().own
     }
 
-    pub fn compile<D: Device>(self, device: D, args: GraphIRCompileArgs) -> Result<Graph<D>, GraphIRError> {
+    pub fn compile<D: Device>(mut self, device: D, args: GraphIRCompileArgs) -> Result<Graph<D>, GraphIRError> {
         if args.emit_ir {
             print!("{self}");
         }
+
+        self.optimise(&args);
 
         if self.roots.len() != 1 {
             return Err(GraphIRError::Compilation(GraphIRCompileError::MoreThanOneRoot));
@@ -173,7 +181,7 @@ impl GraphIR {
 
         let mut nodes = Vec::new();
         for node_data in &self.nodes {
-            if let Some(GraphIRNode { id: _id, size, requires_grad, parent_operation, own }) = node_data.clone() {
+            if let Some(GraphIRNode { size, requires_grad, parent_operation, own, .. }) = node_data.clone() {
                 let tensor = Tensor::new(device.clone(), size, requires_grad, parent_operation, own);
                 let tensor = tensor.map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor));
 
@@ -192,31 +200,36 @@ impl GraphIR {
         Ok(Graph { nodes, root, inputs, weights, device, profile: Default::default() })
     }
 
-    pub fn optimise(&mut self) {
-        while self.try_fusion_pass() {}
+    pub fn optimise(&mut self, args: &GraphIRCompileArgs) {
+        let mut pass = 0;
+
+        if args.allow_fusion {
+            while self.optimisation_pass(fusion::fusion_pass) {
+                pass += 1;
+
+                if args.emit_ir {
+                    println!("Pass {pass}:");
+                    print!("{self}");
+                }
+            }
+
+            if args.emit_ir {
+                println!("Fusions: {pass}");
+            }
+        }
     }
 
-    fn try_fusion_pass(&mut self) -> bool {
+    fn optimisation_pass<F: FnMut(&mut Self, usize) -> bool>(&mut self, mut pass: F) -> bool {
         for node in (0..self.nodes.len()).rev() {
             if let Some(data) = self.get(node) {
-                let own = data.own.idx;
+                assert_eq!(data.own.idx, node);
 
-                if let Some((eliminated, new_data)) = self.search_for_fusion(own) {
-                    for dead in eliminated {
-                        self.nodes[dead] = None;
-                    }
-
-                    self.nodes[node] = Some(new_data);
-
+                if pass(self, node) {
                     return true;
                 }
             }
         }
 
         false
-    }
-
-    fn search_for_fusion(&self, _node: usize) -> Option<(Vec<usize>, GraphIRNode)> {
-        None
     }
 }

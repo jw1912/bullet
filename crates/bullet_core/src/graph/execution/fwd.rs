@@ -1,6 +1,6 @@
 use crate::{
     backend::device::{
-        base::{Activation, BaseOperations},
+        base::BaseOperations,
         blas::{BlasOperations, GemmConfig, Shape},
         Device, DeviceBuffer, OperationError,
     },
@@ -181,7 +181,7 @@ impl<D: Device> Graph<D> {
             Slice(input, start, end) => {
                 slice::slice_vector_batched(input.shape, get(*input).values.dense()?, *start, *end, output)
             }
-            SparseAffine(wn, inp, bn) => {
+            SparseAffineActivate(wn, inp, bn, act) => {
                 let i = get(*inp);
                 let w = get(*wn);
                 let w = w.values.dense()?;
@@ -189,27 +189,9 @@ impl<D: Device> Graph<D> {
                 if let Some(bn) = bn {
                     let b = get(*bn);
                     let b = Some((b.values.dense()?, bn.shape));
-                    sparse::affine_activate(
-                        None,
-                        Activation::Identity,
-                        w,
-                        wn.shape,
-                        i.values.sparse()?,
-                        inp.shape,
-                        b,
-                        output,
-                    )
+                    sparse::affine_activate(None, *act, w, wn.shape, i.values.sparse()?, inp.shape, b, output)
                 } else {
-                    sparse::affine_activate(
-                        None,
-                        Activation::Identity,
-                        w,
-                        wn.shape,
-                        i.values.sparse()?,
-                        inp.shape,
-                        None,
-                        output,
-                    )
+                    sparse::affine_activate(None, *act, w, wn.shape, i.values.sparse()?, inp.shape, None, output)
                 }
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {

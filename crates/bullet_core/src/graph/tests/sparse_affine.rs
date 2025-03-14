@@ -15,7 +15,7 @@ pub fn sparse_affine<D: Device>(device: D) -> Result<(), GraphError<D::DeviceErr
     let w = builder.add_weights("w", Shape::new(1, 3)).unwrap();
     let b = builder.add_weights("b", Shape::new(1, 1)).unwrap();
     let i = builder.add_sparse_input("i", Shape::new(3, 1), 2).unwrap();
-    let out = builder.add_op(GraphIROp::SparseAffine(w, i, Some(b)), true)?;
+    let out = builder.add_op(GraphIROp::SparseAffineActivate(w, i, Some(b), Activation::Identity), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
@@ -52,8 +52,8 @@ pub fn sparse_affine_batched_biases<D: Device>(device: D) -> Result<(), GraphErr
     let i = builder.add_sparse_input("i", Shape::new(3, 1), 2).unwrap();
     let bb = builder.add_sparse_input("bb", Shape::new(2, 1), 1).unwrap();
 
-    let b = builder.add_op(GraphIROp::SparseAffine(b, bb, None), true)?;
-    let out = builder.add_op(GraphIROp::SparseAffine(w, i, Some(b)), true)?;
+    let b = builder.add_op(GraphIROp::SparseAffineActivate(b, bb, None, Activation::Identity), true)?;
+    let out = builder.add_op(GraphIROp::SparseAffineActivate(w, i, Some(b), Activation::Identity), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 

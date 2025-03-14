@@ -2,17 +2,17 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    nn::{optimiser, Activation},
+    nn::{optimiser, Activation, GraphCompileArgs},
     trainer::{
         default::{inputs, loader, outputs, Loss, TrainerBuilder},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
-    NetworkTrainer,
 };
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
+        .set_compile_args(GraphCompileArgs::default().emit_ir().allow_fusion())
         .quantisations(&[181, 64])
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
@@ -23,7 +23,7 @@ fn main() {
         .add_layer(1)
         .build();
 
-    trainer.optimiser_mut().load_from_old_format_checkpoint("checkpoints/testnet/optimiser_state").unwrap();
+    trainer.load_from_checkpoint("checkpoints/testnet");
 
     let schedule = TrainingSchedule {
         net_id: "testnet".to_string(),
