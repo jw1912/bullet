@@ -1,15 +1,18 @@
 use crate::{
     backend::device::{blas::Shape, Device, OperationError},
-    graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
+    graph::{
+        ir::{op::GraphIROp, GraphIR},
+        GraphError,
+    },
 };
 
 pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    let mut builder = GraphBuilder::default();
-    let w1 = builder.create_weights("w1", Shape::new(1, 3)).unwrap();
-    let w2 = builder.create_weights("w2", Shape::new(3, 1)).unwrap();
-    let out = builder.create_result_of_operation(Operation::Matmul(w1, false, w2, false), true)?;
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out), true)?;
-    let mut graph = builder.build(device)?;
+    let mut builder = GraphIR::default();
+    let w1 = builder.add_weights("w1", Shape::new(1, 3)).unwrap();
+    let w2 = builder.add_weights("w2", Shape::new(3, 1)).unwrap();
+    let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false), true)?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
+    let mut graph = builder.compile(device)?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();
     graph.get_weights_mut("w2").load_dense_from_slice(Some(2), &[1.0, 2.0, 3.0, 1.0, 2.0, 3.0]).unwrap();
@@ -17,7 +20,7 @@ pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let err = graph.forward()?;
     assert_eq!(err, 26.0);
 
-    let output = graph.get_node(out).get_dense_vals().unwrap();
+    let output = graph.get_node(out.into()).get_dense_vals().unwrap();
     assert_eq!(&output, &[13.0, 13.0]);
 
     graph.backward()?;
@@ -34,15 +37,15 @@ pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
 }
 
 pub fn matmul2<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    let mut builder = GraphBuilder::default();
-    let w1 = builder.create_weights("w1", Shape::new(2, 2)).unwrap();
-    let w2 = builder.create_weights("w2", Shape::new(2, 2)).unwrap();
-    let dot = builder.create_dense_input("dot", Shape::new(1, 4)).unwrap();
-    let out = builder.create_result_of_operation(Operation::Matmul(w1, false, w2, false), true)?;
+    let mut builder = GraphIR::default();
+    let w1 = builder.add_weights("w1", Shape::new(2, 2)).unwrap();
+    let w2 = builder.add_weights("w2", Shape::new(2, 2)).unwrap();
+    let dot = builder.add_dense_input("dot", Shape::new(1, 4)).unwrap();
+    let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false), true)?;
     let a = out.reshape(Shape::new(4, 1)).unwrap();
-    let err = builder.create_result_of_operation(Operation::Matmul(dot, false, a, false), true)?;
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(err), true)?;
-    let mut graph = builder.build(device)?;
+    let err = builder.add_op(GraphIROp::Matmul(dot, false, a, false), true)?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(err), true)?;
+    let mut graph = builder.compile(device)?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0, 1.0]).unwrap();
     graph.get_weights_mut("w2").load_dense_from_slice(Some(2), &[1.0, 2.0, 3.0, 4.0, 1.0, 3.0, 2.0, 4.0]).unwrap();
@@ -51,7 +54,7 @@ pub fn matmul2<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let err = graph.forward()?;
     assert_eq!(err, 60.0);
 
-    let output = graph.get_node(out).get_dense_vals().unwrap();
+    let output = graph.get_node(out.into()).get_dense_vals().unwrap();
     assert_eq!(&output, &[3.0, 6.0, 5.0, 16.0, 5.0, 7.0, 6.0, 12.0]);
 
     graph.backward()?;

@@ -1,10 +1,9 @@
 use crate::{
     default::{Layout, SavedFormat},
-    frontend::NetworkBuilder,
     logger,
     nn::{
         optimiser::{self, OptimiserType},
-        InitSettings,
+        InitSettings, NetworkBuilder,
     },
     trainer::save::QuantTarget,
     Activation, ExecutionContext, Shape,

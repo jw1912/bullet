@@ -1,21 +1,20 @@
 pub mod builder;
-mod bwd;
-pub mod error;
-mod fwd;
-pub mod operation;
+pub mod execution;
+pub mod ir;
 pub mod tests;
 
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Debug,
     sync::Arc,
     time::Instant,
 };
 
-use builder::Node;
+use ir::{node::AnnotatedNode, GraphIRError};
 
 use crate::backend::{
-    device::{Device, OperationError},
+    device::{blas::Shape, Device, OperationError},
     tensor::Tensor,
 };
 
@@ -28,6 +27,37 @@ pub struct Graph<D: Device> {
     profile: HashMap<Node, ProfileInformation>,
 }
 
+#[derive(Debug)]
+pub enum GraphError<T: Debug> {
+    Builder(GraphIRError),
+    Operation(OperationError<T>),
+    DeviceError(T),
+}
+
+impl<T: Debug> From<GraphIRError> for GraphError<T> {
+    fn from(value: GraphIRError) -> Self {
+        Self::Builder(value)
+    }
+}
+
+impl<T: Debug> From<OperationError<T>> for GraphError<T> {
+    fn from(value: OperationError<T>) -> Self {
+        Self::Operation(value)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Node {
+    idx: usize,
+    pub shape: Shape,
+}
+
+impl From<AnnotatedNode> for Node {
+    fn from(value: AnnotatedNode) -> Self {
+        Self { idx: value.idx, shape: value.shape }
+    }
+}
+
 #[derive(Clone, Default)]
 struct ProfileInformation {
     name: String,
@@ -38,7 +68,7 @@ struct ProfileInformation {
 }
 
 impl<D: Device> Graph<D> {
-    fn get_node_info(&self, idx: usize) -> Result<Node, OperationError<D::DeviceError>> {
+    fn get_node_info(&self, idx: usize) -> Result<AnnotatedNode, OperationError<D::DeviceError>> {
         if let Ok(node) = self.get(idx) {
             Ok(node.own)
         } else {
@@ -74,7 +104,7 @@ impl<D: Device> Graph<D> {
         for node in 0..self.nodes.len() {
             let node = self.get_node_info(node)?;
 
-            let t = if self.profile.contains_key(&node) {
+            let t = if self.profile.contains_key(&node.into()) {
                 self.device().synchronise()?;
                 Some(Instant::now())
             } else {
@@ -85,7 +115,7 @@ impl<D: Device> Graph<D> {
 
             if let Some(t) = t {
                 self.device().synchronise()?;
-                let prof = self.profile.get_mut(&node).unwrap();
+                let prof = self.profile.get_mut(&node.into()).unwrap();
                 prof.fwd_time += t.elapsed().as_micros();
                 prof.fwd_count += 1;
             }
@@ -100,7 +130,7 @@ impl<D: Device> Graph<D> {
         for node in (0..self.nodes.len()).rev() {
             let node = self.get_node_info(node)?;
 
-            let t = if self.profile.contains_key(&node) {
+            let t = if self.profile.contains_key(&node.into()) {
                 self.device().synchronise()?;
                 Some(Instant::now())
             } else {
@@ -111,7 +141,7 @@ impl<D: Device> Graph<D> {
 
             if let Some(t) = t {
                 self.device().synchronise()?;
-                let prof = self.profile.get_mut(&node).unwrap();
+                let prof = self.profile.get_mut(&node.into()).unwrap();
                 prof.bwd_time += t.elapsed().as_micros();
                 prof.bwd_count += 1;
             }
@@ -133,7 +163,7 @@ impl<D: Device> Graph<D> {
                     let id = format!("{:?}", *op);
                     let id = id.split_once('(').unwrap();
                     let name = format!("Node {: >2} = {}", node.idx, id.0);
-                    self.profile.insert(node, ProfileInformation { name, ..Default::default() });
+                    self.profile.insert(node.into(), ProfileInformation { name, ..Default::default() });
                 }
             }
         }
