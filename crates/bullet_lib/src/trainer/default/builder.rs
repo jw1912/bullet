@@ -310,10 +310,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
-        let apply = |x| if self.output_bucket_ft_biases {
-            l0.weights.matmul(x) + l0.bias.matmul(buckets.unwrap())
-        } else {
-            l0.forward(x)
+        let apply = |x| {
+            if self.output_bucket_ft_biases {
+                l0.weights.matmul(x) + l0.bias.matmul(buckets.unwrap())
+            } else {
+                l0.forward(x)
+            }
         };
 
         out = apply(out);
