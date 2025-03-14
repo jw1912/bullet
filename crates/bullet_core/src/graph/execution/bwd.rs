@@ -1,6 +1,6 @@
 use crate::{
     backend::device::{
-        base::{Activation, BaseOperations},
+        base::BaseOperations,
         blas::{BlasOperations, GemmConfig, Shape},
         Device, DeviceBuffer, OperationError,
     },
@@ -274,7 +274,7 @@ impl<D: Device> Graph<D> {
                     )?;
                 }
             }
-            SparseAffine(wn, inp, bn) => {
+            SparseAffineActivate(wn, inp, bn, act) => {
                 let i = &mut *get(*inp);
                 let w = &mut *get(*wn);
                 let o = output_tensor.values.dense()?;
@@ -287,7 +287,7 @@ impl<D: Device> Graph<D> {
                     let ones = &internal.get("ones").unwrap().borrow().buf;
                     sparse::backprop_affine_activate(
                         None,
-                        Activation::Identity,
+                        *act,
                         w,
                         wn.shape,
                         i,
@@ -297,17 +297,7 @@ impl<D: Device> Graph<D> {
                         output_grad,
                     )?;
                 } else {
-                    sparse::backprop_affine_activate(
-                        None,
-                        Activation::Identity,
-                        w,
-                        wn.shape,
-                        i,
-                        inp.shape,
-                        &mut None,
-                        o,
-                        output_grad,
-                    )?;
+                    sparse::backprop_affine_activate(None, *act, w, wn.shape, i, inp.shape, &mut None, o, output_grad)?;
                 }
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {

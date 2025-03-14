@@ -80,7 +80,6 @@ impl GraphBuilder {
     pub fn build<D: Device>(self, device: D) -> Graph<D> {
         let mut builder = self.graph_builder.into_inner().unwrap();
         builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root()), true).unwrap();
-        builder.optimise();
         let mut graph = builder.compile(device, self.args).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
@@ -149,7 +148,7 @@ impl GraphBuilderNode<'_> {
 
     pub fn matmul(self, rhs: Self) -> Self {
         if rhs.node.is_sparse() {
-            self.builder.apply(GraphIROp::SparseAffine(self.node, rhs.node, None))
+            self.builder.apply(GraphIROp::SparseAffineActivate(self.node, rhs.node, None, Activation::Identity))
         } else {
             self.builder.apply(GraphIROp::Matmul(self.node, false, rhs.node, false))
         }
@@ -210,7 +209,12 @@ pub struct Affine {
 impl Affine {
     pub fn forward(self, input: GraphBuilderNode<'_>) -> GraphBuilderNode<'_> {
         if input.node.is_sparse() {
-            input.builder.apply(GraphIROp::SparseAffine(self.weights, input.node, Some(self.bias)))
+            input.builder.apply(GraphIROp::SparseAffineActivate(
+                self.weights,
+                input.node,
+                Some(self.bias),
+                Activation::Identity,
+            ))
         } else {
             input.builder.apply(GraphIROp::Affine(self.weights, input.node, self.bias))
         }
@@ -232,7 +236,8 @@ impl Affine {
         buckets: GraphBuilderNode<'a>,
         activation: Activation,
     ) -> GraphBuilderNode<'a> {
-        let biases = stm.builder.apply(GraphIROp::SparseAffine(self.bias, buckets.node, None));
+        let biases =
+            stm.builder.apply(GraphIROp::SparseAffineActivate(self.bias, buckets.node, None, Activation::Identity));
         stm.builder.apply(GraphIROp::SparseAffineDualActivate(
             self.weights,
             stm.node,

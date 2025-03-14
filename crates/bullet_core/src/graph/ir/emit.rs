@@ -43,12 +43,9 @@ fn op_name_only(node: &GraphIRNode, shapes: &mut HashMap<usize, Shape>) -> Strin
             ReduceAcrossBatch(node) => format!("ReduceAcrossBatch({})", id(node)),
             Select(input, buckets) => format!("Select({}, {}", id(input), id(buckets)),
             Slice(input, a, b) => format!("Slice({}, {a}, {b})", id(input)),
-            SparseAffine(w, i, b) => {
-                if let Some(b) = b {
-                    format!("SparseAffine({}, {}, {})", id(w), id(i), id(b))
-                } else {
-                    format!("SparseAffine({}, {}, None)", id(w), id(i))
-                }
+            SparseAffineActivate(w, i, b, act) => {
+                let bias = if let Some(b) = b { id(b) } else { "None".to_string() };
+                format!("SparseAffineActivate({}, {}, {bias}, {act:?})", id(w), id(i))
             }
             ToDense(node) => format!("ToDense({})", id(node)),
             SparseAffineDualActivate(w, s, n, b, act) => {

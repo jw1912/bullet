@@ -102,22 +102,26 @@ impl<D: Device> Graph<D> {
 
     pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
         for node in 0..self.nodes.len() {
-            let node = self.get_node_info(node)?;
+            match self.get_node_info(node) {
+                Ok(node) => {
+                    let t = if self.profile.contains_key(&node.into()) {
+                        self.device().synchronise()?;
+                        Some(Instant::now())
+                    } else {
+                        None
+                    };
 
-            let t = if self.profile.contains_key(&node.into()) {
-                self.device().synchronise()?;
-                Some(Instant::now())
-            } else {
-                None
-            };
+                    self.forward_node(node)?;
 
-            self.forward_node(node)?;
-
-            if let Some(t) = t {
-                self.device().synchronise()?;
-                let prof = self.profile.get_mut(&node.into()).unwrap();
-                prof.fwd_time += t.elapsed().as_micros();
-                prof.fwd_count += 1;
+                    if let Some(t) = t {
+                        self.device().synchronise()?;
+                        let prof = self.profile.get_mut(&node.into()).unwrap();
+                        prof.fwd_time += t.elapsed().as_micros();
+                        prof.fwd_count += 1;
+                    }
+                }
+                Err(OperationError::TensorOptimisedOut) => {}
+                Err(x) => return Err(x),
             }
         }
 
@@ -128,22 +132,26 @@ impl<D: Device> Graph<D> {
         self.get_mut(self.root)?.set_grad_to_unit()?;
 
         for node in (0..self.nodes.len()).rev() {
-            let node = self.get_node_info(node)?;
+            match self.get_node_info(node) {
+                Ok(node) => {
+                    let t = if self.profile.contains_key(&node.into()) {
+                        self.device().synchronise()?;
+                        Some(Instant::now())
+                    } else {
+                        None
+                    };
 
-            let t = if self.profile.contains_key(&node.into()) {
-                self.device().synchronise()?;
-                Some(Instant::now())
-            } else {
-                None
-            };
+                    self.backward_node(node)?;
 
-            self.backward_node(node)?;
-
-            if let Some(t) = t {
-                self.device().synchronise()?;
-                let prof = self.profile.get_mut(&node.into()).unwrap();
-                prof.bwd_time += t.elapsed().as_micros();
-                prof.bwd_count += 1;
+                    if let Some(t) = t {
+                        self.device().synchronise()?;
+                        let prof = self.profile.get_mut(&node.into()).unwrap();
+                        prof.bwd_time += t.elapsed().as_micros();
+                        prof.bwd_count += 1;
+                    }
+                }
+                Err(OperationError::TensorOptimisedOut) => {}
+                Err(x) => return Err(x),
             }
         }
 

@@ -3,7 +3,7 @@ use crate::{
     logger,
     nn::{
         optimiser::{self, OptimiserType},
-        InitSettings, NetworkBuilder,
+        GraphCompileArgs, InitSettings, NetworkBuilder,
     },
     trainer::save::QuantTarget,
     Activation, ExecutionContext, Shape,
@@ -52,6 +52,7 @@ pub struct TrainerBuilder<T, U = outputs::Single, O = optimiser::AdamW> {
     ft_init_input_size: Option<usize>,
     output_bucket_ft_biases: bool,
     profile_ft: bool,
+    compile_args: GraphCompileArgs,
 }
 
 impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType> Default for TrainerBuilder<T, U, O> {
@@ -70,6 +71,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             ft_init_input_size: None,
             output_bucket_ft_biases: false,
             profile_ft: false,
+            compile_args: GraphCompileArgs::default(),
         }
     }
 }
@@ -220,6 +222,11 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         self
     }
 
+    pub fn set_compile_args(mut self, args: GraphCompileArgs) -> Self {
+        self.compile_args = args;
+        self
+    }
+
     fn push_saved_format(&self, layer: usize, shape: Shape, saved_format: &mut Vec<SavedFormat>, net_quant: &mut i16) {
         let w = format!("l{layer}w");
         let b = format!("l{layer}b");
@@ -257,7 +264,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U> {
-        let builder = NetworkBuilder::default();
+        let mut builder = NetworkBuilder::default();
 
         let output_buckets = U::BUCKETS > 1;
 
@@ -303,31 +310,22 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
-        let skip = if self.perspective {
-            let (skip, activation) = if let OpType::Activate(act) = self.nodes[0].op {
-                (1, act)
-            } else {
-                warning(|| {
-                    println!("Feature transformer is not followed");
-                    println!("   by an activation function,");
-                    println!("  which is probably erreonous");
-                });
-                (0, Activation::Identity)
-            };
-
+        if self.perspective {
             let ntm = builder.new_sparse_input("nstm", input_shape, input_getter.max_active());
 
             if self.output_bucket_ft_biases {
-                out = l0.forward_sparse_dual_with_activation_and_bias_buckets(out, ntm, buckets.unwrap(), activation);
+                out = l0.forward_sparse_dual_with_activation_and_bias_buckets(
+                    out,
+                    ntm,
+                    buckets.unwrap(),
+                    Activation::Identity,
+                );
             } else {
-                out = l0.forward_sparse_dual_with_activation(out, ntm, activation);
+                out = l0.forward_sparse_dual_with_activation(out, ntm, Activation::Identity);
             }
-
-            skip
         } else {
             out = l0.forward(out);
-            0
-        };
+        }
 
         let profile_node = self.profile_ft.then(|| out.node());
 
@@ -335,7 +333,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let mut layer_sizes = Vec::new();
         let mut prev_size = self.ft_out_size * if self.perspective { 2 } else { 1 };
 
-        for &NodeType { size, op } in self.nodes.iter().skip(skip) {
+        for &NodeType { size, op } in self.nodes.iter() {
             match op {
                 OpType::Activate(activation) => out = out.activate(activation),
                 OpType::ActivateDual => {
@@ -368,6 +366,8 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
                         out = out.pairwise_mul();
                     }
 
+                    still_in_ft = false;
+
                     prev_size /= 2;
                 }
             }
@@ -391,6 +391,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         #[allow(clippy::default_constructed_unit_structs)]
         let ctx = ExecutionContext::default();
+        builder.set_compile_args(self.compile_args);
         let mut graph = builder.build(ctx);
 
         if let Some(size) = self.ft_init_input_size {
