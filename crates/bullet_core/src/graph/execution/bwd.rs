@@ -4,16 +4,19 @@ use crate::{
         blas::{BlasOperations, GemmConfig, Shape},
         Device, DeviceBuffer, OperationError,
     },
-    graph::{Graph, Node},
+    graph::{
+        ir::{node::AnnotatedNode, op::GraphIROp},
+        Graph,
+    },
 };
 
-use super::operation::{concat, linear_comb, matmul, setup_ones, slice, sparse, Operation};
+use super::{concat, linear_comb, matmul, setup_ones, slice, sparse};
 
 impl<D: Device> Graph<D> {
-    pub(crate) fn backward_node(&mut self, output_node: Node) -> Result<(), OperationError<D::DeviceError>> {
-        use Operation::*;
+    pub(crate) fn backward_node(&mut self, output_node: AnnotatedNode) -> Result<(), OperationError<D::DeviceError>> {
+        use GraphIROp::*;
 
-        let get = |node: Node| self.get_mut(node.idx).unwrap();
+        let get = |node: AnnotatedNode| self.get_mut(node.idx).unwrap();
 
         let output_tensor = &mut *self.get_mut(output_node.idx)?;
         let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };

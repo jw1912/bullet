@@ -1,17 +1,20 @@
 use crate::{
     backend::device::{blas::Shape, Device, OperationError},
-    graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
+    graph::{
+        ir::{op::GraphIROp, GraphIR},
+        GraphError,
+    },
 };
 
 pub fn concat<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    let mut builder = GraphBuilder::default();
-    let w1 = builder.create_weights("w1", Shape::new(3, 1)).unwrap();
-    let w2 = builder.create_weights("w2", Shape::new(1, 1)).unwrap();
-    let out = builder.create_result_of_operation(Operation::Concat(w1, w2), true)?;
-    let dot = builder.create_dense_input("dot", Shape::new(1, 4)).unwrap();
-    let out2 = builder.create_result_of_operation(Operation::Matmul(dot, false, out, false), true)?;
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out2), true)?;
-    let mut graph = builder.build(device)?;
+    let mut builder = GraphIR::default();
+    let w1 = builder.add_weights("w1", Shape::new(3, 1)).unwrap();
+    let w2 = builder.add_weights("w2", Shape::new(1, 1)).unwrap();
+    let out = builder.add_op(GraphIROp::Concat(w1, w2), true)?;
+    let dot = builder.add_dense_input("dot", Shape::new(1, 4)).unwrap();
+    let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false), true)?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out2), true)?;
+    let mut graph = builder.compile(device)?;
 
     graph
         .get_weights_mut("w1")

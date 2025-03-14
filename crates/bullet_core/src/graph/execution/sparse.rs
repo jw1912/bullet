@@ -1,12 +1,9 @@
-use crate::{
-    backend::{
-        device::{blas::Shape, Device, OperationError},
-        tensor::{DenseMatrix, SparseMatrix, Tensor},
-    },
-    graph::operation::linear_comb::backprop_add_single_scaled,
+use crate::backend::{
+    device::{blas::Shape, Device, OperationError},
+    tensor::{DenseMatrix, SparseMatrix, Tensor},
 };
 
-use super::Activation;
+use super::{linear_comb::backprop_add_single_scaled, Activation};
 
 #[allow(clippy::too_many_arguments)]
 pub fn affine_activate<D: Device>(

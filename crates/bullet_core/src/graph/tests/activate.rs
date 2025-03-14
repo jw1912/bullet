@@ -1,6 +1,9 @@
 use crate::{
     backend::device::{base::Activation, blas::Shape, Device, OperationError},
-    graph::{builder::GraphBuilder, error::GraphError, operation::Operation},
+    graph::{
+        ir::{op::GraphIROp, GraphIR},
+        GraphError,
+    },
 };
 
 pub fn relu<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
@@ -25,18 +28,18 @@ fn activate<D: Device>(
     fwd: [f32; 4],
     bwd: [f32; 4],
 ) -> Result<(), GraphError<D::DeviceError>> {
-    let mut builder = GraphBuilder::default();
-    let w = builder.create_weights("w", Shape::new(1, 1)).unwrap();
-    let out = builder.create_result_of_operation(Operation::Activate(w, activation), true).unwrap();
-    builder.create_result_of_operation(Operation::ReduceAcrossBatch(out), true).unwrap();
-    let mut graph = builder.build(device).unwrap();
+    let mut builder = GraphIR::default();
+    let w = builder.add_weights("w", Shape::new(1, 1)).unwrap();
+    let out = builder.add_op(GraphIROp::Activate(w, activation), true).unwrap();
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out), true).unwrap();
+    let mut graph = builder.compile(device).unwrap();
 
     graph.get_weights_mut("w").load_dense_from_slice(Some(4), &[-1.0, 0.5, 2.0, -2.0]).unwrap();
 
     let err = graph.forward().unwrap();
     assert_eq!(err, fwd.iter().sum());
 
-    let output = graph.get_node(out).get_dense_vals().unwrap();
+    let output = graph.get_node(out.into()).get_dense_vals().unwrap();
     assert_eq!(&output, &fwd);
 
     graph.backward().unwrap();

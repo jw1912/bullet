@@ -1,15 +1,12 @@
-use crate::{
-    backend::{
-        device::{
-            blas::{BlasOperations, GemmConfig, Shape},
-            Device, OperationError,
-        },
-        tensor::{DenseMatrix, Tensor},
+use crate::backend::{
+    device::{
+        blas::{BlasOperations, GemmConfig, Shape},
+        Device, OperationError,
     },
-    graph::operation::linear_comb,
+    tensor::{DenseMatrix, Tensor},
 };
 
-use super::linear_comb::backprop_add_single_scaled;
+use super::linear_comb::{add_assign_single_to_batched_scaled, backprop_add_single_scaled};
 
 #[allow(clippy::too_many_arguments)]
 pub fn affine<D: Device>(
@@ -30,7 +27,7 @@ pub fn affine<D: Device>(
     matmul(a, shape_a, false, b, shape_b, false, out)?;
 
     let bs = out.batch_size().unwrap_or(1);
-    linear_comb::add_assign_single_to_batched_scaled::<D>(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf)
+    add_assign_single_to_batched_scaled::<D>(c.single_size(), bs, ones, 1.0, &c.buf, &mut out.buf)
 }
 
 pub fn backprop_affine<D: Device>(
