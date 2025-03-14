@@ -1,7 +1,7 @@
 use crate::{
     backend::device::{blas::Shape, Device, OperationError},
     graph::{
-        ir::{op::GraphIROp, GraphIR},
+        ir::{args::GraphIRCompileArgs, op::GraphIROp, GraphIR},
         GraphError,
     },
 };
@@ -14,7 +14,7 @@ pub fn concat<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let dot = builder.add_dense_input("dot", Shape::new(1, 4)).unwrap();
     let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out2), true)?;
-    let mut graph = builder.compile(device)?;
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph
         .get_weights_mut("w1")

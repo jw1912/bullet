@@ -7,7 +7,7 @@ use std::{
 use crate::backend::device::{base::Activation, blas::Shape, Device};
 
 use super::{
-    ir::{node::AnnotatedNode, op::GraphIROp, GraphIR},
+    ir::{args::GraphIRCompileArgs, node::AnnotatedNode, op::GraphIROp, GraphIR},
     Graph, Node,
 };
 
@@ -22,6 +22,7 @@ pub enum InitSettings {
 pub struct GraphBuilder {
     graph_builder: Mutex<GraphIR>,
     init_data: Mutex<HashMap<String, InitSettings>>,
+    args: GraphIRCompileArgs,
 }
 
 impl GraphBuilder {
@@ -72,11 +73,15 @@ impl GraphBuilder {
         Affine { weights: weights.node, bias: bias.node }
     }
 
+    pub fn set_compile_args(&mut self, args: GraphIRCompileArgs) {
+        self.args = args;
+    }
+
     pub fn build<D: Device>(self, device: D) -> Graph<D> {
         let mut builder = self.graph_builder.into_inner().unwrap();
         builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root()), true).unwrap();
         builder.optimise();
-        let mut graph = builder.compile(device).unwrap();
+        let mut graph = builder.compile(device, self.args).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
             match *init_data {

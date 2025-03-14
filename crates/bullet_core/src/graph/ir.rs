@@ -1,8 +1,11 @@
+pub mod args;
+pub mod emit;
 pub mod node;
 pub mod op;
 
 use std::{cell::RefCell, collections::HashSet, num::NonZeroUsize, sync::Arc};
 
+use args::GraphIRCompileArgs;
 use node::AnnotatedNode;
 use op::{GraphIROp, GraphIROpError};
 
@@ -142,7 +145,11 @@ impl GraphIR {
         self.get(*self.roots.iter().next().unwrap()).unwrap().own
     }
 
-    pub fn compile<D: Device>(self, device: D) -> Result<Graph<D>, GraphIRError> {
+    pub fn compile<D: Device>(self, device: D, args: GraphIRCompileArgs) -> Result<Graph<D>, GraphIRError> {
+        if args.emit_ir {
+            print!("{self}");
+        }
+
         if self.roots.len() != 1 {
             return Err(GraphIRError::Compilation(GraphIRCompileError::MoreThanOneRoot));
         }

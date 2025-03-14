@@ -2,6 +2,7 @@ pub use bullet_core::{
     backend::device::{base::Activation, blas::Shape},
     graph::{
         builder::{Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings},
+        ir::args::GraphIRCompileArgs as GraphCompileArgs,
         Node,
     },
 };

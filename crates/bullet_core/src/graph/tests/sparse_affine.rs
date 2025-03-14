@@ -2,6 +2,7 @@ use crate::{
     backend::device::{base::Activation, blas::Shape, Device, OperationError},
     graph::{
         ir::{
+            args::GraphIRCompileArgs,
             op::{GraphIROp, GraphIROpError, GraphIROpErrorType},
             GraphIR, GraphIRError,
         },
@@ -16,7 +17,7 @@ pub fn sparse_affine<D: Device>(device: D) -> Result<(), GraphError<D::DeviceErr
     let i = builder.add_sparse_input("i", Shape::new(3, 1), 2).unwrap();
     let out = builder.add_op(GraphIROp::SparseAffine(w, i, Some(b)), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
-    let mut graph = builder.compile(device)?;
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();
     graph.get_weights_mut("b").load_dense_from_slice(None, &[1.0]).unwrap();
@@ -54,7 +55,7 @@ pub fn sparse_affine_batched_biases<D: Device>(device: D) -> Result<(), GraphErr
     let b = builder.add_op(GraphIROp::SparseAffine(b, bb, None), true)?;
     let out = builder.add_op(GraphIROp::SparseAffine(w, i, Some(b)), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
-    let mut graph = builder.compile(device)?;
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).expect("loading weights");
     graph.get_weights_mut("b").load_dense_from_slice(None, &[1.0, 2.0]).expect("loading weights");
@@ -93,7 +94,7 @@ pub fn sparse_affine_dual<D: Device>(device: D) -> Result<(), GraphError<D::Devi
     let out = builder.add_op(GraphIROp::SparseAffineDualActivate(w, i1, i2, b, Activation::Identity), true)?;
     let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false), true)?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out2), true)?;
-    let mut graph = builder.compile(device)?;
+    let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();
     graph.get_weights_mut("b").load_dense_from_slice(None, &[1.0]).unwrap();
