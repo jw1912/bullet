@@ -17,7 +17,7 @@ fn main() {
     let outw = builder.new_weights("outw", Shape::new(1, 2), InitSettings::Zeroed);
     let _ = outw.matmul(out);
 
-    let args = GraphCompileArgs::default().emit_ir().allow_fusion();
+    let args = GraphCompileArgs::default().emit_ir();
 
     builder.set_compile_args(args);
     let graph = builder.build(CpuThread);
