@@ -450,14 +450,17 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             println!("Factoriser             : Will be merged in quantised network for you");
         }
 
+        println!("Input Layer Layout     : [[T; feature transformer size]; number of inputs]");
+
+        print!("Output Layer Layout    : ");
         if output_buckets {
             if self.allow_transpose {
-                println!("Output Buckets         : Will be transposed in quantised network for you, output bucketed layers will");
-                println!("                       : have weights in form [[[T; layer input size]; layer output size]; buckets]")
+                println!("[[[T; layer input size]; layer output size]; output buckets]");
             } else {
-                println!("Output Buckets         : Will **not** be transposed in quantised network for you, output bucketed layers will");
-                println!("                       : have weights in form [[[T; layer output size]; buckets]; layer input size]")
+                println!("[[[T; layer output size]; output buckets]; layer input size]");
             }
+        } else {
+            println!("[[T; layer output size]; layer input size]");
         }
 
         if let Some(quantisations) = self.quantisations {
