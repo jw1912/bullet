@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
+        Activation, ExecutionContext, Graph, GraphCompileArgs, InitSettings, NetworkBuilder, Node, Shape,
     },
     trainer::{
         default::{inputs, loader, outputs, Trainer},
@@ -70,7 +70,7 @@ fn main() {
 }
 
 fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: usize) -> (Graph, Node) {
-    let builder = NetworkBuilder::default();
+    let mut builder = NetworkBuilder::default();
 
     // inputs
     let stm = builder.new_sparse_input("stm", Shape::new(num_inputs, 1), max_active);
@@ -86,7 +86,9 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
     let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
     // inference
-    let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::CReLU);
+    let stm_subnet = l0.forward(stm).activate(Activation::CReLU);
+    let ntm_subnet = l0.forward(nstm).activate(Activation::CReLU);
+    let mut out = stm_subnet.concat(ntm_subnet);
 
     out = out.pairwise_mul_post_affine_dual();
     out = l1.forward(out).select(buckets);
@@ -108,5 +110,6 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
 
     // graph, output node
     let output_node = out.node();
+    builder.set_compile_args(GraphCompileArgs::default().emit_ir().allow_fusion());
     (builder.build(ExecutionContext::default()), output_node)
 }

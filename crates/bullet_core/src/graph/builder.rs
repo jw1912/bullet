@@ -70,7 +70,7 @@ impl GraphBuilder {
         let weights = self.new_weights(&wid, Shape::new(output_size, input_size), init);
         let bias = self.new_weights(&format!("{}b", id), Shape::new(output_size, bias_cols), InitSettings::Zeroed);
 
-        Affine { weights: weights.node, bias: bias.node }
+        Affine { weights, bias }
     }
 
     pub fn set_compile_args(&mut self, args: GraphIRCompileArgs) {
@@ -201,49 +201,31 @@ impl GraphBuilderNode<'_> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Affine {
-    pub weights: AnnotatedNode,
-    pub bias: AnnotatedNode,
+pub struct Affine<'a> {
+    pub weights: GraphBuilderNode<'a>,
+    pub bias: GraphBuilderNode<'a>,
 }
 
-impl Affine {
-    pub fn forward(self, input: GraphBuilderNode<'_>) -> GraphBuilderNode<'_> {
-        if input.node.is_sparse() {
-            input.builder.apply(GraphIROp::SparseAffineActivate(
-                self.weights,
-                input.node,
-                Some(self.bias),
-                Activation::Identity,
-            ))
-        } else {
-            input.builder.apply(GraphIROp::Affine(self.weights, input.node, self.bias))
-        }
+impl<'a> Affine<'a> {
+    pub fn forward(self, input: GraphBuilderNode<'a>) -> GraphBuilderNode<'a> {
+        //if input.node.is_sparse() {
+        //input.builder.apply(GraphIROp::SparseAffineActivate(
+        //    self.weights,
+        //    input.node,
+        //    Some(self.bias),
+        //    Activation::Identity,
+        //))
+        //} else {
+        self.weights.matmul(input) + self.bias
+        //}
     }
 
-    pub fn forward_sparse_dual_with_activation<'a>(
+    pub fn forward_sparse_dual_with_activation(
         self,
         stm: GraphBuilderNode<'a>,
         ntm: GraphBuilderNode<'a>,
         activation: Activation,
     ) -> GraphBuilderNode<'a> {
-        stm.builder.apply(GraphIROp::SparseAffineDualActivate(self.weights, stm.node, ntm.node, self.bias, activation))
-    }
-
-    pub fn forward_sparse_dual_with_activation_and_bias_buckets<'a>(
-        self,
-        stm: GraphBuilderNode<'a>,
-        ntm: GraphBuilderNode<'a>,
-        buckets: GraphBuilderNode<'a>,
-        activation: Activation,
-    ) -> GraphBuilderNode<'a> {
-        let biases =
-            stm.builder.apply(GraphIROp::SparseAffineActivate(self.bias, buckets.node, None, Activation::Identity));
-        stm.builder.apply(GraphIROp::SparseAffineDualActivate(
-            self.weights,
-            stm.node,
-            ntm.node,
-            biases.node,
-            activation,
-        ))
+        self.forward(stm).concat(self.forward(ntm)).activate(activation)
     }
 }

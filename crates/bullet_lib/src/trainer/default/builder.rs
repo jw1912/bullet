@@ -306,25 +306,23 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             pst.matmul(out)
         });
 
-        self.push_saved_format(0, l0.weights.shape(), &mut saved_format, &mut net_quant);
+        self.push_saved_format(0, l0.weights.node().shape, &mut saved_format, &mut net_quant);
 
         assert!(self.nodes.len() > 1, "Require at least 2 nodes for a working arch!");
 
+        let apply = |x| {
+            if self.output_bucket_ft_biases {
+                l0.weights.matmul(x) + l0.bias.matmul(buckets.unwrap())
+            } else {
+                l0.forward(x)
+            }
+        };
+
+        out = apply(out);
+
         if self.perspective {
             let ntm = builder.new_sparse_input("nstm", input_shape, input_getter.max_active());
-
-            if self.output_bucket_ft_biases {
-                out = l0.forward_sparse_dual_with_activation_and_bias_buckets(
-                    out,
-                    ntm,
-                    buckets.unwrap(),
-                    Activation::Identity,
-                );
-            } else {
-                out = l0.forward_sparse_dual_with_activation(out, ntm, Activation::Identity);
-            }
-        } else {
-            out = l0.forward(out);
+            out = out.concat(apply(ntm));
         }
 
         let profile_node = self.profile_ft.then(|| out.node());
@@ -346,7 +344,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
                     let l = builder.new_affine(&format!("l{layer}"), prev_size, raw_size);
 
-                    self.push_saved_format(layer, l.weights.shape(), &mut saved_format, &mut net_quant);
+                    self.push_saved_format(layer, l.weights.node().shape, &mut saved_format, &mut net_quant);
 
                     layer += 1;
 

@@ -41,7 +41,7 @@ fn op_name_only(node: &GraphIRNode, shapes: &mut HashMap<usize, Shape>) -> Strin
             PairwiseMul(input, post_concat) => format!("PairwiseMul({}, {post_concat})", id(input)),
             PowerError(a, b, pow) => format!("PowerError({}, {}, {pow})", id(a), id(b)),
             ReduceAcrossBatch(node) => format!("ReduceAcrossBatch({})", id(node)),
-            Select(input, buckets) => format!("Select({}, {}", id(input), id(buckets)),
+            Select(input, buckets) => format!("Select({}, {})", id(input), id(buckets)),
             Slice(input, a, b) => format!("Slice({}, {a}, {b})", id(input)),
             SparseAffineActivate(w, i, b, act) => {
                 let bias = if let Some(b) = b { id(b) } else { "None".to_string() };

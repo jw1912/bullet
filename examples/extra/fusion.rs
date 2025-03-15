@@ -7,11 +7,15 @@ use bullet_lib::{
 fn main() {
     let mut builder = NetworkBuilder::default();
 
-    let input = builder.new_sparse_input("input", Shape::new(768, 1), 32);
+    let stm = builder.new_sparse_input("stm", Shape::new(768, 1), 32);
+    let ntm = builder.new_sparse_input("ntm", Shape::new(768, 1), 32);
     let weights = builder.new_weights("weights", Shape::new(1, 768), InitSettings::Zeroed);
     let bias = builder.new_weights("bias", Shape::new(1, 1), InitSettings::Zeroed);
-    let almost = weights.matmul(input) + bias;
-    let _ = almost.activate(Activation::SCReLU);
+    let stm = (weights.matmul(stm) + bias).activate(Activation::SCReLU);
+    let ntm = (weights.matmul(ntm) + bias).activate(Activation::SCReLU);
+    let out = stm.concat(ntm);
+    let outw = builder.new_weights("outw", Shape::new(1, 2), InitSettings::Zeroed);
+    let _ = outw.matmul(out);
 
     let args = GraphCompileArgs::default().emit_ir().allow_fusion();
 
