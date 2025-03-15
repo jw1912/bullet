@@ -208,16 +208,7 @@ pub struct Affine<'a> {
 
 impl<'a> Affine<'a> {
     pub fn forward(self, input: GraphBuilderNode<'a>) -> GraphBuilderNode<'a> {
-        //if input.node.is_sparse() {
-        //input.builder.apply(GraphIROp::SparseAffineActivate(
-        //    self.weights,
-        //    input.node,
-        //    Some(self.bias),
-        //    Activation::Identity,
-        //))
-        //} else {
         self.weights.matmul(input) + self.bias
-        //}
     }
 
     pub fn forward_sparse_dual_with_activation(
