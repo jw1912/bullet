@@ -15,8 +15,8 @@ impl GraphIRCompileArgs {
         self
     }
 
-    pub fn allow_fusion(mut self) -> Self {
-        self.allow_fusion = true;
+    pub fn disable_fusion(mut self) -> Self {
+        self.allow_fusion = false;
         self
     }
 }
