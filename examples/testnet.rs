@@ -12,7 +12,7 @@ use bullet_lib::{
 
 fn main() {
     let mut trainer = TrainerBuilder::default()
-        .set_compile_args(GraphCompileArgs::default().emit_ir().allow_fusion())
+        .set_compile_args(GraphCompileArgs::default().emit_ir())
         .quantisations(&[181, 64])
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
