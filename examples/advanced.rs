@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, GraphCompileArgs, InitSettings, NetworkBuilder, Node, Shape,
+        Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
     },
     trainer::{
         default::{inputs, loader, outputs, Trainer},
@@ -70,7 +70,7 @@ fn main() {
 }
 
 fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: usize) -> (Graph, Node) {
-    let mut builder = NetworkBuilder::default();
+    let builder = NetworkBuilder::default();
 
     // inputs
     let stm = builder.new_sparse_input("stm", Shape::new(num_inputs, 1), max_active);
@@ -110,6 +110,5 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
 
     // graph, output node
     let output_node = out.node();
-    builder.set_compile_args(GraphCompileArgs::default().emit_ir().allow_fusion());
     (builder.build(ExecutionContext::default()), output_node)
 }
