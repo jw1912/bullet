@@ -125,6 +125,8 @@ impl<D: Device> Graph<D> {
             }
         }
 
+        self.device.synchronise()?;
+        self.device.get_last_device_error()?;
         Ok(self.get(self.root)?.get_scalar().unwrap())
     }
 
@@ -155,6 +157,8 @@ impl<D: Device> Graph<D> {
             }
         }
 
+        self.device.synchronise()?;
+        self.device.get_last_device_error()?;
         Ok(())
     }
 
