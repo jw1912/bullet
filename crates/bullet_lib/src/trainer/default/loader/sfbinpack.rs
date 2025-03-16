@@ -132,13 +132,13 @@ where
 
                     for handle in handles {
                         if handle.join().unwrap() {
-                            reader_msg_sender.send(true).unwrap();
                             should_break = true;
                         }
                     }
                 });
 
                 if should_break {
+                    reader_msg_sender.send(true).unwrap();
                     break 'dataloading;
                 }
             }
