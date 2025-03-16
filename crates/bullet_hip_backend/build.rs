@@ -61,6 +61,7 @@ fn build_cuda(out_path: &Path) {
         .cuda(true)
         .cudart("shared")
         .debug(false)
+        .flag("-arch=native")
         .opt_level(3)
         .files(&[KERNELS])
         .out_dir(out_path)
