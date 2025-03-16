@@ -137,6 +137,10 @@ where
                         }
                     }
                 });
+                
+                if should_break {
+                    break 'dataloading;
+                }
             }
         });
 
