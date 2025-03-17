@@ -38,7 +38,7 @@ use super::{
     LocalSettings, NetworkTrainer, TrainingSchedule,
 };
 
-use crate::{nn::DeviceError, save, ExecutionContext};
+use crate::{nn::DeviceError, ExecutionContext};
 
 use bullet_core::{
     backend::device::OperationError,
@@ -239,7 +239,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
         let mut buf = Vec::new();
 
-        for SavedFormat { id, quant, layout } in &self.saved_format {
+        for SavedFormat { id, quant, layout, transforms } in &self.saved_format {
             let weights = self.optimiser.graph.get_weights(id);
             let weights = weights.values.dense().unwrap();
 
@@ -262,7 +262,11 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
             if let Layout::Transposed(shape) = layout {
                 assert_eq!(shape.size(), weights.size());
-                weight_buf = save::transpose(*shape, &weight_buf);
+                weight_buf = SavedFormat::transpose(*shape, &weight_buf);
+            }
+
+            for transform in transforms {
+                weight_buf = transform(&self.optimiser.graph, weight_buf);
             }
 
             let quantised = quant.quantise(&weight_buf)?;

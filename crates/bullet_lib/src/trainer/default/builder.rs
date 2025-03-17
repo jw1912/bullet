@@ -259,8 +259,8 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             (QuantTarget::Float, QuantTarget::Float)
         };
 
-        saved_format.push(SavedFormat { id: w, quant: wquant, layout });
-        saved_format.push(SavedFormat { id: b, quant: bquant, layout: Layout::Normal });
+        saved_format.push(SavedFormat::new(&w, wquant, layout));
+        saved_format.push(SavedFormat::new(&b, bquant, Layout::Normal));
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U> {
@@ -302,7 +302,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
         let pst = self.psqt_subnet.then(|| {
             let pst = builder.new_weights("pst", Shape::new(1, input_size), InitSettings::Zeroed);
-            saved_format.push(SavedFormat { id: "pst".to_string(), quant: QuantTarget::Float, layout: Layout::Normal });
+            saved_format.push(SavedFormat::new("pst", QuantTarget::Float, Layout::Normal));
             pst.matmul(out)
         });
 
