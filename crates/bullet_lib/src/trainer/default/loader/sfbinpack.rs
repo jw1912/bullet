@@ -38,7 +38,7 @@ fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
 
 #[derive(Clone)]
 pub struct SfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool> {
-    file_path: [String; 1],
+    file_paths: Vec<String>,
     buffer_size: usize,
     threads: usize,
     filter: T,
@@ -46,8 +46,12 @@ pub struct SfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool> {
 
 impl<T: Fn(&TrainingDataEntry) -> bool> SfBinpackLoader<T> {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: T) -> Self {
+        Self::new_concat_multiple(&[path], buffer_size_mb, threads, filter)
+    }
+
+    pub fn new_concat_multiple(paths: &[&str], buffer_size_mb: usize, threads: usize, filter: T) -> Self {
         Self {
-            file_path: [path.to_string(); 1],
+            file_paths: paths.iter().map(|x| x.to_string()).collect(),
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
             threads,
             filter,
@@ -60,7 +64,7 @@ where
     T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
 {
     fn data_file_paths(&self) -> &[String] {
-        &self.file_path
+        &self.file_paths
     }
 
     fn count_positions(&self) -> Option<u64> {
@@ -68,7 +72,7 @@ where
     }
 
     fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, batch_size: usize, mut f: F) {
-        let file_path = self.file_path[0].clone();
+        let file_paths = self.file_paths.clone();
         let buffer_size = self.buffer_size;
         let threads = self.threads;
         let filter = self.filter.clone();
@@ -81,17 +85,19 @@ where
             let mut buffer = Vec::with_capacity(reader_buffer_size);
 
             'dataloading: loop {
-                let mut reader = CompressedTrainingDataEntryReader::new(&file_path).unwrap();
+                for file in &file_paths {
+                    let mut reader = CompressedTrainingDataEntryReader::new(file).unwrap();
 
-                while reader.has_next() {
-                    buffer.push(reader.next());
-
-                    if buffer.len() == reader_buffer_size || !reader.has_next() {
-                        if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(buffer).is_err() {
-                            break 'dataloading;
+                    while reader.has_next() {
+                        buffer.push(reader.next());
+    
+                        if buffer.len() == reader_buffer_size || !reader.has_next() {
+                            if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(buffer).is_err() {
+                                break 'dataloading;
+                            }
+    
+                            buffer = Vec::with_capacity(reader_buffer_size);
                         }
-
-                        buffer = Vec::with_capacity(reader_buffer_size);
                     }
                 }
             }
