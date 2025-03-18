@@ -265,7 +265,14 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
                 weight_buf = save::transpose(*shape, &weight_buf);
             }
 
-            let quantised = quant.quantise(&weight_buf)?;
+            let quantised = match quant.quantise(&weight_buf) {
+                Ok(q) => q,
+                Err(err) => {
+                    println!("Quantisation failed for id: {}", id);
+                    return Err(err);
+                }
+            };
+
             buf.extend_from_slice(&quantised);
         }
 
