@@ -1,3 +1,4 @@
+mod adapter;
 mod ataxx147;
 mod chess768;
 mod chess_buckets;
@@ -9,6 +10,7 @@ mod legacy;
 
 use super::loader::LoadableDataType;
 
+pub use adapter::MarlinFormatAdapter;
 pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
 pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};

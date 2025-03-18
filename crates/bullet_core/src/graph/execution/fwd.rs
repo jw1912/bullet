@@ -151,6 +151,7 @@ impl<D: Device> Graph<D> {
                     input.batch_size().unwrap_or(1),
                     &input.buf,
                     &mut output.buf,
+                    false,
                 )
             }
             Select(input, buckets) => {

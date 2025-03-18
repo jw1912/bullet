@@ -101,7 +101,7 @@ pub fn backprop_add_single_scaled<D: Device>(
         (Some(_), Some(_)) | (None, None) => add_assign_scaled(alpha, output_grad, input_grad),
         (None, Some(x)) => {
             assert!(output_grad.batch_size().unwrap_or(1) <= ones.size());
-            reduce_add::<D>(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf)
+            reduce_add::<D>(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf, true)
         }
         (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
@@ -113,8 +113,10 @@ pub fn reduce_add<D: Device>(
     batch_size: usize,
     input: &D::BufferF32,
     output: &mut D::BufferF32,
+    onto: bool,
 ) -> OperationResult<D::DeviceError> {
-    let cfg = GemmConfig::new(1.0, 0.0, Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
+    let cfg =
+        GemmConfig::new(1.0, f32::from(onto), Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
     output.gemm(&cfg, input, ones)?;
     Ok(())
 }
