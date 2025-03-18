@@ -90,12 +90,12 @@ where
 
                     while reader.has_next() {
                         buffer.push(reader.next());
-    
+
                         if buffer.len() == reader_buffer_size || !reader.has_next() {
                             if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(buffer).is_err() {
                                 break 'dataloading;
                             }
-    
+
                             buffer = Vec::with_capacity(reader_buffer_size);
                         }
                     }
