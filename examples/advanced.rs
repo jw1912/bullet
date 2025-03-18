@@ -2,35 +2,31 @@ use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
         Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
-    },
-    trainer::{
-        default::{inputs, loader, outputs, Trainer},
+    }, trainer::{
+        default::{inputs::{self, SparseInputType}, loader, outputs, Trainer},
         save::{Layout, QuantTarget, SavedFormat},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
-    },
+    }
 };
 
 type InputFeatures = inputs::Chess768;
-type OutputBuckets = outputs::MaterialCount<8>;
 const HL_SIZE: usize = 512;
+const OUTPUT_BUCKETS: usize = 8;
 
 fn main() {
     let inputs = InputFeatures::default();
-    let output_buckets = OutputBuckets::default();
+    let num_inputs = inputs.num_inputs();
+    let max_active = inputs.max_active();
 
-    let num_inputs = <InputFeatures as inputs::SparseInputType>::num_inputs(&inputs);
-    let max_active = <InputFeatures as inputs::SparseInputType>::max_active(&inputs);
-    let num_buckets = <OutputBuckets as outputs::OutputBuckets<_>>::BUCKETS;
-
-    let (graph, output_node) = build_network(num_inputs, max_active, num_buckets, HL_SIZE);
+    let (graph, output_node) = build_network(num_inputs, max_active, OUTPUT_BUCKETS, HL_SIZE);
 
     let mut trainer = Trainer::<AdamWOptimiser, _, _>::new(
         graph,
         output_node,
         AdamWParams::default(),
         inputs,
-        output_buckets,
+        outputs::MaterialCount::<OUTPUT_BUCKETS>,
         vec![
             SavedFormat::new("pst", QuantTarget::I16(255), Layout::Normal),
             SavedFormat::new("l0w", QuantTarget::I16(255), Layout::Normal),
