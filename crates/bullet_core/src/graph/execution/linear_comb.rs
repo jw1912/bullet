@@ -115,7 +115,8 @@ pub fn reduce_add<D: Device>(
     output: &mut D::BufferF32,
     onto: bool,
 ) -> OperationResult<D::DeviceError> {
-    let cfg = GemmConfig::new(1.0, f32::from(onto), Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
+    let cfg =
+        GemmConfig::new(1.0, f32::from(onto), Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
     output.gemm(&cfg, input, ones)?;
     Ok(())
 }

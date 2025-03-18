@@ -2,12 +2,16 @@ use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
         Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
-    }, trainer::{
-        default::{inputs::{self, SparseInputType}, loader, outputs, Trainer},
+    },
+    trainer::{
+        default::{
+            inputs::{self, SparseInputType},
+            loader, outputs, Trainer,
+        },
         save::{Layout, QuantTarget, SavedFormat},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
-    }
+    },
 };
 
 type InputFeatures = inputs::Chess768;
