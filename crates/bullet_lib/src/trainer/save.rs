@@ -99,9 +99,10 @@ impl QuantTarget {
                     x.to_le_bytes().to_vec()
                 }
                 Self::I32(q) => {
-                    let x = (q as f32 * float) as i32;
+                    let qf = (f64::from(q) * f64::from(float)).trunc();
+                    let x = qf as i32;
 
-                    if (f64::from(float) * f64::from(q)).trunc() != f64::from(x) {
+                    if qf != f64::from(x) {
                         return Err(io::Error::new(io::ErrorKind::InvalidData, "Failed quantisation from f32 to i32!"));
                     }
 
