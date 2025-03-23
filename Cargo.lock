@@ -497,8 +497,8 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "viriformat"
-version = "0.1.0"
-source = "git+https://github.com/cosmobobak/viriformat.git?rev=ef1c383f7ecfce02477eec1dd378c4242e022bfd#ef1c383f7ecfce02477eec1dd378c4242e022bfd"
+version = "1.0.0"
+source = "git+https://github.com/cosmobobak/viriformat.git?rev=3e5f0d792fd869f179ce922bdbc4215bc9e1f9f7#3e5f0d792fd869f179ce922bdbc4215bc9e1f9f7"
 dependencies = [
  "anyhow",
  "arrayvec",
