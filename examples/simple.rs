@@ -65,7 +65,7 @@ fn main() {
                 && !entry.pos.is_checked(entry.pos.side_to_move())
                 && entry.score.unsigned_abs() <= 10000
                 && entry.mv.mtype() == MoveType::Normal
-                && entry.pos.piece_at(entry.mv.to).piece_type() == PieceType::None
+                && entry.pos.piece_at(entry.mv.to()).piece_type() == PieceType::None
         }
 
         loader::SfBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
