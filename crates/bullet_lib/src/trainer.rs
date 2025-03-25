@@ -1,4 +1,3 @@
-pub mod default;
 pub mod logger;
 mod preparer;
 pub mod save;
@@ -11,6 +10,7 @@ use save::SavedFormat;
 use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 use settings::LocalSettings;
 
+pub use crate::default;
 use crate::ExecutionContext;
 
 use std::{

@@ -1,11 +1,10 @@
 use crate::{
     default::{Layout, SavedFormat},
-    logger,
     nn::{
         optimiser::{self, OptimiserType},
         GraphCompileArgs, InitSettings, NetworkBuilder,
     },
-    trainer::save::QuantTarget,
+    trainer::{logger, save::QuantTarget},
     Activation, ExecutionContext, Shape,
 };
 

@@ -1,5 +1,9 @@
-/// Contains the `NetworkTrainer` trait and associated structs for its use
-/// as well as the `default` impl of the trait for training value networks
+/// Default implementation of `NetworkTrainer`,
+/// for training value networks.
+pub mod default;
+
+/// Contains the `NetworkTrainer` trait and
+/// associated structs for its use
 pub mod trainer;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
@@ -8,10 +12,8 @@ pub use nn::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
-    default, logger, save,
     schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
     settings::LocalSettings,
-    DataPreparer, NetworkTrainer,
 };
 
 /// Re-export of `bullet_core`
