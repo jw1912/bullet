@@ -4,7 +4,6 @@
 /data
 /.idea
 /.vscode
-/venv
 /visualisation
 /data
 
@@ -12,5 +11,5 @@
 *.txt
 *.bin
 *.data
-
-!requirements.txt
+*.binpack
+*.network
