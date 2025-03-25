@@ -10,8 +10,8 @@ use save::SavedFormat;
 use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 use settings::LocalSettings;
 
-use crate::ExecutionContext;
 pub use crate::default;
+use crate::ExecutionContext;
 
 use std::{
     fs::File,
