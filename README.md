@@ -8,7 +8,7 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
 
 ### Crates
 
-- **`bullet_core`**
+- **bullet_core**
     - An ML framework that is generic over backends:
     - A network graph is constructed using `GraphBuilder`
     - This is then lowered to `GraphIR` and optimisation passes performed on it
@@ -16,11 +16,11 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
         - Upon which forwards and backwards passes, editing weights/inputs, etc, may be performed
         - A small set of (composable) optimisers are included that ingest a graph and provide update methods for it
     - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
-- **`bullet_hip_backend`**
+- **bullet_hip_backend**
     - Currently contains both the HIP (for AMD GPUs) and CUDA backends.
-- **`bullet_lib`**
+- **bullet_lib**
     - Provides a high-level wrapper around the above crates specifically for training networks to do with chess (and other games e.g. Ataxx) easily.
-- **`bullet-utils`**
+- **bullet-utils**
     - Various utilities mostly to do with handling data
 
 ### Usage for NNUE/Value Network Training
