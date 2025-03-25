@@ -16,7 +16,6 @@ pub mod formats {
     pub use sfbinpack;
 }
 
-pub use super::save::{Layout, QuantTarget, SavedFormat};
 pub use builder::{Loss, TrainerBuilder};
 
 use inputs::SparseInputType;
@@ -32,13 +31,17 @@ use std::{
     io::{self, Write},
 };
 
-use super::{
-    logger,
-    schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSteps},
-    LocalSettings, NetworkTrainer, TrainingSchedule,
+use crate::{
+    nn::DeviceError,
+    trainer::{
+        logger,
+        save::{Layout, QuantTarget, SavedFormat},
+        schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule, TrainingSteps},
+        settings::LocalSettings,
+        NetworkTrainer,
+    },
+    ExecutionContext,
 };
-
-use crate::{nn::DeviceError, ExecutionContext};
 
 use bullet_core::{
     backend::device::OperationError,

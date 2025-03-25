@@ -7,10 +7,10 @@ type F = fn(&Graph, Vec<f32>) -> Vec<f32>;
 
 #[derive(Clone)]
 pub struct SavedFormat {
-    pub(super) id: String,
-    pub(super) quant: QuantTarget,
-    pub(super) layout: Layout,
-    pub(super) transforms: Vec<F>,
+    pub(crate) id: String,
+    pub(crate) quant: QuantTarget,
+    pub(crate) layout: Layout,
+    pub(crate) transforms: Vec<F>,
 }
 
 impl SavedFormat {

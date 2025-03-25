@@ -1,4 +1,3 @@
-pub mod default;
 pub mod logger;
 mod preparer;
 pub mod save;
