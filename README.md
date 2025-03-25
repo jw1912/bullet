@@ -8,21 +8,20 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
 
 ### Crates
 
-The main crate is `bullet_core`, which is an ML framework that is generic over backends:
-- A network graph is constructed using `GraphBuilder`
-- This is then lowered to `GraphIR` and optimisation passes performed on it
-- The `GraphIR` is then compiled into a `Graph<D: Device>`, for a specific backend device
-    - Upon which forwards and backwards passes, editing weights/inputs, etc, may be performed
-    - A small set of (composable) optimisers are included that ingest a graph and provide update methods for it
-- A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
-
-Backend Crates:
-- These implement specific backends
-- `bullet_hip_backend` currently contains both the HIP/ROCm and CUDA backends
-- `bullet_cuda_backend` is an incomplete CUDA backend rewrite waiting on ongoing refactors in the `cudarc` crate
-
-The crate `bullet_lib` provides a high-level wrapper around these crates specifically for training networks to do with chess (and other games e.g. Ataxx) easily. 
-There are also various misc utilities mostly to do with handling chess data in `bullet-utils`.
+- **bullet_core**
+    - An ML framework that is generic over backends:
+    - A network graph is constructed using `GraphBuilder`
+    - This is then lowered to `GraphIR` and optimisation passes performed on it
+    - The `GraphIR` is then compiled into a `Graph<D: Device>`, for a specific backend device
+        - Upon which forwards and backwards passes, editing weights/inputs, etc, may be performed
+        - A small set of (composable) optimisers are included that ingest a graph and provide update methods for it
+    - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
+- **bullet_hip_backend**
+    - Currently contains both the HIP (for AMD GPUs) and CUDA backends. Enable the `hip` feature to use the HIP backend.
+- **bullet_lib**
+    - Provides a high-level wrapper around the above crates specifically for training networks to do with chess (and other games e.g. Ataxx) easily.
+- **bullet-utils**
+    - Various utilities mostly to do with handling data
 
 ### Usage for NNUE/Value Network Training
 
