@@ -17,7 +17,7 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
         - A small set of (composable) optimisers are included that ingest a graph and provide update methods for it
     - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
 - **bullet_hip_backend**
-    - Currently contains both the HIP (for AMD GPUs) and CUDA backends.
+    - Currently contains both the HIP (for AMD GPUs) and CUDA backends. Enable the `hip` feature to use the HIP backend.
 - **bullet_lib**
     - Provides a high-level wrapper around the above crates specifically for training networks to do with chess (and other games e.g. Ataxx) easily.
 - **bullet-utils**
