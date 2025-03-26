@@ -19,8 +19,16 @@ pub enum GraphIROp {
     Select(AnnotatedNode, AnnotatedNode),
     Slice(AnnotatedNode, usize, usize),
     ToDense(AnnotatedNode),
+    Unary(AnnotatedNode, UnaryOp),
     MaskedSoftmaxCrossEntropyLoss(AnnotatedNode, AnnotatedNode, AnnotatedNode),
     SoftmaxCrossEntropyLoss(AnnotatedNode, AnnotatedNode),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UnaryOp {
+    Add(f32),
+    Mul(f32),
+    AbsPow(f32),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -203,6 +211,10 @@ impl GraphIROp {
                 check_dense_eq(node, false)?;
                 Ok(node.shape)
             }
+            Unary(node, _) => {
+                check_dense_eq(node, true)?;
+                Ok(node.shape)
+            }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 check_dense_eq(input, true)?;
                 check_dense_eq(target, true)?;
@@ -245,6 +257,7 @@ impl GraphIROp {
                 }
             }
             ToDense(node) => vec![node],
+            Unary(node, _) => vec![node],
             SparseAffineDualActivate(w, s, n, b, _) => vec![w, s, n, b],
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => vec![mask, input, target],
             SoftmaxCrossEntropyLoss(a, b) => vec![a, b],

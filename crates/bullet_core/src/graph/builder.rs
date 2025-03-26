@@ -1,13 +1,18 @@
 use std::{
     collections::HashMap,
-    ops::{Add, Sub},
+    ops::{Add, Div, Mul, Sub},
     sync::{Mutex, MutexGuard},
 };
 
 use crate::backend::device::{base::Activation, blas::Shape, Device};
 
 use super::{
-    ir::{args::GraphIRCompileArgs, node::AnnotatedNode, op::GraphIROp, GraphIR},
+    ir::{
+        args::GraphIRCompileArgs,
+        node::AnnotatedNode,
+        op::{GraphIROp, UnaryOp},
+        GraphIR,
+    },
     Graph, Node,
 };
 
@@ -120,6 +125,62 @@ impl Sub<Self> for GraphBuilderNode<'_> {
     }
 }
 
+impl<'a> Add<GraphBuilderNode<'a>> for f32 {
+    type Output = GraphBuilderNode<'a>;
+
+    fn add(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+        rhs.builder.apply(GraphIROp::Unary(rhs.node, UnaryOp::Add(self)))
+    }
+}
+
+impl Add<f32> for GraphBuilderNode<'_> {
+    type Output = Self;
+
+    fn add(self, rhs: f32) -> Self::Output {
+        rhs + self
+    }
+}
+
+impl<'a> Sub<GraphBuilderNode<'a>> for f32 {
+    type Output = GraphBuilderNode<'a>;
+
+    fn sub(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+        self + (-1.0 * rhs)
+    }
+}
+
+impl Sub<f32> for GraphBuilderNode<'_> {
+    type Output = Self;
+
+    fn sub(self, rhs: f32) -> Self::Output {
+        self + (-rhs)
+    }
+}
+
+impl<'a> Mul<GraphBuilderNode<'a>> for f32 {
+    type Output = GraphBuilderNode<'a>;
+
+    fn mul(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+        rhs.builder.apply(GraphIROp::Unary(rhs.node, UnaryOp::Mul(self)))
+    }
+}
+
+impl Mul<f32> for GraphBuilderNode<'_> {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl Div<f32> for GraphBuilderNode<'_> {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        (1.0 / rhs) * self
+    }
+}
+
 impl GraphBuilderNode<'_> {
     pub fn node(self) -> Node {
         self.node.into()
@@ -172,6 +233,10 @@ impl GraphBuilderNode<'_> {
 
     pub fn pairwise_mul_post_affine_dual(self) -> Self {
         self.builder.apply(GraphIROp::PairwiseMul(self.node, true))
+    }
+
+    pub fn abs_pow(self, power: f32) -> Self {
+        self.builder.apply(GraphIROp::Unary(self.node, UnaryOp::AbsPow(power)))
     }
 
     pub fn mask(self, mask: Self) -> Self {

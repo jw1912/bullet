@@ -24,12 +24,13 @@ pub enum Loss {
     SoftmaxCrossEntropy,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 enum OpType {
     Activate(Activation),
     ActivateDual,
     Affine,
     PairwiseMul,
+    Scale(f32),
 }
 
 struct NodeType {
@@ -195,6 +196,12 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
         self.add(size, OpType::Activate(activation))
+    }
+
+    /// Multiply by `scale`
+    pub fn scale(self, scale: f32) -> Self {
+        let size = self.get_last_layer_size();
+        self.add(size, OpType::Scale(scale))
     }
 
     /// Adds SF-style dual activation
@@ -367,6 +374,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
 
                     prev_size /= 2;
                 }
+                OpType::Scale(x) => out = x * out,
             }
         }
 

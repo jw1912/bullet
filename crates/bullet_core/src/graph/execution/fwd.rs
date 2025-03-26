@@ -5,7 +5,10 @@ use crate::{
         Device, DeviceBuffer, OperationError,
     },
     graph::{
-        ir::{node::AnnotatedNode, op::GraphIROp},
+        ir::{
+            node::AnnotatedNode,
+            op::{GraphIROp, UnaryOp},
+        },
         Graph,
     },
 };
@@ -210,6 +213,22 @@ impl<D: Device> Graph<D> {
                 )
             }
             ToDense(node) => get(*node).values.sparse()?.copy_into_dense(output),
+            Unary(node, unary) => {
+                let vals = get(*node);
+                let vals = vals.values.dense()?;
+
+                assert_eq!(output.single_size(), vals.single_size());
+                output.set_batch_size(vals.batch_size())?;
+
+                match unary {
+                    UnaryOp::Add(_) => Err(OperationError::UnsupportedOperation),
+                    UnaryOp::Mul(x) => {
+                        output.buf.geam(vals.size(), *x, Some(&vals.buf), 0.0, None)?;
+                        Ok(())
+                    }
+                    UnaryOp::AbsPow(_) => Err(OperationError::UnsupportedOperation),
+                }
+            }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 let masks = get(*mask);
                 let inputs = get(*input);

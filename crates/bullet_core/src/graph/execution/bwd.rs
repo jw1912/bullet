@@ -5,7 +5,10 @@ use crate::{
         Device, DeviceBuffer, OperationError,
     },
     graph::{
-        ir::{node::AnnotatedNode, op::GraphIROp},
+        ir::{
+            node::AnnotatedNode,
+            op::{GraphIROp, UnaryOp},
+        },
         Graph,
     },
 };
@@ -322,6 +325,21 @@ impl<D: Device> Graph<D> {
                 )?;
             }
             ToDense(_) => return Err(OperationError::UnsupportedOperation),
+            Unary(node, unary) => {
+                let mut vals = get(*node);
+
+                if let Some(grd) = vals.gradients.as_mut() {
+                    grd.set_batch_size(output_grad.batch_size())?;
+
+                    match unary {
+                        UnaryOp::Add(_) => return Err(OperationError::UnsupportedOperation),
+                        UnaryOp::Mul(x) => {
+                            grd.buf.geam(output_grad.size(), 1.0, None, *x, Some(&output_grad.buf))?;
+                        }
+                        UnaryOp::AbsPow(_) => return Err(OperationError::UnsupportedOperation),
+                    }
+                }
+            }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 let masks = &*get(*mask);
                 let masks = masks.values.sparse()?;
