@@ -5,7 +5,10 @@ use crate::{
         Device, DeviceBuffer, OperationError,
     },
     graph::{
-        ir::{node::AnnotatedNode, op::{GraphIROp, UnaryOp}},
+        ir::{
+            node::AnnotatedNode,
+            op::{GraphIROp, UnaryOp},
+        },
         Graph,
     },
 };
@@ -332,7 +335,7 @@ impl<D: Device> Graph<D> {
                         UnaryOp::Add(_) => return Err(OperationError::UnsupportedOperation),
                         UnaryOp::Mul(x) => {
                             grd.buf.geam(output_grad.size(), 1.0, None, *x, Some(&output_grad.buf))?;
-                        },
+                        }
                         UnaryOp::AbsPow(_) => return Err(OperationError::UnsupportedOperation),
                     }
                 }

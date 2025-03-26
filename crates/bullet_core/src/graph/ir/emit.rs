@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt};
 
-use crate::{backend::device::blas::Shape, graph::ir::{node::AnnotatedNode, op::UnaryOp}};
+use crate::{
+    backend::device::blas::Shape,
+    graph::ir::{node::AnnotatedNode, op::UnaryOp},
+};
 
 use super::{GraphIR, GraphIRNode};
 
@@ -52,7 +55,7 @@ fn op_name_only(node: &GraphIRNode, shapes: &mut HashMap<usize, Shape>) -> Strin
                 UnaryOp::Add(x) => format!("Add({}, {x})", id(node)),
                 UnaryOp::Mul(x) => format!("Mul({}, {x})", id(node)),
                 UnaryOp::AbsPow(x) => format!("Pow({}, {x})", id(node)),
-            }
+            },
             SparseAffineDualActivate(w, s, n, b, act) => {
                 format!("SparseAffineDualActivate({}, {}, {}, {}, {act:?})", id(w), id(s), id(n), id(b))
             }

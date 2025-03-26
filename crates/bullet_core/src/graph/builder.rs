@@ -7,7 +7,12 @@ use std::{
 use crate::backend::device::{base::Activation, blas::Shape, Device};
 
 use super::{
-    ir::{args::GraphIRCompileArgs, node::AnnotatedNode, op::{GraphIROp, UnaryOp}, GraphIR},
+    ir::{
+        args::GraphIRCompileArgs,
+        node::AnnotatedNode,
+        op::{GraphIROp, UnaryOp},
+        GraphIR,
+    },
     Graph, Node,
 };
 
