@@ -32,17 +32,6 @@ impl<D: Device> Graph<D> {
         };
 
         match op {
-            Activate(node, act) => {
-                let input = &mut *get(*node);
-                if let Some(grad) = input.gradients.as_mut() {
-                    let input = input.values.dense()?;
-                    assert_eq!(outn.shape, node.shape);
-                    assert_eq!(output_grad.size(), input.size());
-                    assert_eq!(output_grad.batch_size(), input.batch_size());
-                    grad.set_batch_size(output_grad.batch_size())?;
-                    grad.buf.activate_bwd(input.size(), &input.buf, &output_grad.buf, *act)?;
-                }
-            }
             Affine(wn, inp, bn) => {
                 let i = &mut *get(*inp);
                 let w = &mut *get(*wn);
@@ -326,17 +315,24 @@ impl<D: Device> Graph<D> {
             }
             ToDense(_) => return Err(OperationError::UnsupportedOperation),
             Unary(node, unary) => {
-                let mut vals = get(*node);
+                let vals = &mut *get(*node);
 
                 if let Some(grd) = vals.gradients.as_mut() {
+                    let input = vals.values.dense()?;
+                    let size = output_grad.size();
+                    let out_grd = &output_grad.buf;
+                    assert_eq!(outn.shape, node.shape);
+                    assert_eq!(size, input.size());
+                    assert_eq!(output_grad.batch_size(), input.batch_size());
                     grd.set_batch_size(output_grad.batch_size())?;
 
                     match unary {
-                        UnaryOp::Add(_) => return Err(OperationError::UnsupportedOperation),
-                        UnaryOp::Mul(x) => {
-                            grd.buf.geam(output_grad.size(), 1.0, None, *x, Some(&output_grad.buf))?;
+                        UnaryOp::DiffableFromOutput(act) => {
+                            grd.buf.diffable_from_output_bwd(size, &input.buf, out_grd, *act)?
                         }
-                        UnaryOp::AbsPow(_) => return Err(OperationError::UnsupportedOperation),
+                        UnaryOp::Add(_) => grd.buf.geam(size, 1.0, None, 1.0, Some(out_grd))?,
+                        UnaryOp::Mul(x) => grd.buf.geam(size, 1.0, None, *x, Some(out_grd))?,
+                        UnaryOp::AbsPow(x) => grd.buf.abs_pow_scalar_backward(size, *x, &input.buf, out_grd)?,
                     }
                 }
             }

@@ -7,13 +7,13 @@ pub mod sparse;
 mod tests;
 
 pub use backend::ExecutionContext;
-use backend::{bindings, util, Buffer};
+use backend::{bindings, ops, util, Buffer};
 
 use bullet_core::backend::{
     device::{
-        base::{Activation, AdamConfig, BaseOperations},
+        base::{AdamConfig, BaseOperations, DiffableFromOutput},
         blas::{BlasOperations, GemmConfig, Shape},
-        Device, OperationError,
+        Device, DeviceBuffer, OperationError,
     },
     tensor,
 };
@@ -78,28 +78,79 @@ impl BlasOperations for Buffer<f32> {
 impl BaseOperations for Buffer<f32> {
     type BaseError = DeviceError;
 
-    fn activate_fwd(&mut self, size: usize, a: &Self, act: Activation) -> Result<(), Self::BaseError> {
+    fn diffable_from_output_fwd(
+        &mut self,
+        size: usize,
+        a: &Self,
+        act: DiffableFromOutput,
+    ) -> Result<(), Self::BaseError> {
         match act {
-            Activation::Identity => panic!("No-op!"),
-            Activation::ReLU => dense::relu(size, a, self),
-            Activation::CReLU => dense::crelu(size, a, self),
-            Activation::SCReLU => dense::screlu(size, a, self),
-            Activation::SqrReLU => dense::sqrrelu(size, a, self),
-            Activation::Sigmoid => dense::sigmoid(size, a, self),
-            Activation::Square => dense::square(size, a, self),
+            DiffableFromOutput::Identity => panic!("No-op!"),
+            DiffableFromOutput::ReLU => dense::relu(size, a, self),
+            DiffableFromOutput::CReLU => dense::crelu(size, a, self),
+            DiffableFromOutput::SCReLU => dense::screlu(size, a, self),
+            DiffableFromOutput::SqrReLU => dense::sqrrelu(size, a, self),
+            DiffableFromOutput::Sigmoid => dense::sigmoid(size, a, self),
         }
     }
 
-    fn activate_bwd(&mut self, size: usize, a: &Self, grd: &Self, act: Activation) -> Result<(), Self::BaseError> {
+    fn diffable_from_output_bwd(
+        &mut self,
+        size: usize,
+        a: &Self,
+        grd: &Self,
+        act: DiffableFromOutput,
+    ) -> Result<(), Self::BaseError> {
         match act {
-            Activation::Identity => panic!("No-op!"),
-            Activation::ReLU => dense::relu_backward(size, a, self, grd),
-            Activation::CReLU => dense::crelu_backward(size, a, self, grd),
-            Activation::SCReLU => dense::screlu_backward(size, a, self, grd),
-            Activation::SqrReLU => dense::sqrrelu_backward(size, a, self, grd),
-            Activation::Sigmoid => dense::sigmoid_backward(size, a, self, grd),
-            Activation::Square => dense::square_backward(size, a, self, grd),
+            DiffableFromOutput::Identity => panic!("No-op!"),
+            DiffableFromOutput::ReLU => dense::relu_backward(size, a, self, grd),
+            DiffableFromOutput::CReLU => dense::crelu_backward(size, a, self, grd),
+            DiffableFromOutput::SCReLU => dense::screlu_backward(size, a, self, grd),
+            DiffableFromOutput::SqrReLU => dense::sqrrelu_backward(size, a, self, grd),
+            DiffableFromOutput::Sigmoid => dense::sigmoid_backward(size, a, self, grd),
         }
+    }
+
+    fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
+        if size > input.size() || size > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::add_scalar(size, alpha, input.ptr(), self.mut_ptr());
+        }
+
+        Ok(())
+    }
+
+    fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
+        if size > input.size() || size > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::abs_pow_scalar(size, alpha, input.ptr(), self.mut_ptr());
+        }
+
+        Ok(())
+    }
+
+    fn abs_pow_scalar_backward(
+        &mut self,
+        size: usize,
+        alpha: f32,
+        input: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
+        if size > input.size() || size > grd.size() || size > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::abs_pow_scalar_backward(size, alpha, input.ptr(), grd.ptr(), self.mut_ptr());
+        }
+
+        Ok(())
     }
 
     fn copy_or_add_strided(
@@ -177,7 +228,7 @@ impl Device for ExecutionContext {
     fn backprop_sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
-        activation: Activation,
+        activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -211,7 +262,7 @@ impl Device for ExecutionContext {
     fn sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
-        activation: Activation,
+        activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,

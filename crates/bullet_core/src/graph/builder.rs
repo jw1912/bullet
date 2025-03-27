@@ -4,7 +4,8 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
-use crate::backend::device::{base::Activation, blas::Shape, Device};
+pub use crate::backend::device::blas::Shape;
+use crate::backend::device::{base::DiffableFromOutput, Device};
 
 use super::{
     ir::{
@@ -15,6 +16,17 @@ use super::{
     },
     Graph, Node,
 };
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Activation {
+    Identity,
+    ReLU,
+    CReLU,
+    SCReLU,
+    SqrReLU,
+    Sigmoid,
+    Square,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
@@ -191,8 +203,40 @@ impl GraphBuilderNode<'_> {
         self
     }
 
-    pub fn activate(self, activation: Activation) -> Self {
-        self.builder.apply(GraphIROp::Activate(self.node, activation))
+    pub fn relu(self) -> Self {
+        self.diffable_from_output(DiffableFromOutput::ReLU)
+    }
+
+    pub fn crelu(self) -> Self {
+        self.diffable_from_output(DiffableFromOutput::CReLU)
+    }
+
+    pub fn screlu(self) -> Self {
+        self.diffable_from_output(DiffableFromOutput::SCReLU)
+    }
+
+    pub fn sqrrelu(self) -> Self {
+        self.diffable_from_output(DiffableFromOutput::SqrReLU)
+    }
+
+    pub fn sigmoid(self) -> Self {
+        self.diffable_from_output(DiffableFromOutput::Sigmoid)
+    }
+
+    fn diffable_from_output(self, act: DiffableFromOutput) -> Self {
+        self.builder.apply(GraphIROp::Unary(self.node, UnaryOp::DiffableFromOutput(act)))
+    }
+
+    pub fn activate(self, act: Activation) -> Self {
+        match act {
+            Activation::Identity => self.diffable_from_output(DiffableFromOutput::Identity),
+            Activation::ReLU => self.relu(),
+            Activation::CReLU => self.crelu(),
+            Activation::SCReLU => self.screlu(),
+            Activation::Sigmoid => self.sigmoid(),
+            Activation::SqrReLU => self.sqrrelu(),
+            Activation::Square => self.abs_pow(2.0),
+        }
     }
 
     pub fn select(self, buckets: Self) -> Self {
@@ -209,7 +253,7 @@ impl GraphBuilderNode<'_> {
 
     pub fn matmul(self, rhs: Self) -> Self {
         if rhs.node.is_sparse() {
-            self.builder.apply(GraphIROp::SparseAffineActivate(self.node, rhs.node, None, Activation::Identity))
+            self.builder.apply(GraphIROp::SparseAffineActivate(self.node, rhs.node, None, DiffableFromOutput::Identity))
         } else {
             self.builder.apply(GraphIROp::Matmul(self.node, false, rhs.node, false))
         }
@@ -219,12 +263,22 @@ impl GraphBuilderNode<'_> {
         self.builder.apply(GraphIROp::Matmul(self.node, transa, rhs.node, transb))
     }
 
-    pub fn mpe(self, targets: Self, power: f32) -> Self {
-        self.builder.apply(GraphIROp::PowerError(self.node, targets.node, power))
+    pub fn power_error(self, targets: Self, power: f32) -> Self {
+        self.builder.apply(GraphIROp::Unary((self - targets).node, UnaryOp::AbsPow(power)))
     }
 
+    pub fn squared_error(self, targets: Self) -> Self {
+        self.power_error(targets, 2.0)
+    }
+
+    #[deprecated]
+    pub fn mpe(self, targets: Self, power: f32) -> Self {
+        self.power_error(targets, power)
+    }
+
+    #[deprecated]
     pub fn mse(self, targets: Self) -> Self {
-        self.mpe(targets, 2.0)
+        self.squared_error(targets)
     }
 
     pub fn pairwise_mul(self) -> Self {

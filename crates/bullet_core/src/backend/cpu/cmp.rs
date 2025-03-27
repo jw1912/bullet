@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::backend::{
     device::{
-        base::{Activation, AdamConfig, BaseOperations},
+        base::{AdamConfig, BaseOperations, DiffableFromOutput},
         blas::{BlasOperations, GemmConfig, Shape},
         Device, DeviceBuffer,
     },
@@ -56,17 +56,16 @@ impl CpuThread {
 
     pub fn compare_activate<D: Device>(device: Arc<D>) {
         for (size, act) in [
-            (1027, Activation::ReLU),
-            (1027, Activation::CReLU),
-            (1027, Activation::SCReLU),
-            (1027, Activation::Sigmoid),
-            (1027, Activation::SqrReLU),
-            (1027, Activation::Square),
+            (1027, DiffableFromOutput::ReLU),
+            (1027, DiffableFromOutput::CReLU),
+            (1027, DiffableFromOutput::SCReLU),
+            (1027, DiffableFromOutput::Sigmoid),
+            (1027, DiffableFromOutput::SqrReLU),
         ] {
             print!("activation={act:?} size={size} fwd... ");
-            display_passed(base_op_equal(device.clone(), size, BaseOp::Activate(act), true));
+            display_passed(base_op_equal(device.clone(), size, BaseOp::DiffableFromOutput(act), true));
             print!("activation={act:?} size={size} bwd... ");
-            display_passed(base_op_equal(device.clone(), size, BaseOp::Activate(act), false));
+            display_passed(base_op_equal(device.clone(), size, BaseOp::DiffableFromOutput(act), false));
         }
     }
 
@@ -111,6 +110,22 @@ impl CpuThread {
         for size in [1023, 1027] {
             print!("clip size={size}... ");
             display_passed(base_op_equal(device.clone(), size, BaseOp::Clip(-1.98, 1.98), true));
+        }
+    }
+
+    pub fn compare_add<D: Device>(device: Arc<D>) {
+        for size in [1023, 1027] {
+            print!("add_scalar size={size}... ");
+            display_passed(base_op_equal(device.clone(), size, BaseOp::Add(3.0), true));
+        }
+    }
+
+    pub fn compare_abs_pow<D: Device>(device: Arc<D>) {
+        for size in [1023, 1027] {
+            print!("abs_pow_scalar size={size} fwd... ");
+            display_passed(base_op_equal(device.clone(), size, BaseOp::AbsPow(2.5), true));
+            print!("abs_pow_scalar size={size} bwd... ");
+            display_passed(base_op_equal(device.clone(), size, BaseOp::AbsPow(2.5), false));
         }
     }
 }
@@ -194,11 +209,13 @@ fn copy_strided_equal<D: Device>(device: Arc<D>, add: bool, rows: usize, cols: u
 }
 
 enum BaseOp {
-    Activate(Activation),
+    DiffableFromOutput(DiffableFromOutput),
     PowerErr,
     Pairwise,
     Clip(f32, f32),
     Adam(AdamConfig),
+    Add(f32),
+    AbsPow(f32),
 }
 
 fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) -> bool {
@@ -216,13 +233,13 @@ fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) 
     let mut cdev = load(device.clone(), &c);
 
     match op {
-        BaseOp::Activate(act) => {
+        BaseOp::DiffableFromOutput(act) => {
             if fwd {
-                ccpu.activate_fwd(size, &acpu, act).unwrap();
-                cdev.activate_fwd(size, &adev, act).unwrap();
+                ccpu.diffable_from_output_fwd(size, &acpu, act).unwrap();
+                cdev.diffable_from_output_fwd(size, &adev, act).unwrap();
             } else {
-                ccpu.activate_bwd(size, &acpu, &bcpu, act).unwrap();
-                cdev.activate_bwd(size, &adev, &bdev, act).unwrap();
+                ccpu.diffable_from_output_bwd(size, &acpu, &bcpu, act).unwrap();
+                cdev.diffable_from_output_bwd(size, &adev, &bdev, act).unwrap();
             }
         }
         BaseOp::Pairwise => {
@@ -256,6 +273,19 @@ fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) 
 
             assert!(approx_equal::<D>(&bcpu, &bdev, 0.001).is_none());
             assert!(approx_equal::<D>(&dcpu, &ddev, 0.001).is_none());
+        }
+        BaseOp::AbsPow(x) => {
+            if fwd {
+                ccpu.abs_pow_scalar(size, x, &acpu).unwrap();
+                cdev.abs_pow_scalar(size, x, &adev).unwrap();
+            } else {
+                ccpu.abs_pow_scalar_backward(size, x, &acpu, &bcpu).unwrap();
+                cdev.abs_pow_scalar_backward(size, x, &adev, &bdev).unwrap();
+            }
+        }
+        BaseOp::Add(x) => {
+            ccpu.add_scalar(size, x, &acpu).unwrap();
+            cdev.add_scalar(size, x, &adev).unwrap();
         }
     }
 

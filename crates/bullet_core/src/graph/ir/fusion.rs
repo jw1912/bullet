@@ -1,6 +1,9 @@
-use crate::{backend::device::base::Activation, graph::ir::node::AnnotatedNode};
+use crate::{backend::device::base::DiffableFromOutput, graph::ir::node::AnnotatedNode};
 
-use super::{op::GraphIROp, GraphIR, GraphIRNode};
+use super::{
+    op::{GraphIROp, UnaryOp},
+    GraphIR, GraphIRNode,
+};
 
 use GraphIROp::*;
 
@@ -52,7 +55,8 @@ fn search_for_fusion(ir: &GraphIR, node: usize) -> Option<(Vec<usize>, GraphIRNo
                 }
             }
             Concat(a, b) => return fuse_concat(ir, a, b, data),
-            Activate(node, act) => return fuse_activation(ir, node, *act, data),
+            Unary(node, UnaryOp::DiffableFromOutput(act)) => return fuse_diffable_from_output(ir, node, *act, data),
+            Unary(node, UnaryOp::AbsPow(x)) => return fuse_power_error(ir, node, *x, data),
             _ => {}
         }
     }
@@ -77,9 +81,9 @@ fn fuse_add(
             let mut new_data = old_data.clone();
 
             match op {
-                SparseAffineActivate(weights, input, None, Activation::Identity) => {
+                SparseAffineActivate(weights, input, None, DiffableFromOutput::Identity) => {
                     new_data.parent_operation =
-                        Some(SparseAffineActivate(weights, input, Some(*rhs), Activation::Identity));
+                        Some(SparseAffineActivate(weights, input, Some(*rhs), DiffableFromOutput::Identity));
                     return Some((vec![lhs.idx], new_data));
                 }
                 Matmul(a, false, b, false) => {
@@ -96,28 +100,24 @@ fn fuse_add(
     None
 }
 
-fn fuse_activation(
+fn fuse_diffable_from_output(
     ir: &GraphIR,
     node: &AnnotatedNode,
-    activation: Activation,
+    activation: DiffableFromOutput,
     old_data: &GraphIRNode,
 ) -> Option<(Vec<usize>, GraphIRNode)> {
     let ir_node = get_ir_node(ir, node);
-
-    if activation == Activation::Square {
-        return None;
-    }
 
     if ir_node.num_children == 1 {
         if let Some(op) = ir_node.parent_operation {
             let mut new_data = old_data.clone();
 
             match op {
-                SparseAffineActivate(a, b, c, Activation::Identity) => {
+                SparseAffineActivate(a, b, c, DiffableFromOutput::Identity) => {
                     new_data.parent_operation = Some(SparseAffineActivate(a, b, c, activation));
                     return Some((vec![node.idx], new_data));
                 }
-                SparseAffineDualActivate(w, n, s, b, Activation::Identity) => {
+                SparseAffineDualActivate(w, n, s, b, DiffableFromOutput::Identity) => {
                     new_data.parent_operation = Some(SparseAffineDualActivate(w, n, s, b, activation));
                     return Some((vec![node.idx], new_data));
                 }
@@ -143,10 +143,34 @@ fn fuse_concat(
             (node_a.parent_operation, node_b.parent_operation)
         {
             if let Some(bias) = ba {
-                if wa == wb && ia != ib && ba == bb && acta == actb {
+                if wa == wb && ia.idx != ib.idx && ba == bb && acta == actb {
                     let mut new_data = old_data.clone();
                     new_data.parent_operation = Some(SparseAffineDualActivate(wa, ia, ib, bias, acta));
                     return Some((vec![a.idx, b.idx], new_data));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn fuse_power_error(
+    ir: &GraphIR,
+    node: &AnnotatedNode,
+    power: f32,
+    old_data: &GraphIRNode,
+) -> Option<(Vec<usize>, GraphIRNode)> {
+    let ir_node = get_ir_node(ir, node);
+
+    if ir_node.num_children == 1 {
+        if let Some(op) = ir_node.parent_operation {
+            let mut new_data = old_data.clone();
+
+            if let LinearCombination(1.0, a, -1.0, b) = op {
+                if a.idx != b.idx {
+                    new_data.parent_operation = Some(PowerError(a, b, power));
+                    return Some((vec![node.idx], new_data));
                 }
             }
         }

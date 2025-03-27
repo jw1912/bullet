@@ -1,10 +1,9 @@
-pub use bullet_core::{
-    backend::device::{base::Activation, blas::Shape},
-    graph::{
-        builder::{Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings},
-        ir::args::GraphIRCompileArgs as GraphCompileArgs,
-        Node,
+pub use bullet_core::graph::{
+    builder::{
+        Activation, Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings, Shape,
     },
+    ir::args::GraphIRCompileArgs as GraphCompileArgs,
+    Node,
 };
 pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 

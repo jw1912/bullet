@@ -3,7 +3,7 @@ pub mod blas;
 
 use std::{fmt::Debug, sync::Arc};
 
-use base::{Activation, BaseOperations};
+use base::{BaseOperations, DiffableFromOutput};
 use blas::{BlasOperations, Shape};
 
 use super::cpu::CpuThread;
@@ -70,12 +70,14 @@ pub trait Device: Sized + 'static {
         CpuThread::compare_clip(self.clone());
         CpuThread::compare_adam(self.clone());
         CpuThread::compare_copy_or_add_strided(self.clone());
+        CpuThread::compare_add(self.clone());
+        CpuThread::compare_abs_pow(self.clone());
     }
 
     fn sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
-        activation: Activation,
+        activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
@@ -89,7 +91,7 @@ pub trait Device: Sized + 'static {
     fn backprop_sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
-        activation: Activation,
+        activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,

@@ -1,14 +1,13 @@
 /// List of supported activation functions.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Activation {
+pub enum DiffableFromOutput {
     Identity = 0,
     ReLU = 1,
     CReLU = 2,
     SCReLU = 3,
     SqrReLU = 4,
     Sigmoid = 5,
-    Square = 6,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -42,9 +41,32 @@ pub trait BaseOperations {
         stride_a: usize,
     ) -> Result<(), Self::BaseError>;
 
-    fn activate_fwd(&mut self, size: usize, a: &Self, act: Activation) -> Result<(), Self::BaseError>;
+    fn diffable_from_output_fwd(
+        &mut self,
+        size: usize,
+        a: &Self,
+        act: DiffableFromOutput,
+    ) -> Result<(), Self::BaseError>;
 
-    fn activate_bwd(&mut self, size: usize, a: &Self, grd: &Self, act: Activation) -> Result<(), Self::BaseError>;
+    fn diffable_from_output_bwd(
+        &mut self,
+        size: usize,
+        a: &Self,
+        grd: &Self,
+        act: DiffableFromOutput,
+    ) -> Result<(), Self::BaseError>;
+
+    fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError>;
+
+    fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError>;
+
+    fn abs_pow_scalar_backward(
+        &mut self,
+        size: usize,
+        alpha: f32,
+        input: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError>;
 
     fn pairwise_fwd(
         &mut self,

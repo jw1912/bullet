@@ -8,6 +8,7 @@
 #include "base/optimiser.cu"
 #include "base/pairwise.cu"
 #include "base/power_error.cu"
+#include "base/scalar.cu"
 #include "gather.cu"
 #include "select.cu"
 #include "softmax/masked.cu"

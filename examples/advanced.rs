@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
+        ExecutionContext, Graph, InitSettings, NetworkBuilder, Node, Shape,
     },
     trainer::{
         default::{
@@ -86,8 +86,8 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
     let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
     // inference
-    let stm_subnet = l0.forward(stm).activate(Activation::CReLU);
-    let ntm_subnet = l0.forward(nstm).activate(Activation::CReLU);
+    let stm_subnet = l0.forward(stm).crelu();
+    let ntm_subnet = l0.forward(nstm).crelu();
     let mut out = stm_subnet.concat(ntm_subnet);
 
     out = out.pairwise_mul_post_affine_dual();
@@ -96,17 +96,17 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
     let skip_neuron = out.slice_rows(15, 16);
     out = out.slice_rows(0, 15);
 
-    out = out.concat(out.activate(Activation::Square));
-    out = out.activate(Activation::CReLU);
+    out = out.concat(out.abs_pow(2.0));
+    out = out.crelu();
 
-    out = l2.forward(out).select(buckets).activate(Activation::SCReLU);
+    out = l2.forward(out).select(buckets).screlu();
     out = l3.forward(out).select(buckets);
 
     let pst_out = pst.matmul(stm) - pst.matmul(nstm);
     out = out + skip_neuron + pst_out;
 
-    let pred = out.activate(Activation::Sigmoid);
-    pred.mse(targets);
+    let pred = out.sigmoid();
+    pred.squared_error(targets);
 
     // graph, output node
     let output_node = out.node();

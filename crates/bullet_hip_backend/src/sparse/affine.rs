@@ -1,4 +1,4 @@
-use bullet_core::backend::device::{base::Activation, blas::Shape, DeviceBuffer, OperationError};
+use bullet_core::backend::device::{base::DiffableFromOutput, blas::Shape, DeviceBuffer, OperationError};
 
 use crate::{
     backend::{ops, Buffer},
@@ -9,7 +9,7 @@ use crate::{
 pub fn sparse_affine(
     batch_size: usize,
     stride: Option<bool>,
-    activation: Activation,
+    activation: DiffableFromOutput,
     input_a: &Buffer<f32>,
     shape_a: Shape,
     input_b: &Buffer<i32>,
@@ -63,7 +63,7 @@ pub fn sparse_affine(
 pub fn backprop_sparse_affine(
     batch_size: usize,
     stride: Option<bool>,
-    activation: Activation,
+    activation: DiffableFromOutput,
     input_a: &Buffer<f32>,
     input_a_grad: &mut Buffer<f32>,
     shape_a: Shape,

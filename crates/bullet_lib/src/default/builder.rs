@@ -341,7 +341,7 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
             match op {
                 OpType::Activate(activation) => out = out.activate(activation),
                 OpType::ActivateDual => {
-                    out = out.concat(out.activate(Activation::Square)).activate(Activation::CReLU);
+                    out = out.concat(out.abs_pow(2.0)).activate(Activation::CReLU);
                     prev_size = size;
                 }
                 OpType::Affine => {
@@ -389,8 +389,8 @@ impl<T: SparseInputType, U: OutputBuckets<T::RequiredDataType>, O: OptimiserType
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
         match self.loss {
             Loss::None => panic!("No loss function specified!"),
-            Loss::SigmoidMSE => out.activate(Activation::Sigmoid).mse(targets),
-            Loss::SigmoidMPE(power) => out.activate(Activation::Sigmoid).mpe(targets, power),
+            Loss::SigmoidMSE => out.activate(Activation::Sigmoid).squared_error(targets),
+            Loss::SigmoidMPE(power) => out.activate(Activation::Sigmoid).power_error(targets, power),
             Loss::SoftmaxCrossEntropy => out.softmax_crossentropy_loss(targets),
         };
 
