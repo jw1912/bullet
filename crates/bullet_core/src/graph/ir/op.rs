@@ -55,11 +55,11 @@ pub enum GraphIROpErrorType {
 }
 
 impl GraphIROp {
-    pub fn output_shape(&self) -> Result<Shape, GraphIROpError> {
+    pub fn output_shape(&self) -> Result<(Shape, bool), GraphIROpError> {
         use GraphIROp::*;
         use GraphIROpErrorType::*;
 
-        let ret = |cond, ok, err| if cond { Ok(ok) } else { Err(err) };
+        let ret = |cond, ok, err| if cond { Ok((ok, true)) } else { Err(err) };
 
         let mismatch = |nodes: &[&AnnotatedNode]| GraphIROpError {
             op: Box::new(*self),
@@ -136,7 +136,13 @@ impl GraphIROp {
                 check_dense_eq(b, true)?;
 
                 let out = check_matmul(a.shape.maybe_transpose(*transa), b.shape.maybe_transpose(*transb))?;
-                ret(true, out, mismatch(&[a, b]))
+                let mut ret = ret(true, out, mismatch(&[a, b]))?;
+
+                if !a.can_be_batched && !b.can_be_batched {
+                    ret.1 = false;
+                }
+
+                Ok(ret)
             }
             PairwiseMul(input, post_concat) => {
                 let is = input.shape;
@@ -196,11 +202,11 @@ impl GraphIROp {
             }
             ToDense(node) => {
                 check_dense_eq(node, false)?;
-                Ok(node.shape)
+                Ok((node.shape, node.can_be_batched))
             }
             Unary(node, _) => {
                 check_dense_eq(node, true)?;
-                Ok(node.shape)
+                Ok((node.shape, node.can_be_batched))
             }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 check_dense_eq(input, true)?;
