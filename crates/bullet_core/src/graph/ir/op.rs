@@ -59,7 +59,7 @@ impl GraphIROp {
         use GraphIROp::*;
         use GraphIROpErrorType::*;
 
-        let ret = |cond, ok, err| if cond { Ok((ok, true)) } else { Err(err) };
+        let ret = |cond, ok, err| if cond { Ok(ok) } else { Err(err) };
 
         let mismatch = |nodes: &[&AnnotatedNode]| GraphIROpError {
             op: Box::new(*self),
@@ -90,7 +90,7 @@ impl GraphIROp {
             }
         };
 
-        match self {
+        let shape = match self {
             Affine(w, i, b) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, true)?;
@@ -136,13 +136,7 @@ impl GraphIROp {
                 check_dense_eq(b, true)?;
 
                 let out = check_matmul(a.shape.maybe_transpose(*transa), b.shape.maybe_transpose(*transb))?;
-                let mut ret = ret(true, out, mismatch(&[a, b]))?;
-
-                if !a.can_be_batched && !b.can_be_batched {
-                    ret.1 = false;
-                }
-
-                Ok(ret)
+                ret(true, out, mismatch(&[a, b]))
             }
             PairwiseMul(input, post_concat) => {
                 let is = input.shape;
@@ -202,11 +196,11 @@ impl GraphIROp {
             }
             ToDense(node) => {
                 check_dense_eq(node, false)?;
-                Ok((node.shape, node.can_be_batched))
+                Ok(node.shape)
             }
             Unary(node, _) => {
                 check_dense_eq(node, true)?;
-                Ok((node.shape, node.can_be_batched))
+                Ok(node.shape)
             }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 check_dense_eq(input, true)?;
@@ -223,7 +217,11 @@ impl GraphIROp {
                 check_dense_eq(b, true)?;
                 ret(a.shape == b.shape, Shape::new(1, 1), mismatch(&[a, b]))
             }
-        }
+        }?;
+
+        let can_be_batched = !self.nodes().iter().all(|node| !node.can_be_batched);
+
+        Ok((shape, can_be_batched))
     }
 
     pub fn nodes(&self) -> Vec<AnnotatedNode> {
