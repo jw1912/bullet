@@ -22,7 +22,7 @@ bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 montyformat = { workspace = true }
 sfbinpack = "0.4.1"
-viriformat = { git = "https://github.com/cosmobobak/viriformat.git", rev = "3e5f0d792fd869f179ce922bdbc4215bc9e1f9f7" }
+viriformat = "1.0.0"
 
 [[example]]
 name = "advanced"
