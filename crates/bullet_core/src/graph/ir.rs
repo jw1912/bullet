@@ -142,8 +142,8 @@ impl GraphIR {
     }
 
     pub fn add_op(&mut self, operation: GraphIROp, requires_grad: bool) -> Result<AnnotatedNode, GraphIRError> {
-        let shape = operation.output_shape()?;
-        self.add_node(None, Some(operation), shape, true, requires_grad, None)
+        let (shape, can_be_batched) = operation.output_shape()?;
+        self.add_node(None, Some(operation), shape, can_be_batched, requires_grad, None)
     }
 
     pub fn root(&self) -> AnnotatedNode {

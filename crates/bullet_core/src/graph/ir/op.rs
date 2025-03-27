@@ -55,7 +55,7 @@ pub enum GraphIROpErrorType {
 }
 
 impl GraphIROp {
-    pub fn output_shape(&self) -> Result<Shape, GraphIROpError> {
+    pub fn output_shape(&self) -> Result<(Shape, bool), GraphIROpError> {
         use GraphIROp::*;
         use GraphIROpErrorType::*;
 
@@ -90,7 +90,7 @@ impl GraphIROp {
             }
         };
 
-        match self {
+        let shape = match self {
             Affine(w, i, b) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, true)?;
@@ -217,7 +217,11 @@ impl GraphIROp {
                 check_dense_eq(b, true)?;
                 ret(a.shape == b.shape, Shape::new(1, 1), mismatch(&[a, b]))
             }
-        }
+        }?;
+
+        let can_be_batched = !self.nodes().iter().all(|node| !node.can_be_batched);
+
+        Ok((shape, can_be_batched))
     }
 
     pub fn nodes(&self) -> Vec<AnnotatedNode> {
