@@ -1,11 +1,16 @@
-use crate::backend::device::base::{Activation, AdamConfig, BaseOperations};
+use crate::backend::device::base::{AdamConfig, BaseOperations, DiffableFromOutput};
 
 use super::{CpuBuffer, CpuError};
 
 impl BaseOperations for CpuBuffer<f32> {
     type BaseError = CpuError;
 
-    fn activate_fwd(&mut self, size: usize, a: &Self, act: Activation) -> Result<(), Self::BaseError> {
+    fn diffable_from_output_fwd(
+        &mut self,
+        size: usize,
+        a: &Self,
+        act: DiffableFromOutput,
+    ) -> Result<(), Self::BaseError> {
         fn apply<F: Fn(f32) -> f32>(size: usize, input: &CpuBuffer<f32>, output: &mut CpuBuffer<f32>, f: F) {
             for (o, &i) in output.buf[..size].iter_mut().zip(input.buf[..size].iter()) {
                 *o = f(i);
@@ -13,19 +18,24 @@ impl BaseOperations for CpuBuffer<f32> {
         }
 
         match act {
-            Activation::Identity => apply(size, a, self, |x| x),
-            Activation::ReLU => apply(size, a, self, |x| x.max(0.0)),
-            Activation::CReLU => apply(size, a, self, |x| x.clamp(0.0, 1.0)),
-            Activation::SCReLU => apply(size, a, self, |x| x.clamp(0.0, 1.0).powi(2)),
-            Activation::SqrReLU => apply(size, a, self, |x| x.max(0.0).powi(2)),
-            Activation::Square => apply(size, a, self, |x| x.powi(2)),
-            Activation::Sigmoid => apply(size, a, self, |x| 1.0 / (1.0 + (-x).exp())),
+            DiffableFromOutput::Identity => apply(size, a, self, |x| x),
+            DiffableFromOutput::ReLU => apply(size, a, self, |x| x.max(0.0)),
+            DiffableFromOutput::CReLU => apply(size, a, self, |x| x.clamp(0.0, 1.0)),
+            DiffableFromOutput::SCReLU => apply(size, a, self, |x| x.clamp(0.0, 1.0).powi(2)),
+            DiffableFromOutput::SqrReLU => apply(size, a, self, |x| x.max(0.0).powi(2)),
+            DiffableFromOutput::Sigmoid => apply(size, a, self, |x| 1.0 / (1.0 + (-x).exp())),
         }
 
         Ok(())
     }
 
-    fn activate_bwd(&mut self, size: usize, a: &Self, grd: &Self, act: Activation) -> Result<(), Self::BaseError> {
+    fn diffable_from_output_bwd(
+        &mut self,
+        size: usize,
+        a: &Self,
+        grd: &Self,
+        act: DiffableFromOutput,
+    ) -> Result<(), Self::BaseError> {
         fn apply<F: Fn(f32) -> f32>(
             size: usize,
             input: &CpuBuffer<f32>,
@@ -41,16 +51,46 @@ impl BaseOperations for CpuBuffer<f32> {
         }
 
         match act {
-            Activation::Identity => apply(size, a, grd, self, |_| 1.0),
-            Activation::ReLU => apply(size, a, grd, self, |x| f32::from(x > 0.0)),
-            Activation::CReLU => apply(size, a, grd, self, |x| f32::from(x > 0.0 && x < 1.0)),
-            Activation::SCReLU => apply(size, a, grd, self, |x| if x > 0.0 && x < 1.0 { 2.0 * x } else { 0.0 }),
-            Activation::SqrReLU => apply(size, a, grd, self, |x| if x > 0.0 { 2.0 * x } else { 0.0 }),
-            Activation::Square => apply(size, a, grd, self, |x| 2.0 * x),
-            Activation::Sigmoid => apply(size, a, grd, self, |x| {
+            DiffableFromOutput::Identity => apply(size, a, grd, self, |_| 1.0),
+            DiffableFromOutput::ReLU => apply(size, a, grd, self, |x| f32::from(x > 0.0)),
+            DiffableFromOutput::CReLU => apply(size, a, grd, self, |x| f32::from(x > 0.0 && x < 1.0)),
+            DiffableFromOutput::SCReLU => apply(size, a, grd, self, |x| if x > 0.0 && x < 1.0 { 2.0 * x } else { 0.0 }),
+            DiffableFromOutput::SqrReLU => apply(size, a, grd, self, |x| if x > 0.0 { 2.0 * x } else { 0.0 }),
+            DiffableFromOutput::Sigmoid => apply(size, a, grd, self, |x| {
                 let sig = 1.0 / (1.0 + (-x).exp());
                 sig * (1.0 - sig)
             }),
+        }
+
+        Ok(())
+    }
+
+    fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
+        for (o, &i) in self.buf[..size].iter_mut().zip(input.buf[..size].iter()) {
+            *o = i + alpha;
+        }
+
+        Ok(())
+    }
+
+    fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
+        for (o, &i) in self.buf[..size].iter_mut().zip(input.buf[..size].iter()) {
+            *o = i.abs().powf(alpha);
+        }
+
+        Ok(())
+    }
+
+    fn abs_pow_scalar_backward(
+        &mut self,
+        size: usize,
+        alpha: f32,
+        input: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
+        for ((ig, &og), &i) in self.buf[..size].iter_mut().zip(grd.buf[..size].iter()).zip(input.buf[..size].iter()) {
+            let err = alpha * i.abs().powf(alpha - 1.0);
+            *ig += og * if i > 0.0 { err } else { -err };
         }
 
         Ok(())

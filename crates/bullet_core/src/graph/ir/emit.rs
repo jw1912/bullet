@@ -34,7 +34,6 @@ fn op_name_only(node: &GraphIRNode, shapes: &mut HashMap<usize, Shape>) -> Strin
 
     match node.parent_operation.as_ref() {
         Some(op) => match op {
-            Activate(node, act) => format!("Activate({}, {act:?})", id(node)),
             Affine(a, b, c) => format!("Affine({}, {}, {})", id(a), id(b), id(c)),
             Concat(a, b) => format!("Concat({}, {})", id(a), id(b)),
             Gather(input, mask) => format!("Gather({}, {})", id(input), id(mask)),
@@ -52,9 +51,10 @@ fn op_name_only(node: &GraphIRNode, shapes: &mut HashMap<usize, Shape>) -> Strin
             }
             ToDense(node) => format!("ToDense({})", id(node)),
             Unary(node, unary) => match unary {
+                UnaryOp::DiffableFromOutput(act) => format!("{act:?}({})", id(node)),
                 UnaryOp::Add(x) => format!("Add({}, {x})", id(node)),
                 UnaryOp::Mul(x) => format!("Mul({}, {x})", id(node)),
-                UnaryOp::AbsPow(x) => format!("Pow({}, {x})", id(node)),
+                UnaryOp::AbsPow(x) => format!("AbsPow({}, {x})", id(node)),
             },
             SparseAffineDualActivate(w, s, n, b, act) => {
                 format!("SparseAffineDualActivate({}, {}, {}, {}, {act:?})", id(w), id(s), id(n), id(b))

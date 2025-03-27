@@ -1,13 +1,12 @@
-use crate::backend::device::{base::Activation, blas::Shape};
+use crate::backend::device::{base::DiffableFromOutput, blas::Shape};
 
 use super::node::AnnotatedNode;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GraphIROp {
-    Activate(AnnotatedNode, Activation),
     Affine(AnnotatedNode, AnnotatedNode, AnnotatedNode),
-    SparseAffineActivate(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, Activation),
-    SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, AnnotatedNode, Activation),
+    SparseAffineActivate(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
+    SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, AnnotatedNode, DiffableFromOutput),
     Concat(AnnotatedNode, AnnotatedNode),
     Gather(AnnotatedNode, AnnotatedNode),
     LinearCombination(f32, AnnotatedNode, f32, AnnotatedNode),
@@ -26,6 +25,7 @@ pub enum GraphIROp {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOp {
+    DiffableFromOutput(DiffableFromOutput),
     Add(f32),
     Mul(f32),
     AbsPow(f32),
@@ -51,7 +51,6 @@ pub enum GraphIROpErrorType {
     IncorrectDataLayout,
     BatchedInputNotSupported,
     InvalidMatmulDims,
-    ActivationCannotBeFused,
     AnnotatedNodeWithIdAlreadyExists,
 }
 
@@ -92,10 +91,6 @@ impl GraphIROp {
         };
 
         match self {
-            Activate(node, _) => {
-                check_dense_eq(node, true)?;
-                Ok(node.shape)
-            }
             Affine(w, i, b) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, true)?;
@@ -175,7 +170,7 @@ impl GraphIROp {
                 let out = Shape::new(end - start, 1);
                 ret(valid, out, GraphIROpError::new(self, OutOfBounds(is, [*start, *end])))
             }
-            SparseAffineActivate(w, i, b, act) => {
+            SparseAffineActivate(w, i, b, _) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, false)?;
                 check_not_batched(w)?;
@@ -184,24 +179,16 @@ impl GraphIROp {
                     check_dense_eq(b, true)?;
                 }
 
-                if *act == Activation::Square {
-                    return Err(GraphIROpError::new(self, GraphIROpErrorType::ActivationCannotBeFused));
-                }
-
                 let out = check_matmul(w.shape, i.shape)?;
                 ret(b.is_none() || out == b.unwrap().shape, out, mismatch(&[w, i]))
             }
-            SparseAffineDualActivate(w, s, n, b, act) => {
+            SparseAffineDualActivate(w, s, n, b, _) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(b, true)?;
                 check_dense_eq(s, false)?;
                 check_dense_eq(n, false)?;
                 check_not_batched(w)?;
                 let shb = b.shape;
-
-                if *act == Activation::Square {
-                    return Err(GraphIROpError::new(self, GraphIROpErrorType::ActivationCannotBeFused));
-                }
 
                 let out = check_matmul(w.shape, s.shape)?;
                 let valid = s.shape == n.shape && out == shb;
@@ -237,7 +224,6 @@ impl GraphIROp {
         use GraphIROp::*;
 
         match *self {
-            Activate(node, _) => vec![node],
             Affine(a, b, c) => vec![a, b, c],
             Concat(a, b) => vec![a, b],
             Gather(input, mask) => vec![input, mask],

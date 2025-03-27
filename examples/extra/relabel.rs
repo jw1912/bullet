@@ -112,8 +112,8 @@ fn build_network(num_inputs: usize, nnz: usize, hl: usize) -> (Graph, Node) {
     let mut out = l0.forward_sparse_dual_with_activation(stm, nstm, Activation::SCReLU);
     out = l1.forward(out);
 
-    let pred = out.activate(Activation::Sigmoid);
-    pred.mse(targets);
+    let pred = out.sigmoid();
+    pred.squared_error(targets);
 
     // graph, output node
     let output_node = out.node();

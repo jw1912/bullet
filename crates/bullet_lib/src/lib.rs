@@ -7,7 +7,7 @@ pub mod default;
 pub mod trainer;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use bullet_core::backend::device::{base::Activation, blas::Shape};
+pub use bullet_core::graph::builder::{Activation, Shape};
 pub use nn::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module

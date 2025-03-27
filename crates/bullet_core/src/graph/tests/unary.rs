@@ -1,36 +1,40 @@
 use crate::{
-    backend::device::{base::Activation, blas::Shape, Device, OperationError},
+    backend::device::{base::DiffableFromOutput, blas::Shape, Device, OperationError},
     graph::{
-        ir::{args::GraphIRCompileArgs, op::GraphIROp, GraphIR},
+        ir::{
+            args::GraphIRCompileArgs,
+            op::{GraphIROp, UnaryOp},
+            GraphIR,
+        },
         GraphError,
     },
 };
 
 pub fn relu<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    activate(device, Activation::ReLU, [0.0, 0.5, 2.0, 0.0], [0.0, 1.0, 1.0, 0.0])
+    run_test(device, DiffableFromOutput::ReLU, [0.0, 0.5, 2.0, 0.0], [0.0, 1.0, 1.0, 0.0])
 }
 
 pub fn crelu<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    activate(device, Activation::CReLU, [0.0, 0.5, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0])
+    run_test(device, DiffableFromOutput::CReLU, [0.0, 0.5, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0])
 }
 
 pub fn screlu<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    activate(device, Activation::SCReLU, [0.0, 0.25, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0])
+    run_test(device, DiffableFromOutput::SCReLU, [0.0, 0.25, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0])
 }
 
 pub fn sqrrelu<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
-    activate(device, Activation::SqrReLU, [0.0, 0.25, 4.0, 0.0], [0.0, 1.0, 4.0, 0.0])
+    run_test(device, DiffableFromOutput::SqrReLU, [0.0, 0.25, 4.0, 0.0], [0.0, 1.0, 4.0, 0.0])
 }
 
-fn activate<D: Device>(
+fn run_test<D: Device>(
     device: D,
-    activation: Activation,
+    activation: DiffableFromOutput,
     fwd: [f32; 4],
     bwd: [f32; 4],
 ) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphIR::default();
     let w = builder.add_weights("w", Shape::new(1, 1)).unwrap();
-    let out = builder.add_op(GraphIROp::Activate(w, activation), true).unwrap();
+    let out = builder.add_op(GraphIROp::Unary(w, UnaryOp::DiffableFromOutput(activation)), true).unwrap();
     builder.add_op(GraphIROp::ReduceAcrossBatch(out), true).unwrap();
     let mut graph = builder.compile(device, GraphIRCompileArgs::default()).unwrap();
 

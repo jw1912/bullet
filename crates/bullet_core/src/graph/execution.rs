@@ -8,10 +8,7 @@ pub mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
-use crate::backend::{
-    device::{base::Activation, Device},
-    tensor::DenseMatrix,
-};
+use crate::backend::{device::Device, tensor::DenseMatrix};
 
 pub fn setup_ones<D: Device>(
     device: Arc<D>,

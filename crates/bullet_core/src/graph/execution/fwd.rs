@@ -25,17 +25,8 @@ impl<D: Device> Graph<D> {
         let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
         let internal = &mut output_tensor.internal;
         let output = output_tensor.values.dense_mut()?;
-        let outn = output_tensor.own;
 
         match op {
-            Activate(node, act) => {
-                let input = get(*node);
-                let input = input.values.dense()?;
-                assert_eq!(outn.shape, node.shape);
-                output.set_batch_size(input.batch_size())?;
-                output.buf.activate_fwd(input.size(), &input.buf, *act)?;
-                Ok(())
-            }
             Affine(wn, inp, bn) => {
                 let w = get(*wn);
                 let i = get(*inp);
@@ -216,18 +207,19 @@ impl<D: Device> Graph<D> {
             Unary(node, unary) => {
                 let vals = get(*node);
                 let vals = vals.values.dense()?;
+                let size = vals.size();
 
                 assert_eq!(output.single_size(), vals.single_size());
                 output.set_batch_size(vals.batch_size())?;
 
                 match unary {
-                    UnaryOp::Add(_) => Err(OperationError::UnsupportedOperation),
-                    UnaryOp::Mul(x) => {
-                        output.buf.geam(vals.size(), *x, Some(&vals.buf), 0.0, None)?;
-                        Ok(())
-                    }
-                    UnaryOp::AbsPow(_) => Err(OperationError::UnsupportedOperation),
+                    UnaryOp::DiffableFromOutput(act) => output.buf.diffable_from_output_fwd(size, &vals.buf, *act)?,
+                    UnaryOp::Add(x) => output.buf.add_scalar(size, *x, &vals.buf)?,
+                    UnaryOp::Mul(x) => output.buf.geam(size, *x, Some(&vals.buf), 0.0, None)?,
+                    UnaryOp::AbsPow(x) => output.buf.abs_pow_scalar(size, *x, &vals.buf)?,
                 }
+
+                Ok(())
             }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 let masks = get(*mask);

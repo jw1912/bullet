@@ -6,7 +6,7 @@ pub mod sparse;
 use std::sync::Arc;
 
 use crate::{
-    backend::device::{base::Activation, blas::Shape, Device, DeviceBuffer, OperationError, OperationResult},
+    backend::device::{base::DiffableFromOutput, blas::Shape, Device, DeviceBuffer, OperationError, OperationResult},
     graph::tests,
 };
 
@@ -99,7 +99,7 @@ impl Device for CpuThread {
     fn sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
-        activation: Activation,
+        activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
@@ -135,19 +135,20 @@ impl Device for CpuThread {
         let y = &mut output.buf;
 
         match activation {
-            Activation::Identity => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x),
-            Activation::ReLU => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0)),
-            Activation::CReLU => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0)),
-            Activation::SCReLU => {
+            DiffableFromOutput::Identity => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x),
+            DiffableFromOutput::ReLU => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0)),
+            DiffableFromOutput::CReLU => {
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0))
+            }
+            DiffableFromOutput::SCReLU => {
                 sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2))
             }
-            Activation::SqrReLU => {
+            DiffableFromOutput::SqrReLU => {
                 sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0).powi(2))
             }
-            Activation::Sigmoid => {
+            DiffableFromOutput::Sigmoid => {
                 sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| 1.0 / (1.0 + (-x).exp()))
             }
-            Activation::Square => return Err(OperationError::UnsupportedOperation),
         }
 
         Ok(())
@@ -156,7 +157,7 @@ impl Device for CpuThread {
     fn backprop_sparse_affine_activate(
         batch_size: usize,
         stride: Option<bool>,
-        activation: Activation,
+        activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -200,31 +201,32 @@ impl Device for CpuThread {
         let bg = input_c_grad.map(|x| &mut *x.buf);
 
         match activation {
-            Activation::Identity => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 1.0),
-            Activation::ReLU => {
+            DiffableFromOutput::Identity => {
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 1.0)
+            }
+            DiffableFromOutput::ReLU => {
                 sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| f32::from(x > 0.0))
             }
-            Activation::CReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
+            DiffableFromOutput::CReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
                 if x > 0.0 && x < 1.0 {
                     1.0
                 } else {
                     0.0
                 }
             }),
-            Activation::SCReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
+            DiffableFromOutput::SCReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
                 if x > 0.0 && x < 1.0 {
                     2.0 * x.sqrt()
                 } else {
                     0.0
                 }
             }),
-            Activation::SqrReLU => {
+            DiffableFromOutput::SqrReLU => {
                 sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt())
             }
-            Activation::Sigmoid => {
+            DiffableFromOutput::Sigmoid => {
                 sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| x * (1.0 - x))
             }
-            Activation::Square => return Err(OperationError::UnsupportedOperation),
         }
 
         Ok(())

@@ -1,14 +1,14 @@
 use crate::backend::{
-    device::{blas::Shape, Device, OperationError},
+    device::{base::DiffableFromOutput, blas::Shape, Device, OperationError},
     tensor::{DenseMatrix, SparseMatrix, Tensor},
 };
 
-use super::{linear_comb::backprop_add_single_scaled, Activation};
+use super::linear_comb::backprop_add_single_scaled;
 
 #[allow(clippy::too_many_arguments)]
 pub fn affine_activate<D: Device>(
     stride: Option<bool>,
-    activation: Activation,
+    activation: DiffableFromOutput,
     a: &DenseMatrix<D>,
     shape_a: Shape,
     b: &SparseMatrix<D>,
@@ -50,7 +50,7 @@ pub fn affine_activate<D: Device>(
 #[allow(clippy::too_many_arguments)]
 pub fn backprop_affine_activate<D: Device>(
     stride: Option<bool>,
-    activation: Activation,
+    activation: DiffableFromOutput,
     a: &mut Tensor<D>,
     shape_a: Shape,
     b: &SparseMatrix<D>,
@@ -133,7 +133,7 @@ pub fn affine_dual<D: Device>(
     b: &DenseMatrix<D>,
     b_shape: Shape,
     output: &mut DenseMatrix<D>,
-    activation: Activation,
+    activation: DiffableFromOutput,
 ) -> Result<(), OperationError<D::DeviceError>> {
     assert!(w.batch_size().is_none());
     assert_eq!(s.batch_size(), n.batch_size());
@@ -159,7 +159,7 @@ pub fn backprop_affine_dual<D: Device>(
     b: &mut Option<(&mut Tensor<D>, &D::BufferF32)>,
     output: &DenseMatrix<D>,
     output_grad: &DenseMatrix<D>,
-    activation: Activation,
+    activation: DiffableFromOutput,
 ) -> Result<(), OperationError<D::DeviceError>> {
     assert_eq!(s.batch_size(), n.batch_size());
     assert_eq!(s.nnz, n.nnz);

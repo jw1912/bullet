@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{
         optimiser::{AdamWOptimiser, AdamWParams},
-        Activation, ExecutionContext, Graph, NetworkBuilder, NetworkBuilderNode, Node, Shape,
+        ExecutionContext, Graph, NetworkBuilder, NetworkBuilderNode, Node, Shape,
     },
     trainer::{
         default::{inputs, loader, outputs, Trainer},
@@ -69,12 +69,12 @@ fn build_network() -> (Graph, Node) {
 
     // inference
     let mut out = stm.to_dense().reshape(Shape::new(token_size, tokens));
-    out = attn.new_block(out).activate(Activation::ReLU);
-    out = o1.forward(out).activate(Activation::ReLU);
+    out = attn.new_block(out).relu();
+    out = o1.forward(out).relu();
     out = out.reshape(Shape::new(tokens, 1));
     out = o2.forward(out);
-    let pred = out.activate(Activation::Sigmoid);
-    pred.mse(targets);
+    let pred = out.sigmoid();
+    pred.squared_error(targets);
 
     // graph, output node
     let output_node = out.node();
@@ -105,7 +105,7 @@ impl<'a> AttentionDescription<'a> {
         let k = builder.new_affine_custom(&id("k"), input_rows, dim, tokens);
         let v = builder.new_affine_custom(&id("v"), input_rows, dim, tokens);
 
-        let pa = pa.forward(input.reshape(Shape::new(tokens * input_rows, 1))).activate(Activation::ReLU);
+        let pa = pa.forward(input.reshape(Shape::new(tokens * input_rows, 1))).relu();
         let p = pb.forward(pa).reshape(Shape::new(tokens, tokens));
 
         let q = q.forward(input);
