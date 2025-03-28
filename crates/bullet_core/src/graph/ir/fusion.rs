@@ -10,34 +10,12 @@ use GraphIROp::*;
 pub fn fusion_pass(ir: &mut GraphIR, node: usize) -> bool {
     if let Some((mut eliminated, new_data)) = search_for_fusion(ir, node) {
         eliminated.push(node);
-        delete_eliminated(ir, &eliminated);
-        add_new(ir, node, new_data);
+        ir.delete_nodes(&eliminated);
+        ir.replace_data(node, new_data);
         true
     } else {
         false
     }
-}
-
-fn delete_eliminated(ir: &mut GraphIR, eliminated: &[usize]) {
-    for &dead in eliminated {
-        if let Some(Some(op)) = ir.nodes[dead].as_ref().map(|x| x.parent_operation) {
-            for parent in op.nodes() {
-                ir.nodes[parent.idx].as_mut().unwrap().num_children -= 1;
-            }
-        }
-    }
-
-    for &dead in eliminated {
-        ir.nodes[dead] = None;
-    }
-}
-
-fn add_new(ir: &mut GraphIR, node: usize, data: GraphIRNode) {
-    for parent in data.parent_operation.as_ref().unwrap().nodes() {
-        ir.nodes[parent.idx].as_mut().unwrap().num_children += 1;
-    }
-
-    ir.nodes[node] = Some(data);
 }
 
 fn search_for_fusion(ir: &GraphIR, node: usize) -> Option<(Vec<usize>, GraphIRNode)> {
