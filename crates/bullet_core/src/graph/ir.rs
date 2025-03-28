@@ -7,6 +7,7 @@ pub mod op;
 use std::{cell::RefCell, collections::HashSet, num::NonZeroUsize, sync::Arc};
 
 use args::GraphIRCompileArgs;
+use emit::GraphIRStringFormat;
 use node::AnnotatedNode;
 use op::{GraphIROp, GraphIROpError};
 
@@ -203,14 +204,29 @@ impl GraphIR {
     pub fn optimise(&mut self, args: &GraphIRCompileArgs) {
         let mut fusions = 0;
 
+        if let Some(x) = args.fancy_ir_display {
+            print!("\x1b[s{self}\x1b[u");
+            std::thread::sleep(std::time::Duration::from_secs_f32(x));
+        }
+
         if args.allow_fusion {
             while self.optimisation_pass(fusion::fusion_pass) {
                 fusions += 1;
+
+                if let Some(x) = args.fancy_ir_display {
+                    print!("\x1b[s{self}\x1b[u");
+                    std::thread::sleep(std::time::Duration::from_secs_f32(x));
+                }
+            }
+
+            if args.fancy_ir_display.is_some() {
+                print!("{self}");
             }
 
             if args.emit_ir {
                 println!("Fusions: {fusions}");
-                print!("{self}");
+                let fmt = GraphIRStringFormat { fill_newlines: false, ..GraphIRStringFormat::default_colours() };
+                print!("{}", self.to_formatted_string(&fmt).unwrap());
             }
         }
     }
@@ -227,5 +243,27 @@ impl GraphIR {
         }
 
         false
+    }
+
+    fn delete_nodes(&mut self, eliminated: &[usize]) {
+        for &dead in eliminated {
+            if let Some(Some(op)) = self.nodes[dead].as_ref().map(|x| x.parent_operation) {
+                for parent in op.nodes() {
+                    self.nodes[parent.idx].as_mut().unwrap().num_children -= 1;
+                }
+            }
+        }
+
+        for &dead in eliminated {
+            self.nodes[dead] = None;
+        }
+    }
+
+    fn replace_data(&mut self, node: usize, data: GraphIRNode) {
+        for parent in data.parent_operation.as_ref().unwrap().nodes() {
+            self.nodes[parent.idx].as_mut().unwrap().num_children += 1;
+        }
+
+        self.nodes[node] = Some(data);
     }
 }
