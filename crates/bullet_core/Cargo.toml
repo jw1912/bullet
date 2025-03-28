@@ -11,3 +11,7 @@ edition = { workspace = true }
 [dependencies]
 rand = "0.9"
 rand_distr = "0.5.1"
+
+[[example]]
+name = "fusion"
+path = "../../examples/extra/fusion.rs"

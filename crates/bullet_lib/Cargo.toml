@@ -55,7 +55,3 @@ path = "../../examples/extra/relabel.rs"
 [[example]]
 name = "attention"
 path = "../../examples/extra/attention.rs"
-
-[[example]]
-name = "fusion"
-path = "../../examples/extra/fusion.rs"
