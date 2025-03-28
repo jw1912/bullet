@@ -5,4 +5,4 @@ Check out the [fusion](../../examples/extra/fusion.rs) example, compile and run 
 cargo r -r --example fusion --features cpu --no-default-features
 ```
 
-![Video](operator-fusion.mp4)
+https://github.com/user-attachments/assets/926724d3-edd4-4dcd-a5fc-18b9a54e0c6d
