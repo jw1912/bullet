@@ -19,7 +19,7 @@ We can fuse the first layer calculation into a single operation
 
 Check out the [fusion](../../examples/extra/fusion.rs) example, compile and run it for yourself with
 ```
-cargo r -r --example fusion --features cpu --no-default-features
+cargo r -r --example fusion
 ```
 
 Below is the output at the time of writing (may change as more optimisation passes are added).
