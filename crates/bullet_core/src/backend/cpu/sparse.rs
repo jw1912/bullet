@@ -16,15 +16,13 @@ pub fn affine_fwd<F: Fn(f32) -> f32>(
 
     for loc in 0..k {
         let base = stride * m * loc + offset;
+        let ty = &mut y[base..base + m];
 
         if let Some(b) = b {
-            for i in 0..m {
-                y[base + i] = b[bias_stride * loc + i];
-            }
+            let base = bias_stride * loc;
+            by_chunks_32_2(ty, &b[base..base + m], |_, b| b);
         } else {
-            for i in 0..m {
-                y[base + i] = 0.0;
-            }
+            by_chunks_32_1(ty, |_| 0.0);
         }
 
         for i in 0..nnz {
@@ -34,14 +32,11 @@ pub fn affine_fwd<F: Fn(f32) -> f32>(
                 break;
             }
 
-            for j in 0..m {
-                y[base + j] += a[m * inp as usize + j];
-            }
+            let base = m * inp as usize;
+            by_chunks_32_2(ty, &a[base..base + m], |a, b| a + b);
         }
 
-        for i in 0..m {
-            y[base + i] = op(y[base + i]);
-        }
+        by_chunks_32_1(ty, &op);
     }
 }
 
@@ -67,14 +62,11 @@ pub fn affine_bwd<F: Fn(f32) -> f32>(
     for loc in 0..k {
         let base = stride * m * loc + offset;
 
-        for i in 0..m {
-            grd[i] = op(y[base + i]) * yg[base + i];
-        }
+        by_chunks_32_3(&mut grd, &y[base..base + m], &yg[base..base + m], |_, a, b| op(a) * b);
 
         if let Some(bg) = bg.as_mut() {
-            for i in 0..m {
-                bg[bias_stride * loc + i] += grd[i];
-            }
+            let base = bias_stride * loc;
+            by_chunks_32_2(&mut bg[base..base + m], &grd, |a, b| a + b);
         }
 
         for i in 0..nnz {
@@ -84,8 +76,60 @@ pub fn affine_bwd<F: Fn(f32) -> f32>(
                 break;
             }
 
-            for j in 0..m {
-                ag[m * inp as usize + j] += grd[j];
+            let base = m * inp as usize;
+            by_chunks_32_2(&mut ag[base..base + m], &grd, |a, b| a + b);
+        }
+    }
+}
+
+pub fn by_chunks_32_1<F: Fn(f32) -> f32>(a: &mut [f32], f: F) {
+    if a.len() % 32 == 0 {
+        for ac in a.chunks_exact_mut(32) {
+            for ai in ac {
+                *ai = f(*ai);
+            }
+        }
+    } else {
+        for ac in a.chunks_mut(32) {
+            for ai in ac {
+                *ai = f(*ai);
+            }
+        }
+    }
+}
+
+pub fn by_chunks_32_2<F: Fn(f32, f32) -> f32>(a: &mut [f32], b: &[f32], f: F) {
+    assert_eq!(a.len(), b.len());
+
+    if a.len() % 32 == 0 {
+        for (ac, bc) in a.chunks_exact_mut(32).zip(b.chunks_exact(32)) {
+            for (ai, &bi) in ac.iter_mut().zip(bc.iter()) {
+                *ai = f(*ai, bi);
+            }
+        }
+    } else {
+        for (ac, bc) in a.chunks_mut(32).zip(b.chunks(32)) {
+            for (ai, &bi) in ac.iter_mut().zip(bc.iter()) {
+                *ai = f(*ai, bi);
+            }
+        }
+    }
+}
+
+pub fn by_chunks_32_3<F: Fn(f32, f32, f32) -> f32>(a: &mut [f32], b: &[f32], c: &[f32], f: F) {
+    assert_eq!(a.len(), b.len());
+    assert_eq!(a.len(), c.len());
+
+    if a.len() % 32 == 0 {
+        for ((ac, bc), cc) in a.chunks_exact_mut(32).zip(b.chunks_exact(32)).zip(c.chunks_exact(32)) {
+            for ((ai, &bi), &ci) in ac.iter_mut().zip(bc.iter()).zip(cc.iter()) {
+                *ai = f(*ai, bi, ci);
+            }
+        }
+    } else {
+        for ((ac, bc), cc) in a.chunks_mut(32).zip(b.chunks(32)).zip(c.chunks(32)) {
+            for ((ai, &bi), &ci) in ac.iter_mut().zip(bc.iter()).zip(cc.iter()) {
+                *ai = f(*ai, bi, ci);
             }
         }
     }
