@@ -29,11 +29,11 @@ fn build_network(num_inputs: usize, max_active: usize, num_buckets: usize, hl: u
     let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
     // inference
-    let stm_subnet = l0.forward(stm).crelu();
-    let ntm_subnet = l0.forward(nstm).crelu();
+    let stm_subnet = l0.forward(stm).crelu().pairwise_mul();
+    let ntm_subnet = l0.forward(nstm).crelu().pairwise_mul();
     let mut out = stm_subnet.concat(ntm_subnet);
 
-    out = out.pairwise_mul_post_affine_dual();
+    //out = out.pairwise_mul_post_affine_dual();
     out = l1.forward(out).select(buckets);
 
     let skip_neuron = out.slice_rows(15, 16);

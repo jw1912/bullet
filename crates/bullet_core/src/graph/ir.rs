@@ -18,7 +18,7 @@ use crate::backend::{
 
 use super::Graph;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GraphIRNode {
     pub id: Option<String>,
     pub size: usize,

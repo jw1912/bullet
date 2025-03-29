@@ -8,13 +8,27 @@ use super::{
 use GraphIROp::*;
 
 pub fn fusion_pass(ir: &mut GraphIR, node: usize) -> bool {
+    if try_exchange_pairwise_concat(ir, node) {
+        return true;
+    }
+
     if let Some((mut eliminated, new_data)) = search_for_fusion(ir, node) {
+        assert!(valid(&new_data));
         eliminated.push(node);
         ir.delete_nodes(&eliminated);
         ir.replace_data(node, new_data);
         true
     } else {
         false
+    }
+}
+
+fn valid(data: &GraphIRNode) -> bool {
+    if let Some(op) = data.parent_operation {
+        let (shape, batched) = op.output_shape().unwrap();
+        data.size == shape.size() && data.own.shape == shape && data.own.can_be_batched == batched
+    } else {
+        true
     }
 }
 
@@ -40,6 +54,51 @@ fn search_for_fusion(ir: &GraphIR, node: usize) -> Option<(Vec<usize>, GraphIRNo
     }
 
     None
+}
+
+fn try_exchange_pairwise_concat(ir: &mut GraphIR, node: usize) -> bool {
+    let mut data = ir.get(node).unwrap().clone();
+
+    if let Some(Concat(a, b)) = data.parent_operation {
+        let an = get_ir_node(ir, &a).clone();
+        let bn = get_ir_node(ir, &b).clone();
+
+        if an.num_children == 1 && bn.num_children == 1 {
+            if let (Some(PairwiseMul(c, false)), Some(PairwiseMul(d, false))) =
+                (&an.parent_operation, &bn.parent_operation)
+            {
+                if c.idx != d.idx && c.shape.size() == d.shape.size() {
+                    ir.delete_nodes(&[a.idx, b.idx, node]);
+
+                    let op = Concat(*c, *d);
+
+                    if let Ok((shape, can_be_batched)) = op.output_shape() {
+                        let new_b = AnnotatedNode { idx: bn.own.idx, shape, sparse: None, can_be_batched };
+
+                        let new_data = GraphIRNode {
+                            id: bn.id,
+                            size: 2 * c.shape.size(),
+                            parent_operation: Some(op),
+                            requires_grad: bn.requires_grad,
+                            num_children: 0,
+                            own: new_b,
+                        };
+
+                        data.parent_operation = Some(PairwiseMul(new_b, true));
+
+                        assert!(valid(&new_data));
+                        assert!(valid(&data), "{data:#?}");
+
+                        ir.replace_data(b.idx, new_data);
+                        ir.replace_data(node, data);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 fn get_ir_node<'a>(ir: &'a GraphIR, node: &AnnotatedNode) -> &'a GraphIRNode {
@@ -116,7 +175,7 @@ fn fuse_concat(
     let node_a = get_ir_node(ir, a);
     let node_b = get_ir_node(ir, b);
 
-    if node_a.num_children == 1 && node_b.num_children == 1 {
+    if node_a.num_children == 1 && node_b.num_children == 1 && node_a.requires_grad && node_b.requires_grad {
         if let (Some(SparseAffineActivate(wa, ia, ba, acta)), Some(SparseAffineActivate(wb, ib, bb, actb))) =
             (node_a.parent_operation, node_b.parent_operation)
         {
@@ -146,7 +205,7 @@ fn fuse_power_error(
             let mut new_data = old_data.clone();
 
             if let LinearCombination(1.0, a, -1.0, b) = op {
-                if a.idx != b.idx {
+                if a.idx != b.idx && a.can_be_batched == b.can_be_batched {
                     new_data.parent_operation = Some(PowerError(a, b, power));
                     return Some((vec![node.idx], new_data));
                 }

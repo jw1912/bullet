@@ -52,6 +52,7 @@ pub enum GraphIROpErrorType {
     BatchedInputNotSupported,
     InvalidMatmulDims,
     AnnotatedNodeWithIdAlreadyExists,
+    MismatchedBatching,
 }
 
 impl GraphIROp {
@@ -90,6 +91,14 @@ impl GraphIROp {
             }
         };
 
+        let check_same_batching = |x: &[&AnnotatedNode]| {
+            if x.iter().all(|y| y.can_be_batched == x[0].can_be_batched) {
+                Ok(())
+            } else {
+                Err(GraphIROpError::new(self, GraphIROpErrorType::MismatchedBatching))
+            }
+        };
+
         let shape = match self {
             Affine(w, i, b) => {
                 check_dense_eq(w, true)?;
@@ -104,6 +113,7 @@ impl GraphIROp {
             Concat(a, b) => {
                 check_dense_eq(a, true)?;
                 check_dense_eq(b, true)?;
+                check_same_batching(&[a, b])?;
 
                 if a.shape.cols() != 1 {
                     return Err(GraphIROpError::new(self, InvalidInputShape(a.shape)));
@@ -147,6 +157,7 @@ impl GraphIROp {
             PowerError(a, b, _) => {
                 check_dense_eq(a, true)?;
                 check_dense_eq(b, true)?;
+                check_same_batching(&[a, b])?;
                 ret(a.shape == b.shape, a.shape, mismatch(&[a, b]))
             }
             ReduceAcrossBatch(node) => {
@@ -157,6 +168,7 @@ impl GraphIROp {
             Select(input, buckets) => {
                 check_dense_eq(input, true)?;
                 check_dense_eq(buckets, false)?;
+                check_same_batching(&[input, buckets])?;
                 let is = input.shape;
                 let bs = buckets.shape;
                 let valid = is.cols() == bs.cols() && is.rows() % bs.rows() == 0;
@@ -188,6 +200,7 @@ impl GraphIROp {
                 check_dense_eq(s, false)?;
                 check_dense_eq(n, false)?;
                 check_not_batched(w)?;
+                check_same_batching(&[s, n])?;
                 let shb = b.shape;
 
                 let out = check_matmul(w.shape, s.shape)?;
