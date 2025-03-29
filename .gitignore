@@ -1,6 +1,7 @@
 /target
 /nets
 /checkpoints
+/.cargo
 /data
 /.idea
 /.vscode
