@@ -1,5 +1,8 @@
 #![allow(clippy::too_many_arguments)]
-use crate::backend::{cpu::sparse::by_chunks_32_2, device::blas::{BlasOperations, GemmConfig, Shape}};
+use crate::backend::{
+    cpu::sparse::by_chunks_32_2,
+    device::blas::{BlasOperations, GemmConfig, Shape},
+};
 
 use super::{CpuBuffer, CpuError};
 
@@ -122,7 +125,7 @@ fn mm_internal<const TA: bool, const TB: bool>(
     c: &mut [f32],
 ) {
     // forward optimisation
-    if !TA && !TB && alpha == 1.0 && beta == 0.0 {
+    if !TA && !TB && alpha == 1.0 && beta == 0.0 && m == 1 {
         return mm_nn_m1(n, a, b, c);
     }
 
@@ -161,12 +164,7 @@ fn mm_fallback<const TA: bool, const TB: bool>(
     }
 }
 
-fn mm_nn_m1(
-    n: usize,
-    a: &[f32],
-    b: &[f32],
-    c: &mut [f32],
-) {
+fn mm_nn_m1(n: usize, a: &[f32], b: &[f32], c: &mut [f32]) {
     for (loc, tc) in c.iter_mut().enumerate() {
         let mut sum = [0.0; 32];
 
@@ -176,23 +174,13 @@ fn mm_nn_m1(
     }
 }
 
-fn mm_nt_m1(
-    k: usize,
-    a: &[f32],
-    b: &[f32],
-    c: &mut [f32],
-) {
+fn mm_nt_m1(k: usize, a: &[f32], b: &[f32], c: &mut [f32]) {
     for (loc, &ta) in a.iter().enumerate() {
         by_chunks_32_2(c, &b[loc * k..(loc + 1) * k], |c, tb| c + ta * tb);
     }
 }
 
-fn mm_tn_n1(
-    m: usize,
-    a: &[f32],
-    b: &[f32],
-    c: &mut [f32],
-) {
+fn mm_tn_n1(m: usize, a: &[f32], b: &[f32], c: &mut [f32]) {
     for (loc, &tb) in b.iter().enumerate() {
         by_chunks_32_2(&mut c[loc * m..(loc + 1) * m], a, |c, ta| c + ta * tb);
     }
