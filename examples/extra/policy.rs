@@ -33,11 +33,12 @@ fn main() {
     ];
 
     let mut trainer = PolicyTrainerBuilder::default()
+        .dual_perspective()
         .inputs(inputs)
         .optimiser(AdamW)
         .move_mapper(transform, buckets)
         .save_format(&save_format)
-        .build_dual_perspective(|builder, stm, ntm| {
+        .build(|builder, stm, ntm| {
             let l0 = builder.new_affine("l0", num_inputs, HL);
             let l1 = builder.new_affine("l1", l1_size, num_outputs);
 
