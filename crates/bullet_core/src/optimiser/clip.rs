@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::backend::{
-    device::{base::BaseOperations, Device, OperationError},
+    device::{Device, OperationError},
     tensor::DenseMatrix,
 };
 
@@ -48,13 +48,13 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for WeightClipping<S> {
         learning_rate: f32,
     ) -> Result<(), OperationError<D::DeviceError>> {
         if self.placement == Placement::Before {
-            weights.buf.clip(weights.size(), self.min, self.max)?;
+            weights.clamp(self.min, self.max)?;
         }
 
         self.inner.update(weights, grads, gradient_factor, learning_rate)?;
 
         if self.placement == Placement::After {
-            weights.buf.clip(weights.size(), self.min, self.max)?;
+            weights.clamp(self.min, self.max)?;
         }
 
         Ok(())
