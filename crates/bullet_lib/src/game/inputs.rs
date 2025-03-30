@@ -8,8 +8,6 @@ mod factorised;
 #[allow(deprecated)]
 mod legacy;
 
-use super::loader::LoadableDataType;
-
 pub use adapter::MarlinFormatAdapter;
 pub use ataxx147::{Ataxx147, Ataxx98};
 pub use chess768::Chess768;
@@ -49,7 +47,7 @@ impl ChessBucketsMergedKingsMirroredFactorised {
 }
 
 pub trait SparseInputType: Clone + Send + Sync + 'static {
-    type RequiredDataType: LoadableDataType + Send + Sync;
+    type RequiredDataType: Send + Sync;
 
     /// The total number of inputs
     fn num_inputs(&self) -> usize;

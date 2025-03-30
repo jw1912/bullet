@@ -4,7 +4,7 @@ use std::{
     sync::mpsc::{self, SyncSender},
 };
 
-use crate::default::{formats::bulletformat::ChessBoard, loader::DataLoader};
+use crate::{default::loader::DataLoader, game::formats::bulletformat::ChessBoard};
 
 use super::rng::SimpleRand;
 

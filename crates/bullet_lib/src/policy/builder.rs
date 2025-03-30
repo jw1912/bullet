@@ -7,7 +7,7 @@ use bullet_core::{
 use bulletformat::ChessBoard;
 
 use crate::{
-    default::inputs::SparseInputType,
+    game::inputs::SparseInputType,
     nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
     ExecutionContext,
