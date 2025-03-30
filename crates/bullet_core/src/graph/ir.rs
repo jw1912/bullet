@@ -157,7 +157,9 @@ impl GraphIR {
             print!("{self}");
         }
 
-        self.optimise(&args);
+        if args.allow_optimisations {
+            self.optimise(&args);
+        }
 
         if self.roots.len() != 1 {
             return Err(GraphIRError::Compilation(GraphIRCompileError::MoreThanOneRoot));
@@ -202,32 +204,30 @@ impl GraphIR {
     }
 
     pub fn optimise(&mut self, args: &GraphIRCompileArgs) {
-        let mut fusions = 0;
+        let mut optimistions = 0;
 
         if let Some(x) = args.fancy_ir_display {
             print!("\x1b[s{self}\x1b[u");
             std::thread::sleep(std::time::Duration::from_secs_f32(x));
         }
 
-        if args.allow_fusion {
-            while self.optimisation_pass(fusion::fusion_pass) {
-                fusions += 1;
+        while self.optimisation_pass(fusion::fusion_pass) {
+            optimistions += 1;
 
-                if let Some(x) = args.fancy_ir_display {
-                    print!("\x1b[s{self}\x1b[u");
-                    std::thread::sleep(std::time::Duration::from_secs_f32(x));
-                }
+            if let Some(x) = args.fancy_ir_display {
+                print!("\x1b[s{self}\x1b[u");
+                std::thread::sleep(std::time::Duration::from_secs_f32(x));
             }
+        }
 
-            if args.fancy_ir_display.is_some() {
-                print!("{self}");
-            }
+        if args.fancy_ir_display.is_some() {
+            print!("{self}");
+        }
 
-            if args.emit_ir {
-                println!("Fusions: {fusions}");
-                let fmt = GraphIRStringFormat { fill_newlines: false, ..GraphIRStringFormat::default_colours() };
-                print!("{}", self.to_formatted_string(&fmt).unwrap());
-            }
+        if args.emit_ir {
+            println!("Optimisations: {optimistions}");
+            let fmt = GraphIRStringFormat { fill_newlines: false, ..GraphIRStringFormat::default_colours() };
+            print!("{}", self.to_formatted_string(&fmt).unwrap());
         }
     }
 

@@ -15,7 +15,7 @@ use ir::{node::AnnotatedNode, GraphIRError};
 
 use crate::backend::{
     device::{blas::Shape, Device, OperationError},
-    tensor::Tensor,
+    tensor::{read_from_byte_buffer, Tensor},
 };
 
 pub struct Graph<D: Device> {
@@ -214,6 +214,47 @@ impl<D: Device> Graph<D> {
         println!("+---------------------------------------------------------------+");
         println!("| {: <40}{fwd: <10} {bwd: <10} |", "Total");
         println!("+---------------------------------------------------------------+");
+    }
+
+    /// Writes the weights of a graph to a file. If `gradients` is true,
+    /// it will instead write the gradients of those weights.
+    pub fn write_to_file(&self, path: &str) {
+        use std::{fs::File, io::Write};
+
+        let weight_ids = self.weight_ids();
+
+        let mut buf = Vec::new();
+
+        for id in &weight_ids {
+            let weights = self.get_weights(id);
+            let this_buf = weights.values.dense().unwrap().write_to_byte_buffer(id).unwrap();
+
+            buf.extend_from_slice(&this_buf);
+        }
+
+        let mut file = File::create(path).unwrap();
+        file.write_all(&buf).unwrap();
+    }
+
+    /// Loads the weights of a graph from a file. If `gradients` is true,
+    /// it will instead load the gradients of those weights.
+    pub fn load_from_file(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {
+        use std::{fs::File, io::Read};
+
+        let mut buf = Vec::new();
+        let mut file = File::open(path).unwrap();
+        file.read_to_end(&mut buf).unwrap();
+
+        let mut offset = 0;
+
+        while offset < buf.len() {
+            let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
+            self.get_weights_mut(&id).load_dense_from_slice(None, &buffer).expect("This is guaranteed!");
+
+            offset += bytes_read;
+        }
+
+        Ok(())
     }
 
     pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {

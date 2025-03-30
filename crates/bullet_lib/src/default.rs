@@ -377,33 +377,42 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 where
     Inp::RequiredDataType: CanBeDirectlySequentiallyLoaded,
 {
-    pub fn run<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler>(
+    pub fn run(
         &mut self,
-        schedule: &TrainingSchedule<LR, WDL>,
+        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
         settings: &LocalSettings,
-        data_loader: &D,
+        data_loader: &impl DataLoader<Inp::RequiredDataType>,
     ) {
-        let test_loader = settings.test_set.map(|test| DirectSequentialDataLoader::new(&[test.path]));
-        let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
-
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |_, _, _, _| {});
+        self.run_with_callback(schedule, settings, data_loader, |_, _, _, _| {});
     }
 
-    pub fn run_and_test<D: DataLoader<Inp::RequiredDataType>, LR: LrScheduler, WDL: WdlScheduler, T: EngineType>(
+    pub fn run_with_callback<LR: LrScheduler, WDL: WdlScheduler>(
         &mut self,
         schedule: &TrainingSchedule<LR, WDL>,
         settings: &LocalSettings,
-        data_loader: &D,
-        testing: &TestSettings<T>,
+        data_loader: &impl DataLoader<Inp::RequiredDataType>,
+        mut callback: impl FnMut(usize, &Self, &TrainingSchedule<LR, WDL>, &LocalSettings),
     ) {
         let test_loader = settings.test_set.map(|test| DirectSequentialDataLoader::new(&[test.path]));
         let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
 
+        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, settings| {
+            callback(superbatch, trainer, schedule, settings)
+        });
+    }
+
+    pub fn run_and_test(
+        &mut self,
+        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
+        settings: &LocalSettings,
+        data_loader: &impl DataLoader<Inp::RequiredDataType>,
+        testing: &TestSettings<impl EngineType>,
+    ) {
         testing.setup(schedule);
 
         let mut handles = Vec::new();
 
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, _| {
+        self.run_with_callback(schedule, settings, data_loader, |superbatch, trainer, schedule, _| {
             if superbatch % testing.test_rate == 0 || superbatch == schedule.steps.end_superbatch {
                 trainer.save_to_checkpoint(&format!("{}/nets/{}-{superbatch}", testing.out_dir, schedule.net_id));
                 let handle = testing.dispatch(&schedule.net_id, superbatch);
