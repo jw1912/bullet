@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use bullet_core::{
     graph::{builder::Shape, ir::args::GraphIRCompileArgs},
     optimiser::Optimiser,
@@ -16,21 +18,29 @@ use super::{
     PolicyTrainer,
 };
 
-pub struct PolicyTrainerBuilder<O, I, T, B> {
+pub struct PolicyTrainerBuilder<O, I, T, B, P> {
     input_getter: Option<I>,
     move_mapper: Option<ChessMoveMapper<T, B>>,
     saved_format: Option<Vec<SavedFormat>>,
     optimiser: Option<O>,
     compile_args: Option<GraphIRCompileArgs>,
+    perspective: PhantomData<P>,
 }
 
-impl<O, I, T, B> Default for PolicyTrainerBuilder<O, I, T, B> {
+impl<O, I, T, B> Default for PolicyTrainerBuilder<O, I, T, B, SinglePerspective> {
     fn default() -> Self {
-        Self { input_getter: None, move_mapper: None, saved_format: None, optimiser: None, compile_args: None }
+        Self {
+            input_getter: None,
+            move_mapper: None,
+            saved_format: None,
+            optimiser: None,
+            compile_args: None,
+            perspective: PhantomData,
+        }
     }
 }
 
-impl<O, I, T, B> PolicyTrainerBuilder<O, I, T, B>
+impl<O, I, T, B, P> PolicyTrainerBuilder<O, I, T, B, P>
 where
     I: SparseInputType<RequiredDataType = ChessBoard>,
     T: SquareTransform,
@@ -66,29 +76,7 @@ where
         self
     }
 
-    pub fn build_single_perspective<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
-    where
-        F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>,
-    {
-        self.build(|inputs, nnz, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            f(builder, stm)
-        })
-    }
-
-    pub fn build_dual_perspective<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
-    where
-        F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>,
-    {
-        self.build(|inputs, nnz, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let ntm = builder.new_sparse_input("nstm", Shape::new(inputs, 1), nnz);
-
-            f(builder, stm, ntm)
-        })
-    }
-
-    fn build<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
+    fn build_internal<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
     where
         F: for<'a> Fn(usize, usize, &'a NetworkBuilder) -> NetworkBuilderNode<'a>,
     {
@@ -118,5 +106,60 @@ where
             move_mapper,
             saved_format: self.saved_format,
         }
+    }
+}
+
+pub struct SinglePerspective;
+pub struct DualPerspective;
+
+impl<O, I, T, B> PolicyTrainerBuilder<O, I, T, B, SinglePerspective>
+where
+    I: SparseInputType<RequiredDataType = ChessBoard>,
+    T: SquareTransform,
+    B: MoveBucket,
+    O: OptimiserType,
+{
+    pub fn single_perspective(self) -> Self{
+        self
+    }
+
+    pub fn dual_perspective(self) -> PolicyTrainerBuilder<O, I, T, B, DualPerspective> {
+        PolicyTrainerBuilder {
+            input_getter: self.input_getter,
+            move_mapper: self.move_mapper,
+            saved_format: self.saved_format,
+            optimiser: self.optimiser,
+            compile_args: self.compile_args,
+            perspective: PhantomData,
+        }
+    }
+
+    pub fn build<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
+    where
+        F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>,
+    {
+        self.build_internal(|inputs, nnz, builder| {
+            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
+            f(builder, stm)
+        })
+    }
+}
+
+impl<O, I, T, B> PolicyTrainerBuilder<O, I, T, B, DualPerspective>
+where
+    I: SparseInputType<RequiredDataType = ChessBoard>,
+    T: SquareTransform,
+    B: MoveBucket,
+    O: OptimiserType,
+{
+    pub fn build<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
+    where
+        F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>,
+    {
+        self.build_internal(|inputs, nnz, builder| {
+            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
+            let ntm = builder.new_sparse_input("nstm", Shape::new(inputs, 1), nnz);
+            f(builder, stm, ntm)
+        })
     }
 }
