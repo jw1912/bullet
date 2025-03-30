@@ -119,7 +119,7 @@ where
     B: MoveBucket,
     O: OptimiserType,
 {
-    pub fn single_perspective(self) -> Self{
+    pub fn single_perspective(self) -> Self {
         self
     }
 
