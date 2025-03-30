@@ -147,3 +147,48 @@ impl<D: Device> DenseMatrix<D> {
         Ok(buf)
     }
 }
+
+/// Reads a matrix from a byte buffer, returning how many bytes were read
+/// and the matrix ID that was read.
+pub fn read_from_byte_buffer(bytes: &[u8], old_format: bool) -> (Vec<f32>, String, usize) {
+    const USIZE: usize = std::mem::size_of::<usize>();
+
+    let mut offset = 0;
+
+    let mut id = String::new();
+    loop {
+        let ch = bytes[offset];
+        offset += 1;
+
+        if ch == b'\n' {
+            break;
+        }
+
+        id.push(char::from(ch));
+    }
+
+    let mut single_size = [0u8; USIZE];
+    single_size.copy_from_slice(&bytes[offset..offset + USIZE]);
+    offset += USIZE;
+
+    let mut single_size = usize::from_le_bytes(single_size);
+
+    if old_format {
+        let mut cols = [0u8; USIZE];
+        cols.copy_from_slice(&bytes[offset..offset + USIZE]);
+        offset += USIZE;
+        single_size *= usize::from_le_bytes(cols);
+    }
+
+    let total_read = offset + single_size * 4;
+
+    let mut values = vec![0.0; single_size];
+
+    for (word, val) in bytes[offset..total_read].chunks_exact(4).zip(values.iter_mut()) {
+        let mut buf = [0; 4];
+        buf.copy_from_slice(word);
+        *val = f32::from_le_bytes(buf);
+    }
+
+    (values, id, total_read)
+}

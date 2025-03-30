@@ -5,7 +5,7 @@ mod sparse;
 
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
-pub use dense::DenseMatrix;
+pub use dense::{DenseMatrix, read_from_byte_buffer};
 pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 

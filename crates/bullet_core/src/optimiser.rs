@@ -98,7 +98,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     }
 
     pub fn write_to_checkpoint(&self, path: &str) -> Result<(), D::DeviceError> {
-        utils::write_graph_weights_to_file(&self.graph, &format!("{path}/weights.bin"));
+        self.graph.write_to_file(&format!("{path}/weights.bin"));
         let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
         S::write_to_checkpoint(&map, path)
     }
@@ -120,7 +120,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     }
 
     fn load_weights_from_file_(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {
-        utils::load_graph_weights_from_file(&mut self.graph, path, old_format)
+        self.graph.load_from_file(path, old_format)
     }
 
     fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {

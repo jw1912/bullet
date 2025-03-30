@@ -1,12 +1,12 @@
 pub struct GraphIRCompileArgs {
     pub(super) emit_ir: bool,
     pub(super) fancy_ir_display: Option<f32>,
-    pub(super) allow_fusion: bool,
+    pub(super) allow_optimisations: bool,
 }
 
 impl Default for GraphIRCompileArgs {
     fn default() -> Self {
-        Self { emit_ir: false, fancy_ir_display: None, allow_fusion: true }
+        Self { emit_ir: false, fancy_ir_display: None, allow_optimisations: true }
     }
 }
 
@@ -21,8 +21,8 @@ impl GraphIRCompileArgs {
         self
     }
 
-    pub fn disable_fusion(mut self) -> Self {
-        self.allow_fusion = false;
+    pub fn disable_optimisations(mut self) -> Self {
+        self.allow_optimisations = false;
         self
     }
 }
