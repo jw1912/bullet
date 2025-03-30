@@ -1,5 +1,7 @@
 use crate::default::formats::montyformat::chess::{Attacks, Move, Piece, Position, Side};
 
+pub const UNIQUE_CHESS_MOVES: usize = NUM_MOVES;
+
 pub const MAX_MOVES: usize = 96;
 const NUM_MOVES: usize = OFFSETS[64] + PROMOS;
 const PROMOS: usize = 4 * 22;
@@ -13,7 +15,9 @@ pub struct ChessMoveMapper<T, B> {
 #[derive(Clone, Copy)]
 pub struct NoBuckets;
 impl MoveBucket for NoBuckets {
-    const NUM: usize = 1;
+    fn num_buckets(&self) -> usize {
+        1
+    }
 
     fn get(&self, _: &Position, _: Move) -> usize {
         0
@@ -21,12 +25,14 @@ impl MoveBucket for NoBuckets {
 }
 
 #[derive(Clone, Copy)]
-pub struct GoodSEEBuckets;
+pub struct GoodSEEBuckets(i32);
 impl MoveBucket for GoodSEEBuckets {
-    const NUM: usize = 1;
+    fn num_buckets(&self) -> usize {
+        2
+    }
 
     fn get(&self, pos: &Position, mov: Move) -> usize {
-        usize::from(see(pos, &mov, -108))
+        usize::from(see(pos, &mov, self.0))
     }
 }
 
@@ -51,7 +57,7 @@ pub trait SquareTransform: Copy + Send + Sync + 'static {
 }
 
 pub trait MoveBucket: Copy + Send + Sync + 'static {
-    const NUM: usize;
+    fn num_buckets(&self) -> usize;
 
     fn get(&self, pos: &Position, mov: Move) -> usize;
 }
@@ -79,7 +85,7 @@ impl<T: SquareTransform, B: MoveBucket> ChessMoveMapper<T, B> {
     }
 
     pub fn num_move_indices(&self) -> usize {
-        NUM_MOVES * B::NUM
+        NUM_MOVES * self.bucket.num_buckets()
     }
 }
 

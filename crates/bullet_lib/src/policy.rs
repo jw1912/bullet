@@ -1,6 +1,6 @@
 mod builder;
-mod loader;
-mod move_maps;
+pub mod loader;
+pub mod move_maps;
 mod preparer;
 
 use bullet_core::optimiser::{Optimiser, OptimiserState};
@@ -11,11 +11,33 @@ use preparer::{PolicyDataPreparer, PolicyPreparedData};
 
 use crate::{
     default::inputs::SparseInputType,
-    lr::LrScheduler,
-    trainer::{logger, save::SavedFormat, NetworkTrainer},
-    wdl::WdlScheduler,
-    ExecutionContext, LocalSettings, TrainingSchedule,
+    nn::ExecutionContext,
+    trainer::{
+        logger,
+        save::SavedFormat,
+        schedule::{lr::LrScheduler, wdl::ConstantWDL, TrainingSchedule, TrainingSteps},
+        settings::LocalSettings,
+        NetworkTrainer,
+    },
 };
+
+#[derive(Clone)]
+pub struct PolicyTrainingSchedule<'a, LR> {
+    pub net_id: &'a str,
+    pub steps: TrainingSteps,
+    pub lr_scheduler: LR,
+    pub save_rate: usize,
+}
+
+#[derive(Clone, Copy)]
+pub struct PolicyLocalSettings<'a> {
+    pub data_prep_threads: usize,
+    /// Directory to write checkpoints to.
+    pub output_directory: &'a str,
+    /// Number of batches that the dataloader can prepare and put in a queue before
+    /// they are processed in training.
+    pub batch_queue_size: usize,
+}
 
 pub use builder::PolicyTrainerBuilder;
 
@@ -33,54 +55,70 @@ where
     T: SquareTransform,
     B: MoveBucket,
 {
+    pub fn profile_all_nodes(&mut self) {
+        self.optimiser.graph.profile_all_nodes();
+    }
+
+    pub fn report_profiles(&self) {
+        self.optimiser.graph.report_profiles();
+    }
+
     pub fn run(
         &mut self,
-        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
-        settings: &LocalSettings,
+        schedule: &PolicyTrainingSchedule<impl LrScheduler>,
+        settings: &PolicyLocalSettings,
         data_loader: &PolicyDataLoader,
     ) {
         self.run_with_callback(schedule, settings, data_loader, |_, _, _, _| {});
     }
 
-    pub fn run_with_callback<LR: LrScheduler, WDL: WdlScheduler>(
+    pub fn run_with_callback<LR: LrScheduler>(
         &mut self,
-        schedule: &TrainingSchedule<LR, WDL>,
-        settings: &LocalSettings,
+        schedule: &PolicyTrainingSchedule<LR>,
+        settings: &PolicyLocalSettings,
         data_loader: &PolicyDataLoader,
-        mut callback: impl FnMut(usize, &Self, &TrainingSchedule<LR, WDL>, &LocalSettings),
+        mut callback: impl FnMut(usize, &Self, &TrainingSchedule<LR, ConstantWDL>, &LocalSettings),
     ) {
-        let test_loader = settings.test_set.map(|test| PolicyDataLoader::new(test.path, 1));
-        let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
+        let PolicyTrainingSchedule { net_id, steps, lr_scheduler, save_rate } = schedule.clone();
+        let schedule = TrainingSchedule {
+            net_id: net_id.to_string(),
+            eval_scale: 1.0,
+            steps,
+            wdl_scheduler: ConstantWDL { value: 0.0 },
+            lr_scheduler,
+            save_rate,
+        };
 
-        self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, settings| {
-            callback(superbatch, trainer, schedule, settings)
-        });
+        let PolicyLocalSettings { data_prep_threads, output_directory, batch_queue_size } = *settings;
+        let settings = LocalSettings { threads: data_prep_threads, test_set: None, output_directory, batch_queue_size };
+
+        let preparer = self.training_preamble(&schedule, &settings, data_loader);
+        let test_preparer = None::<PolicyDataPreparer<Inp, T, B>>;
+
+        self.train_custom(
+            &preparer,
+            &test_preparer,
+            &schedule,
+            &settings,
+            |superbatch, trainer, schedule, settings| callback(superbatch, trainer, schedule, settings),
+        );
     }
 
-    pub fn training_preamble<LR: LrScheduler, WDL: WdlScheduler>(
+    fn training_preamble<LR: LrScheduler>(
         &self,
-        schedule: &TrainingSchedule<LR, WDL>,
+        schedule: &TrainingSchedule<LR, ConstantWDL>,
         settings: &LocalSettings,
         data_loader: &PolicyDataLoader,
-        test_loader: &Option<PolicyDataLoader>,
-    ) -> Paired<PolicyDataPreparer<Inp, T, B>> {
+    ) -> PolicyDataPreparer<Inp, T, B> {
         logger::clear_colours();
         println!("{}", logger::ansi("Beginning Training", "34;1"));
 
         schedule.display();
         settings.display();
 
-        let preparer = PolicyDataPreparer::new(data_loader.clone(), self.input_getter.clone(), self.move_mapper);
-
-        let test_preparer = test_loader
-            .as_ref()
-            .map(|loader| PolicyDataPreparer::new(loader.clone(), self.input_getter.clone(), self.move_mapper));
-
-        (preparer, test_preparer)
+        PolicyDataPreparer::new(data_loader.clone(), self.input_getter.clone(), self.move_mapper)
     }
 }
-
-type Paired<T> = (T, Option<T>);
 
 impl<Opt, Inp, T, B> NetworkTrainer for PolicyTrainer<Opt, Inp, T, B>
 where

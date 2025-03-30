@@ -1,4 +1,7 @@
-use bullet_core::{graph::builder::Shape, optimiser::Optimiser};
+use bullet_core::{
+    graph::{builder::Shape, ir::args::GraphIRCompileArgs},
+    optimiser::Optimiser,
+};
 use bulletformat::ChessBoard;
 
 use crate::{
@@ -13,12 +16,18 @@ use super::{
     PolicyTrainer,
 };
 
-#[derive(Default)]
 pub struct PolicyTrainerBuilder<O, I, T, B> {
     input_getter: Option<I>,
     move_mapper: Option<ChessMoveMapper<T, B>>,
     saved_format: Option<Vec<SavedFormat>>,
     optimiser: Option<O>,
+    compile_args: Option<GraphIRCompileArgs>,
+}
+
+impl<O, I, T, B> Default for PolicyTrainerBuilder<O, I, T, B> {
+    fn default() -> Self {
+        Self { input_getter: None, move_mapper: None, saved_format: None, optimiser: None, compile_args: None }
+    }
 }
 
 impl<O, I, T, B> PolicyTrainerBuilder<O, I, T, B>
@@ -40,9 +49,15 @@ where
         self
     }
 
-    pub fn move_mapper(mut self, transform: T, bucket: B) {
+    pub fn move_mapper(mut self, transform: T, bucket: B) -> Self {
         assert!(self.move_mapper.is_none(), "Move mapper already set!");
         self.move_mapper = Some(ChessMoveMapper { transform, bucket });
+        self
+    }
+
+    pub fn compile_args(mut self, args: GraphIRCompileArgs) -> Self {
+        self.compile_args = Some(args);
+        self
     }
 
     pub fn save_format(mut self, fmt: &[SavedFormat]) -> Self {
@@ -80,12 +95,18 @@ where
         let input_getter = self.input_getter.expect("Need to set inputs!");
         let move_mapper = self.move_mapper.expect("Need to set move mapper!");
 
-        let builder = NetworkBuilder::default();
-        let mask = builder.new_sparse_input("mask", Shape::new(move_mapper.num_move_indices(), 1), MAX_MOVES);
-        let dist = builder.new_dense_input("dist", Shape::new(MAX_MOVES, 1));
-
         let inputs = input_getter.num_inputs();
         let nnz = input_getter.max_active();
+        let outputs = move_mapper.num_move_indices();
+
+        let mut builder = NetworkBuilder::default();
+
+        if let Some(args) = self.compile_args {
+            builder.set_compile_args(args);
+        }
+
+        let mask = builder.new_sparse_input("mask", Shape::new(outputs, 1), MAX_MOVES);
+        let dist = builder.new_dense_input("dist", Shape::new(MAX_MOVES, 1));
 
         let out = f(inputs, nnz, &builder);
         out.masked_softmax_crossentropy_loss(dist, mask);
