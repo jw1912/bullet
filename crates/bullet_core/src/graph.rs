@@ -238,11 +238,7 @@ impl<D: Device> Graph<D> {
 
     /// Loads the weights of a graph from a file. If `gradients` is true,
     /// it will instead load the gradients of those weights.
-    pub fn load_from_file(
-        &mut self,
-        path: &str,
-        old_format: bool,
-    ) -> Result<(), D::DeviceError> {
+    pub fn load_from_file(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {
         use std::{fs::File, io::Read};
 
         let mut buf = Vec::new();

@@ -1,4 +1,7 @@
-use crate::backend::{device::Device, tensor::{read_from_byte_buffer, DenseMatrix}};
+use crate::backend::{
+    device::Device,
+    tensor::{read_from_byte_buffer, DenseMatrix},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Placement {
