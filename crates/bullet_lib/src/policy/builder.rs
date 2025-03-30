@@ -1,9 +1,17 @@
 use bullet_core::{graph::builder::Shape, optimiser::Optimiser};
 use bulletformat::ChessBoard;
 
-use crate::{default::inputs::SparseInputType, nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode}, trainer::save::SavedFormat, ExecutionContext};
+use crate::{
+    default::inputs::SparseInputType,
+    nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
+    trainer::save::SavedFormat,
+    ExecutionContext,
+};
 
-use super::{move_maps::{ChessMoveMapper, MoveBucket, SquareTransform, MAX_MOVES}, PolicyTrainer};
+use super::{
+    move_maps::{ChessMoveMapper, MoveBucket, SquareTransform, MAX_MOVES},
+    PolicyTrainer,
+};
 
 #[derive(Default)]
 pub struct PolicyTrainerBuilder<O, I, T, B> {
@@ -14,7 +22,11 @@ pub struct PolicyTrainerBuilder<O, I, T, B> {
 }
 
 impl<O, I, T, B> PolicyTrainerBuilder<O, I, T, B>
-where I: SparseInputType<RequiredDataType = ChessBoard>, T: SquareTransform, B: MoveBucket, O: OptimiserType
+where
+    I: SparseInputType<RequiredDataType = ChessBoard>,
+    T: SquareTransform,
+    B: MoveBucket,
+    O: OptimiserType,
 {
     pub fn inputs(mut self, inputs: I) -> Self {
         assert!(self.input_getter.is_none(), "Inputs already set!");
@@ -40,7 +52,8 @@ where I: SparseInputType<RequiredDataType = ChessBoard>, T: SquareTransform, B: 
     }
 
     pub fn build_single_perspective<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
-    where F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>
+    where
+        F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>,
     {
         self.build(|inputs, nnz, builder| {
             let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
@@ -49,7 +62,8 @@ where I: SparseInputType<RequiredDataType = ChessBoard>, T: SquareTransform, B: 
     }
 
     pub fn build_dual_perspective<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
-    where F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>
+    where
+        F: for<'a> Fn(&'a NetworkBuilder, NetworkBuilderNode<'a>, NetworkBuilderNode<'a>) -> NetworkBuilderNode<'a>,
     {
         self.build(|inputs, nnz, builder| {
             let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
@@ -60,7 +74,8 @@ where I: SparseInputType<RequiredDataType = ChessBoard>, T: SquareTransform, B: 
     }
 
     fn build<F>(self, f: F) -> PolicyTrainer<O::Optimiser, I, T, B>
-    where F: for<'a> Fn(usize, usize, &'a NetworkBuilder) -> NetworkBuilderNode<'a>
+    where
+        F: for<'a> Fn(usize, usize, &'a NetworkBuilder) -> NetworkBuilderNode<'a>,
     {
         let input_getter = self.input_getter.expect("Need to set inputs!");
         let move_mapper = self.move_mapper.expect("Need to set move mapper!");

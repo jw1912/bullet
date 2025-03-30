@@ -10,7 +10,11 @@ use move_maps::{ChessMoveMapper, MoveBucket, SquareTransform};
 use preparer::{PolicyDataPreparer, PolicyPreparedData};
 
 use crate::{
-    default::inputs::SparseInputType, lr::LrScheduler, trainer::{logger, save::SavedFormat, NetworkTrainer}, wdl::WdlScheduler, ExecutionContext, LocalSettings, TrainingSchedule
+    default::inputs::SparseInputType,
+    lr::LrScheduler,
+    trainer::{logger, save::SavedFormat, NetworkTrainer},
+    wdl::WdlScheduler,
+    ExecutionContext, LocalSettings, TrainingSchedule,
 };
 
 pub use builder::PolicyTrainerBuilder;
@@ -66,19 +70,11 @@ where
         schedule.display();
         settings.display();
 
-        let preparer = PolicyDataPreparer::new(
-            data_loader.clone(),
-            self.input_getter.clone(),
-            self.move_mapper,
-        );
+        let preparer = PolicyDataPreparer::new(data_loader.clone(), self.input_getter.clone(), self.move_mapper);
 
-        let test_preparer = test_loader.as_ref().map(|loader| {
-            PolicyDataPreparer::new(
-                loader.clone(),
-                self.input_getter.clone(),
-                self.move_mapper,
-            )
-        });
+        let test_preparer = test_loader
+            .as_ref()
+            .map(|loader| PolicyDataPreparer::new(loader.clone(), self.input_getter.clone(), self.move_mapper));
 
         (preparer, test_preparer)
     }
