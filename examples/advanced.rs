@@ -1,6 +1,6 @@
 use bullet_lib::{
     game::{
-        inputs::{self, SparseInputType},
+        inputs::{Chess768, SparseInputType},
         outputs::MaterialCount,
     },
     nn::{optimiser::AdamW, InitSettings, Shape},
@@ -12,12 +12,11 @@ use bullet_lib::{
     value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder},
 };
 
-type InputFeatures = inputs::Chess768;
 const HL_SIZE: usize = 512;
 const OUTPUT_BUCKETS: usize = 8;
 
 fn main() {
-    let inputs = InputFeatures::default();
+    let inputs = Chess768;
     let num_inputs = inputs.num_inputs();
 
     let save_format = [
@@ -40,14 +39,12 @@ fn main() {
         .save_format(&save_format)
         .loss_fn(|output, targets| output.sigmoid().squared_error(targets))
         .build(|builder, stm, ntm, buckets| {
-            // trainable weights
             let l0 = builder.new_affine("l0", num_inputs, HL_SIZE);
             let l1 = builder.new_affine("l1", HL_SIZE, OUTPUT_BUCKETS * 16);
             let l2 = builder.new_affine("l2", 30, OUTPUT_BUCKETS * 32);
             let l3 = builder.new_affine("l3", 32, OUTPUT_BUCKETS);
             let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
-            // inference
             let stm_subnet = l0.forward(stm).crelu();
             let ntm_subnet = l0.forward(ntm).crelu();
             let mut out = stm_subnet.concat(ntm_subnet);
@@ -64,7 +61,7 @@ fn main() {
             out = l2.forward(out).select(buckets).screlu();
             out = l3.forward(out).select(buckets);
 
-            let pst_out = pst.matmul(stm) - pst.matmul(ntm);
+            let pst_out = (pst.matmul(stm) - pst.matmul(ntm)) / 2.0;
             out + skip_neuron + pst_out
         });
 

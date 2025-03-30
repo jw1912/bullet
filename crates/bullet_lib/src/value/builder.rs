@@ -22,6 +22,8 @@ pub struct ValueTrainerBuilder<O, I, P, Out, L> {
     perspective: PhantomData<P>,
     output_buckets: Out,
     loss_fn: Option<L>,
+    factorised: Vec<String>,
+    wdl_output: bool,
 }
 
 impl<O, I, L> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets, L> {
@@ -34,6 +36,8 @@ impl<O, I, L> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputB
             perspective: PhantomData,
             output_buckets: NoOutputBuckets,
             loss_fn: None,
+            wdl_output: false,
+            factorised: Vec::new(),
         }
     }
 }
@@ -61,6 +65,11 @@ where
         self
     }
 
+    pub fn wdl_output(mut self) -> Self {
+        self.wdl_output = true;
+        self
+    }
+
     pub fn save_format(mut self, fmt: &[SavedFormat]) -> Self {
         assert!(self.saved_format.is_none(), "Save format already set!");
         self.saved_format = Some(fmt.to_vec());
@@ -70,6 +79,14 @@ where
     pub fn loss_fn(mut self, f: L) -> Self {
         assert!(self.loss_fn.is_none(), "Loss function already set!");
         self.loss_fn = Some(f);
+        self
+    }
+
+    pub fn mark_input_factorised(mut self, list: &[&str]) -> Self {
+        for id in list {
+            self.factorised.push(id.to_string());
+        }
+
         self
     }
 
@@ -93,14 +110,23 @@ where
             builder.set_compile_args(args);
         }
 
-        let targets = builder.new_dense_input("targets", Shape::new(1, 1));
+        let output_size = if self.wdl_output { 3 } else { 1 };
+        let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
         let out = f(inputs, nnz, &builder);
         let output_node = out.node();
 
         let _ = loss(out, targets);
         let graph = builder.build(ExecutionContext::default());
 
-        ValueTrainer::new(graph, output_node, Default::default(), input_getter, buckets, saved_format, false)
+        let mut trainer =
+            ValueTrainer::new(graph, output_node, Default::default(), input_getter, buckets, saved_format, false);
+
+        let factorised = self.factorised.iter().map(String::as_str).collect::<Vec<_>>();
+        if !factorised.is_empty() {
+            trainer.mark_weights_as_input_factorised(&factorised);
+        }
+
+        trainer
     }
 }
 
@@ -149,6 +175,8 @@ where
             perspective: PhantomData,
             output_buckets: self.output_buckets,
             loss_fn: self.loss_fn,
+            factorised: self.factorised,
+            wdl_output: self.wdl_output,
         }
     }
 }
@@ -172,6 +200,8 @@ where
             perspective: self.perspective,
             output_buckets: OutputBucket(buckets),
             loss_fn: self.loss_fn,
+            factorised: self.factorised,
+            wdl_output: self.wdl_output,
         }
     }
 }
