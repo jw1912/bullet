@@ -2,6 +2,8 @@
 /// for training value networks.
 pub mod default;
 
+pub mod policy;
+
 /// Contains the `NetworkTrainer` trait and
 /// associated structs for its use
 pub mod trainer;
