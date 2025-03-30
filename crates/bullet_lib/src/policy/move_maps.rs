@@ -1,4 +1,4 @@
-use crate::default::formats::montyformat::chess::{Attacks, Move, Piece, Position, Side};
+use crate::game::formats::montyformat::chess::{Attacks, Move, Piece, Position, Side};
 
 pub const UNIQUE_CHESS_MOVES: usize = NUM_MOVES;
 

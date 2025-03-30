@@ -1,7 +1,8 @@
 use bulletformat::ChessBoard;
 
 use crate::{
-    default::{formats::montyformat::chess::Move, inputs::SparseInputType, loader::DataLoader as Blah},
+    default::loader::DataLoader as Blah,
+    game::{formats::montyformat::chess::Move, inputs::SparseInputType},
     trainer::DataPreparer,
 };
 

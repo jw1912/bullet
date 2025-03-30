@@ -8,11 +8,12 @@ use crate::{
     Activation, ExecutionContext, Shape,
 };
 
-use super::{
+use crate::game::{
     inputs::SparseInputType,
     outputs::{self, OutputBuckets},
-    AdditionalTrainerInputs, Trainer,
 };
+
+use super::{AdditionalTrainerInputs, Trainer};
 
 use bullet_core::optimiser::Optimiser;
 

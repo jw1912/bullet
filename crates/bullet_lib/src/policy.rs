@@ -10,7 +10,7 @@ use move_maps::{ChessMoveMapper, MoveBucket, SquareTransform};
 use preparer::{PolicyDataPreparer, PolicyPreparedData};
 
 use crate::{
-    default::inputs::SparseInputType,
+    game::inputs::SparseInputType,
     nn::ExecutionContext,
     trainer::{
         logger,

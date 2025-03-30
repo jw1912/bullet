@@ -5,9 +5,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::default::{
-    formats::montyformat::{chess::Position, MontyFormat},
-    loader::DataLoader,
+use crate::{
+    default::loader::DataLoader,
+    game::formats::montyformat::{chess::Position, MontyFormat},
 };
 
 use super::move_maps::MAX_MOVES;

@@ -12,9 +12,10 @@ pub use sfbinpack::SfBinpackLoader;
 pub use text::InMemoryTextLoader;
 pub use viribinpack::ViriBinpackLoader;
 
-use super::{inputs::SparseInputType, outputs::OutputBuckets};
-
-use crate::trainer::DataPreparer;
+use crate::{
+    game::{inputs::SparseInputType, outputs::OutputBuckets},
+    trainer::DataPreparer,
+};
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -73,6 +74,7 @@ where
     I: SparseInputType,
     O: OutputBuckets<I::RequiredDataType>,
     D: DataLoader<I::RequiredDataType>,
+    I::RequiredDataType: LoadableDataType,
 {
     type DataType = I::RequiredDataType;
     type PreparedData = DefaultDataPreparer<I, O>;
@@ -133,7 +135,10 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
         threads: usize,
         blend: f32,
         scale: f32,
-    ) -> Self {
+    ) -> Self
+    where
+        I::RequiredDataType: LoadableDataType,
+    {
         let rscale = 1.0 / scale;
         let batch_size = data.len();
         let max_active = input_getter.max_active();
