@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::backend::{
-    device::{blas::BlasOperations, Device, OperationError},
+    device::{Device, OperationError},
     tensor::DenseMatrix,
 };
 
@@ -61,7 +61,7 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
             assert_eq!(weights.single_size, self.slow_params.single_size);
             assert!(self.slow_params.batch_size().is_none());
 
-            self.slow_params.buf.geam(weights.size(), 1.0 - self.alpha, None, self.alpha, Some(&weights.buf))?;
+            self.slow_params.lerp(self.alpha, weights)?;
             weights.copy_from(&self.slow_params)?;
         }
 

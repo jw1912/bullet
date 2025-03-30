@@ -1,6 +1,6 @@
 use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 
-use crate::backend::device::{Device, DeviceBuffer};
+use crate::backend::device::{base::BaseOperations, blas::BlasOperations, Device, DeviceBuffer, OperationError};
 
 pub struct DenseMatrix<D: Device> {
     pub(crate) buf: D::BufferF32,
@@ -24,6 +24,38 @@ impl<D: Device> DenseMatrix<D> {
         let mut res = Self { buf: D::BufferF32::new(device, size)?, single_size: size, batch_size: None };
         res.load_from_slice(None, &vec![1.0; size])?;
         Ok(res)
+    }
+
+    /// Calculates `self += scale * rhs`
+    pub fn add(&mut self, scale: f32, rhs: &Self) -> Result<(), OperationError<D::DeviceError>> {
+        if self.size() != rhs.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        self.buf.geam(self.size(), 1.0, None, scale, Some(&rhs.buf))?;
+
+        Ok(())
+    }
+
+    /// Calculates `self = (1 - lambda) * self + lambda * rhs`
+    pub fn lerp(&mut self, lambda: f32, rhs: &Self) -> Result<(), OperationError<D::DeviceError>> {
+        if self.size() != rhs.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        self.buf.geam(self.size(), 1.0 - lambda, None, lambda, Some(&rhs.buf))?;
+
+        Ok(())
+    }
+
+    pub fn clamp(&mut self, min: f32, max: f32) -> Result<(), OperationError<D::DeviceError>> {
+        self.buf.clip(self.size(), min, max)?;
+        Ok(())
+    }
+
+    pub fn scale(&mut self, scale: f32) -> Result<(), OperationError<D::DeviceError>> {
+        self.buf.geam(self.size(), scale, None, 0.0, None)?;
+        Ok(())
     }
 
     pub fn allocated_size(&self) -> usize {
