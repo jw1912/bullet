@@ -6,10 +6,16 @@
 /// - t10k-labels.idx1-ubyte
 use std::{fs::File, io::Read, time::Instant};
 
-use bullet_core::{backend::device::OperationError, graph::{Node, builder::{GraphBuilder, Shape}, Graph}};
-use bullet_hip_backend::{ExecutionContext, DeviceError};
+use bullet_core::{
+    backend::device::OperationError,
+    graph::{
+        builder::{GraphBuilder, Shape},
+        Graph, Node,
+    },
+};
+use bullet_hip_backend::{DeviceError, ExecutionContext};
 
-fn main() -> Result<(), OperationError<DeviceError>>{
+fn main() -> Result<(), OperationError<DeviceError>> {
     let images = Images::new("data/mnist/train-images.idx3-ubyte");
     let labels = Labels::new("data/mnist/train-labels.idx1-ubyte");
     let batch_size = labels.vals.len() / 10;
@@ -53,7 +59,10 @@ fn main() -> Result<(), OperationError<DeviceError>>{
             let valid_acc = calculate_accuracy(&mut graph, outputs, &validation_images, &validation_labels)?;
             let train_acc = calculate_accuracy(&mut graph, outputs, &images, &labels)?;
 
-            println!("epoch {epoch} train accuracy {train_acc:.2}% validation accuarcy {valid_acc:.2}% time {:.3}s", t.elapsed().as_secs_f32());
+            println!(
+                "epoch {epoch} train accuracy {train_acc:.2}% validation accuarcy {valid_acc:.2}% time {:.3}s",
+                t.elapsed().as_secs_f32()
+            );
 
             graph.get_input_mut("inputs").load_dense_from_slice(Some(batch_size), &images.vals)?;
             graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
@@ -71,7 +80,12 @@ fn main() -> Result<(), OperationError<DeviceError>>{
     Ok(())
 }
 
-fn calculate_accuracy(graph: &mut Graph<ExecutionContext>, output_node: Node, images: &Images, labels: &Labels) -> Result<f32, OperationError<DeviceError>> {
+fn calculate_accuracy(
+    graph: &mut Graph<ExecutionContext>,
+    output_node: Node,
+    images: &Images,
+    labels: &Labels,
+) -> Result<f32, OperationError<DeviceError>> {
     let batch_size = images.batch_size();
     graph.get_input_mut("inputs").load_dense_from_slice(Some(batch_size), &images.vals)?;
     graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
@@ -96,7 +110,7 @@ fn calculate_accuracy(graph: &mut Graph<ExecutionContext>, output_node: Node, im
             correct += 1;
         }
     }
-    
+
     assert_eq!(batch_size, labels.indices.len());
 
     Ok(100.0 * correct as f32 / batch_size as f32)
@@ -129,7 +143,11 @@ impl Images {
 
         assert_eq!(size * rows * cols, num_bytes as u32);
 
-        Self { vals: bytes.iter().map(|&x| f32::from(x) / f32::from(u8::MAX)).collect(), rows: rows as usize, cols: cols as usize }
+        Self {
+            vals: bytes.iter().map(|&x| f32::from(x) / f32::from(u8::MAX)).collect(),
+            rows: rows as usize,
+            cols: cols as usize,
+        }
     }
 
     pub fn batch_size(&self) -> usize {
