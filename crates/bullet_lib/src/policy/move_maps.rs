@@ -25,7 +25,7 @@ impl MoveBucket for NoBuckets {
 }
 
 #[derive(Clone, Copy)]
-pub struct GoodSEEBuckets(i32);
+pub struct GoodSEEBuckets(pub i32);
 impl MoveBucket for GoodSEEBuckets {
     fn num_buckets(&self) -> usize {
         2
