@@ -24,4 +24,4 @@ cargo r -r --example fusion
 
 Below is the output at the time of writing (may change as more optimisation passes are added).
 
-https://github.com/user-attachments/assets/47c78c44-7316-4e8a-8c80-246ac28af8e3
+https://github.com/user-attachments/assets/83285416-e320-4b24-b8d4-62f43b8ab9cf
