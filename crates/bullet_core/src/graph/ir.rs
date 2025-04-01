@@ -3,56 +3,20 @@ pub mod emit;
 pub mod fusion;
 pub mod node;
 pub mod op;
+pub mod shape;
 
-use std::{cell::RefCell, collections::HashSet, num::NonZeroUsize, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, num::NonZeroUsize, sync::Arc, thread, time::Duration};
 
 use args::GraphIRCompileArgs;
 use emit::GraphIRStringFormat;
 use fusion::FusionDescription;
-use node::AnnotatedNode;
+use node::{AnnotatedNode, GraphIRNode, GraphIRNodeError};
 use op::{GraphIROp, GraphIROpError};
+use shape::Shape;
 
-use crate::backend::{
-    device::{blas::Shape, Device},
-    tensor::Tensor,
-};
+use crate::backend::{device::Device, tensor::Tensor};
 
 use super::Graph;
-
-#[derive(Clone, Debug)]
-pub struct GraphIRNode {
-    pub id: Option<String>,
-    pub size: usize,
-    pub requires_grad: bool,
-    pub parent_operation: Option<GraphIROp>,
-    pub num_children: usize,
-    pub own: AnnotatedNode,
-}
-
-impl GraphIRNode {
-    pub fn is_valid(&self) -> Result<(), GraphIRNodeError> {
-        if self.own.shape.size() != self.size {
-            return Err(GraphIRNodeError::NodeDataDoesNotMatchExpected);
-        }
-
-        if let Some(op) = &self.parent_operation {
-            let (shape, batched) = op.output_shape().unwrap();
-
-            if shape != self.own.shape || self.own.can_be_batched != batched {
-                return Err(GraphIRNodeError::NodeDataDoesNotMatchExpected);
-            }
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum GraphIRNodeError {
-    NodeWithIdAlreadyExists(String),
-    NodeDataDoesNotMatchExpected,
-    NodeDoesNotExist,
-}
 
 #[derive(Default)]
 pub struct GraphIR {
@@ -123,8 +87,10 @@ impl GraphIR {
             parent_operation,
             size: shape.size(),
             requires_grad,
-            own: AnnotatedNode { idx: self.nodes.len(), shape, can_be_batched, sparse },
+            own: AnnotatedNode { idx: self.nodes.len(), shape },
             num_children: 0,
+            can_be_batched,
+            sparse,
         };
 
         if let Some(op) = &node.parent_operation {
@@ -175,7 +141,7 @@ impl GraphIR {
     }
 
     pub fn add_op(&mut self, operation: GraphIROp, requires_grad: bool) -> Result<AnnotatedNode, GraphIRError> {
-        let (shape, can_be_batched) = operation.output_shape()?;
+        let (shape, can_be_batched) = operation.output_info(self)?;
         self.add_node(None, Some(operation), shape, can_be_batched, requires_grad, None)
     }
 
@@ -222,8 +188,8 @@ impl GraphIR {
 
         let mut nodes = Vec::new();
         for node_data in &self.nodes {
-            if let Some(GraphIRNode { size, requires_grad, parent_operation, own, .. }) = node_data.clone() {
-                let tensor = Tensor::new(device.clone(), size, requires_grad, parent_operation, own);
+            if let Some(GraphIRNode { size, requires_grad, parent_operation, own, sparse, .. }) = node_data.clone() {
+                let tensor = Tensor::new(device.clone(), size, requires_grad, parent_operation, sparse, own);
                 let tensor = tensor.map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor));
 
                 nodes.push(Some(RefCell::new(tensor?)));
@@ -246,15 +212,15 @@ impl GraphIR {
 
         if let Some(x) = args.fancy_ir_display {
             print!("\x1b[s{self}\x1b[u");
-            std::thread::sleep(std::time::Duration::from_secs_f32(x));
+            thread::sleep(Duration::from_secs_f32(x));
         }
 
-        while self.optimisation_pass(fusion::fusion_pass)? {
+        while self.try_fusion_pass()? {
             optimistions += 1;
 
             if let Some(x) = args.fancy_ir_display {
                 print!("\x1b[s{self}\x1b[u");
-                std::thread::sleep(std::time::Duration::from_secs_f32(x));
+                thread::sleep(Duration::from_secs_f32(x));
             }
         }
 
@@ -271,13 +237,14 @@ impl GraphIR {
         Ok(())
     }
 
-    fn optimisation_pass<F: FnMut(&mut Self, usize) -> Result<bool, GraphIRError>>(
-        &mut self,
-        mut pass: F,
-    ) -> Result<bool, GraphIRError> {
+    fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
         for node in (0..self.nodes.len()).rev() {
-            if self.get(node).is_ok() && pass(self, node)? {
-                return Ok(true);
+            if self.get(node).is_ok() {
+                if let Some(mut desc) = fusion::search_for_fusion(self, node)? {
+                    desc.eliminated.push(node);
+                    self.apply_fusion(desc)?;
+                    return Ok(true);
+                }
             }
         }
 
@@ -307,7 +274,7 @@ impl GraphIR {
                     return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
                 }
 
-                data.is_valid()?;
+                self.is_data_valid(data)?;
 
                 if let Some(op) = &data.parent_operation {
                     for parent in op.nodes() {
@@ -316,15 +283,27 @@ impl GraphIR {
 
                         let parent_node = actual_parent.own;
 
-                        if parent.idx != parent_node.idx
-                            || parent.can_be_batched != parent_node.can_be_batched
-                            || parent.sparse != parent_node.sparse
-                            || parent.shape.size() != parent_node.shape.size()
-                        {
+                        if parent.idx != parent_node.idx || parent.shape.size() != parent_node.shape.size() {
                             return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
                         }
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_data_valid(&self, data: &GraphIRNode) -> Result<(), GraphIRError> {
+        if data.own.shape.size() != data.size {
+            return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+        }
+
+        if let Some(op) = &data.parent_operation {
+            let (shape, batched) = op.output_info(self)?;
+
+            if shape != data.own.shape || data.can_be_batched != batched {
+                return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
             }
         }
 

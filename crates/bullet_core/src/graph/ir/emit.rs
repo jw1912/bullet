@@ -4,12 +4,12 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::{
-    backend::device::{base::DiffableFromOutput, blas::Shape},
-    graph::ir::{node::AnnotatedNode, op::UnaryOp},
+use super::{
+    node::AnnotatedNode,
+    op::{DiffableFromOutput, UnaryOp},
+    shape::Shape,
+    GraphIR, GraphIRNode,
 };
-
-use super::{GraphIR, GraphIRNode};
 
 impl fmt::Display for GraphIR {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -156,11 +156,11 @@ fn op_args(
             SoftmaxCrossEntropyLoss(a, b) => format!("{}, {}", id(a), id(b)),
         },
         None => {
-            let layout = match node.own.sparse {
+            let layout = match node.sparse {
                 Some(nnz) => format!("Sparse(f32, {nnz})"),
                 None => "Dense(f32)".to_string(),
             };
-            format!("{}, {}, {}, {}", shape(node.own.shape), layout, node.requires_grad, node.own.can_be_batched)
+            format!("{}, {}, {}, {}", shape(node.own.shape), layout, node.requires_grad, node.can_be_batched)
         }
     }
 }

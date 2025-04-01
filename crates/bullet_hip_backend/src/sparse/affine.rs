@@ -1,4 +1,7 @@
-use bullet_core::backend::device::{base::DiffableFromOutput, blas::Shape, DeviceBuffer, OperationError};
+use bullet_core::{
+    backend::device::{DeviceBuffer, OperationError},
+    graph::ir::{op::DiffableFromOutput, shape::Shape},
+};
 
 use crate::{
     backend::{ops, Buffer},

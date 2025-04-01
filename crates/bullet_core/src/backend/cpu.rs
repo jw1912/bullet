@@ -6,8 +6,11 @@ pub mod sparse;
 use std::sync::Arc;
 
 use crate::{
-    backend::device::{base::DiffableFromOutput, blas::Shape, Device, DeviceBuffer, OperationError, OperationResult},
-    graph::tests,
+    backend::device::{Device, DeviceBuffer, OperationError, OperationResult},
+    graph::{
+        ir::{op::DiffableFromOutput, shape::Shape},
+        tests,
+    },
 };
 
 tests::make_tests! {

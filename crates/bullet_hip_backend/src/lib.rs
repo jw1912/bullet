@@ -9,13 +9,16 @@ mod tests;
 pub use backend::ExecutionContext;
 use backend::{bindings, ops, util, Buffer};
 
-use bullet_core::backend::{
-    device::{
-        base::{AdamConfig, BaseOperations, DiffableFromOutput},
-        blas::{BlasOperations, GemmConfig, Shape},
-        Device, DeviceBuffer, OperationError,
+use bullet_core::{
+    backend::{
+        device::{
+            base::{AdamConfig, BaseOperations},
+            blas::{BlasOperations, GemmConfig},
+            Device, DeviceBuffer, OperationError,
+        },
+        tensor,
     },
-    tensor,
+    graph::ir::{op::DiffableFromOutput, shape::Shape},
 };
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;

@@ -11,10 +11,10 @@ use std::{
     time::Instant,
 };
 
-use ir::{node::AnnotatedNode, GraphIRError};
+use ir::{node::AnnotatedNode, shape::Shape, GraphIRError};
 
 use crate::backend::{
-    device::{blas::Shape, Device, OperationError},
+    device::{Device, OperationError},
     tensor::{read_from_byte_buffer, Tensor},
 };
 
