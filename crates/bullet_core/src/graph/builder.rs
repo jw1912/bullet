@@ -96,7 +96,7 @@ impl GraphBuilder {
 
     pub fn build<D: Device>(self, device: D) -> Graph<D> {
         let mut builder = self.graph_builder.into_inner().unwrap();
-        builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root()), true).unwrap();
+        builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root().unwrap()), true).unwrap();
         let mut graph = builder.compile(device, self.args).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {

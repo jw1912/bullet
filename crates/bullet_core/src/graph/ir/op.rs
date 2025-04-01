@@ -149,6 +149,7 @@ impl GraphIROp {
                 ret(true, out, mismatch(&[a, b]))
             }
             PairwiseMul(input, post_concat) => {
+                check_dense_eq(input, true)?;
                 let is = input.shape;
                 let min = 2 + 2 * usize::from(*post_concat);
                 let out = Shape::new(is.rows() / 2, is.cols());
