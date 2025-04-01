@@ -1,9 +1,10 @@
 use crate::{
-    backend::device::{base::DiffableFromOutput, blas::Shape, Device, OperationError},
+    backend::device::{Device, OperationError},
     graph::{
         ir::{
             args::GraphIRCompileArgs,
-            op::{GraphIROp, GraphIROpError, GraphIROpErrorType},
+            op::{DiffableFromOutput, GraphIROp, GraphIROpError, GraphIROpErrorType},
+            shape::Shape,
             GraphIR, GraphIRError,
         },
         GraphError,

@@ -4,18 +4,19 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
-pub use crate::backend::device::blas::Shape;
-use crate::backend::device::{base::DiffableFromOutput, Device};
+use crate::backend::device::Device;
 
 use super::{
     ir::{
         args::GraphIRCompileArgs,
         node::AnnotatedNode,
-        op::{GraphIROp, UnaryOp},
+        op::{DiffableFromOutput, GraphIROp, UnaryOp},
         GraphIR,
     },
     Graph, Node,
 };
+
+pub use crate::graph::ir::shape::Shape;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Activation {
@@ -252,7 +253,7 @@ impl GraphBuilderNode<'_> {
     }
 
     pub fn matmul(self, rhs: Self) -> Self {
-        if rhs.node.is_sparse() {
+        if self.builder.builder().get(rhs.node.idx).unwrap().sparse.is_some() {
             self.builder.apply(GraphIROp::SparseAffineActivate(self.node, rhs.node, None, DiffableFromOutput::Identity))
         } else {
             self.builder.apply(GraphIROp::Matmul(self.node, false, rhs.node, false))

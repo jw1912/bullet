@@ -1,9 +1,12 @@
-use crate::backend::{
-    device::{
-        blas::{BlasOperations, GemmConfig, Shape},
-        Device, DeviceBuffer, OperationError, OperationResult,
+use crate::{
+    backend::{
+        device::{
+            blas::{BlasOperations, GemmConfig},
+            Device, DeviceBuffer, OperationError, OperationResult,
+        },
+        tensor::DenseMatrix,
     },
-    tensor::DenseMatrix,
+    graph::ir::shape::Shape,
 };
 
 #[allow(clippy::too_many_arguments)]

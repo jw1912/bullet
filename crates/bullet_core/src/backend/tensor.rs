@@ -3,7 +3,7 @@ mod matrix;
 pub mod rng;
 mod sparse;
 
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, num::NonZeroUsize, sync::Arc};
 
 pub use dense::{read_from_byte_buffer, DenseMatrix};
 pub use matrix::Matrix;
@@ -28,9 +28,10 @@ impl<D: Device> Tensor<D> {
         single_size: usize,
         requires_grad: bool,
         operation: Option<GraphIROp>,
+        sparse: Option<NonZeroUsize>,
         own: AnnotatedNode,
     ) -> Result<Self, D::DeviceError> {
-        let values = if let Some(nnz) = own.sparse.map(usize::from) {
+        let values = if let Some(nnz) = sparse.map(usize::from) {
             Matrix::Sparse(SparseMatrix::zeroed(device.clone(), single_size, nnz)?)
         } else {
             Matrix::Dense(DenseMatrix::zeroed(device.clone(), single_size)?)

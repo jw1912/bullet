@@ -1,13 +1,14 @@
 use crate::{
     backend::device::{
         base::BaseOperations,
-        blas::{BlasOperations, GemmConfig, Shape},
+        blas::{BlasOperations, GemmConfig},
         Device, DeviceBuffer, OperationError,
     },
     graph::{
         ir::{
             node::AnnotatedNode,
             op::{GraphIROp, UnaryOp},
+            shape::Shape,
         },
         Graph,
     },

@@ -1,6 +1,9 @@
-use crate::backend::{
-    device::{base::DiffableFromOutput, blas::Shape, Device, OperationError},
-    tensor::{DenseMatrix, SparseMatrix, Tensor},
+use crate::{
+    backend::{
+        device::{Device, OperationError},
+        tensor::{DenseMatrix, SparseMatrix, Tensor},
+    },
+    graph::ir::{op::DiffableFromOutput, shape::Shape},
 };
 
 use super::linear_comb::backprop_add_single_scaled;

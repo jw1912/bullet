@@ -3,10 +3,11 @@ pub mod blas;
 
 use std::{fmt::Debug, sync::Arc};
 
-use base::{BaseOperations, DiffableFromOutput};
-use blas::{BlasOperations, Shape};
+use base::BaseOperations;
+use blas::BlasOperations;
 
 use super::cpu::CpuThread;
+use crate::graph::ir::{op::DiffableFromOutput, shape::Shape};
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {

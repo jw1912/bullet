@@ -1,6 +1,9 @@
-use crate::backend::{
-    device::{base::BaseOperations, blas::Shape, Device, OperationError},
-    tensor::DenseMatrix,
+use crate::{
+    backend::{
+        device::{base::BaseOperations, Device, OperationError},
+        tensor::DenseMatrix,
+    },
+    graph::ir::shape::Shape,
 };
 
 pub fn concat<D: Device>(

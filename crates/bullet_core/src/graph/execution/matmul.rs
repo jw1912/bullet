@@ -1,9 +1,12 @@
-use crate::backend::{
-    device::{
-        blas::{BlasOperations, GemmConfig, Shape},
-        Device, OperationError,
+use crate::{
+    backend::{
+        device::{
+            blas::{BlasOperations, GemmConfig},
+            Device, OperationError,
+        },
+        tensor::{DenseMatrix, Tensor},
     },
-    tensor::{DenseMatrix, Tensor},
+    graph::ir::shape::Shape,
 };
 
 use super::linear_comb::{add_assign_single_to_batched_scaled, backprop_add_single_scaled};

@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use crate::{nn::Graph, ExecutionContext};
-use bullet_core::backend::{device::blas::Shape, tensor::DenseMatrix};
+use bullet_core::{backend::tensor::DenseMatrix, graph::ir::shape::Shape};
 
 type F = fn(&Graph, Vec<f32>) -> Vec<f32>;
 

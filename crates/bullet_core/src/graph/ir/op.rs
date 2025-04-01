@@ -1,6 +1,16 @@
-use crate::backend::device::{base::DiffableFromOutput, blas::Shape};
+use super::{node::AnnotatedNode, GraphIR, GraphIRError, Shape};
 
-use super::node::AnnotatedNode;
+/// List of supported activation functions.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiffableFromOutput {
+    Identity = 0,
+    ReLU = 1,
+    CReLU = 2,
+    SCReLU = 3,
+    SqrReLU = 4,
+    Sigmoid = 5,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GraphIROp {
@@ -56,11 +66,13 @@ pub enum GraphIROpErrorType {
 }
 
 impl GraphIROp {
-    pub fn output_shape(&self) -> Result<(Shape, bool), GraphIROpError> {
+    pub fn output_info(&self, ir: &GraphIR) -> Result<(Shape, bool), GraphIRError> {
         use GraphIROp::*;
         use GraphIROpErrorType::*;
 
         let ret = |cond, ok, err| if cond { Ok(ok) } else { Err(err) };
+
+        let get = |node: &AnnotatedNode| ir.get(node.idx).unwrap();
 
         let mismatch = |nodes: &[&AnnotatedNode]| GraphIROpError {
             op: Box::new(*self),
@@ -68,7 +80,7 @@ impl GraphIROp {
         };
 
         let check_dense_eq = |node: &AnnotatedNode, dense: bool| {
-            if node.sparse.is_none() == dense {
+            if get(node).sparse.is_none() == dense {
                 Ok(())
             } else {
                 Err(GraphIROpError::new(self, GraphIROpErrorType::IncorrectDataLayout))
@@ -76,7 +88,7 @@ impl GraphIROp {
         };
 
         let check_not_batched = |node: &AnnotatedNode| {
-            if node.can_be_batched {
+            if get(node).can_be_batched {
                 Err(GraphIROpError::new(self, GraphIROpErrorType::BatchedInputNotSupported))
             } else {
                 Ok(())
@@ -92,7 +104,7 @@ impl GraphIROp {
         };
 
         let check_same_batching = |x: &[&AnnotatedNode]| {
-            if x.iter().all(|y| y.can_be_batched == x[0].can_be_batched) {
+            if x.iter().all(|y| get(y).can_be_batched == get(x[0]).can_be_batched) {
                 Ok(())
             } else {
                 Err(GraphIROpError::new(self, GraphIROpErrorType::MismatchedBatching))
@@ -116,7 +128,7 @@ impl GraphIROp {
                 check_same_batching(&[a, b])?;
 
                 if a.shape.cols() != 1 {
-                    return Err(GraphIROpError::new(self, InvalidInputShape(a.shape)));
+                    return Err(GraphIRError::Op(GraphIROpError::new(self, InvalidInputShape(a.shape))));
                 }
 
                 let out = Shape::new(a.shape.rows() + b.shape.rows(), a.shape.cols());
@@ -220,7 +232,7 @@ impl GraphIROp {
                 check_dense_eq(input, true)?;
                 check_dense_eq(target, true)?;
                 let is = input.shape;
-                let valid = mask.sparse.unwrap().get() == target.shape.rows()
+                let valid = get(mask).sparse.unwrap().get() == target.shape.rows()
                     && mask.shape == is
                     && is.cols() == 1
                     && target.shape.cols() == 1;
@@ -233,7 +245,7 @@ impl GraphIROp {
             }
         }?;
 
-        let can_be_batched = !self.nodes().iter().all(|node| !node.can_be_batched);
+        let can_be_batched = !self.nodes().iter().all(|node| !get(node).can_be_batched);
 
         Ok((shape, can_be_batched))
     }

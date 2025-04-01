@@ -1,7 +1,7 @@
 use crate::{
-    backend::device::{blas::Shape, Device, OperationError},
+    backend::device::{Device, OperationError},
     graph::{
-        ir::{args::GraphIRCompileArgs, op::GraphIROp, GraphIR},
+        ir::{args::GraphIRCompileArgs, op::GraphIROp, shape::Shape, GraphIR},
         GraphError,
     },
 };

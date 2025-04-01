@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
-use crate::backend::{
-    device::{
-        base::{AdamConfig, BaseOperations, DiffableFromOutput},
-        blas::{BlasOperations, GemmConfig, Shape},
-        Device, DeviceBuffer,
+use crate::{
+    backend::{
+        device::{
+            base::{AdamConfig, BaseOperations},
+            blas::{BlasOperations, GemmConfig},
+            Device, DeviceBuffer,
+        },
+        tensor::rng,
     },
-    tensor::rng,
+    graph::ir::{op::DiffableFromOutput, shape::Shape},
 };
 
 use super::{CpuBuffer, CpuThread};

@@ -1,21 +1,10 @@
-use crate::{backend::device::base::DiffableFromOutput, graph::ir::node::AnnotatedNode};
-
 use super::{
-    op::{GraphIROp, UnaryOp},
+    node::AnnotatedNode,
+    op::{DiffableFromOutput, GraphIROp, UnaryOp},
     GraphIR, GraphIRError, GraphIRNode,
 };
 
 use GraphIROp::*;
-
-pub fn fusion_pass(ir: &mut GraphIR, node: usize) -> Result<bool, GraphIRError> {
-    if let Some(mut desc) = search_for_fusion(ir, node)? {
-        desc.eliminated.push(node);
-        ir.apply_fusion(desc)?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
 
 pub struct FusionDescription {
     pub eliminated: Vec<usize>,
@@ -24,15 +13,11 @@ pub struct FusionDescription {
 
 impl FusionDescription {
     pub fn new(eliminated: &[usize], new_nodes: &[GraphIRNode]) -> Result<Option<FusionDescription>, GraphIRError> {
-        for data in new_nodes {
-            data.is_valid()?;
-        }
-
         Ok(Some(FusionDescription { eliminated: eliminated.to_vec(), new_nodes: new_nodes.to_vec() }))
     }
 }
 
-fn search_for_fusion(ir: &GraphIR, node: usize) -> Result<Option<FusionDescription>, GraphIRError> {
+pub fn search_for_fusion(ir: &GraphIR, node: usize) -> Result<Option<FusionDescription>, GraphIRError> {
     let data = ir.get(node).unwrap();
 
     if let Some(op) = data.parent_operation.as_ref() {
@@ -75,7 +60,7 @@ fn fuse_add(
                     return FusionDescription::new(&[lhs.idx], &[new_data]);
                 }
                 Matmul(a, false, b, false) => {
-                    if !rhs.can_be_batched {
+                    if !ir.get(rhs.idx)?.can_be_batched {
                         new_data.parent_operation = Some(Affine(a, b, *rhs));
                         return FusionDescription::new(&[lhs.idx], &[new_data]);
                     }
@@ -141,8 +126,8 @@ fn fuse_concat(
                 if c.idx != d.idx && c.shape.size() == d.shape.size() {
                     let op = Concat(c, d);
 
-                    let (shape, can_be_batched) = op.output_shape()?;
-                    let new_b = AnnotatedNode { idx: node_b.own.idx, shape, sparse: None, can_be_batched };
+                    let (shape, can_be_batched) = op.output_info(ir)?;
+                    let new_b = AnnotatedNode { idx: node_b.own.idx, shape };
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
@@ -151,6 +136,8 @@ fn fuse_concat(
                         requires_grad: node_b.requires_grad,
                         num_children: 0,
                         own: new_b,
+                        sparse: None,
+                        can_be_batched,
                     };
 
                     let mut new_pairwise = old_data.clone();
@@ -178,7 +165,7 @@ fn fuse_power_error(
             let mut new_data = old_data.clone();
 
             if let LinearCombination(1.0, a, -1.0, b) = op {
-                if a.idx != b.idx && a.can_be_batched == b.can_be_batched {
+                if a.idx != b.idx && ir.get(a.idx)?.can_be_batched == ir.get(b.idx)?.can_be_batched {
                     new_data.parent_operation = Some(PowerError(a, b, power));
                     return FusionDescription::new(&[node.idx], &[new_data]);
                 }
