@@ -64,7 +64,7 @@ impl GraphIR {
 
         for node in self.nodes.iter().flatten() {
             let count = AtomicUsize::new(0);
-            let id = maybe_fmt(format!("{:0>2}", node.own.idx), &fmt.op_node_fmt, &count);
+            let id = maybe_fmt(format!("{:0>2}", node.idx), &fmt.op_node_fmt, &count);
             let name = maybe_fmt(op_name(node), &fmt.op_name_fmt, &count);
             let lp = maybe_fmt("(", &fmt.op_paren_fmt, &count);
             let rp = maybe_fmt(")", &fmt.op_paren_fmt, &count);
@@ -106,7 +106,7 @@ fn op_args(
 ) -> String {
     use super::op::GraphIROp::*;
 
-    shapes.insert(node.own.idx, node.own.shape);
+    shapes.insert(node.idx, node.shape);
 
     let shape = |x: Shape| maybe_fmt(x, &fmt.op_shape_fmt, count);
 
@@ -160,7 +160,7 @@ fn op_args(
                 Some(nnz) => format!("Sparse(f32, {nnz})"),
                 None => "Dense(f32)".to_string(),
             };
-            format!("{}, {}, {}, {}", shape(node.own.shape), layout, node.requires_grad, node.can_be_batched)
+            format!("{}, {}, {}, {}", shape(node.shape), layout, node.requires_grad, node.batched)
         }
     }
 }

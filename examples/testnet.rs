@@ -39,8 +39,8 @@ fn main() {
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/batch1.data"]);
-
+    trainer.profile_all_nodes();
     trainer.run(&schedule, &settings, &data_loader);
-
+    trainer.report_profiles();
     trainer.sanity_check();
 }

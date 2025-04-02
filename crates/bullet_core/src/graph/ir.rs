@@ -21,7 +21,6 @@ use super::Graph;
 #[derive(Default)]
 pub struct GraphIR {
     nodes: Vec<Option<GraphIRNode>>,
-    roots: HashSet<usize>,
     inputs: HashSet<usize>,
     weights: HashSet<usize>,
     ids: HashSet<String>,
@@ -29,7 +28,6 @@ pub struct GraphIR {
 
 #[derive(Debug, PartialEq)]
 pub enum GraphIRCompileError {
-    MoreThanOneRoot,
     RootIsAnInput,
     RootIsAWeight,
     RootIsNonScalar,
@@ -70,7 +68,7 @@ impl GraphIR {
         id: Option<String>,
         parent_operation: Option<GraphIROp>,
         shape: Shape,
-        can_be_batched: bool,
+        batched: bool,
         requires_grad: bool,
         sparse: Option<NonZeroUsize>,
     ) -> Result<AnnotatedNode, GraphIRError> {
@@ -82,31 +80,22 @@ impl GraphIR {
             self.ids.insert(id.to_string());
         }
 
-        let node = GraphIRNode {
-            id,
-            parent_operation,
-            size: shape.size(),
-            requires_grad,
-            own: AnnotatedNode { idx: self.nodes.len(), shape },
-            num_children: 0,
-            can_be_batched,
-            sparse,
-        };
+        let idx = self.nodes.len();
+        let annotated = AnnotatedNode { idx, shape };
+
+        let node = GraphIRNode { id, parent_operation, shape, requires_grad, idx, num_children: 0, batched, sparse };
 
         if let Some(op) = &node.parent_operation {
             for parent in &op.nodes() {
-                self.roots.remove(&parent.idx);
                 if let Some(ir_node) = self.nodes[parent.idx].as_mut() {
                     ir_node.num_children += 1;
                 }
             }
         }
 
-        let own = node.own;
         self.nodes.push(Some(node));
-        self.roots.insert(own.idx);
 
-        Ok(own)
+        Ok(annotated)
     }
 
     pub fn add_dense_input(&mut self, id: &str, shape: Shape) -> Result<AnnotatedNode, GraphIRError> {
@@ -140,16 +129,23 @@ impl GraphIR {
         Ok(node)
     }
 
-    pub fn add_op(&mut self, operation: GraphIROp, requires_grad: bool) -> Result<AnnotatedNode, GraphIRError> {
-        let (shape, can_be_batched) = operation.output_info(self)?;
-        self.add_node(None, Some(operation), shape, can_be_batched, requires_grad, None)
+    pub fn add_op(&mut self, operation: GraphIROp) -> Result<AnnotatedNode, GraphIRError> {
+        let (shape, batched, requires_grad) = operation.output_info(self)?;
+        self.add_node(None, Some(operation), shape, batched, requires_grad, None)
     }
 
     pub fn root(&self) -> Result<AnnotatedNode, GraphIRError> {
-        assert_eq!(self.roots.len(), 1, "Graph must have a single output!");
-        let root = self.roots.iter().next().ok_or(GraphIRError::MultipleRoots)?;
+        let roots =
+            self.nodes.iter().filter(|node| node.as_ref().map(|x| x.num_children == 0).unwrap_or(false)).count();
 
-        Ok(self.get(*root)?.own)
+        if roots != 1 {
+            return Err(GraphIRError::MultipleRoots);
+        }
+
+        let idx = self.nodes.len() - 1;
+        let data = self.get(idx)?;
+
+        Ok(AnnotatedNode { idx, shape: data.shape })
     }
 
     pub fn compile<D: Device>(mut self, device: D, args: GraphIRCompileArgs) -> Result<Graph<D>, GraphIRError> {
@@ -161,15 +157,10 @@ impl GraphIR {
 
         if args.allow_optimisations {
             self.optimise(&args)?;
+            self.is_valid()?;
         }
 
-        self.is_valid()?;
-
-        if self.roots.len() != 1 {
-            return Err(GraphIRError::Compilation(GraphIRCompileError::MoreThanOneRoot));
-        }
-
-        let root = *self.roots.iter().next().unwrap();
+        let root = self.root()?.idx;
         let root_data = self.get(root).unwrap();
 
         if !root_data.requires_grad {
@@ -180,7 +171,7 @@ impl GraphIR {
             return Err(GraphIRError::Compilation(GraphIRCompileError::RootIsAWeight));
         }
 
-        if root_data.own.shape != Shape::new(1, 1) {
+        if root_data.shape != Shape::new(1, 1) {
             return Err(GraphIRError::Compilation(GraphIRCompileError::RootIsNonScalar));
         }
 
@@ -188,8 +179,8 @@ impl GraphIR {
 
         let mut nodes = Vec::new();
         for node_data in &self.nodes {
-            if let Some(GraphIRNode { size, requires_grad, parent_operation, own, sparse, .. }) = node_data.clone() {
-                let tensor = Tensor::new(device.clone(), size, requires_grad, parent_operation, sparse, own);
+            if let Some(GraphIRNode { shape, requires_grad, parent_operation, idx, sparse, .. }) = node_data.clone() {
+                let tensor = Tensor::new(device.clone(), shape.size(), requires_grad, parent_operation, sparse, idx);
                 let tensor = tensor.map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor));
 
                 nodes.push(Some(RefCell::new(tensor?)));
@@ -204,7 +195,7 @@ impl GraphIR {
 
         let weights = self.weights.iter().filter_map(id_idx_pair).collect();
 
-        Ok(Graph { nodes, root, inputs, weights, device, profile: Default::default() })
+        Ok(Graph { nodes, inputs, weights, device, profile: Default::default() })
     }
 
     pub fn optimise(&mut self, args: &GraphIRCompileArgs) -> Result<(), GraphIRError> {
@@ -259,9 +250,9 @@ impl GraphIR {
             self.delete_node(dead)?;
         }
 
-        new_nodes.sort_by_key(|x| x.own.idx);
+        new_nodes.sort_by_key(|x| x.idx);
         for new_data in new_nodes {
-            self.replace_data(new_data.own.idx, new_data)?;
+            self.replace_data(new_data.idx, new_data)?;
         }
 
         Ok(())
@@ -270,7 +261,7 @@ impl GraphIR {
     fn is_valid(&self) -> Result<(), GraphIRError> {
         for node in 0..self.nodes.len() {
             if let Ok(data) = self.get(node) {
-                if data.own.idx != node {
+                if data.idx != node {
                     return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
                 }
 
@@ -281,9 +272,7 @@ impl GraphIR {
                         let actual_parent =
                             self.nodes[parent.idx].as_ref().ok_or(GraphIRNodeError::NodeDoesNotExist)?;
 
-                        let parent_node = actual_parent.own;
-
-                        if parent.idx != parent_node.idx || parent.shape.size() != parent_node.shape.size() {
+                        if parent.idx != actual_parent.idx || parent.shape.size() != actual_parent.shape.size() {
                             return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
                         }
                     }
@@ -295,14 +284,10 @@ impl GraphIR {
     }
 
     fn is_data_valid(&self, data: &GraphIRNode) -> Result<(), GraphIRError> {
-        if data.own.shape.size() != data.size {
-            return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
-        }
-
         if let Some(op) = &data.parent_operation {
-            let (shape, batched) = op.output_info(self)?;
+            let (shape, batched, requires_grad) = op.output_info(self)?;
 
-            if shape != data.own.shape || data.can_be_batched != batched {
+            if shape != data.shape || data.batched != batched || data.requires_grad != requires_grad {
                 return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
             }
         }

@@ -17,15 +17,15 @@ use crate::{
 use super::{concat, linear_comb, matmul, setup_ones, slice, sparse};
 
 impl<D: Device> Graph<D> {
-    pub(crate) fn backward_node(&mut self, output_node: AnnotatedNode) -> Result<(), OperationError<D::DeviceError>> {
+    pub(crate) fn backward_node(&mut self, output_node: usize) -> Result<(), OperationError<D::DeviceError>> {
         use GraphIROp::*;
 
         let get = |node: AnnotatedNode| self.get_mut(node.idx).unwrap();
 
-        let output_tensor = &mut *self.get_mut(output_node.idx)?;
+        let output_tensor = &mut *self.get_mut(output_node)?;
         let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
         let internal = &mut output_tensor.internal;
-        let outn = output_tensor.own;
+        let output_size = output_tensor.values.single_size();
         let output_grad = if let Some(grad) = output_tensor.gradients.as_ref() {
             grad
         } else {
@@ -322,7 +322,7 @@ impl<D: Device> Graph<D> {
                     let input = vals.values.dense()?;
                     let size = output_grad.size();
                     let out_grd = &output_grad.buf;
-                    assert_eq!(outn.shape, node.shape);
+                    assert_eq!(output_size, node.shape.size());
                     assert_eq!(size, input.size());
                     assert_eq!(output_grad.batch_size(), input.batch_size());
                     grd.set_batch_size(output_grad.batch_size())?;

@@ -10,8 +10,8 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
 
 - **bullet_core**
     - An ML framework that is generic over backends:
-    - A network graph is constructed using `GraphBuilder`
-    - This is then lowered to `GraphIR` and [optimisation passes performed](docs/advanced-examples/operator-fusion.md) on it
+    - A network graph is constructed using `GraphBuilder`, which internally generates a `GraphIR`
+    - [Optimisation passes](docs/advanced-examples/operator-fusion.md) are performed on the `GraphIR`
     - The `GraphIR` is then compiled into a `Graph<D: Device>`, for a specific backend device
         - Upon which forwards and backwards passes, editing weights/inputs, etc, may be performed
         - A small set of (composable) optimisers are included that ingest a graph and provide update methods for it
