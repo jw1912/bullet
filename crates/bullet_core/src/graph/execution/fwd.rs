@@ -17,12 +17,12 @@ use crate::{
 use super::{concat, linear_comb, matmul, setup_ones, setup_softmax, slice, sparse};
 
 impl<D: Device> Graph<D> {
-    pub(crate) fn forward_node(&mut self, output_node: AnnotatedNode) -> Result<(), OperationError<D::DeviceError>> {
+    pub(crate) fn forward_node(&mut self, output_node: usize) -> Result<(), OperationError<D::DeviceError>> {
         use GraphIROp::*;
 
         let get = |node: AnnotatedNode| self.get(node.idx).unwrap();
 
-        let output_tensor = &mut *self.get_mut(output_node.idx)?;
+        let output_tensor = &mut *self.get_mut(output_node)?;
         let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
         let internal = &mut output_tensor.internal;
         let output = output_tensor.values.dense_mut()?;

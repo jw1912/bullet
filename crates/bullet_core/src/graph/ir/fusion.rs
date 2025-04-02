@@ -60,7 +60,7 @@ fn fuse_add(
                     return FusionDescription::new(&[lhs.idx], &[new_data]);
                 }
                 Matmul(a, false, b, false) => {
-                    if !ir.get(rhs.idx)?.can_be_batched {
+                    if !ir.get(rhs.idx)?.batched {
                         new_data.parent_operation = Some(Affine(a, b, *rhs));
                         return FusionDescription::new(&[lhs.idx], &[new_data]);
                     }
@@ -126,18 +126,18 @@ fn fuse_concat(
                 if c.idx != d.idx && c.shape.size() == d.shape.size() {
                     let op = Concat(c, d);
 
-                    let (shape, can_be_batched) = op.output_info(ir)?;
-                    let new_b = AnnotatedNode { idx: node_b.own.idx, shape };
+                    let (shape, batched, requires_grad) = op.output_info(ir)?;
+                    let new_b = AnnotatedNode { idx: node_b.idx, shape };
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
-                        size: 2 * c.shape.size(),
+                        shape,
                         parent_operation: Some(op),
-                        requires_grad: node_b.requires_grad,
+                        requires_grad,
                         num_children: 0,
-                        own: new_b,
+                        idx: new_b.idx,
                         sparse: None,
-                        can_be_batched,
+                        batched,
                     };
 
                     let mut new_pairwise = old_data.clone();
@@ -165,7 +165,7 @@ fn fuse_power_error(
             let mut new_data = old_data.clone();
 
             if let LinearCombination(1.0, a, -1.0, b) = op {
-                if a.idx != b.idx && ir.get(a.idx)?.can_be_batched == ir.get(b.idx)?.can_be_batched {
+                if a.idx != b.idx && ir.get(a.idx)?.batched == ir.get(b.idx)?.batched {
                     new_data.parent_operation = Some(PowerError(a, b, power));
                     return FusionDescription::new(&[node.idx], &[new_data]);
                 }

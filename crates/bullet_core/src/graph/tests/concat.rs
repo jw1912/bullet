@@ -10,10 +10,10 @@ pub fn concat<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphIR::default();
     let w1 = builder.add_weights("w1", Shape::new(3, 1)).unwrap();
     let w2 = builder.add_weights("w2", Shape::new(1, 1)).unwrap();
-    let out = builder.add_op(GraphIROp::Concat(w1, w2), true)?;
+    let out = builder.add_op(GraphIROp::Concat(w1, w2))?;
     let dot = builder.add_dense_input("dot", Shape::new(1, 4)).unwrap();
-    let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false), true)?;
-    builder.add_op(GraphIROp::ReduceAcrossBatch(out2), true)?;
+    let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false))?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out2))?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph

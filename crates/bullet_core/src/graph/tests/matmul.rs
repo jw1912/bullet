@@ -10,8 +10,8 @@ pub fn matmul<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let mut builder = GraphIR::default();
     let w1 = builder.add_weights("w1", Shape::new(1, 3)).unwrap();
     let w2 = builder.add_weights("w2", Shape::new(3, 1)).unwrap();
-    let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false), true)?;
-    builder.add_op(GraphIROp::ReduceAcrossBatch(out), true)?;
+    let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false))?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out))?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0]).unwrap();
@@ -41,10 +41,10 @@ pub fn matmul2<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let w1 = builder.add_weights("w1", Shape::new(2, 2)).unwrap();
     let w2 = builder.add_weights("w2", Shape::new(2, 2)).unwrap();
     let dot = builder.add_dense_input("dot", Shape::new(1, 4)).unwrap();
-    let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false), true)?;
+    let out = builder.add_op(GraphIROp::Matmul(w1, false, w2, false))?;
     let a = out.reshape(Shape::new(4, 1)).unwrap();
-    let err = builder.add_op(GraphIROp::Matmul(dot, false, a, false), true)?;
-    builder.add_op(GraphIROp::ReduceAcrossBatch(err), true)?;
+    let err = builder.add_op(GraphIROp::Matmul(dot, false, a, false))?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(err))?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0, 1.0]).unwrap();

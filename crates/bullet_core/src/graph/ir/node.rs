@@ -1,35 +1,17 @@
 use std::num::NonZeroUsize;
 
-use super::{op::GraphIROp, GraphIR, GraphIRError, Shape};
+use super::{op::GraphIROp, Shape};
 
 #[derive(Clone, Debug)]
 pub struct GraphIRNode {
-    pub id: Option<String>,
-    pub size: usize,
+    pub idx: usize,
+    pub shape: Shape,
+    pub sparse: Option<NonZeroUsize>,
+    pub batched: bool,
     pub requires_grad: bool,
     pub parent_operation: Option<GraphIROp>,
     pub num_children: usize,
-    pub own: AnnotatedNode,
-    pub sparse: Option<NonZeroUsize>,
-    pub can_be_batched: bool,
-}
-
-impl GraphIRNode {
-    pub fn is_valid(&self, ir: &GraphIR) -> Result<(), GraphIRError> {
-        if self.own.shape.size() != self.size {
-            return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
-        }
-
-        if let Some(op) = &self.parent_operation {
-            let (shape, batched) = op.output_info(ir)?;
-
-            if shape != self.own.shape || self.can_be_batched != batched {
-                return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
-            }
-        }
-
-        Ok(())
-    }
+    pub id: Option<String>,
 }
 
 #[derive(Debug, PartialEq)]

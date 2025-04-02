@@ -53,7 +53,7 @@ impl GraphBuilder {
     }
 
     fn apply(&self, operation: GraphIROp) -> GraphBuilderNode {
-        match self.builder().add_op(operation, true) {
+        match self.builder().add_op(operation) {
             Ok(node) => GraphBuilderNode { node, builder: self },
             Err(e) => {
                 println!("{e:#?}");
@@ -97,7 +97,7 @@ impl GraphBuilder {
 
     pub fn build<D: Device>(self, device: D) -> Graph<D> {
         let mut builder = self.graph_builder.into_inner().unwrap();
-        builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root().unwrap()), true).unwrap();
+        builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root().unwrap())).unwrap();
         let mut graph = builder.compile(device, self.args).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
@@ -315,7 +315,7 @@ impl GraphBuilderNode<'_> {
     }
 
     pub fn to_dense(self) -> Self {
-        let node = self.builder.builder().add_op(GraphIROp::ToDense(self.node), false).unwrap();
+        let node = self.builder.builder().add_op(GraphIROp::ToDense(self.node)).unwrap();
         Self { node, builder: self.builder }
     }
 }

@@ -66,7 +66,7 @@ pub enum GraphIROpErrorType {
 }
 
 impl GraphIROp {
-    pub fn output_info(&self, ir: &GraphIR) -> Result<(Shape, bool), GraphIRError> {
+    pub fn output_info(&self, ir: &GraphIR) -> Result<(Shape, bool, bool), GraphIRError> {
         use GraphIROp::*;
         use GraphIROpErrorType::*;
 
@@ -88,7 +88,7 @@ impl GraphIROp {
         };
 
         let check_not_batched = |node: &AnnotatedNode| {
-            if get(node).can_be_batched {
+            if get(node).batched {
                 Err(GraphIROpError::new(self, GraphIROpErrorType::BatchedInputNotSupported))
             } else {
                 Ok(())
@@ -104,12 +104,23 @@ impl GraphIROp {
         };
 
         let check_same_batching = |x: &[&AnnotatedNode]| {
-            if x.iter().all(|y| get(y).can_be_batched == get(x[0]).can_be_batched) {
+            if x.iter().all(|y| get(y).batched == get(x[0]).batched) {
                 Ok(())
             } else {
                 Err(GraphIROpError::new(self, GraphIROpErrorType::MismatchedBatching))
             }
         };
+
+        for node in self.nodes() {
+            if node.shape.size() != get(&node).shape.size() {
+                let err = GraphIROpError::new(self, GraphIROpErrorType::InvalidInputShape(node.shape));
+                return Err(GraphIRError::Op(err));
+            }
+        }
+
+        let mut batched = self.nodes().iter().any(|node| get(node).batched);
+
+        let requires_grad = self.nodes().iter().any(|node| get(node).requires_grad);
 
         let shape = match self {
             Affine(w, i, b) => {
@@ -176,6 +187,7 @@ impl GraphIROp {
             ReduceAcrossBatch(node) => {
                 check_dense_eq(node, true)?;
                 let is = node.shape;
+                batched = false;
                 ret(is == Shape::new(1, 1), is, GraphIROpError::new(self, InvalidInputShape(is)))
             }
             Select(input, buckets) => {
@@ -245,9 +257,7 @@ impl GraphIROp {
             }
         }?;
 
-        let can_be_batched = !self.nodes().iter().all(|node| !get(node).can_be_batched);
-
-        Ok((shape, can_be_batched))
+        Ok((shape, batched, requires_grad))
     }
 
     pub fn nodes(&self) -> Vec<AnnotatedNode> {

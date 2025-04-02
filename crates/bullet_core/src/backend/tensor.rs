@@ -11,7 +11,7 @@ pub use sparse::SparseMatrix;
 
 use crate::{
     backend::device::{Device, DeviceBuffer, OperationError},
-    graph::ir::{node::AnnotatedNode, op::GraphIROp},
+    graph::ir::op::GraphIROp,
 };
 
 pub struct Tensor<D: Device> {
@@ -19,7 +19,7 @@ pub struct Tensor<D: Device> {
     pub gradients: Option<DenseMatrix<D>>,
     pub(crate) internal: HashMap<String, RefCell<DenseMatrix<D>>>,
     pub(crate) operation: Option<GraphIROp>,
-    pub(crate) own: AnnotatedNode,
+    pub(crate) idx: usize,
 }
 
 impl<D: Device> Tensor<D> {
@@ -29,7 +29,7 @@ impl<D: Device> Tensor<D> {
         requires_grad: bool,
         operation: Option<GraphIROp>,
         sparse: Option<NonZeroUsize>,
-        own: AnnotatedNode,
+        idx: usize,
     ) -> Result<Self, D::DeviceError> {
         let values = if let Some(nnz) = sparse.map(usize::from) {
             Matrix::Sparse(SparseMatrix::zeroed(device.clone(), single_size, nnz)?)
@@ -42,7 +42,7 @@ impl<D: Device> Tensor<D> {
             gradients: if requires_grad { Some(DenseMatrix::zeroed(device, single_size)?) } else { None },
             internal: HashMap::new(),
             operation,
-            own,
+            idx,
         })
     }
 
