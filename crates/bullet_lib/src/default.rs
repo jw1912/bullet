@@ -237,7 +237,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
         let mut buf = Vec::new();
 
-        for SavedFormat { id, quant, layout, transforms } in &self.saved_format {
+        for SavedFormat { id, quant, layout, transforms, round } in &self.saved_format {
             let weights = self.optimiser.graph.get_weights(id);
             let weights = weights.values.dense().unwrap();
 
@@ -267,7 +267,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
                 weight_buf = transform(&self.optimiser.graph, id, weight_buf);
             }
 
-            let quantised = match quant.quantise(&weight_buf) {
+            let quantised = match quant.quantise(*round, &weight_buf) {
                 Ok(q) => q,
                 Err(err) => {
                     println!("Quantisation failed for id: {}", id);
@@ -305,7 +305,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
             let written = weights.write_to_slice(&mut weight_buf).unwrap();
             assert_eq!(written, weights.size());
 
-            let quantised = QuantTarget::Float.quantise(&weight_buf)?;
+            let quantised = QuantTarget::Float.quantise(false, &weight_buf)?;
             buf.extend_from_slice(&quantised);
         }
 
