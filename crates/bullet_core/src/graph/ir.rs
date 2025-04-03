@@ -180,7 +180,7 @@ impl GraphIR {
         let mut nodes = Vec::new();
         for node_data in &self.nodes {
             if let Some(GraphIRNode { shape, requires_grad, parent_operation, idx, sparse, .. }) = node_data.clone() {
-                let tensor = Tensor::new(device.clone(), shape.size(), requires_grad, parent_operation, sparse, idx);
+                let tensor = Tensor::new(device.clone(), shape, requires_grad, parent_operation, sparse, idx);
                 let tensor = tensor.map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor));
 
                 nodes.push(Some(RefCell::new(tensor?)));

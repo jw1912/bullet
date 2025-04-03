@@ -5,7 +5,7 @@ use bullet_lib::{
     },
     nn::{optimiser::AdamW, InitSettings, Shape},
     trainer::{
-        save::{Layout, QuantTarget, SavedFormat},
+        save::SavedFormat,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
@@ -20,15 +20,15 @@ fn main() {
     let num_inputs = inputs.num_inputs();
 
     let save_format = [
-        SavedFormat::new("pst", QuantTarget::I16(255), Layout::Normal),
-        SavedFormat::new("l0w", QuantTarget::I16(255), Layout::Normal),
-        SavedFormat::new("l0b", QuantTarget::I16(255), Layout::Normal),
-        SavedFormat::new("l1w", QuantTarget::I16(64), Layout::Normal),
-        SavedFormat::new("l1b", QuantTarget::I16(64 * 255), Layout::Normal),
-        SavedFormat::new("l2w", QuantTarget::Float, Layout::Normal),
-        SavedFormat::new("l2b", QuantTarget::Float, Layout::Normal),
-        SavedFormat::new("l3w", QuantTarget::Float, Layout::Normal),
-        SavedFormat::new("l3b", QuantTarget::Float, Layout::Normal),
+        SavedFormat::id("pst").quantise::<i16>(255),
+        SavedFormat::id("l0w").quantise::<i16>(255),
+        SavedFormat::id("l0b").quantise::<i16>(255),
+        SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
+        SavedFormat::id("l1b").quantise::<i16>(64 * 255),
+        SavedFormat::id("l2w").transpose(),
+        SavedFormat::id("l2b"),
+        SavedFormat::id("l3w").transpose(),
+        SavedFormat::id("l3b"),
     ];
 
     let mut trainer = ValueTrainerBuilder::default()

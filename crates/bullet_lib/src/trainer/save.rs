@@ -1,9 +1,8 @@
 use std::io::{self, Write};
 
-use crate::{nn::Graph, ExecutionContext};
-use bullet_core::{backend::tensor::DenseMatrix, graph::ir::shape::Shape};
+use crate::nn::{Graph, Shape};
 
-type F = fn(&Graph, Vec<f32>) -> Vec<f32>;
+type F = fn(&Graph, &str, Vec<f32>) -> Vec<f32>;
 
 #[derive(Clone)]
 pub struct SavedFormat {
@@ -14,8 +13,24 @@ pub struct SavedFormat {
 }
 
 impl SavedFormat {
+    pub fn id(id: &str) -> Self {
+        Self::new(id, QuantTarget::Float, Layout::Normal)
+    }
+
     pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
         SavedFormat { id: id.to_string(), quant, layout, transforms: Vec::new() }
+    }
+
+    pub fn quantise<T: Quant>(mut self, multiplier: T::Multiplier) -> Self {
+        self.quant = T::to_target(multiplier);
+        self
+    }
+
+    pub fn transpose(self) -> Self {
+        self.add_transform(|graph, id, weights| {
+            let shape = graph.get_weights(id).shape();
+            Self::transpose_impl(shape, &weights)
+        })
     }
 
     pub fn add_transform(mut self, f: F) -> Self {
@@ -23,20 +38,22 @@ impl SavedFormat {
         self
     }
 
-    pub fn write_to_byte_buffer(&self, weights: &DenseMatrix<ExecutionContext>) -> io::Result<Vec<u8>> {
-        let mut weight_buf = vec![0.0; weights.single_size()];
-        let written = weights.write_to_slice(&mut weight_buf).unwrap();
-        assert_eq!(written, weights.single_size());
+    pub fn write_to_byte_buffer(&self, graph: &Graph) -> io::Result<Vec<u8>> {
+        let mut weights = graph.get_weights(&self.id).get_dense_vals().unwrap();
 
         if let Layout::Transposed(shape) = self.layout {
-            assert_eq!(shape.size(), weights.size());
-            weight_buf = Self::transpose(shape, &weight_buf);
+            assert_eq!(shape.size(), weights.len());
+            weights = Self::transpose_impl(shape, &weights);
         }
 
-        self.quant.quantise(&weight_buf)
+        for transform in &self.transforms {
+            weights = transform(graph, &self.id, weights);
+        }
+
+        self.quant.quantise(&weights)
     }
 
-    pub fn transpose(shape: Shape, weights: &[f32]) -> Vec<f32> {
+    pub(crate) fn transpose_impl(shape: Shape, weights: &[f32]) -> Vec<f32> {
         assert_eq!(shape.size(), weights.len());
 
         let rows = shape.rows();
@@ -47,6 +64,18 @@ impl SavedFormat {
             for j in 0..cols {
                 new_buf[cols * i + j] = weights[rows * j + i];
             }
+        }
+
+        new_buf
+    }
+
+    pub fn submatrix_transpose(shape: Shape, weights: &[f32]) -> Vec<f32> {
+        assert_eq!(weights.len() % shape.size(), 0);
+
+        let mut new_buf = vec![0.0; weights.len()];
+
+        for (new, old) in new_buf.chunks_exact_mut(shape.size()).zip(weights.chunks_exact(shape.size())) {
+            new.copy_from_slice(&Self::transpose_impl(shape, old));
         }
 
         new_buf
@@ -114,5 +143,35 @@ impl QuantTarget {
         }
 
         Ok(quantised)
+    }
+}
+
+pub trait Quant {
+    type Multiplier;
+
+    fn to_target(q: Self::Multiplier) -> QuantTarget;
+}
+
+impl Quant for i8 {
+    type Multiplier = i16;
+
+    fn to_target(q: Self::Multiplier) -> QuantTarget {
+        QuantTarget::I8(q)
+    }
+}
+
+impl Quant for i16 {
+    type Multiplier = i16;
+
+    fn to_target(q: Self::Multiplier) -> QuantTarget {
+        QuantTarget::I16(q)
+    }
+}
+
+impl Quant for i32 {
+    type Multiplier = i32;
+
+    fn to_target(q: Self::Multiplier) -> QuantTarget {
+        QuantTarget::I32(q)
     }
 }
