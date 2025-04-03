@@ -11,7 +11,7 @@ pub use sparse::SparseMatrix;
 
 use crate::{
     backend::device::{Device, DeviceBuffer, OperationError},
-    graph::ir::op::GraphIROp,
+    graph::ir::{op::GraphIROp, shape::Shape},
 };
 
 pub struct Tensor<D: Device> {
@@ -20,17 +20,20 @@ pub struct Tensor<D: Device> {
     pub(crate) internal: HashMap<String, RefCell<DenseMatrix<D>>>,
     pub(crate) operation: Option<GraphIROp>,
     pub(crate) idx: usize,
+    shape: Shape,
 }
 
 impl<D: Device> Tensor<D> {
     pub fn new(
         device: Arc<D>,
-        single_size: usize,
+        shape: Shape,
         requires_grad: bool,
         operation: Option<GraphIROp>,
         sparse: Option<NonZeroUsize>,
         idx: usize,
     ) -> Result<Self, D::DeviceError> {
+        let single_size = shape.size();
+
         let values = if let Some(nnz) = sparse.map(usize::from) {
             Matrix::Sparse(SparseMatrix::zeroed(device.clone(), single_size, nnz)?)
         } else {
@@ -43,6 +46,7 @@ impl<D: Device> Tensor<D> {
             internal: HashMap::new(),
             operation,
             idx,
+            shape,
         })
     }
 
@@ -52,6 +56,10 @@ impl<D: Device> Tensor<D> {
         }
 
         Ok(())
+    }
+
+    pub fn shape(&self) -> Shape {
+        self.shape
     }
 
     pub fn get_scalar(&self) -> Option<f32> {

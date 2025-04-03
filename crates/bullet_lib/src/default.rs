@@ -260,11 +260,11 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
             if let Layout::Transposed(shape) = layout {
                 assert_eq!(shape.size(), weights.size());
-                weight_buf = SavedFormat::transpose(*shape, &weight_buf);
+                weight_buf = SavedFormat::transpose_impl(*shape, &weight_buf);
             }
 
             for transform in transforms {
-                weight_buf = transform(&self.optimiser.graph, weight_buf);
+                weight_buf = transform(&self.optimiser.graph, id, weight_buf);
             }
 
             let quantised = match quant.quantise(&weight_buf) {
