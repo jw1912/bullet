@@ -192,17 +192,30 @@ impl<D: Device> Graph<D> {
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {
                 assert_eq!(sn.shape, nn.shape);
-                sparse::affine_dual(
-                    get(*wn).values.dense()?,
-                    wn.shape,
-                    get(*sn).values.sparse()?,
-                    get(*nn).values.sparse()?,
-                    sn.shape,
-                    get(*bn).values.dense()?,
-                    bn.shape,
-                    output,
-                    *act,
-                )
+
+                if let Some(bn) = bn {
+                    sparse::affine_dual(
+                        get(*wn).values.dense()?,
+                        wn.shape,
+                        get(*sn).values.sparse()?,
+                        get(*nn).values.sparse()?,
+                        sn.shape,
+                        Some((get(*bn).values.dense()?, bn.shape)),
+                        output,
+                        *act,
+                    )
+                } else {
+                    sparse::affine_dual(
+                        get(*wn).values.dense()?,
+                        wn.shape,
+                        get(*sn).values.sparse()?,
+                        get(*nn).values.sparse()?,
+                        sn.shape,
+                        None,
+                        output,
+                        *act,
+                    )
+                }
             }
             ToDense(node) => get(*node).values.sparse()?.copy_into_dense(output),
             Unary(node, unary) => {

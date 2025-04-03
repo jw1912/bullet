@@ -28,9 +28,7 @@ pub struct GraphIR {
 
 #[derive(Debug, PartialEq)]
 pub enum GraphIRCompileError {
-    RootIsAnInput,
-    RootIsAWeight,
-    RootIsNonScalar,
+    InvalidRootNode,
     FailedToInitTensor,
 }
 
@@ -163,16 +161,8 @@ impl GraphIR {
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap();
 
-        if !root_data.requires_grad {
-            return Err(GraphIRError::Compilation(GraphIRCompileError::RootIsAnInput));
-        }
-
-        if self.weights.contains(&root) {
-            return Err(GraphIRError::Compilation(GraphIRCompileError::RootIsAWeight));
-        }
-
-        if root_data.shape != Shape::new(1, 1) {
-            return Err(GraphIRError::Compilation(GraphIRCompileError::RootIsNonScalar));
+        if !root_data.requires_grad || root_data.batched || root_data.shape != Shape::new(1, 1) {
+            return Err(GraphIRError::Compilation(GraphIRCompileError::InvalidRootNode));
         }
 
         let device = Arc::new(device);

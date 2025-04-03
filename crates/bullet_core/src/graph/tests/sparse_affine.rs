@@ -92,7 +92,7 @@ pub fn sparse_affine_dual<D: Device>(device: D) -> Result<(), GraphError<D::Devi
     let i1 = builder.add_sparse_input("i1", Shape::new(3, 1), 2).unwrap();
     let i2 = builder.add_sparse_input("i2", Shape::new(3, 1), 2).unwrap();
     let dot = builder.add_dense_input("dot", Shape::new(1, 2)).unwrap();
-    let out = builder.add_op(GraphIROp::SparseAffineDualActivate(w, i1, i2, b, DiffableFromOutput::Identity))?;
+    let out = builder.add_op(GraphIROp::SparseAffineDualActivate(w, i1, i2, Some(b), DiffableFromOutput::Identity))?;
     let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false))?;
     builder.add_op(GraphIROp::ReduceAcrossBatch(out2))?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
@@ -132,7 +132,7 @@ pub fn sparse_affine_check_not_batched<D: Device>(_device: D) -> Result<(), Grap
     let i1 = builder.add_sparse_input("i1", Shape::new(3, 1), 2).unwrap();
     let i2 = builder.add_sparse_input("i2", Shape::new(3, 1), 2).unwrap();
 
-    let op = GraphIROp::SparseAffineDualActivate(w, i1, i2, b, DiffableFromOutput::Identity);
+    let op = GraphIROp::SparseAffineDualActivate(w, i1, i2, Some(b), DiffableFromOutput::Identity);
     let out = builder.add_op(op);
 
     assert_eq!(out, Err(GraphIRError::Op(GraphIROpError::new(&op, GraphIROpErrorType::BatchedInputNotSupported))));
