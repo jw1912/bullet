@@ -10,6 +10,7 @@ pub struct SavedFormat {
     pub(crate) quant: QuantTarget,
     pub(crate) layout: Layout,
     pub(crate) transforms: Vec<F>,
+    pub(crate) round: bool,
 }
 
 impl SavedFormat {
@@ -18,7 +19,12 @@ impl SavedFormat {
     }
 
     pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
-        SavedFormat { id: id.to_string(), quant, layout, transforms: Vec::new() }
+        SavedFormat { id: id.to_string(), quant, layout, transforms: Vec::new(), round: false }
+    }
+
+    pub fn round(mut self) -> Self {
+        self.round = true;
+        self
     }
 
     pub fn quantise<T: Quant>(mut self, multiplier: T::Multiplier) -> Self {
@@ -50,7 +56,7 @@ impl SavedFormat {
             weights = transform(graph, &self.id, weights);
         }
 
-        self.quant.quantise(&weights)
+        self.quant.quantise(self.round, &weights)
     }
 
     pub(crate) fn transpose_impl(shape: Shape, weights: &[f32]) -> Vec<f32> {
@@ -100,15 +106,23 @@ pub enum QuantTarget {
     I32(i32),
 }
 
+fn round_or_trunc(x: f64, round: bool) -> f64 {
+    if round {
+        x.round()
+    } else {
+        x.trunc()
+    }
+}
+
 impl QuantTarget {
-    pub fn quantise(self, buf: &[f32]) -> io::Result<Vec<u8>> {
+    pub fn quantise(self, round: bool, buf: &[f32]) -> io::Result<Vec<u8>> {
         let mut quantised = Vec::<u8>::new();
 
         for &float in buf {
             let to_write = match self {
                 Self::Float => float.to_le_bytes().to_vec(),
                 Self::I8(q) => {
-                    let qf = (f64::from(q) * f64::from(float)).trunc();
+                    let qf = round_or_trunc(f64::from(q) * f64::from(float), round);
                     let x = qf as i8;
 
                     if qf != f64::from(x) {
@@ -118,7 +132,7 @@ impl QuantTarget {
                     x.to_le_bytes().to_vec()
                 }
                 Self::I16(q) => {
-                    let qf = (f64::from(q) * f64::from(float)).trunc();
+                    let qf = round_or_trunc(f64::from(q) * f64::from(float), round);
                     let x = qf as i16;
 
                     if qf != f64::from(x) {
@@ -128,7 +142,7 @@ impl QuantTarget {
                     x.to_le_bytes().to_vec()
                 }
                 Self::I32(q) => {
-                    let qf = (f64::from(q) * f64::from(float)).trunc();
+                    let qf = round_or_trunc(f64::from(q) * f64::from(float), round);
                     let x = qf as i32;
 
                     if qf != f64::from(x) {
