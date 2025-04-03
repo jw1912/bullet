@@ -204,8 +204,9 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "montyformat"
-version = "0.7.0"
-source = "git+https://github.com/official-monty/montyformat.git?tag=v0.7.0#090d64814e5d4f5f7053f2fd846381b0ad89c7a4"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8456b021dfc471484f59d58babbe38656d1714bc96a75cfb12a5bfd976b8a829"
 
 [[package]]
 name = "num-traits"
