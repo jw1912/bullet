@@ -59,6 +59,11 @@ fn fuse_add(
                         Some(SparseAffineActivate(weights, input, Some(*rhs), DiffableFromOutput::Identity));
                     return FusionDescription::new(&[lhs.idx], &[new_data]);
                 }
+                SparseAffineDualActivate(weights, s, n, None, DiffableFromOutput::Identity) => {
+                    new_data.parent_operation =
+                        Some(SparseAffineDualActivate(weights, s, n, Some(*rhs), DiffableFromOutput::Identity));
+                    return FusionDescription::new(&[lhs.idx], &[new_data]);
+                }
                 Matmul(a, false, b, false) => {
                     if !ir.get(rhs.idx)?.batched {
                         new_data.parent_operation = Some(Affine(a, b, *rhs));
@@ -114,12 +119,10 @@ fn fuse_concat(
     if node_a.num_children == 1 && node_b.num_children == 1 {
         match (node_a.parent_operation, node_b.parent_operation) {
             (Some(SparseAffineActivate(wa, ia, ba, acta)), Some(SparseAffineActivate(wb, ib, bb, actb))) => {
-                if let Some(bias) = ba {
-                    if wa == wb && ia.idx != ib.idx && ba == bb && acta == actb {
-                        let mut new_data = old_data.clone();
-                        new_data.parent_operation = Some(SparseAffineDualActivate(wa, ia, ib, bias, acta));
-                        return FusionDescription::new(&[a.idx, b.idx], &[new_data]);
-                    }
+                if wa == wb && ia.idx != ib.idx && ba == bb && acta == actb {
+                    let mut new_data = old_data.clone();
+                    new_data.parent_operation = Some(SparseAffineDualActivate(wa, ia, ib, ba, acta));
+                    return FusionDescription::new(&[a.idx, b.idx], &[new_data]);
                 }
             }
             (Some(PairwiseMul(c, false)), Some(PairwiseMul(d, false))) => {
@@ -143,6 +146,29 @@ fn fuse_concat(
                     let mut new_pairwise = old_data.clone();
                     new_pairwise.parent_operation = Some(PairwiseMul(new_b, true));
                     return FusionDescription::new(&[a.idx, b.idx], &[new_concat, new_pairwise]);
+                }
+            }
+            (Some(Unary(c, op1)), Some(Unary(d, op2))) => {
+                if op1 == op2 && c.idx != d.idx && c.shape.size() == d.shape.size() {
+                    let op = Concat(c, d);
+
+                    let (shape, batched, requires_grad) = op.output_info(ir)?;
+                    let new_b = AnnotatedNode { idx: node_b.idx, shape };
+
+                    let new_concat = GraphIRNode {
+                        id: node_b.id.clone(),
+                        shape,
+                        parent_operation: Some(op),
+                        requires_grad,
+                        num_children: 0,
+                        idx: new_b.idx,
+                        sparse: None,
+                        batched,
+                    };
+
+                    let mut new_op = old_data.clone();
+                    new_op.parent_operation = Some(Unary(new_b, op1));
+                    return FusionDescription::new(&[a.idx, b.idx], &[new_concat, new_op]);
                 }
             }
             _ => {}

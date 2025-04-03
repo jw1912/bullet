@@ -295,24 +295,37 @@ impl<D: Device> Graph<D> {
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {
                 let w = &mut *get(*wn);
-                let b = &mut *get(*bn);
                 let s = get(*sn);
 
-                let bs = s.values.batch_size().unwrap_or(1);
-                assert_eq!(sn.shape, nn.shape);
-                setup_ones(w.values.dense()?.buf.device(), internal, bs)?;
-                let ones = &internal.get("ones").unwrap().borrow().buf;
-                sparse::backprop_affine_dual(
-                    w,
-                    wn.shape,
-                    s.values.sparse()?,
-                    get(*nn).values.sparse()?,
-                    sn.shape,
-                    &mut Some((b, ones)),
-                    output_tensor.values.dense()?,
-                    output_grad,
-                    *act,
-                )?;
+                if let Some(bn) = bn {
+                    let bs = s.values.batch_size().unwrap_or(1);
+                    setup_ones(w.values.dense()?.buf.device(), internal, bs)?;
+                    let ones = &internal.get("ones").unwrap().borrow().buf;
+
+                    sparse::backprop_affine_dual(
+                        w,
+                        wn.shape,
+                        s.values.sparse()?,
+                        get(*nn).values.sparse()?,
+                        sn.shape,
+                        &mut Some((&mut *get(*bn), ones)),
+                        output_tensor.values.dense()?,
+                        output_grad,
+                        *act,
+                    )?;
+                } else {
+                    sparse::backprop_affine_dual(
+                        w,
+                        wn.shape,
+                        s.values.sparse()?,
+                        get(*nn).values.sparse()?,
+                        sn.shape,
+                        &mut None,
+                        output_tensor.values.dense()?,
+                        output_grad,
+                        *act,
+                    )?;
+                }
             }
             ToDense(_) => return Err(OperationError::UnsupportedOperation),
             Unary(node, unary) => {

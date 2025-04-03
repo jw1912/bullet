@@ -133,8 +133,7 @@ pub fn affine_dual<D: Device>(
     s: &SparseMatrix<D>,
     n: &SparseMatrix<D>,
     s_shape: Shape,
-    b: &DenseMatrix<D>,
-    b_shape: Shape,
+    b: Option<(&DenseMatrix<D>, Shape)>,
     output: &mut DenseMatrix<D>,
     activation: DiffableFromOutput,
 ) -> Result<(), OperationError<D::DeviceError>> {
@@ -144,12 +143,15 @@ pub fn affine_dual<D: Device>(
     assert_eq!(w_shape.size(), w.single_size());
     assert_eq!(s_shape.size(), s.single_size());
     assert_eq!(s_shape.size(), n.single_size());
-    assert_eq!(b_shape.size(), b.single_size());
+
+    if let Some((b, b_shape)) = b {
+        assert_eq!(b_shape.size(), b.single_size());
+    }
 
     output.set_batch_size(s.batch_size())?;
 
-    affine_activate(Some(false), activation, w, w_shape, s, s_shape, Some((b, b_shape)), output)?;
-    affine_activate(Some(true), activation, w, w_shape, n, s_shape, Some((b, b_shape)), output)
+    affine_activate(Some(false), activation, w, w_shape, s, s_shape, b, output)?;
+    affine_activate(Some(true), activation, w, w_shape, n, s_shape, b, output)
 }
 
 #[allow(clippy::too_many_arguments)]

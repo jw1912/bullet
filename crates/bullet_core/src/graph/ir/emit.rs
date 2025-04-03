@@ -147,9 +147,12 @@ fn op_args(
                 UnaryOp::Mul(x) => format!("{}, {}", id(node), fp(x)),
                 UnaryOp::AbsPow(x) => format!("{}, {}", id(node), fp(x)),
             },
-            SparseAffineDualActivate(w, s, n, b, act) => {
-                format!("{}, {}, {}, {}, {act:?}", id(w), id(s), id(n), id(b))
-            }
+            SparseAffineDualActivate(w, s, n, b, act) => match (b, act) {
+                (Some(b), DiffableFromOutput::Identity) => format!("{}, {}, {}, {}", id(w), id(s), id(n), id(b)),
+                (Some(b), _) => format!("{}, {}, {}, {}, {act:?}", id(w), id(s), id(n), id(b)),
+                (None, DiffableFromOutput::Identity) => format!("{}, {}, {}", id(w), id(s), id(n)),
+                (None, _) => format!("{}, {}, {}, {act:?}", id(w), id(s), id(n)),
+            },
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 format!("{}, {}, {}", id(mask), id(input), id(target))
             }
@@ -175,6 +178,13 @@ fn op_name(node: &GraphIRNode) -> String {
                 (Some(_), _) => "SparseAffineActivate",
                 (None, DiffableFromOutput::Identity) => "SparseMatmul",
                 (None, _) => "SparseMatmulActivate",
+            }
+            .to_string(),
+            SparseAffineDualActivate(_, _, _, b, act) => match (b, act) {
+                (Some(_), DiffableFromOutput::Identity) => "SparseAffineDual",
+                (Some(_), _) => "SparseAffineDualActivate",
+                (None, DiffableFromOutput::Identity) => "SparseMatmulDual",
+                (None, _) => "SparseMatmulDualActivate",
             }
             .to_string(),
             Unary(_, unary) => match unary {

@@ -16,7 +16,7 @@ pub enum DiffableFromOutput {
 pub enum GraphIROp {
     Affine(AnnotatedNode, AnnotatedNode, AnnotatedNode),
     SparseAffineActivate(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
-    SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, AnnotatedNode, DiffableFromOutput),
+    SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
     Concat(AnnotatedNode, AnnotatedNode),
     Gather(AnnotatedNode, AnnotatedNode),
     LinearCombination(f32, AnnotatedNode, f32, AnnotatedNode),
@@ -221,16 +221,20 @@ impl GraphIROp {
             }
             SparseAffineDualActivate(w, s, n, b, _) => {
                 check_dense_eq(w, true)?;
-                check_dense_eq(b, true)?;
                 check_dense_eq(s, false)?;
                 check_dense_eq(n, false)?;
                 check_not_batched(w)?;
                 check_same_batching(&[s, n])?;
-                let shb = b.shape;
 
                 let out = check_matmul(w.shape, s.shape)?;
-                let valid = s.shape == n.shape && out == shb;
-                ret(valid, Shape::new(2 * shb.rows(), shb.cols()), mismatch(&[w, s, n, b]))
+                let mut valid = s.shape == n.shape;
+
+                if let Some(b) = b {
+                    check_dense_eq(b, true)?;
+                    valid &= out == b.shape
+                }
+
+                ret(valid, Shape::new(2 * out.rows(), out.cols()), mismatch(&[w, s, n]))
             }
             ToDense(node) => {
                 check_dense_eq(node, false)?;
@@ -284,7 +288,13 @@ impl GraphIROp {
             }
             ToDense(node) => vec![node],
             Unary(node, _) => vec![node],
-            SparseAffineDualActivate(w, s, n, b, _) => vec![w, s, n, b],
+            SparseAffineDualActivate(w, s, n, b, _) => {
+                if let Some(b) = b {
+                    vec![w, s, n, b]
+                } else {
+                    vec![w, s, n]
+                }
+            }
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => vec![mask, input, target],
             SoftmaxCrossEntropyLoss(a, b) => vec![a, b],
         }
