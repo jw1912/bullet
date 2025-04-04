@@ -9,7 +9,7 @@ use bullet_lib::{
         },
         inputs::SparseInputType,
     },
-    nn::{optimiser::AdamW, GraphCompileArgs},
+    nn::optimiser::AdamW,
     trainer::{
         default::inputs::ChessBucketsMirrored,
         save::SavedFormat,
@@ -52,7 +52,6 @@ fn main() {
         .inputs(inputs)
         .save_format(&fmt)
         .loss_fn(|output, targets| output.sigmoid().squared_error(targets))
-        .compile_args(GraphCompileArgs::default().emit_ir())
         .build(|builder, stm, ntm| {
             let l0 = builder.new_affine("l0", inputs.num_inputs(), 1024);
             let l1 = builder.new_affine("l1", 1024, 16);
@@ -77,7 +76,7 @@ fn main() {
             end_superbatch: 480,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
-        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 180 },
+        lr_scheduler: lr::Warmup { inner: lr::StepLR { start: 0.001, gamma: 0.1, step: 180 }, warmup_batches: 200 },
         save_rate: 150,
     };
 
