@@ -84,7 +84,7 @@ impl GraphBuilder {
 
     pub fn new_affine_custom(&self, id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine {
         let wid = format!("{}w", id);
-        let init = InitSettings::Normal { mean: 0.0, stdev: 1.0 / (input_size as f32 * bias_cols as f32).sqrt() };
+        let init = InitSettings::Normal { mean: 0.0, stdev: (2.0 / (input_size as f32 * bias_cols as f32)).sqrt() };
         let weights = self.new_weights(&wid, Shape::new(output_size, input_size), init);
         let bias = self.new_weights(&format!("{}b", id), Shape::new(output_size, bias_cols), InitSettings::Zeroed);
 
@@ -329,6 +329,14 @@ pub struct Affine<'a> {
 impl<'a> Affine<'a> {
     pub fn forward(self, input: GraphBuilderNode<'a>) -> GraphBuilderNode<'a> {
         self.weights.matmul(input) + self.bias
+    }
+
+    pub fn init_with_effective_input_size(&self, size: usize) {
+        let builder = self.weights.builder.builder();
+        let w = builder.get(self.weights.node.idx).unwrap();
+        let id = w.id.clone().unwrap();
+        *self.weights.builder.init().get_mut(&id).unwrap() =
+            InitSettings::Normal { mean: 0.0, stdev: (2.0 / size as f32).sqrt() };
     }
 
     pub fn forward_sparse_dual_with_activation(
