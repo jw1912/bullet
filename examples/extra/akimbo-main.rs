@@ -2,41 +2,70 @@
 The exact training used for akimbo's current network, updated as I merge new nets.
 */
 use bullet_lib::{
-    nn::{optimiser, Activation},
-    trainer::{
-        default::{
-            inputs, loader, outputs,
-            testing::{Engine, GameRunnerPath, OpenBenchCompliant, OpeningBook, TestSettings, TimeControl, UciOption},
-            Loss, TrainerBuilder,
+    game::{
+        formats::sfbinpack::{
+            chess::{piecetype::PieceType, r#move::MoveType},
+            TrainingDataEntry,
         },
+        inputs::SparseInputType,
+    },
+    nn::{optimiser::AdamW, GraphCompileArgs},
+    trainer::{
+        default::inputs::ChessBucketsMirrored,
+        save::SavedFormat,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
+    value::{loader::SfBinpackLoader, ValueTrainerBuilder},
 };
 
-const NET_ID: &str = "lnet002";
+const NET_ID: &str = "lnet003";
+const DATA_PATH: &str = "data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack";
 
 fn main() {
     #[rustfmt::skip]
-    let mut trainer = TrainerBuilder::default()
-        .quantisations(&[255, 64])
-        .optimiser(optimiser::AdamW)
-        .loss_fn(Loss::SigmoidMSE)
-        .input(inputs::ChessBucketsMirrored::new([
-            0, 0, 1, 1,
-            2, 2, 2, 2,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-            3, 3, 3, 3,
-        ]))
-        .output_buckets(outputs::Single)
-        .feature_transformer(1024)
-        .activate(Activation::SCReLU)
-        .add_layer(1)
-        .build();
+    let inputs = ChessBucketsMirrored::new([
+        0, 0, 1, 1,
+        2, 2, 2, 2,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+    ]);
+
+    let fmt = [
+        SavedFormat::id("l0w").quantise::<i16>(255),
+        SavedFormat::id("l0b").quantise::<i16>(255),
+        SavedFormat::id("l1w").quantise::<i8>(64),
+        SavedFormat::id("l1b").quantise::<i32>(64 * 255),
+        SavedFormat::id("l2w").quantise::<i32>(255),
+        SavedFormat::id("l2b").quantise::<i32>(255),
+        SavedFormat::id("l3w").quantise::<i32>(255),
+        SavedFormat::id("l3b").quantise::<i32>(255 * 255),
+    ];
+
+    let mut trainer = ValueTrainerBuilder::default()
+        .dual_perspective()
+        .optimiser(AdamW)
+        .inputs(inputs)
+        .save_format(&fmt)
+        .loss_fn(|output, targets| output.sigmoid().squared_error(targets))
+        .compile_args(GraphCompileArgs::default().emit_ir())
+        .build(|builder, stm, ntm| {
+            let l0 = builder.new_affine("l0", inputs.num_inputs(), 1024);
+            let l1 = builder.new_affine("l1", 1024, 16);
+            let l2 = builder.new_affine("l2", 16, 32);
+            let l3 = builder.new_affine("l3", 32, 1);
+
+            let stm_subnet = l0.forward(stm).crelu().pairwise_mul();
+            let ntm_subnet = l0.forward(ntm).crelu().pairwise_mul();
+            let hl1 = stm_subnet.concat(ntm_subnet);
+            let hl2 = l1.forward(hl1).screlu();
+            let hl3 = l2.forward(hl2).screlu();
+            l3.forward(hl3)
+        });
 
     let schedule = TrainingSchedule {
         net_id: NET_ID.to_string(),
@@ -45,41 +74,18 @@ fn main() {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
             start_superbatch: 1,
-            end_superbatch: 240,
+            end_superbatch: 480,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.0 },
-        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.3, step: 60 },
+        lr_scheduler: lr::StepLR { start: 0.001, gamma: 0.1, step: 180 },
         save_rate: 150,
     };
 
-    trainer.set_optimiser_params(optimiser::AdamWParams::default());
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
+    let data_loader = SfBinpackLoader::new(DATA_PATH, 4096, 4, filter);
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
-
-    let engine = |bench| Engine {
-        repo: "https://github.com/jw1912/akimbo",
-        branch: "main",
-        bench,
-        net_path: None,
-        uci_options: vec![UciOption("Hash", "16")],
-        engine_type: OpenBenchCompliant,
-    };
-
-    let testing = TestSettings {
-        test_rate: 20,
-        out_dir: &format!("../../nets/{NET_ID}"),
-        gamerunner_path: GameRunnerPath::CuteChess("../../nets/cutechess-cli.exe"),
-        book_path: OpeningBook::Epd("../../nets/UHO_Lichess_4852_v1.epd"),
-        num_game_pairs: 2000,
-        concurrency: 6,
-        time_control: TimeControl::FixedNodes(25_000),
-        base_engine: engine(Some(2256851)),
-        dev_engine: engine(None),
-    };
-
-    trainer.run_and_test(&schedule, &settings, &data_loader, &testing);
+    trainer.run(&schedule, &settings, &data_loader);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -92,4 +98,12 @@ fn main() {
         println!("FEN: {fen}");
         println!("EVAL: {}", 400.0 * eval);
     }
+}
+
+fn filter(entry: &TrainingDataEntry) -> bool {
+    entry.ply >= 16
+        && entry.score.unsigned_abs() <= 10000
+        && entry.mv.mtype() == MoveType::Normal
+        && entry.pos.piece_at(entry.mv.to()).piece_type() == PieceType::None
+        && !entry.pos.is_checked(entry.pos.side_to_move())
 }
