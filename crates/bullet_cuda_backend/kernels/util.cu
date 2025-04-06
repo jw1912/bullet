@@ -1,8 +1,11 @@
 #define BULLET_CUDA_UTILS
 #define BULLET_KERNEL extern "C" __global__ void
+#define BULLET_KERNEL_IMPL __device__ __forceinline__ void
 
 typedef float(*OpType)(float);
 typedef float(*BinaryOpType)(float, float);
+
+constexpr int MaximumBlocksY = 32768;
 
 __device__ float Identity([[maybe_unused]] float in) { return in; }
 __device__ float ReLU(float in) { return in > 0.0F ? in : 0.0F; }

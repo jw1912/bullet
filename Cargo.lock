@@ -91,6 +91,7 @@ name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
  "bullet_core",
+ "bullet_cuda_backend",
  "bullet_hip_backend",
  "bulletformat",
  "montyformat",

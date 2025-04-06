@@ -16,7 +16,7 @@ BULLET_KERNEL name(const int size, const float alpha, const float* input, const 
 }\
 
 template<BinaryOpType op>
-__global__ void scalar_kernel_forward(const int size, const float alpha, const float* inp, float* out) {
+BULLET_KERNEL_IMPL scalar_kernel_forward(const int size, const float alpha, const float* inp, float* out) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (tid < size / 4)
@@ -42,7 +42,7 @@ __global__ void scalar_kernel_forward(const int size, const float alpha, const f
 }
 
 template<BinaryOpType op>
-__global__ void scalar_kernel_backward(const int size, const float alpha, const float* input, const float* output_grad, float* input_grad) {
+BULLET_KERNEL_IMPL scalar_kernel_backward(const int size, const float alpha, const float* input, const float* output_grad, float* input_grad) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (tid < size / 4)

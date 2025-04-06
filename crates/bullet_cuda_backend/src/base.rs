@@ -175,6 +175,8 @@ impl BaseOperations for CudaBuffer<f32> {
         }
 
         let output_size = size / 2;
+        let total_size = batch_size * output_size;
+
         let func = self.device.module.load_function("PairwiseMulBackwardKernel").map_err(CudaError::Driver)?;
 
         unsafe {
@@ -183,10 +185,10 @@ impl BaseOperations for CudaBuffer<f32> {
                 .launch_builder(&func)
                 .arg(&(output_size as i32))
                 .arg(&(batch_size as i32))
-                .arg(&a.buf.slice(0..size))
-                .arg(&grd.buf.slice(0..size))
-                .arg(&mut self.buf.slice_mut(0..size))
-                .launch(CudaDevice::elementwise_launch_params_single(batch_size * output_size, 1024))
+                .arg(&a.buf.slice(0..2 * total_size))
+                .arg(&grd.buf.slice(0..2 * total_size))
+                .arg(&mut self.buf.slice_mut(0..total_size))
+                .launch(CudaDevice::elementwise_launch_params_single(total_size, 1024))
                 .map_err(CudaError::Driver)?;
         }
 

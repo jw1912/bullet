@@ -5,7 +5,7 @@
 
 constexpr float Epsilon = 0.00000001F;
 
-__device__ __forceinline__ void adamOp(
+BULLET_KERNEL_IMPL adamOp(
     const float beta1,
     const float beta2,
     const float adj,

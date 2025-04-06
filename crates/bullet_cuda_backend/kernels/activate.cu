@@ -16,7 +16,7 @@ BULLET_KERNEL name(const int size, const float* input, const float* output_grad,
 }\
 
 template<OpType op>
-__global__ void buffer_operation_kernel(const int size, const float* in, float* out)
+BULLET_KERNEL_IMPL buffer_operation_kernel(const int size, const float* in, float* out)
 {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -36,7 +36,7 @@ __global__ void buffer_operation_kernel(const int size, const float* in, float* 
 }
 
 template<OpType op>
-__global__ void buffer_backprop_kernel(const int size, const float* input, const float* output_grad, float* input_grad)
+BULLET_KERNEL_IMPL buffer_backprop_kernel(const int size, const float* input, const float* output_grad, float* input_grad)
 {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 

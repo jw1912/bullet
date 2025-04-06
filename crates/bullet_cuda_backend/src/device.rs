@@ -1,3 +1,5 @@
+mod sparse;
+
 use std::sync::Arc;
 
 use bullet_core::{
@@ -23,6 +25,12 @@ pub struct CudaDevice {
     pub(crate) stream: Arc<CudaStream>,
     pub(crate) blas: CudaBlas,
     pub(crate) module: Arc<CudaModule>,
+}
+
+impl Default for CudaDevice {
+    fn default() -> Self {
+        Self::new(0).unwrap()
+    }
 }
 
 impl CudaDevice {
@@ -79,7 +87,19 @@ impl Device for CudaDevice {
         input_c_batched: bool,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        sparse::sparse_affine(
+            batch_size,
+            stride,
+            activation,
+            input_a,
+            shape_a,
+            input_b,
+            shape_b,
+            nnz,
+            input_c,
+            input_c_batched,
+            output,
+        )
     }
 
     fn backprop_sparse_affine_activate(
@@ -98,7 +118,22 @@ impl Device for CudaDevice {
         outputs: &Self::BufferF32,
         output_grad: &Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        sparse::backprop_sparse_affine(
+            batch_size,
+            stride,
+            activation,
+            input_a,
+            input_a_grad,
+            shape_a,
+            input_b,
+            shape_b,
+            nnz,
+            input_c,
+            input_c_grad,
+            input_c_batched,
+            outputs,
+            output_grad,
+        )
     }
 
     fn mask(
