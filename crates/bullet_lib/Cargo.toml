@@ -14,6 +14,7 @@ default = ["cuda"]
 cpu = []
 cuda = ["bullet_cuda_backend"]
 hip = ["bullet_hip_backend", "bullet_hip_backend/hip"]
+hip-cuda = ["bullet_hip_backend"]
 gh-actions = ["bullet_hip_backend/gh-actions"]
 
 [dependencies]

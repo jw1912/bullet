@@ -49,22 +49,34 @@ pub fn sparse_affine(
     let m = shape_a.rows() as u32;
     let k = batch_size as u32;
 
+    let align = m % 4 == 0 && m >= 128;
+
     let act = activation_str(activation);
 
     const MAXIMUM_BLOCKS_Y: u32 = 32768;
-    let threads = m.min(1024);
-    let chunks = m.div_ceil(threads);
+
+    let (chunks, threads, smem, align_str) = if align {
+        let m4 = m / 4;
+        let threads = m4.min(1024);
+        let chunks = m4.div_ceil(threads);
+        (chunks, threads, 4 * nnz as u32, "Aligned")
+    } else {
+        let threads = m.min(1024);
+        let chunks = m.div_ceil(threads);
+        (chunks, threads, 0, "")
+    };
+
     let ky = k.min(MAXIMUM_BLOCKS_Y);
     let kz = k.div_ceil(MAXIMUM_BLOCKS_Y);
     let grid_dim = (chunks, ky, kz);
-    let cfg = LaunchConfig { grid_dim, block_dim: (threads, 1, 1), shared_mem_bytes: 0 };
+    let cfg = LaunchConfig { grid_dim, block_dim: (threads, 1, 1), shared_mem_bytes: smem };
 
     if let Some(c) = input_c {
         if shape_o.size() * if input_c_batched { batch_size } else { 1 } > c.size() {
             return Err(OperationError::IndexOutOfBounds);
         }
 
-        let func_name = format!("SparseAffineFwd{act}");
+        let func_name = format!("SparseAffine{align_str}Fwd{act}");
         let func = output.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
 
         unsafe {
@@ -85,7 +97,7 @@ pub fn sparse_affine(
                 .map_err(CudaError::Driver)?;
         }
     } else {
-        let func_name = format!("SparseMatmulFwd{act}");
+        let func_name = format!("SparseMatmul{align_str}Fwd{act}");
         let func = output.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
 
         unsafe {
