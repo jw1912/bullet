@@ -10,7 +10,7 @@ rust-version = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["cuda"]
+default = ["hip-cuda"]
 cpu = []
 cuda = ["bullet_cuda_backend"]
 hip = ["bullet_hip_backend", "bullet_hip_backend/hip"]
