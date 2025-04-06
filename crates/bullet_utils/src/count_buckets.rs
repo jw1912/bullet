@@ -41,7 +41,7 @@ impl ValidateOptions {
             }
         }
 
-        let mut num_buckets: usize = 0;
+        let mut num_buckets = 0;
         let mut buckets: [usize; 64] = [0; 64];
         for n in 0..numbers.len() {
             buckets[n] = numbers[n];
@@ -51,7 +51,7 @@ impl ValidateOptions {
         println!("Bucket layout:");
         print_board(buckets);
 
-        let mut total_position_count: usize = 0;
+        let mut total_position_count = 0;
         let mut total_king_squares: [usize; 64] = [0; 64];
         let mut total_bucket_counts: [usize; 64] = [0; 64];
 
@@ -59,7 +59,7 @@ impl ValidateOptions {
             println!("\nFile {}", path.display());
             let loader = DataLoader::<ChessBoard>::new(path, 256).with_context(|| "Failed to create dataloader.")?;
 
-            let mut position_count: usize = 0;
+            let mut position_count = 0usize;
             let mut king_squares: [usize; 64] = [0; 64];
             let mut bucket_counts: [usize; 64] = [0; 64];
 

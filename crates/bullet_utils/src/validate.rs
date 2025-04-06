@@ -14,7 +14,7 @@ impl ValidateOptions {
     pub fn run(&self) -> anyhow::Result<()> {
         let loader = DataLoader::<ChessBoard>::new(&self.input, 256).with_context(|| "Failed to create dataloader.")?;
 
-        let mut done = 0;
+        let mut done = 0usize;
         let timer = Instant::now();
         let mut results = [0u64; 3];
 
