@@ -1,10 +1,13 @@
 use bullet_core::{
-    backend::device::base::{AdamConfig, BaseOperations},
+    backend::device::{
+        base::{AdamConfig, BaseOperations},
+        DeviceBuffer,
+    },
     graph::ir::op::DiffableFromOutput,
 };
-use cudarc::driver::{LaunchConfig, PushKernelArg};
+use cudarc::driver::PushKernelArg;
 
-use crate::{CudaBuffer, CudaError};
+use crate::{CudaBuffer, CudaDevice, CudaError};
 
 #[allow(unused)]
 impl BaseOperations for CudaBuffer<f32> {
@@ -25,10 +28,6 @@ impl BaseOperations for CudaBuffer<f32> {
             DiffableFromOutput::Sigmoid => "ForwardSigmoidKernel",
         };
 
-        let threads = 512;
-        let float4_size = (size as u32 + 3) / 4;
-        let blocks = float4_size.div_ceil(threads);
-
         let func = self.device.module.load_function(func_name).map_err(CudaError::Driver)?;
 
         unsafe {
@@ -38,7 +37,7 @@ impl BaseOperations for CudaBuffer<f32> {
                 .arg(&(size as i32))
                 .arg(&a.buf.slice(0..size))
                 .arg(&mut self.buf.slice_mut(0..size))
-                .launch(LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 })
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
                 .map_err(CudaError::Driver)?;
         }
 
@@ -61,10 +60,6 @@ impl BaseOperations for CudaBuffer<f32> {
             DiffableFromOutput::Sigmoid => "BackwardSigmoidKernel",
         };
 
-        let threads = 512;
-        let float4_size = (size as u32 + 3) / 4;
-        let blocks = float4_size.div_ceil(threads);
-
         let func = self.device.module.load_function(func_name).map_err(CudaError::Driver)?;
 
         unsafe {
@@ -75,7 +70,7 @@ impl BaseOperations for CudaBuffer<f32> {
                 .arg(&a.buf.slice(0..size))
                 .arg(&grd.buf.slice(0..size))
                 .arg(&mut self.buf.slice_mut(0..size))
-                .launch(LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 })
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
                 .map_err(CudaError::Driver)?;
         }
 
@@ -83,10 +78,38 @@ impl BaseOperations for CudaBuffer<f32> {
     }
 
     fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("AddScalarKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&alpha)
+                .arg(&input.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
     fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("AbsPowScalarKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&alpha)
+                .arg(&input.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
@@ -97,18 +120,95 @@ impl BaseOperations for CudaBuffer<f32> {
         input: &Self,
         grd: &Self,
     ) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("AbsPowScalarBackwardKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&alpha)
+                .arg(&input.buf.slice(0..size))
+                .arg(&grd.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
     fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
+        if size * batch_size > a.size() {
+            return Err(CudaError::ExpectedIllegalAddressAccess);
+        }
+
+        if size % 2 != 0 || (size / 2) * batch_size > self.size() {
+            return Err(CudaError::ExpectedIllegalAddressAccess);
+        }
+
+        let output_size = size / 2;
+        let func = self.device.module.load_function("PairwiseMulKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(output_size as i32))
+                .arg(&(batch_size as i32))
+                .arg(&a.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .launch(CudaDevice::elementwise_launch_params_single(batch_size * output_size, 1024))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
     fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
+        if size * batch_size > a.size() {
+            return Err(CudaError::ExpectedIllegalAddressAccess);
+        }
+
+        if size % 2 != 0 || (size / 2) * batch_size > self.size() {
+            return Err(CudaError::ExpectedIllegalAddressAccess);
+        }
+
+        let output_size = size / 2;
+        let func = self.device.module.load_function("PairwiseMulBackwardKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(output_size as i32))
+                .arg(&(batch_size as i32))
+                .arg(&a.buf.slice(0..size))
+                .arg(&grd.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .launch(CudaDevice::elementwise_launch_params_single(batch_size * output_size, 1024))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
     fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("PowerErrorKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&a.buf.slice(0..size))
+                .arg(&b.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .arg(&power)
+                .launch(CudaDevice::elementwise_launch_params_single(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
@@ -120,6 +220,22 @@ impl BaseOperations for CudaBuffer<f32> {
         b: &Self,
         grd: &Self,
     ) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("PowerErrorBackwardKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&a.buf.slice(0..size))
+                .arg(&b.buf.slice(0..size))
+                .arg(&grd.buf.slice(0..size))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .arg(&power)
+                .launch(CudaDevice::elementwise_launch_params_single(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
         Ok(())
     }
 
@@ -138,10 +254,6 @@ impl BaseOperations for CudaBuffer<f32> {
     }
 
     fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {
-        let threads = 1024;
-        let float4_size = (size as u32 + 3) / 4;
-        let blocks = float4_size.div_ceil(threads);
-
         let func = self.device.module.load_function("ClipKernel").map_err(CudaError::Driver)?;
 
         unsafe {
@@ -152,7 +264,7 @@ impl BaseOperations for CudaBuffer<f32> {
                 .arg(&mut self.buf.slice_mut(0..size))
                 .arg(&min)
                 .arg(&max)
-                .launch(LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 })
+                .launch(CudaDevice::elementwise_launch_params(size, 1024))
                 .map_err(CudaError::Driver)?;
         }
 
@@ -167,10 +279,6 @@ impl BaseOperations for CudaBuffer<f32> {
         mom: &mut Self,
         vel: &mut Self,
     ) -> Result<(), Self::BaseError> {
-        let threads = 1024;
-        let float4_size = (size as u32 + 3) / 4;
-        let blocks = float4_size.div_ceil(threads);
-
         let func = self.device.module.load_function("AdamKernel").map_err(CudaError::Driver)?;
 
         unsafe {
@@ -187,7 +295,7 @@ impl BaseOperations for CudaBuffer<f32> {
                 .arg(&mut mom.buf.slice_mut(0..size))
                 .arg(&mut vel.buf.slice_mut(0..size))
                 .arg(&grd.buf.slice(0..size))
-                .launch(LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 })
+                .launch(CudaDevice::elementwise_launch_params(size, 1024))
                 .map_err(CudaError::Driver)?;
         }
 

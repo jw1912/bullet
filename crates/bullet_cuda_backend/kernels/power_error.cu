@@ -18,7 +18,7 @@ BULLET_KERNEL PowerErrorKernel(
     output[i] = powf(abs(inputs[i] - results[i]), power);
 }
 
-BULLET_KERNEL BackpropPowerErrorKernel(
+BULLET_KERNEL PowerErrorBackwardKernel(
     const int size,
     const float* inputs,
     const float* results,

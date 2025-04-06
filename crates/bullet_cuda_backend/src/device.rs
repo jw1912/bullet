@@ -6,7 +6,7 @@ use bullet_core::{
 };
 use cudarc::{
     cublas::{result::CublasError, CudaBlas},
-    driver::{CudaContext, CudaModule, CudaStream, DriverError},
+    driver::{CudaContext, CudaModule, CudaStream, DriverError, LaunchConfig},
     nvrtc::Ptx,
 };
 
@@ -23,6 +23,19 @@ pub struct CudaDevice {
     pub(crate) stream: Arc<CudaStream>,
     pub(crate) blas: CudaBlas,
     pub(crate) module: Arc<CudaModule>,
+}
+
+impl CudaDevice {
+    pub fn elementwise_launch_params(size: usize, threads: u32) -> LaunchConfig {
+        let float4_size = (size as u32 + 3) / 4;
+        let blocks = float4_size.div_ceil(threads);
+        LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 }
+    }
+
+    pub fn elementwise_launch_params_single(size: usize, threads: u32) -> LaunchConfig {
+        let blocks = (size as u32).div_ceil(threads);
+        LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 }
+    }
 }
 
 #[allow(unused)]

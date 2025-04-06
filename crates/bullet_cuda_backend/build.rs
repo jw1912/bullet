@@ -10,7 +10,7 @@ use cudarc::nvrtc;
 fn main() {
     println!("cargo:rerun-if-changed=./kernels");
 
-    let mut src = "#define CUDA_BACKEND\n".to_string();
+    let mut src = String::new();
 
     let mut file = File::open("./kernels/util.cu").unwrap();
     file.read_to_string(&mut src).unwrap();

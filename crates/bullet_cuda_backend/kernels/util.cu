@@ -1,10 +1,5 @@
 #define BULLET_CUDA_UTILS
-
-#ifdef CUDA_BACKEND
 #define BULLET_KERNEL extern "C" __global__ void
-#else
-#define BULLET_KERNEL __global__ void
-#endif
 
 typedef float(*OpType)(float);
 typedef float(*BinaryOpType)(float, float);

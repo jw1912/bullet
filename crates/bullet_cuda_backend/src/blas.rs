@@ -7,10 +7,10 @@ use cudarc::{
         sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
         Gemm, GemmConfig, StridedBatchedConfig,
     },
-    driver::{LaunchConfig, PushKernelArg},
+    driver::PushKernelArg,
 };
 
-use crate::{CudaBuffer, CudaError};
+use crate::{CudaBuffer, CudaDevice, CudaError};
 
 #[allow(unused)]
 impl blas::BlasOperations for CudaBuffer<f32> {
@@ -50,9 +50,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
         beta: f32,
         b: Option<&Self>,
     ) -> Result<(), Self::BlasError> {
-        let threads = 1024;
-        let float4_size = (size as u32 + 3) / 4;
-        let blocks = float4_size.div_ceil(threads);
+        let cfg = CudaDevice::elementwise_launch_params(size, 1024);
 
         let output = match (a, b) {
             (None, None) => {
@@ -69,11 +67,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
                         .arg(&(size as i32))
                         .arg(&mut self.buf.slice_mut(0..size))
                         .arg(&alpha)
-                        .launch(LaunchConfig {
-                            grid_dim: (blocks, 1, 1),
-                            block_dim: (threads, 1, 1),
-                            shared_mem_bytes: 0,
-                        })
+                        .launch(cfg)
                 }
             }
             (None, Some(b)) => {
@@ -92,11 +86,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
                         .arg(&mut self.buf.slice_mut(0..size))
                         .arg(&beta)
                         .arg(&b.buf.slice(0..size))
-                        .launch(LaunchConfig {
-                            grid_dim: (blocks, 1, 1),
-                            block_dim: (threads, 1, 1),
-                            shared_mem_bytes: 0,
-                        })
+                        .launch(cfg)
                 }
             }
             (Some(a), Some(b)) => {
@@ -116,11 +106,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
                         .arg(&beta)
                         .arg(&b.buf.slice(0..size))
                         .arg(&mut self.buf.slice_mut(0..size))
-                        .launch(LaunchConfig {
-                            grid_dim: (blocks, 1, 1),
-                            block_dim: (threads, 1, 1),
-                            shared_mem_bytes: 0,
-                        })
+                        .launch(cfg)
                 }
             }
             (Some(a), None) => {
@@ -138,11 +124,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
                         .arg(&alpha)
                         .arg(&a.buf.slice(0..size))
                         .arg(&mut self.buf.slice_mut(0..size))
-                        .launch(LaunchConfig {
-                            grid_dim: (blocks, 1, 1),
-                            block_dim: (threads, 1, 1),
-                            shared_mem_bytes: 0,
-                        })
+                        .launch(cfg)
                 }
             }
         };
