@@ -10,13 +10,15 @@ rust-version = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["cuda"]
+default = ["hip-cuda"]
 cpu = []
-cuda = ["bullet_hip_backend"]
+cuda = ["bullet_cuda_backend"]
 hip = ["bullet_hip_backend", "bullet_hip_backend/hip"]
+hip-cuda = ["bullet_hip_backend"]
 gh-actions = ["bullet_hip_backend/gh-actions"]
 
 [dependencies]
+bullet_cuda_backend = { workspace = true, optional = true }
 bullet_hip_backend = { workspace = true, optional = true }
 bullet_core = { workspace = true }
 bulletformat = { workspace = true }

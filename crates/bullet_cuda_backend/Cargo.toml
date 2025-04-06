@@ -1,0 +1,12 @@
+[package]
+name = "bullet_cuda_backend"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jamie Whiting"]
+
+[dependencies]
+bullet_core = { workspace = true }
+cudarc = { version = "0.14.0", features = ["cuda-version-from-build-system"] }
+
+[build-dependencies]
+cudarc = { version = "0.14.0", features = ["cuda-version-from-build-system"] }

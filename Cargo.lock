@@ -71,6 +71,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bullet_cuda_backend"
+version = "0.1.0"
+dependencies = [
+ "bullet_core",
+ "cudarc",
+]
+
+[[package]]
 name = "bullet_hip_backend"
 version = "0.1.0"
 dependencies = [
@@ -83,6 +91,7 @@ name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
  "bullet_core",
+ "bullet_cuda_backend",
  "bullet_hip_backend",
  "bulletformat",
  "montyformat",
@@ -124,6 +133,15 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "cudarc"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d50f5a3770c380b8b4303a5588b06a53d31a8170dc7f09cfcfb2dcb9fd807fa"
+dependencies = [
+ "libloading",
 ]
 
 [[package]]
@@ -189,6 +207,16 @@ name = "libc"
 version = "0.2.170"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "875b3680cb2f8f71bdcf9a30f38d48282f5d3c95cbf9b3fa57269bb5d5c06828"
+
+[[package]]
+name = "libloading"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
+dependencies = [
+ "cfg-if",
+ "windows-targets",
+]
 
 [[package]]
 name = "libm"

@@ -17,6 +17,8 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
         - A small set of (composable) optimisers are included that ingest a graph and provide update methods for it
     - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
     - See the [MNIST](examples/extra/mnist.rs) example for using `bullet_core` as a general-purpose ML framework
+- **bullet_cuda_backend**
+    - A working but incomplete CUDA backend rewrite, not currently suitable for serious use.
 - **bullet_hip_backend**
     - Currently contains both the HIP (for AMD GPUs) and CUDA backends. Enable the `hip` feature to use the HIP backend.
 - **bullet_lib**

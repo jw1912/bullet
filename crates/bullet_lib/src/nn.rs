@@ -7,11 +7,14 @@ pub use bullet_core::graph::{
 };
 pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 
-#[cfg(feature = "cpu")]
+#[cfg(all(feature = "cpu", not(feature = "cuda")))]
 pub use bullet_core::backend::cpu::{CpuError as DeviceError, CpuThread as ExecutionContext};
 
-#[cfg(not(feature = "cpu"))]
+#[cfg(all(any(feature = "hip", feature = "hip-cuda"), not(feature = "cpu"), not(feature = "cuda")))]
 pub use bullet_hip_backend::{DeviceError, ExecutionContext};
+
+#[cfg(feature = "cuda")]
+pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as DeviceError};
 
 pub mod optimiser {
     use crate::nn::ExecutionContext;

@@ -83,6 +83,8 @@ fn build_hip(out_path: &Path) {
     println!("cargo:rerun-if-changed={}", include_path_str);
 
     cc::Build::new()
+        .cargo_warnings(false)
+        .warnings(false)
         .compiler(compiler_name)
         .debug(false)
         .opt_level(3)
