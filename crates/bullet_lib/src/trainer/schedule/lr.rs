@@ -88,11 +88,12 @@ pub struct LinearDecayLR {
 
 impl LrScheduler for LinearDecayLR {
     fn lr(&self, _batch: usize, superbatch: usize) -> f32 {
-        // scales from 0 to 1, ish
-        let linear_decay = superbatch as f32 / self.final_superbatch as f32;
-        let diff = self.final_lr - self.initial_lr;
-        let diff_to_apply = linear_decay * diff;
-        self.initial_lr + diff_to_apply
+        if superbatch >= self.final_superbatch {
+            return self.final_lr;
+        }
+
+        let lambda = superbatch as f32 / self.final_superbatch as f32;
+        self.initial_lr + lambda * (self.final_lr - self.initial_lr)
     }
 
     fn colourful(&self) -> String {
@@ -114,12 +115,13 @@ pub struct CosineDecayLR {
 
 impl LrScheduler for CosineDecayLR {
     fn lr(&self, _batch: usize, superbatch: usize) -> f32 {
-        // scales from 0 to 1, ish
+        if superbatch >= self.final_superbatch {
+            return self.final_lr;
+        }
+
         let progress = superbatch as f32 / self.final_superbatch as f32;
-        let cosine_decay = 1.0 - 0.5 * (1.0 + (PI * progress).cos());
-        let diff = self.final_lr - self.initial_lr;
-        let diff_to_apply = cosine_decay * diff;
-        self.initial_lr + diff_to_apply
+        let lambda = 1.0 - 0.5 * (1.0 + (PI * progress).cos());
+        self.initial_lr + lambda * (self.final_lr - self.initial_lr)
     }
 
     fn colourful(&self) -> String {
@@ -144,8 +146,9 @@ impl LrScheduler for ExponentialDecayLR {
         if superbatch >= self.final_superbatch {
             return self.final_lr;
         }
-        let decay_factor = (self.final_lr / self.initial_lr).powf(1.0 / self.final_superbatch as f32);
-        self.initial_lr * decay_factor.powf(superbatch as f32)
+
+        let lambda = superbatch as f32 / self.final_superbatch as f32;
+        self.initial_lr * (self.final_lr / self.initial_lr).powf(lambda)
     }
 
     fn colourful(&self) -> String {
