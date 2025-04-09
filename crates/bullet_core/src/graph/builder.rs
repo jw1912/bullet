@@ -40,6 +40,7 @@ pub enum InitSettings {
 pub struct GraphBuilder {
     graph_builder: Mutex<GraphIR>,
     init_data: Mutex<HashMap<String, InitSettings>>,
+    consts: Mutex<HashMap<usize, Vec<f32>>>,
     args: GraphIRCompileArgs,
 }
 
@@ -69,6 +70,13 @@ impl GraphBuilder {
 
     pub fn new_sparse_input<'a>(&'a self, id: &str, shape: Shape, nnz: usize) -> GraphBuilderNode<'a> {
         let node = self.builder().add_sparse_input(id, shape, nnz).unwrap();
+        GraphBuilderNode { node, builder: self }
+    }
+
+    pub fn new_constant<'a>(&'a self, shape: Shape, vals: &[f32]) -> GraphBuilderNode<'a> {
+        let node = self.builder().add_node(None, None, shape, false, false, None).unwrap();
+        assert_eq!(shape.size(), vals.len(), "Shape of constant does not match provided values!");
+        self.consts.try_lock().unwrap().insert(node.idx, vals.to_vec());
         GraphBuilderNode { node, builder: self }
     }
 
@@ -110,6 +118,10 @@ impl GraphBuilder {
                     graph.get_weights_mut(id).seed_random(mean, stdev, false).unwrap()
                 }
             };
+        }
+
+        for (&idx, vals) in self.consts.lock().unwrap().iter() {
+            graph.get_mut(idx).unwrap().load_dense_from_slice(None, vals).unwrap();
         }
 
         graph
@@ -250,6 +262,10 @@ impl GraphBuilderNode<'_> {
 
     pub fn linear_comb(self, alpha: f32, rhs: Self, beta: f32) -> Self {
         self.builder.apply(GraphIROp::LinearCombination(alpha, self.node, beta, rhs.node))
+    }
+
+    pub fn reduce_sum_across_batch(self) -> Self {
+        self.builder.apply(GraphIROp::ReduceAcrossBatch(self.node))
     }
 
     pub fn matmul(self, rhs: Self) -> Self {
