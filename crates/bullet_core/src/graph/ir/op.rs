@@ -186,9 +186,8 @@ impl GraphIROp {
             }
             ReduceAcrossBatch(node) => {
                 check_dense_eq(node, true)?;
-                let is = node.shape;
                 batched = false;
-                ret(is == Shape::new(1, 1), is, GraphIROpError::new(self, InvalidInputShape(is)))
+                Ok(node.shape)
             }
             Select(input, buckets) => {
                 check_dense_eq(input, true)?;
