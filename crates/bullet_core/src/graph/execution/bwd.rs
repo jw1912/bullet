@@ -99,6 +99,16 @@ impl<D: Device> Graph<D> {
                     output_grad,
                 )?;
             }
+            Copy(node, stop_grad) => {
+                if let Some(grd) = get(*node).gradients.as_mut() {
+                    assert!(!stop_grad);
+                    assert_eq!(grd.single_size(), output_grad.single_size());
+
+                    let size = grd.single_size() * output_grad.batch_size().unwrap_or(1);
+                    grd.set_batch_size(output_grad.batch_size())?;
+                    grd.buf.geam(size, 1.0, None, 1.0, Some(&output_grad.buf))?;
+                }
+            }
             Mask(input, mask) => {
                 if let Some(grd) = get(*input).gradients.as_mut() {
                     let mask = get(*mask);

@@ -125,6 +125,7 @@ fn op_args(
         Some(op) => match op {
             Affine(a, b, c) => format!("{}, {}, {}", id(a), id(b), id(c)),
             Concat(a, b) => format!("{}, {}", id(a), id(b)),
+            Copy(node, stop_grad) => format!("{}, {stop_grad}", id(node)),
             Gather(input, mask) => format!("{}, {}", id(input), id(mask)),
             LinearCombination(alpha, a, beta, b) => format!("{}, {}, {}, {}", fp(alpha), id(a), fp(beta), id(b)),
             Mask(input, mask) => format!("{}, {}", id(input), id(mask)),

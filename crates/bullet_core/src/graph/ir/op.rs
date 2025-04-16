@@ -18,6 +18,7 @@ pub enum GraphIROp {
     SparseAffineActivate(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
     SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
     Concat(AnnotatedNode, AnnotatedNode),
+    Copy(AnnotatedNode, bool),
     Gather(AnnotatedNode, AnnotatedNode),
     LinearCombination(f32, AnnotatedNode, f32, AnnotatedNode),
     Mask(AnnotatedNode, AnnotatedNode),
@@ -120,7 +121,7 @@ impl GraphIROp {
 
         let mut batched = self.nodes().iter().any(|node| get(node).batched);
 
-        let requires_grad = self.nodes().iter().any(|node| get(node).requires_grad);
+        let mut requires_grad = self.nodes().iter().any(|node| get(node).requires_grad);
 
         let shape = match self {
             Affine(w, i, b) => {
@@ -144,6 +145,15 @@ impl GraphIROp {
 
                 let out = Shape::new(a.shape.rows() + b.shape.rows(), a.shape.cols());
                 ret(a.shape.cols() == b.shape.cols(), out, mismatch(&[a, b]))
+            }
+            Copy(node, stop_grad) => {
+                check_dense_eq(node, true)?;
+
+                if *stop_grad {
+                    requires_grad = false;
+                }
+
+                Ok(node.shape)
             }
             Gather(input, mask) => {
                 check_dense_eq(input, true)?;
@@ -269,6 +279,7 @@ impl GraphIROp {
         match *self {
             Affine(a, b, c) => vec![a, b, c],
             Concat(a, b) => vec![a, b],
+            Copy(node, _) => vec![node],
             Gather(input, mask) => vec![input, mask],
             LinearCombination(_, a, _, b) => vec![a, b],
             Mask(input, mask) => vec![input, mask],

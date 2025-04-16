@@ -41,6 +41,16 @@ impl<D: Device> Graph<D> {
                 let ones = &internal.get("ones").unwrap().borrow().buf;
                 matmul::affine(w, wn.shape, i, inp.shape, b, bn.shape, ones, output)
             }
+            Copy(node, _) => {
+                assert_eq!(node.shape.size(), output.single_size);
+                let node = get(*node);
+                let node = node.values.dense()?;
+
+                output.set_batch_size(node.batch_size())?;
+                output.copy_from(node)?;
+
+                Ok(())
+            }
             LinearCombination(alpha, an, beta, bn) => {
                 let a = get(*an);
                 let a = a.values.dense()?;

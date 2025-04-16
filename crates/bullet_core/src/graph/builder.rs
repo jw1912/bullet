@@ -260,6 +260,10 @@ impl GraphBuilderNode<'_> {
         self.builder.apply(GraphIROp::Concat(self.node, rhs.node))
     }
 
+    pub fn copy_stop_grad(self) -> Self {
+        self.builder.apply(GraphIROp::Copy(self.node, true))
+    }
+
     pub fn linear_comb(self, alpha: f32, rhs: Self, beta: f32) -> Self {
         self.builder.apply(GraphIROp::LinearCombination(alpha, self.node, beta, rhs.node))
     }
