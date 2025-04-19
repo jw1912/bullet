@@ -13,7 +13,7 @@ use bullet_lib::{
                 chess::{piecetype::PieceType, r#move::MoveType},
                 TrainingDataEntry,
             },
-            inputs, loader, outputs, Loss, TrainerBuilder,
+            inputs, loader, Loss, TrainerBuilder,
         },
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
@@ -31,7 +31,6 @@ fn main() {
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
         .input(inputs::Chess768)
-        .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
         .activate(Activation::CReLU)
         .add_layer(1)
