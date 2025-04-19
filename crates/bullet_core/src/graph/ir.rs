@@ -219,7 +219,7 @@ impl GraphIR {
     }
 
     fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
-        for node in (0..self.nodes.len()).rev() {
+        for node in 0..self.nodes.len() {
             if self.get(node).is_ok() {
                 if let Some(mut desc) = fusion::search_for_fusion(self, node)? {
                     desc.eliminated.push(node);
