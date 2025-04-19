@@ -4,7 +4,7 @@ This is used to confirm non-functional changes for bullet.
 use bullet_lib::{
     nn::{optimiser, Activation, GraphCompileArgs},
     trainer::{
-        default::{inputs, loader, outputs, Loss, TrainerBuilder},
+        default::{inputs, loader, Loss, TrainerBuilder},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
@@ -17,7 +17,6 @@ fn main() {
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
         .input(inputs::Chess768)
-        .output_buckets(outputs::Single)
         .feature_transformer(32)
         .activate(Activation::SCReLU)
         .add_layer(1)
