@@ -6,8 +6,11 @@ pub trait OutputBuckets<T>: Send + Sync + Copy + Default + 'static {
     fn bucket(&self, pos: &T) -> u8;
 }
 
+#[deprecated(note = "You do not need to specify this anymore, it is the default!")]
 #[derive(Clone, Copy, Default)]
 pub struct Single;
+
+#[allow(deprecated)]
 impl<T: 'static> OutputBuckets<T> for Single {
     const BUCKETS: usize = 1;
 

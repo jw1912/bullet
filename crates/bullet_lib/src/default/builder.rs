@@ -8,9 +8,12 @@ use crate::{
     Activation, ExecutionContext, Shape,
 };
 
-use crate::game::{inputs::SparseInputType, outputs::OutputBuckets};
+use crate::{
+    game::{inputs::SparseInputType, outputs::OutputBuckets},
+    value::builder::{Bucket, NoOutputBuckets, OutputBucket},
+};
 
-use super::{outputs::Single, AdditionalTrainerInputs, Trainer};
+use super::{AdditionalTrainerInputs, Trainer};
 
 use bullet_core::optimiser::Optimiser;
 
@@ -51,30 +54,6 @@ pub struct TrainerBuilder<T, U, O = optimiser::AdamW> {
     output_bucket_ft_biases: bool,
     profile_ft: bool,
     compile_args: GraphCompileArgs,
-}
-
-pub trait Bucket {
-    type Inner;
-
-    fn inner(self) -> Self::Inner;
-}
-
-pub struct NoOutputBuckets;
-impl Bucket for NoOutputBuckets {
-    type Inner = Single;
-
-    fn inner(self) -> Self::Inner {
-        Single
-    }
-}
-
-pub struct OutputBucket<T>(T);
-impl<T> Bucket for OutputBucket<T> {
-    type Inner = T;
-
-    fn inner(self) -> Self::Inner {
-        self.0
-    }
 }
 
 impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutputBuckets, O> {

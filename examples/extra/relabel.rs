@@ -31,6 +31,7 @@ fn main() {
         3, 3, 3, 3,
         3, 3, 3, 3,
     ]);
+    #[allow(deprecated)]
     let output_buckets = outputs::Single;
     let hl_size = 1024;
     let batch_size = 16384;
