@@ -1,7 +1,7 @@
 use bullet_lib::{
     nn::{optimiser, Activation},
     trainer::{
-        default::{formats::bulletformat::AtaxxBoard, inputs::SparseInputType, loader, outputs, Loss, TrainerBuilder},
+        default::{formats::bulletformat::AtaxxBoard, inputs::SparseInputType, loader, Loss, TrainerBuilder},
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
@@ -85,7 +85,6 @@ fn main() {
         .optimiser(optimiser::AdamW)
         .loss_fn(Loss::SigmoidMSE)
         .input(Ataxx2Tuples)
-        .output_buckets(outputs::Single)
         .feature_transformer(HIDDEN_SIZE)
         .activate(Activation::SCReLU)
         .add_layer(1)

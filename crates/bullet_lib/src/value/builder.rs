@@ -3,10 +3,7 @@ use std::marker::PhantomData;
 use bullet_core::graph::{builder::Shape, ir::args::GraphIRCompileArgs};
 
 use crate::{
-    game::{
-        inputs::SparseInputType,
-        outputs::{OutputBuckets, Single},
-    },
+    game::{inputs::SparseInputType, outputs::OutputBuckets},
     nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
     ExecutionContext,
@@ -136,16 +133,26 @@ pub trait Bucket {
     fn inner(self) -> Self::Inner;
 }
 
+#[derive(Clone, Copy, Default)]
 pub struct NoOutputBuckets;
+
 impl Bucket for NoOutputBuckets {
-    type Inner = Single;
+    type Inner = Self;
 
     fn inner(self) -> Self::Inner {
-        Single
+        self
     }
 }
 
-pub struct OutputBucket<T>(T);
+impl<T: 'static> OutputBuckets<T> for NoOutputBuckets {
+    const BUCKETS: usize = 1;
+
+    fn bucket(&self, _: &T) -> u8 {
+        0
+    }
+}
+
+pub struct OutputBucket<T>(pub T);
 impl<T> Bucket for OutputBucket<T> {
     type Inner = T;
 
@@ -215,7 +222,7 @@ where
     O: OptimiserType,
     L: for<'a> Fn(Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Single>
+    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -232,7 +239,7 @@ where
     O: OptimiserType,
     L: for<'a> Fn(Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Single>
+    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {

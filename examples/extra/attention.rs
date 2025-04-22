@@ -1,29 +1,43 @@
 use bullet_lib::{
-    nn::{
-        optimiser::{AdamWOptimiser, AdamWParams},
-        ExecutionContext, Graph, NetworkBuilder, NetworkBuilderNode, Node, Shape,
-    },
+    game::inputs::ChessBucketsMirrored,
+    nn::{optimiser::AdamW, NetworkBuilder, NetworkBuilderNode, Shape},
     trainer::{
-        default::{inputs, loader, outputs, Trainer},
+        default::loader,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
+        NetworkTrainer,
     },
+    value::ValueTrainerBuilder,
 };
 
 fn main() {
-    let (graph, output_node) = build_network();
+    let mut trainer = ValueTrainerBuilder::default()
+        .inputs(ChessBucketsMirrored::new([0; 32]))
+        .optimiser(AdamW)
+        .save_format(&[])
+        .loss_fn(|outputs, targets| outputs.sigmoid().squared_error(targets))
+        .build(|builder, stm| {
+            // network settings
+            let dim = 128;
+            let token_size = 64;
+            let tokens = 12;
+            let smolgen_size = 256;
 
-    println!("Params: {}", graph.get_num_params());
+            // weights
+            let o1 = builder.new_affine_custom("o1", dim, 1, tokens);
+            let o2 = builder.new_affine("o2", tokens, 1);
 
-    let mut trainer = Trainer::<AdamWOptimiser, _, _>::new(
-        graph,
-        output_node,
-        AdamWParams::default(),
-        inputs::ChessBucketsMirrored::new([0; 32]),
-        outputs::MaterialCount::<8>,
-        Vec::new(),
-        false,
-    );
+            let mut attn = AttentionDescription { dim, tokens, smolgen_size, id: 0, builder };
+
+            // inference
+            let mut out = stm.to_dense().reshape(Shape::new(token_size, tokens));
+            out = attn.new_block(out).relu();
+            out = o1.forward(out).relu();
+            out = out.reshape(Shape::new(tokens, 1));
+            o2.forward(out)
+        });
+
+    println!("Params: {}", trainer.optimiser().graph.get_num_params());
 
     let schedule = TrainingSchedule {
         net_id: "test".to_string(),
@@ -47,38 +61,6 @@ fn main() {
 
     let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
     println!("Eval: {eval:.3}cp");
-}
-
-fn build_network() -> (Graph, Node) {
-    let builder = NetworkBuilder::default();
-
-    let dim = 128;
-    let token_size = 64;
-    let tokens = 12;
-    let smolgen_size = 256;
-
-    // inputs
-    let targets = builder.new_dense_input("targets", Shape::new(1, 1));
-    let stm = builder.new_sparse_input("stm", Shape::new(token_size * tokens, 1), 32);
-
-    // weights
-    let o1 = builder.new_affine_custom("o1", dim, 1, tokens);
-    let o2 = builder.new_affine("o2", tokens, 1);
-
-    let mut attn = AttentionDescription { dim, tokens, smolgen_size, id: 0, builder: &builder };
-
-    // inference
-    let mut out = stm.to_dense().reshape(Shape::new(token_size, tokens));
-    out = attn.new_block(out).relu();
-    out = o1.forward(out).relu();
-    out = out.reshape(Shape::new(tokens, 1));
-    out = o2.forward(out);
-    let pred = out.sigmoid();
-    pred.squared_error(targets);
-
-    // graph, output node
-    let output_node = out.node();
-    (builder.build(ExecutionContext::default()), output_node)
 }
 
 #[derive(Clone, Copy)]
