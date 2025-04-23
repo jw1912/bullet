@@ -35,7 +35,7 @@ impl Default for CudaDevice {
 
 impl CudaDevice {
     pub fn elementwise_launch_params(size: usize, threads: u32) -> LaunchConfig {
-        let float4_size = (size as u32 + 3) / 4;
+        let float4_size = (size as u32).div_ceil(4);
         let blocks = float4_size.div_ceil(threads);
         LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads, 1, 1), shared_mem_bytes: 0 }
     }
