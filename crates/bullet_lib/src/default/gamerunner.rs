@@ -11,8 +11,7 @@ pub enum GameRunnerPathInternal {
 impl GameRunnerPathInternal {
     fn inner(&self) -> &str {
         match self {
-            GameRunnerPathInternal::CuteChess(x) => x,
-            GameRunnerPathInternal::FastChess(x) => x,
+            GameRunnerPathInternal::FastChess(x) | GameRunnerPathInternal::CuteChess(x) => x,
         }
     }
 }

@@ -20,7 +20,7 @@ pub struct DirectSequentialDataLoader {
 
 impl DirectSequentialDataLoader {
     pub fn new(file_paths: &[&str]) -> Self {
-        let file_paths = file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>();
+        let file_paths = file_paths.iter().copied().map(ToString::to_string).collect::<Vec<_>>();
 
         for path in &file_paths {
             let path_buf: PathBuf = path.parse().unwrap();
@@ -31,7 +31,7 @@ impl DirectSequentialDataLoader {
     }
 
     pub fn map_file_sizes<F: FnMut(&str, u64)>(&self, mut f: F) {
-        for file in self.file_paths.iter() {
+        for file in &self.file_paths {
             f(file, std::fs::metadata(file).unwrap().len());
         }
     }
@@ -48,9 +48,7 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
         let mut file_size = 0;
 
         self.map_file_sizes(|file, this_size| {
-            if this_size % data_size != 0 {
-                panic!("File [{file}] does not have a multiple of {data_size} size!");
-            }
+            assert!((this_size % data_size == 0), "File [{file}] does not have a multiple of {data_size} size!");
 
             file_size += this_size;
         });
@@ -74,7 +72,7 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
 
         let mut start_file_idx = 0;
         let mut net_batches = 0;
-        for file in self.file_paths.iter() {
+        for file in &self.file_paths {
             let this_size = std::fs::metadata(file).unwrap().len();
             let this_batches = (this_size / data_size).div_ceil(batch_size as u64);
 
@@ -83,9 +81,9 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
             if start_point < net_batches as usize {
                 net_batches -= this_batches;
                 break;
-            } else {
-                start_file_idx += 1;
             }
+
+            start_file_idx += 1;
         }
 
         let mut file_paths = self.file_paths.clone();
@@ -97,7 +95,7 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
 
         'dataloading: loop {
             let mut loader_files = vec![];
-            for file in file_paths.iter() {
+            for file in &file_paths {
                 loader_files.push(File::open(file).unwrap());
             }
 
@@ -139,21 +137,11 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
 unsafe fn zeroed_boxed_slice<T: CanBeDirectlySequentiallyLoaded>(cap: usize) -> Box<[T]> {
     let mut buf = Box::<[T]>::new_uninit_slice(cap);
 
-    // safe as `T` can be any bit pattern, including 0s
-    let zeroed = unsafe {
-        let mut t: MaybeUninit<T> = MaybeUninit::uninit();
-        let tslice: &mut [MaybeUninit<u8>] = slice::from_raw_parts_mut(t.as_mut_ptr().cast(), size_of::<T>());
+    let byte_count = size_of::<T>() * buf.len();
 
-        for elem in tslice {
-            elem.write(0);
-        }
-
-        t.assume_init()
-    };
-
-    for elem in buf.iter_mut() {
-        elem.write(zeroed);
+    unsafe {
+        // safe as `T` can be any bit pattern, including 0s
+        buf.as_mut_ptr().write_bytes(0, byte_count);
+        buf.assume_init()
     }
-
-    unsafe { buf.assume_init() }
 }

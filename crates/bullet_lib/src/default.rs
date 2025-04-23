@@ -133,8 +133,8 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         let wdl = output_shape.rows() == 3;
 
         if inputs.len() != expected {
-            println!("WARNING: The network graph contains an unexpected number of inputs!")
-        };
+            println!("WARNING: The network graph contains an unexpected number of inputs!");
+        }
 
         Self {
             optimiser: Optimiser::new(graph, params).unwrap(),
@@ -212,10 +212,10 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
     pub fn mark_weights_as_input_factorised(&mut self, weights: &[&str]) {
         if self.factorised_weights.is_none() {
-            self.factorised_weights = Some(Vec::new())
+            self.factorised_weights = Some(Vec::new());
         }
 
-        for weight in weights {
+        for &weight in weights {
             self.factorised_weights.as_mut().unwrap().push(weight.to_string());
         }
     }
@@ -392,7 +392,7 @@ where
         let (preparer, test_preparer) = self.training_preamble(schedule, settings, data_loader, &test_loader);
 
         self.train_custom(&preparer, &test_preparer, schedule, settings, |superbatch, trainer, schedule, settings| {
-            callback(superbatch, trainer, schedule, settings)
+            callback(superbatch, trainer, schedule, settings);
         });
     }
 

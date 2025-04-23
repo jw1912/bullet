@@ -80,7 +80,7 @@ where
     }
 
     pub fn mark_input_factorised(mut self, list: &[&str]) -> Self {
-        for id in list {
+        for &id in list {
             self.factorised.push(id.to_string());
         }
 

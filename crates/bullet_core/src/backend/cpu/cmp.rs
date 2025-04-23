@@ -140,10 +140,10 @@ fn geam_equal<D: Device>(device: Arc<D>, size: usize, alpha: f32, a: bool, beta:
     let b = b.then(|| rng::vec_f32(size, 1.0, 0.5, false));
     let c = rng::vec_f32(size, 1.0, 0.5, false);
 
-    let acpu = load_optional(cpu.clone(), &a);
-    let bcpu = load_optional(cpu.clone(), &b);
-    let adev = load_optional(device.clone(), &a);
-    let bdev = load_optional(device.clone(), &b);
+    let acpu = load_optional(cpu.clone(), a.as_deref());
+    let bcpu = load_optional(cpu.clone(), b.as_deref());
+    let adev = load_optional(device.clone(), a.as_deref());
+    let bdev = load_optional(device.clone(), b.as_deref());
     let mut ccpu = load(cpu.clone(), &c);
     let mut cdev = load(device.clone(), &c);
 
@@ -313,8 +313,8 @@ fn approx_equal<D: Device>(a: &CpuBuffer<f32>, b: &D::BufferF32, err: f32) -> Op
     None
 }
 
-fn load_optional<D: Device>(device: Arc<D>, a: &Option<Vec<f32>>) -> Option<D::BufferF32> {
-    a.as_ref().map(|a| load(device, a))
+fn load_optional<D: Device>(device: Arc<D>, a: Option<&[f32]>) -> Option<D::BufferF32> {
+    a.map(|a| load(device, a))
 }
 
 fn load<D: Device>(device: Arc<D>, a: &[f32]) -> D::BufferF32 {

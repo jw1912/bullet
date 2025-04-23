@@ -23,12 +23,10 @@ impl<D: Device> Graph<D> {
         let get = |node: AnnotatedNode| self.get_mut(node.idx).unwrap();
 
         let output_tensor = &mut *self.get_mut(output_node)?;
-        let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
+        let Some(op) = &output_tensor.operation else { return Ok(()) };
         let internal = &mut output_tensor.internal;
         let output_size = output_tensor.values.single_size();
-        let output_grad = if let Some(grad) = output_tensor.gradients.as_ref() {
-            grad
-        } else {
+        let Some(output_grad) = &output_tensor.gradients else {
             return Ok(());
         };
 
@@ -352,7 +350,7 @@ impl<D: Device> Graph<D> {
 
                     match unary {
                         UnaryOp::DiffableFromOutput(act) => {
-                            grd.buf.diffable_from_output_bwd(size, &input.buf, out_grd, *act)?
+                            grd.buf.diffable_from_output_bwd(size, &input.buf, out_grd, *act)?;
                         }
                         UnaryOp::Add(_) => grd.buf.geam(size, 1.0, None, 1.0, Some(out_grd))?,
                         UnaryOp::Mul(x) => grd.buf.geam(size, 1.0, None, *x, Some(out_grd))?,

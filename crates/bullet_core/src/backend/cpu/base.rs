@@ -125,7 +125,7 @@ impl BaseOperations for CpuBuffer<f32> {
 
     fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError> {
         for ((o, &a), &b) in self.buf[..size].iter_mut().zip(a.buf[..size].iter()).zip(b.buf[..size].iter()) {
-            *o = (a - b).abs().powf(power)
+            *o = (a - b).abs().powf(power);
         }
 
         Ok(())
@@ -223,7 +223,7 @@ impl BaseOperations for CpuBuffer<f32> {
 
             let mut val = *m;
             if denom {
-                val /= v.sqrt() + 0.00000001;
+                val /= v.sqrt() + 0.000_000_01;
             }
 
             *p -= learning_rate * val;

@@ -34,10 +34,10 @@ impl SparseInputType for ChessBucketsMergedKings {
             let pc = 64 * usize::from(piece & 7);
             let sq = usize::from(square);
 
-            let offsets = [0, if piece & 7 != 5 { 384 } else { 0 }];
+            let offsets = [0, if piece & 0b111 == 0b101 { 0 } else { 384 }];
             let stm = offsets[c] + pc + sq;
             let ntm = offsets[1 - c] + pc + (sq ^ 56);
-            f(our_bucket + stm, opp_bucket + ntm)
+            f(our_bucket + stm, opp_bucket + ntm);
         }
     }
 
@@ -110,7 +110,7 @@ impl Factorises<ChessBucketsMergedKings> for Chess768 {
             if inputs.buckets[sq] != bucket {
                 feature += 384;
             }
-        };
+        }
 
         Some(feature)
     }
@@ -128,7 +128,7 @@ impl Factorises<ChessBucketsMergedKingsMirrored> for Chess768 {
             if sq % 8 > 3 || inputs.wrapped.buckets[sq] != bucket {
                 feature += 384;
             }
-        };
+        }
 
         Some(feature)
     }

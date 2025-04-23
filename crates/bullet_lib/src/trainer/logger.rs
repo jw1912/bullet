@@ -22,7 +22,7 @@ pub fn clear_colours() {
 }
 
 pub fn set_cbcs(val: bool) {
-    CBCS.store(val, SeqCst)
+    CBCS.store(val, SeqCst);
 }
 
 pub fn num_cs() -> i32 {

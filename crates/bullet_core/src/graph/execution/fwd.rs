@@ -23,7 +23,7 @@ impl<D: Device> Graph<D> {
         let get = |node: AnnotatedNode| self.get(node.idx).unwrap();
 
         let output_tensor = &mut *self.get_mut(output_node)?;
-        let op = if let Some(op) = &output_tensor.operation { op } else { return Ok(()) };
+        let Some(op) = &output_tensor.operation else { return Ok(()) };
         let internal = &mut output_tensor.internal;
         let output = output_tensor.values.dense_mut()?;
 

@@ -73,8 +73,7 @@ impl<A: SparseInputType, B: Factorises<A>> SparseInputType for Factorised<A, B> 
                 let factoriser = self
                     .factoriser
                     .derive_feature(&self.normal, feat)
-                    .map(|feat| unmerged[layer_size * feat + idx])
-                    .unwrap_or(0.0);
+                    .map_or(0.0, |feat| unmerged[layer_size * feat + idx]);
 
                 unmerged[layer_size * (feat + offset) + idx] + factoriser
             })

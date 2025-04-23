@@ -141,16 +141,16 @@ impl Device for CpuThread {
             DiffableFromOutput::Identity => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x),
             DiffableFromOutput::ReLU => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0)),
             DiffableFromOutput::CReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0))
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0));
             }
             DiffableFromOutput::SCReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2))
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2));
             }
             DiffableFromOutput::SqrReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0).powi(2))
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| x.max(0.0).powi(2));
             }
             DiffableFromOutput::Sigmoid => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| 1.0 / (1.0 + (-x).exp()))
+                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, b, bb, y, |x| 1.0 / (1.0 + (-x).exp()));
             }
         }
 
@@ -205,10 +205,10 @@ impl Device for CpuThread {
 
         match activation {
             DiffableFromOutput::Identity => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 1.0)
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 1.0);
             }
             DiffableFromOutput::ReLU => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| f32::from(x > 0.0))
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| f32::from(x > 0.0));
             }
             DiffableFromOutput::CReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| {
                 if x > 0.0 && x < 1.0 {
@@ -225,10 +225,10 @@ impl Device for CpuThread {
                 }
             }),
             DiffableFromOutput::SqrReLU => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt())
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt());
             }
             DiffableFromOutput::Sigmoid => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| x * (1.0 - x))
+                sparse::affine_bwd(stride, offset, nnz, m, k, x, y, yg, bb, ag, bg, |x| x * (1.0 - x));
             }
         }
 

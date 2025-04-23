@@ -42,7 +42,7 @@ pub enum GameRunnerPath<'a> {
 
 impl GameRunnerPath<'_> {
     fn as_internal(&self) -> GameRunnerPathInternal {
-        match self {
+        match *self {
             GameRunnerPath::CuteChess(x) => GameRunnerPathInternal::CuteChess(x.to_string()),
             GameRunnerPath::FastChess(x) => GameRunnerPathInternal::FastChess(x.to_string()),
         }
@@ -99,8 +99,7 @@ impl<T: EngineType> TestSettings<'_, T> {
         assert!(output.status.success(), "Could not start gamerunner!");
 
         let bpath = match self.book_path {
-            OpeningBook::Epd(path) => path,
-            OpeningBook::Pgn(path) => path,
+            OpeningBook::Pgn(path) | OpeningBook::Epd(path) => path,
         };
 
         File::open(bpath).expect("Could not find opening book!");
@@ -135,7 +134,7 @@ impl<T: EngineType> TestSettings<'_, T> {
         println!("# [Running Bench]");
         let bench = base_engine.engine_type.bench(&base_exe_path).unwrap();
         if let Some(expected) = base_engine.bench {
-            assert_eq!(bench, expected, "Bench did not match!")
+            assert_eq!(bench, expected, "Bench did not match!");
         }
 
         println!("# [Bench Successfull]");
@@ -210,7 +209,7 @@ fn clone<T: EngineType>(engine: &Engine<T>, out_dir: &str) {
         .status()
         .expect("Failed to clone engine!");
 
-    assert!(status.success(), "Failed to clone engine!")
+    assert!(status.success(), "Failed to clone engine!");
 }
 
 pub struct OpenBenchCompliant;
@@ -221,7 +220,7 @@ impl EngineType for OpenBenchCompliant {
         build_base.current_dir(repo_path).arg(format!("EXE={out_path}"));
 
         if let Some(net_path) = net {
-            build_base.arg(format!("EVALFILE={}", net_path));
+            build_base.arg(format!("EVALFILE={net_path}"));
         }
 
         match build_base.output() {

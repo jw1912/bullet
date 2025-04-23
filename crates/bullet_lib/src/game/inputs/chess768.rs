@@ -25,7 +25,7 @@ impl SparseInputType for Chess768 {
 
             let stm = [0, 384][c] + pc + sq;
             let ntm = [384, 0][c] + pc + (sq ^ 56);
-            f(stm, ntm)
+            f(stm, ntm);
         }
     }
 

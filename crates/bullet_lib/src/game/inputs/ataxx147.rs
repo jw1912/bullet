@@ -22,7 +22,7 @@ impl SparseInputType for Ataxx147 {
 
             let stm = 49 * pc + sq;
             let ntm = if pc == 2 { stm } else { 49 * (1 - pc) + sq };
-            f(stm, ntm)
+            f(stm, ntm);
         }
     }
 
@@ -51,7 +51,7 @@ impl SparseInputType for Ataxx98 {
     fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, mut f: F) {
         Ataxx147.map_features(pos, |stm, ntm| {
             if stm < 98 {
-                f(stm, ntm)
+                f(stm, ntm);
             }
         });
     }

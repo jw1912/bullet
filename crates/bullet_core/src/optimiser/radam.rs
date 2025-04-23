@@ -104,7 +104,7 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
         utils::write_weights_to_file(&velocity, &format!("{path}/velocity.bin"))?;
 
         let mut file = File::create(format!("{path}/step.txt")).unwrap();
-        for (id, single) in map.iter() {
+        for (id, single) in map {
             writeln!(file, "{id},{}", single.step).unwrap();
         }
 

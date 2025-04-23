@@ -45,7 +45,7 @@ fn ansi<T: fmt::Display, U: fmt::Display>(x: T, y: U) -> String {
     format!("\x1b[{y}m{x}\x1b[0m")
 }
 
-fn maybe_fmt<T: fmt::Display>(x: T, fmt: &Option<String>, count: &AtomicUsize) -> String {
+fn maybe_fmt<T: fmt::Display>(x: T, fmt: Option<&str>, count: &AtomicUsize) -> String {
     if let Some(fmt) = fmt {
         count.fetch_add(7 + fmt.len(), Ordering::SeqCst);
         ansi(x, fmt)
@@ -64,10 +64,10 @@ impl GraphIR {
 
         for node in self.nodes.iter().flatten() {
             let count = AtomicUsize::new(0);
-            let id = maybe_fmt(format!("{:0>2}", node.idx), &fmt.op_node_fmt, &count);
-            let name = maybe_fmt(op_name(node), &fmt.op_name_fmt, &count);
-            let lp = maybe_fmt("(", &fmt.op_paren_fmt, &count);
-            let rp = maybe_fmt(")", &fmt.op_paren_fmt, &count);
+            let id = maybe_fmt(format!("{:0>2}", node.idx), fmt.op_node_fmt.as_deref(), &count);
+            let name = maybe_fmt(op_name(node), fmt.op_name_fmt.as_deref(), &count);
+            let lp = maybe_fmt("(", fmt.op_paren_fmt.as_deref(), &count);
+            let rp = maybe_fmt(")", fmt.op_paren_fmt.as_deref(), &count);
             let args = op_args(node, &mut orig_shapes, fmt, &count);
 
             let line = format!("%{id} = {name}{lp}{args}{rp};");
@@ -108,10 +108,10 @@ fn op_args(
 
     shapes.insert(node.idx, node.shape);
 
-    let shape = |x: Shape| maybe_fmt(x, &fmt.op_shape_fmt, count);
+    let shape = |x: Shape| maybe_fmt(x, fmt.op_shape_fmt.as_deref(), count);
 
     let id = |x: &AnnotatedNode| {
-        let name = maybe_fmt(x.idx, &fmt.op_node_fmt, count);
+        let name = maybe_fmt(x.idx, fmt.op_node_fmt.as_deref(), count);
         if *shapes.get(&x.idx).unwrap() == x.shape {
             format!("%{name}")
         } else {
@@ -119,10 +119,10 @@ fn op_args(
         }
     };
 
-    let fp = |fp: &f32| maybe_fmt(fp, &fmt.op_fp_fmt, count);
+    let fp = |fp: &f32| maybe_fmt(fp, fmt.op_fp_fmt.as_deref(), count);
 
-    match node.parent_operation.as_ref() {
-        Some(op) => match op {
+    if let Some(op) = &node.parent_operation {
+        match op {
             Affine(a, b, c) => format!("{}, {}, {}", id(a), id(b), id(c)),
             Concat(a, b) => format!("{}, {}", id(a), id(b)),
             Copy(node, stop_grad) => format!("{}, {stop_grad}", id(node)),
@@ -158,14 +158,13 @@ fn op_args(
                 format!("{}, {}, {}", id(mask), id(input), id(target))
             }
             SoftmaxCrossEntropyLoss(a, b) => format!("{}, {}", id(a), id(b)),
-        },
-        None => {
-            let layout = match node.sparse {
-                Some(nnz) => format!("Sparse(f32, {nnz})"),
-                None => "Dense(f32)".to_string(),
-            };
-            format!("{}, {}, {}, {}", shape(node.shape), layout, node.requires_grad, node.batched)
         }
+    } else {
+        let layout = match node.sparse {
+            Some(nnz) => format!("Sparse(f32, {nnz})"),
+            None => "Dense(f32)".to_string(),
+        };
+        format!("{}, {}, {}, {}", shape(node.shape), layout, node.requires_grad, node.batched)
     }
 }
 

@@ -32,7 +32,7 @@ impl MoveBucket for GoodSEEBuckets {
     }
 
     fn get(&self, pos: &Position, mov: Move) -> usize {
-        usize::from(see(pos, &mov, self.0))
+        usize::from(see(pos, mov, self.0))
     }
 }
 
@@ -165,7 +165,7 @@ const KING: [u64; 64] = init!(|sq, 64| {
 
 const SEE_VALS: [i32; 8] = [0, 0, 100, 450, 450, 650, 1250, 0];
 
-fn gain(pos: &Position, mov: &Move) -> i32 {
+fn gain(pos: &Position, mov: Move) -> i32 {
     if mov.is_en_passant() {
         return SEE_VALS[Piece::PAWN];
     }
@@ -177,7 +177,7 @@ fn gain(pos: &Position, mov: &Move) -> i32 {
 }
 
 #[allow(unused)]
-fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
+fn see(pos: &Position, mov: Move, threshold: i32) -> bool {
     let sq = usize::from(mov.to());
     assert!(sq < 64, "wha");
     let mut next = if mov.is_promo() { mov.promo_pc() } else { pos.get_pc(1 << mov.src()) };

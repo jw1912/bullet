@@ -253,7 +253,7 @@ pub trait NetworkTrainer {
                 println!("Warning: Training set exhausted but test set is not!");
             }
             h.join().unwrap();
-        };
+        }
     }
 
     fn save_weights_portion(&self, path: &str, weights: &[SavedFormat]) -> io::Result<()> {

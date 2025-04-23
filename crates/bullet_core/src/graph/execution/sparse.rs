@@ -43,7 +43,7 @@ pub fn affine_activate<D: Device>(
         shape_b,
         b.nnz,
         c.map(|x| &x.0.buf),
-        c.map(|x| x.0.batch_size().is_some()).unwrap_or(false),
+        c.is_some_and(|x| x.0.batch_size().is_some()),
         &mut out.buf,
     )?;
 

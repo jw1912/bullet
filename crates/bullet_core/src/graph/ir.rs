@@ -5,7 +5,7 @@ pub mod node;
 pub mod op;
 pub mod shape;
 
-use std::{cell::RefCell, collections::HashSet, num::NonZeroUsize, sync::Arc, thread, time::Duration};
+use std::{cell::RefCell, collections::{HashMap, HashSet}, num::NonZeroUsize, sync::Arc, thread, time::Duration};
 
 use args::GraphIRCompileArgs;
 use emit::GraphIRStringFormat;
@@ -134,7 +134,7 @@ impl GraphIR {
 
     pub fn root(&self) -> Result<AnnotatedNode, GraphIRError> {
         let roots =
-            self.nodes.iter().filter(|node| node.as_ref().map(|x| x.num_children == 0).unwrap_or(false)).count();
+            self.nodes.iter().filter(|node| node.as_ref().is_some_and(|x| x.num_children == 0)).count();
 
         if roots != 1 {
             return Err(GraphIRError::MultipleRoots);
@@ -185,7 +185,7 @@ impl GraphIR {
 
         let weights = self.weights.iter().filter_map(id_idx_pair).collect();
 
-        Ok(Graph { nodes, inputs, weights, device, profile: Default::default() })
+        Ok(Graph { nodes, inputs, weights, device, profile: HashMap::default() })
     }
 
     pub fn optimise(&mut self, args: &GraphIRCompileArgs) -> Result<(), GraphIRError> {
@@ -235,7 +235,7 @@ impl GraphIR {
     fn apply_fusion(&mut self, desc: FusionDescription) -> Result<(), GraphIRError> {
         let FusionDescription { mut eliminated, mut new_nodes } = desc;
 
-        eliminated.sort();
+        eliminated.sort_unstable();
         for dead in eliminated.into_iter().rev() {
             self.delete_node(dead)?;
         }

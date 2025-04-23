@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use crate::{
     default::{Layout, SavedFormat},
     nn::{
@@ -88,9 +90,7 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
 
     /// Makes the first layer single-perspective.
     pub fn single_perspective(mut self) -> Self {
-        if !self.nodes.is_empty() {
-            panic!("You need to set 'single_perspective' before adding any layers!");
-        }
+        assert!(self.nodes.is_empty(), "You need to set 'single_perspective' before adding any layers!");
         self.perspective = false;
         self
     }
@@ -163,11 +163,10 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
             two_in_a_row = true;
         }
 
-        if two_in_a_row {
-            panic!(
-                "Two affine transforms in a row is equivalent to a single affine transform! This is clearly erronous!"
-            );
-        }
+        assert!(
+            !two_in_a_row,
+            "Two affine transforms in a row is equivalent to a single affine transform! This is clearly erronous!"
+        );
 
         self.add(size, OpType::Affine)
     }
@@ -432,14 +431,14 @@ where
         let mut output_desc = format!("{}", layer_sizes[0]);
 
         for size in layer_sizes.iter().skip(1) {
-            output_desc.push_str(&format!(" -> {size}"));
+            write!(output_desc, " -> {size}").unwrap();
         }
 
         if output_buckets > 1 {
             if layer_sizes.len() == 1 {
-                output_desc = format!("{output_desc}x{}", output_buckets);
+                output_desc = format!("{output_desc}x{output_buckets}");
             } else {
-                output_desc = format!("({output_desc})x{}", output_buckets);
+                output_desc = format!("({output_desc})x{output_buckets}");
             }
         }
 
@@ -504,8 +503,7 @@ where
                 }
 
                 let q = match *q {
-                    QuantTarget::I16(x) => i32::from(x),
-                    QuantTarget::I8(x) => i32::from(x),
+                    QuantTarget::I8(x) | QuantTarget::I16(x) => i32::from(x),
                     QuantTarget::I32(x) => x,
                     QuantTarget::Float => 1,
                 };
