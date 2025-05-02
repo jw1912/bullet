@@ -130,8 +130,10 @@ where
 
         let mut num = 0;
         let mut moves = [(0, 0); 108];
+        let mut indices = [usize::MAX; 108];
         pos.map_legal_moves(&castling, |mov| {
             moves[num] = (u16::from(mov), 1);
+            indices[num] = self.move_mapper.map(&pos, mov);
             num += 1;
         });
 
@@ -143,7 +145,12 @@ where
         self.optimiser.graph.forward().unwrap();
         self.optimiser.graph.synchronise().unwrap();
 
-        let mut raw_logits = self.optimiser.graph.get_node(self.logits_node).get_dense_vals().unwrap();
+        let all_logits = self.optimiser.graph.get_node(self.logits_node).get_dense_vals().unwrap();
+
+        let mut raw_logits = [0.0; 108];
+        for i in 0..num {
+            raw_logits[i] = all_logits[indices[i]];
+        }
 
         let mut max = f32::NEG_INFINITY;
         for &logit in &raw_logits[..num] {
