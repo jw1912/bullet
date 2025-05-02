@@ -124,7 +124,7 @@ where
         PolicyDataPreparer::new(data_loader.clone(), self.input_getter.clone(), self.move_mapper)
     }
 
-    pub fn eval(&mut self, fen: &str) {
+    pub fn display_eval(&mut self, fen: &str) {
         let mut castling = Default::default();
         let pos = Position::parse_fen(fen, &mut castling);
 
@@ -157,6 +157,7 @@ where
         }
 
         let mut i = 0;
+        println!("FEN: {fen}");
         pos.map_legal_moves(&castling, |mov| {
             println!("{}: {:.3}%", mov.to_uci(&castling), 100.0 * raw_logits[i] / total);
             i += 1;
