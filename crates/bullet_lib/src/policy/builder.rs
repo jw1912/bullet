@@ -97,6 +97,7 @@ where
         let dist = builder.new_dense_input("dist", Shape::new(MAX_MOVES, 1));
 
         let out = f(inputs, nnz, &builder);
+        let logits_node = out.node();
         out.masked_softmax_crossentropy_loss(dist, mask);
         let graph = builder.build(ExecutionContext::default());
 
@@ -105,6 +106,7 @@ where
             input_getter,
             move_mapper,
             saved_format: self.saved_format,
+            logits_node,
         }
     }
 }

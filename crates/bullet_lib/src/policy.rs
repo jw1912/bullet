@@ -3,9 +3,13 @@ pub mod loader;
 pub mod move_maps;
 mod preparer;
 
-use bullet_core::optimiser::{Optimiser, OptimiserState};
+use bullet_core::{
+    graph::Node,
+    optimiser::{Optimiser, OptimiserState},
+};
 use bulletformat::ChessBoard;
-use loader::PolicyDataLoader;
+use loader::{DecompressedData, PolicyDataLoader};
+use montyformat::chess::Position;
 use move_maps::{ChessMoveMapper, MoveBucket, SquareTransform};
 use preparer::{PolicyDataPreparer, PolicyPreparedData};
 
@@ -46,6 +50,7 @@ pub struct PolicyTrainer<Opt: OptimiserState<ExecutionContext>, Inp, T, B> {
     input_getter: Inp,
     move_mapper: ChessMoveMapper<T, B>,
     saved_format: Option<Vec<SavedFormat>>,
+    logits_node: Node,
 }
 
 impl<Opt, Inp, T, B> PolicyTrainer<Opt, Inp, T, B>
@@ -117,6 +122,53 @@ where
         settings.display();
 
         PolicyDataPreparer::new(data_loader.clone(), self.input_getter.clone(), self.move_mapper)
+    }
+
+    pub fn display_eval(&mut self, fen: &str) {
+        let mut castling = Default::default();
+        let pos = Position::parse_fen(fen, &mut castling);
+
+        let mut num = 0;
+        let mut moves = [(0, 0); 108];
+        let mut indices = [usize::MAX; 108];
+        pos.map_legal_moves(&castling, |mov| {
+            moves[num] = (u16::from(mov), 1);
+            indices[num] = self.move_mapper.map(&pos, mov);
+            num += 1;
+        });
+
+        let datapoint = DecompressedData { pos, moves, num };
+        let prepared = PolicyPreparedData::new(&[datapoint], self.input_getter.clone(), self.move_mapper, 1);
+
+        self.load_batch(&prepared);
+        self.optimiser.graph.synchronise().unwrap();
+        self.optimiser.graph.forward().unwrap();
+        self.optimiser.graph.synchronise().unwrap();
+
+        let all_logits = self.optimiser.graph.get_node(self.logits_node).get_dense_vals().unwrap();
+
+        let mut raw_logits = [0.0; 108];
+        for i in 0..num {
+            raw_logits[i] = all_logits[indices[i]];
+        }
+
+        let mut max = f32::NEG_INFINITY;
+        for &logit in &raw_logits[..num] {
+            max = max.max(logit)
+        }
+
+        let mut total = 0.0;
+        for logit in &mut raw_logits[..num] {
+            *logit = (*logit - max).exp();
+            total += *logit;
+        }
+
+        let mut i = 0;
+        println!("FEN: {fen}");
+        pos.map_legal_moves(&castling, |mov| {
+            println!("{}: {:.3}%", mov.to_uci(&castling), 100.0 * raw_logits[i] / total);
+            i += 1;
+        });
     }
 }
 
