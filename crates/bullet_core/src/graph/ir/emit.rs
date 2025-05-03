@@ -132,7 +132,7 @@ fn op_args(
             Matmul(a, ta, b, tb) => format!("{}, {ta}, {}, {tb}", id(a), id(b)),
             PairwiseMul(input, post_concat) => format!("{}, {post_concat}", id(input)),
             PowerError(a, b, pow) => format!("{}, {}, {pow}", id(a), id(b)),
-            ReduceAcrossBatch(node) => id(node),
+            ReduceAcrossBatch(node, reduce) => format!("{}, {reduce:?}", id(node)),
             Select(input, buckets) => format!("{}, {}", id(input), id(buckets)),
             Slice(input, a, b) => format!("{}, {a}, {b}", id(input)),
             SparseAffineActivate(w, i, b, act) => match (b, act) {

@@ -10,7 +10,7 @@ use super::{
     ir::{
         args::GraphIRCompileArgs,
         node::AnnotatedNode,
-        op::{DiffableFromOutput, GraphIROp, UnaryOp},
+        op::{DiffableFromOutput, GraphIROp, Reduce, UnaryOp},
         GraphIR,
     },
     Graph, Node,
@@ -105,7 +105,12 @@ impl GraphBuilder {
 
     pub fn build<D: Device>(self, device: D) -> Graph<D> {
         let mut builder = self.graph_builder.into_inner().unwrap();
-        builder.add_op(GraphIROp::ReduceAcrossBatch(builder.root().unwrap())).unwrap();
+        let root = builder.root().unwrap();
+
+        if builder.get(root.idx).unwrap().batched {
+            builder.add_op(GraphIROp::ReduceAcrossBatch(root, Reduce::Sum)).unwrap();
+        }
+
         let mut graph = builder.compile(device, self.args).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
@@ -264,12 +269,20 @@ impl GraphBuilderNode<'_> {
         self.builder.apply(GraphIROp::Copy(self.node, true))
     }
 
+    pub fn copy(self) -> Self {
+        self.builder.apply(GraphIROp::Copy(self.node, false))
+    }
+
     pub fn linear_comb(self, alpha: f32, rhs: Self, beta: f32) -> Self {
         self.builder.apply(GraphIROp::LinearCombination(alpha, self.node, beta, rhs.node))
     }
 
     pub fn reduce_sum_across_batch(self) -> Self {
-        self.builder.apply(GraphIROp::ReduceAcrossBatch(self.node))
+        self.builder.apply(GraphIROp::ReduceAcrossBatch(self.node, Reduce::Sum))
+    }
+
+    pub fn reduce_avg_across_batch(self) -> Self {
+        self.builder.apply(GraphIROp::ReduceAcrossBatch(self.node, Reduce::Avg))
     }
 
     pub fn matmul(self, rhs: Self) -> Self {

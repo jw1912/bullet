@@ -144,13 +144,14 @@ impl<D: Device> Graph<D> {
                 output.buf.power_error_fwd(*p, size * batch_size.unwrap_or(1), &a.buf, &b.buf)?;
                 Ok(())
             }
-            ReduceAcrossBatch(node) => {
+            ReduceAcrossBatch(node, reduction) => {
                 let input = get(*node);
                 let input = input.values.dense()?;
                 setup_ones(input.buf.device(), internal, input.batch_size().unwrap_or(1))?;
                 let ones = internal.get("ones").unwrap().borrow();
                 assert_eq!(input.single_size(), node.shape.size());
-                linear_comb::reduce_add::<D>(
+                linear_comb::reduce::<D>(
+                    *reduction,
                     &ones.buf,
                     input.single_size(),
                     input.batch_size().unwrap_or(1),

@@ -6,7 +6,7 @@ use crate::{
         },
         tensor::DenseMatrix,
     },
-    graph::ir::shape::Shape,
+    graph::ir::{op::Reduce, shape::Shape},
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -104,13 +104,14 @@ pub fn backprop_add_single_scaled<D: Device>(
         (Some(_), Some(_)) | (None, None) => add_assign_scaled(alpha, output_grad, input_grad),
         (None, Some(x)) => {
             assert!(output_grad.batch_size().unwrap_or(1) <= ones.size());
-            reduce_add::<D>(ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf, true)
+            reduce::<D>(Reduce::Sum, ones, input.single_size(), x, &output_grad.buf, &mut input_grad.buf, true)
         }
         (Some(_), None) => Err(OperationError::UnsupportedOperation),
     }
 }
 
-pub fn reduce_add<D: Device>(
+pub fn reduce<D: Device>(
+    reduction: Reduce,
     ones: &D::BufferF32,
     size: usize,
     batch_size: usize,
@@ -118,8 +119,13 @@ pub fn reduce_add<D: Device>(
     output: &mut D::BufferF32,
     onto: bool,
 ) -> OperationResult<D::DeviceError> {
+    let mul = match reduction {
+        Reduce::Avg => 1.0 / batch_size as f32,
+        Reduce::Sum => 1.0,
+    };
+
     let cfg =
-        GemmConfig::new(1.0, f32::from(onto), Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
+        GemmConfig::new(mul, f32::from(onto), Shape::new(size, batch_size), false, Shape::new(batch_size, 1), false);
     output.gemm(&cfg, input, ones)?;
     Ok(())
 }
