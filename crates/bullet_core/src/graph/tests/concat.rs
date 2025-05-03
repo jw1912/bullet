@@ -1,7 +1,12 @@
 use crate::{
     backend::device::{Device, OperationError},
     graph::{
-        ir::{args::GraphIRCompileArgs, op::GraphIROp, shape::Shape, GraphIR},
+        ir::{
+            args::GraphIRCompileArgs,
+            op::{GraphIROp, Reduce},
+            shape::Shape,
+            GraphIR,
+        },
         GraphError,
     },
 };
@@ -13,7 +18,7 @@ pub fn concat<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
     let out = builder.add_op(GraphIROp::Concat(w1, w2))?;
     let dot = builder.add_dense_input("dot", Shape::new(1, 4)).unwrap();
     let out2 = builder.add_op(GraphIROp::Matmul(dot, false, out, false))?;
-    builder.add_op(GraphIROp::ReduceAcrossBatch(out2))?;
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out2, Reduce::Sum))?;
     let mut graph = builder.compile(device, GraphIRCompileArgs::default())?;
 
     graph

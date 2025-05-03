@@ -7,7 +7,7 @@ use crate::{
     graph::{
         ir::{
             node::AnnotatedNode,
-            op::{GraphIROp, UnaryOp},
+            op::{GraphIROp, Reduce, UnaryOp},
             shape::Shape,
         },
         Graph,
@@ -203,7 +203,7 @@ impl<D: Device> Graph<D> {
                     )?;
                 }
             }
-            ReduceAcrossBatch(input) => {
+            ReduceAcrossBatch(input, reduction) => {
                 let input = &mut *get(*input);
                 if let Some(grd) = input.gradients.as_mut() {
                     let vals = input.values.dense()?;
@@ -218,11 +218,19 @@ impl<D: Device> Graph<D> {
                     assert_eq!(vals.single_size(), grd.single_size());
 
                     grd.set_batch_size(bs)?;
+
+                    let bs = bs.unwrap_or(1);
+
+                    let alpha = match *reduction {
+                        Reduce::Avg => 1.0 / bs as f32,
+                        Reduce::Sum => 1.0,
+                    };
+
                     linear_comb::add_assign_single_to_batched_scaled::<D>(
                         ss,
-                        bs.unwrap_or(1),
+                        bs,
                         ones,
-                        1.0,
+                        alpha,
                         &output_grad.buf,
                         &mut grd.buf,
                     )?;

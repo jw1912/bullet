@@ -25,7 +25,7 @@ pub enum GraphIROp {
     Matmul(AnnotatedNode, bool, AnnotatedNode, bool),
     PairwiseMul(AnnotatedNode, bool),
     PowerError(AnnotatedNode, AnnotatedNode, f32),
-    ReduceAcrossBatch(AnnotatedNode),
+    ReduceAcrossBatch(AnnotatedNode, Reduce),
     Select(AnnotatedNode, AnnotatedNode),
     Slice(AnnotatedNode, usize, usize),
     ToDense(AnnotatedNode),
@@ -40,6 +40,12 @@ pub enum UnaryOp {
     Add(f32),
     Mul(f32),
     AbsPow(f32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Reduce {
+    Sum,
+    Avg,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -194,7 +200,7 @@ impl GraphIROp {
                 check_same_batching(&[a, b])?;
                 ret(a.shape == b.shape, a.shape, mismatch(&[a, b]))
             }
-            ReduceAcrossBatch(node) => {
+            ReduceAcrossBatch(node, _) => {
                 check_dense_eq(node, true)?;
                 batched = false;
                 Ok(node.shape)
@@ -286,7 +292,7 @@ impl GraphIROp {
             Matmul(a, _, b, _) => vec![a, b],
             PairwiseMul(input, _) => vec![input],
             PowerError(a, b, _) => vec![a, b],
-            ReduceAcrossBatch(node) => vec![node],
+            ReduceAcrossBatch(node, _) => vec![node],
             Select(input, buckets) => vec![input, buckets],
             Slice(input, _, _) => vec![input],
             SparseAffineActivate(w, i, b, _) => {

@@ -3,7 +3,7 @@ use crate::{
     graph::{
         ir::{
             args::GraphIRCompileArgs,
-            op::{DiffableFromOutput, GraphIROp, UnaryOp},
+            op::{DiffableFromOutput, GraphIROp, Reduce, UnaryOp},
             shape::Shape,
             GraphIR,
         },
@@ -36,7 +36,7 @@ fn run_test<D: Device>(
     let mut builder = GraphIR::default();
     let w = builder.add_weights("w", Shape::new(1, 1)).unwrap();
     let out = builder.add_op(GraphIROp::Unary(w, UnaryOp::DiffableFromOutput(activation))).unwrap();
-    builder.add_op(GraphIROp::ReduceAcrossBatch(out)).unwrap();
+    builder.add_op(GraphIROp::ReduceAcrossBatch(out, Reduce::Sum)).unwrap();
     let mut graph = builder.compile(device, GraphIRCompileArgs::default()).unwrap();
 
     graph.get_weights_mut("w").load_dense_from_slice(Some(4), &[-1.0, 0.5, 2.0, -2.0]).unwrap();
