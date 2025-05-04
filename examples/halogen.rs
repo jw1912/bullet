@@ -1,10 +1,15 @@
 use bullet_lib::{
-    inputs, lr, optimiser, outputs, wdl, Activation, LocalSettings, Loss, TrainerBuilder, TrainingSchedule,
+    nn::{optimiser, Activation},
+    trainer::{
+        default::{inputs, loader, outputs, Loss, TrainerBuilder},
+        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+        settings::LocalSettings,
+    },
 };
 
 macro_rules! net_id {
     () => {
-        "bullet_r36_768x8-1024x2-1x8"
+        "bullet_r43_768x8-1024x2-1x8"
     };
 }
 
@@ -15,6 +20,7 @@ fn main() {
     let mut trainer = TrainerBuilder::default()
         .quantisations(&[255, 64])
         .optimiser(optimiser::AdamW)
+        .loss_fn(Loss::SigmoidMSE)
         .input(inputs::ChessBucketsMirroredFactorised::new([
             0, 1, 2, 3,
             4, 4, 5, 5,
@@ -34,30 +40,22 @@ fn main() {
     let schedule = TrainingSchedule {
         net_id: NET_ID.to_string(),
         eval_scale: 160.0,
-        ft_regularisation: 0.0,
-        batch_size: 16_384,
-        batches_per_superbatch: 6104,
-        start_superbatch: 1,
-        end_superbatch: 400,
+        steps: TrainingSteps {
+            batch_size: 16_384,
+            batches_per_superbatch: 6104,
+            start_superbatch: 1,
+            end_superbatch: 400,
+        },
         wdl_scheduler: wdl::ConstantWDL { value: 0.3 },
         lr_scheduler: lr::CosineDecayLR { initial_lr: 0.001, final_lr: 0.0, final_superbatch: 400 },
-        loss_function: Loss::SigmoidMSE,
         save_rate: 10,
-        optimiser_settings: optimiser::AdamWParams {
-            decay: 0.01,
-            beta1: 0.9,
-            beta2: 0.999,
-            min_weight: -1.98,
-            max_weight: 1.98,
-        },
     };
 
-    let settings = LocalSettings {
-        threads: 12,
-        data_file_paths: vec!["../../chess/data/shuffled.data"],
-        test_set: None,
-        output_directory: "checkpoints",
-    };
+    let settings =
+        LocalSettings { threads: 12, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    trainer.run(&schedule, &settings);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["../../chess/data/shuffled.data"]);
+
+    trainer.set_optimiser_params(optimiser::AdamWParams::default());
+    trainer.run(&schedule, &settings, &data_loader);
 }
