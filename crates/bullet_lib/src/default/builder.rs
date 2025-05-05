@@ -13,7 +13,7 @@ use crate::{
     value::builder::{Bucket, NoOutputBuckets, OutputBucket},
 };
 
-use super::{AdditionalTrainerInputs, Trainer};
+use super::{loader::B, AdditionalTrainerInputs, Trainer};
 
 use bullet_core::optimiser::Optimiser;
 
@@ -39,9 +39,10 @@ struct NodeType {
     op: OpType,
 }
 
-pub struct TrainerBuilder<T, U, O = optimiser::AdamW> {
+pub struct TrainerBuilder<T: SparseInputType, U, O = optimiser::AdamW> {
     input_getter: Option<T>,
     bucket_getter: U,
+    blend_getter: B<T>,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
     quantisations: Option<Vec<QuantTarget>>,
@@ -61,6 +62,7 @@ impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutpu
         Self {
             input_getter: None,
             bucket_getter: NoOutputBuckets,
+            blend_getter: |_, wdl| wdl,
             ft_out_size: 0,
             nodes: Vec::new(),
             quantisations: None,
@@ -137,6 +139,11 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
 
     pub fn output_bucket_ft_biases(mut self) -> Self {
         self.output_bucket_ft_biases = true;
+        self
+    }
+
+    pub fn wdl_adjuster(mut self, b: B<T>) -> Self {
+        self.blend_getter = b;
         self
     }
 
@@ -237,6 +244,7 @@ impl<T: SparseInputType, O: OptimiserType> TrainerBuilder<T, NoOutputBuckets, O>
         TrainerBuilder {
             input_getter: self.input_getter,
             bucket_getter: OutputBucket(bucket_getter),
+            blend_getter: self.blend_getter,
             ft_out_size: self.ft_out_size,
             nodes: self.nodes,
             quantisations: self.quantisations,
@@ -459,6 +467,7 @@ where
             optimiser: Optimiser::new(graph, Default::default()).unwrap(),
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter.inner(),
+            blend_getter: self.blend_getter,
             output_node,
             additional_inputs: AdditionalTrainerInputs { wdl: output_size == 3 },
             saved_format: saved_format.clone(),

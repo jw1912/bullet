@@ -54,18 +54,21 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
     fn map_batches<F: FnMut(&[T]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F);
 }
 
+pub(crate) type B<I> = fn(&<I as SparseInputType>::RequiredDataType, f32) -> f32;
+
 #[derive(Clone)]
-pub struct DefaultDataLoader<I, O, D> {
+pub struct DefaultDataLoader<I: SparseInputType, O, D> {
     input_getter: I,
     output_getter: O,
+    blend_getter: B<I>,
     wdl: bool,
     scale: f32,
     loader: D,
 }
 
-impl<I, O, D> DefaultDataLoader<I, O, D> {
-    pub fn new(input_getter: I, output_getter: O, wdl: bool, scale: f32, loader: D) -> Self {
-        Self { input_getter, output_getter, wdl, scale, loader }
+impl<I: SparseInputType, O, D> DefaultDataLoader<I, O, D> {
+    pub fn new(input_getter: I, output_getter: O, blend_getter: B<I>, wdl: bool, scale: f32, loader: D) -> Self {
+        Self { input_getter, output_getter, blend_getter, wdl, scale, loader }
     }
 }
 
@@ -95,6 +98,7 @@ where
         DefaultDataPreparer::prepare(
             self.input_getter.clone(),
             self.output_getter,
+            self.blend_getter,
             self.wdl,
             data,
             threads,
@@ -115,7 +119,7 @@ pub(crate) struct SparseInput {
 }
 
 /// A batch of data, in the correct format for the GPU.
-pub struct DefaultDataPreparer<I, O> {
+pub struct DefaultDataPreparer<I: SparseInputType, O> {
     pub(crate) input_getter: I,
     pub(crate) output_getter: O,
     pub(crate) batch_size: usize,
@@ -125,20 +129,23 @@ pub struct DefaultDataPreparer<I, O> {
     pub(crate) targets: DenseInput,
 }
 
-impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPreparer<I, O> {
+impl<I, O> DefaultDataPreparer<I, O>
+where
+    I: SparseInputType,
+    O: OutputBuckets<I::RequiredDataType>,
+    I::RequiredDataType: LoadableDataType,
+{
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         input_getter: I,
         output_getter: O,
+        blend_getter: B<I>,
         wdl: bool,
         data: &[I::RequiredDataType],
         threads: usize,
         blend: f32,
         scale: f32,
-    ) -> Self
-    where
-        I::RequiredDataType: LoadableDataType,
-    {
+    ) -> Self {
         let rscale = 1.0 / scale;
         let batch_size = data.len();
         let max_active = input_getter.max_active();
@@ -202,6 +209,8 @@ impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> DefaultDataPrepa
                             } else {
                                 let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
                                 let result = f32::from(pos.result() as u8) / 2.0;
+                                let blend = blend_getter(pos, blend);
+                                assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
                                 results_chunk[i] = blend * result + (1. - blend) * score;
                             }
                         }

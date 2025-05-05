@@ -15,7 +15,7 @@ pub use builder::{Loss, TrainerBuilder};
 
 use loader::{
     CanBeDirectlySequentiallyLoaded, DataLoader, DefaultDataLoader, DefaultDataPreparer, DirectSequentialDataLoader,
-    LoadableDataType,
+    LoadableDataType, B,
 };
 use testing::{EngineType, TestSettings};
 
@@ -54,10 +54,11 @@ pub struct AdditionalTrainerInputs {
     wdl: bool,
 }
 
-pub struct Trainer<Opt: OptimiserState<ExecutionContext>, Inp, Out> {
+pub struct Trainer<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out> {
     optimiser: Optimiser<ExecutionContext, Opt>,
     input_getter: Inp,
     output_getter: Out,
+    blend_getter: B<Inp>,
     output_node: Node,
     additional_inputs: AdditionalTrainerInputs,
     saved_format: Vec<SavedFormat>,
@@ -140,11 +141,16 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
             optimiser: Optimiser::new(graph, params).unwrap(),
             input_getter,
             output_getter,
+            blend_getter: |_, wdl| wdl,
             output_node,
             additional_inputs: AdditionalTrainerInputs { wdl },
             saved_format,
             factorised_weights: None,
         }
+    }
+
+    pub fn set_wdl_adjust(&mut self, func: B<Inp>) {
+        self.blend_getter = func;
     }
 
     pub fn load_from_checkpoint(&mut self, path: &str) {
@@ -164,6 +170,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         let prepared = DefaultDataPreparer::prepare(
             self.input_getter.clone(),
             self.output_getter,
+            self.blend_getter,
             self.additional_inputs.wdl,
             &[pos],
             1,
@@ -334,6 +341,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         let preparer = DefaultDataLoader::new(
             self.input_getter.clone(),
             self.output_getter,
+            self.blend_getter,
             self.additional_inputs.wdl,
             schedule.eval_scale,
             data_loader.clone(),
@@ -343,6 +351,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
             DefaultDataLoader::new(
                 self.input_getter.clone(),
                 self.output_getter,
+                self.blend_getter,
                 self.additional_inputs.wdl,
                 schedule.eval_scale,
                 loader.clone(),
