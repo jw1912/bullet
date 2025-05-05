@@ -47,8 +47,10 @@ It is relatively easy to support custom data types for use in the default `Train
 The process is as follows:
 
 1. Write a custom data type `CustomDataType`
-2. Implement `bullet_lib::default::loader::LoadableDataType` for `CustomDataType`
-3. Write an input type `CustomInputs` by implementing `bullet_lib::game::inputs::SparseInputType` with `RequiredDataType = CustomDataType`
+2. Implement `LoadableDataType` for `CustomDataType`
+3. Write an input type `CustomInputs` by implementing `SparseInputType` with `RequiredDataType = CustomDataType`
 for it, which is the method for extracting inputs from `CustomDataType`
 4. Implement a corresponding data loader `CustomDataLoader` for the custom data type that handles reading the data from a file
-by implementing `bullet_lib::default::loader::DataLoader<CustomDataType>` for it
+by implementing `DataLoader<CustomDataType>` for it
+    - If the data type is a fixed-size byte record that can be safely transmuted from any `[u8; std::mem::size_of::<CustomDataType>()]`,
+    then you can `unsafe impl CanBeDirectlySequentiallyLoaded for CustomDataType` and use `DirectSequentialDataLoader`
