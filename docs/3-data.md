@@ -48,7 +48,7 @@ The process is as follows:
 
 1. Write a custom data type `CustomDataType`
 2. Implement `bullet_lib::default::loader::LoadableDataType` for `CustomDataType`
-3. Write an input type `CustomInputs` by implementing `bullet_lib::game::inputs::SparseInputType` with `RequiredDataType = CustomDataType>`
+3. Write an input type `CustomInputs` by implementing `bullet_lib::game::inputs::SparseInputType` with `RequiredDataType = CustomDataType`
 for it, which is the method for extracting inputs from `CustomDataType`
 4. Implement a corresponding data loader `CustomDataLoader` for the custom data type that handles reading the data from a file
 by implementing `bullet_lib::default::loader::DataLoader<CustomDataType>` for it
