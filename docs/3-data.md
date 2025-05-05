@@ -40,3 +40,17 @@ Text Format:
 These types can be loaded with `SfBinpackLoader` and `MontyBinpackLoader` respectively.
 There are utilities for interleaving Monty binpacks in `bullet-utils`.
 Stockfish contains tools for interleaving its own binpack format.
+
+## Custom Data Types
+
+It is relatively easy to support custom data types for use in the default `Trainer` whereby most of the complexity is abstracted away.
+The process is as follows:
+
+1. Write a custom data type `CustomDataType`
+2. Implement `LoadableDataType` for `CustomDataType`
+3. Write an input type `CustomInputs` by implementing `SparseInputType` with `RequiredDataType = CustomDataType`
+for it, which is the method for extracting inputs from `CustomDataType`
+4. Implement a corresponding data loader `CustomDataLoader` for the custom data type that handles reading the data from a file
+by implementing `DataLoader<CustomDataType>` for it
+    - If the data type is a fixed-size byte record that can be safely transmuted from any `[u8; std::mem::size_of::<CustomDataType>()]`,
+    then you can `unsafe impl CanBeDirectlySequentiallyLoaded for CustomDataType` and use `DirectSequentialDataLoader`
