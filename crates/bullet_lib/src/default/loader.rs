@@ -17,6 +17,8 @@ use crate::{
     trainer::DataPreparer,
 };
 
+use super::Wgt;
+
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GameResult {
@@ -61,14 +63,23 @@ pub struct DefaultDataLoader<I: SparseInputType, O, D> {
     input_getter: I,
     output_getter: O,
     blend_getter: B<I>,
+    weight_getter: Option<Wgt<I>>,
     wdl: bool,
     scale: f32,
     loader: D,
 }
 
 impl<I: SparseInputType, O, D> DefaultDataLoader<I, O, D> {
-    pub fn new(input_getter: I, output_getter: O, blend_getter: B<I>, wdl: bool, scale: f32, loader: D) -> Self {
-        Self { input_getter, output_getter, blend_getter, wdl, scale, loader }
+    pub fn new(
+        input_getter: I,
+        output_getter: O,
+        blend_getter: B<I>,
+        weight_getter: Option<Wgt<I>>,
+        wdl: bool,
+        scale: f32,
+        loader: D,
+    ) -> Self {
+        Self { input_getter, output_getter, blend_getter, weight_getter, wdl, scale, loader }
     }
 }
 
@@ -99,6 +110,7 @@ where
             self.input_getter.clone(),
             self.output_getter,
             self.blend_getter,
+            self.weight_getter,
             self.wdl,
             data,
             threads,
@@ -127,6 +139,7 @@ pub struct DefaultDataPreparer<I: SparseInputType, O> {
     pub(crate) nstm: SparseInput,
     pub(crate) buckets: SparseInput,
     pub(crate) targets: DenseInput,
+    pub(crate) weights: DenseInput,
 }
 
 impl<I, O> DefaultDataPreparer<I, O>
@@ -140,6 +153,7 @@ where
         input_getter: I,
         output_getter: O,
         blend_getter: B<I>,
+        weight_getter: Option<Wgt<I>>,
         wdl: bool,
         data: &[I::RequiredDataType],
         threads: usize,
@@ -162,6 +176,7 @@ where
             nstm: SparseInput { max_active, value: vec![0; sparse_size] },
             buckets: SparseInput { max_active: 1, value: vec![0; batch_size] },
             targets: DenseInput { value: vec![0.0; output_size * batch_size] },
+            weights: DenseInput { value: vec![0.0; output_size * batch_size] },
         };
 
         let sparse_chunk_size = max_active * chunk_size;
@@ -172,50 +187,54 @@ where
                 .zip(prep.nstm.value.chunks_mut(sparse_chunk_size))
                 .zip(prep.buckets.value.chunks_mut(chunk_size))
                 .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
-                .for_each(|((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk)| {
-                    let inp = &prep.input_getter;
-                    let out = &prep.output_getter;
-                    s.spawn(move || {
-                        let chunk_len = data_chunk.len();
+                .zip(prep.weights.value.chunks_mut(output_size * chunk_size))
+                .for_each(
+                    |(((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk), weights_chunk)| {
+                        let inp = &prep.input_getter;
+                        let out = &prep.output_getter;
+                        s.spawn(move || {
+                            let chunk_len = data_chunk.len();
 
-                        for i in 0..chunk_len {
-                            let pos = &data_chunk[i];
-                            let mut j = 0;
-                            let sparse_offset = max_active * i;
+                            for i in 0..chunk_len {
+                                let pos = &data_chunk[i];
+                                let mut j = 0;
+                                let sparse_offset = max_active * i;
 
-                            inp.map_features(pos, |our, opp| {
-                                assert!(
-                                    our < input_size && opp < input_size,
-                                    "Input feature index exceeded input size!"
-                                );
+                                inp.map_features(pos, |our, opp| {
+                                    assert!(
+                                        our < input_size && opp < input_size,
+                                        "Input feature index exceeded input size!"
+                                    );
 
-                                stm_chunk[sparse_offset + j] = our as i32;
-                                nstm_chunk[sparse_offset + j] = opp as i32;
+                                    stm_chunk[sparse_offset + j] = our as i32;
+                                    nstm_chunk[sparse_offset + j] = opp as i32;
 
-                                j += 1;
-                            });
+                                    j += 1;
+                                });
 
-                            for j in j..max_active {
-                                stm_chunk[sparse_offset + j] = -1;
-                                nstm_chunk[sparse_offset + j] = -1;
+                                for j in j..max_active {
+                                    stm_chunk[sparse_offset + j] = -1;
+                                    nstm_chunk[sparse_offset + j] = -1;
+                                }
+
+                                assert!(j <= max_active, "More inputs provided than the specified maximum!");
+
+                                buckets_chunk[i] = i32::from(out.bucket(pos));
+                                weights_chunk[i] = weight_getter.map_or(1.0, |w| w(pos));
+
+                                if wdl {
+                                    results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
+                                } else {
+                                    let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
+                                    let result = f32::from(pos.result() as u8) / 2.0;
+                                    let blend = blend_getter(pos, blend);
+                                    assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
+                                    results_chunk[i] = blend * result + (1. - blend) * score;
+                                }
                             }
-
-                            assert!(j <= max_active, "More inputs provided than the specified maximum!");
-
-                            buckets_chunk[i] = i32::from(out.bucket(pos));
-
-                            if wdl {
-                                results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
-                            } else {
-                                let score = 1. / (1. + (-rscale * f32::from(pos.score())).exp());
-                                let result = f32::from(pos.result() as u8) / 2.0;
-                                let blend = blend_getter(pos, blend);
-                                assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
-                                results_chunk[i] = blend * result + (1. - blend) * score;
-                            }
-                        }
-                    });
-                });
+                        });
+                    },
+                );
         });
 
         prep

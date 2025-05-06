@@ -1,29 +1,38 @@
 use std::marker::PhantomData;
 
-use bullet_core::graph::{builder::Shape, ir::args::GraphIRCompileArgs};
+use bullet_core::{
+    graph::{builder::Shape, ir::args::GraphIRCompileArgs},
+    optimiser::Optimiser,
+};
 
 use crate::{
+    default::{AdditionalTrainerInputs, Wgt},
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
     ExecutionContext,
 };
 
-use super::ValueTrainer;
+use super::{loader::B, ValueTrainer};
 
-pub struct ValueTrainerBuilder<O, I, P, Out, L> {
+pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out, L> {
     input_getter: Option<I>,
     saved_format: Option<Vec<SavedFormat>>,
     optimiser: Option<O>,
     compile_args: Option<GraphIRCompileArgs>,
     perspective: PhantomData<P>,
     output_buckets: Out,
+    blend_getter: B<I>,
+    weight_getter: Option<Wgt<I>>,
     loss_fn: Option<L>,
     factorised: Vec<String>,
     wdl_output: bool,
 }
 
-impl<O, I, L> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets, L> {
+impl<O, I, L> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets, L>
+where
+    I: SparseInputType,
+{
     fn default() -> Self {
         Self {
             input_getter: None,
@@ -32,6 +41,8 @@ impl<O, I, L> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputB
             compile_args: None,
             perspective: PhantomData,
             output_buckets: NoOutputBuckets,
+            blend_getter: |_, wdl| wdl,
+            weight_getter: None,
             loss_fn: None,
             wdl_output: false,
             factorised: Vec::new(),
@@ -87,6 +98,17 @@ where
         self
     }
 
+    pub fn wdl_adjust_function(mut self, f: B<I>) -> Self {
+        self.blend_getter = f;
+        self
+    }
+
+    pub fn datapoint_weight_function(mut self, f: Wgt<I>) -> Self {
+        assert!(self.weight_getter.is_none(), "Position weight function alrady set!");
+        self.weight_getter = Some(f);
+        self
+    }
+
     fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, &'a NetworkBuilder) -> NetworkBuilderNode<'a>,
@@ -112,18 +134,28 @@ where
         let out = f(inputs, nnz, &builder);
         let output_node = out.node();
 
-        let _ = loss(out, targets);
-        let graph = builder.build(ExecutionContext::default());
+        let raw_loss = loss(out, targets);
 
-        let mut trainer =
-            ValueTrainer::new(graph, output_node, Default::default(), input_getter, buckets, saved_format, false);
+        assert_eq!(raw_loss.node().shape, Shape::new(1, 1));
 
-        let factorised = self.factorised.iter().map(String::as_str).collect::<Vec<_>>();
-        if !factorised.is_empty() {
-            trainer.mark_weights_as_input_factorised(&factorised);
+        if self.weight_getter.is_some() {
+            let entry_weights = builder.new_dense_input("entry_weights", Shape::new(1, 1));
+            let _ = entry_weights * raw_loss;
         }
 
-        trainer
+        let graph = builder.build(ExecutionContext::default());
+
+        ValueTrainer {
+            optimiser: Optimiser::new(graph, Default::default()).unwrap(),
+            input_getter: input_getter.clone(),
+            output_getter: buckets,
+            blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
+            output_node,
+            additional_inputs: AdditionalTrainerInputs { wdl: output_size == 3 },
+            saved_format: saved_format.clone(),
+            factorised_weights: (!self.factorised.is_empty()).then_some(self.factorised),
+        }
     }
 }
 
@@ -181,6 +213,8 @@ where
             compile_args: self.compile_args,
             perspective: PhantomData,
             output_buckets: self.output_buckets,
+            blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
             loss_fn: self.loss_fn,
             factorised: self.factorised,
             wdl_output: self.wdl_output,
@@ -206,6 +240,8 @@ where
             compile_args: self.compile_args,
             perspective: self.perspective,
             output_buckets: OutputBucket(buckets),
+            blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
             loss_fn: self.loss_fn,
             factorised: self.factorised,
             wdl_output: self.wdl_output,

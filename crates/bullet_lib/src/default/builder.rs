@@ -13,7 +13,7 @@ use crate::{
     value::builder::{Bucket, NoOutputBuckets, OutputBucket},
 };
 
-use super::{loader::B, AdditionalTrainerInputs, Trainer};
+use super::{loader::B, AdditionalTrainerInputs, Trainer, Wgt};
 
 use bullet_core::optimiser::Optimiser;
 
@@ -43,6 +43,7 @@ pub struct TrainerBuilder<T: SparseInputType, U, O = optimiser::AdamW> {
     input_getter: Option<T>,
     bucket_getter: U,
     blend_getter: B<T>,
+    weight_getter: Option<Wgt<T>>,
     ft_out_size: usize,
     nodes: Vec<NodeType>,
     quantisations: Option<Vec<QuantTarget>>,
@@ -63,6 +64,7 @@ impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutpu
             input_getter: None,
             bucket_getter: NoOutputBuckets,
             blend_getter: |_, wdl| wdl,
+            weight_getter: None,
             ft_out_size: 0,
             nodes: Vec::new(),
             quantisations: None,
@@ -144,6 +146,12 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
 
     pub fn wdl_adjuster(mut self, b: B<T>) -> Self {
         self.blend_getter = b;
+        self
+    }
+
+    pub fn datapoint_weight_function(mut self, f: Wgt<T>) -> Self {
+        assert!(self.weight_getter.is_none(), "Position weight function is already set!");
+        self.weight_getter = Some(f);
         self
     }
 
@@ -245,6 +253,7 @@ impl<T: SparseInputType, O: OptimiserType> TrainerBuilder<T, NoOutputBuckets, O>
             input_getter: self.input_getter,
             bucket_getter: OutputBucket(bucket_getter),
             blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
             ft_out_size: self.ft_out_size,
             nodes: self.nodes,
             quantisations: self.quantisations,
@@ -420,12 +429,17 @@ where
         let output_node = out.node();
         let output_size = prev_size;
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
-        match self.loss {
+        let raw_loss = match self.loss {
             Loss::None => panic!("No loss function specified!"),
             Loss::SigmoidMSE => out.activate(Activation::Sigmoid).squared_error(targets),
             Loss::SigmoidMPE(power) => out.activate(Activation::Sigmoid).power_error(targets, power),
             Loss::SoftmaxCrossEntropy => out.softmax_crossentropy_loss(targets),
         };
+
+        if self.weight_getter.is_some() {
+            let entry_weights = builder.new_dense_input("entry_weights", Shape::new(1, 1));
+            let _ = entry_weights * raw_loss;
+        }
 
         #[allow(clippy::default_constructed_unit_structs)]
         let ctx = ExecutionContext::default();
@@ -468,6 +482,7 @@ where
             input_getter: input_getter.clone(),
             output_getter: self.bucket_getter.inner(),
             blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
             output_node,
             additional_inputs: AdditionalTrainerInputs { wdl: output_size == 3 },
             saved_format: saved_format.clone(),

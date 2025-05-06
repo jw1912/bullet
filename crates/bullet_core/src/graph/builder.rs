@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Neg, Sub},
     sync::{Mutex, MutexGuard},
 };
 
@@ -171,6 +171,14 @@ impl Add<f32> for GraphBuilderNode<'_> {
     }
 }
 
+impl Neg for GraphBuilderNode<'_> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        -1.0 * self
+    }
+}
+
 impl<'a> Sub<GraphBuilderNode<'a>> for f32 {
     type Output = GraphBuilderNode<'a>;
 
@@ -192,6 +200,14 @@ impl<'a> Mul<GraphBuilderNode<'a>> for f32 {
 
     fn mul(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
         rhs.builder.apply(GraphIROp::Unary(rhs.node, UnaryOp::Mul(self)))
+    }
+}
+
+impl<'a> Mul<GraphBuilderNode<'a>> for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn mul(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+        self.concat(rhs).pairwise_mul()
     }
 }
 
