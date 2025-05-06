@@ -51,18 +51,21 @@ unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::MarlinForma
 
 #[derive(Clone, Copy)]
 pub struct AdditionalTrainerInputs {
-    wdl: bool,
+    pub wdl: bool,
 }
 
+pub(crate) type Wgt<I> = fn(&<I as SparseInputType>::RequiredDataType) -> f32;
+
 pub struct Trainer<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out> {
-    optimiser: Optimiser<ExecutionContext, Opt>,
-    input_getter: Inp,
-    output_getter: Out,
-    blend_getter: B<Inp>,
-    output_node: Node,
-    additional_inputs: AdditionalTrainerInputs,
-    saved_format: Vec<SavedFormat>,
-    factorised_weights: Option<Vec<String>>,
+    pub(crate) optimiser: Optimiser<ExecutionContext, Opt>,
+    pub(crate) input_getter: Inp,
+    pub(crate) output_getter: Out,
+    pub(crate) blend_getter: B<Inp>,
+    pub(crate) weight_getter: Option<Wgt<Inp>>,
+    pub(crate) output_node: Node,
+    pub(crate) additional_inputs: AdditionalTrainerInputs,
+    pub(crate) saved_format: Vec<SavedFormat>,
+    pub(crate) factorised_weights: Option<Vec<String>>,
 }
 
 impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
@@ -105,6 +108,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuckets<Inp::RequiredDataType>>
     Trainer<Opt, Inp, Out>
 {
+    #[deprecated(note = "You should use `ValueTrainerBuilder` instead of this!")]
     pub fn new(
         graph: Graph<ExecutionContext>,
         output_node: Node,
@@ -142,6 +146,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
             input_getter,
             output_getter,
             blend_getter: |_, wdl| wdl,
+            weight_getter: None,
             output_node,
             additional_inputs: AdditionalTrainerInputs { wdl },
             saved_format,
@@ -171,6 +176,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
             self.input_getter.clone(),
             self.output_getter,
             self.blend_getter,
+            self.weight_getter,
             self.additional_inputs.wdl,
             &[pos],
             1,
@@ -342,6 +348,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
             self.input_getter.clone(),
             self.output_getter,
             self.blend_getter,
+            self.weight_getter,
             self.additional_inputs.wdl,
             schedule.eval_scale,
             data_loader.clone(),
@@ -352,6 +359,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
                 self.input_getter.clone(),
                 self.output_getter,
                 self.blend_getter,
+                self.weight_getter,
                 self.additional_inputs.wdl,
                 schedule.eval_scale,
                 loader.clone(),
@@ -450,32 +458,31 @@ where
     let batch_size = prepared.batch_size;
     let expected_inputs = prepared.input_getter.num_inputs();
 
-    unsafe {
-        let input = &prepared.stm;
-        let mut stm = graph.get_input_mut("stm");
+    let input_ids = graph.input_ids();
 
-        if stm.values.single_size() != expected_inputs {
+    let input = &prepared.stm;
+    let mut stm = graph.get_input_mut("stm");
+
+    if stm.values.single_size() != expected_inputs {
+        return Err(OperationError::InvalidTensorFormat);
+    }
+
+    stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+
+    drop(stm);
+
+    if input_ids.contains(&"nstm".to_string()) {
+        let input = &prepared.nstm;
+        let ntm = &mut *graph.get_input_mut("nstm");
+
+        if ntm.values.single_size() != expected_inputs {
             return Err(OperationError::InvalidTensorFormat);
         }
 
-        stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-
-        drop(stm);
-        let input_ids = graph.input_ids();
-
-        if input_ids.contains(&"nstm".to_string()) {
-            let input = &prepared.nstm;
-            let ntm = &mut *graph.get_input_mut("nstm");
-
-            if ntm.values.single_size() != expected_inputs {
-                return Err(OperationError::InvalidTensorFormat);
-            }
-
-            ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-        }
+        ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
     }
 
-    if graph.input_ids().contains(&"buckets".to_string()) {
+    if input_ids.contains(&"buckets".to_string()) {
         let input = &prepared.buckets;
         let mut buckets = graph.get_input_mut("buckets");
 
@@ -484,6 +491,11 @@ where
         }
 
         buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+    }
+
+    if input_ids.contains(&"entry_weights".to_string()) {
+        let mut weights = graph.get_input_mut("entry_weights");
+        weights.load_dense_from_slice(Some(batch_size), &prepared.weights.value)?;
     }
 
     graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
