@@ -44,7 +44,7 @@ fn main() {
 
         loader.map_batches(batch_size, |batch: &[ChessBoard]| {
             let prepared =
-                DefaultDataPreparer::prepare(inputs, output_buckets, |_, wdl| wdl, false, batch, 4, 0.0, eval_scale);
+                DefaultDataPreparer::prepare(inputs, output_buckets, |_, wdl| wdl, None, false, batch, 4, 0.0, eval_scale);
             sender.send((batch.to_vec(), prepared)).unwrap();
         });
 
