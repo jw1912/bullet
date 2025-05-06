@@ -23,6 +23,10 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
     - Currently contains both the HIP (for AMD GPUs) and CUDA backends. Enable the `hip` feature to use the HIP backend.
 - **bullet_lib**
     - Provides a high-level wrapper around the above crates specifically for training networks to do with chess (and other games e.g. Ataxx) easily.
+    - What backend is used is dictated by passed feature flags:
+        - By default the CUDA backend from `bullet_hip_backend` is used, you should not pass any feature flags if you want to use the CUDA backend
+        - Enable the `hip` feature to use the HIP backend **only** if you have an AMD card
+        - Read the [documentation](docs/2-getting-started.md#backends) for more specific instructions
     - Value network training for games with `Trainer`
         - The [simple](examples/simple.rs) example shows ease-of-use in training the simplest NNUE architectures
         - The [advanced](examples/advanced.rs) example shows how to train flexible value network architectures
