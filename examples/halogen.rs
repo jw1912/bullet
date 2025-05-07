@@ -1,35 +1,27 @@
 use bullet_lib::{
-    game::{
-        inputs::{ChessBucketsMirroredFactorised, SparseInputType},
-        outputs::MaterialCount,
-    },
+    default::{Loss, TrainerBuilder},
+    game::{inputs::ChessBucketsMirroredFactorised, outputs::MaterialCount},
     nn::optimiser,
     trainer::{
         default::loader,
-        save::SavedFormat,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
-    value::ValueTrainerBuilder,
+    Activation,
 };
 
 macro_rules! net_id {
     () => {
-        "bullet_r45_768x8-1024x2-1x8"
+        "bullet_r46_768x8-1024x2-1x8"
     };
 }
 
 const NET_ID: &str = net_id!();
 
-const HL: usize = 1024;
-const OUTPUT_BUCKETS: usize = 8;
-
-type Input = ChessBucketsMirroredFactorised;
-type Output = MaterialCount<OUTPUT_BUCKETS>;
-
 fn main() {
     #[rustfmt::skip]
-    let inputs = Input::new([
+
+    let inputs = ChessBucketsMirroredFactorised::new([
         0, 1, 2, 3,
         4, 4, 5, 5,
         6, 6, 6, 6,
@@ -39,30 +31,17 @@ fn main() {
         7, 7, 7, 7,
         7, 7, 7, 7,
     ]);
-    let output = Output::default();
 
-    let save_format = [
-        SavedFormat::id("l0w").quantise::<i16>(255),
-        SavedFormat::id("l0b").quantise::<i16>(255),
-        SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
-        SavedFormat::id("l1b").quantise::<i16>(64 * 255),
-    ];
-
-    let mut trainer = ValueTrainerBuilder::default()
-        .dual_perspective()
-        .save_format(&save_format)
+    let mut trainer = TrainerBuilder::default()
+        .quantisations(&[255, 64])
         .optimiser(optimiser::Ranger)
-        .loss_fn(|output, targets| output.sigmoid().squared_error(targets))
-        .inputs(inputs)
-        .output_buckets(output)
-        .build(|builder, stm, ntm, buckets| {
-            let l0 = builder.new_affine("l0", inputs.num_inputs(), HL);
-            let l1 = builder.new_affine("l1", HL * 2, OUTPUT_BUCKETS);
-
-            let stm_subnet = l0.forward(stm).screlu();
-            let ntm_subnet = l0.forward(ntm).screlu();
-            l1.forward(stm_subnet.concat(ntm_subnet)).select(buckets)
-        });
+        .loss_fn(Loss::SigmoidMSE)
+        .input(inputs)
+        .output_buckets(MaterialCount::<8>)
+        .feature_transformer(1024)
+        .activate(Activation::SCReLU)
+        .add_layer(1)
+        .build();
 
     let schedule = TrainingSchedule {
         net_id: NET_ID.to_string(),
@@ -80,7 +59,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["../../chess/data/shuffled.data"]);
+    let data_loader = loader::DirectSequentialDataLoader::new(&["../../chess/data/rescored.data"]);
 
     trainer.set_optimiser_params(optimiser::RangerParams::default());
     trainer.run(&schedule, &settings, &data_loader);
