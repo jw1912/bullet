@@ -10,6 +10,18 @@ pub struct ChessBucketsMergedKings {
 
 impl ChessBucketsMergedKings {
     pub fn new(buckets: [usize; 64]) -> Self {
+        for (sq, bucket) in buckets.iter().enumerate() {
+            for (sq2, bucket2) in buckets.iter().enumerate() {
+                if bucket == bucket2 {
+                    let rank_diff = (sq / 8).abs_diff(sq2 / 8);
+                    let file_diff = (sq % 8).abs_diff(sq2 % 8);
+                    if rank_diff > 1 || file_diff > 1 {
+                        panic!("Invalid bucket layout in ChessBucketsMergedKings!");
+                    }
+                }
+            }
+        }
+
         Self { buckets, num_buckets: get_num_buckets(&buckets) }
     }
 }
@@ -57,12 +69,24 @@ pub struct ChessBucketsMergedKingsMirrored {
 
 impl ChessBucketsMergedKingsMirrored {
     pub fn new(buckets: [usize; 32]) -> Self {
+        for (sq, bucket) in buckets.iter().enumerate() {
+            for (sq2, bucket2) in buckets.iter().enumerate() {
+                if bucket == bucket2 {
+                    let rank_diff = (sq / 4).abs_diff(sq2 / 4);
+                    let file_diff = (sq % 4).abs_diff(sq2 % 4);
+                    if rank_diff > 1 || file_diff > 1 {
+                        panic!("Invalid bucket layout in ChessBucketsMergedKingsMirrored!");
+                    }
+                }
+            }
+        }
+
         let mut expanded = [0; 64];
         for (idx, elem) in expanded.iter_mut().enumerate() {
             *elem = buckets[(idx / 8) * 4 + [0, 1, 2, 3, 3, 2, 1, 0][idx % 8]];
         }
 
-        Self { wrapped: ChessBucketsMergedKings::new(expanded) }
+        Self { wrapped: ChessBucketsMergedKings { buckets: expanded, num_buckets: get_num_buckets(&expanded) } }
     }
 }
 
