@@ -8,6 +8,7 @@ pub fn affine_fwd<F: Fn(f32) -> f32>(
     k: usize,
     a: &[f32],
     x: &[i32],
+    v: Option<&[f32]>,
     b: Option<&[f32]>,
     bb: bool,
     y: &mut [f32],
@@ -19,12 +20,13 @@ pub fn affine_fwd<F: Fn(f32) -> f32>(
         let base = stride * m * loc + offset;
         let ty = &mut y[base..base + m];
         let tx = &x[nnz * loc..nnz * loc + nnz];
+        let tv = v.map(|v| &v[nnz * loc..nnz * loc + nnz]);
         let tb = b.map(|b| &b[bias_stride * loc..bias_stride * loc + m]);
 
         if m % 32 == 0 {
-            affine_fwd_single_fast::<32, F>(m, a, tx, tb, ty, &op);
+            affine_fwd_single_fast::<32, F>(m, a, tx, tv, tb, ty, &op);
         } else {
-            affine_fwd_single_fallback(m, a, tx, tb, ty, &op);
+            affine_fwd_single_fallback(m, a, tx, tv, tb, ty, &op);
         }
     }
 }
@@ -36,6 +38,7 @@ pub fn affine_bwd<F: Fn(f32) -> f32>(
     m: usize,
     k: usize,
     x: &[i32],
+    v: Option<&[f32]>,
     y: &[f32],
     yg: &[f32],
     bb: bool,
@@ -50,14 +53,15 @@ pub fn affine_bwd<F: Fn(f32) -> f32>(
     for loc in 0..k {
         let base = stride * m * loc + offset;
         let tx = &x[nnz * loc..nnz * loc + nnz];
+        let tv = v.map(|v| &v[nnz * loc..nnz * loc + nnz]);
         let ty = &y[base..base + m];
         let tyg = &yg[base..base + m];
         let tbg = bg.as_mut().map(|g| &mut g[bias_stride * loc..bias_stride * loc + m]);
 
         if m % 32 == 0 {
-            affine_bwd_single_fast::<32, F>(m, tx, ty, tyg, ag, tbg, &op);
+            affine_bwd_single_fast::<32, F>(m, tx, tv, ty, tyg, ag, tbg, &op);
         } else {
-            affine_bwd_single_fallback(&mut grd, m, tx, ty, tyg, ag, tbg, &op);
+            affine_bwd_single_fallback(&mut grd, m, tx, tv, ty, tyg, ag, tbg, &op);
         }
     }
 }
@@ -66,6 +70,7 @@ fn affine_fwd_single_fast<const T: usize, F: Fn(f32) -> f32>(
     m: usize,
     a: &[f32],
     x: &[i32],
+    v: Option<&[f32]>,
     b: Option<&[f32]>,
     ty: &mut [f32],
     op: &F,
@@ -82,14 +87,15 @@ fn affine_fwd_single_fast<const T: usize, F: Fn(f32) -> f32>(
             }
         }
 
-        for &inp in x {
+        for (j, &inp) in x.iter().enumerate() {
             if inp == -1 {
                 break;
             }
 
+            let v = v.map(|v| v[j]).unwrap_or(1.0);
             let base = m * inp as usize + d;
             for (t, &ta) in tt.iter_mut().zip(a[base..base + T].iter()) {
-                *t += ta;
+                *t += v * ta;
             }
         }
 
@@ -103,6 +109,7 @@ fn affine_fwd_single_fallback<F: Fn(f32) -> f32>(
     m: usize,
     a: &[f32],
     x: &[i32],
+    v: Option<&[f32]>,
     b: Option<&[f32]>,
     ty: &mut [f32],
     op: &F,
@@ -113,13 +120,14 @@ fn affine_fwd_single_fallback<F: Fn(f32) -> f32>(
         by_chunks_32_1(ty, |_| 0.0);
     }
 
-    for &inp in x {
+    for (j, &inp) in x.iter().enumerate() {
         if inp == -1 {
             break;
         }
 
+        let v = v.map(|v| v[j]).unwrap_or(1.0);
         let base = m * inp as usize;
-        by_chunks_32_2(ty, &a[base..base + m], |a, b| a + b);
+        by_chunks_32_2(ty, &a[base..base + m], |a, b| a + v * b);
     }
 
     by_chunks_32_1(ty, op);
@@ -128,6 +136,7 @@ fn affine_fwd_single_fallback<F: Fn(f32) -> f32>(
 fn affine_bwd_single_fast<const T: usize, F: Fn(f32) -> f32>(
     m: usize,
     tx: &[i32],
+    tv: Option<&[f32]>,
     ty: &[f32],
     tyg: &[f32],
     ag: &mut [f32],
@@ -150,14 +159,15 @@ fn affine_bwd_single_fast<const T: usize, F: Fn(f32) -> f32>(
             }
         }
 
-        for &inp in tx {
+        for (j, &inp) in tx.iter().enumerate() {
             if inp == -1 {
                 break;
             }
 
+            let v = tv.map(|v| v[j]).unwrap_or(1.0);
             let base = m * inp as usize + b;
             for (i, &j) in ag[base..base + T].iter_mut().zip(grd.iter()) {
-                *i += j;
+                *i += v * j;
             }
         }
     }
@@ -167,6 +177,7 @@ fn affine_bwd_single_fallback<F: Fn(f32) -> f32>(
     grd: &mut [f32],
     m: usize,
     tx: &[i32],
+    tv: Option<&[f32]>,
     ty: &[f32],
     tyg: &[f32],
     ag: &mut [f32],
@@ -179,13 +190,14 @@ fn affine_bwd_single_fallback<F: Fn(f32) -> f32>(
         by_chunks_32_2(tbg, grd, |a, b| a + b);
     }
 
-    for &inp in tx {
+    for (j, &inp) in tx.iter().enumerate() {
         if inp == -1 {
             break;
         }
 
+        let v = tv.map(|v| v[j]).unwrap_or(1.0);
         let base = m * inp as usize;
-        by_chunks_32_2(&mut ag[base..base + m], grd, |a, b| a + b);
+        by_chunks_32_2(&mut ag[base..base + m], grd, |a, b| a + v * b);
     }
 }
 

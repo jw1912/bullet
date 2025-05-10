@@ -303,7 +303,13 @@ impl GraphBuilderNode<'_> {
 
     pub fn matmul(self, rhs: Self) -> Self {
         if self.builder.builder().get(rhs.node.idx).unwrap().sparse.is_some() {
-            self.builder.apply(GraphIROp::SparseAffineActivate(self.node, rhs.node, None, DiffableFromOutput::Identity))
+            self.builder.apply(GraphIROp::SparseAffineActivate(
+                self.node,
+                rhs.node,
+                None,
+                None,
+                DiffableFromOutput::Identity,
+            ))
         } else {
             self.builder.apply(GraphIROp::Matmul(self.node, false, rhs.node, false))
         }

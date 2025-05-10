@@ -15,6 +15,7 @@ pub fn affine_activate<D: Device>(
     a: &DenseMatrix<D>,
     shape_a: Shape,
     b: &SparseMatrix<D>,
+    v: Option<&DenseMatrix<D>>,
     shape_b: Shape,
     c: Option<(&DenseMatrix<D>, Shape)>,
     out: &mut DenseMatrix<D>,
@@ -40,6 +41,7 @@ pub fn affine_activate<D: Device>(
         &a.buf,
         shape_a,
         &b.buf,
+        v.map(|v| &v.buf),
         shape_b,
         b.nnz,
         c.map(|x| &x.0.buf),
@@ -57,6 +59,7 @@ pub fn backprop_affine_activate<D: Device>(
     a: &mut Tensor<D>,
     shape_a: Shape,
     b: &SparseMatrix<D>,
+    v: Option<&DenseMatrix<D>>,
     shape_b: Shape,
     c: &mut Option<(&mut Tensor<D>, &D::BufferF32)>,
     output: &DenseMatrix<D>,
@@ -105,6 +108,7 @@ pub fn backprop_affine_activate<D: Device>(
             &mut agrd.buf,
             shape_a,
             &b.buf,
+            v.map(|v| &v.buf),
             shape_b,
             b.nnz,
             c,
@@ -150,8 +154,8 @@ pub fn affine_dual<D: Device>(
 
     output.set_batch_size(s.batch_size())?;
 
-    affine_activate(Some(false), activation, w, w_shape, s, s_shape, b, output)?;
-    affine_activate(Some(true), activation, w, w_shape, n, s_shape, b, output)
+    affine_activate(Some(false), activation, w, w_shape, s, None, s_shape, b, output)?;
+    affine_activate(Some(true), activation, w, w_shape, n, None, s_shape, b, output)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -172,8 +176,8 @@ pub fn backprop_affine_dual<D: Device>(
     assert_eq!(s_shape.size(), n.single_size());
     assert_eq!(output.batch_size(), s.batch_size());
 
-    backprop_affine_activate(Some(false), activation, w, w_shape, s, s_shape, b, output, output_grad)?;
-    backprop_affine_activate(Some(true), activation, w, w_shape, n, s_shape, b, output, output_grad)?;
+    backprop_affine_activate(Some(false), activation, w, w_shape, s, None, s_shape, b, output, output_grad)?;
+    backprop_affine_activate(Some(true), activation, w, w_shape, n, None, s_shape, b, output, output_grad)?;
 
     Ok(())
 }

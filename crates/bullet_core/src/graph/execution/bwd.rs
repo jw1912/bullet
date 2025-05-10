@@ -285,12 +285,15 @@ impl<D: Device> Graph<D> {
                     )?;
                 }
             }
-            SparseAffineActivate(wn, inp, bn, act) => {
+            SparseAffineActivate(wn, inp, vals, bn, act) => {
                 let i = &mut *get(*inp);
                 let w = &mut *get(*wn);
                 let o = output_tensor.values.dense()?;
 
                 let i = i.values.sparse()?;
+
+                let v = vals.map(get);
+                let v = if let Some(v) = v.as_ref() { Some(v.values.dense()?) } else { None };
 
                 if let Some(b) = bn {
                     let bs = i.batch_size().unwrap_or(1);
@@ -302,13 +305,25 @@ impl<D: Device> Graph<D> {
                         w,
                         wn.shape,
                         i,
+                        v,
                         inp.shape,
                         &mut Some((&mut *get(*b), ones)),
                         o,
                         output_grad,
                     )?;
                 } else {
-                    sparse::backprop_affine_activate(None, *act, w, wn.shape, i, inp.shape, &mut None, o, output_grad)?;
+                    sparse::backprop_affine_activate(
+                        None,
+                        *act,
+                        w,
+                        wn.shape,
+                        i,
+                        v,
+                        inp.shape,
+                        &mut None,
+                        o,
+                        output_grad,
+                    )?;
                 }
             }
             SparseAffineDualActivate(wn, sn, nn, bn, act) => {
