@@ -185,39 +185,7 @@ where
     fn load_batch(&mut self, prepared: &Self::PreparedData) -> usize {
         let graph = &mut self.optimiser.graph;
 
-        let batch_size = prepared.batch_size;
-        let expected_inputs = prepared.input_getter.num_inputs();
-
-        unsafe {
-            let input = &prepared.stm;
-            let mut stm = graph.get_input_mut("stm");
-
-            assert_eq!(stm.values.single_size(), expected_inputs);
-
-            stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value).unwrap();
-
-            drop(stm);
-            let input_ids = graph.input_ids();
-
-            if input_ids.contains(&"nstm".to_string()) {
-                let input = &prepared.ntm;
-                let ntm = &mut *graph.get_input_mut("nstm");
-
-                assert_eq!(ntm.values.single_size(), expected_inputs);
-
-                ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value).unwrap();
-            }
-        }
-
-        let mask = &prepared.mask;
-        unsafe {
-            graph.get_input_mut("mask").load_sparse_from_slice(mask.max_active, Some(batch_size), &mask.value).unwrap();
-        }
-
-        let dist = &prepared.dist;
-        graph.get_input_mut("dist").load_dense_from_slice(Some(batch_size), &dist.value).unwrap();
-
-        batch_size
+        unsafe { preparer::load_batch_into_graph(graph, prepared).unwrap() }
     }
 
     fn optimiser(&self) -> &Optimiser<ExecutionContext, Self::OptimiserState> {

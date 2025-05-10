@@ -5,6 +5,7 @@ mod sfbinpack;
 mod text;
 mod viribinpack;
 
+use bullet_core::backend::device::OperationError;
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
@@ -14,6 +15,7 @@ pub use viribinpack::ViriBinpackLoader;
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
+    nn::{DeviceError, Graph},
     trainer::DataPreparer,
 };
 
@@ -132,14 +134,14 @@ pub(crate) struct SparseInput {
 
 /// A batch of data, in the correct format for the GPU.
 pub struct DefaultDataPreparer<I: SparseInputType, O> {
-    pub(crate) input_getter: I,
-    pub(crate) output_getter: O,
-    pub(crate) batch_size: usize,
-    pub(crate) stm: SparseInput,
-    pub(crate) nstm: SparseInput,
-    pub(crate) buckets: SparseInput,
-    pub(crate) targets: DenseInput,
-    pub(crate) weights: DenseInput,
+    input_getter: I,
+    output_getter: O,
+    batch_size: usize,
+    stm: SparseInput,
+    nstm: SparseInput,
+    buckets: SparseInput,
+    targets: DenseInput,
+    weights: DenseInput,
 }
 
 impl<I, O> DefaultDataPreparer<I, O>
@@ -239,4 +241,64 @@ where
 
         prep
     }
+}
+
+/// # Safety
+///
+/// The graph needs to take sparse `stm` and optionally `nstm` inputs
+/// in the correct format
+pub unsafe fn load_into_graph<Inp, Out>(
+    graph: &mut Graph,
+    prepared: &DefaultDataPreparer<Inp, Out>,
+) -> Result<usize, OperationError<DeviceError>>
+where
+    Inp: SparseInputType,
+    Out: OutputBuckets<Inp::RequiredDataType>,
+{
+    let batch_size = prepared.batch_size;
+    let expected_inputs = prepared.input_getter.num_inputs();
+
+    let input_ids = graph.input_ids();
+
+    if input_ids.contains(&"stm".to_string()) {
+        let input = &prepared.stm;
+        let stm = &mut *graph.get_input_mut("stm");
+
+        if stm.values.single_size() != expected_inputs {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+    }
+
+    if input_ids.contains(&"nstm".to_string()) {
+        let input = &prepared.nstm;
+        let ntm = &mut *graph.get_input_mut("nstm");
+
+        if ntm.values.single_size() != expected_inputs {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+    }
+
+    if input_ids.contains(&"buckets".to_string()) {
+        let input = &prepared.buckets;
+        let buckets = &mut *graph.get_input_mut("buckets");
+
+        if buckets.values.single_size() != Out::BUCKETS {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+    }
+
+    if input_ids.contains(&"entry_weights".to_string()) {
+        let weights = &mut *graph.get_input_mut("entry_weights");
+        weights.load_dense_from_slice(Some(batch_size), &prepared.weights.value)?;
+    }
+
+    graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
+
+    Ok(batch_size)
 }
