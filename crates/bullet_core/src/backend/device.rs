@@ -16,6 +16,8 @@ pub enum OperationError<T: Debug> {
     IndexOutOfBounds,
     UnsupportedOperation,
     MismatchedBatchSizes,
+    NoWeightWithID(String),
+    WeightLoadingError(String, Option<(usize, usize)>),
     DeviceError(Box<T>),
 }
 
@@ -48,7 +50,7 @@ pub trait DeviceBuffer<D, T>: Sized {
 #[allow(clippy::too_many_arguments)]
 pub trait Device: Sized + 'static {
     type IdType;
-    type DeviceError: std::fmt::Debug;
+    type DeviceError: std::fmt::Debug + Default;
     type BufferI32: DeviceBuffer<Self, i32, BufferError = Self::DeviceError>;
     type BufferF32: DeviceBuffer<Self, f32, BufferError = Self::DeviceError>
         + BaseOperations<BaseError = Self::DeviceError>

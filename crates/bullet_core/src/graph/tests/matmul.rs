@@ -54,7 +54,7 @@ pub fn matmul2<D: Device>(device: D) -> Result<(), GraphError<D::DeviceError>> {
 
     graph.get_weights_mut("w1").load_dense_from_slice(None, &[-1.0, 4.0, 2.0, 1.0]).unwrap();
     graph.get_weights_mut("w2").load_dense_from_slice(Some(2), &[1.0, 2.0, 3.0, 4.0, 1.0, 3.0, 2.0, 4.0]).unwrap();
-    graph.get_input_mut("dot").load_from_slice(None, &[1.0; 4]).unwrap();
+    graph.get_input_mut("dot").load_dense_from_slice(None, &[1.0; 4]).unwrap();
 
     let err = graph.forward()?;
     assert_eq!(err, 60.0);

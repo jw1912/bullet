@@ -100,18 +100,14 @@ impl<D: Device> Tensor<D> {
         grad.load_from_slice(None, &[1.0])
     }
 
-    pub fn load_from_slice(&mut self, batch_size: Option<usize>, values: &[f32]) -> Result<(), D::DeviceError> {
-        if let Matrix::Dense(dst) = &mut self.values {
-            assert_eq!(values.len(), dst.size());
-            dst.load_from_slice(batch_size, values)
-        } else {
-            panic!("This tensor is sparse!")
-        }
-    }
-
-    pub fn seed_random(&mut self, mean: f32, stdev: f32, use_gaussian: bool) -> Result<(), D::DeviceError> {
+    pub fn seed_random(
+        &mut self,
+        mean: f32,
+        stdev: f32,
+        use_gaussian: bool,
+    ) -> Result<(), OperationError<D::DeviceError>> {
         let values = rng::vec_f32(self.values.size(), mean, stdev, use_gaussian);
-        self.load_from_slice(self.values.batch_size(), &values)
+        self.load_dense_from_slice(self.values.batch_size(), &values)
     }
 
     pub fn load_dense_from_slice(

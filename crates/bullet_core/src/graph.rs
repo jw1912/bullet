@@ -240,18 +240,34 @@ impl<D: Device> Graph<D> {
 
     /// Loads the weights of a graph from a file. If `gradients` is true,
     /// it will instead load the gradients of those weights.
-    pub fn load_from_file(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {
+    pub fn load_from_file(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
         use std::{fs::File, io::Read};
 
         let mut buf = Vec::new();
         let mut file = File::open(path).unwrap();
         file.read_to_end(&mut buf).unwrap();
 
+        let weight_ids = self.weight_ids();
+
         let mut offset = 0;
 
         while offset < buf.len() {
             let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
-            self.get_weights_mut(&id).load_dense_from_slice(None, &buffer).expect("This is guaranteed!");
+
+            if !weight_ids.contains(&id) {
+                return Err(OperationError::NoWeightWithID(id));
+            }
+
+            let mut weights = self.get_weights_mut(&id);
+            let exp_size = weights.values.size();
+
+            if buffer.len() != exp_size {
+                return Err(OperationError::WeightLoadingError(id, Some((buffer.len(), exp_size))));
+            }
+
+            if weights.load_dense_from_slice(None, &buffer).is_err() {
+                return Err(OperationError::WeightLoadingError(id, None));
+            }
 
             offset += bytes_read;
         }

@@ -53,8 +53,10 @@ impl<D: Device> SparseMatrix<D> {
         batch_size: Option<usize>,
         buf: &[i32],
     ) -> Result<(), D::DeviceError> {
-        assert_eq!(self.nnz, nnz);
-        assert_eq!(nnz * batch_size.unwrap_or(1), buf.len());
+        if self.nnz != nnz || nnz * batch_size.unwrap_or(1) != buf.len() {
+            return Err(D::DeviceError::default());
+        }
+
         self.set_batch_size(batch_size)?;
         self.buf.load_from_slice(buf)
     }
@@ -62,7 +64,11 @@ impl<D: Device> SparseMatrix<D> {
     pub fn copy_into_dense(&self, dst: &mut DenseMatrix<D>) -> Result<(), OperationError<D::DeviceError>> {
         let batch_size = self.batch_size();
         let size = self.single_size();
-        assert_eq!(size, dst.single_size());
+
+        if size != dst.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
         dst.set_batch_size(batch_size)?;
         D::sparse_to_dense(batch_size.unwrap_or(1), size, self.nnz, &self.buf, &mut dst.buf)
     }

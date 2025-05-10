@@ -71,7 +71,10 @@ impl<D: Device> DenseMatrix<D> {
     }
 
     pub fn copy_from(&mut self, other: &Self) -> Result<(), D::DeviceError> {
-        assert_eq!(self.single_size, other.single_size);
+        if self.single_size != other.single_size {
+            return Err(D::DeviceError::default());
+        }
+
         self.set_batch_size(other.batch_size())?;
         self.buf.load_from_device(&other.buf, other.size())
     }
@@ -94,7 +97,10 @@ impl<D: Device> DenseMatrix<D> {
     }
 
     pub fn load_from_slice(&mut self, batch_size: Option<usize>, buf: &[f32]) -> Result<(), D::DeviceError> {
-        assert_eq!(self.single_size() * batch_size.unwrap_or(1), buf.len());
+        if self.single_size() * batch_size.unwrap_or(1) != buf.len() {
+            return Err(D::DeviceError::default());
+        }
+
         self.set_batch_size(batch_size)?;
         self.buf.load_from_slice(buf)
     }
@@ -106,7 +112,10 @@ impl<D: Device> DenseMatrix<D> {
     /// Writes the contents of this matrix into a buffer,
     /// returns number of values written.
     pub fn write_to_slice(&self, buf: &mut [f32]) -> Result<usize, D::DeviceError> {
-        assert!(self.size() <= buf.len());
+        if self.size() > buf.len() {
+            return Err(D::DeviceError::default());
+        }
+
         self.buf.write_into_slice(buf, self.size())?;
         Ok(self.allocated_size())
     }
