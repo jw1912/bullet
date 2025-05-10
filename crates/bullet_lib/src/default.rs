@@ -14,8 +14,8 @@ pub use crate::game::{inputs, outputs};
 pub use builder::{Loss, TrainerBuilder};
 
 use loader::{
-    CanBeDirectlySequentiallyLoaded, DataLoader, DefaultDataLoader, DefaultDataPreparer, DirectSequentialDataLoader,
-    LoadableDataType, B,
+    load_into_graph, CanBeDirectlySequentiallyLoaded, DataLoader, DefaultDataLoader, DefaultDataPreparer,
+    DirectSequentialDataLoader, LoadableDataType, B,
 };
 use testing::{EngineType, TestSettings};
 
@@ -27,7 +27,6 @@ use std::{
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::DeviceError,
     trainer::{
         logger,
         save::{Layout, QuantTarget, SavedFormat},
@@ -39,7 +38,6 @@ use crate::{
 };
 
 use bullet_core::{
-    backend::device::OperationError,
     graph::{Graph, Node},
     optimiser::{Optimiser, OptimiserState},
 };
@@ -442,63 +440,3 @@ where
 }
 
 type PairedLoaders<Inp, Out, D, D2> = (DefaultDataLoader<Inp, Out, D>, Option<DefaultDataLoader<Inp, Out, D2>>);
-
-/// # Safety
-///
-/// The graph needs to take sparse `stm` and optionally `nstm` inputs
-/// in the correct format
-pub unsafe fn load_into_graph<Inp, Out>(
-    graph: &mut Graph<ExecutionContext>,
-    prepared: &DefaultDataPreparer<Inp, Out>,
-) -> Result<usize, OperationError<DeviceError>>
-where
-    Inp: SparseInputType,
-    Out: OutputBuckets<Inp::RequiredDataType>,
-{
-    let batch_size = prepared.batch_size;
-    let expected_inputs = prepared.input_getter.num_inputs();
-
-    let input_ids = graph.input_ids();
-
-    let input = &prepared.stm;
-    let mut stm = graph.get_input_mut("stm");
-
-    if stm.values.single_size() != expected_inputs {
-        return Err(OperationError::InvalidTensorFormat);
-    }
-
-    stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-
-    drop(stm);
-
-    if input_ids.contains(&"nstm".to_string()) {
-        let input = &prepared.nstm;
-        let ntm = &mut *graph.get_input_mut("nstm");
-
-        if ntm.values.single_size() != expected_inputs {
-            return Err(OperationError::InvalidTensorFormat);
-        }
-
-        ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-    }
-
-    if input_ids.contains(&"buckets".to_string()) {
-        let input = &prepared.buckets;
-        let mut buckets = graph.get_input_mut("buckets");
-
-        if buckets.values.single_size() != Out::BUCKETS {
-            return Err(OperationError::InvalidTensorFormat);
-        }
-
-        buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-    }
-
-    if input_ids.contains(&"entry_weights".to_string()) {
-        let mut weights = graph.get_input_mut("entry_weights");
-        weights.load_dense_from_slice(Some(batch_size), &prepared.weights.value)?;
-    }
-
-    graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
-
-    Ok(batch_size)
-}

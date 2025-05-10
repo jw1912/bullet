@@ -1,8 +1,10 @@
+use bullet_core::backend::device::OperationError;
 use bulletformat::ChessBoard;
 
 use crate::{
     default::loader::DataLoader as Blah,
     game::{formats::montyformat::chess::Move, inputs::SparseInputType},
+    nn::{DeviceError, Graph},
     trainer::DataPreparer,
 };
 
@@ -61,12 +63,12 @@ pub struct SparseInput {
 }
 
 pub struct PolicyPreparedData<I> {
-    pub input_getter: I,
-    pub batch_size: usize,
-    pub stm: SparseInput,
-    pub ntm: SparseInput,
-    pub mask: SparseInput,
-    pub dist: DenseInput,
+    input_getter: I,
+    batch_size: usize,
+    stm: SparseInput,
+    ntm: SparseInput,
+    mask: SparseInput,
+    dist: DenseInput,
 }
 
 impl<I: SparseInputType<RequiredDataType = ChessBoard>> PolicyPreparedData<I> {
@@ -140,8 +142,8 @@ impl<I: SparseInputType<RequiredDataType = ChessBoard>> PolicyPreparedData<I> {
                             distinct += 1;
                         }
 
-                        if distinct < MAX_MOVES {
-                            mask_chunk[mask_offset + distinct] = -1;
+                        for j in distinct..MAX_MOVES {
+                            mask_chunk[mask_offset + j] = -1;
                         }
 
                         let total = f32::from(total);
@@ -156,4 +158,44 @@ impl<I: SparseInputType<RequiredDataType = ChessBoard>> PolicyPreparedData<I> {
 
         prep
     }
+}
+
+/// # Safety
+///
+/// The graph needs to take sparse `stm` and optionally `nstm` inputs
+/// in the correct format
+pub unsafe fn load_batch_into_graph<I: SparseInputType<RequiredDataType = ChessBoard>>(
+    graph: &mut Graph,
+    prepared: &PolicyPreparedData<I>,
+) -> Result<usize, OperationError<DeviceError>> {
+    let batch_size = prepared.batch_size;
+    let expected_inputs = prepared.input_getter.num_inputs();
+
+    let input_ids = graph.input_ids();
+
+    if input_ids.contains(&"stm".to_string()) {
+        let input = &prepared.stm;
+        let mut stm = graph.get_input_mut("stm");
+
+        assert_eq!(stm.values.single_size(), expected_inputs);
+
+        stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+    }
+
+    if input_ids.contains(&"nstm".to_string()) {
+        let input = &prepared.ntm;
+        let ntm = &mut *graph.get_input_mut("nstm");
+
+        assert_eq!(ntm.values.single_size(), expected_inputs);
+
+        ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+    }
+
+    let mask = &prepared.mask;
+    graph.get_input_mut("mask").load_sparse_from_slice(mask.max_active, Some(batch_size), &mask.value)?;
+
+    let dist = &prepared.dist;
+    graph.get_input_mut("dist").load_dense_from_slice(Some(batch_size), &dist.value)?;
+
+    Ok(batch_size)
 }

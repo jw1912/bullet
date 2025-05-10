@@ -7,8 +7,7 @@ use bullet_lib::{
     trainer::default::{
         formats::bulletformat::{ChessBoard, DataLoader},
         inputs::{self, SparseInputType},
-        load_into_graph,
-        loader::DefaultDataPreparer,
+        loader::{load_into_graph, DefaultDataPreparer},
         outputs,
     },
 };
