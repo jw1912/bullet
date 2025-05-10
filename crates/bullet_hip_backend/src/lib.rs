@@ -28,7 +28,8 @@ pub type Tensor = tensor::Tensor<ExecutionContext>;
 
 #[derive(Debug, Default)]
 pub enum DeviceError {
-    #[default] Generic,
+    #[default]
+    Generic,
     Cuda(bindings::cudaError_t),
     Cublas(bindings::cublasStatus_t),
     ExpectedIllegalAddressAccess,

@@ -264,7 +264,7 @@ impl<D: Device> Graph<D> {
             if buffer.len() != exp_size {
                 return Err(OperationError::WeightLoadingError(id, Some((buffer.len(), exp_size))));
             }
-            
+
             if weights.load_dense_from_slice(None, &buffer).is_err() {
                 return Err(OperationError::WeightLoadingError(id, None));
             }

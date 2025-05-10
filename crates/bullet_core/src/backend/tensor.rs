@@ -100,7 +100,12 @@ impl<D: Device> Tensor<D> {
         grad.load_from_slice(None, &[1.0])
     }
 
-    pub fn seed_random(&mut self, mean: f32, stdev: f32, use_gaussian: bool) -> Result<(), OperationError<D::DeviceError>> {
+    pub fn seed_random(
+        &mut self,
+        mean: f32,
+        stdev: f32,
+        use_gaussian: bool,
+    ) -> Result<(), OperationError<D::DeviceError>> {
         let values = rng::vec_f32(self.values.size(), mean, stdev, use_gaussian);
         self.load_dense_from_slice(self.values.batch_size(), &values)
     }
