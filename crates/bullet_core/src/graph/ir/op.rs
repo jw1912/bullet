@@ -15,7 +15,13 @@ pub enum DiffableFromOutput {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GraphIROp {
     Affine(AnnotatedNode, AnnotatedNode, AnnotatedNode),
-    SparseAffineActivate(AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
+    SparseAffineActivate(
+        AnnotatedNode,
+        AnnotatedNode,
+        Option<AnnotatedNode>,
+        Option<AnnotatedNode>,
+        DiffableFromOutput,
+    ),
     SparseAffineDualActivate(AnnotatedNode, AnnotatedNode, AnnotatedNode, Option<AnnotatedNode>, DiffableFromOutput),
     Concat(AnnotatedNode, AnnotatedNode),
     Copy(AnnotatedNode, bool),
@@ -222,7 +228,7 @@ impl GraphIROp {
                 let out = Shape::new(end - start, 1);
                 ret(valid, out, GraphIROpError::new(self, OutOfBounds(is, [*start, *end])))
             }
-            SparseAffineActivate(w, i, b, _) => {
+            SparseAffineActivate(w, i, v, b, _) => {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, false)?;
                 check_not_batched(w)?;
@@ -232,7 +238,17 @@ impl GraphIROp {
                 }
 
                 let out = check_matmul(w.shape, i.shape)?;
-                ret(b.is_none() || out == b.unwrap().shape, out, mismatch(&[w, i]))
+                let mut check = b.is_none() || out == b.unwrap().shape;
+                check &= i.shape.cols() == 1;
+
+                if let Some(v) = v {
+                    check_dense_eq(v, true)?;
+                    check_same_batching(&[i, v])?;
+                    let nnz = get(i).sparse.unwrap();
+                    check &= v.shape.cols() == 1 && v.shape.rows() == nnz.get();
+                }
+
+                ret(check, out, mismatch(&[w, i]))
             }
             SparseAffineDualActivate(w, s, n, b, _) => {
                 check_dense_eq(w, true)?;
@@ -295,12 +311,18 @@ impl GraphIROp {
             ReduceAcrossBatch(node, _) => vec![node],
             Select(input, buckets) => vec![input, buckets],
             Slice(input, _, _) => vec![input],
-            SparseAffineActivate(w, i, b, _) => {
-                if let Some(b) = b {
-                    vec![w, i, b]
-                } else {
-                    vec![w, i]
+            SparseAffineActivate(w, i, v, b, _) => {
+                let mut nodes = vec![w, i];
+
+                if let Some(v) = v {
+                    nodes.push(v);
                 }
+
+                if let Some(b) = b {
+                    nodes.push(b);
+                }
+
+                nodes
             }
             ToDense(node) => vec![node],
             Unary(node, _) => vec![node],

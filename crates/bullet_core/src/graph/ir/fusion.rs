@@ -47,8 +47,8 @@ fn fuse_diffable_from_output(
             let mut new_data = old_data.clone();
 
             match op {
-                SparseAffineActivate(a, b, c, DiffableFromOutput::Identity) => {
-                    new_data.parent_operation = Some(SparseAffineActivate(a, b, c, activation));
+                SparseAffineActivate(a, b, c, d, DiffableFromOutput::Identity) => {
+                    new_data.parent_operation = Some(SparseAffineActivate(a, b, c, d, activation));
                     return FusionDescription::new(&[node.idx], &[new_data]);
                 }
                 SparseAffineDualActivate(w, n, s, b, DiffableFromOutput::Identity) => {
@@ -74,7 +74,10 @@ fn fuse_concat(
 
     if node_a.num_children == 1 && node_b.num_children == 1 {
         match (node_a.parent_operation, node_b.parent_operation) {
-            (Some(SparseAffineActivate(wa, ia, ba, acta)), Some(SparseAffineActivate(wb, ib, bb, actb))) => {
+            (
+                Some(SparseAffineActivate(wa, ia, None, ba, acta)),
+                Some(SparseAffineActivate(wb, ib, None, bb, actb)),
+            ) => {
                 if wa == wb && ia.idx != ib.idx && ba == bb && acta == actb {
                     let mut new_data = old_data.clone();
                     new_data.parent_operation = Some(SparseAffineDualActivate(wa, ia, ib, ba, acta));
@@ -216,9 +219,9 @@ fn fuse_add_single(
             let mut new_data = old_data.clone();
 
             match op {
-                SparseAffineActivate(weights, input, None, DiffableFromOutput::Identity) => {
+                SparseAffineActivate(weights, input, vals, None, DiffableFromOutput::Identity) => {
                     new_data.parent_operation =
-                        Some(SparseAffineActivate(weights, input, Some(*rhs), DiffableFromOutput::Identity));
+                        Some(SparseAffineActivate(weights, input, vals, Some(*rhs), DiffableFromOutput::Identity));
                     return FusionDescription::new(&[lhs.idx], &[new_data]);
                 }
                 SparseAffineDualActivate(weights, s, n, None, DiffableFromOutput::Identity) => {

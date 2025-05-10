@@ -83,12 +83,17 @@ impl Device for CudaDevice {
         input_a: &Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
+        input_b_vals: Option<&Self::BufferF32>,
         shape_b: Shape,
         nnz: usize,
         input_c: Option<&Self::BufferF32>,
         input_c_batched: bool,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
+        if input_b_vals.is_some() {
+            return Err(OperationError::UnsupportedOperation);
+        }
+
         sparse::sparse_affine(
             batch_size,
             stride,
@@ -112,6 +117,7 @@ impl Device for CudaDevice {
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
+        input_b_vals: Option<&Self::BufferF32>,
         shape_b: Shape,
         nnz: usize,
         input_c: Option<&Self::BufferF32>,
@@ -120,6 +126,10 @@ impl Device for CudaDevice {
         outputs: &Self::BufferF32,
         output_grad: &Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
+        if input_b_vals.is_some() {
+            return Err(OperationError::UnsupportedOperation);
+        }
+
         sparse::backprop_sparse_affine(
             batch_size,
             stride,
