@@ -28,7 +28,7 @@ tests::make_tests! {
     concat,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CpuError;
 
 #[derive(Default)]

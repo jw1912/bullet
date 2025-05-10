@@ -14,8 +14,9 @@ use cudarc::{
 
 use crate::CudaBuffer;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum CudaError {
+    #[default] Generic,
     Driver(DriverError),
     Blas(CublasError),
     ExpectedIllegalAddressAccess,

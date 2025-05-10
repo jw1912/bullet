@@ -115,7 +115,7 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
         map: &mut HashMap<String, &mut Self>,
         path: &str,
         old_format: bool,
-    ) -> Result<(), D::DeviceError> {
+    ) -> Result<(), OperationError<D::DeviceError>> {
         let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
         let mut momentum = utils::load_weights_from_file(&paths[0], old_format);
         let mut velocity = utils::load_weights_from_file(&paths[1], old_format);

@@ -34,7 +34,7 @@ pub trait OptimiserState<D: Device>: Sized {
         map: &mut HashMap<String, &mut Self>,
         path: &str,
         old_format: bool,
-    ) -> Result<(), D::DeviceError>;
+    ) -> Result<(), OperationError<D::DeviceError>>;
 
     fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::DeviceError>;
 
@@ -103,27 +103,27 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
         S::write_to_checkpoint(&map, path)
     }
 
-    pub fn load_from_checkpoint(&mut self, path: &str) -> Result<(), D::DeviceError> {
+    pub fn load_from_checkpoint(&mut self, path: &str) -> Result<(), OperationError<D::DeviceError>> {
         self.load_from_checkpoint_(path, false)
     }
 
-    pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), D::DeviceError> {
+    pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), OperationError<D::DeviceError>> {
         self.load_weights_from_file_(path, false)
     }
 
-    pub fn load_from_old_format_checkpoint(&mut self, path: &str) -> Result<(), D::DeviceError> {
+    pub fn load_from_old_format_checkpoint(&mut self, path: &str) -> Result<(), OperationError<D::DeviceError>> {
         self.load_from_checkpoint_(path, true)
     }
 
-    pub fn load_old_format_weights_from_file(&mut self, path: &str) -> Result<(), D::DeviceError> {
+    pub fn load_old_format_weights_from_file(&mut self, path: &str) -> Result<(), OperationError<D::DeviceError>> {
         self.load_weights_from_file_(path, true)
     }
 
-    fn load_weights_from_file_(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {
+    fn load_weights_from_file_(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
         self.graph.load_from_file(path, old_format)
     }
 
-    fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) -> Result<(), D::DeviceError> {
+    fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
         self.load_weights_from_file_(&format!("{path}/weights.bin"), old_format)?;
         let mut map = self.state.iter_mut().map(|(id, single)| (id.clone(), single)).collect();
         S::load_from_checkpoint(&mut map, path, old_format)
@@ -169,7 +169,7 @@ where
         map: &mut HashMap<String, &mut Self>,
         path: &str,
         old_format: bool,
-    ) -> Result<(), D::DeviceError> {
+    ) -> Result<(), OperationError<D::DeviceError>> {
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.optimiser)).collect();
         O::load_from_checkpoint(&mut map, path, old_format)
     }

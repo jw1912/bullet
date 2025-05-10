@@ -26,8 +26,9 @@ pub type SparseMatrix = tensor::SparseMatrix<ExecutionContext>;
 pub type Matrix = tensor::Matrix<ExecutionContext>;
 pub type Tensor = tensor::Tensor<ExecutionContext>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum DeviceError {
+    #[default] Generic,
     Cuda(bindings::cudaError_t),
     Cublas(bindings::cublasStatus_t),
     ExpectedIllegalAddressAccess,

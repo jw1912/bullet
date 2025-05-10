@@ -57,7 +57,13 @@ pub trait NetworkTrainer {
     fn optimiser_mut(&mut self) -> &mut Optimiser<ExecutionContext, Self::OptimiserState>;
 
     fn load_from_checkpoint(&mut self, path: &str) {
-        self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state")).unwrap();
+        let err = self.optimiser_mut().load_from_checkpoint(&format!("{path}/optimiser_state"));
+        if let Err(e) = err {
+            println!();
+            println!("Error loading from checkpoint:");
+            println!("{e:?}");
+            std::process::exit(1);
+        }
     }
 
     fn save_to_checkpoint(&self, path: &str) {
