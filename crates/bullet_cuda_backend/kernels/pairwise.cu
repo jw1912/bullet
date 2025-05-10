@@ -49,17 +49,3 @@ BULLET_KERNEL PairwiseMulBackwardKernel(
     thisInputGrad[0] += gradIn * thisInput[output_size];
     thisInputGrad[output_size] += gradIn * thisInput[0];
 }
-
-//extern "C" void pairwiseMul(const int batch_size, const int output_size, const float* input, float* output)
-//{
-//    const int total_outputs = batch_size * output_size;
-//    const int blocks = (total_outputs + threadsPerBlock - 1) / threadsPerBlock;
-//    pairwiseMulKernel<<<blocks, threadsPerBlock>>>(output_size, batch_size, input, output);
-//}
-//
-//extern "C" void backpropPairwiseMul(const int batch_size, const int output_size, const float* input, const float* output_grad, float* input_grad)
-//{
-//    const int total_outputs = batch_size * output_size;
-//    const int blocks = (total_outputs + threadsPerBlock - 1) / threadsPerBlock;
-//    pairwiseMulBackwardKernel<<<blocks, threadsPerBlock>>>(output_size, batch_size, input, output_grad, input_grad);
-//}

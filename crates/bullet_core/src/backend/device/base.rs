@@ -58,22 +58,9 @@ pub trait BaseOperations {
         grd: &Self,
     ) -> Result<(), Self::BaseError>;
 
-    fn pairwise_fwd(
-        &mut self,
-        size: usize,
-        batch_size: usize,
-        a: &Self,
-        //post_concat: bool,
-    ) -> Result<(), Self::BaseError>;
+    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError>;
 
-    fn pairwise_bwd(
-        &mut self,
-        size: usize,
-        batch_size: usize,
-        a: &Self,
-        grd: &Self,
-        //post_concat: bool,
-    ) -> Result<(), Self::BaseError>;
+    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError>;
 
     fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError>;
 
