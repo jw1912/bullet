@@ -369,8 +369,8 @@ impl<D: Device> Graph<D> {
                     let size = output_grad.size();
                     let out_grd = &output_grad.buf;
                     assert_eq!(output_size, node.shape.size());
-                    assert_eq!(size, input.size());
                     assert_eq!(output_grad.batch_size(), input.batch_size());
+                    assert_eq!(size, input.size());
                     grd.set_batch_size(output_grad.batch_size())?;
 
                     match unary {
