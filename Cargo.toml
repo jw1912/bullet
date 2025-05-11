@@ -17,7 +17,6 @@ members = [
 ]
 
 [workspace.dependencies]
-bullet_backend = { path = "crates/bullet_backend", version = "0.1.0" }
 bullet_core = { path = "crates/bullet_core", version = "0.1.0" }
 bullet_hip_backend = { path = "crates/bullet_hip_backend", version = "0.1.0" }
 bullet_cuda_backend = { path = "crates/bullet_cuda_backend", version = "0.1.0" }
