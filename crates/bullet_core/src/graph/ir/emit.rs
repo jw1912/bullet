@@ -69,10 +69,8 @@ impl GraphIR {
             let lp = maybe_fmt("(", &fmt.op_paren_fmt, &count);
             let rp = maybe_fmt(")", &fmt.op_paren_fmt, &count);
             let args = op_args(node, &mut orig_shapes, fmt, &count);
-            let btch = node.batched;
-            let grd = node.requires_grad;
 
-            let line = format!("%{id}: {btch}, {grd} = {name}{lp}{args}{rp};");
+            let line = format!("%{id} = {name}{lp}{args}{rp};");
             let l = line.chars().count() - count.load(Ordering::SeqCst);
             max_len = max_len.max(l);
             lines.push((line, l));
@@ -177,7 +175,7 @@ fn op_args(
                 Some(nnz) => format!("Sparse(f32, {nnz})"),
                 None => "Dense(f32)".to_string(),
             };
-            format!("{}, {layout}", shape(node.shape))
+            format!("{}, {}, {}, {}", shape(node.shape), layout, node.requires_grad, node.batched)
         }
     }
 }
