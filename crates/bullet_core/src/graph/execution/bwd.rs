@@ -293,7 +293,15 @@ impl<D: Device> Graph<D> {
                 let i = i.values.sparse()?;
 
                 let v = vals.map(get);
-                let v = if let Some(v) = v.as_ref() { Some(v.values.dense()?) } else { None };
+                let v = if let Some(v) = v.as_ref() {
+                    if v.gradients.is_some() {
+                        return Err(OperationError::UnsupportedOperation);
+                    }
+
+                    Some(v.values.dense()?)
+                } else {
+                    None
+                };
 
                 if let Some(b) = bn {
                     let bs = i.batch_size().unwrap_or(1);

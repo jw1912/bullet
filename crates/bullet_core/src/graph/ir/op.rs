@@ -76,6 +76,7 @@ pub enum GraphIROpErrorType {
     InvalidMatmulDims,
     AnnotatedNodeWithIdAlreadyExists,
     MismatchedBatching,
+    GradientNotSupported,
 }
 
 impl GraphIROp {
@@ -92,17 +93,19 @@ impl GraphIROp {
             ty: MismatchedInputShapes(nodes.iter().map(|&x| x.shape).collect::<Vec<_>>()),
         };
 
+        let err = |ty| GraphIROpError::new(self, ty);
+
         let check_dense_eq = |node: &AnnotatedNode, dense: bool| {
             if get(node).sparse.is_none() == dense {
                 Ok(())
             } else {
-                Err(GraphIROpError::new(self, GraphIROpErrorType::IncorrectDataLayout))
+                Err(err(GraphIROpErrorType::IncorrectDataLayout))
             }
         };
 
         let check_not_batched = |node: &AnnotatedNode| {
             if get(node).batched {
-                Err(GraphIROpError::new(self, GraphIROpErrorType::BatchedInputNotSupported))
+                Err(err(GraphIROpErrorType::BatchedInputNotSupported))
             } else {
                 Ok(())
             }
@@ -112,7 +115,7 @@ impl GraphIROp {
             if let Some(c) = a.matmul(b) {
                 Ok(c)
             } else {
-                Err(GraphIROpError::new(self, GraphIROpErrorType::InvalidMatmulDims))
+                Err(err(GraphIROpErrorType::InvalidMatmulDims))
             }
         };
 
@@ -120,13 +123,13 @@ impl GraphIROp {
             if x.iter().all(|y| get(y).batched == get(x[0]).batched) {
                 Ok(())
             } else {
-                Err(GraphIROpError::new(self, GraphIROpErrorType::MismatchedBatching))
+                Err(err(GraphIROpErrorType::MismatchedBatching))
             }
         };
 
         for node in self.nodes() {
             if node.shape.size() != get(&node).shape.size() {
-                let err = GraphIROpError::new(self, GraphIROpErrorType::InvalidInputShape(node.shape));
+                let err = err(GraphIROpErrorType::InvalidInputShape(node.shape));
                 return Err(GraphIRError::Op(err));
             }
         }
@@ -249,6 +252,10 @@ impl GraphIROp {
                     check_same_batching(&[i, v])?;
                     let nnz = get(i).sparse.unwrap();
                     check &= v.shape.cols() == 1 && v.shape.rows() == nnz.get();
+
+                    if get(v).requires_grad {
+                        return Err(GraphIRError::Op(err(GraphIROpErrorType::GradientNotSupported)));
+                    }
                 }
 
                 ret(check, out, mismatch(&[w, i]))
