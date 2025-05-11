@@ -127,6 +127,14 @@ impl GraphIROp {
             }
         };
 
+        let check_no_grad = |x: &[&AnnotatedNode]| {
+            if x.iter().any(|y| get(y).requires_grad) {
+                Err(err(GraphIROpErrorType::GradientNotSupported))
+            } else {
+                Ok(())
+            }
+        };
+
         for node in self.nodes() {
             if node.shape.size() != get(&node).shape.size() {
                 let err = err(GraphIROpErrorType::InvalidInputShape(node.shape));
@@ -176,6 +184,7 @@ impl GraphIROp {
             Gather(input, mask) => {
                 check_dense_eq(input, true)?;
                 check_dense_eq(mask, false)?;
+                check_no_grad(&[mask])?;
 
                 let valid = input.shape.cols() == 1 && mask.shape.cols() == 1;
                 ret(valid, mask.shape, mismatch(&[input, mask]))
@@ -189,6 +198,7 @@ impl GraphIROp {
             Mask(input, mask) => {
                 check_dense_eq(input, true)?;
                 check_dense_eq(mask, false)?;
+                check_no_grad(&[mask])?;
 
                 ret(input.shape == mask.shape, input.shape, mismatch(&[input, mask]))
             }
@@ -238,6 +248,7 @@ impl GraphIROp {
                 check_dense_eq(w, true)?;
                 check_dense_eq(i, false)?;
                 check_not_batched(w)?;
+                check_no_grad(&[i])?;
 
                 if let Some(b) = b {
                     check_dense_eq(b, true)?;
@@ -250,12 +261,9 @@ impl GraphIROp {
                 if let Some(v) = v {
                     check_dense_eq(v, true)?;
                     check_same_batching(&[i, v])?;
+                    check_no_grad(&[v])?;
                     let nnz = get(i).sparse.unwrap();
                     check &= v.shape.cols() == 1 && v.shape.rows() == nnz.get();
-
-                    if get(v).requires_grad {
-                        return Err(GraphIRError::Op(err(GraphIROpErrorType::GradientNotSupported)));
-                    }
                 }
 
                 ret(check, out, mismatch(&[w, i]))
@@ -266,6 +274,7 @@ impl GraphIROp {
                 check_dense_eq(n, false)?;
                 check_not_batched(w)?;
                 check_same_batching(&[s, n])?;
+                check_no_grad(&[s, n])?;
 
                 let out = check_matmul(w.shape, s.shape)?;
                 let mut valid = s.shape == n.shape;
@@ -288,6 +297,8 @@ impl GraphIROp {
             MaskedSoftmaxCrossEntropyLoss(mask, input, target) => {
                 check_dense_eq(input, true)?;
                 check_dense_eq(target, true)?;
+                check_dense_eq(mask, false)?;
+                check_no_grad(&[mask, target])?;
                 let is = input.shape;
                 let valid = get(mask).sparse.unwrap().get() == target.shape.rows()
                     && mask.shape == is
