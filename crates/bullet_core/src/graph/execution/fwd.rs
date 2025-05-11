@@ -39,7 +39,7 @@ impl<D: Device> Graph<D> {
                 let bs = i.batch_size().unwrap_or(1);
                 setup_ones(w.buf.device(), internal, bs)?;
                 let ones = &internal.get("ones").unwrap().borrow().buf;
-                matmul::affine(w, wn.shape, i, inp.shape, b, bn.shape, ones, output)
+                matmul::affine(w, wn.shape, i, inp.shape, b, ones, output)
             }
             Copy(node, _) => {
                 assert_eq!(node.shape.size(), output.single_size);
