@@ -56,6 +56,7 @@ pub struct TrainerBuilder<T: SparseInputType, U, O = optimiser::AdamW> {
     output_bucket_ft_biases: bool,
     profile_ft: bool,
     compile_args: GraphCompileArgs,
+    quant_round: bool,
 }
 
 impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutputBuckets, O> {
@@ -77,6 +78,7 @@ impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutpu
             output_bucket_ft_biases: false,
             profile_ft: false,
             compile_args: GraphCompileArgs::default(),
+            quant_round: false,
         }
     }
 }
@@ -123,6 +125,12 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
     pub fn advanced_quantisations(mut self, quants: &[QuantTarget]) -> Self {
         assert!(self.quantisations.is_none(), "Quantisations already set!");
         self.quantisations = Some(quants.to_vec());
+        self
+    }
+
+    /// Round rather than truncate when quantising.
+    pub fn round_in_quantisation(mut self) -> Self {
+        self.quant_round = true;
         self
     }
 
@@ -266,6 +274,7 @@ impl<T: SparseInputType, O: OptimiserType> TrainerBuilder<T, NoOutputBuckets, O>
             output_bucket_ft_biases: self.output_bucket_ft_biases,
             profile_ft: self.profile_ft,
             compile_args: self.compile_args,
+            quant_round: self.quant_round,
         }
     }
 }
@@ -306,8 +315,16 @@ where
             (QuantTarget::Float, QuantTarget::Float)
         };
 
-        saved_format.push(SavedFormat::new(&w, wquant, layout));
-        saved_format.push(SavedFormat::new(&b, bquant, Layout::Normal));
+        let mut wfmt = SavedFormat::new(&w, wquant, layout);
+        let mut bfmt = SavedFormat::new(&b, bquant, Layout::Normal);
+
+        if self.quant_round {
+            wfmt = wfmt.round();
+            bfmt = bfmt.round();
+        }
+
+        saved_format.push(wfmt);
+        saved_format.push(bfmt);
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U::Inner> {
