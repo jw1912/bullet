@@ -18,13 +18,11 @@ pub fn affine<D: Device>(
     b: &DenseMatrix<D>,
     shape_b: Shape,
     c: &DenseMatrix<D>,
-    shape_c: Shape,
     ones: &D::BufferF32,
     out: &mut DenseMatrix<D>,
 ) -> Result<(), OperationError<D::DeviceError>> {
     let output_shape = shape_a * shape_b;
     assert_eq!(output_shape.size(), c.single_size());
-    assert_eq!(output_shape, shape_c);
     assert!(c.batch_size().is_none());
 
     matmul(a, shape_a, false, b, shape_b, false, out)?;
