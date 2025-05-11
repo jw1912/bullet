@@ -143,8 +143,11 @@ impl GraphIROp {
                 check_not_batched(w)?;
                 check_not_batched(b)?;
 
-                let out = check_matmul(w.shape, i.shape)?;
-                ret(out == b.shape, out, mismatch(&[w, i]))
+                // N.B:
+                // y = A.matmul(x).reshape(b.shape) + b -> mm_shape != b.shape
+                // y = A.matmul(x) + b2.reshape(mm_shape) -> mm_shape == b.shape
+                let mm_shape = check_matmul(w.shape, i.shape)?;
+                ret(mm_shape.size() == b.shape.size(), b.shape, mismatch(&[w, i]))
             }
             Concat(a, b) => {
                 check_dense_eq(a, true)?;
