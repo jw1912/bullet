@@ -402,4 +402,18 @@ impl<'a> Affine<'a> {
     ) -> GraphBuilderNode<'a> {
         self.forward(stm).concat(self.forward(ntm)).activate(activation)
     }
+
+    pub fn forward_sparse_with_values(
+        self,
+        stm: GraphBuilderNode<'a>,
+        vals: GraphBuilderNode<'a>,
+    ) -> GraphBuilderNode<'a> {
+        stm.builder.apply(GraphIROp::SparseAffineActivate(
+            self.weights.node,
+            stm.node,
+            Some(vals.node),
+            Some(self.bias.node),
+            DiffableFromOutput::Identity,
+        ))
+    }
 }
