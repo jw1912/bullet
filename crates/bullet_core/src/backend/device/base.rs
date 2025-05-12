@@ -7,12 +7,8 @@ pub struct AdamConfig {
     pub gradient_factor: f32,
     pub learning_rate: f32,
     pub denom: bool,
-}
-
-impl AdamConfig {
-    pub fn new(beta1: f32, beta2: f32, gradient_factor: f32, learning_rate: f32, denom: bool) -> Self {
-        Self { beta1, beta2, gradient_factor, learning_rate, denom }
-    }
+    pub decay: f32,
+    pub clip: Option<(f32, f32)>,
 }
 
 pub trait BaseOperations {

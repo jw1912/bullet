@@ -8,35 +8,37 @@ use crate::backend::{
     tensor::DenseMatrix,
 };
 
-use super::{
-    clip::{WeightClipping, WeightClippingParams},
-    decay::{WeightDecay, WeightDecayParams},
-    utils::{self, Placement},
-    OptimiserState, WrapOptimiser,
-};
+use super::{utils, OptimiserState};
 
 #[derive(Clone, Copy, Debug)]
-pub struct AdamParams {
+pub struct AdamWParams {
+    pub decay: f32,
     pub beta1: f32,
     pub beta2: f32,
+    pub min_weight: f32,
+    pub max_weight: f32,
 }
 
-impl Default for AdamParams {
+impl Default for AdamWParams {
     fn default() -> Self {
-        Self { beta1: 0.9, beta2: 0.999 }
+        Self { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 }
     }
 }
 
-pub struct Adam<D: Device> {
+pub struct AdamW<D: Device> {
     momentum: DenseMatrix<D>,
     velocity: DenseMatrix<D>,
-    params: AdamParams,
+    params: AdamWParams,
 }
 
-impl<D: Device> OptimiserState<D> for Adam<D> {
-    type Params = AdamParams;
+impl<D: Device> OptimiserState<D> for AdamW<D> {
+    type Params = AdamWParams;
 
     fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Result<Self, D::DeviceError> {
+        if default_params.max_weight < default_params.min_weight {
+            return Err(D::DeviceError::default());
+        }
+
         Ok(Self {
             momentum: DenseMatrix::zeroed(device.clone(), size)?,
             velocity: DenseMatrix::zeroed(device, size)?,
@@ -57,7 +59,19 @@ impl<D: Device> OptimiserState<D> for Adam<D> {
         assert_eq!(weights.size(), self.momentum.size());
         assert_eq!(weights.size(), self.velocity.size());
 
-        let cfg = AdamConfig::new(self.params.beta1, self.params.beta2, gradient_factor, learning_rate, true);
+        let (min, max) = (self.params.min_weight, self.params.max_weight);
+        let clip = (min != max).then_some((min, max));
+
+        let cfg = AdamConfig {
+            beta1: self.params.beta1,
+            beta2: self.params.beta2,
+            gradient_factor,
+            learning_rate,
+            denom: true,
+            decay: 1.0 - self.params.decay * learning_rate,
+            clip,
+        };
+
         weights.buf.adam(&cfg, weights.size(), &grads.buf, &mut self.momentum.buf, &mut self.velocity.buf)?;
 
         Ok(())
@@ -100,38 +114,5 @@ impl<D: Device> OptimiserState<D> for Adam<D> {
 
     fn set_params(&mut self, params: Self::Params) {
         self.params = params;
-    }
-}
-
-type AdamWClip<D> = WeightClipping<WeightDecay<Adam<D>>>;
-pub type AdamW<D> = WrapOptimiser<AdamWClip<D>, AdamWParams>;
-
-#[derive(Clone, Copy, Debug)]
-pub struct AdamWParams {
-    pub decay: f32,
-    pub beta1: f32,
-    pub beta2: f32,
-    pub min_weight: f32,
-    pub max_weight: f32,
-}
-
-impl Default for AdamWParams {
-    fn default() -> Self {
-        Self { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 }
-    }
-}
-
-impl From<AdamWParams> for WeightClippingParams<WeightDecayParams<AdamParams>> {
-    fn from(value: AdamWParams) -> Self {
-        WeightClippingParams {
-            inner: WeightDecayParams {
-                inner: AdamParams { beta1: value.beta1, beta2: value.beta2 },
-                decay: value.decay,
-                placement: Placement::Before,
-            },
-            min: value.min_weight,
-            max: value.max_weight,
-            placement: Placement::After,
-        }
     }
 }

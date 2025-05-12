@@ -79,13 +79,16 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
             1.0 / denom
         };
 
-        let cfg = AdamConfig::new(
-            self.params.beta1,
-            self.params.beta2,
+        let cfg = AdamConfig {
+            beta1: self.params.beta1,
+            beta2: self.params.beta2,
             gradient_factor,
-            learning_rate * step_size,
-            n_sma > params.n_sma_threshold,
-        );
+            learning_rate: learning_rate * step_size,
+            denom: n_sma > params.n_sma_threshold,
+            clip: None,
+            decay: 1.0,
+        };
+
         weights.buf.adam(&cfg, weights.size(), &grads.buf, &mut self.momentum.buf, &mut self.velocity.buf)?;
 
         Ok(())

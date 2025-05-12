@@ -254,6 +254,7 @@ impl BaseOperations for CudaBuffer<f32> {
         offset_a: usize,
         stride_a: usize,
     ) -> Result<(), Self::BaseError> {
+        println!("WARNING UNIMPLEMENTED OPERATION");
         Ok(())
     }
 
@@ -285,6 +286,8 @@ impl BaseOperations for CudaBuffer<f32> {
     ) -> Result<(), Self::BaseError> {
         let func = self.device.module.load_function("AdamKernel").map_err(CudaError::Driver)?;
 
+        let (min, max) = config.clip.unwrap_or((1.0, 1.0));
+
         unsafe {
             self.device
                 .stream
@@ -294,6 +297,9 @@ impl BaseOperations for CudaBuffer<f32> {
                 .arg(&config.beta2)
                 .arg(&config.gradient_factor)
                 .arg(&config.learning_rate)
+                .arg(&config.decay)
+                .arg(&min)
+                .arg(&max)
                 .arg(&config.denom)
                 .arg(&mut self.buf.slice_mut(0..size))
                 .arg(&mut mom.buf.slice_mut(0..size))
