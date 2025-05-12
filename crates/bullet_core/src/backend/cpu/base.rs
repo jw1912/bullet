@@ -210,13 +210,15 @@ impl BaseOperations for CpuBuffer<f32> {
         mom: &mut Self,
         vel: &mut Self,
     ) -> Result<(), Self::BaseError> {
-        let AdamConfig { beta1, beta2, gradient_factor, learning_rate, denom } = *config;
+        let AdamConfig { beta1, beta2, gradient_factor, learning_rate, denom, decay, clip } = *config;
         for (((p, &g), m), v) in self.buf[..size]
             .iter_mut()
             .zip(grd.buf[..size].iter())
             .zip(mom.buf[..size].iter_mut())
             .zip(vel.buf[..size].iter_mut())
         {
+            *p *= decay;
+
             let grad = gradient_factor * g;
             *m = beta1 * *m + (1.0 - beta1) * grad;
             *v = beta2 * *v + (1.0 - beta2) * grad * grad;
@@ -227,6 +229,10 @@ impl BaseOperations for CpuBuffer<f32> {
             }
 
             *p -= learning_rate * val;
+
+            if let Some((min, max)) = clip {
+                *p = (*p).clamp(min, max);
+            }
         }
 
         Ok(())

@@ -5,12 +5,17 @@ __device__ __forceinline__ void adamOp(
     const float beta2,
     const float adj,
     const float rate,
+    const float decay,
+    const float wmin,
+    const float wmax,
     const bool denom,
     float* p,
     float* m,
     float* v,
     const float* g)
 {
+    p[0] *= decay;
+
     const float grad = adj * g[0];
     m[0] = beta1 * m[0] + (1.0F - beta1) * grad;
     v[0] = beta2 * v[0] + (1.0F - beta2) * grad * grad;
@@ -18,6 +23,8 @@ __device__ __forceinline__ void adamOp(
     float val = m[0];
     if (denom) val /= sqrt(v[0]) + Epsilon;
     p[0] -= rate * val;
+
+    p[0] = min(max(p[0], wmin), wmax);
 }
 
 __global__ void AdamKernel(
@@ -26,6 +33,9 @@ __global__ void AdamKernel(
     const float beta2,
     const float adj,
     const float rate,
+    const float decay,
+    const float min,
+    const float max,
     const bool denom,
     float* network,
     float* momentum,
@@ -41,10 +51,10 @@ __global__ void AdamKernel(
         float4 v = ((float4 *)velocity)[tid];
         const float4 g = ((const float4 *)gradients)[tid];
 
-        adamOp(beta1, beta2, adj, rate, denom, &p.x, &m.x, &v.x, &g.x);
-        adamOp(beta1, beta2, adj, rate, denom, &p.y, &m.y, &v.y, &g.y);
-        adamOp(beta1, beta2, adj, rate, denom, &p.z, &m.z, &v.z, &g.z);
-        adamOp(beta1, beta2, adj, rate, denom, &p.w, &m.w, &v.w, &g.w);
+        adamOp(beta1, beta2, adj, rate, decay, min, max, denom, &p.x, &m.x, &v.x, &g.x);
+        adamOp(beta1, beta2, adj, rate, decay, min, max, denom, &p.y, &m.y, &v.y, &g.y);
+        adamOp(beta1, beta2, adj, rate, decay, min, max, denom, &p.z, &m.z, &v.z, &g.z);
+        adamOp(beta1, beta2, adj, rate, decay, min, max, denom, &p.w, &m.w, &v.w, &g.w);
 
         ((float4 *)network)[tid] = p;
         ((float4 *)momentum)[tid] = m;
@@ -55,7 +65,7 @@ __global__ void AdamKernel(
         for (int32_t i = 0; i < size - 4 * tid; i++)
         {
             const int32_t j = 4 * tid + i;
-            adamOp(beta1, beta2, adj, rate, denom, &network[j], &momentum[j], &velocity[j], &gradients[j]);
+            adamOp(beta1, beta2, adj, rate, decay, min, max, denom, &network[j], &momentum[j], &velocity[j], &gradients[j]);
         }
     }
 }
@@ -91,6 +101,9 @@ extern "C" void Adam(
     const float adj,
     const float rate,
     const bool denom,
+    const float decay,
+    const float min,
+    const float max,
     float* network,
     float* momentum,
     float* velocity,
@@ -105,6 +118,9 @@ extern "C" void Adam(
         beta2,
         adj,
         rate,
+        decay,
+        min,
+        max,
         denom,
         network,
         momentum,

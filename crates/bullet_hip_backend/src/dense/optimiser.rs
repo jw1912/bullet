@@ -1,4 +1,4 @@
-use bullet_core::backend::device::DeviceBuffer;
+use bullet_core::backend::device::{base::AdamConfig, DeviceBuffer};
 
 use crate::{
     backend::{ops, Buffer},
@@ -12,24 +12,25 @@ pub fn adam(
     gradient: &Buffer<f32>,
     momentum: &mut Buffer<f32>,
     velocity: &mut Buffer<f32>,
-    beta1: f32,
-    beta2: f32,
-    gradient_factor: f32,
-    learning_rate: f32,
-    denom: bool,
+    config: &AdamConfig,
 ) -> Result<(), DeviceError> {
     if size > params.size() || size > gradient.size() || size > momentum.size() || size > velocity.size() {
         return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
+    let (min, max) = config.clip.unwrap_or((0.0, 0.0));
+
     unsafe {
         ops::Adam(
             size,
-            beta1,
-            beta2,
-            gradient_factor,
-            learning_rate,
-            denom,
+            config.beta1,
+            config.beta2,
+            config.gradient_factor,
+            config.learning_rate,
+            config.denom,
+            config.decay,
+            min,
+            max,
             params.mut_ptr(),
             momentum.mut_ptr(),
             velocity.mut_ptr(),

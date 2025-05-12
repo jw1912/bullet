@@ -203,8 +203,7 @@ impl BaseOperations for Buffer<f32> {
         mom: &mut Self,
         vel: &mut Self,
     ) -> Result<(), Self::BaseError> {
-        let AdamConfig { beta1, beta2, gradient_factor, learning_rate, denom } = *config;
-        dense::adam(size, self, grd, mom, vel, beta1, beta2, gradient_factor, learning_rate, denom)
+        dense::adam(size, self, grd, mom, vel, config)
     }
 
     fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {

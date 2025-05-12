@@ -91,7 +91,15 @@ impl CpuThread {
     }
 
     pub fn compare_adam<D: Device>(device: Arc<D>) {
-        let config = AdamConfig::new(0.9, 0.999, 0.1, 0.001, true);
+        let config = AdamConfig {
+            beta1: 0.9,
+            beta2: 0.999,
+            gradient_factor: 0.1,
+            learning_rate: 0.001,
+            denom: true,
+            decay: 0.5,
+            clip: Some((-1.0, 1.0)),
+        };
         for size in [13, 34, 1023, 1027] {
             print!("adam size={size}... ");
             display_passed(base_op_equal(device.clone(), size, BaseOp::Adam(config), true));
