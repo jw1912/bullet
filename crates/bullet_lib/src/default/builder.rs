@@ -48,6 +48,7 @@ pub struct TrainerBuilder<T: SparseInputType, U, O = optimiser::AdamW> {
     nodes: Vec<NodeType>,
     quantisations: Option<Vec<QuantTarget>>,
     perspective: bool,
+    use_win_rate_model: Option<f32>,
     loss: Loss,
     optimiser: O,
     psqt_subnet: bool,
@@ -70,6 +71,7 @@ impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutpu
             nodes: Vec::new(),
             quantisations: None,
             perspective: true,
+            use_win_rate_model: None,
             loss: Loss::None,
             optimiser: O::default(),
             psqt_subnet: false,
@@ -209,6 +211,11 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
         self.add(size, OpType::PairwiseMul)
     }
 
+    pub fn use_win_rate_model(mut self, scale: f32) -> Self {
+        self.use_win_rate_model = Some(scale);
+        self
+    }
+
     /// Applies the given activation function.
     pub fn activate(self, activation: Activation) -> Self {
         let size = self.get_last_layer_size();
@@ -266,6 +273,7 @@ impl<T: SparseInputType, O: OptimiserType> TrainerBuilder<T, NoOutputBuckets, O>
             nodes: self.nodes,
             quantisations: self.quantisations,
             perspective: self.perspective,
+            use_win_rate_model: self.use_win_rate_model,
             loss: self.loss,
             optimiser: self.optimiser,
             psqt_subnet: self.psqt_subnet,
@@ -446,11 +454,25 @@ where
         let output_node = out.node();
         let output_size = prev_size;
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
-        let raw_loss = match self.loss {
-            Loss::None => panic!("No loss function specified!"),
-            Loss::SigmoidMSE => out.activate(Activation::Sigmoid).squared_error(targets),
-            Loss::SigmoidMPE(power) => out.activate(Activation::Sigmoid).power_error(targets, power),
-            Loss::SoftmaxCrossEntropy => out.softmax_crossentropy_loss(targets),
+
+        let raw_loss = if let Some(scale) = self.use_win_rate_model {
+            let score = (scale / 340.0) * out;
+            let q = score - (270.0 / 340.0);
+            let qm = -score - (270.0 / 340.0);
+            let wdl = 0.5 * (1.0 + q.sigmoid() - qm.sigmoid());
+
+            match self.loss {
+                Loss::SigmoidMSE => wdl.squared_error(targets),
+                Loss::SigmoidMPE(power) => wdl.power_error(targets, power),
+                _ => panic!("Loss fn incompatible with use_win_rate_model!"),
+            }
+        } else {
+            match self.loss {
+                Loss::None => panic!("No loss function specified!"),
+                Loss::SigmoidMSE => out.sigmoid().squared_error(targets),
+                Loss::SigmoidMPE(power) => out.sigmoid().power_error(targets, power),
+                Loss::SoftmaxCrossEntropy => out.softmax_crossentropy_loss(targets),
+            }
         };
 
         if self.weight_getter.is_some() {
@@ -500,6 +522,7 @@ where
             output_getter: self.bucket_getter.inner(),
             blend_getter: self.blend_getter,
             weight_getter: self.weight_getter,
+            use_win_rate_model: self.use_win_rate_model.is_some(),
             output_node,
             additional_inputs: AdditionalTrainerInputs { wdl: output_size == 3 },
             saved_format: saved_format.clone(),
