@@ -48,6 +48,7 @@ fn main() {
                 |_, wdl| wdl,
                 None,
                 false,
+                false,
                 batch,
                 4,
                 0.0,
