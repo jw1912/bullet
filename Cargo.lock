@@ -60,6 +60,7 @@ dependencies = [
  "bulletformat",
  "montyformat",
  "structopt",
+ "viriformat",
 ]
 
 [[package]]
