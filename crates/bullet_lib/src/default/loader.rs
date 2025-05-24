@@ -3,7 +3,7 @@ mod montybinpack;
 mod rng;
 mod sfbinpack;
 mod text;
-mod viribinpack;
+pub mod viribinpack;
 
 use bullet_core::backend::device::OperationError;
 use bulletformat::BulletFormat;

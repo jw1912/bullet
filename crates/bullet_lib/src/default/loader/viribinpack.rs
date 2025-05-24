@@ -8,23 +8,38 @@ use crate::{default::loader::DataLoader, game::formats::bulletformat::ChessBoard
 
 use super::rng::SimpleRand;
 
-use viriformat::dataformat::{Filter, Game};
+use viriformat::{
+    chess::{board::Board, chessmove::Move},
+    dataformat::{Filter, Game},
+};
+
+#[derive(Clone)]
+pub enum ViriFilter {
+    Builtin(Filter),
+    Custom(fn(&Board, Move, i16, f32) -> bool),
+}
+
+impl From<Filter> for ViriFilter {
+    fn from(value: Filter) -> Self {
+        Self::Builtin(value)
+    }
+}
 
 #[derive(Clone)]
 pub struct ViriBinpackLoader {
     file_path: [String; 1],
     buffer_size: usize,
     threads: usize,
-    filter: Filter,
+    filter: ViriFilter,
 }
 
 impl ViriBinpackLoader {
-    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: Filter) -> Self {
+    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: impl Into<ViriFilter>) -> Self {
         Self {
             file_path: [path.to_string(); 1],
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
             threads,
-            filter,
+            filter: filter.into(),
         }
     }
 }
@@ -128,7 +143,7 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
     }
 }
 
-fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Game], filter: &Filter) {
+fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Game], filter: &ViriFilter) {
     let chunk_size = games.len().div_ceil(threads);
 
     std::thread::scope(|s| {
@@ -147,15 +162,33 @@ fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &
     });
 }
 
-fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &Filter) {
-    game.splat_to_bulletformat(
-        |board| {
-            buffer.push(board);
-            Ok(())
-        },
-        filter,
-    )
-    .unwrap();
+fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFilter) {
+    match filter {
+        ViriFilter::Builtin(filter) => {
+            game.splat_to_bulletformat(
+                |board| {
+                    buffer.push(board);
+                    Ok(())
+                },
+                filter,
+            )
+            .unwrap();
+        }
+        ViriFilter::Custom(filter) => {
+            let (mut board, _, wdl, _) = game.initial_position.unpack();
+            let outcome = 0.5 * f32::from(wdl);
+
+            for (mv, eval) in &game.moves {
+                let eval = eval.get();
+                if filter(&board, *mv, eval, outcome) {
+                    let bulletformat = board.to_bulletformat(wdl, eval).unwrap();
+                    buffer.push(bulletformat);
+                }
+
+                board.make_move_simple(*mv);
+            }
+        }
+    }
 }
 
 fn shuffle(data: &mut [ChessBoard]) {
