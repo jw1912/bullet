@@ -526,9 +526,9 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "viriformat"
-version = "1.0.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb427f2d6659a6de6332dd14787ea5534954f9eb583567e774ac7c6a626413e2"
+checksum = "872cedc83d2636c82eb3e8cb2a49164108e02fad8add95e26d80d3ccc23268fe"
 dependencies = [
  "anyhow",
  "arrayvec",
