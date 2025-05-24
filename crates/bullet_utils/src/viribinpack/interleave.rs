@@ -36,7 +36,8 @@ impl InterleaveOptions {
             total_input_file_size += count;
 
             if count > 0 {
-                let fname = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "<unknown>".into());
+                let fname =
+                    path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "<unknown>".into());
                 streams.push((count, BufReader::new(file), fname));
                 total += count;
             }

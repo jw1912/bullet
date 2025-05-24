@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use viriformat::dataformat::Game;
 use structopt::StructOpt;
+use viriformat::dataformat::Game;
 
 #[derive(StructOpt)]
 pub struct CountOptions {
