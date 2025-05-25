@@ -10,7 +10,7 @@ use super::rng::SimpleRand;
 
 use viriformat::{
     chess::{board::Board, chessmove::Move},
-    dataformat::{Filter, Game},
+    dataformat::{Filter, Game, WDL},
 };
 
 #[derive(Clone)]
@@ -175,18 +175,25 @@ fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFil
             .unwrap();
         }
         ViriFilter::Custom(filter) => {
-            let (mut board, _, wdl, _) = game.initial_position.unpack();
-            let outcome = 0.5 * f32::from(wdl);
-
-            for (mv, eval) in &game.moves {
-                let eval = eval.get();
-                if filter(&board, *mv, eval, outcome) {
-                    let bulletformat = board.to_bulletformat(wdl, eval).unwrap();
-                    buffer.push(bulletformat);
-                }
-
-                board.make_move_simple(*mv);
-            }
+            game.splat_to_bulletformat_with_filter_callback(
+                |board| {
+                    buffer.push(board);
+                    Ok(())
+                },
+                |mv, eval, board, wdl, _| {
+                    !filter(
+                        board,
+                        mv,
+                        eval as i16,
+                        match wdl {
+                            WDL::Win => 1.0,
+                            WDL::Draw => 0.5,
+                            WDL::Loss => 0.0,
+                        },
+                    )
+                },
+            )
+            .unwrap();
         }
     }
 }

@@ -4,6 +4,7 @@ mod interleave;
 mod montybinpack;
 mod shuffle;
 mod validate;
+mod viribinpack;
 
 use structopt::StructOpt;
 
@@ -15,6 +16,7 @@ pub enum Options {
     Validate(validate::ValidateOptions),
     BucketCount(count_buckets::ValidateOptions),
     Montybinpack(montybinpack::MontyBinpackOptions),
+    Viribinpack(viribinpack::ViriBinpackOptions),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -25,6 +27,7 @@ fn main() -> anyhow::Result<()> {
         Options::Validate(options) => options.run(),
         Options::BucketCount(options) => options.run(),
         Options::Montybinpack(options) => options.run(),
+        Options::Viribinpack(options) => options.run(),
     }
 }
 
