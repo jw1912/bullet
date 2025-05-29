@@ -1,6 +1,22 @@
+#![deprecated(note = "Merged kings can be done in postprocessing!")]
+
 use bulletformat::ChessBoard;
 
-use super::{get_num_buckets, Chess768, Factorises, SparseInputType};
+use super::{get_num_buckets, Chess768, Factorised, Factorises, SparseInputType};
+
+pub type ChessBucketsMergedKingsFactorised = Factorised<ChessBucketsMergedKings, Chess768>;
+impl ChessBucketsMergedKingsFactorised {
+    pub fn new(buckets: [usize; 64]) -> Self {
+        Self::from_parts(ChessBucketsMergedKings::new(buckets), Chess768)
+    }
+}
+
+pub type ChessBucketsMergedKingsMirroredFactorised = Factorised<ChessBucketsMergedKingsMirrored, Chess768>;
+impl ChessBucketsMergedKingsMirroredFactorised {
+    pub fn new(buckets: [usize; 32]) -> Self {
+        Self::from_parts(ChessBucketsMergedKingsMirrored::new(buckets), Chess768)
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct ChessBucketsMergedKings {
