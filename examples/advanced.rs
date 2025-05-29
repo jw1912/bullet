@@ -1,6 +1,6 @@
 use bullet_lib::{
     game::{
-        inputs::{Chess768, SparseInputType},
+        inputs::{ChessBucketsMirrored, SparseInputType},
         outputs::MaterialCount,
     },
     nn::{optimiser::AdamW, InitSettings, Shape},
@@ -16,11 +16,22 @@ const HL_SIZE: usize = 512;
 const OUTPUT_BUCKETS: usize = 8;
 
 fn main() {
-    let inputs = Chess768;
+    #[rustfmt::skip]
+    let inputs = ChessBucketsMirrored::new([
+        0, 0, 0, 0,
+        1, 1, 1, 1,
+        2, 2, 2, 2,
+        2, 2, 2, 2,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+        3, 3, 3, 3,
+    ]);
     let num_inputs = inputs.num_inputs();
 
     let save_format = [
-        SavedFormat::id("pst").quantise::<i16>(255),
+        // factoriser weights need to be merged
+        SavedFormat::id("l0f").quantise::<i16>(255),
         SavedFormat::id("l0w").quantise::<i16>(255),
         SavedFormat::id("l0b").quantise::<i16>(255),
         SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
@@ -37,18 +48,26 @@ fn main() {
         .output_buckets(MaterialCount::<OUTPUT_BUCKETS>)
         .optimiser(AdamW)
         .save_format(&save_format)
-        .loss_fn(|output, targets| output.sigmoid().squared_error(targets))
-        .build(|builder, stm, ntm, buckets| {
-            let l0 = builder.new_affine("l0", num_inputs, HL_SIZE);
+        .build_custom(|builder, (stm, ntm, buckets), targets| {
+            // factorise first layer weights
+            let num_buckets = num_inputs / 768;
+            let l0f = builder.new_weights("l0f", Shape::new(HL_SIZE * 768, 1), InitSettings::Zeroed);
+            let ones = builder.new_constant(Shape::new(1, num_buckets), &vec![1.0; num_buckets]);
+            let expanded_factoriser = l0f.matmul(ones).reshape(Shape::new(HL_SIZE, num_inputs));
+            let mut l0 = builder.new_affine("l0", num_inputs, HL_SIZE);
+            l0.weights = l0.weights + expanded_factoriser;
+
+            // initialise layerstack
             let l1 = builder.new_affine("l1", HL_SIZE, OUTPUT_BUCKETS * 16);
             let l2 = builder.new_affine("l2", 30, OUTPUT_BUCKETS * 32);
             let l3 = builder.new_affine("l3", 32, OUTPUT_BUCKETS);
-            let pst = builder.new_weights("pst", Shape::new(1, num_inputs), InitSettings::Zeroed);
 
+            // first layer inference
             let stm_subnet = l0.forward(stm).crelu().pairwise_mul();
             let ntm_subnet = l0.forward(ntm).crelu().pairwise_mul();
             let mut out = stm_subnet.concat(ntm_subnet);
 
+            // layerstack inference
             out = l1.forward(out).select(buckets);
 
             let skip_neuron = out.slice_rows(15, 16);
@@ -60,8 +79,13 @@ fn main() {
             out = l2.forward(out).select(buckets).screlu();
             out = l3.forward(out).select(buckets);
 
-            let pst_out = (pst.matmul(stm) - pst.matmul(ntm)) / 2.0;
-            out + skip_neuron + pst_out
+            // network output
+            out = out + skip_neuron;
+
+            // squared error loss
+            let loss = out.sigmoid().squared_error(targets);
+
+            (out, loss)
         });
 
     let schedule = TrainingSchedule {
