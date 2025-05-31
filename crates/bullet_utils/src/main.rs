@@ -1,5 +1,6 @@
 mod convert;
 mod count_buckets;
+mod graph;
 mod interleave;
 mod montybinpack;
 mod shuffle;
@@ -17,6 +18,7 @@ pub enum Options {
     BucketCount(count_buckets::ValidateOptions),
     Montybinpack(montybinpack::MontyBinpackOptions),
     Viribinpack(viribinpack::ViriBinpackOptions),
+    Graph(graph::GraphOptions),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -28,6 +30,7 @@ fn main() -> anyhow::Result<()> {
         Options::BucketCount(options) => options.run(),
         Options::Montybinpack(options) => options.run(),
         Options::Viribinpack(options) => options.run(),
+        Options::Graph(options) => options.run(),
     }
 }
 

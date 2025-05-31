@@ -14,3 +14,4 @@ montyformat = { workspace = true }
 structopt = "0.3.26"
 anyhow = "1.0.86"
 viriformat = "1.2.0"
+plotters = "0.3.7"
