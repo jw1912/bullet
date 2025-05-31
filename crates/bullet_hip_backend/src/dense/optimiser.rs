@@ -18,7 +18,7 @@ pub fn adam(
         return Err(DeviceError::ExpectedIllegalAddressAccess);
     }
 
-    let (min, max) = config.clip.unwrap_or((f32::NEG_INFINITY, f32::INFINITY));
+    let (min, max) = config.clip.unwrap_or((f32::MIN, f32::MAX));
 
     unsafe {
         ops::Adam(
