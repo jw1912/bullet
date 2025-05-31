@@ -18,12 +18,10 @@ pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as Devic
 
 pub mod optimiser {
     use crate::nn::ExecutionContext;
-    use bullet_core::optimiser::{self, clip, decay, radam, utils::Placement, OptimiserState};
-
-    type ClipAndDecay<T> = clip::WeightClipping<decay::WeightDecay<T>>;
+    use bullet_core::optimiser::{self, radam, OptimiserState};
 
     pub type AdamWOptimiser = optimiser::adam::AdamW<ExecutionContext>;
-    pub type RAdamOptimiser = ClipAndDecay<radam::RAdam<ExecutionContext>>;
+    pub type RAdamOptimiser = radam::RAdam<ExecutionContext>;
     pub type RangerOptimiser = optimiser::ranger::Ranger<ExecutionContext>;
     pub use optimiser::{adam::AdamWParams, ranger::RangerParams, Optimiser};
 
@@ -58,19 +56,14 @@ pub mod optimiser {
         pub max_weight: f32,
     }
 
-    type ClipAndDecayParams<T> = clip::WeightClippingParams<decay::WeightDecayParams<T>>;
-
-    impl From<RAdamParams> for ClipAndDecayParams<radam::RAdamParams> {
+    impl From<RAdamParams> for radam::RAdamParams {
         fn from(value: RAdamParams) -> Self {
-            clip::WeightClippingParams {
-                inner: decay::WeightDecayParams {
-                    inner: radam::RAdamParams { beta1: value.beta1, beta2: value.beta2, n_sma_threshold: 5.0 },
-                    placement: Placement::Before,
-                    decay: value.decay,
-                },
-                placement: Placement::After,
-                min: value.min_weight,
-                max: value.max_weight,
+            radam::RAdamParams {
+                beta1: value.beta1,
+                beta2: value.beta2,
+                n_sma_threshold: 5.0,
+                decay: value.decay,
+                clip: Some((value.min_weight, value.max_weight)),
             }
         }
     }
