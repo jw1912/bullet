@@ -75,9 +75,8 @@ fn main() {
         .save_format(&save_format)
         .build_custom(|builder, (stm, ntm, buckets), targets| {
             // input layer factoriser
-            let l0f = builder.new_weights("l0f", Shape::new(hl_size * 768, 1), InitSettings::Zeroed);
-            let ones = builder.new_constant(Shape::new(1, num_buckets), &vec![1.0; num_buckets]);
-            let expanded_factoriser = l0f.matmul(ones).reshape(Shape::new(hl_size, num_inputs));
+            let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);
+            let expanded_factoriser = l0f.repeat(num_buckets);
 
             // input layer weights
             let mut l0 = builder.new_affine("l0", num_inputs, hl_size);
