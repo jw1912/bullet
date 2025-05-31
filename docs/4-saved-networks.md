@@ -14,6 +14,7 @@ If quantisation fails (due to integer overflow), then it will not save the quant
 ## Loading Checkpoints
 
 You can load a preexisting checkpoint into a `trainer: Trainer` by using `trainer.load_from_checkpoint()`.
+You can load just the weights from a checkpoint using `trainer.load_weights_from_file(<checkpoint_path>/optimiser_state/weights.bin)`.
 
 ## Network Layout with `TrainerBuilder`
 
