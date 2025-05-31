@@ -67,10 +67,16 @@ pub trait SparseInputType: Clone + Send + Sync + 'static {
     }
 }
 
-fn get_num_buckets<const N: usize>(arr: &[usize; N]) -> usize {
+pub const fn get_num_buckets<const N: usize>(arr: &[usize; N]) -> usize {
     let mut max = 0;
-    for &val in arr {
-        max = max.max(val)
+    let mut i = 0;
+
+    while i < N {
+        if arr[i] > max {
+            max = arr[i];
+        }
+
+        i += 1;
     }
     max + 1
 }
