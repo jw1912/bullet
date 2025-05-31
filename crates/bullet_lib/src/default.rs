@@ -162,6 +162,10 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         <Self as NetworkTrainer>::load_from_checkpoint(self, path);
     }
 
+    pub fn load_weights_from_file(&mut self, path: &str) {
+        self.optimiser.load_weights_from_file(path).unwrap()
+    }
+
     pub fn save_to_checkpoint(&self, path: &str) {
         <Self as NetworkTrainer>::save_to_checkpoint(self, path);
     }
