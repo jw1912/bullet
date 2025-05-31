@@ -4,9 +4,25 @@
 
 </div>
 
-A domain-specific ML library, generally used for training NNUE-style networks for some of the strongest chess engines in the world.
+A domain-specific ML library, generally used for training NNUE-style networks for many of the strongest chess engines in the world
+due to its best-in-class performance, chess-specific tooling and ease of use.
 
-### Crates
+### Usage for NNUE/Value Network Training
+
+Before attempting to use, check out the [docs](docs/0-contents.md).
+They contain all the main information about building bullet, managing training data and the network output format.
+
+Most people simply clone the repo and edit one of the [examples](/examples) to their taste.
+If you want to create your own example file to ease pulling from upstream, you need to add the example to [`bullet_lib`'s `Cargo.toml`](crates/bullet_lib/Cargo.toml).
+
+Alternatively, import the `bullet_lib` crate with
+```toml
+bullet = { git = "https://github.com/jw1912/bullet", package = "bullet_lib" }
+```
+
+Specific API documentation is covered by Rust's docstrings. You can create local documentations with `cargo doc`.
+
+### Constituent Crates
 
 - **bullet_core**
     - An ML framework that is generic over backends
@@ -33,21 +49,6 @@ A domain-specific ML library, generally used for training NNUE-style networks fo
     - Policy network training for chess with `PolicyTrainer`, see the [policy](examples/extra/policy.rs) example
 - **bullet-utils**
     - Various utilities mostly to do with handling data
-
-### Usage for NNUE/Value Network Training
-
-Before attempting to use, check out the [docs](docs/0-contents.md).
-They contain all the main information about building bullet, managing training data and the network output format.
-
-Most people simply clone the repo and edit one of the [examples](/examples) to their taste.
-If you want to create your own example file to ease pulling from upstream, you need to add the example to [`bullet_lib`'s `Cargo.toml`](crates/bullet_lib/Cargo.toml).
-
-Alternatively, import the `bullet_lib` crate with
-```toml
-bullet = { git = "https://github.com/jw1912/bullet", package = "bullet_lib" }
-```
-
-Specific API documentation is covered by Rust's docstrings.
 
 ### Help/Feedback
 

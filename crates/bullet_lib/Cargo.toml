@@ -53,3 +53,19 @@ path = "../../examples/extra/ataxx.rs"
 [[example]]
 name = "policy"
 path = "../../examples/extra/policy.rs"
+
+[[example]]
+name = "1_simple"
+path = "../../examples/progression/1_simple.rs"
+
+[[example]]
+name = "2_output_buckets"
+path = "../../examples/progression/2_output_buckets.rs"
+
+[[example]]
+name = "3_input_buckets"
+path = "../../examples/progression/3_input_buckets.rs"
+
+[[example]]
+name = "4_multi_layer"
+path = "../../examples/progression/4_multi_layer.rs"
