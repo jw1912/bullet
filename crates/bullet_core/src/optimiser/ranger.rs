@@ -6,10 +6,7 @@ use crate::backend::{
 };
 
 use super::{
-    clip::{WeightClipping, WeightClippingParams},
-    decay::{WeightDecay, WeightDecayParams},
     radam::{RAdam, RAdamParams},
-    utils::Placement,
     OptimiserState, WrapOptimiser,
 };
 
@@ -96,7 +93,7 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
     }
 }
 
-pub type Ranger<D> = WrapOptimiser<WeightClipping<WeightDecay<RangerLookahead<D, RAdam<D>>>>, RangerParams>;
+pub type Ranger<D> = WrapOptimiser<RangerLookahead<D, RAdam<D>>, RangerParams>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RangerParams {
@@ -115,21 +112,18 @@ impl Default for RangerParams {
     }
 }
 
-impl From<RangerParams> for WeightClippingParams<WeightDecayParams<RangerLookaheadParams<RAdamParams>>> {
+impl From<RangerParams> for RangerLookaheadParams<RAdamParams> {
     fn from(value: RangerParams) -> Self {
-        WeightClippingParams {
-            inner: WeightDecayParams {
-                inner: RangerLookaheadParams {
-                    inner: RAdamParams { beta1: value.beta1, beta2: value.beta2, n_sma_threshold: 5.0 },
-                    alpha: value.alpha,
-                    k: value.k,
-                },
-                placement: Placement::Before,
+        RangerLookaheadParams {
+            inner: RAdamParams {
+                beta1: value.beta1,
+                beta2: value.beta2,
+                n_sma_threshold: 5.0,
                 decay: value.decay,
+                clip: Some((value.min_weight, value.max_weight)),
             },
-            placement: Placement::After,
-            min: value.min_weight,
-            max: value.max_weight,
+            alpha: value.alpha,
+            k: value.k,
         }
     }
 }
