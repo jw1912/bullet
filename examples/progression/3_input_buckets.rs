@@ -65,9 +65,8 @@ fn main() {
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
             // input layer factoriser
-            let l0f = builder.new_weights("l0f", Shape::new(hl_size * 768, 1), InitSettings::Zeroed);
-            let ones = builder.new_constant(Shape::new(1, NUM_INPUT_BUCKETS), &[1.0; NUM_INPUT_BUCKETS]);
-            let expanded_factoriser = l0f.matmul(ones).reshape(Shape::new(hl_size, 768 * NUM_INPUT_BUCKETS));
+            let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);
+            let expanded_factoriser = l0f.repeat(NUM_INPUT_BUCKETS);
 
             // input layer weights
             let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);

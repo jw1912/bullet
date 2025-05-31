@@ -332,6 +332,14 @@ impl GraphBuilderNode<'_> {
         self.power_error(targets, power)
     }
 
+    pub fn repeat(self, n: usize) -> Self {
+        let shape = self.node.shape;
+        let ones = self.builder.new_constant(Shape::new(1, n), &vec![1.0; n]);
+        let resh = self.reshape(Shape::new(shape.size(), 1));
+        let reps = resh.matmul(ones);
+        reps.reshape(Shape::new(shape.rows(), shape.cols() * n))
+    }
+
     #[deprecated]
     pub fn mse(self, targets: Self) -> Self {
         self.squared_error(targets)
