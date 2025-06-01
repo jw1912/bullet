@@ -25,8 +25,11 @@ macro_rules! net_id {
 const NET_ID: &str = net_id!();
 
 fn main() {
+    // network hyperparams
+    let hl_size = 1024;
+    const NUM_OUTPUT_BUCKETS: usize = 8;
     #[rustfmt::skip]
-    let inputs = ChessBucketsMirrored::new([
+    const BUCKET_LAYOUT: [usize; 32] = [
         0, 1, 2, 3,
         4, 4, 5, 5,
         6, 6, 6, 6,
@@ -35,41 +38,44 @@ fn main() {
         7, 7, 7, 7,
         7, 7, 7, 7,
         7, 7, 7, 7,
-    ]);
-
-    // network hyperparams
-    let hl_size = 1024;
-    let num_inputs = inputs.num_inputs();
-    let num_buckets = num_inputs / 768;
-    const NUM_OUTPUT_BUCKETS: usize = 8;
+    ];
+    const NUM_INPUT_BUCKETS: usize = 8; //get_num_buckets(&BUCKET_LAYOUT);
 
     let save_format = [
-        // factoriser weights need to be merged
-        SavedFormat::id("l0f").quantise::<i16>(255),
-        SavedFormat::id("l0w").quantise::<i16>(255),
-        SavedFormat::id("l0b").quantise::<i16>(255),
-        SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
-        SavedFormat::id("l1b").quantise::<i16>(64 * 255),
-        SavedFormat::id("l2w").transpose(),
-        SavedFormat::id("l2b"),
-        SavedFormat::id("l3w").transpose(),
-        SavedFormat::id("l3b"),
+        SavedFormat::id("l0w")
+            .add_transform(|builder, _, mut weights| {
+                let factoriser = builder.get_weights("l0f").get_dense_vals().unwrap();
+                let expanded = factoriser.repeat(NUM_INPUT_BUCKETS);
+                for (i, &j) in weights.iter_mut().zip(expanded.iter()) {
+                    *i += j;
+                }
+                weights
+            })
+            .quantise::<i16>(255)
+            .round(),
+        SavedFormat::id("l0b").quantise::<i16>(255).round(),
+        SavedFormat::id("l1w").quantise::<i16>(64).transpose().round(),
+        SavedFormat::id("l1b").quantise::<i16>(64 * 255).round(),
+        SavedFormat::id("l2w").transpose().round(),
+        SavedFormat::id("l2b").round(),
+        SavedFormat::id("l3w").transpose().round(),
+        SavedFormat::id("l3b").round(),
     ];
 
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
-        .inputs(inputs)
+        .inputs(ChessBucketsMirrored::new(BUCKET_LAYOUT))
         .output_buckets(MaterialCount::<8>)
         .optimiser(Ranger)
         .save_format(&save_format)
         .build_custom(|builder, (stm, ntm, buckets), targets| {
             // input layer factoriser
             let l0f = builder.new_weights("l0f", Shape::new(hl_size * 768, 1), InitSettings::Zeroed);
-            let ones = builder.new_constant(Shape::new(1, num_buckets), &vec![1.0; num_buckets]);
-            let expanded_factoriser = l0f.matmul(ones).reshape(Shape::new(hl_size, num_inputs));
+            let ones = builder.new_constant(Shape::new(1, NUM_INPUT_BUCKETS), &vec![1.0; NUM_INPUT_BUCKETS]);
+            let expanded_factoriser = l0f.matmul(ones).reshape(Shape::new(hl_size, 768 * NUM_INPUT_BUCKETS));
 
             // input layer weights
-            let mut l0 = builder.new_affine("l0", num_inputs, hl_size);
+            let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);
             l0.weights = l0.weights + expanded_factoriser;
 
             // layerstack weights
@@ -128,8 +134,8 @@ fn main() {
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 }; // 32
     let data_loader = DirectSequentialDataLoader::new(&["../../chess/data/rescored.data"]);
 
-    //trainer.load_from_checkpoint("checkpoints/...");
-    trainer.run(&schedule, &settings, &data_loader);
+    trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-{num_superbatches}"));
+    //trainer.run(&schedule, &settings, &data_loader);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -144,5 +150,5 @@ fn main() {
         println!("EVAL: {}", 160.0 * eval);
     }
 
-    trainer.save_quantised(&format!("nets/{}.nn", NET_ID)).unwrap();
+    trainer.save_quantised(&format!("nets/{NET_ID}-e{num_superbatches}.nn")).unwrap();
 }
