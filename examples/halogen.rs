@@ -1,8 +1,5 @@
 use bullet_lib::{
-    game::{
-        inputs::{ChessBucketsMirrored, SparseInputType},
-        outputs::MaterialCount,
-    },
+    game::{inputs::ChessBucketsMirrored, outputs::MaterialCount},
     nn::{
         optimiser::{Ranger, RangerParams},
         InitSettings, Shape,
@@ -18,7 +15,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r63-768x8hm-1024-dp-pw-16-32-1x8"
+        "bullet_r64-768x8hm-1024-dp-pw-16-32-1x8"
     };
 }
 
@@ -80,7 +77,7 @@ fn main() {
 
             // layerstack weights
             let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * 16);
-            let l2 = builder.new_affine("l2", 16, NUM_OUTPUT_BUCKETS * 32);
+            let l2 = builder.new_affine("l2", 15, NUM_OUTPUT_BUCKETS * 32);
             let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
 
             // input layer inference
@@ -93,9 +90,12 @@ fn main() {
             let nz_pen = 0.00001 * ones.matmul(out);
 
             // layerstack inference
-            out = l1.forward(out).select(buckets).crelu();
+            out = l1.forward(out).select(buckets);
+            let skip_neuron = out.slice_rows(15, 16);
+            out = out.slice_rows(0, 15);
             out = l2.forward(out).select(buckets).crelu();
             out = l3.forward(out).select(buckets);
+            out = out + skip_neuron;
 
             // squared error loss
             let loss = out.sigmoid().squared_error(targets) + nz_pen;
@@ -134,8 +134,8 @@ fn main() {
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 }; // 32
     let data_loader = DirectSequentialDataLoader::new(&["../../chess/data/rescored.data"]);
 
-    trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-{num_superbatches}"));
-    //trainer.run(&schedule, &settings, &data_loader);
+    //trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-{num_superbatches}"));
+    trainer.run(&schedule, &settings, &data_loader);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
