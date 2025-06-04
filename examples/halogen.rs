@@ -1,5 +1,8 @@
 use bullet_lib::{
-    game::{inputs::ChessBucketsMirrored, outputs::MaterialCount},
+    game::{
+        inputs::{get_num_buckets, ChessBucketsMirrored},
+        outputs::MaterialCount,
+    },
     nn::{
         optimiser::{Ranger, RangerParams},
         InitSettings, Shape,
@@ -15,7 +18,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r64-768x8hm-1024-dp-pw-16-32-1x8"
+        "bullet_r65-768x8hm-1024-dp-pw-16-32-1x8"
     };
 }
 
@@ -36,7 +39,7 @@ fn main() {
         7, 7, 7, 7,
         7, 7, 7, 7,
     ];
-    const NUM_INPUT_BUCKETS: usize = 8; //get_num_buckets(&BUCKET_LAYOUT);
+    const NUM_INPUT_BUCKETS: usize = get_num_buckets(&BUCKET_LAYOUT);
 
     let save_format = [
         SavedFormat::id("l0w")
@@ -67,9 +70,8 @@ fn main() {
         .save_format(&save_format)
         .build_custom(|builder, (stm, ntm, buckets), targets| {
             // input layer factoriser
-            let l0f = builder.new_weights("l0f", Shape::new(hl_size * 768, 1), InitSettings::Zeroed);
-            let ones = builder.new_constant(Shape::new(1, NUM_INPUT_BUCKETS), &vec![1.0; NUM_INPUT_BUCKETS]);
-            let expanded_factoriser = l0f.matmul(ones).reshape(Shape::new(hl_size, 768 * NUM_INPUT_BUCKETS));
+            let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);
+            let expanded_factoriser = l0f.repeat(NUM_INPUT_BUCKETS);
 
             // input layer weights
             let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);
@@ -77,7 +79,7 @@ fn main() {
 
             // layerstack weights
             let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * 16);
-            let l2 = builder.new_affine("l2", 15, NUM_OUTPUT_BUCKETS * 32);
+            let l2 = builder.new_affine("l2", 32, NUM_OUTPUT_BUCKETS * 32);
             let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
 
             // input layer inference
@@ -91,11 +93,9 @@ fn main() {
 
             // layerstack inference
             out = l1.forward(out).select(buckets);
-            let skip_neuron = out.slice_rows(15, 16);
-            out = out.slice_rows(0, 15);
+            out = out.concat(out.abs_pow(2.0)).crelu();
             out = l2.forward(out).select(buckets).crelu();
             out = l3.forward(out).select(buckets);
-            out = out + skip_neuron;
 
             // squared error loss
             let loss = out.sigmoid().squared_error(targets) + nz_pen;
@@ -131,7 +131,7 @@ fn main() {
         save_rate: 100,
     };
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 }; // 32
+    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
     let data_loader = DirectSequentialDataLoader::new(&["../../chess/data/rescored.data"]);
 
     //trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-{num_superbatches}"));
