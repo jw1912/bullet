@@ -56,9 +56,10 @@ fn main() {
 
                     weights
                 })
+                .round()
                 .quantise::<i16>(255),
-            SavedFormat::id("l0b").quantise::<i16>(255),
-            SavedFormat::id("l1w").quantise::<i8>(64).transpose(),
+            SavedFormat::id("l0b").round().quantise::<i16>(255),
+            SavedFormat::id("l1w").round().quantise::<i8>(64).transpose(),
             SavedFormat::id("l1b"),
             SavedFormat::id("l2w").transpose(),
             SavedFormat::id("l2b"),

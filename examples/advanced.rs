@@ -1,7 +1,7 @@
 use bullet_lib::{
     game::{
         formats::bulletformat::ChessBoard,
-        inputs::{ChessBucketsMirrored, SparseInputType},
+        inputs::{get_num_buckets, ChessBucketsMirrored},
         outputs::OutputBuckets,
     },
     nn::{
@@ -34,7 +34,7 @@ impl OutputBuckets<ChessBoard> for CustomOutputBuckets {
 fn main() {
     // king-bucketed inputs
     #[rustfmt::skip]
-    let inputs = ChessBucketsMirrored::new([
+    const BUCKET_LAYOUT: [usize; 32] = [
         0, 1, 2, 3,
         4, 4, 5, 5,
         6, 6, 6, 6,
@@ -43,24 +43,36 @@ fn main() {
         8, 8, 8, 8,
         9, 9, 9, 9,
         9, 9, 9, 9,
-    ]);
+    ];
+
+    const NUM_INPUT_BUCKETS: usize = get_num_buckets(&BUCKET_LAYOUT);
 
     // network hyperparams
     let hl_size = 512;
-    let num_inputs = inputs.num_inputs();
-    let num_buckets = num_inputs / 768;
+    let num_inputs = 768 * NUM_INPUT_BUCKETS;
+    let num_buckets = NUM_INPUT_BUCKETS;
     let num_output_buckets = NUM_OUTPUT_BUCKETS;
 
     assert!(num_buckets > 1, "Factoriser is worthless with only one bucket!");
     assert!(num_output_buckets > 1, "1 output bucket does not make sense!");
 
     let save_format = [
-        // factoriser weights need to be merged
-        SavedFormat::id("l0f").quantise::<i16>(255),
-        SavedFormat::id("l0w").quantise::<i16>(255),
-        SavedFormat::id("l0b").quantise::<i16>(255),
-        SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
-        SavedFormat::id("l1b").quantise::<i16>(64 * 255),
+        SavedFormat::id("l0w")
+            .add_transform(|builder, _, mut weights| {
+                let factoriser = builder.get_weights("l0f").get_dense_vals().unwrap();
+                let expanded = factoriser.repeat(NUM_INPUT_BUCKETS);
+
+                for (i, &j) in weights.iter_mut().zip(expanded.iter()) {
+                    *i += j;
+                }
+
+                weights
+            })
+            .round()
+            .quantise::<i16>(255),
+        SavedFormat::id("l0b").round().quantise::<i16>(255),
+        SavedFormat::id("l1w").round().quantise::<i8>(64).transpose(),
+        SavedFormat::id("l1b"),
         SavedFormat::id("l2w").transpose(),
         SavedFormat::id("l2b"),
         SavedFormat::id("l3w").transpose(),
@@ -69,7 +81,7 @@ fn main() {
 
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
-        .inputs(inputs)
+        .inputs(ChessBucketsMirrored::new(BUCKET_LAYOUT))
         .output_buckets(CustomOutputBuckets)
         .optimiser(AdamW)
         .save_format(&save_format)
