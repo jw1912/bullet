@@ -28,7 +28,7 @@ viriformat = "1.2.0"
 
 [[example]]
 name = "advanced"
-path = "../../examples/advanced.rs"
+path = "../../examples/advanced/main.rs"
 
 [[example]]
 name = "simple"
