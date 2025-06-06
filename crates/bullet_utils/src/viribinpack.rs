@@ -19,7 +19,7 @@ impl ViriBinpackOptions {
             Self::Interleave(options) => options.run(),
             Self::Head(options) => options.run(),
             Self::Count(options) => options.run(),
-            Self::Splat(options) => options.run()
+            Self::Splat(options) => options.run(),
         }
     }
 }
