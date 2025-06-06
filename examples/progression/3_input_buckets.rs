@@ -60,7 +60,7 @@ fn main() {
                 .quantise::<i16>(255),
             SavedFormat::id("l0b").quantise::<i16>(255),
             SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
-            SavedFormat::id("l1b").quantise::<i16>(64),
+            SavedFormat::id("l1b").quantise::<i16>(255 * 64),
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
