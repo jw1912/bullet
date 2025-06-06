@@ -35,7 +35,7 @@ impl SplatOptions {
         let mut games = 0usize;
         let mut positions = 0usize;
 
-        let filter = Filter::from_path(&self.cfg).unwrap_or_default();
+        let filter = Filter::from_path(&self.cfg).unwrap_or(Filter::UNRESTRICTED);
 
         let mut buffer = Vec::new();
 
