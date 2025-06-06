@@ -39,10 +39,6 @@ name = "testnet"
 path = "../../examples/testnet.rs"
 
 [[example]]
-name = "morelayers"
-path = "../../examples/morelayers.rs"
-
-[[example]]
 name = "akimbo-main"
 path = "../../examples/extra/akimbo-main.rs"
 

@@ -45,8 +45,7 @@ Specific API documentation is covered by Rust's docstrings. You can create local
         - Read the [documentation](docs/2-getting-started.md#backends) for more specific instructions
     - Value network training for games with `Trainer`
         - The [simple](examples/simple.rs) example shows ease-of-use in training the simplest NNUE architectures
-        - The [advanced](examples/advanced.rs) example shows how to train flexible value network architectures
-    - Policy network training for chess with `PolicyTrainer`, see the [policy](examples/extra/policy.rs) example
+        - The [progression](examples/progression) examples show how to incrementally improve your NNUE architecture
 - **bullet-utils**
     - Various utilities mostly to do with handling data
 
