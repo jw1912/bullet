@@ -13,4 +13,4 @@ bulletformat = { workspace = true }
 montyformat = { workspace = true }
 structopt = "0.3.26"
 anyhow = "1.0.86"
-viriformat = "1.2.0"
+viriformat = "2.0.0"
