@@ -24,7 +24,7 @@ bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 montyformat = { workspace = true }
 sfbinpack = "0.4.1"
-viriformat = "1.2.0"
+viriformat = "2.0.0"
 
 [[example]]
 name = "advanced"
