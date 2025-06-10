@@ -20,7 +20,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r67-768x8hm-1024-dp-1x8"
+        "bullet_r68-768x8hm-1024-dp-1x8"
     };
 }
 
@@ -109,7 +109,11 @@ fn main() {
         "../../chess/data/training.viri",
         1024,
         4,
-        viribinpack::ViriFilter::Builtin(viriformat::dataformat::Filter::default()),
+        viribinpack::ViriFilter::Builtin(viriformat::dataformat::Filter {
+            min_ply: 0,
+            min_pieces: 0,
+            ..Default::default()
+        }),
     );
 
     trainer.set_optimiser_params(RangerParams::default());
