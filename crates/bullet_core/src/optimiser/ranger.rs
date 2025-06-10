@@ -1,8 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::backend::{
-    device::{Device, OperationError},
-    tensor::DenseMatrix,
+use crate::{
+    backend::{
+        device::{Device, OperationError},
+        tensor::DenseMatrix,
+    },
+    optimiser::utils,
 };
 
 use super::{
@@ -83,11 +86,21 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
         path: &str,
         old_format: bool,
     ) -> Result<(), OperationError<D::DeviceError>> {
+        let slow_params = utils::load_weights_from_file(&format!("{path}/slow.bin"), old_format);
+
+        for (id, par) in &slow_params {
+            let single = map.get_mut(id).unwrap();
+            single.slow_params.load_from_slice(None, par)?;
+        }
+
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.inner)).collect();
         S::load_from_checkpoint(&mut map, path, old_format)
     }
 
     fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::DeviceError> {
+        let slow_params: Vec<_> = map.iter().map(|(id, single)| (id, &single.slow_params)).collect();
+        utils::write_weights_to_file(&slow_params, &format!("{path}/slow.bin"))?;
+
         let map = map.iter().map(|(id, single)| (id.clone(), &single.inner)).collect();
         S::write_to_checkpoint(&map, path)
     }
