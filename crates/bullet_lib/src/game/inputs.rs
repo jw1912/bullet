@@ -20,7 +20,7 @@ pub use chess_buckets_mk::*;
 #[allow(deprecated)]
 pub use legacy::InputType;
 
-#[deprecated(note = "See the `advanced` example for a faster alternative to this.")]
+#[deprecated(note = "See `examples/progression/3_input_buckets.rs` for a faster alternative to this.")]
 pub type ChessBucketsFactorised = Factorised<ChessBuckets, Chess768>;
 
 #[allow(deprecated)]
@@ -30,7 +30,7 @@ impl ChessBucketsFactorised {
     }
 }
 
-#[deprecated(note = "See the `advanced` example for a faster alternative to this.")]
+#[deprecated(note = "See `examples/progression/3_input_buckets.rs` for a faster alternative to this.")]
 pub type ChessBucketsMirroredFactorised = Factorised<ChessBucketsMirrored, Chess768>;
 
 #[allow(deprecated)]

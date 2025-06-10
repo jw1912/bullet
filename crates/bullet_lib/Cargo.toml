@@ -24,11 +24,11 @@ bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 montyformat = { workspace = true }
 sfbinpack = "0.4.1"
-viriformat = "1.2.0"
+viriformat = "2.0.0"
 
 [[example]]
 name = "advanced"
-path = "../../examples/advanced.rs"
+path = "../../examples/advanced/main.rs"
 
 [[example]]
 name = "simple"
@@ -37,10 +37,6 @@ path = "../../examples/simple.rs"
 [[example]]
 name = "testnet"
 path = "../../examples/testnet.rs"
-
-[[example]]
-name = "morelayers"
-path = "../../examples/morelayers.rs"
 
 [[example]]
 name = "akimbo-main"
