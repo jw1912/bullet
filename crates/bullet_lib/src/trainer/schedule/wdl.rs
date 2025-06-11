@@ -73,20 +73,23 @@ impl<WDL: WdlScheduler> WdlScheduler for Warmup<WDL> {
     }
 }
 
-/// Sequence two sub-schedulers, switching over at `crossover_superbatch`
+/// Sequence two sub-schedulers, switching over at `first_scheduler_final_superbatch`
 #[derive(Clone, Debug)]
 pub struct Sequence<First: WdlScheduler, Second: WdlScheduler> {
     pub first: First,
     pub second: Second,
-    pub crossover_superbatch: usize,
+    pub first_scheduler_final_superbatch: usize,
 }
 
 impl<First: WdlScheduler, Second: WdlScheduler> WdlScheduler for Sequence<First, Second> {
     fn blend(&self, batch: usize, superbatch: usize, max: usize) -> f32 {
-        if superbatch < self.crossover_superbatch {
-            return self.first.blend(batch, superbatch, max);
+        let midpoint = self.first_scheduler_final_superbatch;
+
+        if superbatch <= midpoint {
+            self.first.blend(batch, superbatch, midpoint)
+        } else {
+            self.second.blend(batch, superbatch - midpoint, max - midpoint)
         }
-        self.second.blend(batch, superbatch - self.crossover_superbatch, max)
     }
 
     fn colourful(&self) -> String {
@@ -94,7 +97,7 @@ impl<First: WdlScheduler, Second: WdlScheduler> WdlScheduler for Sequence<First,
         format!(
             "{}, then after {} superbatches, {}",
             self.first.colourful(),
-            ansi(self.crossover_superbatch, 32),
+            ansi(self.first_scheduler_final_superbatch, 32),
             self.second.colourful()
         )
     }

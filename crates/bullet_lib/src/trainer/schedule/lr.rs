@@ -188,20 +188,23 @@ impl<LR: LrScheduler> LrScheduler for Warmup<LR> {
     }
 }
 
-/// Sequence two sub-schedulers, switching over at `crossover_superbatch`
+/// Sequence two sub-schedulers, switching over at `first_scheduler_final_superbatch`
 #[derive(Clone, Debug)]
 pub struct Sequence<First: LrScheduler, Second: LrScheduler> {
     pub first: First,
     pub second: Second,
-    pub crossover_superbatch: usize,
+    pub first_scheduler_final_superbatch: usize,
 }
 
 impl<First: LrScheduler, Second: LrScheduler> LrScheduler for Sequence<First, Second> {
     fn lr(&self, batch: usize, superbatch: usize) -> f32 {
-        if superbatch < self.crossover_superbatch {
-            return self.first.lr(batch, superbatch);
+        let midpoint = self.first_scheduler_final_superbatch;
+
+        if superbatch <= midpoint {
+            self.first.lr(batch, superbatch)
+        } else {
+            self.second.lr(batch, superbatch - midpoint)
         }
-        self.second.lr(batch, superbatch - self.crossover_superbatch)
     }
 
     fn colourful(&self) -> String {
@@ -209,7 +212,7 @@ impl<First: LrScheduler, Second: LrScheduler> LrScheduler for Sequence<First, Se
         format!(
             "{}, then after {} superbatches, {}",
             self.first.colourful(),
-            ansi(self.crossover_superbatch, 32),
+            ansi(self.first_scheduler_final_superbatch, 32),
             self.second.colourful()
         )
     }
