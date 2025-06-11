@@ -86,7 +86,7 @@ impl<First: WdlScheduler, Second: WdlScheduler> WdlScheduler for Sequence<First,
         if superbatch < self.crossover_superbatch {
             return self.first.blend(batch, superbatch, self.crossover_superbatch);
         }
-        self.second.blend(batch, superbatch - self.crossover_superbatch, max)
+        self.second.blend(batch, superbatch - self.crossover_superbatch, max - self.crossover_superbatch)
     }
 
     fn colourful(&self) -> String {
