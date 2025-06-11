@@ -84,7 +84,7 @@ pub struct Sequence<First: WdlScheduler, Second: WdlScheduler> {
 impl<First: WdlScheduler, Second: WdlScheduler> WdlScheduler for Sequence<First, Second> {
     fn blend(&self, batch: usize, superbatch: usize, max: usize) -> f32 {
         if superbatch < self.crossover_superbatch {
-            return self.first.blend(batch, superbatch, max);
+            return self.first.blend(batch, superbatch, self.crossover_superbatch);
         }
         self.second.blend(batch, superbatch - self.crossover_superbatch, max)
     }
