@@ -198,7 +198,7 @@ pub struct Sequence<First: LrScheduler, Second: LrScheduler> {
 
 impl<First: LrScheduler, Second: LrScheduler> LrScheduler for Sequence<First, Second> {
     fn lr(&self, batch: usize, superbatch: usize) -> f32 {
-        if superbatch < self.crossover_superbatch {
+        if superbatch <= self.crossover_superbatch {
             return self.first.lr(batch, superbatch);
         }
         self.second.lr(batch, superbatch - self.crossover_superbatch)
