@@ -20,7 +20,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r68-768x8hm-1024-dp-1x8"
+        "bullet_r69-768x8hm-1024-dp-1x8"
     };
 }
 
@@ -103,12 +103,12 @@ fn main() {
         save_rate: 100,
     };
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
+    let settings = LocalSettings { threads: 32, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
 
     let data_loader = ViriBinpackLoader::new(
         "../../chess/data/training.viri",
-        1024,
-        4,
+        1024 * 48,
+        32,
         viribinpack::ViriFilter::Builtin(viriformat::dataformat::Filter {
             min_ply: 0,
             min_pieces: 0,
