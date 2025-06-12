@@ -20,7 +20,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r70-768x8hm-1024-dp-1x8"
+        "bullet_r71-768x8hm-1024-dp-1x8"
     };
 }
 
@@ -98,7 +98,7 @@ fn main() {
             start_superbatch: 1,
             end_superbatch: num_superbatches,
         },
-        wdl_scheduler: wdl::ConstantWDL { value: 0.4 },
+        wdl_scheduler: wdl::ConstantWDL { value: 0.5 },
         lr_scheduler: lr::CosineDecayLR { initial_lr: 0.001, final_lr: 0.0, final_superbatch: num_superbatches },
         save_rate: 100,
     };
@@ -107,7 +107,7 @@ fn main() {
 
     let data_loader = ViriBinpackLoader::new(
         "../../chess/data/training.viri",
-        1024 * 48,
+        1024 * 32,
         4,
         viribinpack::ViriFilter::Builtin(viriformat::dataformat::Filter {
             min_ply: 0,
