@@ -5,14 +5,12 @@ pub mod schedule;
 use std::{sync::mpsc, thread, time::Instant};
 
 use crate::{
-    backend::device::Device,
-    optimiser::{Optimiser, OptimiserState},
-    trainer::schedule::TrainingSchedule,
+    backend::device::{Device, OperationError}, optimiser::{Optimiser, OptimiserState}, trainer::schedule::TrainingSchedule
 };
 
-pub enum TrainerError {
+pub enum TrainerError<D: Device> {
     DataLoadingError,
-    GradientCalculationError,
+    GradientCalculationError(OperationError<D::DeviceError>),
     IoError,
 }
 
@@ -22,7 +20,7 @@ pub struct Trainer<D: Device, O: OptimiserState<D>, S> {
 }
 
 impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
-    pub fn train_custom(&mut self, schedule: TrainingSchedule) -> Result<(), TrainerError> {
+    pub fn train_custom(&mut self, schedule: TrainingSchedule) -> Result<(), TrainerError<D>> {
         logger::clear_colours();
 
         let timer = Instant::now();
@@ -46,9 +44,14 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         let mut running_loss = 0.0;
         let mut superbatch_positions = 0;
 
-        while let Ok(prepared_data) = receiver.recv() {
+        let first_batch = receiver.recv().map_err(|_| TrainerError::DataLoadingError)?;
+
+        let mut batch_queued = true;
+
+        while batch_queued {
             // ignore startup time from loading the first batch of data
-            // because it just poisons the reported pos/sec
+            // because it just poisons the reported pos/sec when reading
+            // from binpacked data
             if superbatch == steps.start_superbatch && curr_batch == 0 {
                 superbatch_timer = Instant::now();
             }
@@ -65,13 +68,31 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
             prev_lr = lrate;
 
-            //let this_batch_size = self.load_batch(&prepared_data);
-            //let gf = 1.0 / this_batch_size as f32;
+            let this_batch_size: usize = 0;
+            let gf = 1.0 / this_batch_size as f32;
 
-            let error = 0.0; //self.train_on_batch(gf, lrate) / this_batch_size as f32;
+            fn step<D: Device, S: OptimiserState<D>>(
+                optim: &mut Optimiser<D, S>,
+                gradient_factor: f32,
+                learning_rate: f32,
+            ) -> Result<(), OperationError<D::DeviceError>> {
+                optim.graph.zero_grads_non_blocking()?;
+                optim.graph.forward_non_blocking()?;
+                optim.graph.backward_non_blocking()?;
+                optim.update(gradient_factor, learning_rate)
+            }
+
+            step(&mut self.optimiser, gf, lrate).map_err(TrainerError::GradientCalculationError)?;
+
+            match receiver.recv() {
+                Ok(_next_batch) => {todo!()},
+                Err(_) => batch_queued = false,
+            }
+
+            let error = self.optimiser.graph.get_output_val().unwrap();
 
             running_loss += error;
-            //superbatch_positions += this_batch_size;
+            superbatch_positions += this_batch_size;
 
             if curr_batch % schedule.log_rate == 0 {
                 logger::report_superbatch_progress(

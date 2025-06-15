@@ -3,7 +3,7 @@
 __global__ void set_kernel(float* buf, int32_t size, float val)
 {
     const int32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-    buf[tid] = val;
+    if (tid < size) buf[tid] = val;
 }
 
 extern "C" void set(float* buf, size_t size, float val)
