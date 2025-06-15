@@ -105,8 +105,8 @@ impl<D: Device> DenseMatrix<D> {
         self.buf.load_from_slice(buf)
     }
 
-    pub fn set_zero(&mut self) -> Result<(), D::DeviceError> {
-        self.buf.set_zero()
+    pub fn set_to(&mut self, val: f32) -> Result<(), D::DeviceError> {
+        self.buf.set_to(self.size(), val)
     }
 
     /// Writes the contents of this matrix into a buffer,

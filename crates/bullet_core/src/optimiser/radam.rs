@@ -100,8 +100,8 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
 
     fn reset(&mut self) -> Result<(), D::DeviceError> {
         self.step = 0;
-        self.momentum.set_zero()?;
-        self.velocity.set_zero()
+        self.momentum.set_to(0.0)?;
+        self.velocity.set_to(0.0)
     }
 
     fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::DeviceError> {
