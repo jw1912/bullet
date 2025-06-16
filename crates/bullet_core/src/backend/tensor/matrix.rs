@@ -69,4 +69,13 @@ impl<D: Device> Matrix<D> {
             Err(OperationError::InvalidTensorFormat)
         }
     }
+
+    pub fn copy_into(&self, other: &mut Self) -> Result<(), OperationError<D::DeviceError>> {
+        match other {
+            Self::Dense(x) => x.copy_from(self.dense()?)?,
+            Self::Sparse(x) => x.copy_from(self.sparse()?)?,
+        }
+
+        Ok(())
+    }
 }

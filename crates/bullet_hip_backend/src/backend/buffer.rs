@@ -59,7 +59,7 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
     }
 
     fn load_from_device(&mut self, buf: &Self, bytes: usize) -> Result<(), DeviceError> {
-        assert!(bytes <= buf.size);
+        assert!(bytes <= buf.size, "Overflow: {bytes} > {}!", buf.size);
         assert!(bytes <= self.size, "Overflow: {} > {}!", buf.size, self.size);
         unsafe { util::copy_on_device(self.ptr, buf.ptr, bytes) }
     }

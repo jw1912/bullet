@@ -3,17 +3,19 @@ use std::marker::PhantomData;
 use bullet_core::{
     graph::{builder::Shape, ir::args::GraphIRCompileArgs},
     optimiser::Optimiser,
+    trainer::Trainer,
 };
 
 use crate::{
-    default::{AdditionalTrainerInputs, Wgt},
+    default::Wgt,
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
+    value::ValueTrainerState,
     ExecutionContext,
 };
 
-use super::{loader::B, ValueTrainer};
+use super::{ValueTrainer, B};
 
 type LossFn = for<'a> fn(Nbn<'a>, Nbn<'a>) -> Nbn<'a>;
 
@@ -141,18 +143,17 @@ where
         let output_node = out.node();
         let graph = builder.build(ExecutionContext::default());
 
-        ValueTrainer {
+        ValueTrainer(Trainer {
             optimiser: Optimiser::new(graph, Default::default()).unwrap(),
-            input_getter: input_getter.clone(),
-            output_getter: buckets,
-            blend_getter: self.blend_getter,
-            weight_getter: self.weight_getter,
-            use_win_rate_model: false,
-            output_node,
-            additional_inputs: AdditionalTrainerInputs { wdl: output_size == 3 },
-            saved_format: saved_format.clone(),
-            factorised_weights: (!self.factorised.is_empty()).then_some(self.factorised),
-        }
+            state: ValueTrainerState {
+                input_getter: input_getter.clone(),
+                output_getter: buckets,
+                blend_getter: self.blend_getter,
+                weight_getter: self.weight_getter,
+                output_node,
+                saved_format: saved_format.clone(),
+            },
+        })
     }
 
     fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>

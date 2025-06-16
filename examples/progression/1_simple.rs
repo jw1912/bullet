@@ -11,7 +11,7 @@ use bullet_lib::{
 
 fn main() {
     // hyperparams to fiddle with
-    let hl_size = 256;
+    let hl_size = 128;
     let dataset_path = "data/baseline.data";
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);

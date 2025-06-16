@@ -33,6 +33,15 @@ impl<D: Device> SparseMatrix<D> {
         Ok(())
     }
 
+    pub fn copy_from(&mut self, other: &Self) -> Result<(), D::DeviceError> {
+        if self.single_size != other.single_size || self.nnz != other.nnz {
+            return Err(D::DeviceError::default());
+        }
+
+        self.set_batch_size(other.batch_size())?;
+        self.buf.load_from_device(&other.buf, other.nnz * other.batch_size().unwrap_or(1))
+    }
+
     pub fn single_size(&self) -> usize {
         self.single_size
     }

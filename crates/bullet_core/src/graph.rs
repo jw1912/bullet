@@ -321,6 +321,10 @@ impl<D: Device> Graph<D> {
         self.get_mut(self.inputs[id]).unwrap()
     }
 
+    pub fn has_input(&self, id: &str) -> bool {
+        self.inputs.contains_key(id)
+    }
+
     pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
         self.get(self.weights[id]).unwrap()
     }

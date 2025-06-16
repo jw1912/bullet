@@ -2,16 +2,35 @@ pub mod dataloader;
 pub mod logger;
 pub mod schedule;
 
+use dataloader::{DataLoader, PreparedBatchDevice, PreparedBatchHost};
+use schedule::TrainingSchedule;
+
 use std::{sync::mpsc, thread, time::Instant};
 
 use crate::{
-    backend::device::{Device, OperationError}, optimiser::{Optimiser, OptimiserState}, trainer::schedule::TrainingSchedule
+    backend::device::{Device, OperationError},
+    optimiser::{Optimiser, OptimiserState},
 };
 
+#[derive(Debug)]
+pub enum DataLoadingError {
+    CopyToDevice,
+    TooManyBatchesReceived,
+    NoBatchesReceived,
+}
+
+#[derive(Debug)]
 pub enum TrainerError<D: Device> {
-    DataLoadingError,
+    DataLoadingError(DataLoadingError),
     GradientCalculationError(OperationError<D::DeviceError>),
+    Unexpected(OperationError<D::DeviceError>),
     IoError,
+}
+
+impl<D: Device> From<DataLoadingError> for TrainerError<D> {
+    fn from(value: DataLoadingError) -> Self {
+        Self::DataLoadingError(value)
+    }
 }
 
 pub struct Trainer<D: Device, O: OptimiserState<D>, S> {
@@ -20,22 +39,48 @@ pub struct Trainer<D: Device, O: OptimiserState<D>, S> {
 }
 
 impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
-    pub fn train_custom(&mut self, schedule: TrainingSchedule) -> Result<(), TrainerError<D>> {
+    pub fn train_custom(
+        &mut self,
+        schedule: TrainingSchedule,
+        dataloader: impl DataLoader<Error = DataLoadingError>,
+        mut batch_callback: impl FnMut(&mut Self, usize, usize),
+        mut superbatch_callback: impl FnMut(&mut Self, usize),
+    ) -> Result<(), TrainerError<D>> {
         logger::clear_colours();
+        println!("{}", logger::ansi("Beginning Training", "34;1"));
 
         let timer = Instant::now();
         let out_dir = schedule.out_dir.as_str();
         let lr = schedule.lr_schedule;
+        let steps = schedule.steps;
 
         let _ = std::fs::create_dir(out_dir);
 
         self.optimiser.graph.synchronise().unwrap();
 
-        let steps = schedule.steps;
+        let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost>(32);
 
-        let (sender, receiver) = mpsc::sync_channel::<()>(32);
+        let dataloader = thread::spawn(move || {
+            let mut batch_no = 0;
+            let mut superbatch = steps.start_superbatch;
 
-        let dataloader = thread::spawn(|| {});
+            dataloader.map_batches(|batch| {
+                sender.send(batch).unwrap();
+
+                batch_no += 1;
+
+                if batch_no % steps.batches_per_superbatch == 0 {
+                    batch_no = 0;
+                    superbatch += 1;
+
+                    if superbatch > steps.end_superbatch {
+                        return true;
+                    }
+                }
+
+                false
+            })
+        });
 
         let mut prev_lr = lr(0, 1);
         let mut superbatch = steps.start_superbatch;
@@ -44,11 +89,19 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         let mut running_loss = 0.0;
         let mut superbatch_positions = 0;
 
-        let first_batch = receiver.recv().map_err(|_| TrainerError::DataLoadingError)?;
+        let first_batch =
+            receiver.recv().map_err(|_| TrainerError::DataLoadingError(DataLoadingError::NoBatchesReceived))?;
+
+        let mut batch_on_device = PreparedBatchDevice::new(self.optimiser.graph.device(), &first_batch)
+            .map_err(|_| TrainerError::DataLoadingError(DataLoadingError::CopyToDevice))?;
 
         let mut batch_queued = true;
 
         while batch_queued {
+            if superbatch > steps.end_superbatch {
+                return Err(TrainerError::DataLoadingError(DataLoadingError::TooManyBatchesReceived));
+            }
+
             // ignore startup time from loading the first batch of data
             // because it just poisons the reported pos/sec when reading
             // from binpacked data
@@ -68,8 +121,16 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
             prev_lr = lrate;
 
-            let this_batch_size: usize = 0;
+            let this_batch_size = batch_on_device.batch_size;
             let gf = 1.0 / this_batch_size as f32;
+
+            for (id, matrix) in &batch_on_device.inputs {
+                if self.optimiser.graph.has_input(id) {
+                    matrix
+                        .copy_into(&mut self.optimiser.graph.get_input_mut(id).values)
+                        .map_err(TrainerError::Unexpected)?;
+                }
+            }
 
             fn step<D: Device, S: OptimiserState<D>>(
                 optim: &mut Optimiser<D, S>,
@@ -84,12 +145,15 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
             step(&mut self.optimiser, gf, lrate).map_err(TrainerError::GradientCalculationError)?;
 
-            match receiver.recv() {
-                Ok(_next_batch) => {todo!()},
-                Err(_) => batch_queued = false,
+            if let Ok(next_batch) = receiver.recv() {
+                batch_on_device
+                    .load_new_data(&next_batch)
+                    .map_err(|_| TrainerError::DataLoadingError(DataLoadingError::CopyToDevice))?;
+            } else {
+                batch_queued = false;
             }
 
-            let error = self.optimiser.graph.get_output_val().unwrap();
+            let error = self.optimiser.graph.get_output_val().unwrap() / this_batch_size as f32;
 
             running_loss += error;
             superbatch_positions += this_batch_size;
@@ -105,6 +169,8 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
             }
 
             curr_batch += 1;
+
+            batch_callback(self, superbatch, curr_batch);
 
             if curr_batch % steps.batches_per_superbatch == 0 {
                 let error = running_loss / steps.batches_per_superbatch as f32;
@@ -124,6 +190,8 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
                     println!("Saved [{}]", logger::ansi(name, 31));
                 }
 
+                superbatch_callback(self, superbatch);
+
                 superbatch += 1;
                 curr_batch = 0;
                 superbatch_positions = 0;
@@ -141,7 +209,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
             logger::ansi(seconds, logger::num_cs()),
         );
 
-        dataloader.join().unwrap();
+        dataloader.join().unwrap()?;
 
         Ok(())
     }

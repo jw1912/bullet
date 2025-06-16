@@ -8,23 +8,7 @@ use super::logger::ansi;
 pub mod lr;
 pub mod wdl;
 
-#[derive(Clone, Copy, Debug)]
-pub struct TrainingSteps {
-    pub batch_size: usize,
-    pub batches_per_superbatch: usize,
-    pub start_superbatch: usize,
-    pub end_superbatch: usize,
-}
-
-impl TrainingSteps {
-    fn display(&self) {
-        println!("Batch Size             : {}", ansi(self.batch_size, 31));
-        println!("Batches / Superbatch   : {}", ansi(self.batches_per_superbatch, 31));
-        println!("Positions / Superbatch : {}", ansi(self.batches_per_superbatch * self.batch_size, 31));
-        println!("Start Superbatch       : {}", ansi(self.start_superbatch, 31));
-        println!("End Superbatch         : {}", ansi(self.end_superbatch, 31));
-    }
-}
+pub use bullet_core::trainer::schedule::TrainingSteps;
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {

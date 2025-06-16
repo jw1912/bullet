@@ -18,11 +18,11 @@ impl TrainingSteps {
     }
 }
 
-pub struct TrainingSchedule {
+pub struct TrainingSchedule<'a> {
     pub out_dir: String,
     pub net_id: String,
     pub steps: TrainingSteps,
-    pub lr_schedule: Box<dyn Fn(usize, usize) -> f32>,
+    pub lr_schedule: Box<dyn Fn(usize, usize) -> f32 + 'a>,
     pub save_rate: usize,
     pub log_rate: usize,
 }
