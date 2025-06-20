@@ -108,7 +108,7 @@ impl<D: Device> PreparedBatchDevice<D> {
                     // # Safety
                     // HostMatrix::Sparse is verified on construction.
                     unsafe {
-                        sparse.load_from_slice(*nnz, Some(batch_size), vals)?;
+                        sparse.load_non_blocking_from_host(*nnz, Some(batch_size), vals)?;
                     }
                 }
                 HostMatrix::Dense(HostDenseMatrix { vals, shape }) => {
@@ -118,7 +118,9 @@ impl<D: Device> PreparedBatchDevice<D> {
                         return Err(OperationError::InvalidTensorFormat);
                     }
 
-                    dense.load_from_slice(Some(batch_size), vals)?;
+                    unsafe {
+                        dense.load_non_blocking_from_host(Some(batch_size), vals)?;
+                    }
                 }
             }
         }

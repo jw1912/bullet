@@ -69,6 +69,10 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
         unsafe { util::copy_to_device(self.ptr, buf.as_ptr(), buf.len()) }
     }
 
+    unsafe fn load_non_blocking_from_host(&mut self, _buf: &[T]) -> Result<(), Self::BufferError> {
+        Err(DeviceError::Generic)
+    }
+
     fn write_into_slice(&self, buf: &mut [T], bytes: usize) -> Result<(), DeviceError> {
         assert!(bytes <= self.size, "Overflow!");
         unsafe { util::copy_from_device(buf.as_mut_ptr(), self.ptr, bytes) }

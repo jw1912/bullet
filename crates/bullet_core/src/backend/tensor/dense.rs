@@ -105,6 +105,21 @@ impl<D: Device> DenseMatrix<D> {
         self.buf.load_from_slice(buf)
     }
 
+    /// # Safety
+    /// Must synchronise before `buf` is dropped or mutated.
+    pub unsafe fn load_non_blocking_from_host(
+        &mut self,
+        batch_size: Option<usize>,
+        buf: &[f32],
+    ) -> Result<(), D::DeviceError> {
+        if self.single_size() * batch_size.unwrap_or(1) != buf.len() {
+            return Err(D::DeviceError::default());
+        }
+
+        self.set_batch_size(batch_size)?;
+        self.buf.load_non_blocking_from_host(buf)
+    }
+
     pub fn set_to(&mut self, val: f32) -> Result<(), D::DeviceError> {
         self.buf.set_to(self.size(), val)
     }

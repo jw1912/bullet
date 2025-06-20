@@ -72,6 +72,10 @@ impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
         Ok(())
     }
 
+    unsafe fn load_non_blocking_from_host(&mut self, buf: &[T]) -> Result<(), Self::BufferError> {
+        self.load_from_slice(buf)
+    }
+
     fn write_into_slice(&self, buf: &mut [T], num: usize) -> Result<(), CpuError> {
         buf[..num].copy_from_slice(&self.buf[..num]);
         Ok(())

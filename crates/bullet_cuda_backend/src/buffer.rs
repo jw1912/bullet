@@ -44,6 +44,10 @@ impl<T: DeviceRepr + ValidAsZeroBits> DeviceBuffer<CudaDevice, T> for CudaBuffer
         self.device.stream.memcpy_htod(buf, &mut self.buf.slice_mut(0..buf.len())).map_err(CudaError::Driver)
     }
 
+    unsafe fn load_non_blocking_from_host(&mut self, buf: &[T]) -> Result<(), Self::BufferError> {
+        self.device.copystream.memcpy_htod(buf, &mut self.buf.slice_mut(0..buf.len())).map_err(CudaError::Driver)
+    }
+
     fn write_into_slice(&self, buf: &mut [T], num: usize) -> Result<(), Self::BufferError> {
         self.device.stream.memcpy_dtoh(&self.buf.slice(0..num), &mut buf[..num]).map_err(CudaError::Driver)
     }

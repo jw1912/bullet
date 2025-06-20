@@ -44,6 +44,10 @@ pub trait DeviceBuffer<D, T>: Sized {
 
     fn load_from_slice(&mut self, buf: &[T]) -> Result<(), Self::BufferError>;
 
+    /// # Safety
+    /// Needs to be followed by a synchronise before `buf` is dropped!
+    unsafe fn load_non_blocking_from_host(&mut self, buf: &[T]) -> Result<(), Self::BufferError>;
+
     fn write_into_slice(&self, buf: &mut [T], num: usize) -> Result<(), Self::BufferError>;
 }
 

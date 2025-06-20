@@ -70,6 +70,24 @@ impl<D: Device> SparseMatrix<D> {
         self.buf.load_from_slice(buf)
     }
 
+    /// #### Safety
+    /// It is the responsibility of the user to ensure all indices fall within the given shape.
+    ///
+    /// Must synchronise before `buf` is dropped or mutated.
+    pub unsafe fn load_non_blocking_from_host(
+        &mut self,
+        nnz: usize,
+        batch_size: Option<usize>,
+        buf: &[i32],
+    ) -> Result<(), D::DeviceError> {
+        if self.nnz != nnz || nnz * batch_size.unwrap_or(1) != buf.len() {
+            return Err(D::DeviceError::default());
+        }
+
+        self.set_batch_size(batch_size)?;
+        self.buf.load_non_blocking_from_host(buf)
+    }
+
     pub fn copy_into_dense(&self, dst: &mut DenseMatrix<D>) -> Result<(), OperationError<D::DeviceError>> {
         let batch_size = self.batch_size();
         let size = self.single_size();

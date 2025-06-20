@@ -31,6 +31,13 @@ extern "C" {
     pub fn cudaMalloc(devPtr: *mut *mut c_void, size: usize) -> cudaError_t;
     pub fn cudaFree(devPtr: *mut c_void) -> cudaError_t;
     pub fn cudaMemcpy(dst: *mut c_void, src: *const c_void, count: usize, kind: cudaMemcpyKind) -> cudaError_t;
+    pub fn cudaMemcpyAsync(
+        dst: c_void,
+        src: *const c_void,
+        count: usize,
+        kind: cudaMemcpyKind,
+        stream: cudaStream_t,
+    ) -> cudaError_t;
     pub fn cudaMemset(devPtr: *mut c_void, value: c_int, count: usize) -> cudaError_t;
 }
 
@@ -66,6 +73,14 @@ pub struct cublasContext {
     _unused: [u8; 0],
 }
 pub type cublasHandle_t = *mut cublasContext;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CUstream_st {
+    _unused: [u8; 0],
+}
+pub type CUstream = *mut CUstream_st;
+pub type cudaStream_t = *mut CUstream_st;
 
 #[rustfmt::skip]
 extern "C" {

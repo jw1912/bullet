@@ -9,12 +9,12 @@ use std::{
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
+use crate::nn::ExecutionContext;
 use bullet_core::{
     graph::Node,
     optimiser::OptimiserState,
     trainer::{self, logger, Trainer},
 };
-use bullet_hip_backend::ExecutionContext;
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},

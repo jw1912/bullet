@@ -23,10 +23,12 @@ pub enum CudaError {
     ExpectedIllegalAddressAccess,
 }
 
+#[derive(Debug)]
 pub struct CudaDevice {
     pub(crate) stream: Arc<CudaStream>,
     pub(crate) blas: CudaBlas,
     pub(crate) module: Arc<CudaModule>,
+    pub(crate) copystream: Arc<CudaStream>,
 }
 
 impl Default for CudaDevice {
@@ -59,17 +61,19 @@ impl Device for CudaDevice {
         let ctx = CudaContext::new(id).map_err(CudaError::Driver)?;
         ctx.set_blocking_synchronize().map_err(CudaError::Driver)?;
         let stream = ctx.default_stream();
+        let copystream = ctx.new_stream().map_err(CudaError::Driver)?;
         let blas = CudaBlas::new(stream.clone()).map_err(CudaError::Blas)?;
 
         static PTX: &str = include_str!(concat!(env!("OUT_DIR"), "/kernels.ptx"));
 
         let module = ctx.load_module(Ptx::from_src(PTX)).map_err(CudaError::Driver)?;
 
-        Ok(Self { stream, blas, module })
+        Ok(Self { stream, blas, module, copystream })
     }
 
     fn synchronise(&self) -> Result<(), Self::DeviceError> {
-        self.stream.synchronize().map_err(CudaError::Driver)
+        self.stream.synchronize().map_err(CudaError::Driver)?;
+        self.copystream.synchronize().map_err(CudaError::Driver)
     }
 
     fn get_last_device_error(&self) -> Result<(), Self::DeviceError> {
