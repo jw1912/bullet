@@ -185,6 +185,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
                 if superbatch % schedule.save_rate == 0 || superbatch == steps.end_superbatch {
                     let name = format!("{}-{superbatch}", schedule.net_id);
                     let path = format!("{out_dir}/{name}");
+                    std::fs::create_dir(path.as_str()).unwrap_or(());
                     self.optimiser.write_to_checkpoint(path.as_str()).map_err(|_| TrainerError::IoError)?;
 
                     println!("Saved [{}]", logger::ansi(name, 31));
