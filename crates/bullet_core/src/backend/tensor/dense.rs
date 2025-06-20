@@ -70,6 +70,16 @@ impl<D: Device> DenseMatrix<D> {
         self.single_size
     }
 
+    pub fn swap_with(&mut self, other: &mut Self) -> Result<(), D::DeviceError> {
+        if self.single_size != other.single_size {
+            return Err(D::DeviceError::default());
+        }
+
+        std::mem::swap(self, other);
+
+        Ok(())
+    }
+
     pub fn copy_from(&mut self, other: &Self) -> Result<(), D::DeviceError> {
         if self.single_size != other.single_size {
             return Err(D::DeviceError::default());

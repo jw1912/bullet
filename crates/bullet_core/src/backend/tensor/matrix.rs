@@ -70,6 +70,15 @@ impl<D: Device> Matrix<D> {
         }
     }
 
+    pub fn swap_with(&mut self, other: &mut Self) -> Result<(), OperationError<D::DeviceError>> {
+        match other {
+            Self::Dense(x) => x.swap_with(self.dense_mut()?)?,
+            Self::Sparse(x) => x.swap_with(self.sparse_mut()?)?,
+        }
+
+        Ok(())
+    }
+
     pub fn copy_into(&self, other: &mut Self) -> Result<(), OperationError<D::DeviceError>> {
         match other {
             Self::Dense(x) => x.copy_from(self.dense()?)?,

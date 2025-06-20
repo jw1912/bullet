@@ -33,6 +33,16 @@ impl<D: Device> SparseMatrix<D> {
         Ok(())
     }
 
+    pub fn swap_with(&mut self, other: &mut Self) -> Result<(), D::DeviceError> {
+        if self.single_size != other.single_size || self.nnz != other.nnz {
+            return Err(D::DeviceError::default());
+        }
+
+        std::mem::swap(self, other);
+
+        Ok(())
+    }
+
     pub fn copy_from(&mut self, other: &Self) -> Result<(), D::DeviceError> {
         if self.single_size != other.single_size || self.nnz != other.nnz {
             return Err(D::DeviceError::default());
