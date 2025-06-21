@@ -52,4 +52,7 @@ fn main() {
     let data_loader = DirectSequentialDataLoader::new(&["data/batch1.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
+
+    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("Eval: {eval:.3}cp");
 }

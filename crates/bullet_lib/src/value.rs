@@ -1,11 +1,6 @@
 pub(crate) mod builder;
 mod dataloader;
-
-use std::{
-    fs::File,
-    io::{self, Write},
-    ops::{Deref, DerefMut},
-};
+mod save;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
@@ -23,7 +18,7 @@ use bullet_core::{
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     lr::LrScheduler,
-    trainer::save::{Layout, QuantTarget, SavedFormat},
+    trainer::save::SavedFormat,
     value::{
         dataloader::ValueDataLoader,
         loader::{DefaultDataLoader, LoadableDataType},
@@ -43,7 +38,7 @@ pub struct ValueTrainer<
     Out: OutputBuckets<Inp::RequiredDataType>,
 >(Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>);
 
-impl<Opt, Inp, Out> Deref for ValueTrainer<Opt, Inp, Out>
+impl<Opt, Inp, Out> std::ops::Deref for ValueTrainer<Opt, Inp, Out>
 where
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
@@ -56,7 +51,7 @@ where
     }
 }
 
-impl<Opt, Inp, Out> DerefMut for ValueTrainer<Opt, Inp, Out>
+impl<Opt, Inp, Out> std::ops::DerefMut for ValueTrainer<Opt, Inp, Out>
 where
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
@@ -132,19 +127,9 @@ where
         .unwrap();
     }
 
-    pub fn load_from_checkpoint(&mut self, path: &str) {
-        let err = self.optimiser.load_from_checkpoint(&format!("{path}/optimiser_state"));
-        if let Err(e) = err {
-            println!();
-            println!("Error loading from checkpoint:");
-            println!("{e:?}");
-            std::process::exit(1);
-        }
-    }
-
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
-        Inp::RequiredDataType: std::str::FromStr<Err = String> + LoadableDataType,
+        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
@@ -179,7 +164,7 @@ where
 
     pub fn eval(&mut self, fen: &str) -> f32
     where
-        Inp::RequiredDataType: std::str::FromStr<Err = String> + LoadableDataType,
+        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
         let vals = self.eval_raw_output(fen);
 
@@ -195,74 +180,5 @@ where
             [score] => *score,
             _ => panic!("Invalid output size!"),
         }
-    }
-
-    pub fn save_quantised(&self, path: &str) -> io::Result<()> {
-        let mut file = File::create(path).unwrap();
-
-        let mut buf = Vec::new();
-
-        for SavedFormat { id, quant, layout, transforms, round } in &self.state.saved_format {
-            let weights = self.optimiser.graph.get_weights(id);
-            let weights = weights.values.dense().unwrap();
-
-            let mut weight_buf = vec![0.0; weights.size()];
-            let written = weights.write_to_slice(&mut weight_buf).unwrap();
-            assert_eq!(written, weights.size());
-
-            if let Layout::Transposed(shape) = layout {
-                assert_eq!(shape.size(), weights.size());
-                weight_buf = SavedFormat::transpose_impl(*shape, &weight_buf);
-            }
-
-            for transform in transforms {
-                weight_buf = transform(&self.optimiser.graph, id, weight_buf);
-            }
-
-            let quantised = match quant.quantise(*round, &weight_buf) {
-                Ok(q) => q,
-                Err(err) => {
-                    println!("Quantisation failed for id: {}", id);
-                    return Err(err);
-                }
-            };
-
-            buf.extend_from_slice(&quantised);
-        }
-
-        let bytes = buf.len() % 64;
-        if bytes > 0 {
-            let chs = [b'b', b'u', b'l', b'l', b'e', b't'];
-
-            for i in 0..64 - bytes {
-                buf.push(chs[i % chs.len()]);
-            }
-        }
-
-        file.write_all(&buf)?;
-
-        Ok(())
-    }
-
-    pub fn save_unquantised(&self, path: &str) -> io::Result<()> {
-        let mut file = File::create(path).unwrap();
-
-        let mut buf = Vec::new();
-
-        for SavedFormat { id, .. } in &self.state.saved_format {
-            let weights = self.optimiser.graph.get_weights(id);
-            let weights = weights.values.dense().unwrap();
-
-            let mut weight_buf = vec![0.0; weights.size()];
-            let written = weights.write_to_slice(&mut weight_buf).unwrap();
-            assert_eq!(written, weights.size());
-
-            let quantised = QuantTarget::Float.quantise(false, &weight_buf)?;
-            buf.extend_from_slice(&quantised);
-        }
-
-        file.write_all(&buf)?;
-
-        Ok(())
     }
 }
