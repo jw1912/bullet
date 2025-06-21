@@ -5,7 +5,8 @@ use crate::{
         device::{Device, OperationError},
         tensor::{DenseMatrix, Matrix, SparseMatrix},
     },
-    graph::builder::Shape,
+    graph::{builder::Shape, Graph},
+    trainer::TrainerError,
 };
 
 pub trait DataLoader: Send + Sync + 'static {
@@ -125,7 +126,23 @@ impl<D: Device> PreparedBatchDevice<D> {
             }
         }
 
+        self.batch_size = batch_size;
+
         self.device.synchronise()?;
+
+        Ok(())
+    }
+
+    pub fn load_into_graph(&mut self, graph: &mut Graph<D>) -> Result<(), TrainerError<D>> {
+        let batch_size = self.batch_size;
+
+        for (id, matrix) in &mut self.inputs {
+            assert_eq!(batch_size, matrix.batch_size().unwrap_or(1));
+
+            if graph.has_input(id) {
+                matrix.swap_with(&mut graph.get_input_mut(id).values).map_err(TrainerError::Unexpected)?;
+            }
+        }
 
         Ok(())
     }

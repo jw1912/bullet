@@ -1,12 +1,11 @@
 use bullet_lib::{
-    default::Trainer,
     game::inputs::{get_num_buckets, ChessBucketsMirrored},
     nn::{
         optimiser::{AdamW, AdamWParams},
         ExecutionContext, InitSettings, Shape,
     },
-    trainer::{save::SavedFormat, NetworkTrainer},
-    value::ValueTrainerBuilder,
+    trainer::save::SavedFormat,
+    value::{ValueTrainer, ValueTrainerBuilder},
 };
 
 use crate::output_buckets::{CustomOutputBuckets, NUM_OUTPUT_BUCKETS};
@@ -14,7 +13,7 @@ use crate::output_buckets::{CustomOutputBuckets, NUM_OUTPUT_BUCKETS};
 pub fn make_trainer(
     input_bucket_layout: [usize; 32],
     hl_size: usize,
-) -> Trainer<bullet_core::optimiser::adam::AdamW<ExecutionContext>, ChessBucketsMirrored, CustomOutputBuckets> {
+) -> ValueTrainer<bullet_core::optimiser::adam::AdamW<ExecutionContext>, ChessBucketsMirrored, CustomOutputBuckets> {
     let num_input_buckets = get_num_buckets(&input_bucket_layout);
     let num_inputs = 768 * num_input_buckets;
     let num_output_buckets = NUM_OUTPUT_BUCKETS;
@@ -92,8 +91,8 @@ pub fn make_trainer(
 
     // need to account for factoriser weight magnitudes
     let stricter_clipping = AdamWParams { max_weight: 0.99, min_weight: -0.99, ..Default::default() };
-    trainer.optimiser_mut().set_params_for_weight("l0w", stricter_clipping);
-    trainer.optimiser_mut().set_params_for_weight("l0f", stricter_clipping);
+    trainer.optimiser.set_params_for_weight("l0w", stricter_clipping);
+    trainer.optimiser.set_params_for_weight("l0f", stricter_clipping);
 
     trainer
 }

@@ -39,7 +39,7 @@ where
         let start_batch = steps.batches_per_superbatch * (steps.start_superbatch - 1);
 
         let mut batch_no = 0;
-        let mut superbatch = 0;
+        let mut superbatch = 1;
 
         dataloader.load_and_map_batches(start_batch, steps.batch_size, |batch| {
             let blend = wdl.blend(batch_no, superbatch, steps.end_superbatch);

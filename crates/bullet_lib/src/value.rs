@@ -9,11 +9,15 @@ use std::{
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
-use crate::nn::ExecutionContext;
+use crate::{nn::ExecutionContext, value::loader::DefaultDataPreparer};
 use bullet_core::{
     graph::Node,
     optimiser::OptimiserState,
-    trainer::{self, logger, Trainer},
+    trainer::{
+        self,
+        dataloader::{PreparedBatchDevice, PreparedBatchHost},
+        logger, Trainer,
+    },
 };
 
 use crate::{
@@ -135,6 +139,61 @@ where
             println!("Error loading from checkpoint:");
             println!("{e:?}");
             std::process::exit(1);
+        }
+    }
+
+    pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
+    where
+        Inp::RequiredDataType: std::str::FromStr<Err = String> + LoadableDataType,
+    {
+        let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
+
+        let prepared = DefaultDataPreparer::prepare(
+            self.state.input_getter.clone(),
+            self.state.output_getter,
+            self.state.blend_getter,
+            self.state.weight_getter,
+            false,
+            false,
+            &[pos],
+            1,
+            1.0,
+            1.0,
+        );
+
+        let host_data = PreparedBatchHost::from(prepared);
+        let mut device_data = PreparedBatchDevice::new(self.optimiser.graph.device(), &host_data).unwrap();
+
+        device_data.load_into_graph(&mut self.optimiser.graph).unwrap();
+
+        self.optimiser.graph.synchronise().unwrap();
+        self.optimiser.graph.forward().unwrap();
+
+        let eval = self.optimiser.graph.get_node(self.state.output_node);
+
+        let dense_vals = eval.values.dense().unwrap();
+        let mut vals = vec![0.0; dense_vals.size()];
+        dense_vals.write_to_slice(&mut vals).unwrap();
+        vals
+    }
+
+    pub fn eval(&mut self, fen: &str) -> f32
+    where
+        Inp::RequiredDataType: std::str::FromStr<Err = String> + LoadableDataType,
+    {
+        let vals = self.eval_raw_output(fen);
+
+        match &vals[..] {
+            [mut loss, mut draw, mut win] => {
+                let max = win.max(draw).max(loss);
+                win = (win - max).exp();
+                draw = (draw - max).exp();
+                loss = (loss - max).exp();
+
+                (win + draw / 2.0) / (win + draw + loss)
+            }
+            [score] => *score,
+            _ => panic!("Invalid output size!"),
         }
     }
 

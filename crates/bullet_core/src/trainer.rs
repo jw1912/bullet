@@ -124,13 +124,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
             let this_batch_size = batch_on_device.batch_size;
             let gf = 1.0 / this_batch_size as f32;
 
-            for (id, matrix) in &mut batch_on_device.inputs {
-                if self.optimiser.graph.has_input(id) {
-                    matrix
-                        .swap_with(&mut self.optimiser.graph.get_input_mut(id).values)
-                        .map_err(TrainerError::Unexpected)?;
-                }
-            }
+            batch_on_device.load_into_graph(&mut self.optimiser.graph)?;
 
             fn step<D: Device, S: OptimiserState<D>>(
                 optim: &mut Optimiser<D, S>,
