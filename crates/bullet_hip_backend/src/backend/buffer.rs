@@ -69,8 +69,9 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
         unsafe { util::copy_to_device(self.ptr, buf.as_ptr(), buf.len()) }
     }
 
-    unsafe fn load_non_blocking_from_host(&mut self, _buf: &[T]) -> Result<(), Self::BufferError> {
-        Err(DeviceError::Generic)
+    unsafe fn load_non_blocking_from_host(&mut self, buf: &[T]) -> Result<(), Self::BufferError> {
+        assert!(buf.len() <= self.size, "Overflow!");
+        unsafe { util::async_copy_to_device(self.ptr, buf.as_ptr(), buf.len(), self.ctx.copystream) }
     }
 
     fn write_into_slice(&self, buf: &mut [T], bytes: usize) -> Result<(), DeviceError> {
@@ -80,7 +81,7 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
 }
 
 mod util {
-    use crate::DeviceError;
+    use crate::{backend::bindings::cudaStream_t, DeviceError};
 
     use super::super::{bindings, util::catch};
     use std::ffi::c_void;
@@ -129,6 +130,18 @@ mod util {
     pub unsafe fn copy_to_device<T>(dest: *mut T, src: *const T, amt: usize) -> Result<(), DeviceError> {
         catch(bindings::cudaMemcpy(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::H2D))?;
         catch(bindings::cudaDeviceSynchronize())
+    }
+
+    /// # Safety
+    /// Pointers need to be valid and `amt` need to be valid.
+    /// Data in `src` cannot be freed or modified before device is synchronised.
+    pub unsafe fn async_copy_to_device<T>(
+        dest: *mut T,
+        src: *const T,
+        amt: usize,
+        stream: cudaStream_t,
+    ) -> Result<(), DeviceError> {
+        catch(bindings::cudaMemcpyAsync(dest.cast(), src.cast(), amt * std::mem::size_of::<T>(), bindings::H2D, stream))
     }
 
     /// # Safety

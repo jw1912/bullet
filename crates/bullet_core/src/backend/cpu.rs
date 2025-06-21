@@ -31,7 +31,7 @@ tests::make_tests! {
 #[derive(Debug, Default)]
 pub struct CpuError;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CpuThread;
 
 pub struct CpuBuffer<T> {
