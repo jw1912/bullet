@@ -83,6 +83,18 @@ impl BlasOperations for Buffer<f32> {
 impl BaseOperations for Buffer<f32> {
     type BaseError = DeviceError;
 
+    fn set_to(&mut self, size: usize, val: f32) -> Result<(), Self::BaseError> {
+        if size > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::set(self.mut_ptr(), size, val);
+        }
+
+        Ok(())
+    }
+
     fn diffable_from_output_fwd(
         &mut self,
         size: usize,

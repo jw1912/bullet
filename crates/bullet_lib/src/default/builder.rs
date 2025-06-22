@@ -10,10 +10,13 @@ use crate::{
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    value::builder::{Bucket, NoOutputBuckets, OutputBucket},
+    value::{
+        builder::{Bucket, NoOutputBuckets, OutputBucket},
+        loader::B,
+    },
 };
 
-use super::{loader::B, AdditionalTrainerInputs, Trainer, Wgt};
+use super::{AdditionalTrainerInputs, Trainer, Wgt};
 
 use bullet_core::optimiser::Optimiser;
 

@@ -5,7 +5,7 @@ mod sfbinpack;
 mod text;
 pub mod viribinpack;
 
-use bullet_core::backend::device::OperationError;
+use bullet_core::{backend::device::OperationError, graph::builder::Shape};
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
@@ -20,6 +20,11 @@ use crate::{
 };
 
 use super::Wgt;
+
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::CudADFormat {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::MarlinFormat {}
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -128,24 +133,26 @@ where
 
 pub(crate) struct DenseInput {
     pub value: Vec<f32>,
+    pub shape: Shape,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct SparseInput {
     pub value: Vec<i32>,
     pub max_active: usize,
+    pub shape: Shape,
 }
 
 /// A batch of data, in the correct format for the GPU.
 pub struct DefaultDataPreparer<I: SparseInputType, O> {
-    input_getter: I,
-    output_getter: O,
-    batch_size: usize,
-    stm: SparseInput,
-    nstm: SparseInput,
-    buckets: SparseInput,
-    targets: DenseInput,
-    weights: DenseInput,
+    pub(crate) input_getter: I,
+    pub(crate) output_getter: O,
+    pub(crate) batch_size: usize,
+    pub(crate) stm: SparseInput,
+    pub(crate) nstm: SparseInput,
+    pub(crate) buckets: SparseInput,
+    pub(crate) targets: DenseInput,
+    pub(crate) weights: DenseInput,
 }
 
 impl<I, O> DefaultDataPreparer<I, O>
@@ -179,11 +186,11 @@ where
             input_getter,
             output_getter,
             batch_size,
-            stm: SparseInput { max_active, value: vec![0; sparse_size] },
-            nstm: SparseInput { max_active, value: vec![0; sparse_size] },
-            buckets: SparseInput { max_active: 1, value: vec![0; batch_size] },
-            targets: DenseInput { value: vec![0.0; output_size * batch_size] },
-            weights: DenseInput { value: vec![0.0; output_size * batch_size] },
+            stm: SparseInput { max_active, value: vec![0; sparse_size], shape: Shape::new(input_size, 1) },
+            nstm: SparseInput { max_active, value: vec![0; sparse_size], shape: Shape::new(input_size, 1) },
+            buckets: SparseInput { max_active: 1, value: vec![0; batch_size], shape: Shape::new(O::BUCKETS, 1) },
+            targets: DenseInput { value: vec![0.0; output_size * batch_size], shape: Shape::new(output_size, 1) },
+            weights: DenseInput { value: vec![0.0; batch_size], shape: Shape::new(1, 1) },
         };
 
         let sparse_chunk_size = max_active * chunk_size;

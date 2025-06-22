@@ -31,6 +31,13 @@ extern "C" {
     pub fn cudaMalloc(devPtr: *mut *mut c_void, size: usize) -> cudaError_t;
     pub fn cudaFree(devPtr: *mut c_void) -> cudaError_t;
     pub fn cudaMemcpy(dst: *mut c_void, src: *const c_void, count: usize, kind: cudaMemcpyKind) -> cudaError_t;
+    pub fn cudaMemcpyAsync(
+        dst: *mut c_void,
+        src: *const c_void,
+        count: usize,
+        kind: cudaMemcpyKind,
+        stream: cudaStream_t,
+    ) -> cudaError_t;
     pub fn cudaMemset(devPtr: *mut c_void, value: c_int, count: usize) -> cudaError_t;
 }
 
@@ -67,6 +74,14 @@ pub struct cublasContext {
 }
 pub type cublasHandle_t = *mut cublasContext;
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CUstream_st {
+    _unused: [u8; 0],
+}
+pub type CUstream = *mut CUstream_st;
+pub type cudaStream_t = *mut CUstream_st;
+
 #[rustfmt::skip]
 extern "C" {
     pub fn cublasCreate_v2(handle: *mut cublasHandle_t) -> cublasStatus_t;
@@ -76,6 +91,8 @@ extern "C" {
     pub fn cublasSgeam(handle: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, alpha: *const f32, A: *const f32, lda: c_int, beta: *const f32, B: *const f32, ldb: c_int, C: *mut f32, ldc: c_int) -> cublasStatus_t;
     pub fn cublasSger_v2(handle: cublasHandle_t, m: c_int, n: c_int, alpha: *const f32, x: *const f32, incx: c_int, y: *const f32, incy: c_int, A: *mut f32, lda: c_int) -> cublasStatus_t;
     pub fn cublasSgemmStridedBatched(handle: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const f32, A: *const f32, lda: c_int, strideA: c_longlong, B: *const f32, ldb: ::std::os::raw::c_int, strideB: c_longlong, beta: *const f32, C: *mut f32, ldc: ::std::os::raw::c_int, strideC: c_longlong, batchCount: c_int) -> cublasStatus_t;
+    pub fn cudaStreamCreateWithFlags(pStream: *mut cudaStream_t, flags: ::std::os::raw::c_uint) -> cudaError_t;
+    pub fn cudaStreamDestroy(stream: cudaStream_t) -> cudaError_t;
 }
 
 #[repr(i32)]

@@ -8,6 +8,18 @@ use super::{CpuBuffer, CpuError};
 impl BaseOperations for CpuBuffer<f32> {
     type BaseError = CpuError;
 
+    fn set_to(&mut self, size: usize, val: f32) -> Result<(), Self::BaseError> {
+        if size > self.buf.len() {
+            return Err(CpuError);
+        }
+
+        for i in self.buf.iter_mut().take(size) {
+            *i = val;
+        }
+
+        Ok(())
+    }
+
     fn diffable_from_output_fwd(
         &mut self,
         size: usize,

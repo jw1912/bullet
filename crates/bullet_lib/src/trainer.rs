@@ -10,7 +10,9 @@ use save::SavedFormat;
 use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
 use settings::LocalSettings;
 
+#[allow(deprecated)]
 pub use crate::default;
+
 use crate::ExecutionContext;
 
 use std::{

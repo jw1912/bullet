@@ -13,6 +13,23 @@ use crate::{CudaBuffer, CudaDevice, CudaError};
 impl BaseOperations for CudaBuffer<f32> {
     type BaseError = CudaError;
 
+    fn set_to(&mut self, size: usize, val: f32) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("SetKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&mut self.buf.slice_mut(0..size))
+                .arg(&(size as i32))
+                .arg(&val)
+                .launch(CudaDevice::elementwise_launch_params_single(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
+        Ok(())
+    }
+
     fn diffable_from_output_fwd(
         &mut self,
         size: usize,

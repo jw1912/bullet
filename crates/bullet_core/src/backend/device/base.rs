@@ -14,6 +14,8 @@ pub struct AdamConfig {
 pub trait BaseOperations {
     type BaseError;
 
+    fn set_to(&mut self, size: usize, val: f32) -> Result<(), Self::BaseError>;
+
     #[allow(clippy::too_many_arguments)]
     fn copy_or_add_strided(
         &mut self,

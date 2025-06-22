@@ -19,6 +19,7 @@ pub enum hipMemcpyKind {
     hipMemcpyDefault = 4,
 }
 
+#[rustfmt::skip]
 extern "C" {
     pub fn hipDeviceReset() -> hipError_t;
     pub fn hipDeviceSynchronize() -> hipError_t;
@@ -29,8 +30,18 @@ extern "C" {
     pub fn hipMalloc(devPtr: *mut *mut c_void, size: usize) -> hipError_t;
     pub fn hipFree(devPtr: *mut c_void) -> hipError_t;
     pub fn hipMemcpy(dst: *mut c_void, src: *const c_void, count: usize, kind: hipMemcpyKind) -> hipError_t;
+    pub fn hipMemcpyAsync(dst: *mut c_void, src: *const c_void, count: usize, kind: hipMemcpyKind, stream: hipStream_t) -> hipError_t;
     pub fn hipMemset(devPtr: *mut c_void, value: c_int, count: usize) -> hipError_t;
+    pub fn hipStreamCreateWithFlags(stream: *mut hipStream_t, flags: ::std::os::raw::c_uint) -> hipError_t;
+    pub fn hipStreamDestroy(stream: hipStream_t) -> hipError_t;
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ihipStream_t {
+    _unused: [u8; 0],
+}
+pub type hipStream_t = *mut ihipStream_t;
 
 #[repr(i32)]
 #[non_exhaustive]

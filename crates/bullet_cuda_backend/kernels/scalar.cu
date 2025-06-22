@@ -3,6 +3,12 @@
 #include "util.cu"
 #endif
 
+BULLET_KERNEL SetKernel(float* buf, int size, float val)
+{
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) buf[tid] = val;
+}
+
 #define SCALAR_KERNEL_FORWARD(name, op)\
 BULLET_KERNEL name(const int size, const float alpha, const float* in, float* out)\
 {\

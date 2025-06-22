@@ -2,25 +2,39 @@
 This is used to confirm non-functional changes for bullet.
 */
 use bullet_lib::{
-    nn::{optimiser, Activation, GraphCompileArgs},
+    game::inputs::Chess768,
+    nn::optimiser::AdamW,
     trainer::{
-        default::{inputs, loader, Loss, TrainerBuilder},
+        save::SavedFormat,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
+    value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder},
 };
 
 fn main() {
-    let mut trainer = TrainerBuilder::default()
-        .set_compile_args(GraphCompileArgs::default().emit_ir())
-        .quantisations(&[181, 64])
-        .optimiser(optimiser::AdamW)
-        .loss_fn(Loss::SigmoidMSE)
-        .input(inputs::Chess768)
-        .feature_transformer(32)
-        .activate(Activation::SCReLU)
-        .add_layer(1)
-        .build();
+    let mut trainer = ValueTrainerBuilder::default()
+        .dual_perspective()
+        .optimiser(AdamW)
+        .inputs(Chess768)
+        .save_format(&[
+            SavedFormat::id("l0w").quantise::<i16>(255),
+            SavedFormat::id("l0b").quantise::<i16>(255),
+            SavedFormat::id("l1w").quantise::<i16>(64),
+            SavedFormat::id("l1b").quantise::<i16>(255 * 64),
+        ])
+        .loss_fn(|output, target| output.sigmoid().squared_error(target))
+        .build(|builder, stm_inputs, ntm_inputs| {
+            // weights
+            let l0 = builder.new_affine("l0", 768, 32);
+            let l1 = builder.new_affine("l1", 2 * 32, 1);
+
+            // inference
+            let stm_hidden = l0.forward(stm_inputs).screlu();
+            let ntm_hidden = l0.forward(ntm_inputs).screlu();
+            let hidden_layer = stm_hidden.concat(ntm_hidden);
+            l1.forward(hidden_layer)
+        });
 
     trainer.load_from_checkpoint("checkpoints/testnet");
 
@@ -33,13 +47,12 @@ fn main() {
         save_rate: 10,
     };
 
-    trainer.set_optimiser_params(optimiser::AdamWParams::default());
-
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/batch1.data"]);
-    trainer.profile_all_nodes();
+    let data_loader = DirectSequentialDataLoader::new(&["data/batch1.data"]);
+
     trainer.run(&schedule, &settings, &data_loader);
-    trainer.report_profiles();
-    trainer.sanity_check();
+
+    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("Eval: {eval:.3}cp");
 }

@@ -31,7 +31,7 @@ tests::make_tests! {
 #[derive(Debug, Default)]
 pub struct CpuError;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CpuThread;
 
 pub struct CpuBuffer<T> {
@@ -70,6 +70,10 @@ impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
     fn load_from_slice(&mut self, buf: &[T]) -> Result<(), CpuError> {
         self.buf[..buf.len()].copy_from_slice(buf);
         Ok(())
+    }
+
+    unsafe fn load_non_blocking_from_host(&mut self, buf: &[T]) -> Result<(), Self::BufferError> {
+        self.load_from_slice(buf)
     }
 
     fn write_into_slice(&self, buf: &mut [T], num: usize) -> Result<(), CpuError> {

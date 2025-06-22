@@ -70,6 +70,16 @@ impl<D: Device> DenseMatrix<D> {
         self.single_size
     }
 
+    pub fn swap_with(&mut self, other: &mut Self) -> Result<(), D::DeviceError> {
+        if self.single_size != other.single_size {
+            return Err(D::DeviceError::default());
+        }
+
+        std::mem::swap(self, other);
+
+        Ok(())
+    }
+
     pub fn copy_from(&mut self, other: &Self) -> Result<(), D::DeviceError> {
         if self.single_size != other.single_size {
             return Err(D::DeviceError::default());
@@ -105,8 +115,23 @@ impl<D: Device> DenseMatrix<D> {
         self.buf.load_from_slice(buf)
     }
 
-    pub fn set_zero(&mut self) -> Result<(), D::DeviceError> {
-        self.buf.set_zero()
+    /// # Safety
+    /// Must synchronise before `buf` is dropped or mutated.
+    pub unsafe fn load_non_blocking_from_host(
+        &mut self,
+        batch_size: Option<usize>,
+        buf: &[f32],
+    ) -> Result<(), D::DeviceError> {
+        if self.single_size() * batch_size.unwrap_or(1) != buf.len() {
+            return Err(D::DeviceError::default());
+        }
+
+        self.set_batch_size(batch_size)?;
+        self.buf.load_non_blocking_from_host(buf)
+    }
+
+    pub fn set_to(&mut self, val: f32) -> Result<(), D::DeviceError> {
+        self.buf.set_to(self.size(), val)
     }
 
     /// Writes the contents of this matrix into a buffer,

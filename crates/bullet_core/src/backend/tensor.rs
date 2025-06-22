@@ -52,7 +52,7 @@ impl<D: Device> Tensor<D> {
 
     pub fn zero_grad(&mut self) -> Result<(), D::DeviceError> {
         if let Some(grad) = self.gradients.as_mut() {
-            grad.set_zero()?;
+            grad.set_to(0.0)?;
         }
 
         Ok(())
@@ -93,11 +93,6 @@ impl<D: Device> Tensor<D> {
             }
             Matrix::Dense(_) => Err(OperationError::InvalidTensorFormat),
         }
-    }
-
-    pub fn set_grad_to_unit(&mut self) -> Result<(), D::DeviceError> {
-        let grad = self.gradients.as_mut().unwrap();
-        grad.load_from_slice(None, &[1.0])
     }
 
     pub fn seed_random(

@@ -1,50 +1,41 @@
 use std::{
     fs::File,
-    io::BufReader,
+    io::{BufReader, Cursor},
     sync::mpsc::{self, SyncSender},
 };
 
-use crate::{default::loader::DataLoader, game::formats::bulletformat::ChessBoard};
+use crate::game::formats::bulletformat::ChessBoard;
 
-use super::rng::SimpleRand;
+use super::{rng::SimpleRand, DataLoader};
 
-use viriformat::{
-    chess::{board::Board, chessmove::Move},
-    dataformat::{Filter, Game, WDL},
+use montyformat::{
+    chess::{Move, Position},
+    FastDeserialise, MontyValueFormat,
 };
 
 #[derive(Clone)]
-pub enum ViriFilter {
-    Builtin(Filter),
-    Custom(fn(&Board, Move, i16, f32) -> bool),
-}
-
-impl From<Filter> for ViriFilter {
-    fn from(value: Filter) -> Self {
-        Self::Builtin(value)
-    }
-}
-
-#[derive(Clone)]
-pub struct ViriBinpackLoader {
+pub struct MontyBinpackLoader<T: Fn(&Position, Move, i16, f32) -> bool> {
     file_path: [String; 1],
     buffer_size: usize,
     threads: usize,
-    filter: ViriFilter,
+    filter: T,
 }
 
-impl ViriBinpackLoader {
-    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: impl Into<ViriFilter>) -> Self {
+impl<T: Fn(&Position, Move, i16, f32) -> bool> MontyBinpackLoader<T> {
+    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: T) -> Self {
         Self {
             file_path: [path.to_string(); 1],
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
             threads,
-            filter: filter.into(),
+            filter,
         }
     }
 }
 
-impl DataLoader<ChessBoard> for ViriBinpackLoader {
+impl<T> DataLoader<ChessBoard> for MontyBinpackLoader<T>
+where
+    T: Fn(&Position, Move, i16, f32) -> bool + Clone + Send + Sync + 'static,
+{
     fn data_file_paths(&self) -> &[String] {
         &self.file_path
     }
@@ -60,16 +51,19 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
         let file_path = self.file_path[0].clone();
         let buffer_size = self.buffer_size;
 
-        let (sender, receiver) = mpsc::sync_channel::<Game>(256);
+        let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(256);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || 'dataloading: loop {
             let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
 
-            while let Ok(game) = Game::deserialise_from(&mut reader, Vec::new()) {
-                if msg_receiver.try_recv().unwrap_or(false) || sender.send(game).is_err() {
+            let mut buffer = Vec::new();
+            while let Ok(()) = MontyValueFormat::deserialise_fast_into_buffer(&mut reader, &mut buffer) {
+                if msg_receiver.try_recv().unwrap_or(false) || sender.send(buffer).is_err() {
                     break 'dataloading;
                 }
+
+                buffer = Vec::new();
             }
         });
 
@@ -81,13 +75,13 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
 
         std::thread::spawn(move || {
             let mut reusable = Vec::new();
-            'dataloading: while let Ok(game) = receiver.recv() {
+            'dataloading: while let Ok(game_bytes) = receiver.recv() {
                 if game_msg_receiver.try_recv().unwrap_or(false) {
                     msg_sender.send(true).unwrap();
                     break 'dataloading;
                 }
 
-                reusable.push(game);
+                reusable.push(game_bytes);
 
                 if reusable.len() % (8192 * threads) == 0 {
                     convert_buffer(threads, &game_sender, &reusable, &filter);
@@ -143,7 +137,12 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
     }
 }
 
-fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Game], filter: &ViriFilter) {
+fn convert_buffer<T: Fn(&Position, Move, i16, f32) -> bool + Send + Sync>(
+    threads: usize,
+    sender: &SyncSender<Vec<ChessBoard>>,
+    games: &[Vec<u8>],
+    filter: &T,
+) {
     let chunk_size = games.len().div_ceil(threads);
 
     std::thread::scope(|s| {
@@ -152,8 +151,8 @@ fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &
             s.spawn(move || {
                 let mut buffer = Vec::new();
 
-                for game in chunk {
-                    parse_into_buffer(game, &mut buffer, filter);
+                for game_bytes in chunk {
+                    parse_into_buffer(game_bytes, &mut buffer, filter);
                 }
 
                 this_sender.send(buffer)
@@ -162,39 +161,23 @@ fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &
     });
 }
 
-fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFilter) {
-    match filter {
-        ViriFilter::Builtin(filter) => {
-            game.splat_to_bulletformat(
-                |board| {
-                    buffer.push(board);
-                    Ok(())
-                },
-                filter,
-            )
-            .unwrap();
+fn parse_into_buffer<T: Fn(&Position, Move, i16, f32) -> bool>(
+    game_bytes: &[u8],
+    buffer: &mut Vec<ChessBoard>,
+    filter: &T,
+) {
+    let mut reader = Cursor::new(game_bytes);
+    let game = MontyValueFormat::deserialise_from(&mut reader, Vec::new()).unwrap();
+
+    let mut pos = game.startpos;
+    let castling = game.castling;
+
+    for data in game.moves {
+        if filter(&pos, data.best_move, data.score, game.result) {
+            buffer.push(ChessBoard::from_raw(pos.bbs(), pos.stm(), data.score, game.result).unwrap());
         }
-        ViriFilter::Custom(filter) => {
-            game.splat_to_bulletformat_with_filter_callback(
-                |board| {
-                    buffer.push(board);
-                    Ok(())
-                },
-                |mv, eval, board, wdl, _| {
-                    !filter(
-                        board,
-                        mv,
-                        eval as i16,
-                        match wdl {
-                            WDL::Win => 1.0,
-                            WDL::Draw => 0.5,
-                            WDL::Loss => 0.0,
-                        },
-                    )
-                },
-            )
-            .unwrap();
-        }
+
+        pos.make(data.best_move, &castling);
     }
 }
 

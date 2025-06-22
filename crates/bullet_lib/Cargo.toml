@@ -43,14 +43,6 @@ name = "akimbo-main"
 path = "../../examples/extra/akimbo-main.rs"
 
 [[example]]
-name = "ataxx"
-path = "../../examples/extra/ataxx.rs"
-
-[[example]]
-name = "policy"
-path = "../../examples/extra/policy.rs"
-
-[[example]]
 name = "1_simple"
 path = "../../examples/progression/1_simple.rs"
 

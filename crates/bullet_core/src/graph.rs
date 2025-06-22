@@ -103,7 +103,7 @@ impl<D: Device> Graph<D> {
         self.nodes.len() - 1
     }
 
-    pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
+    pub(crate) fn forward_non_blocking(&mut self) -> Result<(), OperationError<D::DeviceError>> {
         for node in 0..self.nodes.len() {
             match self.get_node_info(node) {
                 Ok(node) => {
@@ -128,13 +128,11 @@ impl<D: Device> Graph<D> {
             }
         }
 
-        self.device.synchronise()?;
-        self.device.get_last_device_error()?;
-        Ok(self.get(self.root())?.get_scalar().unwrap())
+        Ok(())
     }
 
-    pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
-        self.get_mut(self.root())?.set_grad_to_unit()?;
+    pub(crate) fn backward_non_blocking(&mut self) -> Result<(), OperationError<D::DeviceError>> {
+        self.get_mut(self.root())?.gradients.as_mut().unwrap().set_to(1.0)?;
 
         for node in (0..self.nodes.len()).rev() {
             match self.get_node_info(node) {
@@ -160,9 +158,41 @@ impl<D: Device> Graph<D> {
             }
         }
 
+        Ok(())
+    }
+
+    pub(crate) fn zero_grads_non_blocking(&mut self) -> Result<(), D::DeviceError> {
+        for node in &mut self.nodes {
+            if let Some(node) = node.as_mut() {
+                node.get_mut().zero_grad()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
+        self.forward_non_blocking()?;
+        self.device.synchronise()?;
+        self.device.get_last_device_error()?;
+        self.get_output_val()
+    }
+
+    pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
+        self.backward_non_blocking()?;
         self.device.synchronise()?;
         self.device.get_last_device_error()?;
         Ok(())
+    }
+
+    pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
+        self.zero_grads_non_blocking()?;
+        self.device.synchronise()?;
+        self.device.get_last_device_error()
+    }
+
+    pub fn get_output_val(&self) -> Result<f32, OperationError<D::DeviceError>> {
+        Ok(self.get(self.root())?.get_scalar().unwrap())
     }
 
     pub fn profile_node(&mut self, node: Node, id: &str) {
@@ -275,16 +305,6 @@ impl<D: Device> Graph<D> {
         Ok(())
     }
 
-    pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
-        for node in &mut self.nodes {
-            if let Some(node) = node.as_mut() {
-                node.get_mut().zero_grad()?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn input_ids(&self) -> Vec<String> {
         self.inputs.keys().cloned().collect()
     }
@@ -299,6 +319,10 @@ impl<D: Device> Graph<D> {
 
     pub fn get_input_mut(&mut self, id: &str) -> RefMut<'_, Tensor<D>> {
         self.get_mut(self.inputs[id]).unwrap()
+    }
+
+    pub fn has_input(&self, id: &str) -> bool {
+        self.inputs.contains_key(id)
     }
 
     pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {

@@ -1,5 +1,18 @@
 #include "../util.cu"
 
+__global__ void set_kernel(float* buf, int32_t size, float val)
+{
+    const int32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) buf[tid] = val;
+}
+
+extern "C" void set(float* buf, size_t size, float val)
+{
+    const size_t threads = 512;
+    const size_t blocks = (size + threads - 1) / threads;
+    set_kernel<<<blocks, threads>>>(buf, size, val);
+}
+
 #define SCALAR_KERNEL_FORWARD(name, op)\
 extern "C" void name(const size_t size, const float alpha, const float* in, float* out)\
 {\

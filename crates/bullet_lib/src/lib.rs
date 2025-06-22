@@ -1,13 +1,11 @@
 /// Contains `Trainer`, the default implementation
 /// of `NetworkTrainer`, for training value networks.
+#[deprecated]
 pub mod default;
 
 /// Contains common game related code used in both policy
 /// and value network traiing (e.g. sparse input types).
 pub mod game;
-
-/// Contains `PolicyTrainer`, for training policy networks.
-pub mod policy;
 
 /// Contains the `NetworkTrainer` trait and
 /// associated structs for its use
