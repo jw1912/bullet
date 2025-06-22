@@ -5,9 +5,9 @@ use sfbinpack::{
     CompressedTrainingDataEntryReader, TrainingDataEntry,
 };
 
-use crate::{default::loader::DataLoader, game::formats::bulletformat::ChessBoard};
+use crate::game::formats::bulletformat::ChessBoard;
 
-use super::rng::SimpleRand;
+use super::{rng::SimpleRand, DataLoader};
 
 fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     let mut bbs = [0; 8];

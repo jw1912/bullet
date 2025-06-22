@@ -1,5 +1,6 @@
 /// Contains `Trainer`, the default implementation
 /// of `NetworkTrainer`, for training value networks.
+#[deprecated]
 pub mod default;
 
 /// Contains common game related code used in both policy

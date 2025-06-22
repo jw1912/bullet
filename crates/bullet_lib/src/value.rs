@@ -1,5 +1,6 @@
 pub(crate) mod builder;
 mod dataloader;
+pub mod loader;
 mod save;
 
 use std::cell::RefCell;
@@ -28,8 +29,6 @@ use crate::{
     wdl::WdlScheduler,
     LocalSettings, TrainingSchedule,
 };
-
-pub use crate::default::loader;
 
 /// For now `ValueTrainer` just aliases the existing `Trainer`,
 /// because the only improvements for now are in the **construction**

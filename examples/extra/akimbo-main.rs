@@ -1,6 +1,4 @@
-/*
-The exact training used for akimbo's current network, updated as I merge new nets.
-*/
+#![allow(deprecated)]
 use bullet_lib::{
     nn::{optimiser, Activation},
     trainer::{

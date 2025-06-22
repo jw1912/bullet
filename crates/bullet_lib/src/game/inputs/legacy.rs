@@ -1,4 +1,4 @@
-use crate::default::loader::LoadableDataType;
+use crate::value::loader::LoadableDataType;
 
 use super::SparseInputType;
 

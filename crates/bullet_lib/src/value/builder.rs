@@ -7,7 +7,6 @@ use bullet_core::{
 };
 
 use crate::{
-    default::Wgt,
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
@@ -17,6 +16,7 @@ use crate::{
 
 use super::{ValueTrainer, B};
 
+type Wgt<I> = fn(&<I as SparseInputType>::RequiredDataType) -> f32;
 type LossFn = for<'a> fn(Nbn<'a>, Nbn<'a>) -> Nbn<'a>;
 
 pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {

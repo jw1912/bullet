@@ -21,6 +21,11 @@ use crate::{
 
 use super::Wgt;
 
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::ChessBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::AtaxxBoard {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::CudADFormat {}
+unsafe impl CanBeDirectlySequentiallyLoaded for bulletformat::chess::MarlinFormat {}
+
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GameResult {

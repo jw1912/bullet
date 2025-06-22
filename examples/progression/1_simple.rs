@@ -15,7 +15,7 @@ fn main() {
     let dataset_path = "data/baseline.data";
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);
-    let superbatches = 160;
+    let superbatches = 40;
     let wdl_proportion = 0.75;
 
     let mut trainer = ValueTrainerBuilder::default()
