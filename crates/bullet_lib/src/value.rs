@@ -30,9 +30,7 @@ use crate::{
     LocalSettings, TrainingSchedule,
 };
 
-/// For now `ValueTrainer` just aliases the existing `Trainer`,
-/// because the only improvements for now are in the **construction**
-/// of the trainer via `ValueTrainerBuilder`.
+/// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
