@@ -2,6 +2,8 @@ pub(crate) mod builder;
 mod dataloader;
 mod save;
 
+use std::cell::RefCell;
+
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use crate::{nn::ExecutionContext, value::loader::DefaultDataPreparer};
@@ -72,6 +74,8 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
     weight_getter: Option<Wgt<Inp>>,
     output_node: Node,
     saved_format: Vec<SavedFormat>,
+    use_win_rate_model: bool,
+    wdl: bool,
 }
 
 impl<Opt, Inp, Out> ValueTrainer<Opt, Inp, Out>
@@ -98,31 +102,53 @@ where
             self.state.output_getter,
             self.state.blend_getter,
             self.state.weight_getter,
-            false,
-            false,
+            self.state.use_win_rate_model,
+            self.state.wdl,
             schedule.eval_scale,
             dataloader.clone(),
         );
 
         let lr_scheduler = schedule.lr_scheduler.clone();
 
+        let steps = schedule.steps;
+
+        let error_record = RefCell::new(Vec::new());
+        let mut prev32_loss = 0.0;
+
         self.train_custom(
             trainer::schedule::TrainingSchedule {
-                steps: schedule.steps,
+                steps,
                 save_rate: schedule.save_rate,
                 out_dir: settings.output_directory.to_string(),
                 log_rate: 128,
                 lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)),
                 net_id: schedule.net_id.clone(),
             },
-            ValueDataLoader {
-                steps: schedule.steps,
-                threads: settings.threads,
-                dataloader,
-                wdl: schedule.wdl_scheduler.clone(),
+            ValueDataLoader { steps, threads: settings.threads, dataloader, wdl: schedule.wdl_scheduler.clone() },
+            |_, superbatch, curr_batch, error| {
+                prev32_loss += error;
+
+                if curr_batch % 32 == 0
+                    || (steps.batches_per_superbatch < 32 && curr_batch == steps.batches_per_superbatch)
+                {
+                    prev32_loss /= 32.0_f32.min(steps.batches_per_superbatch as f32);
+
+                    error_record.borrow_mut().push((superbatch, curr_batch, prev32_loss));
+
+                    prev32_loss = 0.0;
+                }
             },
-            |_, _, _| {},
-            |_, _| {},
+            |trainer, superbatch| {
+                if superbatch % schedule.save_rate == 0 || superbatch == steps.end_superbatch {
+                    let name = format!("{}-{superbatch}", schedule.net_id);
+                    let path = format!("{}/{name}", settings.output_directory);
+                    std::fs::create_dir(path.as_str()).unwrap_or(());
+                    save::save_to_checkpoint(trainer, &path);
+                    save::write_losses(&format!("{path}/log.txt"), &error_record.borrow());
+
+                    println!("Saved [{}]", logger::ansi(name, 31));
+                }
+            },
         )
         .unwrap();
     }

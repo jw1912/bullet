@@ -31,6 +31,7 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     loss_fn: Option<LossFn>,
     factorised: Vec<String>,
     wdl_output: bool,
+    use_win_rate_model: bool,
 }
 
 impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
@@ -49,6 +50,7 @@ where
             weight_getter: None,
             loss_fn: None,
             wdl_output: false,
+            use_win_rate_model: false,
             factorised: Vec::new(),
         }
     }
@@ -112,6 +114,11 @@ where
         self
     }
 
+    pub fn use_win_rate_model(mut self) -> Self {
+        self.use_win_rate_model = true;
+        self
+    }
+
     fn build_custom_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, Nbn<'a>, &'a NetworkBuilder) -> (Nbn<'a>, Nbn<'a>),
@@ -151,6 +158,8 @@ where
                 blend_getter: self.blend_getter,
                 weight_getter: self.weight_getter,
                 output_node,
+                use_win_rate_model: self.use_win_rate_model,
+                wdl: self.wdl_output,
                 saved_format: saved_format.clone(),
             },
         })
@@ -235,6 +244,7 @@ where
             loss_fn: self.loss_fn,
             factorised: self.factorised,
             wdl_output: self.wdl_output,
+            use_win_rate_model: self.use_win_rate_model,
         }
     }
 }
@@ -262,6 +272,7 @@ where
             loss_fn: self.loss_fn,
             factorised: self.factorised,
             wdl_output: self.wdl_output,
+            use_win_rate_model: self.use_win_rate_model,
         }
     }
 }

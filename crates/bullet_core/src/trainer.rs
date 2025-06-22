@@ -43,7 +43,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         &mut self,
         schedule: TrainingSchedule,
         dataloader: impl DataLoader<Error = DataLoadingError>,
-        mut batch_callback: impl FnMut(&mut Self, usize, usize),
+        mut batch_callback: impl FnMut(&mut Self, usize, usize, f32),
         mut superbatch_callback: impl FnMut(&mut Self, usize),
     ) -> Result<(), TrainerError<D>> {
         logger::clear_colours();
@@ -164,7 +164,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
             curr_batch += 1;
 
-            batch_callback(self, superbatch, curr_batch);
+            batch_callback(self, superbatch, curr_batch, error);
 
             if curr_batch % steps.batches_per_superbatch == 0 {
                 let error = running_loss / steps.batches_per_superbatch as f32;
@@ -175,15 +175,6 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
                 logger::report_superbatch_finished(superbatch, error, sb_time, total_time, superbatch_positions);
                 logger::report_time_left(steps, superbatch, total_time);
-
-                if superbatch % schedule.save_rate == 0 || superbatch == steps.end_superbatch {
-                    let name = format!("{}-{superbatch}", schedule.net_id);
-                    let path = format!("{out_dir}/{name}");
-                    std::fs::create_dir(path.as_str()).unwrap_or(());
-                    self.optimiser.write_to_checkpoint(path.as_str()).map_err(|_| TrainerError::IoError)?;
-
-                    println!("Saved [{}]", logger::ansi(name, 31));
-                }
 
                 superbatch_callback(self, superbatch);
 
