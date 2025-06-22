@@ -97,6 +97,13 @@ where
         schedule.display();
         settings.display();
 
+        if settings.test_set.is_some() {
+            println!(
+                "{}",
+                logger::ansi("Warning: Validation data not currently implemented! Please bother me on discord.", "31")
+            )
+        }
+
         let dataloader = DefaultDataLoader::new(
             self.state.input_getter.clone(),
             self.state.output_getter,
