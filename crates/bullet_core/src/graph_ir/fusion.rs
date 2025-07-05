@@ -1,3 +1,5 @@
+use crate::graph_ir::operation::sparse::SparseAffineDualActivate;
+
 use super::{
     node::AnnotatedNode,
     operation::{
@@ -77,12 +79,23 @@ fn fuse_diffable_from_output(
                 return FusionDescription::new(&[node.idx], vec![new_data]);
             }
 
-            /*
-                SparseAffineDualActivate(w, n, s, b, DiffableFromOutput::Identity) => {
-                    new_data.parent_operation = Some(SparseAffineDualActivate(w, n, s, b, activation));
-                    return FusionDescription::new(&[node.idx], vec![new_data]);
-                }
-            */
+            if let Some(&SparseAffineDualActivate {
+                weights,
+                indices_l,
+                indices_r,
+                biases,
+                activation: DiffableFromOutput::Identity,
+            }) = downcast(op)
+            {
+                let new_data = old_data.with_new_op(SparseAffineDualActivate {
+                    weights,
+                    indices_l,
+                    indices_r,
+                    biases,
+                    activation,
+                });
+                return FusionDescription::new(&[node.idx], vec![new_data]);
+            }
         }
     }
 
@@ -100,15 +113,22 @@ fn fuse_concat(
 
     if node_a.num_children == 1 && node_b.num_children == 1 {
         if let (Some(op1), Some(op2)) = (&node_a.parent_operation, &node_b.parent_operation) {
-            /*if let (
-                Some(SparseAffineActivate { weights: wa, indices: ia, values: None, biases: ba, activation: acta }),
-                Some(SparseAffineActivate { weights: wb, indices: ib, values: None, biases: bb, activation: actb }),
-            ) = (downcast(op1), downcast(op2)) {
+            if let (
+                Some(&SparseAffineActivate { weights: wa, indices: ia, values: None, biases: ba, activation: acta }),
+                Some(&SparseAffineActivate { weights: wb, indices: ib, values: None, biases: bb, activation: actb }),
+            ) = (downcast(op1), downcast(op2))
+            {
                 if wa == wb && ia.idx != ib.idx && ba == bb && acta == actb {
-                    let new_data = old_data.with_new_op(SparseAffineDualActivate(wa, ia, ib, ba, acta));
+                    let new_data = old_data.with_new_op(SparseAffineDualActivate {
+                        weights: wa,
+                        indices_l: ia,
+                        indices_r: ib,
+                        biases: ba,
+                        activation: acta,
+                    });
                     return FusionDescription::new(&[a.idx, b.idx], vec![new_data]);
                 }
-            }*/
+            }
 
             if let (
                 Some(&PairwiseMul { input: c, post_concat: false }),
@@ -281,12 +301,23 @@ fn fuse_add_single(
                 }
             }
 
-            /*
-                SparseAffineDualActivate(weights, s, n, None, DiffableFromOutput::Identity) => {
-                    let new_data = old_data.with_new_op(SparseAffineDualActivate(weights, s, n, Some(*rhs), DiffableFromOutput::Identity));
-                    return FusionDescription::new(&[lhs.idx], [new_data]);
-                }
-            */
+            if let Some(&SparseAffineDualActivate {
+                weights,
+                indices_l,
+                indices_r,
+                biases: None,
+                activation: DiffableFromOutput::Identity,
+            }) = downcast(op)
+            {
+                let new_data = old_data.with_new_op(SparseAffineDualActivate {
+                    weights,
+                    indices_l,
+                    indices_r,
+                    biases: Some(*rhs),
+                    activation: DiffableFromOutput::Identity,
+                });
+                return FusionDescription::new(&[lhs.idx], [new_data]);
+            }
         }
     }
 
