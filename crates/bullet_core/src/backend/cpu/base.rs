@@ -1,6 +1,6 @@
 use crate::{
     backend::device::base::{AdamConfig, BaseOperations},
-    graph::ir::op::DiffableFromOutput,
+    graph::ir::operation::unary::DiffableFromOutput,
 };
 
 use super::{CpuBuffer, CpuError};

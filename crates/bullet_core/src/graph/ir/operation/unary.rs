@@ -1,4 +1,4 @@
-use crate::graph_ir::{
+use crate::graph::ir::{
     node::AnnotatedNode,
     operation::{util, GraphIROperation, GraphIROperationError},
     shape::Shape,
@@ -116,5 +116,41 @@ impl GraphIROperation for Slice {
         } else {
             Err(GraphIRError::Op(GraphIROperationError::OutOfBounds(is, [self.start, self.end])))
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct ToDense(pub AnnotatedNode);
+
+impl GraphIROperation for ToDense {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.0]
+    }
+
+    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.0, false)?;
+        Ok(self.0.shape)
+    }
+}
+
+#[derive(Debug)]
+pub struct Copy {
+    pub input: AnnotatedNode,
+    pub stop_grad: bool,
+}
+
+impl GraphIROperation for Copy {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.input]
+    }
+
+    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.input, true)?;
+
+        Ok(self.input.shape)
+    }
+
+    fn output_requires_grad(&self, ir: &GraphIR) -> Result<bool, GraphIRError> {
+        Ok(!self.stop_grad && ir.get(self.input.idx).unwrap().requires_grad)
     }
 }

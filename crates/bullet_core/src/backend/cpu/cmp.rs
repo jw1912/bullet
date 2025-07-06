@@ -9,7 +9,7 @@ use crate::{
         },
         tensor::rng,
     },
-    graph::ir::{op::DiffableFromOutput, shape::Shape},
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 
 use super::{CpuBuffer, CpuThread};

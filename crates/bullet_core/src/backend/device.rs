@@ -7,7 +7,7 @@ use base::BaseOperations;
 use blas::BlasOperations;
 
 use super::cpu::CpuThread;
-use crate::graph::ir::{op::DiffableFromOutput, shape::Shape};
+use crate::graph::ir::{operation::unary::DiffableFromOutput, shape::Shape};
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {

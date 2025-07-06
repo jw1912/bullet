@@ -7,26 +7,8 @@ use std::sync::Arc;
 
 use crate::{
     backend::device::{Device, DeviceBuffer, OperationError, OperationResult},
-    graph::{
-        ir::{op::DiffableFromOutput, shape::Shape},
-        tests,
-    },
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
-
-tests::make_tests! {
-    CpuThread,
-    matmul,
-    matmul2,
-    sparse_affine,
-    sparse_affine_batched_biases,
-    sparse_affine_dual,
-    sparse_affine_check_not_batched,
-    relu,
-    crelu,
-    screlu,
-    sqrrelu,
-    concat,
-}
 
 #[derive(Debug, Default)]
 pub struct CpuError;

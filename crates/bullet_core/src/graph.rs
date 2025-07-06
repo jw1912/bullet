@@ -1,7 +1,6 @@
 pub mod builder;
 pub mod execution;
 pub mod ir;
-pub mod tests;
 
 use std::{
     cell::{Ref, RefCell, RefMut},

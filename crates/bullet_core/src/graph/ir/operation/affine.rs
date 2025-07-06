@@ -1,4 +1,4 @@
-use crate::graph_ir::{
+use crate::graph::ir::{
     node::AnnotatedNode,
     operation::{util, GraphIROperation, GraphIROperationError},
     shape::Shape,

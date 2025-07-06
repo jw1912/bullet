@@ -1,4 +1,4 @@
-use crate::graph_ir::{node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, GraphIR};
+use crate::graph::ir::{node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, GraphIR};
 
 pub fn check_dense_eq(ir: &GraphIR, node: &AnnotatedNode, dense: bool) -> Result<(), GraphIROperationError> {
     if ir.get(node.idx).unwrap().sparse.is_none() == dense {

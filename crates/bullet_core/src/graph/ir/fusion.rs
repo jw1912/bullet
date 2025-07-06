@@ -1,10 +1,18 @@
+use crate::graph::ir::operation::sparse::SparseAffineDualActivate;
+
 use super::{
     node::AnnotatedNode,
-    op::{DiffableFromOutput, GraphIROp, UnaryOp},
+    operation::{
+        affine::{Affine, Matmul},
+        binary::Concat,
+        binary::{Binary, BinaryOp},
+        sparse::SparseAffineActivate,
+        unary::PairwiseMul,
+        unary::{DiffableFromOutput, Unary, UnaryOp},
+        GraphIROperation,
+    },
     GraphIR, GraphIRError, GraphIRNode,
 };
-
-use GraphIROp::*;
 
 pub struct FusionDescription {
     pub eliminated: Vec<usize>,
@@ -12,22 +20,36 @@ pub struct FusionDescription {
 }
 
 impl FusionDescription {
-    pub fn new(eliminated: &[usize], new_nodes: &[GraphIRNode]) -> Result<Option<FusionDescription>, GraphIRError> {
-        Ok(Some(FusionDescription { eliminated: eliminated.to_vec(), new_nodes: new_nodes.to_vec() }))
+    pub fn new(
+        eliminated: &[usize],
+        new_nodes: impl Into<Vec<GraphIRNode>>,
+    ) -> Result<Option<FusionDescription>, GraphIRError> {
+        Ok(Some(FusionDescription { eliminated: eliminated.to_vec(), new_nodes: new_nodes.into() }))
     }
 }
 
 pub fn search_for_fusion(ir: &GraphIR, node: usize) -> Result<Option<FusionDescription>, GraphIRError> {
     let data = ir.get(node).unwrap();
 
-    if let Some(op) = data.parent_operation.as_ref() {
-        match op {
-            LinearCombination(alpha, lhs, beta, rhs) => return fuse_linear_comb(ir, *alpha, lhs, *beta, rhs, data),
-            Concat(a, b) => return fuse_concat(ir, a, b, data),
-            Unary(node, UnaryOp::DiffableFromOutput(act)) => return fuse_diffable_from_output(ir, node, *act, data),
-            Unary(node, UnaryOp::AbsPow(x)) => return fuse_power_error(ir, node, *x, data),
-            Unary(node, UnaryOp::Mul(x)) => return fuse_scale(ir, node, *x, data),
-            _ => {}
+    if let Some(op) = &data.parent_operation {
+        if let Some(Binary { a, b, op: BinaryOp::LinearCombination { alpha, beta } }) = downcast(op) {
+            return fuse_linear_comb(ir, *alpha, a, *beta, b, data);
+        }
+
+        if let Some(Concat { a, b }) = downcast(op) {
+            return fuse_concat(ir, a, b, data);
+        }
+
+        if let Some(Unary { input, op: UnaryOp::DiffableFromOutput(act) }) = downcast(op) {
+            return fuse_diffable_from_output(ir, input, *act, data);
+        }
+
+        if let Some(Unary { input, op: UnaryOp::AbsPow(x) }) = downcast(op) {
+            return fuse_power_error(ir, input, *x, data);
+        }
+
+        if let Some(Unary { input, op: UnaryOp::Mul(x) }) = downcast(op) {
+            return fuse_scale(ir, input, *x, data);
         }
     }
 
@@ -43,19 +65,36 @@ fn fuse_diffable_from_output(
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
-        if let Some(op) = ir_node.parent_operation {
-            let mut new_data = old_data.clone();
+        if let Some(op) = &ir_node.parent_operation {
+            if let Some(&SparseAffineActivate {
+                weights,
+                biases,
+                values,
+                indices,
+                activation: DiffableFromOutput::Identity,
+            }) = downcast(op)
+            {
+                let new_data =
+                    old_data.with_new_op(SparseAffineActivate { weights, biases, values, indices, activation });
+                return FusionDescription::new(&[node.idx], vec![new_data]);
+            }
 
-            match op {
-                SparseAffineActivate(a, b, c, d, DiffableFromOutput::Identity) => {
-                    new_data.parent_operation = Some(SparseAffineActivate(a, b, c, d, activation));
-                    return FusionDescription::new(&[node.idx], &[new_data]);
-                }
-                SparseAffineDualActivate(w, n, s, b, DiffableFromOutput::Identity) => {
-                    new_data.parent_operation = Some(SparseAffineDualActivate(w, n, s, b, activation));
-                    return FusionDescription::new(&[node.idx], &[new_data]);
-                }
-                _ => {}
+            if let Some(&SparseAffineDualActivate {
+                weights,
+                indices_l,
+                indices_r,
+                biases,
+                activation: DiffableFromOutput::Identity,
+            }) = downcast(op)
+            {
+                let new_data = old_data.with_new_op(SparseAffineDualActivate {
+                    weights,
+                    indices_l,
+                    indices_r,
+                    biases,
+                    activation,
+                });
+                return FusionDescription::new(&[node.idx], vec![new_data]);
             }
         }
     }
@@ -73,28 +112,41 @@ fn fuse_concat(
     let node_b = ir.get(b.idx)?;
 
     if node_a.num_children == 1 && node_b.num_children == 1 {
-        match (node_a.parent_operation, node_b.parent_operation) {
-            (
-                Some(SparseAffineActivate(wa, ia, None, ba, acta)),
-                Some(SparseAffineActivate(wb, ib, None, bb, actb)),
-            ) => {
+        if let (Some(op1), Some(op2)) = (&node_a.parent_operation, &node_b.parent_operation) {
+            if let (
+                Some(&SparseAffineActivate { weights: wa, indices: ia, values: None, biases: ba, activation: acta }),
+                Some(&SparseAffineActivate { weights: wb, indices: ib, values: None, biases: bb, activation: actb }),
+            ) = (downcast(op1), downcast(op2))
+            {
                 if wa == wb && ia.idx != ib.idx && ba == bb && acta == actb {
-                    let mut new_data = old_data.clone();
-                    new_data.parent_operation = Some(SparseAffineDualActivate(wa, ia, ib, ba, acta));
-                    return FusionDescription::new(&[a.idx, b.idx], &[new_data]);
+                    let new_data = old_data.with_new_op(SparseAffineDualActivate {
+                        weights: wa,
+                        indices_l: ia,
+                        indices_r: ib,
+                        biases: ba,
+                        activation: acta,
+                    });
+                    return FusionDescription::new(&[a.idx, b.idx], vec![new_data]);
                 }
             }
-            (Some(PairwiseMul(c, false)), Some(PairwiseMul(d, false))) => {
+
+            if let (
+                Some(&PairwiseMul { input: c, post_concat: false }),
+                Some(&PairwiseMul { input: d, post_concat: false }),
+            ) = (downcast(op1), downcast(op2))
+            {
                 if c.idx != d.idx && c.shape.size() == d.shape.size() {
-                    let op = Concat(c, d);
+                    let op = Concat { a: c, b: d };
 
-                    let (shape, batched, requires_grad) = op.output_info(ir)?;
+                    let shape = op.output_shape(ir)?;
+                    let batched = op.output_batched(ir)?;
+                    let requires_grad = op.output_requires_grad(ir)?;
                     let new_b = AnnotatedNode { idx: node_b.idx, shape };
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
                         shape,
-                        parent_operation: Some(op),
+                        parent_operation: Some(Box::new(op)),
                         requires_grad,
                         num_children: 0,
                         idx: new_b.idx,
@@ -102,22 +154,26 @@ fn fuse_concat(
                         batched,
                     };
 
-                    let mut new_pairwise = old_data.clone();
-                    new_pairwise.parent_operation = Some(PairwiseMul(new_b, true));
-                    return FusionDescription::new(&[a.idx, b.idx], &[new_concat, new_pairwise]);
+                    let new_pairwise = old_data.with_new_op(PairwiseMul { input: new_b, post_concat: true });
+                    return FusionDescription::new(&[a.idx, b.idx], vec![new_concat, new_pairwise]);
                 }
             }
-            (Some(Unary(c, op1)), Some(Unary(d, op2))) => {
+
+            if let (Some(&Unary { input: c, op: op1 }), Some(&Unary { input: d, op: op2 })) =
+                (downcast(op1), downcast(op2))
+            {
                 if op1 == op2 && c.idx != d.idx && c.shape.size() == d.shape.size() {
-                    let op = Concat(c, d);
+                    let op = Concat { a: c, b: d };
 
-                    let (shape, batched, requires_grad) = op.output_info(ir)?;
+                    let shape = op.output_shape(ir)?;
+                    let batched = op.output_batched(ir)?;
+                    let requires_grad = op.output_requires_grad(ir)?;
                     let new_b = AnnotatedNode { idx: node_b.idx, shape };
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
                         shape,
-                        parent_operation: Some(op),
+                        parent_operation: Some(Box::new(op)),
                         requires_grad,
                         num_children: 0,
                         idx: new_b.idx,
@@ -125,12 +181,10 @@ fn fuse_concat(
                         batched,
                     };
 
-                    let mut new_op = old_data.clone();
-                    new_op.parent_operation = Some(Unary(new_b, op1));
-                    return FusionDescription::new(&[a.idx, b.idx], &[new_concat, new_op]);
+                    let new_op = old_data.with_new_op(Unary { input: new_b, op: op1 });
+                    return FusionDescription::new(&[a.idx, b.idx], vec![new_concat, new_op]);
                 }
             }
-            _ => {}
         }
     }
 
@@ -146,11 +200,12 @@ fn fuse_power_error(
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
-        if let Some(LinearCombination(1.0, a, -1.0, b)) = ir_node.parent_operation {
-            if a.idx != b.idx && ir.get(a.idx)?.batched == ir.get(b.idx)?.batched {
-                let mut new_data = old_data.clone();
-                new_data.parent_operation = Some(PowerError(a, b, power));
-                return FusionDescription::new(&[node.idx], &[new_data]);
+        if let Some(op) = &ir_node.parent_operation {
+            if let Some(&Binary { a, b, op: BinaryOp::LinearCombination { alpha: 1.0, beta: -1.0 } }) = downcast(op) {
+                if a.idx != b.idx && ir.get(a.idx)?.batched == ir.get(b.idx)?.batched {
+                    let new_data = old_data.with_new_op(Binary { a, b, op: BinaryOp::PowerError { power } });
+                    return FusionDescription::new(&[node.idx], [new_data]);
+                }
             }
         }
     }
@@ -167,10 +222,15 @@ fn fuse_scale(
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
-        if let Some(LinearCombination(alpha, a, beta, b)) = ir_node.parent_operation {
-            let mut new_data = old_data.clone();
-            new_data.parent_operation = Some(LinearCombination(alpha * scale, a, beta * scale, b));
-            return FusionDescription::new(&[node.idx], &[new_data]);
+        if let Some(op) = &ir_node.parent_operation {
+            if let Some(&Binary { a, b, op: BinaryOp::LinearCombination { alpha, beta } }) = downcast(op) {
+                let new_data = old_data.with_new_op(Binary {
+                    a,
+                    b,
+                    op: BinaryOp::LinearCombination { alpha: alpha * scale, beta: beta * scale },
+                });
+                return FusionDescription::new(&[node.idx], [new_data]);
+            }
         }
     }
 
@@ -215,27 +275,48 @@ fn fuse_add_single(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.num_children == 1 {
-        if let Some(op) = ir_node.parent_operation {
-            let mut new_data = old_data.clone();
+        if let Some(op) = &ir_node.parent_operation {
+            if let Some(&SparseAffineActivate {
+                weights,
+                indices,
+                values,
+                biases: None,
+                activation: DiffableFromOutput::Identity,
+            }) = downcast(op)
+            {
+                let new_data = old_data.with_new_op(SparseAffineActivate {
+                    weights,
+                    indices,
+                    values,
+                    biases: Some(*rhs),
+                    activation: DiffableFromOutput::Identity,
+                });
+                return FusionDescription::new(&[lhs.idx], [new_data]);
+            }
 
-            match op {
-                SparseAffineActivate(weights, input, vals, None, DiffableFromOutput::Identity) => {
-                    new_data.parent_operation =
-                        Some(SparseAffineActivate(weights, input, vals, Some(*rhs), DiffableFromOutput::Identity));
-                    return FusionDescription::new(&[lhs.idx], &[new_data]);
+            if let Some(&Matmul { a, transa: false, b, transb: false }) = downcast(op) {
+                if !ir.get(rhs.idx)?.batched {
+                    let new_data = old_data.with_new_op(Affine { weights: a, inputs: b, biases: *rhs });
+                    return FusionDescription::new(&[lhs.idx], [new_data]);
                 }
-                SparseAffineDualActivate(weights, s, n, None, DiffableFromOutput::Identity) => {
-                    new_data.parent_operation =
-                        Some(SparseAffineDualActivate(weights, s, n, Some(*rhs), DiffableFromOutput::Identity));
-                    return FusionDescription::new(&[lhs.idx], &[new_data]);
-                }
-                Matmul(a, false, b, false) => {
-                    if !ir.get(rhs.idx)?.batched {
-                        new_data.parent_operation = Some(Affine(a, b, *rhs));
-                        return FusionDescription::new(&[lhs.idx], &[new_data]);
-                    }
-                }
-                _ => {}
+            }
+
+            if let Some(&SparseAffineDualActivate {
+                weights,
+                indices_l,
+                indices_r,
+                biases: None,
+                activation: DiffableFromOutput::Identity,
+            }) = downcast(op)
+            {
+                let new_data = old_data.with_new_op(SparseAffineDualActivate {
+                    weights,
+                    indices_l,
+                    indices_r,
+                    biases: Some(*rhs),
+                    activation: DiffableFromOutput::Identity,
+                });
+                return FusionDescription::new(&[lhs.idx], [new_data]);
             }
         }
     }
@@ -254,12 +335,22 @@ fn fuse_linear_comb_single(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.num_children == 1 {
-        if let Some(Unary(node, UnaryOp::Mul(x))) = ir_node.parent_operation {
-            let mut new_data = old_data.clone();
-            new_data.parent_operation = Some(LinearCombination(alpha * x, node, beta, *rhs));
-            return FusionDescription::new(&[lhs.idx], &[new_data]);
+        if let Some(op) = &ir_node.parent_operation {
+            if let Some(&Unary { input, op: UnaryOp::Mul(x) }) = downcast(op) {
+                let new_data = old_data.with_new_op(Binary {
+                    a: input,
+                    b: *rhs,
+                    op: BinaryOp::LinearCombination { alpha: alpha * x, beta },
+                });
+                return FusionDescription::new(&[lhs.idx], vec![new_data]);
+            }
         }
     }
 
     Ok(None)
+}
+
+#[allow(clippy::borrowed_box)]
+fn downcast<T: 'static>(op: &Box<dyn GraphIROperation>) -> Option<&T> {
+    (op as &dyn std::any::Any).downcast_ref()
 }

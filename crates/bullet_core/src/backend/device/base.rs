@@ -1,4 +1,4 @@
-use crate::graph::ir::op::DiffableFromOutput;
+use crate::graph::ir::operation::unary::DiffableFromOutput;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamConfig {
