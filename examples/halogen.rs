@@ -20,7 +20,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r74-768x8hm-1024-dp-1x8"
+        "bullet_r75-768x8hm-1536-dp-1x8"
     };
 }
 
@@ -28,7 +28,7 @@ const NET_ID: &str = net_id!();
 
 fn main() {
     // network hyperparams
-    let hl_size = 1024;
+    let hl_size = 1536;
     const NUM_OUTPUT_BUCKETS: usize = 8;
     #[rustfmt::skip]
     const BUCKET_LAYOUT: [usize; 32] = [
