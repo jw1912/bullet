@@ -20,7 +20,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r71-768x8hm-1024-dp-1x8"
+        "bullet_r74-768x8hm-1024-dp-1x8"
     };
 }
 
