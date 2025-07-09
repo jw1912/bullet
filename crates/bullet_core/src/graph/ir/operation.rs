@@ -4,6 +4,8 @@ pub mod sparse;
 pub mod unary;
 pub mod util;
 
+use crate::{backend::device::Device, graph::GraphFunction};
+
 use super::{node::AnnotatedNode, GraphIR, GraphIRError, Shape};
 
 pub trait GraphIROperation: std::fmt::Debug + 'static {
@@ -18,6 +20,12 @@ pub trait GraphIROperation: std::fmt::Debug + 'static {
     fn output_requires_grad(&self, ir: &GraphIR) -> Result<bool, GraphIRError> {
         Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().requires_grad))
     }
+}
+
+pub trait GraphIROperationCompile<D: Device>: GraphIROperation {
+    fn forward_pass(&self) -> GraphFunction<D>;
+
+    fn backward_pass(&self) -> GraphFunction<D>;
 }
 
 #[derive(Clone, Debug, PartialEq)]

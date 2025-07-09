@@ -131,9 +131,9 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
                 gradient_factor: f32,
                 learning_rate: f32,
             ) -> Result<(), OperationError<D::DeviceError>> {
-                optim.graph.zero_grads_non_blocking()?;
-                optim.graph.forward_non_blocking()?;
-                optim.graph.backward_non_blocking()?;
+                optim.graph.execute("forward")?;
+                optim.graph.execute("backward")?;
+                optim.graph.execute("zero_grads")?;
                 optim.update(gradient_factor, learning_rate)
             }
 

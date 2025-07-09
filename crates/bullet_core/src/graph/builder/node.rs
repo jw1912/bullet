@@ -199,7 +199,7 @@ impl GraphBuilderNode<'_> {
     }
 
     pub fn matmul(self, rhs: Self) -> Self {
-        if self.builder.builder().get(rhs.node.idx).unwrap().sparse.is_some() {
+        if self.builder.ir().get(rhs.node.idx).unwrap().sparse.is_some() {
             self.builder.apply(SparseAffineActivate {
                 weights: self.node,
                 indices: rhs.node,
@@ -263,7 +263,7 @@ impl GraphBuilderNode<'_> {
     }
 
     pub fn to_dense(self) -> Self {
-        let node = self.builder.builder().add_op(ToDense(self.node)).unwrap();
+        let node = self.builder.ir().add_op(ToDense(self.node)).unwrap();
         Self { node, builder: self.builder }
     }
 }

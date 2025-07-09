@@ -227,28 +227,6 @@ impl Device for CpuThread {
         Ok(())
     }
 
-    fn mask(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        inputs: &Self::BufferF32,
-        masks: &Self::BufferI32,
-        outputs: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn backprop_mask(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        output_grads: &Self::BufferF32,
-        masks: &Self::BufferI32,
-        input_grads: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
     fn select(
         batch_size: usize,
         input_size: usize,
@@ -267,28 +245,6 @@ impl Device for CpuThread {
         indices: &Self::BufferI32,
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn gather(
-        batch_size: usize,
-        input_size: usize,
-        output_size: usize,
-        inputs: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        outputs: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn backprop_gather(
-        batch_size: usize,
-        input_size: usize,
-        output_size: usize,
-        output_grads: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        input_grads: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
         Err(OperationError::UnsupportedOperation)
     }
@@ -313,43 +269,6 @@ impl Device for CpuThread {
 
     fn backprop_softmax_crossentropy(
         size: usize,
-        softmaxed: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn softmax_across_batch_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn crossentropy_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        pred: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        error: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn backprop_softmax_crossentropy_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
         softmaxed: &Self::BufferF32,
         target: &Self::BufferF32,
         output_grad: &Self::BufferF32,

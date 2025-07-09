@@ -14,7 +14,7 @@ impl<'a> Affine<'a> {
     }
 
     pub fn init_with_effective_input_size(&self, size: usize) {
-        let builder = self.weights.builder.builder();
+        let builder = self.weights.builder.ir();
         let w = builder.get(self.weights.node.idx).unwrap();
         let id = w.id.clone().unwrap();
         *self.weights.builder.init().get_mut(&id).unwrap() =

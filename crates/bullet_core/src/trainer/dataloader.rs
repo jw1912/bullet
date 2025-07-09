@@ -5,7 +5,7 @@ use crate::{
         device::{Device, OperationError},
         tensor::{DenseMatrix, Matrix, SparseMatrix},
     },
-    graph::{builder::Shape, Graph},
+    graph::{builder::Shape, Graph, NodeIdTy},
     trainer::TrainerError,
 };
 
@@ -139,8 +139,10 @@ impl<D: Device> PreparedBatchDevice<D> {
         for (id, matrix) in &mut self.inputs {
             assert_eq!(batch_size, matrix.batch_size().unwrap_or(1));
 
-            if graph.has_input(id) {
-                matrix.swap_with(&mut graph.get_input_mut(id).values).map_err(TrainerError::Unexpected)?;
+            if let Some(idx) = graph.input_idx(id) {
+                matrix
+                    .swap_with(&mut graph.get_mut(idx, NodeIdTy::Values).unwrap().values)
+                    .map_err(TrainerError::Unexpected)?;
             }
         }
 

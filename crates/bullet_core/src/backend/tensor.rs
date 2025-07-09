@@ -15,8 +15,8 @@ use crate::{
 };
 
 pub struct Tensor<D: Device> {
-    values: Matrix<D>,
-    shape: Shape,
+    pub values: Matrix<D>,
+    pub shape: Shape,
 }
 
 impl<D: Device> Tensor<D> {
@@ -82,6 +82,34 @@ impl<D: Device> Tensor<D> {
     ) -> Result<(), OperationError<D::DeviceError>> {
         let values = rng::vec_f32(self.values.size(), mean, stdev, use_gaussian);
         self.load_dense_from_slice(self.values.batch_size(), &values)
+    }
+
+    pub fn dense(&self) -> Result<&DenseMatrix<D>, OperationError<D::DeviceError>> {
+        match &self.values {
+            Matrix::Dense(dense) => Ok(dense),
+            Matrix::Sparse(_) => Err(OperationError::InvalidTensorFormat),
+        }
+    }
+
+    pub fn dense_mut(&mut self) -> Result<&mut DenseMatrix<D>, OperationError<D::DeviceError>> {
+        match &mut self.values {
+            Matrix::Dense(dense) => Ok(dense),
+            Matrix::Sparse(_) => Err(OperationError::InvalidTensorFormat),
+        }
+    }
+
+    pub fn sparse(&self) -> Result<&SparseMatrix<D>, OperationError<D::DeviceError>> {
+        match &self.values {
+            Matrix::Dense(_) => Err(OperationError::InvalidTensorFormat),
+            Matrix::Sparse(sparse) => Ok(sparse),
+        }
+    }
+
+    pub fn sparse_mut(&mut self) -> Result<&mut SparseMatrix<D>, OperationError<D::DeviceError>> {
+        match &mut self.values {
+            Matrix::Dense(_) => Err(OperationError::InvalidTensorFormat),
+            Matrix::Sparse(sparse) => Ok(sparse),
+        }
     }
 
     pub fn load_dense_from_slice(
