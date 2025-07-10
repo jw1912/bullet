@@ -1,8 +1,10 @@
 mod matmul;
 mod sparse;
+mod unary;
 
 pub use matmul::Matmul;
 pub use sparse::{BackpropSparseAffineActivateStrided, SparseAffineActivateStrided};
+pub use unary::{PairwiseMul, SparseToDense};
 
 use crate::{
     backend::device::{Device, OperationError},

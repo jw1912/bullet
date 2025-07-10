@@ -43,8 +43,12 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivateStrided {
         let values = if let Some(v) = values { Some(graph.get(v)?) } else { None };
         let values = if let Some(v) = &values { Some(v.dense()?) } else { None };
 
+        let batch_size = indices.batch_size();
+
+        output.set_batch_size(batch_size)?;
+
         D::sparse_affine_activate(
-            indices.batch_size().unwrap_or(1),
+            batch_size.unwrap_or(1),
             stride,
             activation,
             &weights.buf,
@@ -105,6 +109,9 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivateStrided {
         let values = if let Some(v) = &values { Some(v.dense()?) } else { None };
 
         let biases_batched = biases_grads.as_ref().map(|b| b.batch_size.is_some()).unwrap_or(false);
+
+        assert_eq!(indices.batch_size(), output.batch_size());
+        assert_eq!(indices.batch_size(), output_grads.batch_size());
 
         D::backprop_sparse_affine_activate(
             indices.batch_size().unwrap_or(1),

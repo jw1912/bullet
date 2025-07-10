@@ -1,6 +1,10 @@
-use crate::graph::ir::{node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, GraphIR};
+use crate::graph::ir::{node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, BackendMarker, GraphIR};
 
-pub fn check_dense_eq(ir: &GraphIR, node: &AnnotatedNode, dense: bool) -> Result<(), GraphIROperationError> {
+pub fn check_dense_eq<B: BackendMarker>(
+    ir: &GraphIR<B>,
+    node: &AnnotatedNode,
+    dense: bool,
+) -> Result<(), GraphIROperationError> {
     if ir.get(node.idx).unwrap().info.sparse.is_none() == dense {
         Ok(())
     } else {
@@ -8,7 +12,7 @@ pub fn check_dense_eq(ir: &GraphIR, node: &AnnotatedNode, dense: bool) -> Result
     }
 }
 
-pub fn check_not_batched(ir: &GraphIR, node: &AnnotatedNode) -> Result<(), GraphIROperationError> {
+pub fn check_not_batched<B: BackendMarker>(ir: &GraphIR<B>, node: &AnnotatedNode) -> Result<(), GraphIROperationError> {
     if ir.get(node.idx).unwrap().info.batched {
         Err(GraphIROperationError::BatchedInputNotSupported)
     } else {
@@ -24,7 +28,10 @@ pub fn check_matmul(a: Shape, b: Shape) -> Result<Shape, GraphIROperationError> 
     }
 }
 
-pub fn check_same_batching(ir: &GraphIR, x: &[&AnnotatedNode]) -> Result<(), GraphIROperationError> {
+pub fn check_same_batching<B: BackendMarker>(
+    ir: &GraphIR<B>,
+    x: &[&AnnotatedNode],
+) -> Result<(), GraphIROperationError> {
     if x.iter().all(|y| ir.get(y.idx).unwrap().info.batched == ir.get(x[0].idx).unwrap().info.batched) {
         Ok(())
     } else {
@@ -32,7 +39,7 @@ pub fn check_same_batching(ir: &GraphIR, x: &[&AnnotatedNode]) -> Result<(), Gra
     }
 }
 
-pub fn check_no_grad(ir: &GraphIR, x: &[&AnnotatedNode]) -> Result<(), GraphIROperationError> {
+pub fn check_no_grad<B: BackendMarker>(ir: &GraphIR<B>, x: &[&AnnotatedNode]) -> Result<(), GraphIROperationError> {
     if x.iter().any(|y| ir.get(y.idx).unwrap().info.requires_grad) {
         Err(GraphIROperationError::GradientNotSupported)
     } else {

@@ -15,9 +15,9 @@ use crate::{
         ir::{
             operation::{
                 unary::{Reduce, ReduceAcrossBatch},
-                GraphIROperation,
+                GraphIROperationCompilable,
             },
-            GraphIR,
+            BackendMarker, GraphIR,
         },
         Graph, NodeId, NodeIdTy,
     },
@@ -33,14 +33,14 @@ pub enum InitSettings {
 }
 
 #[derive(Default)]
-pub struct GraphBuilder {
-    ir: Mutex<GraphIR>,
+pub struct GraphBuilder<B: BackendMarker> {
+    ir: Mutex<GraphIR<B>>,
     init_data: Mutex<HashMap<String, InitSettings>>,
     consts: Mutex<HashMap<usize, Vec<f32>>>,
 }
 
-impl GraphBuilder {
-    fn ir(&self) -> MutexGuard<GraphIR> {
+impl<B: BackendMarker> GraphBuilder<B> {
+    fn ir(&self) -> MutexGuard<GraphIR<B>> {
         self.ir.try_lock().unwrap()
     }
 
@@ -48,7 +48,7 @@ impl GraphBuilder {
         self.init_data.try_lock().unwrap()
     }
 
-    fn apply(&self, operation: impl GraphIROperation) -> GraphBuilderNode {
+    fn apply(&self, operation: impl GraphIROperationCompilable<B>) -> GraphBuilderNode<B> {
         match self.ir().add_op(operation) {
             Ok(node) => GraphBuilderNode { node, builder: self },
             Err(e) => {
@@ -58,34 +58,34 @@ impl GraphBuilder {
         }
     }
 
-    pub fn new_dense_input<'a>(&'a self, id: &str, shape: Shape) -> GraphBuilderNode<'a> {
+    pub fn new_dense_input<'a>(&'a self, id: &str, shape: Shape) -> GraphBuilderNode<'a, B> {
         let node = self.ir().add_dense_input(id, shape).unwrap();
         GraphBuilderNode { node, builder: self }
     }
 
-    pub fn new_sparse_input<'a>(&'a self, id: &str, shape: Shape, nnz: usize) -> GraphBuilderNode<'a> {
+    pub fn new_sparse_input<'a>(&'a self, id: &str, shape: Shape, nnz: usize) -> GraphBuilderNode<'a, B> {
         let node = self.ir().add_sparse_input(id, shape, nnz).unwrap();
         GraphBuilderNode { node, builder: self }
     }
 
-    pub fn new_constant<'a>(&'a self, shape: Shape, vals: &[f32]) -> GraphBuilderNode<'a> {
+    pub fn new_constant<'a>(&'a self, shape: Shape, vals: &[f32]) -> GraphBuilderNode<'a, B> {
         let node = self.ir().add_node(None, None, shape, false, false, None).unwrap();
         assert_eq!(shape.size(), vals.len(), "Shape of constant does not match provided values!");
         self.consts.try_lock().unwrap().insert(node.idx, vals.to_vec());
         GraphBuilderNode { node, builder: self }
     }
 
-    pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: InitSettings) -> GraphBuilderNode<'a> {
+    pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: InitSettings) -> GraphBuilderNode<'a, B> {
         let node = self.ir().add_weights(id, shape).unwrap();
         self.init().insert(id.to_string(), init);
         GraphBuilderNode { node, builder: self }
     }
 
-    pub fn new_affine(&self, id: &str, input_size: usize, output_size: usize) -> Affine {
+    pub fn new_affine(&self, id: &str, input_size: usize, output_size: usize) -> Affine<B> {
         self.new_affine_custom(id, input_size, output_size, 1)
     }
 
-    pub fn new_affine_custom(&self, id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine {
+    pub fn new_affine_custom(&self, id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine<B> {
         let wid = format!("{id}w");
         let init = InitSettings::Normal { mean: 0.0, stdev: (2.0 / (input_size as f32 * bias_cols as f32)).sqrt() };
         let weights = self.new_weights(&wid, Shape::new(output_size, input_size), init);
@@ -93,8 +93,13 @@ impl GraphBuilder {
 
         Affine { weights, bias }
     }
+}
 
-    pub fn build<D: Device>(self, device: D) -> Graph<D> {
+impl<B: BackendMarker> GraphBuilder<B>
+where
+    B::Backend: Device,
+{
+    pub fn build(self, device: B::Backend) -> Graph<B::Backend> {
         let mut ir = self.ir.into_inner().unwrap();
         let root = ir.root().unwrap();
 

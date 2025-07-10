@@ -1,6 +1,8 @@
 use std::num::NonZeroUsize;
 
-use super::{operation::GraphIROperation, shape::Shape};
+use crate::graph::ir::{operation::GraphIROperationCompilable, BackendMarker};
+
+use super::shape::Shape;
 
 #[derive(Clone, Copy, Debug)]
 pub struct NodeInfo {
@@ -11,16 +13,16 @@ pub struct NodeInfo {
 }
 
 #[derive(Debug)]
-pub struct GraphIRNode {
+pub struct GraphIRNode<B: BackendMarker> {
     pub idx: usize,
     pub info: NodeInfo,
-    pub parent_operation: Option<Box<dyn GraphIROperation>>,
+    pub parent_operation: Option<Box<dyn GraphIROperationCompilable<B>>>,
     pub num_children: usize,
     pub id: Option<String>,
 }
 
-impl GraphIRNode {
-    pub fn with_new_op(&self, op: impl GraphIROperation) -> Self {
+impl<B: BackendMarker> GraphIRNode<B> {
+    pub fn with_new_op(&self, op: impl GraphIROperationCompilable<B>) -> Self {
         Self {
             idx: self.idx,
             info: self.info,

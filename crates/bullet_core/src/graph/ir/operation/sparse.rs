@@ -1,17 +1,14 @@
-use crate::{
-    backend::device::Device,
-    graph::{
-        instruction,
-        ir::{
-            node::AnnotatedNode,
-            operation::{
-                unary::DiffableFromOutput, util, GraphIROperation, GraphIROperationCompile, GraphIROperationError,
-            },
-            shape::Shape,
-            GraphIR, GraphIRError, GraphIRNodeInfo,
+use crate::graph::{
+    instruction,
+    ir::{
+        node::AnnotatedNode,
+        operation::{
+            unary::DiffableFromOutput, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError,
         },
-        GraphFunction, NodeId, NodeIdTy,
+        shape::Shape,
+        BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
     },
+    GraphFunction, NodeId, NodeIdTy,
 };
 
 #[derive(Debug)]
@@ -23,7 +20,7 @@ pub struct SparseAffineActivate {
     pub activation: DiffableFromOutput,
 }
 
-impl GraphIROperation for SparseAffineActivate {
+impl<B: BackendMarker> GraphIROperation<B> for SparseAffineActivate {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         let mut nodes = vec![self.weights, self.indices];
 
@@ -38,7 +35,7 @@ impl GraphIROperation for SparseAffineActivate {
         nodes
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.weights, true)?;
         util::check_dense_eq(ir, &self.indices, false)?;
         util::check_not_batched(ir, &self.weights)?;
@@ -64,8 +61,8 @@ impl GraphIROperation for SparseAffineActivate {
     }
 }
 
-impl<D: Device> GraphIROperationCompile<D> for SparseAffineActivate {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
+impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         func.push(instruction::SparseAffineActivateStrided {
@@ -83,7 +80,7 @@ impl<D: Device> GraphIROperationCompile<D> for SparseAffineActivate {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         if node_info.get(self.weights.idx).unwrap().requires_grad {
@@ -118,7 +115,7 @@ pub struct SparseAffineDualActivate {
     pub activation: DiffableFromOutput,
 }
 
-impl GraphIROperation for SparseAffineDualActivate {
+impl<B: BackendMarker> GraphIROperation<B> for SparseAffineDualActivate {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         let mut nodes = vec![self.weights, self.indices_l, self.indices_r];
 
@@ -129,7 +126,7 @@ impl GraphIROperation for SparseAffineDualActivate {
         nodes
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.weights, true)?;
         util::check_dense_eq(ir, &self.indices_l, false)?;
         util::check_dense_eq(ir, &self.indices_r, false)?;
@@ -155,8 +152,8 @@ impl GraphIROperation for SparseAffineDualActivate {
     }
 }
 
-impl<D: Device> GraphIROperationCompile<D> for SparseAffineDualActivate {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
+impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineDualActivate {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         let lhs = instruction::SparseAffineActivateStrided {
@@ -182,7 +179,7 @@ impl<D: Device> GraphIROperationCompile<D> for SparseAffineDualActivate {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         if node_info.get(self.weights.idx).unwrap().requires_grad {

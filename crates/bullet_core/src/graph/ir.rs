@@ -20,9 +20,13 @@ use crate::{
     graph::{instruction::Set, Graph, GraphFunction, NodeId, NodeIdTy},
 };
 
+pub trait BackendMarker: Copy + 'static {
+    type Backend: Device;
+}
+
 #[derive(Default)]
-pub struct GraphIR {
-    nodes: Vec<Option<GraphIRNode>>,
+pub struct GraphIR<B: BackendMarker> {
+    nodes: Vec<Option<GraphIRNode<B>>>,
     inputs: HashSet<usize>,
     weights: HashSet<usize>,
     ids: HashSet<String>,
@@ -65,19 +69,19 @@ impl From<GraphIRNodeError> for GraphIRError {
     }
 }
 
-impl GraphIR {
-    pub fn get(&self, idx: usize) -> Result<&GraphIRNode, GraphIRError> {
+impl<B: BackendMarker> GraphIR<B> {
+    pub fn get(&self, idx: usize) -> Result<&GraphIRNode<B>, GraphIRError> {
         self.nodes[idx].as_ref().ok_or(GraphIRError::Node(GraphIRNodeError::NodeDoesNotExist))
     }
 
-    pub fn get_mut(&mut self, idx: usize) -> Result<&mut GraphIRNode, GraphIRError> {
+    pub fn get_mut(&mut self, idx: usize) -> Result<&mut GraphIRNode<B>, GraphIRError> {
         self.nodes[idx].as_mut().ok_or(GraphIRError::Node(GraphIRNodeError::NodeDoesNotExist))
     }
 
     pub fn add_node(
         &mut self,
         id: Option<String>,
-        parent_operation: Option<Box<dyn GraphIROperation>>,
+        parent_operation: Option<Box<dyn GraphIROperationCompilable<B>>>,
         shape: Shape,
         batched: bool,
         requires_grad: bool,
@@ -146,7 +150,7 @@ impl GraphIR {
         Ok(node)
     }
 
-    pub fn add_op(&mut self, operation: impl GraphIROperation) -> Result<AnnotatedNode, GraphIRError> {
+    pub fn add_op(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphIRError> {
         let shape = operation.output_shape(self)?;
         let batched = operation.output_batched(self)?;
         let requires_grad = operation.output_requires_grad(self)?;
@@ -167,7 +171,111 @@ impl GraphIR {
         Ok(AnnotatedNode { idx, shape: data.info.shape })
     }
 
-    pub fn compile<D: Device>(mut self, device: D) -> Result<Graph<D>, GraphIRError> {
+    fn optimise(&mut self) -> Result<(), GraphIRError> {
+        while self.try_fusion_pass()? {}
+
+        Ok(())
+    }
+
+    fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
+        for node in 0..self.nodes.len() {
+            if self.get(node).is_ok() {
+                if let Some(mut desc) = fusion::search_for_fusion(self, node)? {
+                    desc.eliminated.push(node);
+                    self.apply_fusion(desc)?;
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    fn apply_fusion(&mut self, desc: FusionDescription<B>) -> Result<(), GraphIRError> {
+        let FusionDescription { mut eliminated, mut new_nodes } = desc;
+
+        eliminated.sort();
+        for dead in eliminated.into_iter().rev() {
+            self.delete_node(dead)?;
+        }
+
+        new_nodes.sort_by_key(|x| x.idx);
+        for new_data in new_nodes {
+            self.replace_data(new_data.idx, new_data)?;
+        }
+
+        Ok(())
+    }
+
+    fn is_valid(&self) -> Result<(), GraphIRError> {
+        for node in 0..self.nodes.len() {
+            if let Ok(data) = self.get(node) {
+                if data.idx != node {
+                    return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+                }
+
+                self.is_data_valid(data)?;
+
+                if let Some(op) = &data.parent_operation {
+                    for parent in op.nodes() {
+                        let actual_parent =
+                            self.nodes[parent.idx].as_ref().ok_or(GraphIRNodeError::NodeDoesNotExist)?;
+
+                        if parent.idx != actual_parent.idx || parent.shape.size() != actual_parent.info.shape.size() {
+                            return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_data_valid(&self, data: &GraphIRNode<B>) -> Result<(), GraphIRError> {
+        if let Some(op) = &data.parent_operation {
+            let shape = op.output_shape(self)?;
+            let batched = op.output_batched(self)?;
+            let requires_grad = op.output_requires_grad(self)?;
+
+            if data.info.shape != shape || data.info.batched != batched || data.info.requires_grad != requires_grad {
+                return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn delete_node(&mut self, node: usize) -> Result<(), GraphIRError> {
+        if let Some(Some(op)) = self.nodes[node].as_ref().map(|x| &x.parent_operation) {
+            for parent in op.nodes() {
+                self.get_mut(parent.idx)?.num_children -= 1;
+            }
+        }
+
+        self.nodes[node] = None;
+
+        Ok(())
+    }
+
+    fn replace_data(&mut self, node: usize, data: GraphIRNode<B>) -> Result<(), GraphIRError> {
+        if let Some(op) = data.parent_operation.as_ref() {
+            for parent in op.nodes() {
+                self.get_mut(parent.idx)?.num_children += 1;
+            }
+        }
+
+        self.nodes[node] = Some(data);
+
+        Ok(())
+    }
+}
+
+impl<B: BackendMarker> GraphIR<B>
+where
+    B::Backend: Device,
+{
+    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRError> {
         self.is_valid()?;
         self.optimise()?;
         self.is_valid()?;
@@ -224,8 +332,6 @@ impl GraphIR {
             }
 
             if let Some(op) = parent_operation {
-                let opname = format!("{op:?}");
-
                 for (num, &(shape, sparse)) in ancillary_buffers.get(&idx).unwrap().iter().enumerate() {
                     let ancillary = Tensor::new(device.clone(), shape, sparse)
                         .map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor))?;
@@ -234,19 +340,12 @@ impl GraphIR {
                     nodes.insert(id, RefCell::new(ancillary));
                 }
 
-                let x: Box<dyn std::any::Any> = Box::new(op);
+                forward.extend(op.forward_pass(&node_info, idx));
 
-                match x.downcast::<Box<dyn GraphIROperationCompile<D>>>() {
-                    Ok(compilable) => {
-                        forward.extend(compilable.forward_pass(&node_info, idx));
-
-                        if requires_grad {
-                            let mut this_bwd = compilable.backward_pass(&node_info, idx);
-                            this_bwd.extend(backward);
-                            backward = this_bwd;
-                        }
-                    }
-                    _ => return Err(GraphIRError::Compilation(GraphIRCompileError::UnsupportedOperation(opname))),
+                if requires_grad {
+                    let mut this_bwd = op.backward_pass(&node_info, idx);
+                    this_bwd.extend(backward);
+                    backward = this_bwd;
                 }
             }
         }
@@ -257,104 +356,5 @@ impl GraphIR {
             .collect();
 
         Ok(Graph { nodes, inputs, weights, functions, device })
-    }
-
-    fn optimise(&mut self) -> Result<(), GraphIRError> {
-        while self.try_fusion_pass()? {}
-
-        Ok(())
-    }
-
-    fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
-        for node in 0..self.nodes.len() {
-            if self.get(node).is_ok() {
-                if let Some(mut desc) = fusion::search_for_fusion(self, node)? {
-                    desc.eliminated.push(node);
-                    self.apply_fusion(desc)?;
-                    return Ok(true);
-                }
-            }
-        }
-
-        Ok(false)
-    }
-
-    fn apply_fusion(&mut self, desc: FusionDescription) -> Result<(), GraphIRError> {
-        let FusionDescription { mut eliminated, mut new_nodes } = desc;
-
-        eliminated.sort();
-        for dead in eliminated.into_iter().rev() {
-            self.delete_node(dead)?;
-        }
-
-        new_nodes.sort_by_key(|x| x.idx);
-        for new_data in new_nodes {
-            self.replace_data(new_data.idx, new_data)?;
-        }
-
-        Ok(())
-    }
-
-    fn is_valid(&self) -> Result<(), GraphIRError> {
-        for node in 0..self.nodes.len() {
-            if let Ok(data) = self.get(node) {
-                if data.idx != node {
-                    return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
-                }
-
-                self.is_data_valid(data)?;
-
-                if let Some(op) = &data.parent_operation {
-                    for parent in op.nodes() {
-                        let actual_parent =
-                            self.nodes[parent.idx].as_ref().ok_or(GraphIRNodeError::NodeDoesNotExist)?;
-
-                        if parent.idx != actual_parent.idx || parent.shape.size() != actual_parent.info.shape.size() {
-                            return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn is_data_valid(&self, data: &GraphIRNode) -> Result<(), GraphIRError> {
-        if let Some(op) = &data.parent_operation {
-            let shape = op.output_shape(self)?;
-            let batched = op.output_batched(self)?;
-            let requires_grad = op.output_requires_grad(self)?;
-
-            if data.info.shape != shape || data.info.batched != batched || data.info.requires_grad != requires_grad {
-                return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn delete_node(&mut self, node: usize) -> Result<(), GraphIRError> {
-        if let Some(Some(op)) = self.nodes[node].as_ref().map(|x| &x.parent_operation) {
-            for parent in op.nodes() {
-                self.get_mut(parent.idx)?.num_children -= 1;
-            }
-        }
-
-        self.nodes[node] = None;
-
-        Ok(())
-    }
-
-    fn replace_data(&mut self, node: usize, data: GraphIRNode) -> Result<(), GraphIRError> {
-        if let Some(op) = data.parent_operation.as_ref() {
-            for parent in op.nodes() {
-                self.get_mut(parent.idx)?.num_children += 1;
-            }
-        }
-
-        self.nodes[node] = Some(data);
-
-        Ok(())
     }
 }

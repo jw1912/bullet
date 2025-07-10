@@ -1,15 +1,18 @@
-use crate::graph::ir::operation::{sparse::SparseAffineActivate, unary::DiffableFromOutput};
+use crate::graph::ir::{
+    operation::{sparse::SparseAffineActivate, unary::DiffableFromOutput},
+    BackendMarker,
+};
 
 use super::{Activation, GraphBuilderNode, InitSettings};
 
 #[derive(Clone, Copy)]
-pub struct Affine<'a> {
-    pub weights: GraphBuilderNode<'a>,
-    pub bias: GraphBuilderNode<'a>,
+pub struct Affine<'a, B: BackendMarker> {
+    pub weights: GraphBuilderNode<'a, B>,
+    pub bias: GraphBuilderNode<'a, B>,
 }
 
-impl<'a> Affine<'a> {
-    pub fn forward(self, input: GraphBuilderNode<'a>) -> GraphBuilderNode<'a> {
+impl<'a, B: BackendMarker> Affine<'a, B> {
+    pub fn forward(self, input: GraphBuilderNode<'a, B>) -> GraphBuilderNode<'a, B> {
         self.weights.matmul(input) + self.bias
     }
 
@@ -23,18 +26,18 @@ impl<'a> Affine<'a> {
 
     pub fn forward_sparse_dual_with_activation(
         self,
-        stm: GraphBuilderNode<'a>,
-        ntm: GraphBuilderNode<'a>,
+        stm: GraphBuilderNode<'a, B>,
+        ntm: GraphBuilderNode<'a, B>,
         activation: Activation,
-    ) -> GraphBuilderNode<'a> {
+    ) -> GraphBuilderNode<'a, B> {
         self.forward(stm).concat(self.forward(ntm)).activate(activation)
     }
 
     pub fn forward_sparse_with_values(
         self,
-        stm: GraphBuilderNode<'a>,
-        vals: GraphBuilderNode<'a>,
-    ) -> GraphBuilderNode<'a> {
+        stm: GraphBuilderNode<'a, B>,
+        vals: GraphBuilderNode<'a, B>,
+    ) -> GraphBuilderNode<'a, B> {
         stm.builder.apply(SparseAffineActivate {
             weights: self.weights.node,
             indices: stm.node,

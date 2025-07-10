@@ -1,8 +1,12 @@
-use crate::graph::ir::{
-    node::AnnotatedNode,
-    operation::{util, GraphIROperation, GraphIROperationError},
-    shape::Shape,
-    GraphIR, GraphIRError,
+use crate::graph::{
+    instruction,
+    ir::{
+        node::AnnotatedNode,
+        operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+        shape::Shape,
+        BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+    },
+    GraphFunction, NodeId, NodeIdTy,
 };
 
 /// List of supported activation functions.
@@ -31,15 +35,25 @@ pub enum UnaryOp {
     AbsPow(f32),
 }
 
-impl GraphIROperation for Unary {
+impl<B: BackendMarker> GraphIROperation<B> for Unary {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
 
         Ok(self.input.shape)
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
     }
 }
 
@@ -55,19 +69,29 @@ pub struct ReduceAcrossBatch {
     pub reduction: Reduce,
 }
 
-impl GraphIROperation for ReduceAcrossBatch {
+impl<B: BackendMarker> GraphIROperation<B> for ReduceAcrossBatch {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
 
-    fn output_batched(&self, _: &GraphIR) -> Result<bool, GraphIRError> {
+    fn output_batched(&self, _: &GraphIR<B>) -> Result<bool, GraphIRError> {
         Ok(false)
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
 
         Ok(self.input.shape)
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
     }
 }
 
@@ -77,12 +101,12 @@ pub struct PairwiseMul {
     pub post_concat: bool,
 }
 
-impl GraphIROperation for PairwiseMul {
+impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
 
         let is = self.input.shape;
@@ -96,6 +120,20 @@ impl GraphIROperation for PairwiseMul {
     }
 }
 
+impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        GraphFunction::single(instruction::PairwiseMul {
+            post_concat: self.post_concat,
+            input: NodeId::new(self.input.idx, NodeIdTy::Values),
+            output: NodeId::new(output_node, NodeIdTy::Values),
+        })
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct Slice {
     pub input: AnnotatedNode,
@@ -103,12 +141,12 @@ pub struct Slice {
     pub end: usize,
 }
 
-impl GraphIROperation for Slice {
+impl<B: BackendMarker> GraphIROperation<B> for Slice {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
         let is = self.input.shape;
         if self.end > self.start && self.end <= is.rows() && is.cols() == 1 {
@@ -119,17 +157,41 @@ impl GraphIROperation for Slice {
     }
 }
 
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct ToDense(pub AnnotatedNode);
 
-impl GraphIROperation for ToDense {
+impl<B: BackendMarker> GraphIROperation<B> for ToDense {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.0]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.0, false)?;
         Ok(self.0.shape)
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for ToDense {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        GraphFunction::single(instruction::SparseToDense {
+            input: NodeId::new(self.0.idx, NodeIdTy::Values),
+            output: NodeId::new(output_node, NodeIdTy::Values),
+        })
+    }
+
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        assert!(!node_info.get(output_node).unwrap().requires_grad);
+        GraphFunction::default()
     }
 }
 
@@ -139,18 +201,28 @@ pub struct Copy {
     pub stop_grad: bool,
 }
 
-impl GraphIROperation for Copy {
+impl<B: BackendMarker> GraphIROperation<B> for Copy {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
 
         Ok(self.input.shape)
     }
 
-    fn output_requires_grad(&self, ir: &GraphIR) -> Result<bool, GraphIRError> {
+    fn output_requires_grad(&self, ir: &GraphIR<B>) -> Result<bool, GraphIRError> {
         Ok(!self.stop_grad && ir.get(self.input.idx).unwrap().info.requires_grad)
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
     }
 }

@@ -121,8 +121,7 @@ mod util {
     /// ### Safety
     /// Type needs to be zeroable.
     pub unsafe fn set_zero<T>(ptr: *mut T, num: usize) -> Result<(), DeviceError> {
-        catch(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()))?;
-        catch(bindings::cudaDeviceSynchronize())
+        catch(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()))
     }
 
     /// # Safety

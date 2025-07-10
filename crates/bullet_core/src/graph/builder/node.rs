@@ -11,6 +11,7 @@ use crate::graph::{
             unary::{Copy, DiffableFromOutput, PairwiseMul, Reduce, ReduceAcrossBatch, Slice, ToDense, Unary, UnaryOp},
         },
         shape::Shape,
+        BackendMarker,
     },
     Node,
 };
@@ -27,12 +28,12 @@ pub enum Activation {
 }
 
 #[derive(Clone, Copy)]
-pub struct GraphBuilderNode<'a> {
+pub struct GraphBuilderNode<'a, B: BackendMarker> {
     pub(super) node: AnnotatedNode,
-    pub(super) builder: &'a GraphBuilder,
+    pub(super) builder: &'a GraphBuilder<B>,
 }
 
-impl Add<Self> for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Add<Self> for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -40,7 +41,7 @@ impl Add<Self> for GraphBuilderNode<'_> {
     }
 }
 
-impl Sub<Self> for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Sub<Self> for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -48,15 +49,15 @@ impl Sub<Self> for GraphBuilderNode<'_> {
     }
 }
 
-impl<'a> Add<GraphBuilderNode<'a>> for f32 {
-    type Output = GraphBuilderNode<'a>;
+impl<'a, B: BackendMarker> Add<GraphBuilderNode<'a, B>> for f32 {
+    type Output = GraphBuilderNode<'a, B>;
 
-    fn add(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+    fn add(self, rhs: GraphBuilderNode<'a, B>) -> Self::Output {
         rhs.builder.apply(Unary { input: rhs.node, op: UnaryOp::Add(self) })
     }
 }
 
-impl Add<f32> for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Add<f32> for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn add(self, rhs: f32) -> Self::Output {
@@ -64,7 +65,7 @@ impl Add<f32> for GraphBuilderNode<'_> {
     }
 }
 
-impl Neg for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Neg for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -72,15 +73,15 @@ impl Neg for GraphBuilderNode<'_> {
     }
 }
 
-impl<'a> Sub<GraphBuilderNode<'a>> for f32 {
-    type Output = GraphBuilderNode<'a>;
+impl<'a, B: BackendMarker> Sub<GraphBuilderNode<'a, B>> for f32 {
+    type Output = GraphBuilderNode<'a, B>;
 
-    fn sub(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+    fn sub(self, rhs: GraphBuilderNode<'a, B>) -> Self::Output {
         self + (-1.0 * rhs)
     }
 }
 
-impl Sub<f32> for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Sub<f32> for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn sub(self, rhs: f32) -> Self::Output {
@@ -88,23 +89,23 @@ impl Sub<f32> for GraphBuilderNode<'_> {
     }
 }
 
-impl<'a> Mul<GraphBuilderNode<'a>> for f32 {
-    type Output = GraphBuilderNode<'a>;
+impl<'a, B: BackendMarker> Mul<GraphBuilderNode<'a, B>> for f32 {
+    type Output = GraphBuilderNode<'a, B>;
 
-    fn mul(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+    fn mul(self, rhs: GraphBuilderNode<'a, B>) -> Self::Output {
         rhs.builder.apply(Unary { input: rhs.node, op: UnaryOp::Mul(self) })
     }
 }
 
-impl<'a> Mul<GraphBuilderNode<'a>> for GraphBuilderNode<'a> {
-    type Output = GraphBuilderNode<'a>;
+impl<'a, B: BackendMarker> Mul<GraphBuilderNode<'a, B>> for GraphBuilderNode<'a, B> {
+    type Output = GraphBuilderNode<'a, B>;
 
-    fn mul(self, rhs: GraphBuilderNode<'a>) -> Self::Output {
+    fn mul(self, rhs: GraphBuilderNode<'a, B>) -> Self::Output {
         self.concat(rhs).pairwise_mul()
     }
 }
 
-impl Mul<f32> for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Mul<f32> for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn mul(self, rhs: f32) -> Self::Output {
@@ -112,7 +113,7 @@ impl Mul<f32> for GraphBuilderNode<'_> {
     }
 }
 
-impl Div<f32> for GraphBuilderNode<'_> {
+impl<B: BackendMarker> Div<f32> for GraphBuilderNode<'_, B> {
     type Output = Self;
 
     fn div(self, rhs: f32) -> Self::Output {
@@ -120,7 +121,7 @@ impl Div<f32> for GraphBuilderNode<'_> {
     }
 }
 
-impl GraphBuilderNode<'_> {
+impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     pub fn annotated_node(&self) -> AnnotatedNode {
         self.node
     }

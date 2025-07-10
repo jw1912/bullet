@@ -1,4 +1,8 @@
-use crate::graph::ir::{node::NodeInfo, operation::sparse::SparseAffineDualActivate};
+use crate::graph::ir::{
+    node::NodeInfo,
+    operation::{sparse::SparseAffineDualActivate, GraphIROperationCompilable},
+    BackendMarker,
+};
 
 use super::{
     node::AnnotatedNode,
@@ -14,21 +18,24 @@ use super::{
     GraphIR, GraphIRError, GraphIRNode,
 };
 
-pub struct FusionDescription {
+pub struct FusionDescription<B: BackendMarker> {
     pub eliminated: Vec<usize>,
-    pub new_nodes: Vec<GraphIRNode>,
+    pub new_nodes: Vec<GraphIRNode<B>>,
 }
 
-impl FusionDescription {
+impl<B: BackendMarker> FusionDescription<B> {
     pub fn new(
         eliminated: &[usize],
-        new_nodes: impl Into<Vec<GraphIRNode>>,
-    ) -> Result<Option<FusionDescription>, GraphIRError> {
+        new_nodes: impl Into<Vec<GraphIRNode<B>>>,
+    ) -> Result<Option<FusionDescription<B>>, GraphIRError> {
         Ok(Some(FusionDescription { eliminated: eliminated.to_vec(), new_nodes: new_nodes.into() }))
     }
 }
 
-pub fn search_for_fusion(ir: &GraphIR, node: usize) -> Result<Option<FusionDescription>, GraphIRError> {
+pub fn search_for_fusion<B: BackendMarker>(
+    ir: &GraphIR<B>,
+    node: usize,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let data = ir.get(node).unwrap();
 
     if let Some(op) = &data.parent_operation {
@@ -56,12 +63,12 @@ pub fn search_for_fusion(ir: &GraphIR, node: usize) -> Result<Option<FusionDescr
     Ok(None)
 }
 
-fn fuse_diffable_from_output(
-    ir: &GraphIR,
+fn fuse_diffable_from_output<B: BackendMarker>(
+    ir: &GraphIR<B>,
     node: &AnnotatedNode,
     activation: DiffableFromOutput,
-    old_data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    old_data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
@@ -102,12 +109,12 @@ fn fuse_diffable_from_output(
     Ok(None)
 }
 
-fn fuse_concat(
-    ir: &GraphIR,
+fn fuse_concat<B: BackendMarker>(
+    ir: &GraphIR<B>,
     a: &AnnotatedNode,
     b: &AnnotatedNode,
-    old_data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    old_data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let node_a = ir.get(a.idx)?;
     let node_b = ir.get(b.idx)?;
 
@@ -169,9 +176,7 @@ fn fuse_concat(
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
-
                         parent_operation: Some(Box::new(op)),
-
                         num_children: 0,
                         idx: new_b.idx,
                         info: NodeInfo { shape, requires_grad, sparse: None, batched },
@@ -187,12 +192,12 @@ fn fuse_concat(
     Ok(None)
 }
 
-fn fuse_power_error(
-    ir: &GraphIR,
+fn fuse_power_error<B: BackendMarker>(
+    ir: &GraphIR<B>,
     node: &AnnotatedNode,
     power: f32,
-    old_data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    old_data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
@@ -209,12 +214,12 @@ fn fuse_power_error(
     Ok(None)
 }
 
-fn fuse_scale(
-    ir: &GraphIR,
+fn fuse_scale<B: BackendMarker>(
+    ir: &GraphIR<B>,
     node: &AnnotatedNode,
     scale: f32,
-    old_data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    old_data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
@@ -233,14 +238,14 @@ fn fuse_scale(
     Ok(None)
 }
 
-fn fuse_linear_comb(
-    ir: &GraphIR,
+fn fuse_linear_comb<B: BackendMarker>(
+    ir: &GraphIR<B>,
     alpha: f32,
     lhs: &AnnotatedNode,
     beta: f32,
     rhs: &AnnotatedNode,
-    data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     if alpha == 1.0 && beta == 1.0 {
         if let Some(fusion_data) = fuse_add_single(ir, lhs, rhs, data)? {
             return Ok(Some(fusion_data));
@@ -262,12 +267,12 @@ fn fuse_linear_comb(
     Ok(None)
 }
 
-fn fuse_add_single(
-    ir: &GraphIR,
+fn fuse_add_single<B: BackendMarker>(
+    ir: &GraphIR<B>,
     lhs: &AnnotatedNode,
     rhs: &AnnotatedNode,
-    old_data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    old_data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.num_children == 1 {
@@ -320,14 +325,14 @@ fn fuse_add_single(
     Ok(None)
 }
 
-fn fuse_linear_comb_single(
-    ir: &GraphIR,
+fn fuse_linear_comb_single<B: BackendMarker>(
+    ir: &GraphIR<B>,
     alpha: f32,
     lhs: &AnnotatedNode,
     beta: f32,
     rhs: &AnnotatedNode,
-    old_data: &GraphIRNode,
-) -> Result<Option<FusionDescription>, GraphIRError> {
+    old_data: &GraphIRNode<B>,
+) -> Result<Option<FusionDescription<B>>, GraphIRError> {
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.num_children == 1 {
@@ -347,7 +352,7 @@ fn fuse_linear_comb_single(
 }
 
 #[allow(clippy::borrowed_box)]
-fn downcast<T: 'static>(op: &Box<dyn GraphIROperation>) -> Option<&T> {
+fn downcast<B: BackendMarker, T: 'static>(op: &Box<dyn GraphIROperationCompilable<B>>) -> Option<&T> {
     let op: &dyn std::any::Any = op.as_ref();
     op.downcast_ref()
 }

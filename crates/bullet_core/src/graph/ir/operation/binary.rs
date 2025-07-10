@@ -1,8 +1,11 @@
-use crate::graph::ir::{
-    node::AnnotatedNode,
-    operation::{util, GraphIROperation, GraphIROperationError},
-    shape::Shape,
-    GraphIR, GraphIRError,
+use crate::graph::{
+    ir::{
+        node::AnnotatedNode,
+        operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+        shape::Shape,
+        BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+    },
+    GraphFunction,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -19,12 +22,12 @@ pub enum BinaryOp {
     SoftmaxCrossEntropyLoss,
 }
 
-impl GraphIROperation for Binary {
+impl<B: BackendMarker> GraphIROperation<B> for Binary {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.a, self.b]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.a, true)?;
         util::check_dense_eq(ir, &self.b, true)?;
 
@@ -36,18 +39,28 @@ impl GraphIROperation for Binary {
     }
 }
 
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Binary {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct Concat {
     pub a: AnnotatedNode,
     pub b: AnnotatedNode,
 }
 
-impl GraphIROperation for Concat {
+impl<B: BackendMarker> GraphIROperation<B> for Concat {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.a, self.b]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.a, true)?;
         util::check_dense_eq(ir, &self.b, true)?;
         util::check_same_batching(ir, &[&self.a, &self.b])?;
@@ -66,18 +79,28 @@ impl GraphIROperation for Concat {
     }
 }
 
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct Select {
     pub input: AnnotatedNode,
     pub buckets: AnnotatedNode,
 }
 
-impl GraphIROperation for Select {
+impl<B: BackendMarker> GraphIROperation<B> for Select {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input, self.buckets]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
         util::check_dense_eq(ir, &self.buckets, false)?;
         util::check_same_batching(ir, &[&self.input, &self.buckets])?;
@@ -89,5 +112,15 @@ impl GraphIROperation for Select {
         } else {
             Err(GraphIRError::Op(GraphIROperationError::MismatchedInputShapes(vec![is, bs])))
         }
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
+    }
+
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
     }
 }

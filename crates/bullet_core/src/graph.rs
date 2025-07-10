@@ -28,6 +28,10 @@ impl<D: Device> Default for GraphFunction<D> {
 }
 
 impl<D: Device> GraphFunction<D> {
+    pub fn single(instruction: impl GraphInstruction<D>) -> Self {
+        Self { instructions: vec![Box::new(instruction)] }
+    }
+
     pub fn push(&mut self, instruction: impl GraphInstruction<D>) {
         self.instructions.push(Box::new(instruction));
     }

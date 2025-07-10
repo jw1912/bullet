@@ -1,6 +1,10 @@
 use std::marker::PhantomData;
 
-use bullet_core::{graph::builder::Shape, optimiser::Optimiser, trainer::Trainer};
+use bullet_core::{
+    graph::{builder::Shape, ir::BackendMarker},
+    optimiser::Optimiser,
+    trainer::Trainer,
+};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
@@ -110,7 +114,7 @@ where
 
     fn build_custom_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
     where
-        F: for<'a> Fn(usize, usize, Nbn<'a>, &'a NetworkBuilder) -> (Nbn<'a>, Nbn<'a>),
+        F: for<'a> Fn(usize, usize, Nbn<'a>, Nb<'a>) -> (Nbn<'a>, Nbn<'a>),
         Out: Bucket,
         Out::Inner: OutputBuckets<I::RequiredDataType>,
     {
@@ -152,7 +156,7 @@ where
 
     fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
     where
-        F: for<'a> Fn(usize, usize, &'a NetworkBuilder) -> NetworkBuilderNode<'a>,
+        F: for<'a> Fn(usize, usize, Nb<'a>) -> Nbn<'a>,
         Out: Bucket,
         Out::Inner: OutputBuckets<I::RequiredDataType>,
     {
@@ -260,8 +264,14 @@ where
     }
 }
 
-type Nb<'a> = &'a NetworkBuilder;
-type Nbn<'a> = NetworkBuilderNode<'a>;
+#[derive(Clone, Copy, Default)]
+pub struct DefaultBackend;
+impl BackendMarker for DefaultBackend {
+    type Backend = ExecutionContext;
+}
+
+type Nb<'a> = &'a NetworkBuilder<DefaultBackend>;
+type Nbn<'a> = NetworkBuilderNode<'a, DefaultBackend>;
 
 impl<O, I> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
 where

@@ -4,9 +4,9 @@ use crate::{
         instruction,
         ir::{
             node::AnnotatedNode,
-            operation::{util, GraphIROperation, GraphIROperationCompile, GraphIROperationError},
+            operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
             shape::Shape,
-            GraphIR, GraphIRError, GraphIRNodeInfo,
+            BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
         },
         GraphFunction, NodeId, NodeIdTy,
     },
@@ -20,12 +20,12 @@ pub struct Matmul {
     pub transb: bool,
 }
 
-impl GraphIROperation for Matmul {
+impl<B: BackendMarker> GraphIROperation<B> for Matmul {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.a, self.b]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.a, true)?;
         util::check_dense_eq(ir, &self.b, true)?;
         util::check_matmul(self.a.shape.maybe_transpose(self.transa), self.b.shape.maybe_transpose(self.transb))
@@ -33,8 +33,11 @@ impl GraphIROperation for Matmul {
     }
 }
 
-impl<D: Device> GraphIROperationCompile<D> for Matmul {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Matmul
+where
+    B::Backend: Device,
+{
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         func.push(instruction::Matmul {
@@ -52,7 +55,7 @@ impl<D: Device> GraphIROperationCompile<D> for Matmul {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         let shape_o = self.a.shape.maybe_transpose(self.transa) * self.b.shape.maybe_transpose(self.transb);
@@ -128,12 +131,12 @@ pub struct Affine {
     pub inputs: AnnotatedNode,
 }
 
-impl GraphIROperation for Affine {
+impl<B: BackendMarker> GraphIROperation<B> for Affine {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.weights, self.biases, self.inputs]
     }
 
-    fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError> {
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.weights, true)?;
         util::check_dense_eq(ir, &self.inputs, true)?;
         util::check_dense_eq(ir, &self.biases, true)?;
@@ -156,26 +159,12 @@ impl GraphIROperation for Affine {
     }
 }
 
-impl<D: Device> GraphIROperationCompile<D> for Affine {
-    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
-        let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
-
-        let mut func = matmul.forward_pass(node_info, output_node);
-
-        todo!();
-
-        func
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<D> {
-        let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
-
-        let mut func = matmul.backward_pass(node_info, output_node);
-
-        if node_info.get(self.biases.idx).unwrap().requires_grad {
-            todo!()
-        }
-
-        func
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+        todo!()
     }
 }
