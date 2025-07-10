@@ -12,7 +12,7 @@ use crate::{
         device::{Device, OperationError},
         tensor::DenseMatrix,
     },
-    graph::{Graph, NodeIdTy},
+    graph::{Graph, NodeId, NodeIdTy},
 };
 
 pub trait OptimiserState<D: Device>: Sized {
@@ -54,7 +54,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
 
         for id in &weight_ids {
             let idx = graph.weight_idx(id).unwrap();
-            let w = graph.get(idx, NodeIdTy::Values).unwrap();
+            let w = graph.get(NodeId::new(idx, NodeIdTy::Values)).unwrap();
             assert!(w.values.batch_size().is_none());
             let size = w.values.size();
 
@@ -70,10 +70,10 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     pub fn update(&mut self, gradient_factor: f32, learning_rate: f32) -> Result<(), OperationError<D::DeviceError>> {
         for id in &self.graph.weight_ids() {
             let idx = self.graph.weight_idx(id).unwrap();
-            let weights = &mut self.graph.get_mut(idx, NodeIdTy::Values)?;
+            let weights = &mut self.graph.get_mut(NodeId::new(idx, NodeIdTy::Values))?;
             let single = self.state.get_mut(id).unwrap();
 
-            if let Ok(mut grads) = self.graph.get_mut(idx, NodeIdTy::Gradients) {
+            if let Ok(mut grads) = self.graph.get_mut(NodeId::new(idx, NodeIdTy::Gradients)) {
                 single.update(weights.dense_mut()?, grads.dense_mut()?, gradient_factor, learning_rate)?;
             }
         }

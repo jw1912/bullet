@@ -5,7 +5,7 @@ use crate::{
         device::{Device, OperationError},
         tensor::{DenseMatrix, Matrix, SparseMatrix},
     },
-    graph::{builder::Shape, Graph, NodeIdTy},
+    graph::{builder::Shape, Graph, NodeId, NodeIdTy},
     trainer::TrainerError,
 };
 
@@ -141,7 +141,7 @@ impl<D: Device> PreparedBatchDevice<D> {
 
             if let Some(idx) = graph.input_idx(id) {
                 matrix
-                    .swap_with(&mut graph.get_mut(idx, NodeIdTy::Values).unwrap().values)
+                    .swap_with(&mut graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap().values)
                     .map_err(TrainerError::Unexpected)?;
             }
         }

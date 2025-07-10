@@ -10,7 +10,7 @@ use bullet_core::{
     backend::device::OperationError,
     graph::{
         builder::{GraphBuilder, Shape},
-        Graph, Node,
+        Graph, Node, NodeId, NodeIdTy,
     },
 };
 use bullet_hip_backend::{DeviceError, ExecutionContext};
@@ -69,10 +69,11 @@ fn main() -> Result<(), OperationError<DeviceError>> {
         }
 
         for id in &graph.weight_ids() {
-            let weight = &mut *graph.get_weights_mut(id);
+            let idx = graph.weight_idx(id).unwrap();
+            let weight = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
 
-            if let Some(grd) = &weight.gradients {
-                weight.values.dense_mut()?.add(-lr, grd)?;
+            if let Ok(grd) = graph.get(NodeId::new(idx, NodeIdTy::Gradients)) {
+                weight.values.dense_mut()?.add(-lr, grd.dense()?)?;
             }
         }
     }
@@ -91,7 +92,7 @@ fn calculate_accuracy(
     graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
     let _ = graph.forward()?;
 
-    let vals = graph.get_node(output_node).get_dense_vals()?;
+    let vals = graph.get(NodeId::new(output_node.idx(), NodeIdTy::Values))?.get_dense_vals()?;
     let mut correct = 0;
     for (predicted, &expected) in vals.chunks(10).zip(labels.indices.iter()) {
         let mut max = f32::NEG_INFINITY;

@@ -19,7 +19,7 @@ use crate::{
             },
             GraphIR,
         },
-        Graph, NodeIdTy,
+        Graph, NodeId, NodeIdTy,
     },
 };
 
@@ -108,12 +108,12 @@ impl GraphBuilder {
             match *init_data {
                 InitSettings::Zeroed => {}
                 InitSettings::Normal { mean, stdev } => graph
-                    .get_mut(graph.weight_idx(id).unwrap(), NodeIdTy::Values)
+                    .get_mut(NodeId::new(graph.weight_idx(id).unwrap(), NodeIdTy::Values))
                     .unwrap()
                     .seed_random(mean, stdev, true)
                     .unwrap(),
                 InitSettings::Uniform { mean, stdev } => graph
-                    .get_mut(graph.weight_idx(id).unwrap(), NodeIdTy::Values)
+                    .get_mut(NodeId::new(graph.weight_idx(id).unwrap(), NodeIdTy::Values))
                     .unwrap()
                     .seed_random(mean, stdev, false)
                     .unwrap(),
@@ -121,7 +121,7 @@ impl GraphBuilder {
         }
 
         for (&idx, vals) in self.consts.lock().unwrap().iter() {
-            graph.get_mut(idx, NodeIdTy::Values).unwrap().load_dense_from_slice(None, vals).unwrap();
+            graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap().load_dense_from_slice(None, vals).unwrap();
         }
 
         graph

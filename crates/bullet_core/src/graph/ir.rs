@@ -17,7 +17,7 @@ use shape::Shape;
 
 use crate::{
     backend::{device::Device, tensor::Tensor},
-    graph::{Graph, GraphFunction, NodeId, NodeIdTy},
+    graph::{instruction::Set, Graph, GraphFunction, NodeId, NodeIdTy},
 };
 
 #[derive(Default)]
@@ -32,7 +32,7 @@ pub struct GraphIR {
 pub enum GraphIRCompileError {
     InvalidRootNode,
     FailedToInitTensor,
-    UnsupportedOperation,
+    UnsupportedOperation(String),
 }
 
 #[derive(Debug)]
@@ -190,18 +190,22 @@ impl GraphIR {
                 let id = NodeId::new(idx, NodeIdTy::Gradients);
                 nodes.insert(id, RefCell::new(grads));
 
-                //zero_grads.push(SetZero(id));
+                zero_grads.push(Set(id, 0.0));
             }
 
             if let Some(op) = parent_operation {
+                let opname = format!("{op:?}");
+
                 if let Some(compilable) = downcast_op::<D>(op) {
                     forward.extend(compilable.forward_pass());
 
-                    let mut this_bwd = compilable.backward_pass();
-                    this_bwd.extend(backward);
-                    backward = this_bwd;
+                    if requires_grad {
+                        let mut this_bwd = compilable.backward_pass();
+                        this_bwd.extend(backward);
+                        backward = this_bwd;
+                    }
                 } else {
-                    return Err(GraphIRError::Compilation(GraphIRCompileError::UnsupportedOperation));
+                    return Err(GraphIRError::Compilation(GraphIRCompileError::UnsupportedOperation(opname)));
                 }
             }
         }

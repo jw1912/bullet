@@ -352,5 +352,6 @@ fn fuse_linear_comb_single(
 
 #[allow(clippy::borrowed_box)]
 fn downcast<T: 'static>(op: &Box<dyn GraphIROperation>) -> Option<&T> {
-    (op as &dyn std::any::Any).downcast_ref()
+    let op: &dyn std::any::Any = op.as_ref();
+    op.downcast_ref()
 }

@@ -221,7 +221,7 @@ impl EngineType for OpenBenchCompliant {
         build_base.current_dir(repo_path).arg(format!("EXE={out_path}"));
 
         if let Some(net_path) = net {
-            build_base.arg(format!("EVALFILE={}", net_path));
+            build_base.arg(format!("EVALFILE={net_path}"));
         }
 
         match build_base.output() {

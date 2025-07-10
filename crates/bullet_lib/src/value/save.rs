@@ -4,7 +4,11 @@ use std::{
 };
 
 use crate::{nn::ExecutionContext, value::ValueTrainerState};
-use bullet_core::{optimiser::OptimiserState, trainer::Trainer};
+use bullet_core::{
+    graph::{NodeId, NodeIdTy},
+    optimiser::OptimiserState,
+    trainer::Trainer,
+};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
@@ -59,8 +63,9 @@ where
     let mut buf = Vec::new();
 
     for SavedFormat { id, .. } in &trainer.state.saved_format {
-        let weights = trainer.optimiser.graph.get_weights(id);
-        let weights = weights.values.dense().unwrap();
+        let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+        let weights = trainer.optimiser.graph.get(idx).unwrap();
+        let weights = weights.dense().unwrap();
 
         let mut weight_buf = vec![0.0; weights.size()];
         let written = weights.write_to_slice(&mut weight_buf).unwrap();
@@ -87,8 +92,9 @@ where
     let mut buf = Vec::new();
 
     for SavedFormat { id, quant, layout, transforms, round } in &trainer.state.saved_format {
-        let weights = trainer.optimiser.graph.get_weights(id);
-        let weights = weights.values.dense().unwrap();
+        let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+        let weights = trainer.optimiser.graph.get(idx).unwrap();
+        let weights = weights.dense().unwrap();
 
         let mut weight_buf = vec![0.0; weights.size()];
         let written = weights.write_to_slice(&mut weight_buf).unwrap();
@@ -106,7 +112,7 @@ where
         let quantised = match quant.quantise(*round, &weight_buf) {
             Ok(q) => q,
             Err(err) => {
-                println!("Quantisation failed for id: {}", id);
+                println!("Quantisation failed for id: {id}");
                 return Err(err);
             }
         };

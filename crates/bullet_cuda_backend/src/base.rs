@@ -3,7 +3,7 @@ use bullet_core::{
         base::{AdamConfig, BaseOperations},
         DeviceBuffer,
     },
-    graph::ir::op::DiffableFromOutput,
+    graph::ir::operation::unary::DiffableFromOutput,
 };
 use cudarc::driver::PushKernelArg;
 

@@ -91,6 +91,12 @@ pub struct Node {
     pub shape: Shape,
 }
 
+impl Node {
+    pub fn idx(&self) -> usize {
+        self.idx
+    }
+}
+
 impl From<AnnotatedNode> for Node {
     fn from(value: AnnotatedNode) -> Self {
         Self { idx: value.idx, shape: value.shape }
@@ -103,23 +109,43 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_node_values(&self, node: Node) -> Ref<'_, Tensor<D>> {
-        self.get(node.idx, NodeIdTy::Values).unwrap()
+        self.get(NodeId::new(node.idx, NodeIdTy::Values)).unwrap()
     }
 
-    pub fn get(&self, idx: usize, ty: NodeIdTy) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = &self.nodes.get(&NodeId { id: idx, ty }) {
+    pub fn get(&self, id: NodeId) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = &self.nodes.get(&id) {
             Ok(tensor.borrow())
         } else {
             Err(OperationError::TensorOptimisedOut)
         }
     }
 
-    pub fn get_mut(&self, idx: usize, ty: NodeIdTy) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = &self.nodes.get(&NodeId { id: idx, ty }) {
+    pub fn get_mut(&self, id: NodeId) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = &self.nodes.get(&id) {
             Ok(tensor.borrow_mut())
         } else {
             Err(OperationError::TensorOptimisedOut)
         }
+    }
+
+    pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
+        let idx = self.weight_idx(id).unwrap();
+        self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+    }
+
+    pub fn get_weights_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
+        let idx = self.weight_idx(id).unwrap();
+        self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+    }
+
+    pub fn get_input(&self, id: &str) -> Ref<'_, Tensor<D>> {
+        let idx = self.input_idx(id).unwrap();
+        self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+    }
+
+    pub fn get_input_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
+        let idx = self.input_idx(id).unwrap();
+        self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap()
     }
 
     fn root(&self) -> usize {
@@ -156,7 +182,7 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_output_val(&self) -> Result<f32, OperationError<D::DeviceError>> {
-        Ok(self.get(self.root(), NodeIdTy::Values)?.get_scalar().unwrap())
+        Ok(self.get(NodeId::new(self.root(), NodeIdTy::Values))?.get_scalar().unwrap())
     }
 
     /// Writes the weights of a graph to a file. If `gradients` is true,
@@ -170,7 +196,7 @@ impl<D: Device> Graph<D> {
 
         for id in &weight_ids {
             let idx = *self.weights.get(id).unwrap();
-            let weights = self.get_mut(idx, NodeIdTy::Values).unwrap();
+            let weights = self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
             let this_buf = weights.dense().unwrap().write_to_byte_buffer(id).unwrap();
 
             buf.extend_from_slice(&this_buf);
@@ -201,7 +227,7 @@ impl<D: Device> Graph<D> {
             }
 
             let idx = *self.weights.get(&id).unwrap();
-            let mut weights = self.get_mut(idx, NodeIdTy::Values).unwrap();
+            let mut weights = self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
             let weights = weights.dense_mut().unwrap();
             let exp_size = weights.size();
 
@@ -240,7 +266,7 @@ impl<D: Device> Graph<D> {
 
         for weight in self.weight_ids() {
             let idx = *self.weights.get(&weight).unwrap();
-            total += self.get(idx, NodeIdTy::Values).unwrap().dense().unwrap().size();
+            total += self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap().dense().unwrap().size();
         }
 
         total

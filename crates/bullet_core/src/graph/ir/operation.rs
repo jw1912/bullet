@@ -8,7 +8,7 @@ use crate::{backend::device::Device, graph::GraphFunction};
 
 use super::{node::AnnotatedNode, GraphIR, GraphIRError, Shape};
 
-pub trait GraphIROperation: std::fmt::Debug + 'static {
+pub trait GraphIROperation: std::any::Any + std::fmt::Debug + 'static {
     fn nodes(&self) -> Vec<AnnotatedNode>;
 
     fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError>;

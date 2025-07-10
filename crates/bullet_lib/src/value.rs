@@ -9,7 +9,7 @@ pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use crate::{nn::ExecutionContext, value::loader::DefaultDataPreparer};
 use bullet_core::{
-    graph::Node,
+    graph::{Node, NodeId, NodeIdTy},
     optimiser::OptimiserState,
     trainer::{
         self,
@@ -184,9 +184,10 @@ where
         self.optimiser.graph.synchronise().unwrap();
         self.optimiser.graph.forward().unwrap();
 
-        let eval = self.optimiser.graph.get_node(self.state.output_node);
+        let id = NodeId::new(self.state.output_node.idx(), NodeIdTy::Values);
+        let eval = self.optimiser.graph.get(id).unwrap();
 
-        let dense_vals = eval.values.dense().unwrap();
+        let dense_vals = eval.dense().unwrap();
         let mut vals = vec![0.0; dense_vals.size()];
         dense_vals.write_to_slice(&mut vals).unwrap();
         vals

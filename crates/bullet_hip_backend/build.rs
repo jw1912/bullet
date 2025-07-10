@@ -21,7 +21,7 @@ fn main() {
 const KERNELS: &str = "./kernels/include.cu";
 
 fn get_var_path(name: &str) -> PathBuf {
-    println!("rerun-if-env-changed={}", name);
+    println!("rerun-if-env-changed={name}");
 
     use std::env::VarError;
     let path = std::env::var(name).unwrap_or_else(|e| match e {
@@ -29,11 +29,11 @@ fn get_var_path(name: &str) -> PathBuf {
         VarError::NotUnicode(_) => panic!("{name} contains non-unicode path!"),
     });
 
-    println!("Path {}={:?}", name, path);
+    println!("Path {name}={path:?}");
 
     let path = PathBuf::from(path);
     if !path.exists() {
-        panic!("Path {}={:?} does not exist", name, path);
+        panic!("Path {name}={path:?} does not exist");
     }
 
     path
@@ -54,7 +54,7 @@ fn build_cuda(out_path: &Path) {
 
     println!("cargo:rustc-link-lib=dylib=cublas");
     link_search(&cuda_path);
-    println!("cargo:rerun-if-changed={}", include_path_str);
+    println!("cargo:rerun-if-changed={include_path_str}");
 
     cc::Build::new()
         .cargo_warnings(false)
@@ -80,7 +80,7 @@ fn build_hip(out_path: &Path) {
     println!("cargo:rustc-link-lib=dylib=rocblas");
     println!("cargo:rustc-link-lib=dylib=amdhip64");
     println!("cargo:rustc-link-search=native={}", hip_path.join("lib").to_str().unwrap());
-    println!("cargo:rerun-if-changed={}", include_path_str);
+    println!("cargo:rerun-if-changed={include_path_str}");
 
     cc::Build::new()
         .cargo_warnings(false)

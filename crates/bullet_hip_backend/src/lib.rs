@@ -3,9 +3,6 @@ pub mod dense;
 mod matmul;
 pub mod sparse;
 
-#[cfg(test)]
-mod tests;
-
 pub use backend::ExecutionContext;
 use backend::{bindings, ops, util, Buffer};
 
@@ -18,7 +15,7 @@ use bullet_core::{
         },
         tensor,
     },
-    graph::ir::{op::DiffableFromOutput, shape::Shape},
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;
@@ -365,95 +362,5 @@ impl Device for ExecutionContext {
         input_grad: &mut Self::BufferF32,
     ) -> OperationResult {
         dense::backprop_softmax_crossentropy(size, softmaxed, target, output_grad, input_grad)
-    }
-
-    fn mask(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        inputs: &Self::BufferF32,
-        masks: &Self::BufferI32,
-        outputs: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::mask(batch_size, single_size, inputs, masks, nnz, outputs)
-    }
-
-    fn backprop_mask(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        output_grads: &Self::BufferF32,
-        masks: &Self::BufferI32,
-        input_grads: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::backprop_mask(batch_size, single_size, output_grads, masks, nnz, input_grads)
-    }
-
-    fn gather(
-        batch_size: usize,
-        input_size: usize,
-        output_size: usize,
-        inputs: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        outputs: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::gather(batch_size, input_size, output_size, inputs, indices, outputs)
-    }
-
-    fn backprop_gather(
-        batch_size: usize,
-        input_size: usize,
-        output_size: usize,
-        output_grads: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        input_grads: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::backprop_gather(batch_size, input_size, output_size, output_grads, indices, input_grads)
-    }
-
-    fn softmax_across_batch_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::softmax_across_batch_masked(batch_size, single_size, nnz, masks, input, output)
-    }
-
-    fn crossentropy_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        pred: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        error: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::crossentropy_masked(batch_size, single_size, nnz, masks, pred, target, output, error)
-    }
-
-    fn backprop_softmax_crossentropy_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        softmaxed: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-    ) -> OperationResult {
-        sparse::backprop_softmax_crossentropy_masked(
-            batch_size,
-            single_size,
-            nnz,
-            masks,
-            softmaxed,
-            target,
-            output_grad,
-            input_grad,
-        )
     }
 }

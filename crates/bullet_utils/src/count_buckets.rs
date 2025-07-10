@@ -25,7 +25,7 @@ impl ValidateOptions {
             let line = match line {
                 Ok(line) => line,
                 Err(e) => {
-                    eprintln!("Error reading line: {}", e);
+                    eprintln!("Error reading line: {e}");
                     continue;
                 }
             };
@@ -34,7 +34,7 @@ impl ValidateOptions {
                 match token.trim().parse::<usize>() {
                     Ok(num) => numbers.push(num),
                     Err(e) => {
-                        eprintln!("Error parsing number: {}", e);
+                        eprintln!("Error parsing number: {e}");
                         continue;
                     }
                 }
@@ -70,7 +70,7 @@ impl ValidateOptions {
                 bucket_counts[buckets[sq]] += 1;
             });
 
-            println!("King bucket distribution from {} positions:", position_count);
+            println!("King bucket distribution from {position_count} positions:");
             print_buckets(bucket_counts, num_buckets);
 
             total_position_count += position_count;
@@ -81,7 +81,7 @@ impl ValidateOptions {
         }
 
         if self.inputs.len() != 1 {
-            println!("\nTotal King bucket distribution from {} positions:", total_position_count);
+            println!("\nTotal King bucket distribution from {total_position_count} positions:");
             print_buckets(total_bucket_counts, num_buckets);
         }
 
@@ -94,7 +94,7 @@ impl ValidateOptions {
 
 pub fn print_buckets(arr: [usize; 64], num_buckets: usize) {
     for (bucket, count) in arr.iter().enumerate().take(num_buckets + 1) {
-        println!("Bucket {}: {}", bucket, count);
+        println!("Bucket {bucket}: {count}");
     }
 }
 

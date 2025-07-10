@@ -1,13 +1,10 @@
 use bullet_core::{
     backend::cpu::{CpuError, CpuThread},
-    graph::{
-        builder::{GraphBuilder, Shape},
-        ir::args::GraphIRCompileArgs,
-    },
+    graph::builder::{GraphBuilder, Shape},
 };
 
 fn main() -> Result<(), CpuError> {
-    let mut builder = GraphBuilder::default();
+    let builder = GraphBuilder::default();
 
     // inputs
     let stm = builder.new_sparse_input("stm", Shape::new(768, 1), 32);
@@ -26,7 +23,6 @@ fn main() -> Result<(), CpuError> {
     pred.squared_error(targets);
 
     // build graph
-    builder.set_compile_args(GraphIRCompileArgs::default().fancy_ir_display(1.0));
     let graph = builder.build(CpuThread);
 
     graph.get_last_device_error()

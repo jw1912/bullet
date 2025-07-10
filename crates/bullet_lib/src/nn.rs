@@ -2,7 +2,6 @@ pub use bullet_core::graph::{
     builder::{
         Activation, Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings, Shape,
     },
-    ir::args::GraphIRCompileArgs as GraphCompileArgs,
     Node,
 };
 pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
