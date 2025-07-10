@@ -5,18 +5,6 @@ use crate::graph::ir::{
     GraphIR, GraphIRError,
 };
 
-/// List of supported activation functions.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiffableFromOutput {
-    Identity = 0,
-    ReLU = 1,
-    CReLU = 2,
-    SCReLU = 3,
-    SqrReLU = 4,
-    Sigmoid = 5,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Binary {
     pub a: AnnotatedNode,

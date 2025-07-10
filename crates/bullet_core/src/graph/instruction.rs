@@ -2,7 +2,7 @@ mod matmul;
 mod sparse;
 
 pub use matmul::Matmul;
-pub use sparse::SparseAffineActivateStrided;
+pub use sparse::{BackpropSparseAffineActivateStrided, SparseAffineActivateStrided};
 
 use crate::{
     backend::device::{Device, OperationError},

@@ -10,6 +10,8 @@ use super::GraphInstruction;
 
 #[derive(Clone, Copy)]
 pub struct Matmul {
+    pub alpha: f32,
+    pub beta: f32,
     pub input_a: NodeId,
     pub shape_a: Shape,
     pub trans_a: bool,
@@ -21,7 +23,7 @@ pub struct Matmul {
 
 impl<D: Device> GraphInstruction<D> for Matmul {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let Matmul { input_a, shape_a, trans_a, input_b, shape_b, trans_b, output } = *self;
+        let Matmul { alpha, beta, input_a, shape_a, trans_a, input_b, shape_b, trans_b, output } = *self;
 
         let input_a = graph.get(input_a)?;
         let input_a = input_a.dense()?;
@@ -45,12 +47,12 @@ impl<D: Device> GraphInstruction<D> for Matmul {
                     return Err(OperationError::MismatchedBatchSizes);
                 }
 
-                let cfg = GemmConfig::new(1.0, 0.0, shape_a, trans_a, shape_b, trans_b);
+                let cfg = GemmConfig::new(alpha, beta, shape_a, trans_a, shape_b, trans_b);
                 output.set_batch_size(Some(x))?;
                 output.buf.gebmm(&cfg, x, &input_a.buf, &input_b.buf)?;
             }
             (None, None) => {
-                let cfg = GemmConfig::new(1.0, 0.0, shape_a, trans_a, shape_b, trans_b);
+                let cfg = GemmConfig::new(alpha, beta, shape_a, trans_a, shape_b, trans_b);
                 output.set_batch_size(None)?;
                 output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
             }
@@ -60,7 +62,7 @@ impl<D: Device> GraphInstruction<D> for Matmul {
                 }
 
                 let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
-                let cfg = GemmConfig::new(1.0, 0.0, shape_a, trans_a, shape_b, trans_b);
+                let cfg = GemmConfig::new(alpha, beta, shape_a, trans_a, shape_b, trans_b);
                 output.set_batch_size(Some(x))?;
                 output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
             }

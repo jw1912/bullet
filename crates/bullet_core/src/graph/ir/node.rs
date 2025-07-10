@@ -2,6 +2,14 @@ use std::num::NonZeroUsize;
 
 use super::{operation::GraphIROperation, shape::Shape};
 
+#[derive(Clone, Copy)]
+pub struct NodeInfo {
+    pub requires_grad: bool,
+    pub sparse: Option<NonZeroUsize>,
+    pub batched: bool,
+    pub shape: Shape,
+}
+
 #[derive(Debug)]
 pub struct GraphIRNode {
     pub idx: usize,

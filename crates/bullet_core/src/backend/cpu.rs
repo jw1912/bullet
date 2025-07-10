@@ -151,14 +151,12 @@ impl Device for CpuThread {
         batch_size: usize,
         stride: Option<bool>,
         activation: DiffableFromOutput,
-        input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
         input_b_vals: Option<&Self::BufferF32>,
         shape_b: Shape,
         nnz: usize,
-        input_c: Option<&Self::BufferF32>,
         input_c_grad: Option<&mut Self::BufferF32>,
         input_c_batched: bool,
         outputs: &Self::BufferF32,
@@ -170,8 +168,7 @@ impl Device for CpuThread {
 
         assert_eq!(shape_b.cols(), 1);
         assert_eq!(shape_o.cols(), 1);
-        if shape_a.size() > input_a.size()
-            || shape_a.size() > input_a_grad.size()
+        if shape_a.size() > input_a_grad.size()
             || batch_size * nnz > input_b.size()
             || batch_size * shape_o.size() > outputs.size()
             || batch_size * shape_o.size() * stride > output_grad.size()

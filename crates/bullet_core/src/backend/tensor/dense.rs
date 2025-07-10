@@ -3,9 +3,9 @@ use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 use crate::backend::device::{base::BaseOperations, blas::BlasOperations, Device, DeviceBuffer, OperationError};
 
 pub struct DenseMatrix<D: Device> {
-    pub(crate) buf: D::BufferF32,
-    pub(crate) single_size: usize,
-    pub(crate) batch_size: Option<NonZeroUsize>,
+    pub buf: D::BufferF32,
+    pub single_size: usize,
+    pub batch_size: Option<NonZeroUsize>,
 }
 
 impl<D: Device> Debug for DenseMatrix<D> {

@@ -5,10 +5,10 @@ use crate::backend::device::{Device, DeviceBuffer, OperationError};
 use super::DenseMatrix;
 
 pub struct SparseMatrix<D: Device> {
-    pub(crate) buf: D::BufferI32,
-    pub(crate) nnz: usize,
-    pub(crate) single_size: usize,
-    pub(crate) batch_size: Option<NonZeroUsize>,
+    pub buf: D::BufferI32,
+    pub nnz: usize,
+    pub single_size: usize,
+    pub batch_size: Option<NonZeroUsize>,
 }
 
 impl<D: Device> SparseMatrix<D> {

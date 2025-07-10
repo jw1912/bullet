@@ -125,13 +125,11 @@ pub fn backprop_sparse_affine(
     batch_size: usize,
     stride: Option<bool>,
     activation: DiffableFromOutput,
-    input_a: &CudaBuffer<f32>,
     input_a_grad: &mut CudaBuffer<f32>,
     shape_a: Shape,
     input_b: &CudaBuffer<i32>,
     shape_b: Shape,
     nnz: usize,
-    _input_c: Option<&CudaBuffer<f32>>,
     input_c_grad: Option<&mut CudaBuffer<f32>>,
     input_c_batched: bool,
     outputs: &CudaBuffer<f32>,
@@ -143,8 +141,7 @@ pub fn backprop_sparse_affine(
 
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(shape_o.cols(), 1);
-    if shape_a.size() > input_a.size()
-        || shape_a.size() > input_a_grad.size()
+    if shape_a.size() > input_a_grad.size()
         || batch_size * nnz > input_b.size()
         || batch_size * shape_o.size() > outputs.size()
         || batch_size * shape_o.size() * stride > output_grad.size()
@@ -171,10 +168,10 @@ pub fn backprop_sparse_affine(
         }
 
         let func_name = format!("SparseAffineBwd{act}");
-        let func = input_a.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
+        let func = input_b.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
 
         unsafe {
-            input_a
+            input_b
                 .device
                 .stream
                 .launch_builder(&func)
@@ -193,10 +190,10 @@ pub fn backprop_sparse_affine(
         }
     } else {
         let func_name = format!("SparseMatmulBwd{act}");
-        let func = input_a.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
+        let func = input_b.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
 
         unsafe {
-            input_a
+            input_b
                 .device
                 .stream
                 .launch_builder(&func)
