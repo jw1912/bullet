@@ -19,11 +19,11 @@ pub trait GraphIROperation: std::any::Any + std::fmt::Debug + 'static {
     fn output_shape(&self, ir: &GraphIR) -> Result<Shape, GraphIRError>;
 
     fn output_batched(&self, ir: &GraphIR) -> Result<bool, GraphIRError> {
-        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().batched))
+        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().info.batched))
     }
 
     fn output_requires_grad(&self, ir: &GraphIR) -> Result<bool, GraphIRError> {
-        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().requires_grad))
+        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().info.requires_grad))
     }
 
     fn ancillary_buffers(&self, _ir: &GraphIR) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {

@@ -98,7 +98,7 @@ impl GraphBuilder {
         let mut ir = self.ir.into_inner().unwrap();
         let root = ir.root().unwrap();
 
-        if ir.get(root.idx).unwrap().batched {
+        if ir.get(root.idx).unwrap().info.batched {
             ir.add_op(ReduceAcrossBatch { input: root, reduction: Reduce::Sum }).unwrap();
         }
 

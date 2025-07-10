@@ -1,4 +1,4 @@
-use crate::graph::ir::operation::sparse::SparseAffineDualActivate;
+use crate::graph::ir::{node::NodeInfo, operation::sparse::SparseAffineDualActivate};
 
 use super::{
     node::AnnotatedNode,
@@ -145,13 +145,10 @@ fn fuse_concat(
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
-                        shape,
                         parent_operation: Some(Box::new(op)),
-                        requires_grad,
                         num_children: 0,
                         idx: new_b.idx,
-                        sparse: None,
-                        batched,
+                        info: NodeInfo { shape, requires_grad, sparse: None, batched },
                     };
 
                     let new_pairwise = old_data.with_new_op(PairwiseMul { input: new_b, post_concat: true });
@@ -172,13 +169,12 @@ fn fuse_concat(
 
                     let new_concat = GraphIRNode {
                         id: node_b.id.clone(),
-                        shape,
+
                         parent_operation: Some(Box::new(op)),
-                        requires_grad,
+
                         num_children: 0,
                         idx: new_b.idx,
-                        sparse: None,
-                        batched,
+                        info: NodeInfo { shape, requires_grad, sparse: None, batched },
                     };
 
                     let new_op = old_data.with_new_op(Unary { input: new_b, op: op1 });
@@ -202,7 +198,7 @@ fn fuse_power_error(
     if ir_node.num_children == 1 {
         if let Some(op) = &ir_node.parent_operation {
             if let Some(&Binary { a, b, op: BinaryOp::LinearCombination { alpha: 1.0, beta: -1.0 } }) = downcast(op) {
-                if a.idx != b.idx && ir.get(a.idx)?.batched == ir.get(b.idx)?.batched {
+                if a.idx != b.idx && ir.get(a.idx)?.info.batched == ir.get(b.idx)?.info.batched {
                     let new_data = old_data.with_new_op(Binary { a, b, op: BinaryOp::PowerError { power } });
                     return FusionDescription::new(&[node.idx], [new_data]);
                 }
@@ -295,7 +291,7 @@ fn fuse_add_single(
             }
 
             if let Some(&Matmul { a, transa: false, b, transb: false }) = downcast(op) {
-                if !ir.get(rhs.idx)?.batched {
+                if !ir.get(rhs.idx)?.info.batched {
                     let new_data = old_data.with_new_op(Affine { weights: a, inputs: b, biases: *rhs });
                     return FusionDescription::new(&[lhs.idx], [new_data]);
                 }

@@ -94,7 +94,13 @@ impl GraphIR {
         let idx = self.nodes.len();
         let annotated = AnnotatedNode { idx, shape };
 
-        let node = GraphIRNode { id, parent_operation, shape, requires_grad, idx, num_children: 0, batched, sparse };
+        let node = GraphIRNode {
+            id,
+            parent_operation,
+            info: NodeInfo { shape, requires_grad, batched, sparse },
+            idx,
+            num_children: 0,
+        };
 
         if let Some(op) = &node.parent_operation {
             for parent in &op.nodes() {
@@ -158,7 +164,7 @@ impl GraphIR {
         let idx = self.nodes.len() - 1;
         let data = self.get(idx)?;
 
-        Ok(AnnotatedNode { idx, shape: data.shape })
+        Ok(AnnotatedNode { idx, shape: data.info.shape })
     }
 
     pub fn compile<D: Device>(mut self, device: D) -> Result<Graph<D>, GraphIRError> {
@@ -167,7 +173,7 @@ impl GraphIR {
         self.is_valid()?;
 
         let root = self.root()?.idx;
-        let root_data = self.get(root).unwrap();
+        let root_data = self.get(root).unwrap().info;
 
         if !root_data.requires_grad || root_data.batched || root_data.shape != Shape::new(1, 1) {
             return Err(GraphIRError::Compilation(GraphIRCompileError::InvalidRootNode));
@@ -196,20 +202,11 @@ impl GraphIR {
         let weights = self.weights.iter().filter_map(id_idx_pair).collect();
 
         let node_info = GraphIRNodeInfo {
-            nodes: self
-                .nodes
-                .iter()
-                .flatten()
-                .map(|GraphIRNode { idx, shape, sparse, requires_grad, batched, .. }| {
-                    (
-                        *idx,
-                        NodeInfo { requires_grad: *requires_grad, sparse: *sparse, batched: *batched, shape: *shape },
-                    )
-                })
-                .collect(),
+            nodes: self.nodes.iter().flatten().map(|GraphIRNode { idx, info, .. }| (*idx, *info)).collect(),
         };
 
-        for GraphIRNode { idx, shape, sparse, requires_grad, parent_operation, .. } in self.nodes.into_iter().flatten()
+        for GraphIRNode { idx, info: NodeInfo { shape, sparse, requires_grad, .. }, parent_operation, .. } in
+            self.nodes.into_iter().flatten()
         {
             let values = Tensor::new(device.clone(), shape, sparse)
                 .map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor))?;
@@ -312,7 +309,7 @@ impl GraphIR {
                         let actual_parent =
                             self.nodes[parent.idx].as_ref().ok_or(GraphIRNodeError::NodeDoesNotExist)?;
 
-                        if parent.idx != actual_parent.idx || parent.shape.size() != actual_parent.shape.size() {
+                        if parent.idx != actual_parent.idx || parent.shape.size() != actual_parent.info.shape.size() {
                             return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
                         }
                     }
@@ -329,7 +326,7 @@ impl GraphIR {
             let batched = op.output_batched(self)?;
             let requires_grad = op.output_requires_grad(self)?;
 
-            if shape != data.shape || data.batched != batched || data.requires_grad != requires_grad {
+            if data.info.shape != shape || data.info.batched != batched || data.info.requires_grad != requires_grad {
                 return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
             }
         }

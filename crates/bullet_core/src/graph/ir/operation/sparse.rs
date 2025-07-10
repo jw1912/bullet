@@ -56,7 +56,7 @@ impl GraphIROperation for SparseAffineActivate {
             util::check_dense_eq(ir, v, true)?;
             util::check_same_batching(ir, &[&self.indices, v])?;
             util::check_no_grad(ir, &[v])?;
-            let nnz = ir.get(self.indices.idx).unwrap().sparse.unwrap();
+            let nnz = ir.get(self.indices.idx).unwrap().info.sparse.unwrap();
             check &= v.shape.cols() == 1 && v.shape.rows() == nnz.get();
         }
 

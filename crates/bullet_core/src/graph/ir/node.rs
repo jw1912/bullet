@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 
 use super::{operation::GraphIROperation, shape::Shape};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct NodeInfo {
     pub requires_grad: bool,
     pub sparse: Option<NonZeroUsize>,
@@ -13,10 +13,7 @@ pub struct NodeInfo {
 #[derive(Debug)]
 pub struct GraphIRNode {
     pub idx: usize,
-    pub shape: Shape,
-    pub sparse: Option<NonZeroUsize>,
-    pub batched: bool,
-    pub requires_grad: bool,
+    pub info: NodeInfo,
     pub parent_operation: Option<Box<dyn GraphIROperation>>,
     pub num_children: usize,
     pub id: Option<String>,
@@ -26,10 +23,7 @@ impl GraphIRNode {
     pub fn with_new_op(&self, op: impl GraphIROperation) -> Self {
         Self {
             idx: self.idx,
-            shape: self.shape,
-            sparse: self.sparse,
-            batched: self.batched,
-            requires_grad: self.requires_grad,
+            info: self.info,
             parent_operation: Some(Box::new(op)),
             num_children: self.num_children,
             id: self.id.clone(),

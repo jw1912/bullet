@@ -151,6 +151,6 @@ impl GraphIROperation for Copy {
     }
 
     fn output_requires_grad(&self, ir: &GraphIR) -> Result<bool, GraphIRError> {
-        Ok(!self.stop_grad && ir.get(self.input.idx).unwrap().requires_grad)
+        Ok(!self.stop_grad && ir.get(self.input.idx).unwrap().info.requires_grad)
     }
 }
