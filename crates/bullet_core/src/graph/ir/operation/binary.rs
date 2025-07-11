@@ -116,8 +116,34 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for AbsPowerError {
         func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let a = NodeId::new(self.a.idx, NodeIdTy::Values);
+        let b = NodeId::new(self.a.idx, NodeIdTy::Values);
+        let output_grad = NodeId::new(output_node, NodeIdTy::Gradients);
+
+        let mut func = GraphFunction::default();
+
+        if node_info.get(self.a.idx).unwrap().requires_grad {
+            let grd = NodeId::new(self.a.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::SetBatchSize { input: a, output: grd });
+            func.push(instruction::AbsPowerErrorBackward { a, b, c: output_grad, output: grd, power: self.power });
+        }
+
+        if node_info.get(self.b.idx).unwrap().requires_grad {
+            let grd = NodeId::new(self.b.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::SetBatchSize { input: b, output: grd });
+            func.push(instruction::AbsPowerErrorBackward {
+                a: b,
+                b: a,
+                c: output_grad,
+                output: grd,
+                power: self.power,
+            });
+        }
+
+        func
     }
 }
 

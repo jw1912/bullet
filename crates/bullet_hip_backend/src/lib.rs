@@ -158,7 +158,28 @@ impl BaseOperations for Buffer<f32> {
         beta: f32,
         input: &Self,
     ) -> Result<(), Self::BaseError> {
-        unimplemented!()
+        let device = self.device();
+
+        device.with_ones(reps, |ones| {
+            let cfg = GemmConfig::new(beta, alpha, Shape::new(size, 1), false, Shape::new(1, reps), false);
+            self.gemm(&cfg, input, ones)
+        })
+    }
+
+    fn reduce_across_batch(
+        &mut self,
+        size: usize,
+        reps: usize,
+        output_mul: f32,
+        input_mul: f32,
+        input: &Self,
+    ) -> Result<(), Self::BaseError> {
+        let device = self.device();
+
+        device.with_ones(reps, |ones| {
+            let cfg = GemmConfig::new(input_mul, output_mul, Shape::new(size, reps), false, Shape::new(reps, 1), false);
+            self.gemm(&cfg, input, ones)
+        })
     }
 
     fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {

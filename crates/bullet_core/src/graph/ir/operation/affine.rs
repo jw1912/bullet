@@ -196,7 +196,20 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
         func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
+
+        let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, node_info, output_node);
+
+        if node_info.get(self.biases.idx).unwrap().requires_grad {
+            func.push(instruction::LinearCombinationSplat {
+                input: NodeId::new(output_node, NodeIdTy::Gradients),
+                output: NodeId::new(self.biases.idx, NodeIdTy::Gradients),
+                input_mul: 1.0,
+                output_mul: 1.0,
+            });
+        }
+
+        func
     }
 }

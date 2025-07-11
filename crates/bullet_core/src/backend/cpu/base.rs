@@ -105,6 +105,17 @@ impl BaseOperations for CpuBuffer<f32> {
         Ok(())
     }
 
+    fn reduce_across_batch(
+        &mut self,
+        size: usize,
+        batch_size: usize,
+        output_mul: f32,
+        input_mul: f32,
+        input: &Self,
+    ) -> Result<(), Self::BaseError> {
+        unimplemented!()
+    }
+
     fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError> {
         for x in &mut self.buf[..size] {
             *x *= alpha;

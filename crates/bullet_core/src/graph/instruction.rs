@@ -1,22 +1,25 @@
 mod binary;
 mod matmul;
 mod sparse;
+mod trinary;
 mod unary;
 
-pub use binary::{AbsPowerError, UnaryBackward};
-pub use matmul::{Matmul, MatmulType};
-pub use sparse::{BackpropSparseAffineActivateStrided, SparseAffineActivateStrided};
-pub use unary::{LinearCombination, LinearCombinationSplat, PairwiseMul, SetBatchSize, SparseToDense, Unary};
+pub use binary::*;
+pub use matmul::*;
+pub use sparse::*;
+pub use trinary::*;
+pub use unary::*;
 
 use crate::{
     backend::device::{Device, OperationError},
     graph::{Graph, NodeId},
 };
 
-pub trait GraphInstruction<D: Device>: 'static {
+pub trait GraphInstruction<D: Device>: std::fmt::Debug + 'static {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>>;
 }
 
+#[derive(Debug)]
 pub struct Set(pub NodeId, pub f32);
 
 impl<D: Device> GraphInstruction<D> for Set {

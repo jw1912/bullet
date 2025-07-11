@@ -55,6 +55,15 @@ pub trait BaseOperations {
         input: &Self,
     ) -> Result<(), Self::BaseError>;
 
+    fn reduce_across_batch(
+        &mut self,
+        size: usize,
+        batch_size: usize,
+        output_mul: f32,
+        input_mul: f32,
+        input: &Self,
+    ) -> Result<(), Self::BaseError>;
+
     fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError>;
 
     fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError>;

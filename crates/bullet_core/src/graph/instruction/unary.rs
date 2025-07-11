@@ -1,8 +1,13 @@
 use crate::{
     backend::device::{base::BaseOperations, Device, OperationError},
-    graph::{instruction::GraphInstruction, ir::operation::unary::UnaryOp, Graph, NodeId},
+    graph::{
+        instruction::GraphInstruction,
+        ir::operation::unary::{Reduce, UnaryOp},
+        Graph, NodeId,
+    },
 };
 
+#[derive(Debug)]
 pub struct SetBatchSize {
     pub input: NodeId,
     pub output: NodeId,
@@ -11,19 +16,95 @@ pub struct SetBatchSize {
 impl<D: Device> GraphInstruction<D> for SetBatchSize {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
         let input = graph.get(self.input)?;
-        let input = input.dense()?;
 
         let mut output = graph.get_mut(self.output)?;
         let output = output.dense_mut()?;
 
-        if output.batch_size() != input.batch_size() {
-            output.set_batch_size(input.batch_size())?;
+        if output.batch_size() != input.values.batch_size() {
+            output.set_batch_size(input.values.batch_size())?;
         }
 
         Ok(())
     }
 }
 
+#[derive(Debug)]
+pub struct ReduceAcrossBatch {
+    pub input: NodeId,
+    pub output: NodeId,
+    pub input_mul: f32,
+    pub output_mul: f32,
+    pub reduction: Reduce,
+}
+
+impl<D: Device> GraphInstruction<D> for ReduceAcrossBatch {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        if input.batch_size().is_none() || output.batch_size().is_some() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if input.single_size() != output.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        let bs = input.batch_size().unwrap_or(1);
+
+        let scale = match self.reduction {
+            Reduce::Avg => 1.0 / bs as f32,
+            Reduce::Sum => 1.0,
+        };
+
+        output.buf.reduce_across_batch(input.single_size(), bs, self.output_mul, self.input_mul * scale, &input.buf)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct SplatAcrossBatch {
+    pub input: NodeId,
+    pub output: NodeId,
+    pub input_mul: f32,
+    pub output_mul: f32,
+    pub reduction: Reduce,
+}
+
+impl<D: Device> GraphInstruction<D> for SplatAcrossBatch {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        if input.batch_size().is_some() || output.batch_size().is_none() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if input.single_size() != output.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        let bs = output.batch_size().unwrap_or(1);
+
+        let scale = match self.reduction {
+            Reduce::Avg => 1.0 / bs as f32,
+            Reduce::Sum => 1.0,
+        };
+
+        output.buf.linear_comb_splat(input.single_size(), bs, self.output_mul, self.input_mul * scale, &input.buf)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
 pub struct LinearCombination {
     pub input_mul: f32,
     pub output_mul: f32,
@@ -53,6 +134,7 @@ impl<D: Device> GraphInstruction<D> for LinearCombination {
     }
 }
 
+#[derive(Debug)]
 pub struct LinearCombinationSplat {
     pub input_mul: f32,
     pub output_mul: f32,
@@ -83,6 +165,7 @@ impl<D: Device> GraphInstruction<D> for LinearCombinationSplat {
     }
 }
 
+#[derive(Debug)]
 pub struct SparseToDense {
     pub input: NodeId,
     pub output: NodeId,
@@ -108,6 +191,7 @@ impl<D: Device> GraphInstruction<D> for SparseToDense {
     }
 }
 
+#[derive(Debug)]
 pub struct PairwiseMul {
     pub post_concat: bool,
     pub input: NodeId,
@@ -144,6 +228,7 @@ impl<D: Device> GraphInstruction<D> for PairwiseMul {
     }
 }
 
+#[derive(Debug)]
 pub struct Unary {
     pub input: NodeId,
     pub output: NodeId,

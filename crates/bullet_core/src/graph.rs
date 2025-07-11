@@ -39,7 +39,7 @@ impl<D: Device> GraphFunction<D> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NodeIdTy {
     Values,
     Gradients,
@@ -55,6 +55,12 @@ pub struct NodeId {
 impl NodeId {
     pub fn new(id: usize, ty: NodeIdTy) -> Self {
         Self { id, ty }
+    }
+}
+
+impl std::fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id({}, {:?})", self.id, self.ty)
     }
 }
 
@@ -152,9 +158,20 @@ impl<D: Device> Graph<D> {
         self.nodes.len() - 1
     }
 
+    pub fn display(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
+            println!("{instr:?}");
+        }
+
+        Ok(())
+    }
+
     pub fn execute(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
         for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
-            instr.execute(self)?;
+            if let Err(e) = instr.execute(self) {
+                println!("Error {e:?} executing {instr:?}");
+                return Err(e);
+            }
         }
 
         Ok(())

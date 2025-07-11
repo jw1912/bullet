@@ -3,6 +3,7 @@ use crate::{
     graph::{instruction::GraphInstruction, ir::operation::unary::UnaryOp, Graph, NodeId},
 };
 
+#[derive(Debug)]
 pub struct AbsPowerError {
     pub a: NodeId,
     pub b: NodeId,
@@ -35,6 +36,7 @@ impl<D: Device> GraphInstruction<D> for AbsPowerError {
     }
 }
 
+#[derive(Debug)]
 pub struct UnaryBackward {
     pub input: NodeId,
     pub output_grad: NodeId,

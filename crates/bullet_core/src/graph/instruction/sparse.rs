@@ -3,7 +3,7 @@ use crate::{
     graph::{builder::Shape, instruction::GraphInstruction, ir::operation::unary::DiffableFromOutput, Graph, NodeId},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SparseAffineActivateStrided {
     pub weights: NodeId,
     pub weights_shape: Shape,
@@ -66,7 +66,7 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivateStrided {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BackpropSparseAffineActivateStrided {
     pub weights_grads: NodeId,
     pub weights_shape: Shape,

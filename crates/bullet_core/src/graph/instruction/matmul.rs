@@ -8,7 +8,7 @@ use crate::{
 
 use super::GraphInstruction;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatmulType {
     BatBat,
     NobBat,
@@ -16,7 +16,7 @@ pub enum MatmulType {
     BatBatRed,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Matmul {
     pub cfg: GemmConfig,
     pub input_a: NodeId,

@@ -104,18 +104,56 @@ impl<B: BackendMarker> GraphIROperation<B> for ReduceAcrossBatch {
 
     fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
+        if util::check_not_batched(ir, &self.input).is_ok() {
+            return Err(GraphIRError::Op(GraphIROperationError::MismatchedBatching));
+        }
 
         Ok(self.input.shape)
     }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+
+        let mut func = GraphFunction::default();
+
+        func.push(instruction::ReduceAcrossBatch {
+            input,
+            output,
+            input_mul: 1.0,
+            output_mul: 0.0,
+            reduction: self.reduction,
+        });
+
+        func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let info = node_info.get(output_node).unwrap();
+        assert!(info.requires_grad);
+        assert!(!info.batched);
+
+        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
+        let input_grad = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+        let output_grad = NodeId::new(output_node, NodeIdTy::Gradients);
+
+        let mut func = GraphFunction::default();
+
+        func.push(instruction::SetBatchSize { input, output: input_grad });
+
+        if node_info.get(self.input.idx).unwrap().requires_grad {
+            func.push(instruction::SplatAcrossBatch {
+                input: output_grad,
+                output: input_grad,
+                reduction: self.reduction,
+                input_mul: 1.0,
+                output_mul: 1.0,
+            });
+        }
+
+        func
     }
 }
 
