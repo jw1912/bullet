@@ -151,6 +151,7 @@ impl<D: Device> GraphInstruction<D> for LinearCombinationSplat {
         let output = output.dense_mut()?;
 
         if input.batch_size().is_some() || output.batch_size().is_none() {
+            println!("{:?} {:?}", input.batch_size(), output.batch_size());
             return Err(OperationError::MismatchedBatchSizes);
         }
 

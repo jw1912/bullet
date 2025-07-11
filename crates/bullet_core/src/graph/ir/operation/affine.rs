@@ -4,7 +4,7 @@ use crate::{
         instruction::{self, MatmulType},
         ir::{
             node::AnnotatedNode,
-            operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+            operation::{unary::Reduce, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
             shape::Shape,
             BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
         },
@@ -202,11 +202,12 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
         let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, node_info, output_node);
 
         if node_info.get(self.biases.idx).unwrap().requires_grad {
-            func.push(instruction::LinearCombinationSplat {
+            func.push(instruction::ReduceAcrossBatch {
                 input: NodeId::new(output_node, NodeIdTy::Gradients),
                 output: NodeId::new(self.biases.idx, NodeIdTy::Gradients),
                 input_mul: 1.0,
                 output_mul: 1.0,
+                reduction: Reduce::Sum,
             });
         }
 

@@ -355,6 +355,6 @@ where
             .map(|(x, y)| (x.to_string(), y))
             .collect();
 
-        Ok(Graph { nodes, inputs, weights, functions, device })
+        Ok(Graph { nodes, inputs, weights, functions, device, root })
     }
 }

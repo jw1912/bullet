@@ -70,6 +70,7 @@ pub struct Graph<D: Device> {
     weights: HashMap<String, usize>,
     functions: HashMap<String, GraphFunction<D>>,
     device: Arc<D>,
+    root: usize,
 }
 
 #[derive(Debug)]
@@ -122,6 +123,7 @@ impl<D: Device> Graph<D> {
         if let Some(tensor) = &self.nodes.get(&id) {
             Ok(tensor.borrow())
         } else {
+            println!("Cant find: {id:?}");
             Err(OperationError::TensorOptimisedOut)
         }
     }
@@ -155,7 +157,7 @@ impl<D: Device> Graph<D> {
     }
 
     fn root(&self) -> usize {
-        self.nodes.len() - 1
+        self.root
     }
 
     pub fn display(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {

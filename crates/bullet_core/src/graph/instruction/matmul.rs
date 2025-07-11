@@ -75,7 +75,25 @@ impl<D: Device> GraphInstruction<D> for Matmul {
                 let cfg = GemmConfig { shape_b, ..cfg };
                 output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
             }
-            MatmulType::BatBatRed => unimplemented!(),
+            MatmulType::BatBatRed => {
+                if input_a.batch_size() != input_b.batch_size() || output.batch_size().is_some() {
+                    return Err(OperationError::MismatchedBatchSizes);
+                }
+
+                if !cfg.trans_b {
+                    return Err(OperationError::UnsupportedOperation);
+                }
+
+                let bs = input_a.batch_size().unwrap_or(1);
+
+                let cfg = GemmConfig {
+                    shape_a: Shape::new(self.cfg.shape_a.rows(), bs * self.cfg.shape_a.cols()),
+                    shape_b: Shape::new(self.cfg.shape_b.rows(), bs * self.cfg.shape_b.cols()),
+                    ..self.cfg
+                };
+
+                output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
+            }
         }
 
         Ok(())
