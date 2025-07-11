@@ -17,7 +17,10 @@ use shape::Shape;
 
 use crate::{
     backend::{device::Device, tensor::Tensor},
-    graph::{instruction::Set, Graph, GraphFunction, NodeId, NodeIdTy},
+    graph::{
+        instruction::{self, Set},
+        Graph, GraphFunction, NodeId, NodeIdTy,
+    },
 };
 
 pub trait BackendMarker: Copy + Default + 'static {
@@ -301,6 +304,7 @@ where
         let mut nodes = HashMap::new();
         let mut forward = GraphFunction::default();
         let mut backward = GraphFunction::default();
+
         let mut zero_grads = GraphFunction::default();
 
         let id_idx_pair = |&node| self.get(node).ok().map(|data| (data.id.clone().unwrap(), node));
@@ -349,6 +353,11 @@ where
                 }
             }
         }
+
+        let mut new_bwd = GraphFunction::default();
+        new_bwd.push(instruction::Set(NodeId { id: root, ty: NodeIdTy::Gradients }, 1.0));
+        new_bwd.extend(backward);
+        backward = new_bwd;
 
         let functions = [("forward", forward), ("backward", backward), ("zero_grads", zero_grads)]
             .into_iter()

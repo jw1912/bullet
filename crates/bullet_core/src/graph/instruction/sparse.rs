@@ -112,9 +112,6 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivateStrided {
 
         let biases_batched = biases_grads.as_ref().map(|b| b.batch_size.is_some()).unwrap_or(false);
 
-        assert_eq!(indices.batch_size(), output.batch_size());
-        assert_eq!(indices.batch_size(), output_grads.batch_size());
-
         let batch_size = indices.batch_size();
 
         if batch_size != output.batch_size() || batch_size != output_grads.batch_size() {
