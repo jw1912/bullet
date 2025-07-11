@@ -94,6 +94,53 @@ impl BaseOperations for CudaBuffer<f32> {
         Ok(())
     }
 
+    fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("ScaleAssignKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&mut self.buf.slice_mut(0..size))
+                .arg(&alpha)
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
+        Ok(())
+    }
+
+    fn linear_comb(&mut self, size: usize, alpha: f32, beta: f32, input: &Self) -> Result<(), Self::BaseError> {
+        let func = self.device.module.load_function("ScaleAddAssignKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&alpha)
+                .arg(&mut self.buf.slice_mut(0..size))
+                .arg(&beta)
+                .arg(&input.buf.slice(0..size))
+                .launch(CudaDevice::elementwise_launch_params(size, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
+        Ok(())
+    }
+
+    fn linear_comb_splat(
+        &mut self,
+        size: usize,
+        reps: usize,
+        alpha: f32,
+        beta: f32,
+        input: &Self,
+    ) -> Result<(), Self::BaseError> {
+        unimplemented!()
+    }
+
     fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
         let func = self.device.module.load_function("AddScalarKernel").map_err(CudaError::Driver)?;
 

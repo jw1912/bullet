@@ -44,6 +44,19 @@ pub trait BaseOperations {
         act: DiffableFromOutput,
     ) -> Result<(), Self::BaseError>;
 
+    fn linear_comb(&mut self, size: usize, alpha: f32, beta: f32, input: &Self) -> Result<(), Self::BaseError>;
+
+    fn linear_comb_splat(
+        &mut self,
+        size: usize,
+        reps: usize,
+        alpha: f32,
+        beta: f32,
+        input: &Self,
+    ) -> Result<(), Self::BaseError>;
+
+    fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError>;
+
     fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError>;
 
     fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError>;

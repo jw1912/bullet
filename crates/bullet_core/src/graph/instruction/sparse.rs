@@ -45,7 +45,9 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivateStrided {
 
         let batch_size = indices.batch_size();
 
-        output.set_batch_size(batch_size)?;
+        if batch_size != output.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
 
         D::sparse_affine_activate(
             batch_size.unwrap_or(1),
@@ -113,8 +115,14 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivateStrided {
         assert_eq!(indices.batch_size(), output.batch_size());
         assert_eq!(indices.batch_size(), output_grads.batch_size());
 
+        let batch_size = indices.batch_size();
+
+        if batch_size != output.batch_size() || batch_size != output_grads.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
         D::backprop_sparse_affine_activate(
-            indices.batch_size().unwrap_or(1),
+            batch_size.unwrap_or(1),
             stride,
             activation,
             &mut weights_grads.buf,

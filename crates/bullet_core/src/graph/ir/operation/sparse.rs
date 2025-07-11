@@ -154,7 +154,11 @@ impl<B: BackendMarker> GraphIROperation<B> for SparseAffineDualActivate {
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineDualActivate {
     fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+
         let mut func = GraphFunction::default();
+
+        func.push(instruction::SetBatchSize { input: NodeId::new(self.indices_l.idx, NodeIdTy::Values), output });
 
         let lhs = instruction::SparseAffineActivateStrided {
             weights: NodeId::new(self.weights.idx, NodeIdTy::Values),
@@ -165,7 +169,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineDualActivat
             values: None,
             stride: Some(false),
             activation: self.activation,
-            output: NodeId::new(output_node, NodeIdTy::Values),
+            output,
         };
 
         func.push(lhs);

@@ -43,40 +43,6 @@ impl BlasOperations for CpuBuffer<f32> {
 
         Ok(())
     }
-
-    fn geam(
-        &mut self,
-        size: usize,
-        alpha: f32,
-        a: Option<&Self>,
-        beta: f32,
-        b: Option<&Self>,
-    ) -> Result<(), Self::BlasError> {
-        match (a, b) {
-            (Some(a), Some(b)) => {
-                for ((o, &a), &b) in self.buf[..size].iter_mut().zip(a.buf[..size].iter()).zip(b.buf[..size].iter()) {
-                    *o = alpha * a + beta * b;
-                }
-            }
-            (Some(a), None) => {
-                for (o, &a) in self.buf[..size].iter_mut().zip(a.buf[..size].iter()) {
-                    *o = alpha * a;
-                }
-            }
-            (None, Some(b)) => {
-                for (o, &b) in self.buf[..size].iter_mut().zip(b.buf[..size].iter()) {
-                    *o = alpha * *o + beta * b;
-                }
-            }
-            (None, None) => {
-                for o in &mut self.buf[..size] {
-                    *o *= alpha;
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 fn sgemm(

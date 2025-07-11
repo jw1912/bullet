@@ -6,7 +6,7 @@ use crate::graph::{
         node::AnnotatedNode,
         operation::{
             affine::Matmul,
-            binary::{Binary, BinaryOp, Concat, Select},
+            binary::{Concat, LinearCombination, Select},
             sparse::SparseAffineActivate,
             unary::{Copy, DiffableFromOutput, PairwiseMul, Reduce, ReduceAcrossBatch, Slice, ToDense, Unary, UnaryOp},
         },
@@ -188,7 +188,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     }
 
     pub fn linear_comb(self, alpha: f32, rhs: Self, beta: f32) -> Self {
-        self.builder.apply(Binary { a: self.node, b: rhs.node, op: BinaryOp::LinearCombination { alpha, beta } })
+        self.builder.apply(LinearCombination { a: self.node, b: rhs.node, alpha, beta })
     }
 
     pub fn reduce_sum_across_batch(self) -> Self {
@@ -255,8 +255,8 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
         self.builder.apply(Unary { input: self.node, op: UnaryOp::AbsPow(power) })
     }
 
-    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
-        self.builder.apply(Binary { a: self.node, b: targets.node, op: BinaryOp::SoftmaxCrossEntropyLoss })
+    pub fn softmax_crossentropy_loss(self, _targets: Self) -> Self {
+        unimplemented!() //self.builder.apply(Binary { a: self.node, b: targets.node, op: BinaryOp::SoftmaxCrossEntropyLoss })
     }
 
     pub fn slice_rows(self, start: usize, end: usize) -> Self {

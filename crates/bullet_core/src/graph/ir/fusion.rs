@@ -9,7 +9,7 @@ use super::{
     operation::{
         affine::{Affine, Matmul},
         binary::Concat,
-        binary::{Binary, BinaryOp},
+        binary::{AbsPowerError, LinearCombination},
         sparse::SparseAffineActivate,
         unary::PairwiseMul,
         unary::{DiffableFromOutput, Unary, UnaryOp},
@@ -39,7 +39,7 @@ pub fn search_for_fusion<B: BackendMarker>(
     let data = ir.get(node).unwrap();
 
     if let Some(op) = &data.parent_operation {
-        if let Some(Binary { a, b, op: BinaryOp::LinearCombination { alpha, beta } }) = downcast(op) {
+        if let Some(LinearCombination { a, b, alpha, beta }) = downcast(op) {
             return fuse_linear_comb(ir, *alpha, a, *beta, b, data);
         }
 
@@ -202,9 +202,9 @@ fn fuse_power_error<B: BackendMarker>(
 
     if ir_node.num_children == 1 {
         if let Some(op) = &ir_node.parent_operation {
-            if let Some(&Binary { a, b, op: BinaryOp::LinearCombination { alpha: 1.0, beta: -1.0 } }) = downcast(op) {
+            if let Some(&LinearCombination { a, b, alpha: 1.0, beta: -1.0 }) = downcast(op) {
                 if a.idx != b.idx && ir.get(a.idx)?.info.batched == ir.get(b.idx)?.info.batched {
-                    let new_data = old_data.with_new_op(Binary { a, b, op: BinaryOp::PowerError { power } });
+                    let new_data = old_data.with_new_op(AbsPowerError { a, b, power });
                     return FusionDescription::new(&[node.idx], [new_data]);
                 }
             }
@@ -224,12 +224,9 @@ fn fuse_scale<B: BackendMarker>(
 
     if ir_node.num_children == 1 {
         if let Some(op) = &ir_node.parent_operation {
-            if let Some(&Binary { a, b, op: BinaryOp::LinearCombination { alpha, beta } }) = downcast(op) {
-                let new_data = old_data.with_new_op(Binary {
-                    a,
-                    b,
-                    op: BinaryOp::LinearCombination { alpha: alpha * scale, beta: beta * scale },
-                });
+            if let Some(&LinearCombination { a, b, alpha, beta }) = downcast(op) {
+                let new_data =
+                    old_data.with_new_op(LinearCombination { a, b, alpha: alpha * scale, beta: beta * scale });
                 return FusionDescription::new(&[node.idx], [new_data]);
             }
         }
@@ -338,11 +335,7 @@ fn fuse_linear_comb_single<B: BackendMarker>(
     if ir_node.num_children == 1 {
         if let Some(op) = &ir_node.parent_operation {
             if let Some(&Unary { input, op: UnaryOp::Mul(x) }) = downcast(op) {
-                let new_data = old_data.with_new_op(Binary {
-                    a: input,
-                    b: *rhs,
-                    op: BinaryOp::LinearCombination { alpha: alpha * x, beta },
-                });
+                let new_data = old_data.with_new_op(LinearCombination { a: input, b: *rhs, alpha: alpha * x, beta });
                 return FusionDescription::new(&[lhs.idx], vec![new_data]);
             }
         }

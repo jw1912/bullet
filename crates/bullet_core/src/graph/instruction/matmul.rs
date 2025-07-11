@@ -8,22 +8,26 @@ use crate::{
 
 use super::GraphInstruction;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MatmulType {
+    BatBat,
+    NobBat,
+    NobNob,
+    BatBatRed,
+}
+
 #[derive(Clone, Copy)]
 pub struct Matmul {
-    pub alpha: f32,
-    pub beta: f32,
+    pub cfg: GemmConfig,
     pub input_a: NodeId,
-    pub shape_a: Shape,
-    pub trans_a: bool,
     pub input_b: NodeId,
-    pub shape_b: Shape,
-    pub trans_b: bool,
     pub output: NodeId,
+    pub ty: MatmulType,
 }
 
 impl<D: Device> GraphInstruction<D> for Matmul {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let Matmul { alpha, beta, input_a, shape_a, trans_a, input_b, shape_b, trans_b, output } = *self;
+        let Matmul { cfg, input_a, input_b, output, ty } = *self;
 
         let input_a = graph.get(input_a)?;
         let input_a = input_a.dense()?;
@@ -32,41 +36,46 @@ impl<D: Device> GraphInstruction<D> for Matmul {
         let mut output = graph.get_mut(output)?;
         let output = output.dense_mut()?;
 
-        let output_shape = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
-
-        if input_a.single_size() != shape_a.size()
-            || input_b.single_size() != shape_b.size()
-            || output.single_size() != output_shape.size()
-        {
+        if input_a.single_size() != cfg.shape_a.size() || input_b.single_size() != cfg.shape_b.size() {
             return Err(OperationError::InvalidTensorFormat);
         }
 
-        match (input_a.batch_size(), input_b.batch_size()) {
-            (Some(x), Some(y)) => {
-                if x != y {
+        match ty {
+            MatmulType::BatBat => {
+                let bs = input_a.batch_size();
+
+                if bs != input_b.batch_size() || bs != output.batch_size() {
                     return Err(OperationError::MismatchedBatchSizes);
                 }
 
-                let cfg = GemmConfig::new(alpha, beta, shape_a, trans_a, shape_b, trans_b);
-                output.set_batch_size(Some(x))?;
-                output.buf.gebmm(&cfg, x, &input_a.buf, &input_b.buf)?;
+                output.buf.gebmm(&cfg, bs.unwrap_or(1), &input_a.buf, &input_b.buf)?;
             }
-            (None, None) => {
-                let cfg = GemmConfig::new(alpha, beta, shape_a, trans_a, shape_b, trans_b);
-                output.set_batch_size(None)?;
+            MatmulType::NobNob => {
+                if input_a.batch_size().is_some() || input_b.batch_size().is_some() || output.batch_size().is_some() {
+                    return Err(OperationError::MismatchedBatchSizes);
+                }
+
                 output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
             }
-            (None, Some(x)) => {
-                if trans_b {
+            MatmulType::NobBat => {
+                if input_a.batch_size().is_some()
+                    || input_b.batch_size().is_none()
+                    || input_b.batch_size() != output.batch_size()
+                {
+                    return Err(OperationError::MismatchedBatchSizes);
+                }
+
+                if cfg.trans_b {
                     return Err(OperationError::UnsupportedOperation);
                 }
 
-                let shape_b = Shape::new(shape_b.rows(), x * shape_b.cols());
-                let cfg = GemmConfig::new(alpha, beta, shape_a, trans_a, shape_b, trans_b);
-                output.set_batch_size(Some(x))?;
+                let bs = input_b.batch_size().unwrap();
+
+                let shape_b = Shape::new(cfg.shape_b.rows(), bs * cfg.shape_b.cols());
+                let cfg = GemmConfig { shape_b, ..cfg };
                 output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
             }
-            (Some(_), None) => return Err(OperationError::UnsupportedOperation),
+            MatmulType::BatBatRed => unimplemented!(),
         }
 
         Ok(())

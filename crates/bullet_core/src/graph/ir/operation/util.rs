@@ -1,4 +1,6 @@
-use crate::graph::ir::{node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, BackendMarker, GraphIR};
+use crate::graph::ir::{
+    node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, BackendMarker, GraphIR, GraphIRNodeInfo,
+};
 
 pub fn check_dense_eq<B: BackendMarker>(
     ir: &GraphIR<B>,
@@ -45,4 +47,8 @@ pub fn check_no_grad<B: BackendMarker>(ir: &GraphIR<B>, x: &[&AnnotatedNode]) ->
     } else {
         Ok(())
     }
+}
+
+pub fn batch_size_node(node_info: &GraphIRNodeInfo, nodes: &[AnnotatedNode]) -> usize {
+    nodes.iter().find(|x| node_info.get(x.idx).unwrap().batched).unwrap_or(&nodes[0]).idx
 }

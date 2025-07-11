@@ -1,10 +1,12 @@
+mod binary;
 mod matmul;
 mod sparse;
 mod unary;
 
-pub use matmul::Matmul;
+pub use binary::{AbsPowerError, UnaryBackward};
+pub use matmul::{Matmul, MatmulType};
 pub use sparse::{BackpropSparseAffineActivateStrided, SparseAffineActivateStrided};
-pub use unary::{PairwiseMul, SparseToDense};
+pub use unary::{LinearCombination, LinearCombinationSplat, PairwiseMul, SetBatchSize, SparseToDense, Unary};
 
 use crate::{
     backend::device::{Device, OperationError},

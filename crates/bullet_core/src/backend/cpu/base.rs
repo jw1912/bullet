@@ -80,6 +80,39 @@ impl BaseOperations for CpuBuffer<f32> {
         Ok(())
     }
 
+    fn linear_comb(&mut self, size: usize, alpha: f32, beta: f32, nb: &Self) -> Result<(), Self::BaseError> {
+        for (o, &i) in self.buf[..size].iter_mut().zip(nb.buf[..size].iter()) {
+            *o = alpha * *o + beta * i;
+        }
+
+        Ok(())
+    }
+
+    fn linear_comb_splat(
+        &mut self,
+        size: usize,
+        batch_size: usize,
+        alpha: f32,
+        beta: f32,
+        nb: &Self,
+    ) -> Result<(), Self::BaseError> {
+        for single in self.buf.chunks_exact_mut(batch_size) {
+            for (o, &i) in single.iter_mut().zip(nb.buf[..size].iter()) {
+                *o = alpha * *o + beta * i;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError> {
+        for x in &mut self.buf[..size] {
+            *x *= alpha;
+        }
+
+        Ok(())
+    }
+
     fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
         for (o, &i) in self.buf[..size].iter_mut().zip(input.buf[..size].iter()) {
             *o = i + alpha;

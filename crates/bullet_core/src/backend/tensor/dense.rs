@@ -1,6 +1,6 @@
 use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 
-use crate::backend::device::{base::BaseOperations, blas::BlasOperations, Device, DeviceBuffer, OperationError};
+use crate::backend::device::{base::BaseOperations, Device, DeviceBuffer, OperationError};
 
 pub struct DenseMatrix<D: Device> {
     pub buf: D::BufferF32,
@@ -32,7 +32,7 @@ impl<D: Device> DenseMatrix<D> {
             return Err(OperationError::IndexOutOfBounds);
         }
 
-        self.buf.geam(self.size(), 1.0, None, scale, Some(&rhs.buf))?;
+        self.buf.linear_comb(self.size(), 1.0, scale, &rhs.buf)?;
 
         Ok(())
     }
@@ -43,7 +43,7 @@ impl<D: Device> DenseMatrix<D> {
             return Err(OperationError::IndexOutOfBounds);
         }
 
-        self.buf.geam(self.size(), 1.0 - lambda, None, lambda, Some(&rhs.buf))?;
+        self.buf.linear_comb(self.size(), 1.0 - lambda, lambda, &rhs.buf)?;
 
         Ok(())
     }
@@ -54,7 +54,7 @@ impl<D: Device> DenseMatrix<D> {
     }
 
     pub fn scale(&mut self, scale: f32) -> Result<(), OperationError<D::DeviceError>> {
-        self.buf.geam(self.size(), scale, None, 0.0, None)?;
+        self.buf.mul_scalar(self.size(), scale)?;
         Ok(())
     }
 

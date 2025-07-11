@@ -64,17 +64,6 @@ impl BlasOperations for Buffer<f32> {
     fn gebmm(&mut self, config: &GemmConfig, batch_size: usize, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
         matmul::sgemm_batched(config, batch_size, a, b, self)
     }
-
-    fn geam(
-        &mut self,
-        size: usize,
-        alpha: f32,
-        a: Option<&Self>,
-        beta: f32,
-        b: Option<&Self>,
-    ) -> Result<(), Self::BlasError> {
-        dense::linear_comb_single(size, alpha, a, beta, b, self)
-    }
 }
 
 impl BaseOperations for Buffer<f32> {
@@ -125,6 +114,18 @@ impl BaseOperations for Buffer<f32> {
         }
     }
 
+    fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError> {
+        if size > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::scale_assign(size, self.mut_ptr(), alpha);
+        }
+
+        Ok(())
+    }
+
     fn add_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {
         if size > input.size() || size > self.size() {
             return Err(DeviceError::ExpectedIllegalAddressAccess);
@@ -135,6 +136,29 @@ impl BaseOperations for Buffer<f32> {
         }
 
         Ok(())
+    }
+
+    fn linear_comb(&mut self, size: usize, alpha: f32, beta: f32, input: &Self) -> Result<(), Self::BaseError> {
+        if size > input.size() || size > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::scale_add_assign(size, alpha, self.mut_ptr(), beta, input.ptr());
+        }
+
+        Ok(())
+    }
+
+    fn linear_comb_splat(
+        &mut self,
+        size: usize,
+        reps: usize,
+        alpha: f32,
+        beta: f32,
+        input: &Self,
+    ) -> Result<(), Self::BaseError> {
+        unimplemented!()
     }
 
     fn abs_pow_scalar(&mut self, size: usize, alpha: f32, input: &Self) -> Result<(), Self::BaseError> {

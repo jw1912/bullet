@@ -15,15 +15,10 @@ use crate::{
 use super::{CpuBuffer, CpuThread};
 
 impl CpuThread {
-    pub fn compare_geam<D: Device>(device: Arc<D>) {
-        for (size, alpha, a, beta, b) in [
-            (1027, 2.0, false, -3.0, false),
-            (101, 2.0, true, -3.0, true),
-            (103, 2.0, false, -3.0, true),
-            (1024, 2.0, true, -3.0, false),
-        ] {
-            print!("geam alpha={alpha} beta={beta} size={size} a={a} b={b}... ");
-            display_passed(geam_equal(device.clone(), size, alpha, a, beta, b));
+    pub fn compare_linear_comb<D: Device>(device: Arc<D>) {
+        for (size, alpha, beta) in [(1027, 2.0, -3.0), (101, 2.0, -3.0), (103, 0.0, 1.0), (1024, 2.0, -3.0)] {
+            print!("geam alpha={alpha} beta={beta} size={size}... ");
+            display_passed(linear_comb_equal(device.clone(), size, alpha, beta));
         }
     }
 
@@ -141,24 +136,22 @@ impl CpuThread {
     }
 }
 
-fn geam_equal<D: Device>(device: Arc<D>, size: usize, alpha: f32, a: bool, beta: f32, b: bool) -> bool {
+fn linear_comb_equal<D: Device>(device: Arc<D>, size: usize, alpha: f32, beta: f32) -> bool {
     let device = device;
     let cpu = Arc::new(CpuThread);
-    let a = a.then(|| rng::vec_f32(size, 1.0, 0.5, false));
-    let b = b.then(|| rng::vec_f32(size, 1.0, 0.5, false));
-    let c = rng::vec_f32(size, 1.0, 0.5, false);
+    let a = rng::vec_f32(size, 1.0, 0.5, false);
+    let b = rng::vec_f32(size, 1.0, 0.5, false);
 
-    let acpu = load_optional(cpu.clone(), &a);
-    let bcpu = load_optional(cpu.clone(), &b);
-    let adev = load_optional(device.clone(), &a);
-    let bdev = load_optional(device.clone(), &b);
-    let mut ccpu = load(cpu.clone(), &c);
-    let mut cdev = load(device.clone(), &c);
+    let acpu = load(cpu.clone(), &a);
+    let adev = load(device.clone(), &a);
 
-    ccpu.geam(size, alpha, acpu.as_ref(), beta, bcpu.as_ref()).unwrap();
-    cdev.geam(size, alpha, adev.as_ref(), beta, bdev.as_ref()).unwrap();
+    let mut bcpu = load(cpu.clone(), &b);
+    let mut bdev = load(device.clone(), &b);
 
-    approx_equal::<D>(&ccpu, &cdev, 0.001).is_none()
+    bcpu.linear_comb(size, alpha, beta, &acpu).unwrap();
+    bdev.linear_comb(size, alpha, beta, &adev).unwrap();
+
+    approx_equal::<D>(&bcpu, &bdev, 0.001).is_none()
 }
 
 fn gemm_equal<D: Device>(device: Arc<D>, config: GemmConfig) -> bool {
@@ -319,10 +312,6 @@ fn approx_equal<D: Device>(a: &CpuBuffer<f32>, b: &D::BufferF32, err: f32) -> Op
     }
 
     None
-}
-
-fn load_optional<D: Device>(device: Arc<D>, a: &Option<Vec<f32>>) -> Option<D::BufferF32> {
-    a.as_ref().map(|a| load(device, a))
 }
 
 fn load<D: Device>(device: Arc<D>, a: &[f32]) -> D::BufferF32 {

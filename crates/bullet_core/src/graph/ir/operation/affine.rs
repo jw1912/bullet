@@ -1,7 +1,7 @@
 use crate::{
-    backend::device::Device,
+    backend::device::{blas::GemmConfig, Device},
     graph::{
-        instruction,
+        instruction::{self, MatmulType},
         ir::{
             node::AnnotatedNode,
             operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
@@ -11,6 +11,15 @@ use crate::{
         GraphFunction, NodeId, NodeIdTy,
     },
 };
+
+fn matmul_ty(batched_a: bool, batched_b: bool) -> MatmulType {
+    match (batched_a, batched_b) {
+        (true, true) => MatmulType::BatBat,
+        (false, false) => MatmulType::NobNob,
+        (false, true) => MatmulType::NobBat,
+        (true, false) => unimplemented!(),
+    }
+}
 
 #[derive(Debug)]
 pub struct Matmul {
@@ -37,19 +46,22 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Matmul
 where
     B::Backend: Device,
 {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+        let bsn = util::batch_size_node(node_info, &[self.a, self.b]);
+
         let mut func = GraphFunction::default();
 
+        func.push(instruction::SetBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
+
+        let ty = matmul_ty(node_info.get(self.a.idx).unwrap().batched, node_info.get(self.b.idx).unwrap().batched);
+
         func.push(instruction::Matmul {
-            alpha: 1.0,
-            beta: 0.0,
+            cfg: GemmConfig::new(1.0, 0.0, self.a.shape, self.transa, self.b.shape, self.transb),
             input_a: NodeId::new(self.a.idx, NodeIdTy::Values),
             input_b: NodeId::new(self.b.idx, NodeIdTy::Values),
-            trans_a: self.transa,
-            trans_b: self.transb,
-            shape_a: self.a.shape,
-            shape_b: self.b.shape,
-            output: NodeId::new(output_node, NodeIdTy::Values),
+            output,
+            ty,
         });
 
         func
@@ -60,30 +72,35 @@ where
 
         let shape_o = self.a.shape.maybe_transpose(self.transa) * self.b.shape.maybe_transpose(self.transb);
 
+        let ty = matmul_ty(node_info.get(self.a.idx).unwrap().batched, node_info.get(self.b.idx).unwrap().batched);
+
         if node_info.get(self.a.idx).unwrap().requires_grad {
+            let output = NodeId::new(self.a.idx, NodeIdTy::Gradients);
+            let b = NodeId::new(self.b.idx, NodeIdTy::Values);
+            let o = NodeId::new(output_node, NodeIdTy::Gradients);
+            let ty = match ty {
+                MatmulType::BatBat | MatmulType::NobNob => ty,
+                MatmulType::NobBat => MatmulType::BatBatRed,
+                MatmulType::BatBatRed => unimplemented!(),
+            };
+
+            func.push(instruction::SetBatchSize { input: NodeId::new(self.a.idx, NodeIdTy::Values), output });
+
             let instr = if self.transa {
                 instruction::Matmul {
-                    alpha: 1.0,
-                    beta: 1.0,
-                    output: NodeId::new(self.a.idx, NodeIdTy::Gradients),
-                    input_a: NodeId::new(self.b.idx, NodeIdTy::Values),
-                    shape_a: self.b.shape,
-                    trans_a: self.transb,
-                    input_b: NodeId::new(output_node, NodeIdTy::Gradients),
-                    shape_b: shape_o,
-                    trans_b: true,
+                    cfg: GemmConfig::new(1.0, 1.0, self.b.shape, self.transb, shape_o, true),
+                    output,
+                    input_a: b,
+                    input_b: o,
+                    ty,
                 }
             } else {
                 instruction::Matmul {
-                    alpha: 1.0,
-                    beta: 1.0,
-                    output: NodeId::new(self.a.idx, NodeIdTy::Gradients),
-                    input_a: NodeId::new(output_node, NodeIdTy::Gradients),
-                    shape_a: shape_o,
-                    trans_a: false,
-                    input_b: NodeId::new(self.b.idx, NodeIdTy::Values),
-                    shape_b: self.b.shape,
-                    trans_b: !self.transb,
+                    cfg: GemmConfig::new(1.0, 1.0, shape_o, false, self.b.shape, !self.transb),
+                    output,
+                    input_a: o,
+                    input_b: b,
+                    ty,
                 }
             };
 
@@ -91,29 +108,31 @@ where
         }
 
         if node_info.get(self.b.idx).unwrap().requires_grad {
+            let output = NodeId::new(self.b.idx, NodeIdTy::Gradients);
+            let a = NodeId::new(self.a.idx, NodeIdTy::Values);
+            let o = NodeId::new(output_node, NodeIdTy::Gradients);
+
+            func.push(instruction::SetBatchSize { input: NodeId::new(self.b.idx, NodeIdTy::Values), output });
+
             let instr = if self.transb {
+                if ty == MatmulType::NobBat {
+                    unimplemented!();
+                }
+
                 instruction::Matmul {
-                    alpha: 1.0,
-                    beta: 1.0,
-                    output: NodeId::new(self.b.idx, NodeIdTy::Gradients),
-                    input_a: NodeId::new(output_node, NodeIdTy::Gradients),
-                    shape_a: shape_o,
-                    trans_a: true,
-                    input_b: NodeId::new(self.a.idx, NodeIdTy::Values),
-                    shape_b: self.a.shape,
-                    trans_b: self.transa,
+                    cfg: GemmConfig::new(1.0, 1.0, shape_o, true, self.a.shape, self.transa),
+                    output,
+                    input_a: o,
+                    input_b: a,
+                    ty,
                 }
             } else {
                 instruction::Matmul {
-                    alpha: 1.0,
-                    beta: 1.0,
-                    output: NodeId::new(self.b.idx, NodeIdTy::Gradients),
-                    input_a: NodeId::new(self.a.idx, NodeIdTy::Values),
-                    shape_a: self.a.shape,
-                    trans_a: !self.transa,
-                    input_b: NodeId::new(output_node, NodeIdTy::Gradients),
-                    shape_b: shape_o,
-                    trans_b: false,
+                    cfg: GemmConfig::new(1.0, 1.0, self.a.shape, !self.transa, shape_o, false),
+                    output,
+                    input_a: a,
+                    input_b: o,
+                    ty,
                 }
             };
 
@@ -160,8 +179,21 @@ impl<B: BackendMarker> GraphIROperation<B> for Affine {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
+
+        let mut func = <Matmul as GraphIROperationCompilable<B>>::forward_pass(&matmul, node_info, output_node);
+
+        let input = NodeId::new(self.biases.idx, NodeIdTy::Values);
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+
+        if !node_info.get(output_node).unwrap().batched || node_info.get(self.biases.idx).unwrap().batched {
+            func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
+        } else {
+            func.push(instruction::LinearCombinationSplat { input_mul: 1.0, output_mul: 1.0, input, output });
+        }
+
+        func
     }
 
     fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {

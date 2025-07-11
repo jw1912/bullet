@@ -20,7 +20,7 @@ use crate::{
     graph::{instruction::Set, Graph, GraphFunction, NodeId, NodeIdTy},
 };
 
-pub trait BackendMarker: Copy + 'static {
+pub trait BackendMarker: Copy + Default + 'static {
     type Backend: Device;
 }
 
