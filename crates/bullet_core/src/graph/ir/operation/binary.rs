@@ -118,7 +118,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for AbsPowerError {
 
     fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         let a = NodeId::new(self.a.idx, NodeIdTy::Values);
-        let b = NodeId::new(self.a.idx, NodeIdTy::Values);
+        let b = NodeId::new(self.b.idx, NodeIdTy::Values);
         let output_grad = NodeId::new(output_node, NodeIdTy::Gradients);
 
         let mut func = GraphFunction::default();

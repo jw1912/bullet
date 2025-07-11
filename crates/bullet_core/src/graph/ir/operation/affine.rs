@@ -187,7 +187,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
         let input = NodeId::new(self.biases.idx, NodeIdTy::Values);
         let output = NodeId::new(output_node, NodeIdTy::Values);
 
-        if !node_info.get(output_node).unwrap().batched || node_info.get(self.biases.idx).unwrap().batched {
+        if !node_info.get(output_node).unwrap().batched {
             func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
         } else {
             func.push(instruction::LinearCombinationSplat { input_mul: 1.0, output_mul: 1.0, input, output });

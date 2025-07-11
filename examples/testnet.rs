@@ -36,6 +36,8 @@ fn main() {
             l1.forward(hidden_layer)
         });
 
+    trainer.optimiser.graph.display("backward").unwrap();
+
     trainer.load_from_checkpoint("checkpoints/testnet");
 
     let schedule = TrainingSchedule {

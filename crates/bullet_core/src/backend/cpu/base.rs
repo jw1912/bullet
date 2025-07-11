@@ -96,7 +96,7 @@ impl BaseOperations for CpuBuffer<f32> {
         beta: f32,
         nb: &Self,
     ) -> Result<(), Self::BaseError> {
-        for single in self.buf.chunks_exact_mut(batch_size) {
+        for single in self.buf.chunks_exact_mut(size).take(batch_size) {
             for (o, &i) in single.iter_mut().zip(nb.buf[..size].iter()) {
                 *o = alpha * *o + beta * i;
             }
@@ -113,7 +113,17 @@ impl BaseOperations for CpuBuffer<f32> {
         input_mul: f32,
         input: &Self,
     ) -> Result<(), Self::BaseError> {
-        unimplemented!()
+        for o in &mut self.buf[..size] {
+            *o *= output_mul;
+        }
+
+        for single in input.buf.chunks_exact(size).take(batch_size) {
+            for (o, &i) in self.buf[..size].iter_mut().zip(single.iter()) {
+                *o += input_mul * i;
+            }
+        }
+
+        Ok(())
     }
 
     fn mul_scalar(&mut self, size: usize, alpha: f32) -> Result<(), Self::BaseError> {
