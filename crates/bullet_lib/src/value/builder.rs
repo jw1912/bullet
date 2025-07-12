@@ -1,14 +1,10 @@
 use std::marker::PhantomData;
 
-use bullet_core::{
-    graph::{builder::Shape, ir::BackendMarker},
-    optimiser::Optimiser,
-    trainer::Trainer,
-};
+use bullet_core::{graph::builder::Shape, optimiser::Optimiser, trainer::Trainer};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
+    nn::{optimiser::OptimiserType, BackendMarker, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
     value::ValueTrainerState,
     ExecutionContext,
@@ -264,14 +260,8 @@ where
     }
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct DefaultBackend;
-impl BackendMarker for DefaultBackend {
-    type Backend = ExecutionContext;
-}
-
-type Nb<'a> = &'a NetworkBuilder<DefaultBackend>;
-type Nbn<'a> = NetworkBuilderNode<'a, DefaultBackend>;
+type Nb<'a> = &'a NetworkBuilder<BackendMarker>;
+type Nbn<'a> = NetworkBuilderNode<'a, BackendMarker>;
 
 impl<O, I> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
 where

@@ -56,6 +56,7 @@ pub trait DeviceBuffer<D, T>: Sized {
 #[allow(clippy::too_many_arguments)]
 pub trait Device: Sized + 'static {
     type IdType;
+    type Marker;
     type DeviceError: std::fmt::Debug + Default;
     type BufferI32: DeviceBuffer<Self, i32, BufferError = Self::DeviceError>;
     type BufferF32: DeviceBuffer<Self, f32, BufferError = Self::DeviceError>

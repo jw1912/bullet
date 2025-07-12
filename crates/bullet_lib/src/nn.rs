@@ -7,13 +7,13 @@ pub use bullet_core::graph::{
 pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 
 #[cfg(all(feature = "cpu", not(feature = "cuda")))]
-pub use bullet_core::cpu::{CpuError as DeviceError, CpuThread as ExecutionContext};
+pub use bullet_core::cpu::{CpuError as DeviceError, CpuMarker as BackendMarker, CpuThread as ExecutionContext};
 
 #[cfg(all(any(feature = "hip", feature = "hip-cuda"), not(feature = "cpu"), not(feature = "cuda")))]
-pub use bullet_hip_backend::{DeviceError, ExecutionContext};
+pub use bullet_hip_backend::{DeviceError, ExecutionContext, HipMarker as BackendMarker};
 
 #[cfg(feature = "cuda")]
-pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as DeviceError};
+pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as DeviceError, CudaMarker as BackendMarker};
 
 pub mod optimiser {
     use crate::nn::ExecutionContext;

@@ -5,7 +5,6 @@ use crate::{
         InitSettings, NetworkBuilder,
     },
     trainer::{logger, save::QuantTarget},
-    value::builder::DefaultBackend,
     Activation, ExecutionContext, Shape,
 };
 
@@ -335,7 +334,7 @@ where
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U::Inner> {
-        let builder = NetworkBuilder::<DefaultBackend>::default();
+        let builder = NetworkBuilder::default();
 
         let output_buckets = U::Inner::BUCKETS;
 

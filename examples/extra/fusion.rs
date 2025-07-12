@@ -1,19 +1,10 @@
 use bullet_core::{
     cpu::{CpuError, CpuThread},
-    graph::{
-        builder::{GraphBuilder, Shape},
-        ir::BackendMarker,
-    },
+    graph::builder::{GraphBuilder, Shape},
 };
 
-#[derive(Clone, Copy, Default)]
-pub struct Marker;
-impl BackendMarker for Marker {
-    type Backend = CpuThread;
-}
-
 fn main() -> Result<(), CpuError> {
-    let builder = GraphBuilder::<Marker>::default();
+    let builder = GraphBuilder::default();
 
     // inputs
     let stm = builder.new_sparse_input("stm", Shape::new(768, 1), 32);

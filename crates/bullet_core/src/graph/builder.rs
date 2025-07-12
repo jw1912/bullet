@@ -95,11 +95,8 @@ impl<B: BackendMarker> GraphBuilder<B> {
     }
 }
 
-impl<B: BackendMarker> GraphBuilder<B>
-where
-    B::Backend: Device,
-{
-    pub fn build(self, device: B::Backend) -> Graph<B::Backend> {
+impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
+    pub fn build(self, device: D) -> Graph<D> {
         let mut ir = self.ir.into_inner().unwrap();
         let root = ir.root().unwrap();
 

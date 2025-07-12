@@ -13,7 +13,7 @@ use bullet_core::{
         Device, DeviceBuffer, OperationError,
     },
     graph::{
-        ir::{operation::unary::DiffableFromOutput, shape::Shape},
+        ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
         tensor,
     },
 };
@@ -265,7 +265,14 @@ impl BaseOperations for Buffer<f32> {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct HipMarker;
+impl BackendMarker for HipMarker {
+    type Backend = ExecutionContext;
+}
+
 impl Device for ExecutionContext {
+    type Marker = HipMarker;
     type BufferF32 = Buffer<f32>;
     type BufferI32 = Buffer<i32>;
     type DeviceError = DeviceError;

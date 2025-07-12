@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     device::{Device, DeviceBuffer, OperationError, OperationResult},
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
 };
 
 #[derive(Debug, Default)]
@@ -19,6 +19,13 @@ pub struct CpuThread;
 pub struct CpuBuffer<T> {
     buf: Vec<T>,
     device: Arc<CpuThread>,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct CpuMarker;
+
+impl BackendMarker for CpuMarker {
+    type Backend = CpuThread;
 }
 
 impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
@@ -66,6 +73,8 @@ impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
 
 #[allow(unused)]
 impl Device for CpuThread {
+    type Marker = CpuMarker;
+
     type BufferF32 = CpuBuffer<f32>;
     type BufferI32 = CpuBuffer<i32>;
 

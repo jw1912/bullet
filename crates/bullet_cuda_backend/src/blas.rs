@@ -13,7 +13,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
     fn gemm(&mut self, config: &blas::GemmConfig, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
         let (cfg, _) = convert_config(config);
 
-        unsafe { self.device.blas.gemm(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
+        unsafe { self.device.blas().gemm(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
     }
 
     fn gebmm(
@@ -33,11 +33,11 @@ impl blas::BlasOperations for CudaBuffer<f32> {
             stride_c: shape_o.size() as i64,
         };
 
-        unsafe { self.device.blas.gemm_strided_batched(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
+        unsafe { self.device.blas().gemm_strided_batched(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
     }
 }
 
-fn convert_config(config: &blas::GemmConfig) -> (GemmConfig<f32>, Shape) {
+pub fn convert_config(config: &blas::GemmConfig) -> (GemmConfig<f32>, Shape) {
     let blas::GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b } = *config;
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
