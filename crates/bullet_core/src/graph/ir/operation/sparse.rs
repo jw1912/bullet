@@ -158,7 +158,10 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineDualActivat
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::SetBatchSize { input: NodeId::new(self.indices_l.idx, NodeIdTy::Values), output });
+        func.push(instruction::MaybeUpdateBatchSize {
+            input: NodeId::new(self.indices_l.idx, NodeIdTy::Values),
+            output,
+        });
 
         let lhs = instruction::SparseAffineActivateStrided {
             weights: NodeId::new(self.weights.idx, NodeIdTy::Values),

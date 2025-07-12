@@ -53,7 +53,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
         let output = NodeId::new(output_node, NodeIdTy::Values);
 
         let mut func = GraphFunction::default();
-        func.push(instruction::SetBatchSize { input, output });
+        func.push(instruction::MaybeUpdateBatchSize { input, output });
         func.push(instruction::Unary { input, output, op: self.op });
 
         func
@@ -66,7 +66,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::SetBatchSize { input, output: input_grad });
+        func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
 
         if node_info.get(self.input.idx).unwrap().requires_grad {
             func.push(instruction::UnaryBackward {
@@ -141,7 +141,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::SetBatchSize { input, output: input_grad });
+        func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
 
         if node_info.get(self.input.idx).unwrap().requires_grad {
             func.push(instruction::SplatAcrossBatch {
@@ -188,7 +188,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
         let output = NodeId::new(output_node, NodeIdTy::Values);
 
         let mut func = GraphFunction::default();
-        func.push(instruction::SetBatchSize { input, output });
+        func.push(instruction::MaybeUpdateBatchSize { input, output });
         func.push(instruction::PairwiseMul { post_concat: self.post_concat, input, output });
 
         func
@@ -252,7 +252,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ToDense {
         let output = NodeId::new(output_node, NodeIdTy::Values);
 
         let mut func = GraphFunction::default();
-        func.push(instruction::SetBatchSize { input, output });
+        func.push(instruction::MaybeUpdateBatchSize { input, output });
         func.push(instruction::SparseToDense { input, output });
 
         func
@@ -291,7 +291,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
         let output = NodeId::new(output_node, NodeIdTy::Values);
 
         let mut func = GraphFunction::default();
-        func.push(instruction::SetBatchSize { input, output });
+        func.push(instruction::MaybeUpdateBatchSize { input, output });
         func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 0.0, input, output });
 
         func
@@ -304,7 +304,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
             let input = NodeId::new(output_node, NodeIdTy::Gradients);
             let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
 
-            func.push(instruction::SetBatchSize { input, output });
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
         }
 

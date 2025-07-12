@@ -41,7 +41,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::SetBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
+        func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
 
         let mut push = |input_mul, output_mul, node| {
             if !node_info.get(output_node).unwrap().batched || node_info.get(node).unwrap().batched {
@@ -104,7 +104,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for AbsPowerError {
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::SetBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
+        func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
 
         func.push(instruction::AbsPowerError {
             a: NodeId::new(self.a.idx, NodeIdTy::Values),
@@ -126,14 +126,14 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for AbsPowerError {
         if node_info.get(self.a.idx).unwrap().requires_grad {
             let grd = NodeId::new(self.a.idx, NodeIdTy::Gradients);
 
-            func.push(instruction::SetBatchSize { input: a, output: grd });
+            func.push(instruction::MaybeUpdateBatchSize { input: a, output: grd });
             func.push(instruction::AbsPowerErrorBackward { a, b, c: output_grad, output: grd, power: self.power });
         }
 
         if node_info.get(self.b.idx).unwrap().requires_grad {
             let grd = NodeId::new(self.b.idx, NodeIdTy::Gradients);
 
-            func.push(instruction::SetBatchSize { input: b, output: grd });
+            func.push(instruction::MaybeUpdateBatchSize { input: b, output: grd });
             func.push(instruction::AbsPowerErrorBackward {
                 a: b,
                 b: a,

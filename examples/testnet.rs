@@ -36,6 +36,9 @@ fn main() {
             l1.forward(hidden_layer)
         });
 
+    println!("Single Step:");
+    trainer.optimiser.graph.display("zero_grads").unwrap();
+    trainer.optimiser.graph.display("forward").unwrap();
     trainer.optimiser.graph.display("backward").unwrap();
 
     trainer.load_from_checkpoint("checkpoints/testnet");

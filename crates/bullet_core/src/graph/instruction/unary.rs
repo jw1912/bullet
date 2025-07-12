@@ -8,12 +8,12 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct SetBatchSize {
+pub struct MaybeUpdateBatchSize {
     pub input: NodeId,
     pub output: NodeId,
 }
 
-impl<D: Device> GraphInstruction<D> for SetBatchSize {
+impl<D: Device> GraphInstruction<D> for MaybeUpdateBatchSize {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
         let input = graph.get(self.input)?;
 

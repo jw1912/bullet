@@ -52,7 +52,7 @@ where
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::SetBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
+        func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
 
         let ty = matmul_ty(node_info.get(self.a.idx).unwrap().batched, node_info.get(self.b.idx).unwrap().batched);
 
@@ -84,7 +84,7 @@ where
                 MatmulType::BatBatRed => unimplemented!(),
             };
 
-            func.push(instruction::SetBatchSize { input: NodeId::new(self.a.idx, NodeIdTy::Values), output });
+            func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(self.a.idx, NodeIdTy::Values), output });
 
             let instr = if self.transa {
                 instruction::Matmul {
@@ -112,7 +112,7 @@ where
             let a = NodeId::new(self.a.idx, NodeIdTy::Values);
             let o = NodeId::new(output_node, NodeIdTy::Gradients);
 
-            func.push(instruction::SetBatchSize { input: NodeId::new(self.b.idx, NodeIdTy::Values), output });
+            func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(self.b.idx, NodeIdTy::Values), output });
 
             let instr = if self.transb {
                 if ty == MatmulType::NobBat {

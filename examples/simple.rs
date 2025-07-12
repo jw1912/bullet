@@ -1,4 +1,4 @@
-/*S
+/*
 This is about as simple as you can get with a network, the arch is
     (768 -> HIDDEN_SIZE)x2 -> 1
 and the training schedule is pretty sensible.
