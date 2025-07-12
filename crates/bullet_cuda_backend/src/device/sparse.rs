@@ -1,5 +1,5 @@
 use bullet_core::{
-    backend::device::{DeviceBuffer, OperationError},
+    device::{DeviceBuffer, OperationError},
     graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 use cudarc::driver::{LaunchConfig, PushKernelArg};

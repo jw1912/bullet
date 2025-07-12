@@ -1,5 +1,5 @@
 use bullet_core::{
-    backend::cpu::{CpuError, CpuThread},
+    cpu::{CpuError, CpuThread},
     graph::{
         builder::{GraphBuilder, Shape},
         ir::BackendMarker,

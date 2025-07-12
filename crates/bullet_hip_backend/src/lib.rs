@@ -7,15 +7,15 @@ pub use backend::ExecutionContext;
 use backend::{bindings, ops, util, Buffer};
 
 use bullet_core::{
-    backend::{
-        device::{
-            base::{AdamConfig, BaseOperations},
-            blas::{BlasOperations, GemmConfig},
-            Device, DeviceBuffer, OperationError,
-        },
+    device::{
+        base::{AdamConfig, BaseOperations},
+        blas::{BlasOperations, GemmConfig},
+        Device, DeviceBuffer, OperationError,
+    },
+    graph::{
+        ir::{operation::unary::DiffableFromOutput, shape::Shape},
         tensor,
     },
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;

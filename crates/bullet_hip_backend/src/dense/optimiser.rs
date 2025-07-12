@@ -1,4 +1,4 @@
-use bullet_core::backend::device::{base::AdamConfig, DeviceBuffer};
+use bullet_core::device::{base::AdamConfig, DeviceBuffer};
 
 use crate::{
     backend::{ops, Buffer},

@@ -3,7 +3,7 @@ mod sparse;
 use std::sync::Arc;
 
 use bullet_core::{
-    backend::device::{Device, DeviceBuffer, OperationError, OperationResult},
+    device::{Device, DeviceBuffer, OperationError, OperationResult},
     graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 use cudarc::{

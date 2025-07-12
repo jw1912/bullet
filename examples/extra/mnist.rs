@@ -7,7 +7,7 @@
 use std::{fs::File, io::Read, time::Instant};
 
 use bullet_core::{
-    backend::device::OperationError,
+    device::OperationError,
     graph::{
         builder::{GraphBuilder, Shape},
         Graph, Node, NodeId, NodeIdTy,

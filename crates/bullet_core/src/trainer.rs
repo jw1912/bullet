@@ -8,7 +8,7 @@ use schedule::TrainingSchedule;
 use std::{sync::mpsc, thread, time::Instant};
 
 use crate::{
-    backend::device::{Device, OperationError},
+    device::{Device, OperationError},
     optimiser::{Optimiser, OptimiserState},
 };
 

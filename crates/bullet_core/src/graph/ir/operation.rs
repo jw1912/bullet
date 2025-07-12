@@ -7,7 +7,7 @@ pub mod util;
 use std::num::NonZeroUsize;
 
 use crate::{
-    backend::device::Device,
+    device::Device,
     graph::{
         ir::{BackendMarker, GraphIRNodeInfo},
         GraphFunction,

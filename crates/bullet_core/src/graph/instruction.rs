@@ -11,7 +11,7 @@ pub use trinary::*;
 pub use unary::*;
 
 use crate::{
-    backend::device::{Device, OperationError},
+    device::{Device, OperationError},
     graph::{Graph, NodeId},
 };
 

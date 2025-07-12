@@ -1,5 +1,5 @@
 use crate::{
-    backend::device::base::{AdamConfig, BaseOperations},
+    device::base::{AdamConfig, BaseOperations},
     graph::ir::operation::unary::DiffableFromOutput,
 };
 

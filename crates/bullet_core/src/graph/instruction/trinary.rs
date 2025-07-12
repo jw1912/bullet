@@ -1,5 +1,5 @@
 use crate::{
-    backend::device::{base::BaseOperations, Device, OperationError},
+    device::{base::BaseOperations, Device, OperationError},
     graph::{instruction::GraphInstruction, Graph, NodeId},
 };
 

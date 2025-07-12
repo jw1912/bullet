@@ -6,8 +6,10 @@ use std::{fmt::Debug, sync::Arc};
 use base::BaseOperations;
 use blas::BlasOperations;
 
-use super::cpu::CpuThread;
-use crate::graph::ir::{operation::unary::DiffableFromOutput, shape::Shape};
+use crate::{
+    cpu::CpuThread,
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
+};
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {

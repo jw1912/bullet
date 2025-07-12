@@ -16,9 +16,10 @@ use operation::*;
 use shape::Shape;
 
 use crate::{
-    backend::{device::Device, tensor::Tensor},
+    device::Device,
     graph::{
         instruction::{self, Set},
+        tensor::Tensor,
         Graph, GraphFunction, NodeId, NodeIdTy,
     },
 };

@@ -1,4 +1,4 @@
-use bullet_core::{backend::device::blas, graph::ir::shape::Shape};
+use bullet_core::{device::blas, graph::ir::shape::Shape};
 use cudarc::cublas::{
     sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
     Gemm, GemmConfig, StridedBatchedConfig,

@@ -1,5 +1,5 @@
 use bullet_core::{
-    backend::device::{
+    device::{
         base::{AdamConfig, BaseOperations},
         DeviceBuffer,
     },

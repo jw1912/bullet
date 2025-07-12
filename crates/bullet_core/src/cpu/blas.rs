@@ -1,9 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 use crate::{
-    backend::{
-        cpu::sparse::by_chunks_32_2,
-        device::blas::{BlasOperations, GemmConfig},
-    },
+    cpu::sparse::by_chunks_32_2,
+    device::blas::{BlasOperations, GemmConfig},
     graph::ir::shape::Shape,
 };
 

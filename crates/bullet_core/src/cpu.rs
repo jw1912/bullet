@@ -6,7 +6,7 @@ pub mod sparse;
 use std::sync::Arc;
 
 use crate::{
-    backend::device::{Device, DeviceBuffer, OperationError, OperationResult},
+    device::{Device, DeviceBuffer, OperationError, OperationResult},
     graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 

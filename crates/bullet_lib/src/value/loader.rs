@@ -6,7 +6,7 @@ mod text;
 pub mod viribinpack;
 
 use bullet_core::{
-    backend::device::OperationError,
+    device::OperationError,
     graph::{builder::Shape, NodeId, NodeIdTy},
 };
 use bulletformat::BulletFormat;

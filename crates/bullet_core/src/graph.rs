@@ -1,6 +1,7 @@
 pub mod builder;
 pub mod instruction;
 pub mod ir;
+pub mod tensor;
 
 use std::{
     cell::{Ref, RefCell, RefMut},
@@ -11,11 +12,9 @@ use std::{
 
 use instruction::GraphInstruction;
 use ir::{node::AnnotatedNode, shape::Shape, GraphIRError};
+use tensor::{read_from_byte_buffer, Tensor};
 
-use crate::backend::{
-    device::{Device, OperationError},
-    tensor::{read_from_byte_buffer, Tensor},
-};
+use crate::device::{Device, OperationError};
 
 pub struct GraphFunction<D: Device> {
     instructions: Vec<Box<dyn GraphInstruction<D>>>,

@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    backend::device::Device,
+    device::Device,
     graph::{
         ir::{
             operation::{

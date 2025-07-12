@@ -1,5 +1,5 @@
 use crate::{
-    backend::device::{
+    device::{
         blas::{BlasOperations, GemmConfig},
         Device, OperationError,
     },

@@ -1,5 +1,5 @@
 use crate::{
-    backend::device::{blas::GemmConfig, Device},
+    device::{blas::GemmConfig, Device},
     graph::{
         instruction::{self, MatmulType},
         ir::{

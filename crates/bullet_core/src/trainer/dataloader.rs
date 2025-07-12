@@ -1,11 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    backend::{
-        device::{Device, OperationError},
+    device::{Device, OperationError},
+    graph::{
+        builder::Shape,
         tensor::{DenseMatrix, Matrix, SparseMatrix},
+        Graph, NodeId, NodeIdTy,
     },
-    graph::{builder::Shape, Graph, NodeId, NodeIdTy},
     trainer::TrainerError,
 };
 

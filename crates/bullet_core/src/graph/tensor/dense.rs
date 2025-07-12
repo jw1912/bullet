@@ -1,6 +1,6 @@
 use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 
-use crate::backend::device::{base::BaseOperations, Device, DeviceBuffer, OperationError};
+use crate::device::{base::BaseOperations, Device, DeviceBuffer, OperationError};
 
 pub struct DenseMatrix<D: Device> {
     pub buf: D::BufferF32,
