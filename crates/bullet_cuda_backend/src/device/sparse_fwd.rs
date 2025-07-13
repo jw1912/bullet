@@ -62,7 +62,7 @@ pub fn sparse_affine(
     let kernel_cfg = KernelConfig { bias: input_c.map(|_| input_c_batched), m, act: activation, nnz: nnz as u32 };
 
     let mut rtcs = output.device.rtc.try_lock().unwrap();
-    let name = name(kernel_cfg);
+    let name = kernel_cfg.name();
 
     let module = if let Some(module) = rtcs.get(&name) {
         module.clone()
@@ -70,7 +70,7 @@ pub fn sparse_affine(
         let kernel_str = kernel(kernel_cfg, vectorise);
         let ptx = nvrtc::compile_ptx(kernel_str).map_err(|_| CudaError::Generic)?;
         let module = output.device.stream.context().load_module(ptx).map_err(CudaError::Driver)?;
-        rtcs.insert(name.clone(), module.clone());
+        rtcs.insert(name, module.clone());
         module
     };
 
@@ -100,26 +100,30 @@ pub fn sparse_affine(
 }
 
 #[derive(Clone, Copy)]
-struct KernelConfig {
-    m: u32,
-    nnz: u32,
-    act: DiffableFromOutput,
-    bias: Option<bool>,
+pub(crate) struct KernelConfig {
+    pub m: u32,
+    pub nnz: u32,
+    pub act: DiffableFromOutput,
+    pub bias: Option<bool>,
 }
 
-fn name(cfg: KernelConfig) -> String {
-    let KernelConfig { m, nnz, act, bias } = cfg;
-    let act = match act {
-        DiffableFromOutput::Identity => "Identity",
-        DiffableFromOutput::ReLU => "Relu",
-        DiffableFromOutput::CReLU => "Crelu",
-        DiffableFromOutput::SCReLU => "Screlu",
-        DiffableFromOutput::SqrReLU => "SqrRelu",
-        DiffableFromOutput::Sigmoid => "Sigmoid",
-    };
+impl KernelConfig {
+    pub fn name(self) -> String {
+        let KernelConfig { m, nnz, act, bias } = self;
+        let act = match act {
+            DiffableFromOutput::Identity => "Identity",
+            DiffableFromOutput::ReLU => "Relu",
+            DiffableFromOutput::CReLU => "Crelu",
+            DiffableFromOutput::SCReLU => "Screlu",
+            DiffableFromOutput::SqrReLU => "SqrRelu",
+            DiffableFromOutput::Sigmoid => "Sigmoid",
+        };
 
-    format!("SparseAffine{act}_{m}_{nnz}_{bias:?}")
+        format!("SparseAffine{act}_{m}_{nnz}_{bias:?}")
+    }
 }
+
+
 
 fn act_str(act: DiffableFromOutput) -> &'static str {
     match act {
