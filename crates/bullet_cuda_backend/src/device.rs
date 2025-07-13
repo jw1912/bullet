@@ -1,6 +1,10 @@
-mod sparse;
+mod sparse_bwd;
+mod sparse_fwd;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use bullet_core::{
     device::{Device, DeviceBuffer, OperationError, OperationResult},
@@ -30,6 +34,7 @@ pub struct CudaDevice {
     module: Arc<CudaModule>,
     copystream: Arc<CudaStream>,
     ones: Mutex<CudaSlice<f32>>,
+    rtc: Mutex<HashMap<String, Arc<CudaModule>>>,
 }
 
 impl Default for CudaDevice {
@@ -110,7 +115,7 @@ impl Device for CudaDevice {
 
         let ones = Mutex::new(stream.alloc_zeros::<f32>(0).map_err(CudaError::Driver)?);
 
-        Ok(Self { stream, blas, module, copystream, ones })
+        Ok(Self { stream, blas, module, copystream, ones, rtc: Mutex::new(HashMap::new()) })
     }
 
     fn synchronise(&self) -> Result<(), Self::DeviceError> {
@@ -140,7 +145,7 @@ impl Device for CudaDevice {
             return Err(OperationError::UnsupportedOperation);
         }
 
-        sparse::sparse_affine(
+        sparse_fwd::sparse_affine(
             batch_size,
             stride,
             activation,
@@ -174,7 +179,7 @@ impl Device for CudaDevice {
             return Err(OperationError::UnsupportedOperation);
         }
 
-        sparse::backprop_sparse_affine(
+        sparse_bwd::backprop_sparse_affine(
             batch_size,
             stride,
             activation,
