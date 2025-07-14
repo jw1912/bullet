@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use crate::graph::{
     instruction,
     ir::{
@@ -333,6 +335,82 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::SelectBackprop { input, output, buckets });
+        }
+
+        func
+    }
+}
+
+#[derive(Debug)]
+pub struct SoftmaxCrossEntropy {
+    pub logits: AnnotatedNode,
+    pub targets: AnnotatedNode,
+}
+
+impl<B: BackendMarker> GraphIROperation<B> for SoftmaxCrossEntropy {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.logits, self.targets]
+    }
+
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.logits, true)?;
+        util::check_dense_eq(ir, &self.targets, true)?;
+        util::check_same_batching(ir, &[&self.logits, &self.targets])?;
+        util::check_no_grad(ir, &[&self.targets])?;
+
+        let shape = self.logits.shape;
+
+        if shape != self.targets.shape {
+            Err(GraphIRError::Op(GraphIROperationError::MismatchedInputShapes(vec![shape, self.targets.shape])))
+        } else {
+            Ok(shape)
+        }
+    }
+
+    fn ancillary_buffers(&self, _ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
+        Ok(vec![(self.logits.shape, None)])
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for SoftmaxCrossEntropy {
+    fn forward_pass(
+        &self,
+        _node_info: &GraphIRNodeInfo,
+        output_node: usize,
+    ) -> GraphFunction<<B as BackendMarker>::Backend> {
+        let logits = NodeId::new(self.logits.idx, NodeIdTy::Values);
+        let targets = NodeId::new(self.targets.idx, NodeIdTy::Values);
+        let smax = NodeId::new(output_node, NodeIdTy::Ancillary(0));
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+
+        let mut func = GraphFunction::default();
+
+        func.push(instruction::MaybeUpdateBatchSize { input: logits, output: smax });
+        func.push(instruction::MaybeUpdateBatchSize { input: logits, output });
+
+        func.push(instruction::Softmax { input: logits, output: smax });
+        func.push(instruction::CrossEntropy { a: smax, b: targets, output });
+
+        func
+    }
+
+    fn backward_pass(
+        &self,
+        node_info: &GraphIRNodeInfo,
+        output_node: usize,
+    ) -> GraphFunction<<B as BackendMarker>::Backend> {
+        assert!(!node_info.get(self.targets.idx).unwrap().requires_grad);
+
+        let mut func = GraphFunction::default();
+
+        if node_info.get(self.logits.idx).unwrap().requires_grad {
+            let softmax = NodeId::new(output_node, NodeIdTy::Ancillary(0));
+            let output_grads = NodeId::new(output_node, NodeIdTy::Gradients);
+            let targets = NodeId::new(self.targets.idx, NodeIdTy::Values);
+            let output = NodeId::new(self.logits.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::MaybeUpdateBatchSize { input: softmax, output });
+            func.push(instruction::SoftmaxCrossEntropyBackward { softmax, output_grads, targets, output });
         }
 
         func

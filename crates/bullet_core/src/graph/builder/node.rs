@@ -6,7 +6,7 @@ use crate::graph::{
         node::AnnotatedNode,
         operation::{
             affine::Matmul,
-            binary::{Concat, LinearCombination, Select},
+            binary::{Concat, LinearCombination, Select, SoftmaxCrossEntropy},
             sparse::SparseAffineActivate,
             unary::{Copy, DiffableFromOutput, PairwiseMul, Reduce, ReduceAcrossBatch, Slice, ToDense, Unary, UnaryOp},
         },
@@ -255,8 +255,8 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
         self.builder.apply(Unary { input: self.node, op: UnaryOp::AbsPow(power) })
     }
 
-    pub fn softmax_crossentropy_loss(self, _targets: Self) -> Self {
-        unimplemented!() //self.builder.apply(Binary { a: self.node, b: targets.node, op: BinaryOp::SoftmaxCrossEntropyLoss })
+    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
+        self.builder.apply(SoftmaxCrossEntropy { logits: self.annotated_node(), targets: targets.annotated_node() })
     }
 
     pub fn slice_rows(self, start: usize, end: usize) -> Self {

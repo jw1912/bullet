@@ -195,3 +195,33 @@ impl<D: Device> GraphInstruction<D> for SelectBackprop {
         )
     }
 }
+
+#[derive(Debug)]
+pub struct CrossEntropy {
+    pub a: NodeId,
+    pub b: NodeId,
+    pub output: NodeId,
+}
+
+impl<D: Device> GraphInstruction<D> for CrossEntropy {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let a = graph.get(self.a)?;
+        let a = a.dense()?;
+
+        let b = graph.get(self.b)?;
+        let b = b.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        if a.batch_size() != b.batch_size() || a.batch_size() != output.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if a.single_size() != b.single_size() || a.single_size() != output.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        D::crossentropy(a.size(), &a.buf, &b.buf, &mut output.buf)
+    }
+}

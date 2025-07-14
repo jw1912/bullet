@@ -303,3 +303,32 @@ impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub struct Softmax {
+    pub input: NodeId,
+    pub output: NodeId,
+}
+
+impl<D: Device> GraphInstruction<D> for Softmax {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        let batch_size = input.batch_size();
+        let single_size = input.single_size();
+
+        if batch_size != output.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if single_size != output.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        D::softmax_across_batch(batch_size.unwrap_or(1), single_size, &input.buf, &mut output.buf)
+    }
+}

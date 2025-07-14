@@ -39,7 +39,10 @@ fn main() -> Result<(), OperationError<DeviceError>> {
     let f0 = l0.forward(inputs.reshape(Shape::new(28 * 28, 1))).sigmoid();
     let f1 = l1.forward(f0).sigmoid();
     let f2 = l2.forward(f1);
-    f2.softmax_crossentropy_loss(targets);
+    let losses = f2.softmax_crossentropy_loss(targets);
+
+    let ones = builder.new_constant(Shape::new(1, 10), &[1.0; 10]);
+    ones.matmul(losses);
 
     let outputs = f2.node();
     let mut graph = builder.build(ExecutionContext::default());

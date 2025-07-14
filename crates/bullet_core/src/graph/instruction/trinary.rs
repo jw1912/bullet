@@ -43,3 +43,44 @@ impl<D: Device> GraphInstruction<D> for AbsPowerErrorBackward {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub struct SoftmaxCrossEntropyBackward {
+    pub softmax: NodeId,
+    pub targets: NodeId,
+    pub output_grads: NodeId,
+    pub output: NodeId,
+}
+
+impl<D: Device> GraphInstruction<D> for SoftmaxCrossEntropyBackward {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let softmax = graph.get(self.softmax)?;
+        let softmax = softmax.dense()?;
+
+        let targets = graph.get(self.targets)?;
+        let targets = targets.dense()?;
+
+        let output_grads = graph.get(self.output_grads)?;
+        let output_grads = output_grads.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        if softmax.batch_size() != targets.batch_size()
+            || softmax.batch_size() != output_grads.batch_size()
+            || softmax.batch_size() != output.batch_size()
+        {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if softmax.single_size() != targets.single_size()
+            || softmax.single_size() != output_grads.single_size()
+            || softmax.single_size() != output.single_size()
+        {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        let size = softmax.size();
+        D::backprop_softmax_crossentropy(size, &softmax.buf, &targets.buf, &output_grads.buf, &mut output.buf)
+    }
+}
