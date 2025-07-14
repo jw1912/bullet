@@ -48,7 +48,7 @@ impl<B: BackendMarker> GraphBuilder<B> {
         self.init_data.try_lock().unwrap()
     }
 
-    fn apply(&self, operation: impl GraphIROperationCompilable<B>) -> GraphBuilderNode<B> {
+    pub fn apply(&self, operation: impl GraphIROperationCompilable<B>) -> GraphBuilderNode<B> {
         match self.ir().add_op(operation) {
             Ok(node) => GraphBuilderNode { node, builder: self },
             Err(e) => {

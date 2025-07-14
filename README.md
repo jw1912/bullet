@@ -26,6 +26,7 @@ Specific API documentation is covered by Rust's docstrings. You can create local
 
 - **bullet_core**
     - An ML framework that is generic over backends
+    - Graphs are defined once (ahead of use), then optimsed and compiled for a given backend device
     - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
     - See the [MNIST](examples/extra/mnist.rs) example for using `bullet_core` as a general-purpose ML framework
 - **bullet_cuda_backend**
