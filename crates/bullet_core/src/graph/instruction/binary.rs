@@ -102,7 +102,7 @@ impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
             return Err(OperationError::InvalidTensorFormat);
         }
 
-        let mut single_size = input.single_size();
+        let mut single_size = output.single_size();
         let mut batch_size = input.batch_size().unwrap_or(1);
 
         if self.post_concat {
