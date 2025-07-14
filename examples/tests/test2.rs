@@ -11,14 +11,14 @@ use bullet_lib::{
 fn main() {
     #[rustfmt::skip]
     let bucket_layout = [
-        0, 1, 2, 3,
-        4, 4, 5, 5,
-        6, 6, 6, 6,
-        7, 7, 7, 7,
-        8, 8, 8, 8,
-        8, 8, 8, 8,
-        9, 9, 9, 9,
-        9, 9, 9, 9,
+        0, 0, 0, 0,
+        1, 1, 1, 1,
+        1, 1, 1, 1,
+        1, 1, 1, 1,
+        1, 1, 1, 1,
+        1, 1, 1, 1,
+        1, 1, 1, 1,
+        1, 1, 1, 1,
     ];
 
     let hl_size = 128;
@@ -61,7 +61,7 @@ fn main() {
             out + skip_neuron
         });
 
-    //trainer.optimiser.load_weights_from_file("examples/tests/checkpoints/test2.wgts").unwrap();
+    trainer.optimiser.load_weights_from_file("examples/tests/checkpoints/test2.wgts").unwrap();
 
     let schedule = TrainingSchedule {
         net_id: "test2".to_string(),
