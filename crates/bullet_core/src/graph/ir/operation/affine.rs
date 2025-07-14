@@ -201,14 +201,24 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
 
         let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, node_info, output_node);
 
-        if node_info.get(self.biases.idx).unwrap().requires_grad {
-            func.push(instruction::ReduceAcrossBatch {
-                input: NodeId::new(output_node, NodeIdTy::Gradients),
-                output: NodeId::new(self.biases.idx, NodeIdTy::Gradients),
-                input_mul: 1.0,
-                output_mul: 1.0,
-                reduction: Reduce::Sum,
-            });
+        let info = node_info.get(self.biases.idx).unwrap();
+
+        if info.requires_grad {
+            let input = NodeId::new(output_node, NodeIdTy::Gradients);
+            let output = NodeId::new(self.biases.idx, NodeIdTy::Gradients);
+            let values = NodeId::new(self.biases.idx, NodeIdTy::Values);
+
+            let input_mul = 1.0;
+            let output_mul = 1.0;
+            let reduction = Reduce::Sum;
+
+            func.push(instruction::MaybeUpdateBatchSize { input: values, output });
+
+            if info.batched || !node_info.get(output_node).unwrap().batched {
+                func.push(instruction::LinearCombination { input, output, input_mul, output_mul });
+            } else {
+                func.push(instruction::ReduceAcrossBatch { input, output, input_mul, output_mul, reduction });
+            }
         }
 
         func

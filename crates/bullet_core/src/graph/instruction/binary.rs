@@ -75,3 +75,123 @@ impl<D: Device> GraphInstruction<D> for UnaryBackward {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub struct PairwiseMulBackward {
+    pub post_concat: bool,
+    pub values: NodeId,
+    pub input: NodeId,
+    pub output: NodeId,
+}
+
+impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+        let values = graph.get(self.values)?;
+        let values = values.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        if input.batch_size() != output.batch_size() || input.batch_size() != values.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if output.single_size() != 2 * input.single_size() || output.single_size() != values.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        let mut single_size = input.single_size();
+        let mut batch_size = input.batch_size().unwrap_or(1);
+
+        if self.post_concat {
+            single_size /= 2;
+            batch_size *= 2;
+        }
+
+        output.buf.pairwise_bwd(single_size, batch_size, &values.buf, &input.buf)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct Select {
+    pub input: NodeId,
+    pub output: NodeId,
+    pub buckets: NodeId,
+}
+
+impl<D: Device> GraphInstruction<D> for Select {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        let buckets = graph.get(self.buckets)?;
+        let buckets = buckets.sparse()?;
+
+        if input.batch_size() != output.batch_size() || input.batch_size() != buckets.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        let input_size = input.single_size();
+        let output_size = output.single_size();
+
+        if input_size != buckets.single_size() * output_size || buckets.nnz != 1 {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        D::select(
+            input.batch_size().unwrap_or(1),
+            input.single_size(),
+            output.single_size(),
+            &input.buf,
+            &buckets.buf,
+            &mut output.buf,
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct SelectBackprop {
+    pub input: NodeId,
+    pub output: NodeId,
+    pub buckets: NodeId,
+}
+
+impl<D: Device> GraphInstruction<D> for SelectBackprop {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        let buckets = graph.get(self.buckets)?;
+        let buckets = buckets.sparse()?;
+
+        if input.batch_size() != output.batch_size() || input.batch_size() != buckets.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        let input_size = input.single_size();
+        let output_size = output.single_size();
+
+        if output_size != buckets.single_size() * input_size || buckets.nnz != 1 {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        D::select_backprop(
+            input.batch_size().unwrap_or(1),
+            output.single_size(),
+            input.single_size(),
+            &buckets.buf,
+            &input.buf,
+            &mut output.buf,
+        )
+    }
+}

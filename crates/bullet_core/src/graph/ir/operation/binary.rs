@@ -224,7 +224,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
             input_offset: 0,
             output_offset: 0,
             add: false,
-            backprop: false,
+            len_is_out: false,
         });
 
         func.push(instruction::CopyOrAddStrided {
@@ -233,7 +233,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
             input_offset: 0,
             output_offset: ainfo.shape.size(),
             add: false,
-            backprop: false,
+            len_is_out: false,
         });
 
         func
@@ -258,7 +258,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
                 input_offset: 0,
                 output_offset: 0,
                 add: true,
-                backprop: true,
+                len_is_out: true,
             });
         }
 
@@ -273,7 +273,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
                 input_offset: ainfo.shape.size(),
                 output_offset: 0,
                 add: true,
-                backprop: true,
+                len_is_out: true,
             });
         }
 
@@ -308,11 +308,33 @@ impl<B: BackendMarker> GraphIROperation<B> for Select {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+        let buckets = NodeId::new(self.buckets.idx, NodeIdTy::Values);
+
+        let mut func = GraphFunction::default();
+
+        func.push(instruction::MaybeUpdateBatchSize { input, output });
+        func.push(instruction::Select { input, output, buckets });
+
+        func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        assert!(!node_info.get(self.buckets.idx).unwrap().requires_grad);
+
+        let mut func = GraphFunction::default();
+
+        if node_info.get(self.input.idx).unwrap().requires_grad {
+            let input = NodeId::new(output_node, NodeIdTy::Gradients);
+            let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+            let buckets = NodeId::new(self.buckets.idx, NodeIdTy::Values);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+            func.push(instruction::SelectBackprop { input, output, buckets });
+        }
+
+        func
     }
 }

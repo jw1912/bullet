@@ -272,7 +272,7 @@ pub struct CopyOrAddStrided {
     pub input_offset: usize,
     pub output_offset: usize,
     pub add: bool,
-    pub backprop: bool,
+    pub len_is_out: bool,
 }
 
 impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
@@ -287,7 +287,7 @@ impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
-        let rows = if self.backprop { output.single_size() } else { input.single_size() };
+        let rows = if self.len_is_out { output.single_size() } else { input.single_size() };
 
         output.buf.copy_or_add_strided(
             self.add,

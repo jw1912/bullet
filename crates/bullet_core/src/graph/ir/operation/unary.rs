@@ -61,17 +61,18 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
 
     fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
         assert!(node_info.get(output_node).unwrap().requires_grad);
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let input_grad = NodeId::new(self.input.idx, NodeIdTy::Gradients);
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
-
         if node_info.get(self.input.idx).unwrap().requires_grad {
+            let input = NodeId::new(self.input.idx, NodeIdTy::Values);
+            let input_grad = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
+
             func.push(instruction::UnaryBackward {
-                input: NodeId::new(self.input.idx, NodeIdTy::Values),
-                input_grad: NodeId::new(self.input.idx, NodeIdTy::Gradients),
+                input,
+                input_grad,
                 output_grad: NodeId::new(output_node, NodeIdTy::Gradients),
                 op: self.op,
             });
@@ -194,8 +195,23 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
         func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let mut func = GraphFunction::default();
+
+        if node_info.get(self.input.idx).unwrap().requires_grad {
+            let input = NodeId::new(output_node, NodeIdTy::Gradients);
+            let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+            func.push(instruction::PairwiseMulBackward {
+                post_concat: self.post_concat,
+                values: NodeId::new(self.input.idx, NodeIdTy::Values),
+                input,
+                output,
+            });
+        }
+
+        func
     }
 }
 
@@ -223,12 +239,43 @@ impl<B: BackendMarker> GraphIROperation<B> for Slice {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+
+        let mut func = GraphFunction::default();
+        func.push(instruction::MaybeUpdateBatchSize { input, output });
+        func.push(instruction::CopyOrAddStrided {
+            input,
+            output,
+            input_offset: self.start,
+            output_offset: 0,
+            add: false,
+            len_is_out: true,
+        });
+
+        func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let mut func = GraphFunction::default();
+
+        if node_info.get(self.input.idx).unwrap().requires_grad {
+            let input = NodeId::new(output_node, NodeIdTy::Gradients);
+            let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+            func.push(instruction::CopyOrAddStrided {
+                input,
+                output,
+                input_offset: 0,
+                output_offset: self.start,
+                add: true,
+                len_is_out: false,
+            });
+        }
+
+        func
     }
 }
 

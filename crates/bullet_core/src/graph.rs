@@ -170,7 +170,7 @@ impl<D: Device> Graph<D> {
     pub fn execute(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
         for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
             if let Err(e) = instr.execute(self) {
-                println!("Error {e:?} executing {instr:?}");
+                println!("Error {e:?} in function '{id}' executing {instr:?}");
                 return Err(e);
             }
         }
