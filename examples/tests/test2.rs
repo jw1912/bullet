@@ -1,11 +1,15 @@
 use bullet_lib::{
-    game::{inputs::{get_num_buckets, ChessBucketsMirrored}, outputs::MaterialCount},
+    game::{
+        inputs::{get_num_buckets, ChessBucketsMirrored},
+        outputs::MaterialCount,
+    },
     nn::{optimiser::AdamW, InitSettings},
     trainer::{
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
-    value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder}, Shape,
+    value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder},
+    Shape,
 };
 
 fn main() {
@@ -57,7 +61,7 @@ fn main() {
 
             out = l2.forward(out).select(buckets).screlu();
             out = l3.forward(out).select(buckets);
-            
+
             out + skip_neuron
         });
 

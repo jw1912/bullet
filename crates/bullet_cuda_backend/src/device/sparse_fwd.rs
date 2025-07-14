@@ -123,8 +123,6 @@ impl KernelConfig {
     }
 }
 
-
-
 fn act_str(act: DiffableFromOutput) -> &'static str {
     match act {
         DiffableFromOutput::Identity => "x",

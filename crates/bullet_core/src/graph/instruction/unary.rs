@@ -264,3 +264,42 @@ impl<D: Device> GraphInstruction<D> for Unary {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub struct CopyOrAddStrided {
+    pub input: NodeId,
+    pub output: NodeId,
+    pub input_offset: usize,
+    pub output_offset: usize,
+    pub add: bool,
+    pub backprop: bool,
+}
+
+impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
+    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = graph.get(self.input)?;
+        let input = input.dense()?;
+
+        let mut output = graph.get_mut(self.output)?;
+        let output = output.dense_mut()?;
+
+        if input.batch_size() != output.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        let rows = if self.backprop { output.single_size() } else { input.single_size() };
+
+        output.buf.copy_or_add_strided(
+            self.add,
+            rows,
+            input.batch_size().unwrap_or(1),
+            self.output_offset,
+            output.single_size(),
+            &input.buf,
+            self.input_offset,
+            input.single_size(),
+        )?;
+
+        Ok(())
+    }
+}

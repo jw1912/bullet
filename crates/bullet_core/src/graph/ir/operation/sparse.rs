@@ -63,18 +63,23 @@ impl<B: BackendMarker> GraphIROperation<B> for SparseAffineActivate {
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
     fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let indices = NodeId::new(self.indices.idx, NodeIdTy::Values);
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+
         let mut func = GraphFunction::default();
+
+        func.push(instruction::MaybeUpdateBatchSize { input: indices, output });
 
         func.push(instruction::SparseAffineActivateStrided {
             weights: NodeId::new(self.weights.idx, NodeIdTy::Values),
             weights_shape: self.weights.shape,
             biases: self.biases.map(|b| NodeId::new(b.idx, NodeIdTy::Values)),
             input_shape: self.indices.shape,
-            indices: NodeId::new(self.indices.idx, NodeIdTy::Values),
+            indices,
             values: self.values.map(|v| NodeId::new(v.idx, NodeIdTy::Values)),
             stride: None,
             activation: self.activation,
-            output: NodeId::new(output_node, NodeIdTy::Values),
+            output,
         });
 
         func
@@ -84,12 +89,25 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
         let mut func = GraphFunction::default();
 
         if node_info.get(self.weights.idx).unwrap().requires_grad {
+            let indices = NodeId::new(self.indices.idx, NodeIdTy::Values);
+
+            if let Some(bias) = self.biases {
+                let info = node_info.get(bias.idx).unwrap();
+
+                if info.requires_grad && info.batched {
+                    func.push(instruction::MaybeUpdateBatchSize {
+                        input: indices,
+                        output: NodeId::new(bias.idx, NodeIdTy::Gradients),
+                    });
+                }
+            }
+
             func.push(instruction::BackpropSparseAffineActivateStrided {
                 weights_grads: NodeId::new(self.weights.idx, NodeIdTy::Gradients),
                 weights_shape: self.weights.shape,
                 biases_grads: self.biases.map(|b| NodeId::new(b.idx, NodeIdTy::Gradients)),
                 input_shape: self.indices.shape,
-                indices: NodeId::new(self.indices.idx, NodeIdTy::Values),
+                indices,
                 values: self.values.map(|v| NodeId::new(v.idx, NodeIdTy::Values)),
                 stride: None,
                 activation: self.activation,

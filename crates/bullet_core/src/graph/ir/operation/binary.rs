@@ -2,7 +2,7 @@ use crate::graph::{
     instruction,
     ir::{
         node::AnnotatedNode,
-        operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+        operation::{unary::Reduce, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
         shape::Shape,
         BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
     },
@@ -61,14 +61,41 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
             }
         };
 
-        push(0.0, self.alpha, self.a.idx);
-        push(1.0, self.beta, self.b.idx);
+        push(self.alpha, 0.0, self.a.idx);
+        push(self.beta, 1.0, self.b.idx);
 
         func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let input = NodeId::new(output_node, NodeIdTy::Gradients);
+
+        let mut func = GraphFunction::default();
+
+        let mut push = |input_mul, output_mul, node| {
+            if node_info.get(node).unwrap().requires_grad {
+                let output = NodeId::new(node, NodeIdTy::Gradients);
+
+                func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(node, NodeIdTy::Values), output });
+
+                if !node_info.get(output_node).unwrap().batched || node_info.get(node).unwrap().batched {
+                    func.push(instruction::LinearCombination { input_mul, output_mul, input, output });
+                } else {
+                    func.push(instruction::ReduceAcrossBatch {
+                        input_mul,
+                        output_mul,
+                        input,
+                        output,
+                        reduction: Reduce::Sum,
+                    });
+                }
+            }
+        };
+
+        push(self.alpha, 1.0, self.a.idx);
+        push(self.beta, 1.0, self.b.idx);
+
+        func
     }
 }
 
@@ -178,12 +205,79 @@ impl<B: BackendMarker> GraphIROperation<B> for Concat {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+        let a = NodeId::new(self.a.idx, NodeIdTy::Values);
+        let b = NodeId::new(self.b.idx, NodeIdTy::Values);
+
+        let mut func = GraphFunction::default();
+
+        let ainfo = node_info.get(self.a.idx).unwrap();
+
+        assert_eq!(ainfo.batched, node_info.get(self.b.idx).unwrap().batched);
+
+        func.push(instruction::MaybeUpdateBatchSize { input: a, output });
+
+        func.push(instruction::CopyOrAddStrided {
+            input: a,
+            output,
+            input_offset: 0,
+            output_offset: 0,
+            add: false,
+            backprop: false,
+        });
+
+        func.push(instruction::CopyOrAddStrided {
+            input: b,
+            output,
+            input_offset: 0,
+            output_offset: ainfo.shape.size(),
+            add: false,
+            backprop: false,
+        });
+
+        func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
-        todo!()
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let input = NodeId::new(output_node, NodeIdTy::Gradients);
+
+        let ainfo = node_info.get(self.a.idx).unwrap();
+        let binfo = node_info.get(self.b.idx).unwrap();
+
+        let mut func = GraphFunction::default();
+
+        if ainfo.requires_grad {
+            let output = NodeId::new(self.a.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+
+            func.push(instruction::CopyOrAddStrided {
+                input,
+                output,
+                input_offset: 0,
+                output_offset: 0,
+                add: true,
+                backprop: true,
+            });
+        }
+
+        if binfo.requires_grad {
+            let output = NodeId::new(self.b.idx, NodeIdTy::Gradients);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+
+            func.push(instruction::CopyOrAddStrided {
+                input,
+                output,
+                input_offset: ainfo.shape.size(),
+                output_offset: 0,
+                add: true,
+                backprop: true,
+            });
+        }
+
+        func
     }
 }
 
