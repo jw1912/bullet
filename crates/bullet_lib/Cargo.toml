@@ -35,8 +35,12 @@ name = "simple"
 path = "../../examples/simple.rs"
 
 [[example]]
-name = "testnet"
-path = "../../examples/testnet.rs"
+name = "test1"
+path = "../../examples/tests/test1.rs"
+
+[[example]]
+name = "test2"
+path = "../../examples/tests/test2.rs"
 
 [[example]]
 name = "akimbo-main"
