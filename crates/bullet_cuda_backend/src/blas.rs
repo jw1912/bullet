@@ -1,16 +1,10 @@
-use bullet_core::{
-    backend::device::{blas, DeviceBuffer},
-    graph::ir::shape::Shape,
-};
-use cudarc::{
-    cublas::{
-        sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
-        Gemm, GemmConfig, StridedBatchedConfig,
-    },
-    driver::PushKernelArg,
+use bullet_core::{device::blas, graph::ir::shape::Shape};
+use cudarc::cublas::{
+    sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
+    Gemm, GemmConfig, StridedBatchedConfig,
 };
 
-use crate::{CudaBuffer, CudaDevice, CudaError};
+use crate::{CudaBuffer, CudaError};
 
 #[allow(unused)]
 impl blas::BlasOperations for CudaBuffer<f32> {
@@ -19,7 +13,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
     fn gemm(&mut self, config: &blas::GemmConfig, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
         let (cfg, _) = convert_config(config);
 
-        unsafe { self.device.blas.gemm(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
+        unsafe { self.device.blas().gemm(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
     }
 
     fn gebmm(
@@ -39,103 +33,11 @@ impl blas::BlasOperations for CudaBuffer<f32> {
             stride_c: shape_o.size() as i64,
         };
 
-        unsafe { self.device.blas.gemm_strided_batched(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
-    }
-
-    fn geam(
-        &mut self,
-        size: usize,
-        alpha: f32,
-        a: Option<&Self>,
-        beta: f32,
-        b: Option<&Self>,
-    ) -> Result<(), Self::BlasError> {
-        let cfg = CudaDevice::elementwise_launch_params(size, 1024);
-
-        let output = match (a, b) {
-            (None, None) => {
-                if size > self.size() {
-                    return Err(CudaError::ExpectedIllegalAddressAccess);
-                }
-
-                let func = self.device.module.load_function("ScaleAssignKernel").map_err(CudaError::Driver)?;
-
-                unsafe {
-                    self.device
-                        .stream
-                        .launch_builder(&func)
-                        .arg(&(size as i32))
-                        .arg(&mut self.buf.slice_mut(0..size))
-                        .arg(&alpha)
-                        .launch(cfg)
-                }
-            }
-            (None, Some(b)) => {
-                if size > self.size() || size > b.size() {
-                    return Err(CudaError::ExpectedIllegalAddressAccess);
-                }
-
-                let func = self.device.module.load_function("ScaleAddAssignKernel").map_err(CudaError::Driver)?;
-
-                unsafe {
-                    self.device
-                        .stream
-                        .launch_builder(&func)
-                        .arg(&(size as i32))
-                        .arg(&alpha)
-                        .arg(&mut self.buf.slice_mut(0..size))
-                        .arg(&beta)
-                        .arg(&b.buf.slice(0..size))
-                        .launch(cfg)
-                }
-            }
-            (Some(a), Some(b)) => {
-                if size > self.size() || size > a.size() || size > b.size() {
-                    return Err(CudaError::ExpectedIllegalAddressAccess);
-                }
-
-                let func = self.device.module.load_function("LinearCombKernel").map_err(CudaError::Driver)?;
-
-                unsafe {
-                    self.device
-                        .stream
-                        .launch_builder(&func)
-                        .arg(&(size as i32))
-                        .arg(&alpha)
-                        .arg(&a.buf.slice(0..size))
-                        .arg(&beta)
-                        .arg(&b.buf.slice(0..size))
-                        .arg(&mut self.buf.slice_mut(0..size))
-                        .launch(cfg)
-                }
-            }
-            (Some(a), None) => {
-                if size > self.size() || size > a.size() {
-                    return Err(CudaError::ExpectedIllegalAddressAccess);
-                }
-
-                let func = self.device.module.load_function("ScaleKernel").map_err(CudaError::Driver)?;
-
-                unsafe {
-                    self.device
-                        .stream
-                        .launch_builder(&func)
-                        .arg(&(size as i32))
-                        .arg(&alpha)
-                        .arg(&a.buf.slice(0..size))
-                        .arg(&mut self.buf.slice_mut(0..size))
-                        .launch(cfg)
-                }
-            }
-        };
-
-        output.map_err(CudaError::Driver)?;
-
-        Ok(())
+        unsafe { self.device.blas().gemm_strided_batched(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
     }
 }
 
-fn convert_config(config: &blas::GemmConfig) -> (GemmConfig<f32>, Shape) {
+pub fn convert_config(config: &blas::GemmConfig) -> (GemmConfig<f32>, Shape) {
     let blas::GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b } = *config;
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 

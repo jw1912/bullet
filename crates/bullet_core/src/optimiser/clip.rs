@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::backend::{
+use crate::{
     device::{Device, OperationError},
-    tensor::DenseMatrix,
+    graph::tensor::DenseMatrix,
 };
 
 use super::{utils::Placement, OptimiserState};

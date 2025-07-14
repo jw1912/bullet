@@ -1,4 +1,4 @@
-use bullet_core::backend::device::{blas::GemmConfig, DeviceBuffer};
+use bullet_core::device::{blas::GemmConfig, DeviceBuffer};
 
 use crate::{
     backend::{blas, util::catch_cublas, Buffer},

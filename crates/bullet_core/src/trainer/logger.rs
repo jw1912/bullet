@@ -83,7 +83,7 @@ pub fn report_superbatch_finished(
         ansi(superbatch, num_cs),
         ansi(format!("{superbatch_time:.1}"), num_cs),
         ansi(format!("{error:.6}"), num_cs),
-        ansi(format!("{:.0}", pos_per_sec), num_cs),
+        ansi(format!("{pos_per_sec:.0}"), num_cs),
         ansi(format!("{total_time:.1}"), num_cs),
     );
 }

@@ -1,11 +1,4 @@
 /*
-IMPORTANT NOTICE:
-This example uses TrainerBuilder, which simplifies the process of building
-the trainer at the cost of relying on a lot of implicit behaviour and being
-inflexible. It is recommended to transition to examples/progression/1_simple.rs
-(which does the same as this example) when you are looking to develop your NNUE
-further. Eventually TrainerBuilder will be marked as deprecated.
-
 This is about as simple as you can get with a network, the arch is
     (768 -> HIDDEN_SIZE)x2 -> 1
 and the training schedule is pretty sensible.

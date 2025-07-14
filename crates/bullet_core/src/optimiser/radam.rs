@@ -5,12 +5,12 @@ use std::{
     sync::Arc,
 };
 
-use crate::backend::{
+use crate::{
     device::{
         base::{AdamConfig, BaseOperations},
         Device, OperationError,
     },
-    tensor::DenseMatrix,
+    graph::tensor::DenseMatrix,
 };
 
 use super::{utils, OptimiserState};

@@ -1,6 +1,6 @@
 use bullet_core::{
-    backend::device::{DeviceBuffer, OperationError},
-    graph::ir::{op::DiffableFromOutput, shape::Shape},
+    device::{DeviceBuffer, OperationError},
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
 
 use crate::{
@@ -79,14 +79,12 @@ pub fn backprop_sparse_affine(
     batch_size: usize,
     stride: Option<bool>,
     activation: DiffableFromOutput,
-    input_a: &Buffer<f32>,
     input_a_grad: &mut Buffer<f32>,
     shape_a: Shape,
     input_b: &Buffer<i32>,
     input_b_vals: Option<&Buffer<f32>>,
     shape_b: Shape,
     nnz: usize,
-    _input_c: Option<&Buffer<f32>>,
     input_c_grad: Option<&mut Buffer<f32>>,
     input_c_batched: bool,
     outputs: &Buffer<f32>,
@@ -98,8 +96,7 @@ pub fn backprop_sparse_affine(
 
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(shape_o.cols(), 1);
-    if shape_a.size() > input_a.size()
-        || shape_a.size() > input_a_grad.size()
+    if shape_a.size() > input_a_grad.size()
         || batch_size * nnz > input_b.size()
         || batch_size * shape_o.size() > outputs.size()
         || batch_size * shape_o.size() * stride > output_grad.size()

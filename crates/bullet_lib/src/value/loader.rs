@@ -5,7 +5,10 @@ mod sfbinpack;
 mod text;
 pub mod viribinpack;
 
-use bullet_core::{backend::device::OperationError, graph::builder::Shape};
+use bullet_core::{
+    device::OperationError,
+    graph::{builder::Shape, NodeId, NodeIdTy},
+};
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
@@ -281,11 +284,9 @@ where
     let batch_size = prepared.batch_size;
     let expected_inputs = prepared.input_getter.num_inputs();
 
-    let input_ids = graph.input_ids();
-
-    if input_ids.contains(&"stm".to_string()) {
+    if let Some(idx) = graph.input_idx("stm") {
         let input = &prepared.stm;
-        let stm = &mut *graph.get_input_mut("stm");
+        let stm = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
 
         if stm.values.single_size() != expected_inputs {
             return Err(OperationError::InvalidTensorFormat);
@@ -294,9 +295,9 @@ where
         stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
     }
 
-    if input_ids.contains(&"nstm".to_string()) {
+    if let Some(idx) = graph.input_idx("nstm") {
         let input = &prepared.nstm;
-        let ntm = &mut *graph.get_input_mut("nstm");
+        let ntm = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
 
         if ntm.values.single_size() != expected_inputs {
             return Err(OperationError::InvalidTensorFormat);
@@ -305,9 +306,9 @@ where
         ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
     }
 
-    if input_ids.contains(&"buckets".to_string()) {
+    if let Some(idx) = graph.input_idx("buckets") {
         let input = &prepared.buckets;
-        let buckets = &mut *graph.get_input_mut("buckets");
+        let buckets = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
 
         if buckets.values.single_size() != Out::BUCKETS {
             return Err(OperationError::InvalidTensorFormat);
@@ -316,12 +317,17 @@ where
         buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
     }
 
-    if input_ids.contains(&"entry_weights".to_string()) {
-        let weights = &mut *graph.get_input_mut("entry_weights");
+    if let Some(idx) = graph.input_idx("entry_weights") {
+        let weights = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
         weights.load_dense_from_slice(Some(batch_size), &prepared.weights.value)?;
     }
 
-    graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
+    if let Some(idx) = graph.input_idx("targets") {
+        graph
+            .get_mut(NodeId::new(idx, NodeIdTy::Values))
+            .unwrap()
+            .load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
+    }
 
     Ok(batch_size)
 }

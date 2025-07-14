@@ -1,4 +1,4 @@
-use bullet_core::backend::device::DeviceBuffer;
+use bullet_core::device::DeviceBuffer;
 
 use crate::{backend::ops, Buffer, DeviceError};
 

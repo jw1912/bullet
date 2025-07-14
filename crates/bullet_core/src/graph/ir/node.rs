@@ -1,17 +1,36 @@
 use std::num::NonZeroUsize;
 
-use super::{op::GraphIROp, Shape};
+use crate::graph::ir::{operation::GraphIROperationCompilable, BackendMarker};
 
-#[derive(Clone, Debug)]
-pub struct GraphIRNode {
-    pub idx: usize,
-    pub shape: Shape,
+use super::shape::Shape;
+
+#[derive(Clone, Copy, Debug)]
+pub struct NodeInfo {
+    pub requires_grad: bool,
     pub sparse: Option<NonZeroUsize>,
     pub batched: bool,
-    pub requires_grad: bool,
-    pub parent_operation: Option<GraphIROp>,
+    pub shape: Shape,
+}
+
+#[derive(Debug)]
+pub struct GraphIRNode<B: BackendMarker> {
+    pub idx: usize,
+    pub info: NodeInfo,
+    pub parent_operation: Option<Box<dyn GraphIROperationCompilable<B>>>,
     pub num_children: usize,
     pub id: Option<String>,
+}
+
+impl<B: BackendMarker> GraphIRNode<B> {
+    pub fn with_new_op(&self, op: impl GraphIROperationCompilable<B>) -> Self {
+        Self {
+            idx: self.idx,
+            info: self.info,
+            parent_operation: Some(Box::new(op)),
+            num_children: self.num_children,
+            id: self.id.clone(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]

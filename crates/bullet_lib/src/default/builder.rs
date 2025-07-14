@@ -2,7 +2,7 @@ use crate::{
     default::{Layout, SavedFormat},
     nn::{
         optimiser::{self, OptimiserType},
-        GraphCompileArgs, InitSettings, NetworkBuilder,
+        InitSettings, NetworkBuilder,
     },
     trainer::{logger, save::QuantTarget},
     Activation, ExecutionContext, Shape,
@@ -18,7 +18,10 @@ use crate::{
 
 use super::{AdditionalTrainerInputs, Trainer, Wgt};
 
-use bullet_core::optimiser::Optimiser;
+use bullet_core::{
+    graph::{NodeId, NodeIdTy},
+    optimiser::Optimiser,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Loss {
@@ -59,7 +62,6 @@ pub struct TrainerBuilder<T: SparseInputType, U, O = optimiser::AdamW> {
     ft_init_input_size: Option<usize>,
     output_bucket_ft_biases: bool,
     profile_ft: bool,
-    compile_args: GraphCompileArgs,
     quant_round: bool,
 }
 
@@ -82,7 +84,6 @@ impl<T: SparseInputType, O: OptimiserType> Default for TrainerBuilder<T, NoOutpu
             ft_init_input_size: None,
             output_bucket_ft_biases: false,
             profile_ft: false,
-            compile_args: GraphCompileArgs::default(),
             quant_round: false,
         }
     }
@@ -254,11 +255,6 @@ impl<T: SparseInputType, U, O: OptimiserType> TrainerBuilder<T, U, O> {
         self.ft_init_input_size = Some(size);
         self
     }
-
-    pub fn set_compile_args(mut self, args: GraphCompileArgs) -> Self {
-        self.compile_args = args;
-        self
-    }
 }
 
 impl<T: SparseInputType, O: OptimiserType> TrainerBuilder<T, NoOutputBuckets, O> {
@@ -284,7 +280,6 @@ impl<T: SparseInputType, O: OptimiserType> TrainerBuilder<T, NoOutputBuckets, O>
             ft_init_input_size: self.ft_init_input_size,
             output_bucket_ft_biases: self.output_bucket_ft_biases,
             profile_ft: self.profile_ft,
-            compile_args: self.compile_args,
             quant_round: self.quant_round,
         }
     }
@@ -339,7 +334,7 @@ where
     }
 
     pub fn build(self) -> Trainer<O::Optimiser, T, U::Inner> {
-        let mut builder = NetworkBuilder::default();
+        let builder = NetworkBuilder::default();
 
         let output_buckets = U::Inner::BUCKETS;
 
@@ -400,8 +395,6 @@ where
             let ntm = builder.new_sparse_input("nstm", input_shape, input_getter.max_active());
             out = out.concat(apply(ntm));
         }
-
-        let profile_node = self.profile_ft.then(|| out.node());
 
         let mut layer = 1;
         let mut layer_sizes = Vec::new();
@@ -485,12 +478,12 @@ where
 
         #[allow(clippy::default_constructed_unit_structs)]
         let ctx = ExecutionContext::default();
-        builder.set_compile_args(self.compile_args);
-        let mut graph = builder.build(ctx);
+        let graph = builder.build(ctx);
 
         if let Some(size) = self.ft_init_input_size {
             let stdev = 1.0 / (size as f32).sqrt();
-            graph.get_weights_mut("l0w").seed_random(0.0, stdev, true).unwrap();
+            let id = NodeId::new(graph.weight_idx("l0w").unwrap(), NodeIdTy::Values);
+            graph.get_mut(id).unwrap().seed_random(0.0, stdev, true).unwrap();
         }
 
         let mut output_desc = format!("{}", layer_sizes[0]);
@@ -501,9 +494,9 @@ where
 
         if output_buckets > 1 {
             if layer_sizes.len() == 1 {
-                output_desc = format!("{output_desc}x{}", output_buckets);
+                output_desc = format!("{output_desc}x{output_buckets}");
             } else {
-                output_desc = format!("({output_desc})x{}", output_buckets);
+                output_desc = format!("({output_desc})x{output_buckets}");
             }
         }
 
@@ -514,10 +507,6 @@ where
                 vec!["l0w".to_string()]
             }
         });
-
-        if let Some(node) = profile_node {
-            graph.profile_node(node, "Profile");
-        }
 
         let trainer = Trainer {
             optimiser: Optimiser::new(graph, Default::default()).unwrap(),

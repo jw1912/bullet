@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bullet_core::backend::device::DeviceBuffer;
+use bullet_core::device::DeviceBuffer;
 
 use crate::DeviceError;
 
@@ -15,9 +15,9 @@ unsafe impl ValidType for i32 {}
 /// Managed memory buffer of `T` on the device.
 #[derive(Debug)]
 pub struct Buffer<T: ValidType> {
-    size: usize,
-    ptr: *mut T,
-    ctx: Arc<ExecutionContext>,
+    pub(super) size: usize,
+    pub(super) ptr: *mut T,
+    pub(super) ctx: Arc<ExecutionContext>,
 }
 
 impl<T: ValidType> Drop for Buffer<T> {
@@ -80,13 +80,13 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
     }
 }
 
-mod util {
+pub mod util {
     use crate::{backend::bindings::cudaStream_t, DeviceError};
 
     use super::super::{bindings, util::catch};
     use std::ffi::c_void;
 
-    fn malloc<T>(num: usize) -> Result<*mut T, DeviceError> {
+    pub unsafe fn malloc<T>(num: usize) -> Result<*mut T, DeviceError> {
         let size = num * std::mem::size_of::<T>();
         let mut grad = std::ptr::null_mut::<T>();
         let grad_ptr = (&mut grad) as *mut *mut T;
@@ -121,8 +121,7 @@ mod util {
     /// ### Safety
     /// Type needs to be zeroable.
     pub unsafe fn set_zero<T>(ptr: *mut T, num: usize) -> Result<(), DeviceError> {
-        catch(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()))?;
-        catch(bindings::cudaDeviceSynchronize())
+        catch(bindings::cudaMemset(ptr.cast(), 0, num * std::mem::size_of::<T>()))
     }
 
     /// # Safety

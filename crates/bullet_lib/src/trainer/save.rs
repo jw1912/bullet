@@ -1,5 +1,7 @@
 use std::io::{self, Write};
 
+use bullet_core::graph::{NodeId, NodeIdTy};
+
 use crate::nn::{Graph, Shape};
 
 type F = fn(&Graph, &str, Vec<f32>) -> Vec<f32>;
@@ -34,7 +36,8 @@ impl SavedFormat {
 
     pub fn transpose(self) -> Self {
         self.add_transform(|graph, id, weights| {
-            let shape = graph.get_weights(id).shape();
+            let id = NodeId::new(graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+            let shape = graph.get(id).unwrap().shape();
             Self::transpose_impl(shape, &weights)
         })
     }
@@ -45,7 +48,8 @@ impl SavedFormat {
     }
 
     pub fn write_to_byte_buffer(&self, graph: &Graph) -> io::Result<Vec<u8>> {
-        let mut weights = graph.get_weights(&self.id).get_dense_vals().unwrap();
+        let id = NodeId::new(graph.weight_idx(&self.id).unwrap(), NodeIdTy::Values);
+        let mut weights = graph.get(id).unwrap().get_dense_vals().unwrap();
 
         if let Layout::Transposed(shape) = self.layout {
             assert_eq!(shape.size(), weights.len());

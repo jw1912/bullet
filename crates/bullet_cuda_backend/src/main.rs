@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bullet_core::backend::device::Device;
+use bullet_core::device::Device;
 use bullet_cuda_backend::CudaDevice;
 
 fn main() {

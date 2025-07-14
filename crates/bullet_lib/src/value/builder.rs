@@ -1,14 +1,10 @@
 use std::marker::PhantomData;
 
-use bullet_core::{
-    graph::{builder::Shape, ir::args::GraphIRCompileArgs},
-    optimiser::Optimiser,
-    trainer::Trainer,
-};
+use bullet_core::{graph::builder::Shape, optimiser::Optimiser, trainer::Trainer};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{optimiser::OptimiserType, NetworkBuilder, NetworkBuilderNode},
+    nn::{optimiser::OptimiserType, BackendMarker, NetworkBuilder, NetworkBuilderNode},
     trainer::save::SavedFormat,
     value::ValueTrainerState,
     ExecutionContext,
@@ -23,7 +19,6 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     input_getter: Option<I>,
     saved_format: Option<Vec<SavedFormat>>,
     optimiser: Option<O>,
-    compile_args: Option<GraphIRCompileArgs>,
     perspective: PhantomData<P>,
     output_buckets: Out,
     blend_getter: B<I>,
@@ -43,7 +38,6 @@ where
             input_getter: None,
             saved_format: None,
             optimiser: None,
-            compile_args: None,
             perspective: PhantomData,
             output_buckets: NoOutputBuckets,
             blend_getter: |_, wdl| wdl,
@@ -70,11 +64,6 @@ where
     pub fn optimiser(mut self, optimiser: O) -> Self {
         assert!(self.optimiser.is_none(), "Optimiser already set!");
         self.optimiser = Some(optimiser);
-        self
-    }
-
-    pub fn compile_args(mut self, args: GraphIRCompileArgs) -> Self {
-        self.compile_args = Some(args);
         self
     }
 
@@ -121,7 +110,7 @@ where
 
     fn build_custom_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
     where
-        F: for<'a> Fn(usize, usize, Nbn<'a>, &'a NetworkBuilder) -> (Nbn<'a>, Nbn<'a>),
+        F: for<'a> Fn(usize, usize, Nbn<'a>, Nb<'a>) -> (Nbn<'a>, Nbn<'a>),
         Out: Bucket,
         Out::Inner: OutputBuckets<I::RequiredDataType>,
     {
@@ -132,11 +121,7 @@ where
         let inputs = input_getter.num_inputs();
         let nnz = input_getter.max_active();
 
-        let mut builder = NetworkBuilder::default();
-
-        if let Some(args) = self.compile_args {
-            builder.set_compile_args(args);
-        }
+        let builder = NetworkBuilder::default();
 
         let output_size = if self.wdl_output { 3 } else { 1 };
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
@@ -167,7 +152,7 @@ where
 
     fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
     where
-        F: for<'a> Fn(usize, usize, &'a NetworkBuilder) -> NetworkBuilderNode<'a>,
+        F: for<'a> Fn(usize, usize, Nb<'a>) -> Nbn<'a>,
         Out: Bucket,
         Out::Inner: OutputBuckets<I::RequiredDataType>,
     {
@@ -236,7 +221,6 @@ where
             input_getter: self.input_getter,
             saved_format: self.saved_format,
             optimiser: self.optimiser,
-            compile_args: self.compile_args,
             perspective: PhantomData,
             output_buckets: self.output_buckets,
             blend_getter: self.blend_getter,
@@ -264,7 +248,6 @@ where
             input_getter: self.input_getter,
             saved_format: self.saved_format,
             optimiser: self.optimiser,
-            compile_args: self.compile_args,
             perspective: self.perspective,
             output_buckets: OutputBucket(buckets),
             blend_getter: self.blend_getter,
@@ -277,8 +260,8 @@ where
     }
 }
 
-type Nb<'a> = &'a NetworkBuilder;
-type Nbn<'a> = NetworkBuilderNode<'a>;
+type Nb<'a> = &'a NetworkBuilder<BackendMarker>;
+type Nbn<'a> = NetworkBuilderNode<'a, BackendMarker>;
 
 impl<O, I> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
 where

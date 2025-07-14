@@ -1,29 +1,75 @@
 pub mod builder;
-pub mod execution;
+pub mod instruction;
 pub mod ir;
-pub mod tests;
+pub mod tensor;
 
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
     fmt::Debug,
     sync::Arc,
-    time::Instant,
 };
 
+use instruction::GraphInstruction;
 use ir::{node::AnnotatedNode, shape::Shape, GraphIRError};
+use tensor::{read_from_byte_buffer, Tensor};
 
-use crate::backend::{
-    device::{Device, OperationError},
-    tensor::{read_from_byte_buffer, Tensor},
-};
+use crate::device::{Device, OperationError};
+
+pub struct GraphFunction<D: Device> {
+    instructions: Vec<Box<dyn GraphInstruction<D>>>,
+}
+
+impl<D: Device> Default for GraphFunction<D> {
+    fn default() -> Self {
+        Self { instructions: Vec::new() }
+    }
+}
+
+impl<D: Device> GraphFunction<D> {
+    pub fn push(&mut self, instruction: impl GraphInstruction<D>) {
+        self.instructions.push(Box::new(instruction));
+    }
+
+    pub fn extend(&mut self, rhs: Self) {
+        for instr in rhs.instructions {
+            self.instructions.push(instr);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NodeIdTy {
+    Values,
+    Gradients,
+    Ancillary(u16),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeId {
+    id: usize,
+    ty: NodeIdTy,
+}
+
+impl NodeId {
+    pub fn new(id: usize, ty: NodeIdTy) -> Self {
+        Self { id, ty }
+    }
+}
+
+impl std::fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id({}, {:?})", self.id, self.ty)
+    }
+}
 
 pub struct Graph<D: Device> {
-    nodes: Vec<Option<RefCell<Tensor<D>>>>,
+    nodes: HashMap<NodeId, RefCell<Tensor<D>>>,
     inputs: HashMap<String, usize>,
     weights: HashMap<String, usize>,
+    functions: HashMap<String, GraphFunction<D>>,
     device: Arc<D>,
-    profile: HashMap<usize, ProfileInformation>,
+    root: usize,
 }
 
 #[derive(Debug)]
@@ -51,120 +97,81 @@ pub struct Node {
     pub shape: Shape,
 }
 
+impl Node {
+    pub fn idx(&self) -> usize {
+        self.idx
+    }
+}
+
 impl From<AnnotatedNode> for Node {
     fn from(value: AnnotatedNode) -> Self {
         Self { idx: value.idx, shape: value.shape }
     }
 }
 
-#[derive(Clone, Default)]
-struct ProfileInformation {
-    name: String,
-    fwd_time: u128,
-    fwd_count: u128,
-    bwd_time: u128,
-    bwd_count: u128,
-}
-
 impl<D: Device> Graph<D> {
-    fn get_node_info(&self, idx: usize) -> Result<usize, OperationError<D::DeviceError>> {
-        if let Ok(node) = self.get(idx) {
-            Ok(node.idx)
+    pub fn sanity_check(&self) {
+        self.device().sanity_check();
+    }
+
+    pub fn get_node_values(&self, node: Node) -> Ref<'_, Tensor<D>> {
+        self.get(NodeId::new(node.idx, NodeIdTy::Values)).unwrap()
+    }
+
+    pub fn get(&self, id: NodeId) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = &self.nodes.get(&id) {
+            Ok(tensor.borrow())
+        } else {
+            println!("Cant find: {id:?}");
+            Err(OperationError::TensorOptimisedOut)
+        }
+    }
+
+    pub fn get_mut(&self, id: NodeId) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = &self.nodes.get(&id) {
+            Ok(tensor.borrow_mut())
         } else {
             Err(OperationError::TensorOptimisedOut)
         }
     }
 
-    pub fn sanity_check(&self) {
-        self.device().sanity_check();
+    pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
+        let idx = self.weight_idx(id).unwrap();
+        self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap()
     }
 
-    pub fn get_node(&self, node: Node) -> Ref<'_, Tensor<D>> {
-        self.get(node.idx).unwrap()
+    pub fn get_weights_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
+        let idx = self.weight_idx(id).unwrap();
+        self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap()
     }
 
-    fn get(&self, idx: usize) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = &self.nodes[idx] {
-            Ok(tensor.borrow())
-        } else {
-            Err(OperationError::UnsupportedOperation)
-        }
+    pub fn get_input(&self, id: &str) -> Ref<'_, Tensor<D>> {
+        let idx = self.input_idx(id).unwrap();
+        self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap()
     }
 
-    fn get_mut(&self, idx: usize) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = &self.nodes[idx] {
-            Ok(tensor.borrow_mut())
-        } else {
-            Err(OperationError::UnsupportedOperation)
-        }
+    pub fn get_input_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
+        let idx = self.input_idx(id).unwrap();
+        self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap()
     }
 
     fn root(&self) -> usize {
-        self.nodes.len() - 1
+        self.root
     }
 
-    pub(crate) fn forward_non_blocking(&mut self) -> Result<(), OperationError<D::DeviceError>> {
-        for node in 0..self.nodes.len() {
-            match self.get_node_info(node) {
-                Ok(node) => {
-                    let t = if self.profile.contains_key(&node) {
-                        self.device().synchronise()?;
-                        Some(Instant::now())
-                    } else {
-                        None
-                    };
-
-                    self.forward_node(node)?;
-
-                    if let Some(t) = t {
-                        self.device().synchronise()?;
-                        let prof = self.profile.get_mut(&node).unwrap();
-                        prof.fwd_time += t.elapsed().as_micros();
-                        prof.fwd_count += 1;
-                    }
-                }
-                Err(OperationError::TensorOptimisedOut) => {}
-                Err(x) => return Err(x),
-            }
+    pub fn display(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
+            println!("{instr:?}");
         }
 
         Ok(())
     }
 
-    pub(crate) fn backward_non_blocking(&mut self) -> Result<(), OperationError<D::DeviceError>> {
-        self.get_mut(self.root())?.gradients.as_mut().unwrap().set_to(1.0)?;
-
-        for node in (0..self.nodes.len()).rev() {
-            match self.get_node_info(node) {
-                Ok(node) => {
-                    let t = if self.profile.contains_key(&node) {
-                        self.device().synchronise()?;
-                        Some(Instant::now())
-                    } else {
-                        None
-                    };
-
-                    self.backward_node(node)?;
-
-                    if let Some(t) = t {
-                        self.device().synchronise()?;
-                        let prof = self.profile.get_mut(&node).unwrap();
-                        prof.bwd_time += t.elapsed().as_micros();
-                        prof.bwd_count += 1;
-                    }
-                }
-                Err(OperationError::TensorOptimisedOut) => {}
-                Err(x) => return Err(x),
-            }
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn zero_grads_non_blocking(&mut self) -> Result<(), D::DeviceError> {
-        for node in &mut self.nodes {
-            if let Some(node) = node.as_mut() {
-                node.get_mut().zero_grad()?;
+    pub fn execute(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
+            if let Err(e) = instr.execute(self) {
+                println!("Error {e:?} in function '{id}' executing {instr:?}");
+                return Err(e);
             }
         }
 
@@ -172,80 +179,28 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
-        self.forward_non_blocking()?;
+        self.execute("forward")?;
         self.device.synchronise()?;
         self.device.get_last_device_error()?;
         self.get_output_val()
     }
 
     pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
-        self.backward_non_blocking()?;
+        self.execute("backward")?;
         self.device.synchronise()?;
         self.device.get_last_device_error()?;
         Ok(())
     }
 
-    pub fn zero_grads(&mut self) -> Result<(), D::DeviceError> {
-        self.zero_grads_non_blocking()?;
+    pub fn zero_grads(&mut self) -> Result<(), OperationError<D::DeviceError>> {
+        self.execute("zero_grads")?;
         self.device.synchronise()?;
-        self.device.get_last_device_error()
+        self.device.get_last_device_error()?;
+        Ok(())
     }
 
     pub fn get_output_val(&self) -> Result<f32, OperationError<D::DeviceError>> {
-        Ok(self.get(self.root())?.get_scalar().unwrap())
-    }
-
-    pub fn profile_node(&mut self, node: Node, id: &str) {
-        self.profile.insert(node.idx, ProfileInformation { name: id.to_string(), ..Default::default() });
-    }
-
-    pub fn profile_all_nodes(&mut self) {
-        for node in 0..self.nodes.len() {
-            if let Some(tensor) = &self.nodes[node] {
-                let tensor = tensor.borrow();
-                if let Some(op) = tensor.operation.as_ref() {
-                    let id = format!("{:?}", *op);
-                    let id = id.split_once('(').unwrap();
-                    let name = format!("Node {: >2} = {}", tensor.idx, id.0);
-                    self.profile.insert(tensor.idx, ProfileInformation { name, ..Default::default() });
-                }
-            }
-        }
-    }
-
-    pub fn report_profiles(&self) {
-        let mut vals = self.profile.values().cloned().collect::<Vec<_>>();
-        vals.sort_by_key(|prof| prof.fwd_time + prof.bwd_time);
-
-        let mut fwd = 0;
-        let mut bwd = 0;
-
-        println!("+--------------- Profile ---------------- Fwd ------ Bwd -------+");
-
-        for prof in vals.iter().rev() {
-            if prof.fwd_count + prof.bwd_count > 0 {
-                print!("| {: <40}", prof.name);
-                if prof.fwd_count > 0 {
-                    let avg = prof.fwd_time / prof.fwd_count;
-                    fwd += avg;
-                    print!("{avg: <10} ");
-                } else {
-                    print!("{: <10} ", "N/A");
-                }
-
-                if prof.bwd_count > 0 {
-                    let avg = prof.bwd_time / prof.bwd_count;
-                    bwd += avg;
-                    println!("{avg: <10} |");
-                } else {
-                    println!("{: <10} |", "N/A");
-                }
-            }
-        }
-
-        println!("+---------------------------------------------------------------+");
-        println!("| {: <40}{fwd: <10} {bwd: <10} |", "Total");
-        println!("+---------------------------------------------------------------+");
+        Ok(self.get(NodeId::new(self.root(), NodeIdTy::Values))?.get_scalar().unwrap())
     }
 
     /// Writes the weights of a graph to a file. If `gradients` is true,
@@ -258,8 +213,9 @@ impl<D: Device> Graph<D> {
         let mut buf = Vec::new();
 
         for id in &weight_ids {
-            let weights = self.get_weights(id);
-            let this_buf = weights.values.dense().unwrap().write_to_byte_buffer(id).unwrap();
+            let idx = *self.weights.get(id).unwrap();
+            let weights = self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+            let this_buf = weights.dense().unwrap().write_to_byte_buffer(id).unwrap();
 
             buf.extend_from_slice(&this_buf);
         }
@@ -288,14 +244,16 @@ impl<D: Device> Graph<D> {
                 return Err(OperationError::NoWeightWithID(id));
             }
 
-            let mut weights = self.get_weights_mut(&id);
-            let exp_size = weights.values.size();
+            let idx = *self.weights.get(&id).unwrap();
+            let mut weights = self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+            let weights = weights.dense_mut().unwrap();
+            let exp_size = weights.size();
 
             if buffer.len() != exp_size {
                 return Err(OperationError::WeightLoadingError(id, Some((buffer.len(), exp_size))));
             }
 
-            if weights.load_dense_from_slice(None, &buffer).is_err() {
+            if weights.load_from_slice(None, &buffer).is_err() {
                 return Err(OperationError::WeightLoadingError(id, None));
             }
 
@@ -313,31 +271,20 @@ impl<D: Device> Graph<D> {
         self.weights.keys().cloned().collect()
     }
 
-    pub fn get_input(&self, id: &str) -> Ref<'_, Tensor<D>> {
-        self.get(self.inputs[id]).unwrap()
+    pub fn input_idx(&self, id: &str) -> Option<usize> {
+        self.inputs.get(id).copied()
     }
 
-    pub fn get_input_mut(&mut self, id: &str) -> RefMut<'_, Tensor<D>> {
-        self.get_mut(self.inputs[id]).unwrap()
-    }
-
-    pub fn has_input(&self, id: &str) -> bool {
-        self.inputs.contains_key(id)
-    }
-
-    pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
-        self.get(self.weights[id]).unwrap()
-    }
-
-    pub fn get_weights_mut(&mut self, id: &str) -> RefMut<'_, Tensor<D>> {
-        self.get_mut(self.weights[id]).unwrap()
+    pub fn weight_idx(&self, id: &str) -> Option<usize> {
+        self.weights.get(id).copied()
     }
 
     pub fn get_num_params(&self) -> usize {
         let mut total = 0;
 
         for weight in self.weight_ids() {
-            total += self.get_weights(&weight).values.size();
+            let idx = *self.weights.get(&weight).unwrap();
+            total += self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap().dense().unwrap().size();
         }
 
         total

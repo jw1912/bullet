@@ -1,14 +1,18 @@
-mod sparse;
+mod sparse_bwd;
+mod sparse_fwd;
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use bullet_core::{
-    backend::device::{Device, DeviceBuffer, OperationError, OperationResult},
-    graph::ir::{op::DiffableFromOutput, shape::Shape},
+    device::{Device, DeviceBuffer, OperationError, OperationResult},
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
 };
 use cudarc::{
     cublas::{result::CublasError, CudaBlas},
-    driver::{CudaContext, CudaModule, CudaStream, DriverError, LaunchConfig, PushKernelArg},
+    driver::{CudaContext, CudaModule, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
     nvrtc::Ptx,
 };
 
@@ -25,10 +29,12 @@ pub enum CudaError {
 
 #[derive(Debug)]
 pub struct CudaDevice {
-    pub(crate) stream: Arc<CudaStream>,
-    pub(crate) blas: CudaBlas,
-    pub(crate) module: Arc<CudaModule>,
-    pub(crate) copystream: Arc<CudaStream>,
+    stream: Arc<CudaStream>,
+    blas: CudaBlas,
+    module: Arc<CudaModule>,
+    copystream: Arc<CudaStream>,
+    ones: Mutex<CudaSlice<f32>>,
+    rtc: Mutex<HashMap<String, Arc<CudaModule>>>,
 }
 
 impl Default for CudaDevice {
@@ -38,6 +44,38 @@ impl Default for CudaDevice {
 }
 
 impl CudaDevice {
+    pub fn stream(&self) -> Arc<CudaStream> {
+        self.stream.clone()
+    }
+
+    pub fn blas(&self) -> &CudaBlas {
+        &self.blas
+    }
+
+    pub fn module(&self) -> Arc<CudaModule> {
+        self.module.clone()
+    }
+
+    pub fn copystream(&self) -> Arc<CudaStream> {
+        self.copystream.clone()
+    }
+
+    pub fn with_ones<T, F: FnMut(&CudaSlice<f32>) -> Result<T, CudaError>>(
+        self: Arc<Self>,
+        count: usize,
+        mut f: F,
+    ) -> Result<T, CudaError> {
+        let mut ones = self.ones.try_lock().unwrap();
+
+        if count > ones.len() {
+            *ones = self.stream.alloc_zeros(count).map_err(CudaError::Driver)?;
+
+            crate::base::set_to(self.clone(), &mut ones, count, 1.0).map_err(CudaError::Driver)?;
+        }
+
+        f(&ones)
+    }
+
     pub fn elementwise_launch_params(size: usize, threads: u32) -> LaunchConfig {
         let float4_size = (size as u32).div_ceil(4);
         let blocks = float4_size.div_ceil(threads);
@@ -50,8 +88,15 @@ impl CudaDevice {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct CudaMarker;
+impl BackendMarker for CudaMarker {
+    type Backend = CudaDevice;
+}
+
 #[allow(unused)]
 impl Device for CudaDevice {
+    type Marker = CudaMarker;
     type IdType = usize;
     type DeviceError = CudaError;
     type BufferF32 = CudaBuffer<f32>;
@@ -68,7 +113,9 @@ impl Device for CudaDevice {
 
         let module = ctx.load_module(Ptx::from_src(PTX)).map_err(CudaError::Driver)?;
 
-        Ok(Self { stream, blas, module, copystream })
+        let ones = Mutex::new(stream.alloc_zeros::<f32>(0).map_err(CudaError::Driver)?);
+
+        Ok(Self { stream, blas, module, copystream, ones, rtc: Mutex::new(HashMap::new()) })
     }
 
     fn synchronise(&self) -> Result<(), Self::DeviceError> {
@@ -98,7 +145,7 @@ impl Device for CudaDevice {
             return Err(OperationError::UnsupportedOperation);
         }
 
-        sparse::sparse_affine(
+        sparse_fwd::sparse_affine(
             batch_size,
             stride,
             activation,
@@ -117,14 +164,12 @@ impl Device for CudaDevice {
         batch_size: usize,
         stride: Option<bool>,
         activation: DiffableFromOutput,
-        input_a: &Self::BufferF32,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
         input_b: &Self::BufferI32,
         input_b_vals: Option<&Self::BufferF32>,
         shape_b: Shape,
         nnz: usize,
-        input_c: Option<&Self::BufferF32>,
         input_c_grad: Option<&mut Self::BufferF32>,
         input_c_batched: bool,
         outputs: &Self::BufferF32,
@@ -134,44 +179,20 @@ impl Device for CudaDevice {
             return Err(OperationError::UnsupportedOperation);
         }
 
-        sparse::backprop_sparse_affine(
+        sparse_bwd::backprop_sparse_affine(
             batch_size,
             stride,
             activation,
-            input_a,
             input_a_grad,
             shape_a,
             input_b,
             shape_b,
             nnz,
-            input_c,
             input_c_grad,
             input_c_batched,
             outputs,
             output_grad,
         )
-    }
-
-    fn mask(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        inputs: &Self::BufferF32,
-        masks: &Self::BufferI32,
-        outputs: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn backprop_mask(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        output_grads: &Self::BufferF32,
-        masks: &Self::BufferI32,
-        input_grads: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
     }
 
     fn select(
@@ -252,28 +273,6 @@ impl Device for CudaDevice {
         Ok(())
     }
 
-    fn gather(
-        batch_size: usize,
-        input_size: usize,
-        output_size: usize,
-        inputs: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        outputs: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn backprop_gather(
-        batch_size: usize,
-        input_size: usize,
-        output_size: usize,
-        output_grads: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        input_grads: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
     fn softmax_across_batch(
         batch_size: usize,
         single_size: usize,
@@ -294,43 +293,6 @@ impl Device for CudaDevice {
 
     fn backprop_softmax_crossentropy(
         size: usize,
-        softmaxed: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn softmax_across_batch_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn crossentropy_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
-        pred: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-        error: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn backprop_softmax_crossentropy_masked(
-        batch_size: usize,
-        single_size: usize,
-        nnz: usize,
-        masks: &Self::BufferI32,
         softmaxed: &Self::BufferF32,
         target: &Self::BufferF32,
         output_grad: &Self::BufferF32,

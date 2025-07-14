@@ -1,10 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    backend::{
-        device::{Device, OperationError},
-        tensor::DenseMatrix,
-    },
+    device::{Device, OperationError},
+    graph::tensor::DenseMatrix,
     optimiser::utils,
 };
 
