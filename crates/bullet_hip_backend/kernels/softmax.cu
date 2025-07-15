@@ -1,4 +1,4 @@
-#include "../util.cu"
+#include "util.cu"
 
 // it is assumed that we will only be using this on matrixs with small number of columns
 // (so the perf won't be terrible)

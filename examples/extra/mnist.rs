@@ -47,13 +47,15 @@ fn main() -> Result<(), OperationError<DeviceError>> {
     let outputs = f2.node();
     let mut graph = builder.build(ExecutionContext::default());
 
+    graph.load_from_file("checkpoints/mnist.bin", false)?;
+
     graph.get_input_mut("inputs").load_dense_from_slice(Some(batch_size), &images.vals)?;
     graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
 
     let t = Instant::now();
     let lr = 0.0001;
 
-    for epoch in 1..=1000 {
+    for epoch in 1..=10 {
         graph.zero_grads()?;
         graph.forward()?;
         graph.backward()?;
