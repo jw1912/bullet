@@ -279,7 +279,30 @@ impl Device for CudaDevice {
         input: &Self::BufferF32,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        let size = batch_size * single_size;
+        if size > input.size() || size > output.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        let func = input.device.module.load_function("softmax").unwrap();
+
+        let threads = 512u32;
+        let grid_dim = ((batch_size as u32).div_ceil(threads), 1, 1);
+        let cfg = LaunchConfig { grid_dim, block_dim: (threads, 1, 1), shared_mem_bytes: 0 };
+
+        unsafe {
+            input
+                .device
+                .stream
+                .launch_builder(&func)
+                .arg(&(single_size as i32))
+                .arg(&(batch_size as i32))
+                .arg(&input.buf.slice(0..size))
+                .arg(&mut output.buf.slice_mut(0..size))
+                .launch(cfg);
+        }
+
+        Ok(())
     }
 
     fn crossentropy(
@@ -288,7 +311,27 @@ impl Device for CudaDevice {
         target: &Self::BufferF32,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        if size > pred.size() || size > target.size() || size > output.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        let func = pred.device.module.load_function("cross_entropy").unwrap();
+        let threads = 512u32;
+        let grid_dim = ((size as u32).div_ceil(threads), 1, 1);
+        let cfg = LaunchConfig { grid_dim, block_dim: (threads, 1, 1), shared_mem_bytes: 0 };
+
+        unsafe {
+            pred.device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&pred.buf.slice(0..size))
+                .arg(&target.buf.slice(0..size))
+                .arg(&mut output.buf.slice_mut(0..size))
+                .launch(cfg);
+        }
+
+        Ok(())
     }
 
     fn backprop_softmax_crossentropy(
@@ -298,7 +341,29 @@ impl Device for CudaDevice {
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        if size > softmaxed.size() || size > target.size() || size > output_grad.size() || size > input_grad.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        let func = softmaxed.device.module.load_function("backprop_softmax_cross_entropy").unwrap();
+        let threads = 512u32;
+        let grid_dim = ((size as u32).div_ceil(threads), 1, 1);
+        let cfg = LaunchConfig { grid_dim, block_dim: (threads, 1, 1), shared_mem_bytes: 0 };
+
+        unsafe {
+            softmaxed
+                .device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&softmaxed.buf.slice(0..size))
+                .arg(&target.buf.slice(0..size))
+                .arg(&output_grad.buf.slice(0..size))
+                .arg(&mut input_grad.buf.slice_mut(0..size))
+                .launch(cfg);
+        }
+
+        Ok(())
     }
 
     fn sparse_to_dense(
@@ -308,6 +373,30 @@ impl Device for CudaDevice {
         sparse: &Self::BufferI32,
         dense: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        if batch_size * nnz > sparse.size() || batch_size * size > dense.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        dense.set_zero()?;
+
+        let func = sparse.device.module.load_function("sparse_to_dense").unwrap();
+        let threads = batch_size.min(1024);
+        let blocks = batch_size.div_ceil(threads) as u32;
+        let cfg = LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads as u32, 1, 1), shared_mem_bytes: 0 };
+
+        unsafe {
+            sparse
+                .device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&(batch_size as i32))
+                .arg(&(nnz as i32))
+                .arg(&sparse.buf)
+                .arg(&mut dense.buf)
+                .launch(cfg);
+        }
+
+        Ok(())
     }
 }

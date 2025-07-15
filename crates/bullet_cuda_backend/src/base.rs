@@ -357,8 +357,7 @@ impl BaseOperations for CudaBuffer<f32> {
         offset_a: usize,
         stride_a: usize,
     ) -> Result<(), Self::BaseError> {
-        println!("WARNING UNIMPLEMENTED OPERATION");
-        Ok(())
+        Err(CudaError::Generic)
     }
 
     fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {

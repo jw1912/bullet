@@ -3,6 +3,26 @@
 #include "util.cu"
 #endif
 
+BULLET_KERNEL sparse_to_dense(const int rows, const int cols, const int max_active, const int* inputs, float* outputs)
+{
+    const int elem = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (elem >= cols)
+        return;
+
+    const int* thisInput = inputs + max_active * elem;
+    float* thisOutput = outputs + rows * elem;
+
+    for (int i = 0; i < max_active; i++) {
+        const int inp = thisInput[i];
+
+        if (inp == -1)
+            break;
+
+        thisOutput[inp] = 1.0F;
+    }
+}
+
 #define SPARSE_MATMUL_BWD_KERNEL(name, op)\
 BULLET_KERNEL name(\
     const int stride,\
