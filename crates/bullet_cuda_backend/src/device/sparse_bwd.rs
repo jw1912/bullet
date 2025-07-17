@@ -10,7 +10,7 @@ use super::CudaError;
 
 fn activation_str(activation: DiffableFromOutput) -> &'static str {
     match activation {
-        DiffableFromOutput::Identity => "x",
+        DiffableFromOutput::Identity => "",
         DiffableFromOutput::ReLU => "Relu",
         DiffableFromOutput::CReLU => "Crelu",
         DiffableFromOutput::SCReLU => "Screlu",
