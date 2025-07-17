@@ -13,7 +13,7 @@ use crate::{
 pub trait DataLoader: Send + Sync + 'static {
     type Error: Send + Sync;
 
-    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(self, f: F) -> Result<(), Self::Error>;
+    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(self, batch_size: usize, f: F) -> Result<(), Self::Error>;
 }
 
 pub struct PreparedBatchHost {

@@ -64,7 +64,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
             let mut batch_no = 0;
             let mut superbatch = steps.start_superbatch;
 
-            dataloader.map_batches(|batch| {
+            dataloader.map_batches(steps.batch_size, |batch| {
                 sender.send(batch).unwrap();
 
                 batch_no += 1;
