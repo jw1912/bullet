@@ -11,6 +11,7 @@ use bullet_lib::{
         save::SavedFormat,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
+        NetworkTrainer,
     },
     value::{
         loader::{viribinpack, ViriBinpackLoader},
@@ -20,7 +21,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r75-768x8hm-1536-dp-1x8"
+        "bullet_r78-768x8hm-1536-dp-pw-16-32-1x8"
     };
 }
 
@@ -53,10 +54,15 @@ fn main() {
                 }
                 weights
             })
-            .quantise::<i16>(255),
-        SavedFormat::id("l0b").quantise::<i16>(255),
-        SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
-        SavedFormat::id("l1b").quantise::<i16>(64 * 255),
+            .quantise::<i16>(255)
+            .round(),
+        SavedFormat::id("l0b").quantise::<i16>(255).round(),
+        SavedFormat::id("l1w").quantise::<i16>(64).transpose().round(),
+        SavedFormat::id("l1b").quantise::<i16>(64 * 255).round(),
+        SavedFormat::id("l2w").transpose().round(),
+        SavedFormat::id("l2b").round(),
+        SavedFormat::id("l3w").transpose().round(),
+        SavedFormat::id("l3b").round(),
     ];
 
     let mut trainer = ValueTrainerBuilder::default()
@@ -74,19 +80,39 @@ fn main() {
             let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);
             l0.weights = l0.weights + expanded_factoriser;
 
-            // output layer weights
-            let l1 = builder.new_affine("l1", 2 * hl_size, NUM_OUTPUT_BUCKETS);
+            // layerstack weights
+            let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * 16);
+            let l2 = builder.new_affine("l2", 16, NUM_OUTPUT_BUCKETS * 32);
+            let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
 
-            // inference
-            let stm_hidden = l0.forward(stm).screlu();
-            let ntm_hidden = l0.forward(ntm).screlu();
-            let mut out = stm_hidden.concat(ntm_hidden);
-            out = l1.forward(out).select(buckets);
+            // input layer inference
+            let stm_subnet = l0.forward(stm).crelu().pairwise_mul();
+            let ntm_subnet = l0.forward(ntm).crelu().pairwise_mul();
+            let mut out = stm_subnet.concat(ntm_subnet);
+
+            // layerstack inference
+            out = l1.forward(out).select(buckets).crelu();
+            out = l2.forward(out).select(buckets).crelu();
+            out = l3.forward(out).select(buckets);
 
             // squared error loss
             let loss = out.sigmoid().squared_error(targets);
             (out, loss)
         });
+
+    // cap l1 weights to 1.98 after factoriser is applied
+    let l0_params = RangerParams { max_weight: 0.99, min_weight: -0.99, ..Default::default() };
+
+    // allow float weights to have a large range
+    let float_params = RangerParams { max_weight: 128.0, min_weight: -128.0, ..Default::default() };
+
+    trainer.set_optimiser_params(RangerParams::default());
+    trainer.optimiser_mut().set_params_for_weight("l0w", l0_params);
+    trainer.optimiser_mut().set_params_for_weight("l0f", l0_params);
+    trainer.optimiser_mut().set_params_for_weight("l2w", float_params);
+    trainer.optimiser_mut().set_params_for_weight("l2b", float_params);
+    trainer.optimiser_mut().set_params_for_weight("l3w", float_params);
+    trainer.optimiser_mut().set_params_for_weight("l3b", float_params);
 
     let num_superbatches = 1000;
     let schedule = TrainingSchedule {
@@ -95,7 +121,7 @@ fn main() {
         steps: TrainingSteps {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
-            start_superbatch: 1,
+            start_superbatch: 701,
             end_superbatch: num_superbatches,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.5 },
@@ -104,7 +130,6 @@ fn main() {
     };
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
-
     let data_loader = ViriBinpackLoader::new(
         "../../chess/data/training.viri",
         1024 * 32,
@@ -116,8 +141,7 @@ fn main() {
         }),
     );
 
-    trainer.set_optimiser_params(RangerParams::default());
-    //trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-{num_superbatches}"));
+    trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-700"));
     trainer.run(&schedule, &settings, &data_loader);
 
     for fen in [
