@@ -6,4 +6,4 @@ authors = ["Jamie Whiting"]
 
 [dependencies]
 bullet_core = { workspace = true }
-cudarc = { version = "0.16.6", features = ["cuda-version-from-build-system"] }
+cudarc = { version = "=0.16.4", features = ["cuda-version-from-build-system"] }
