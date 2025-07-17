@@ -112,7 +112,7 @@ impl Device for CudaDevice {
         static KERNELS: &str = include_str!("kernels.cu");
         println!("{KERNELS}");
         let ptx = nvrtc::compile_ptx(KERNELS).unwrap();
-
+        println!("Compiled");
         let module = ctx.load_module(ptx).map_err(CudaError::Driver)?;
 
         let ones = Mutex::new(stream.alloc_zeros::<f32>(0).map_err(CudaError::Driver)?);
