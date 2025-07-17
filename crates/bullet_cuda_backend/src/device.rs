@@ -12,8 +12,8 @@ use bullet_core::{
 };
 use cudarc::{
     cublas::{result::CublasError, CudaBlas},
-    driver::{CudaContext, CudaModule, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
-    nvrtc,
+    driver::{CudaContext, CudaFunction, CudaModule, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
+    nvrtc::{self, CompileError},
 };
 
 use crate::CudaBuffer;
@@ -22,6 +22,7 @@ use crate::CudaBuffer;
 pub enum CudaError {
     #[default]
     Generic,
+    RuntimeCompile(CompileError),
     Driver(DriverError),
     Blas(CublasError),
     ExpectedIllegalAddressAccess,
@@ -58,6 +59,28 @@ impl CudaDevice {
 
     pub fn copystream(&self) -> Arc<CudaStream> {
         self.copystream.clone()
+    }
+
+    /// # Safety
+    /// Function name collisions can cause UB.
+    pub unsafe fn get_custom_func_or_rtc<F: FnMut() -> String>(
+        &self,
+        name: &str,
+        mut f: F,
+    ) -> Result<CudaFunction, CudaError> {
+        let mut rtcs = self.rtc.try_lock().unwrap();
+
+        let module = if let Some(module) = rtcs.get(name) {
+            module.clone()
+        } else {
+            let kernel_str = f();
+            let ptx = nvrtc::compile_ptx(kernel_str).map_err(CudaError::RuntimeCompile)?;
+            let module = self.stream.context().load_module(ptx).map_err(CudaError::Driver)?;
+            rtcs.insert(name.to_string(), module.clone());
+            module
+        };
+
+        module.load_function("kernel").map_err(CudaError::Driver)
     }
 
     pub fn with_ones<T, F: FnMut(&CudaSlice<f32>) -> Result<T, CudaError>>(
@@ -110,7 +133,7 @@ impl Device for CudaDevice {
         let blas = CudaBlas::new(stream.clone()).map_err(CudaError::Blas)?;
 
         static KERNELS: &str = include_str!("kernels.cu");
-        let ptx = nvrtc::compile_ptx(KERNELS).map_err(|_| CudaError::Generic)?;
+        let ptx = nvrtc::compile_ptx(KERNELS).map_err(CudaError::RuntimeCompile)?;
 
         let module = ctx.load_module(ptx).map_err(CudaError::Driver)?;
 
