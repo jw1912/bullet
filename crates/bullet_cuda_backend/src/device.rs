@@ -118,7 +118,7 @@ impl Device for CudaDevice {
         }
         ";
         println!("{KERNELS}");
-        let ptx = nvrtc::compile_ptx(KERNELS).unwrap();
+        let ptx = nvrtc::compile_ptx(KERNELS).map_err(|_| CudaError::Generic)?;
         println!("Compiled");
         let module = ctx.load_module(ptx).map_err(CudaError::Driver)?;
 
