@@ -110,7 +110,7 @@ impl Device for CudaDevice {
         let blas = CudaBlas::new(stream.clone()).map_err(CudaError::Blas)?;
 
         static KERNELS: &str = include_str!("kernels.cu");
-        let ptx = nvrtc::compile_ptx(KERNELS).unwrap();
+        let ptx = nvrtc::compile_ptx(KERNELS).map_err(|_| CudaError::Generic)?;
 
         let module = ctx.load_module(ptx).map_err(CudaError::Driver)?;
 
