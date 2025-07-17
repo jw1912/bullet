@@ -13,7 +13,7 @@ use bullet_core::{
 use cudarc::{
     cublas::{result::CublasError, CudaBlas},
     driver::{CudaContext, CudaModule, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
-    nvrtc::Ptx,
+    nvrtc,
 };
 
 use crate::CudaBuffer;
@@ -109,9 +109,10 @@ impl Device for CudaDevice {
         let copystream = ctx.new_stream().map_err(CudaError::Driver)?;
         let blas = CudaBlas::new(stream.clone()).map_err(CudaError::Blas)?;
 
-        static PTX: &str = include_str!(concat!(env!("OUT_DIR"), "/kernels.ptx"));
+        static KERNELS: &str = include_str!("kernels.cu");
+        let ptx = nvrtc::compile_ptx(KERNELS).unwrap();;
 
-        let module = ctx.load_module(Ptx::from_src(PTX)).map_err(CudaError::Driver)?;
+        let module = ctx.load_module(ptx).map_err(CudaError::Driver)?;
 
         let ones = Mutex::new(stream.alloc_zeros::<f32>(0).map_err(CudaError::Driver)?);
 
