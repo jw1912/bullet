@@ -109,7 +109,14 @@ impl Device for CudaDevice {
         let copystream = ctx.new_stream().map_err(CudaError::Driver)?;
         let blas = CudaBlas::new(stream.clone()).map_err(CudaError::Blas)?;
 
-        static KERNELS: &str = include_str!("kernels.cu");
+        static KERNELS: &str = "
+        extern \"C\" __global__ void sin_kernel(float *out, const float *inp, int numel) {
+            int i = blockIdx.x * blockDim.x + threadIdx.x;
+            if (i < numel) {
+                out[i] = sin(inp[i]);
+            }
+        }
+        ";
         println!("{KERNELS}");
         let ptx = nvrtc::compile_ptx(KERNELS).unwrap();
         println!("Compiled");
