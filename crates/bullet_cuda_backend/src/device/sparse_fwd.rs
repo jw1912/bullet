@@ -2,10 +2,7 @@ use bullet_core::{
     device::{DeviceBuffer, OperationError},
     graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
 };
-use cudarc::{
-    driver::{LaunchConfig, PushKernelArg},
-    nvrtc,
-};
+use cudarc::driver::{LaunchConfig, PushKernelArg};
 
 use crate::CudaBuffer;
 
@@ -61,20 +58,8 @@ pub fn sparse_affine(
 
     let kernel_cfg = KernelConfig { bias: input_c.map(|_| input_c_batched), m, act: activation, nnz: nnz as u32 };
 
-    let mut rtcs = output.device.rtc.try_lock().unwrap();
     let name = kernel_cfg.name();
-
-    let module = if let Some(module) = rtcs.get(&name) {
-        module.clone()
-    } else {
-        let kernel_str = kernel(kernel_cfg, vectorise);
-        let ptx = nvrtc::compile_ptx(kernel_str).map_err(|_| CudaError::Generic)?;
-        let module = output.device.stream.context().load_module(ptx).map_err(CudaError::Driver)?;
-        rtcs.insert(name, module.clone());
-        module
-    };
-
-    let func = module.load_function("kernel").map_err(CudaError::Driver)?;
+    let func = unsafe { output.device.get_custom_func_or_rtc(&name, || kernel(kernel_cfg, vectorise))? };
 
     let mut builder = output.device.stream.launch_builder(&func);
 
