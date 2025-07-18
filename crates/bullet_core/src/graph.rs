@@ -7,7 +7,8 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
     fmt::Debug,
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use instruction::GraphInstruction;
@@ -63,11 +64,18 @@ impl std::fmt::Debug for NodeId {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ProfileInfo {
+    executions: usize,
+    total_time_micros: u128,
+}
+
 pub struct Graph<D: Device> {
     nodes: HashMap<NodeId, RefCell<Tensor<D>>>,
     inputs: HashMap<String, usize>,
     weights: HashMap<String, usize>,
     functions: HashMap<String, GraphFunction<D>>,
+    profiles: HashMap<String, Mutex<Vec<ProfileInfo>>>,
     device: Arc<D>,
     root: usize,
 }
@@ -159,7 +167,34 @@ impl<D: Device> Graph<D> {
         self.root
     }
 
-    pub fn display(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+    pub fn profile_function(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
+
+        let _ = self.profiles.insert(
+            id.to_string(),
+            Mutex::new(vec![ProfileInfo { executions: 0, total_time_micros: 0 }; func.instructions.len()]),
+        );
+
+        Ok(())
+    }
+
+    pub fn display_profile(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
+        let profile = self.profiles.get(id).ok_or(OperationError::UnsupportedOperation)?;
+
+        println!("Profile for function '{id}':");
+        for (instr, info) in func.instructions.iter().zip(profile.lock().unwrap().iter()) {
+            let avg_time = info.total_time_micros / info.executions as u128;
+            let dbg = format!("{instr:?}");
+            let instr_name = dbg.split_whitespace().next().unwrap();
+
+            println!("{avg_time: >6} micros for {instr_name}");
+        }
+
+        Ok(())
+    }
+
+    pub fn display_function_code(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
         for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
             println!("{instr:?}");
         }
@@ -168,10 +203,28 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn execute(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
-        for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
-            if let Err(e) = instr.execute(self) {
-                println!("Error {e:?} in function '{id}' executing {instr:?}");
-                return Err(e);
+        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
+
+        if let Some(profile) = self.profiles.get(id) {
+            for (instr, info) in func.instructions.iter().zip(profile.lock().unwrap().iter_mut()) {
+                self.device().synchronise()?;
+                let t = Instant::now();
+
+                if let Err(e) = instr.execute(self) {
+                    println!("Error {e:?} in function '{id}' executing {instr:?}");
+                    return Err(e);
+                }
+
+                self.device().synchronise()?;
+                info.executions += 1;
+                info.total_time_micros += t.elapsed().as_micros();
+            }
+        } else {
+            for instr in &func.instructions {
+                if let Err(e) = instr.execute(self) {
+                    println!("Error {e:?} in function '{id}' executing {instr:?}");
+                    return Err(e);
+                }
             }
         }
 
