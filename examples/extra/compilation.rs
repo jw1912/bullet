@@ -43,12 +43,12 @@ fn main() -> Result<(), CpuError> {
     println!();
     println!("Forward Pass Code");
     println!();
-    graph.display("forward").unwrap();
+    graph.display_function_code("forward").unwrap();
 
     println!();
     println!("Backward Pass Code");
     println!();
-    graph.display("backward").unwrap();
+    graph.display_function_code("backward").unwrap();
 
     graph.get_last_device_error()
 }

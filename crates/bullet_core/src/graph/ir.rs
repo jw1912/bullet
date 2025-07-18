@@ -365,6 +365,6 @@ where
             .map(|(x, y)| (x.to_string(), y))
             .collect();
 
-        Ok(Graph { nodes, inputs, weights, functions, device, root })
+        Ok(Graph { nodes, inputs, weights, functions, device, root, profiles: HashMap::new() })
     }
 }
