@@ -112,6 +112,8 @@ where
             dataloader.clone(),
         );
 
+        let _ = std::fs::create_dir(settings.output_directory);
+
         let lr_scheduler = schedule.lr_scheduler.clone();
 
         let steps = schedule.steps;
@@ -122,11 +124,8 @@ where
         self.train_custom(
             trainer::schedule::TrainingSchedule {
                 steps,
-                save_rate: schedule.save_rate,
-                out_dir: settings.output_directory.to_string(),
                 log_rate: 128,
                 lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)),
-                net_id: schedule.net_id.clone(),
             },
             ValueDataLoader { steps, threads: settings.threads, dataloader, wdl: schedule.wdl_scheduler.clone() },
             |_, superbatch, curr_batch, error| {
