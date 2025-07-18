@@ -50,11 +50,8 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         println!("{}", logger::ansi("Beginning Training", "34;1"));
 
         let timer = Instant::now();
-        let out_dir = schedule.out_dir.as_str();
         let lr = schedule.lr_schedule;
         let steps = schedule.steps;
-
-        let _ = std::fs::create_dir(out_dir);
 
         self.optimiser.graph.synchronise().unwrap();
 
