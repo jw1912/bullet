@@ -21,7 +21,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r78-768x8hm-1536-dp-pw-16-32-1x8"
+        "bullet_r79-768x8hm-1536-dp-pw-16-32-1x8"
     };
 }
 
@@ -121,7 +121,7 @@ fn main() {
         steps: TrainingSteps {
             batch_size: 16_384,
             batches_per_superbatch: 6104,
-            start_superbatch: 701,
+            start_superbatch: 1,
             end_superbatch: num_superbatches,
         },
         wdl_scheduler: wdl::ConstantWDL { value: 0.5 },
@@ -131,7 +131,7 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
     let data_loader = ViriBinpackLoader::new(
-        "../../chess/data/training.viri",
+        "..\\..\\chess\\data\\training.viri",
         1024 * 32,
         4,
         viribinpack::ViriFilter::Builtin(viriformat::dataformat::Filter {
@@ -141,7 +141,7 @@ fn main() {
         }),
     );
 
-    trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-700"));
+    //trainer.load_from_checkpoint(&format!("checkpoints/{NET_ID}-"));
     trainer.run(&schedule, &settings, &data_loader);
 
     for fen in [
