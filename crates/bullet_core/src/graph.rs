@@ -207,7 +207,10 @@ impl<D: Device> Graph<D> {
 
         if let Some(profile) = self.profiles.get(id) {
             for (instr, info) in func.instructions.iter().zip(profile.lock().unwrap().iter_mut()) {
-                self.device().synchronise()?;
+                if let Err(e) = self.device().synchronise() {
+                    println!("Error {e:?} in function '{id}' before executing {instr:?}");
+                    return Err(OperationError::DeviceError(Box::new(e)));
+                }
                 let t = Instant::now();
 
                 if let Err(e) = instr.execute(self) {
@@ -215,7 +218,11 @@ impl<D: Device> Graph<D> {
                     return Err(e);
                 }
 
-                self.device().synchronise()?;
+                if let Err(e) = self.device().synchronise() {
+                    println!("Error {e:?} in function '{id}' after executing {instr:?}");
+                    return Err(OperationError::DeviceError(Box::new(e)));
+                }
+
                 info.executions += 1;
                 info.total_time_micros += t.elapsed().as_micros();
             }
