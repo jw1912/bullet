@@ -290,9 +290,9 @@ impl BaseOperations for CudaBuffer<f32> {
                 .launch_builder(&func)
                 .arg(&(output_size as i32))
                 .arg(&(batch_size as i32))
-                .arg(&a.buf.slice(0..2 * total_size))
-                .arg(&grd.buf.slice(0..2 * total_size))
-                .arg(&mut self.buf.slice_mut(0..total_size))
+                .arg(&a.buf.slice(0..total_size))
+                .arg(&grd.buf.slice(0..total_size))
+                .arg(&mut self.buf.slice_mut(0..2 * total_size))
                 .launch(CudaDevice::elementwise_launch_params_single(total_size, 1024))
                 .map_err(CudaError::Driver)?;
         }

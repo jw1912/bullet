@@ -73,6 +73,7 @@ fn main() {
 
             // input layer weights
             let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);
+            l0.init_with_effective_input_size(32);
             l0.weights = l0.weights + expanded_factoriser;
 
             // layerstack weights
