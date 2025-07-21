@@ -21,7 +21,7 @@ use bullet_lib::{
 
 macro_rules! net_id {
     () => {
-        "bullet_r79-768x8hm-1536-dp-pw-16-32-1x8"
+        "bullet_r81-768x8hm-1536-dp-pw-16-da-32-1x8"
     };
 }
 
@@ -29,7 +29,9 @@ const NET_ID: &str = net_id!();
 
 fn main() {
     // network hyperparams
-    let hl_size = 1536;
+    let ft_size = 1536;
+    let l1_size = 16;
+    let l2_size = 32;
     const NUM_OUTPUT_BUCKETS: usize = 8;
     #[rustfmt::skip]
     const BUCKET_LAYOUT: [usize; 32] = [
@@ -73,17 +75,17 @@ fn main() {
         .save_format(&save_format)
         .build_custom(|builder, (stm, ntm, buckets), targets| {
             // input layer factoriser
-            let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);
+            let l0f = builder.new_weights("l0f", Shape::new(ft_size, 768), InitSettings::Zeroed);
             let expanded_factoriser = l0f.repeat(NUM_INPUT_BUCKETS);
 
             // input layer weights
-            let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);
+            let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, ft_size);
             l0.weights = l0.weights + expanded_factoriser;
 
             // layerstack weights
-            let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * 16);
-            let l2 = builder.new_affine("l2", 16, NUM_OUTPUT_BUCKETS * 32);
-            let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
+            let l1 = builder.new_affine("l1", ft_size, NUM_OUTPUT_BUCKETS * l1_size);
+            let l2 = builder.new_affine("l2", l1_size * 2, NUM_OUTPUT_BUCKETS * l2_size);
+            let l3 = builder.new_affine("l3", l2_size, NUM_OUTPUT_BUCKETS);
 
             // input layer inference
             let stm_subnet = l0.forward(stm).crelu().pairwise_mul();
@@ -91,7 +93,8 @@ fn main() {
             let mut out = stm_subnet.concat(ntm_subnet);
 
             // layerstack inference
-            out = l1.forward(out).select(buckets).crelu();
+            out = l1.forward(out).select(buckets);
+            out = out.concat(out.abs_pow(2.0)).crelu();
             out = l2.forward(out).select(buckets).crelu();
             out = l3.forward(out).select(buckets);
 
