@@ -3,7 +3,7 @@ authors = ["Jamie Whiting"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/jw1912/bullet"
-rust-version = "1.83"
+rust-version = "1.86"
 edition = "2021"
 
 [workspace]
