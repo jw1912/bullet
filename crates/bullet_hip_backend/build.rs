@@ -97,6 +97,7 @@ fn build_hip(out_path: &Path) {
 }
 
 fn get_gcn_arch_name() -> Option<String> {
+    println!("rerun-if-env-changed=GCN_ARCH_NAME");
     let provided = std::env::var("GCN_ARCH_NAME").ok();
 
     if provided.is_some() {
