@@ -318,14 +318,14 @@ where
 
         if let Some(path) = self.opts.dump_graphviz.clone() {
             use std::io::Write;
-            let opts = |label| format!("label=\"{label}\";style=filled;color=lightgrey;node [style=filled,color=white];");
+            let opts = "style=filled;color=lightgrey;node [style=filled,color=white];";
             let unoptim = self.as_graphviz("unoptim").unwrap();
-            let unoptim = format!("subgraph cluster_0 {{ {}{unoptim} }}", opts("Unoptimised"));
+            let unoptim = format!("subgraph cluster_0 {{ label=\"Unoptimised\";{opts}{unoptim} }}");
 
             self.optimise()?;
 
             let optim = self.as_graphviz("optim").unwrap();
-            let optim = format!("subgraph cluster_1 {{ {}{optim} }}", opts("Optimised"));
+            let optim = format!("subgraph cluster_1 {{ label=\"Optimised\";{opts}{optim} }}");
 
             let mut file = std::fs::File::create(path).unwrap();
             write!(&mut file, "digraph G {{ {unoptim} {optim} }}").unwrap();
