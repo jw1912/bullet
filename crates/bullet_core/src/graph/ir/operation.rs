@@ -32,6 +32,11 @@ pub trait GraphIROperation<B: BackendMarker>: std::any::Any + std::fmt::Debug + 
     fn ancillary_buffers(&self, _ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
         Ok(Vec::new())
     }
+
+    fn shorthand(&self) -> String {
+        let dbg = format!("{self:?}");
+        dbg.split_whitespace().next().unwrap().to_string()
+    }
 }
 
 pub trait GraphIROperationCompilable<B: BackendMarker>: GraphIROperation<B>

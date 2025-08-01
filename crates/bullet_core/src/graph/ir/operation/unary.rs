@@ -45,6 +45,15 @@ impl<B: BackendMarker> GraphIROperation<B> for Unary {
 
         Ok(self.input.shape)
     }
+
+    fn shorthand(&self) -> String {
+        match self.op {
+            UnaryOp::AbsPow(p) => format!("|x|^{p}"),
+            UnaryOp::Add(x) => format!("+ {x}"),
+            UnaryOp::Mul(x) => format!("* {x}"),
+            UnaryOp::DiffableFromOutput(act) => format!("{act:?}"),
+        }
+    }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
@@ -110,6 +119,10 @@ impl<B: BackendMarker> GraphIROperation<B> for ReduceAcrossBatch {
         }
 
         Ok(self.input.shape)
+    }
+
+    fn shorthand(&self) -> String {
+        format!("Reduce{:?}AcrossBatch", self.reduction)
     }
 }
 
@@ -179,6 +192,14 @@ impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
             Ok(Shape::new(is.rows() / 2, is.cols()))
         } else {
             Err(GraphIRError::Op(GraphIROperationError::InvalidInputShape(is)))
+        }
+    }
+
+    fn shorthand(&self) -> String {
+        if self.post_concat {
+            "PairwiseMulPostConcat".to_string()
+        } else {
+            "PairwiseMul".to_string()
         }
     }
 }

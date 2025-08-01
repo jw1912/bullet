@@ -17,7 +17,7 @@ use crate::{
                 unary::{Reduce, ReduceAcrossBatch},
                 GraphIROperationCompilable,
             },
-            BackendMarker, GraphIR,
+            BackendMarker, GraphIR, GraphIRCompileOptions,
         },
         Graph, NodeId, NodeIdTy,
     },
@@ -92,6 +92,11 @@ impl<B: BackendMarker> GraphBuilder<B> {
         let bias = self.new_weights(&format!("{id}b"), Shape::new(output_size, bias_cols), InitSettings::Zeroed);
 
         Affine { weights, bias }
+    }
+
+    /// Outputs the `GraphIR` before and after optimisation to the given `path`, at compilation time.
+    pub fn dump_graphviz(&self, path: &str) {
+        self.ir().set_compile_opts(GraphIRCompileOptions { dump_graphviz: Some(path.to_string()) });
     }
 }
 
