@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::BufReader,
+    slice,
     sync::mpsc::{self, SyncSender},
 };
 
@@ -27,7 +28,7 @@ impl From<Filter> for ViriFilter {
 
 #[derive(Clone)]
 pub struct ViriBinpackLoader {
-    file_path: [String; 1],
+    file_path: String,
     buffer_size: usize,
     threads: usize,
     filter: ViriFilter,
@@ -36,7 +37,7 @@ pub struct ViriBinpackLoader {
 impl ViriBinpackLoader {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: impl Into<ViriFilter>) -> Self {
         Self {
-            file_path: [path.to_string(); 1],
+            file_path: path.to_string(),
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
             threads,
             filter: filter.into(),
@@ -46,7 +47,7 @@ impl ViriBinpackLoader {
 
 impl DataLoader<ChessBoard> for ViriBinpackLoader {
     fn data_file_paths(&self) -> &[String] {
-        &self.file_path
+        slice::from_ref(&self.file_path)
     }
 
     fn count_positions(&self) -> Option<u64> {
@@ -57,7 +58,7 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
         let mut shuffle_buffer = Vec::new();
         shuffle_buffer.reserve_exact(self.buffer_size);
 
-        let file_path = self.file_path[0].clone();
+        let file_path = self.file_path.clone();
         let buffer_size = self.buffer_size;
 
         let (sender, receiver) = mpsc::sync_channel::<Game>(256);
