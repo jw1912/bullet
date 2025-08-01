@@ -28,12 +28,18 @@ pub trait BackendMarker: Copy + Default + 'static {
     type Backend: Device;
 }
 
+#[derive(Debug, Default)]
+pub struct GraphIRCompileOptions {
+    pub dump_graphviz: Option<String>,
+}
+
 #[derive(Default)]
 pub struct GraphIR<B: BackendMarker> {
     nodes: Vec<Option<GraphIRNode<B>>>,
     inputs: HashSet<usize>,
     weights: HashSet<usize>,
     ids: HashSet<String>,
+    opts: GraphIRCompileOptions,
 }
 
 pub struct GraphIRNodeInfo {
@@ -175,6 +181,34 @@ impl<B: BackendMarker> GraphIR<B> {
         Ok(AnnotatedNode { idx, shape: data.info.shape })
     }
 
+    pub fn set_compile_opts(&mut self, opts: GraphIRCompileOptions) {
+        self.opts = opts;
+    }
+
+    pub fn as_graphviz(&self, prefix: &str) -> Result<String, std::fmt::Error> {
+        use std::fmt::Write;
+
+        let mut s = String::new();
+
+        for node in 0..self.nodes.len() {
+            if let Ok(data) = self.get(node) {
+                if let Some(op) = &data.parent_operation {
+                    let opname = op.shorthand();
+                    write!(&mut s, "{prefix}{node} [label=\"{opname}\"];")?;
+
+                    for parent in op.nodes() {
+                        write!(&mut s, "{prefix}{} -> {prefix}{node};", parent.idx)?;
+                    }
+                } else {
+                    let opname = data.id.clone().unwrap_or("__constant".to_string());
+                    write!(&mut s, "{prefix}{node} [label=\"{opname}\", style=filled, color=lightblue];")?;
+                }
+            }
+        }
+
+        Ok(s)
+    }
+
     fn optimise(&mut self) -> Result<(), GraphIRError> {
         while self.try_fusion_pass()? {}
 
@@ -281,7 +315,24 @@ where
 {
     pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRError> {
         self.is_valid()?;
-        self.optimise()?;
+
+        if let Some(path) = self.opts.dump_graphviz.clone() {
+            use std::io::Write;
+            let opts = "label=\"Unoptimised\";style=filled;color=lightgrey;node [style=filled,color=white];";
+            let unoptim = self.as_graphviz("unoptim").unwrap();
+            let unoptim = format!("subgraph cluster_0 {{ {opts}{unoptim} }}");
+
+            self.optimise()?;
+
+            let optim = self.as_graphviz("optim").unwrap();
+            let optim = format!("subgraph cluster_1 {{ {opts}{optim} }}");
+
+            let mut file = std::fs::File::create(path).unwrap();
+            write!(&mut file, "digraph G {{ {unoptim} {optim} }}").unwrap();
+        } else {
+            self.optimise()?;
+        }
+
         self.is_valid()?;
 
         let root = self.root()?.idx;

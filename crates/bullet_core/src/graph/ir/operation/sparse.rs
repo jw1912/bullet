@@ -59,6 +59,15 @@ impl<B: BackendMarker> GraphIROperation<B> for SparseAffineActivate {
 
         check.then_some(out).ok_or(GraphIRError::Op(GraphIROperationError::InvalidInputShape(self.indices.shape)))
     }
+
+    fn shorthand(&self) -> String {
+        match (self.biases.is_some(), self.activation) {
+            (true, DiffableFromOutput::Identity) => "SparseAffine".to_string(),
+            (true, act) => format!("SparseAffine{act:?}"),
+            (false, DiffableFromOutput::Identity) => "SparseMatmul".to_string(),
+            (false, act) => format!("SparseMatmul{act:?}"),
+        }
+    }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
@@ -167,6 +176,13 @@ impl<B: BackendMarker> GraphIROperation<B> for SparseAffineDualActivate {
                 self.indices_r.shape,
             ]),
         ))
+    }
+
+    fn shorthand(&self) -> String {
+        match self.activation {
+            DiffableFromOutput::Identity => "SparseAffineDual".to_string(),
+            act => format!("SparseAffineDual{act:?}"),
+        }
     }
 }
 

@@ -34,6 +34,14 @@ impl<B: BackendMarker> GraphIROperation<B> for LinearCombination {
             Err(GraphIRError::Op(GraphIROperationError::MismatchedInputShapes(vec![self.a.shape, self.b.shape])))
         }
     }
+
+    fn shorthand(&self) -> String {
+        match (self.alpha, self.beta) {
+            (1.0, 1.0) => "Add".to_string(),
+            (1.0, -1.0) | (-1.0, 1.0) => "Sub".to_string(),
+            _ => format!("{self:?}"),
+        }
+    }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
