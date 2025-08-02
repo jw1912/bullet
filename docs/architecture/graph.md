@@ -35,11 +35,6 @@ fn main() -> Result<(), CpuError> {
     println!("Forward Pass Code");
     graph.display_function_code("forward").unwrap();
 
-    println!();
-
-    println!("Backward Pass Code");
-    graph.display_function_code("backward").unwrap();
-
     graph.get_last_device_error()
 }
 ```
@@ -58,22 +53,4 @@ Unary { op: DiffableFromOutput(Sigmoid), ... }
 MaybeUpdateBatchSize { ... }
 AbsPowerError { ... }
 ReduceAcrossBatch { ... }
-```
-
-```
-Backward Pass Code
-Set(...)
-MaybeUpdateBatchSize { ... }
-SplatAcrossBatch { ... }
-MaybeUpdateBatchSize { ... }
-AbsPowerErrorBackward { ... }
-MaybeUpdateBatchSize { ... }
-UnaryBackward { ... }
-MaybeUpdateBatchSize { ... }
-Matmul { ... }
-MaybeUpdateBatchSize { ... }
-Matmul { ... }
-MaybeUpdateBatchSize { ... }
-ReduceAcrossBatch { ... }
-BackpropSparseAffineActivateStrided { ... }
 ```
