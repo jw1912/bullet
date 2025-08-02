@@ -63,16 +63,18 @@ where
     let mut buf = Vec::new();
 
     for SavedFormat { id, .. } in &trainer.state.saved_format {
-        let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
-        let weights = trainer.optimiser.graph.get(idx).unwrap();
-        let weights = weights.dense().unwrap();
+        if let Some(id) = id {
+            let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+            let weights = trainer.optimiser.graph.get(idx).unwrap();
+            let weights = weights.dense().unwrap();
 
-        let mut weight_buf = vec![0.0; weights.size()];
-        let written = weights.write_to_slice(&mut weight_buf).unwrap();
-        assert_eq!(written, weights.size());
+            let mut weight_buf = vec![0.0; weights.size()];
+            let written = weights.write_to_slice(&mut weight_buf).unwrap();
+            assert_eq!(written, weights.size());
 
-        let quantised = QuantTarget::Float.quantise(false, &weight_buf)?;
-        buf.extend_from_slice(&quantised);
+            let quantised = QuantTarget::Float.quantise(false, &weight_buf)?;
+            buf.extend_from_slice(&quantised);
+        }
     }
 
     file.write_all(&buf)?;
@@ -91,33 +93,37 @@ where
 
     let mut buf = Vec::new();
 
-    for SavedFormat { id, quant, layout, transforms, round } in &trainer.state.saved_format {
-        let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
-        let weights = trainer.optimiser.graph.get(idx).unwrap();
-        let weights = weights.dense().unwrap();
+    for SavedFormat { custom, id, quant, layout, transforms, round } in &trainer.state.saved_format {
+        if let Some(id) = id {
+            let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+            let weights = trainer.optimiser.graph.get(idx).unwrap();
+            let weights = weights.dense().unwrap();
 
-        let mut weight_buf = vec![0.0; weights.size()];
-        let written = weights.write_to_slice(&mut weight_buf).unwrap();
-        assert_eq!(written, weights.size());
+            let mut weight_buf = vec![0.0; weights.size()];
+            let written = weights.write_to_slice(&mut weight_buf).unwrap();
+            assert_eq!(written, weights.size());
 
-        if let Layout::Transposed(shape) = layout {
-            assert_eq!(shape.size(), weights.size());
-            weight_buf = SavedFormat::transpose_impl(*shape, &weight_buf);
-        }
-
-        for transform in transforms {
-            weight_buf = transform(&trainer.optimiser.graph, id, weight_buf);
-        }
-
-        let quantised = match quant.quantise(*round, &weight_buf) {
-            Ok(q) => q,
-            Err(err) => {
-                println!("Quantisation failed for id: {id}");
-                return Err(err);
+            if let Layout::Transposed(shape) = layout {
+                assert_eq!(shape.size(), weights.size());
+                weight_buf = SavedFormat::transpose_impl(*shape, &weight_buf);
             }
-        };
 
-        buf.extend_from_slice(&quantised);
+            for transform in transforms {
+                weight_buf = transform(&trainer.optimiser.graph, id, weight_buf);
+            }
+
+            let quantised = match quant.quantise(*round, &weight_buf) {
+                Ok(q) => q,
+                Err(err) => {
+                    println!("Quantisation failed for id: {id}");
+                    return Err(err);
+                }
+            };
+
+            buf.extend_from_slice(&quantised);
+        } else {
+            buf.extend_from_slice(custom.as_ref().unwrap());
+        }
     }
 
     let bytes = buf.len() % 64;

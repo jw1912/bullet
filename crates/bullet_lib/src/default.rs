@@ -243,7 +243,8 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
 
         let mut buf = Vec::new();
 
-        for SavedFormat { id, quant, layout, transforms, round } in &self.saved_format {
+        for SavedFormat { custom: _, id, quant, layout, transforms, round } in &self.saved_format {
+            let id = id.as_ref().unwrap();
             let idx = NodeId::new(self.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
             let weights = self.optimiser.graph.get(idx).unwrap();
             let weights = weights.dense().unwrap();
@@ -305,6 +306,7 @@ impl<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out: OutputBuc
         let mut buf = Vec::new();
 
         for SavedFormat { id, .. } in &self.saved_format {
+            let id = id.as_ref().unwrap();
             let id = NodeId::new(self.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
             let weights = self.optimiser.graph.get(id).unwrap();
             let weights = weights.dense().unwrap();
