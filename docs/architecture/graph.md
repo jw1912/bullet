@@ -54,6 +54,7 @@ MaybeUpdateBatchSize { ... }
 Matmul { ... }
 LinearCombinationSplat { ... }
 MaybeUpdateBatchSize { ... }
+Unary { op: DiffableFromOutput(Sigmoid), ... }
 MaybeUpdateBatchSize { ... }
 AbsPowerError { ... }
 ReduceAcrossBatch { ... }
@@ -61,7 +62,7 @@ ReduceAcrossBatch { ... }
 
 ```
 Backward Pass Code
-Set(Id(14, Gradients), 1.0)
+Set(...)
 MaybeUpdateBatchSize { ... }
 SplatAcrossBatch { ... }
 MaybeUpdateBatchSize { ... }
