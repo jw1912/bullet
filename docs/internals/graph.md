@@ -1,4 +1,4 @@
-# Graph Architecture
+# Graph Compilation Internals
 
 A brief overview of the architecture in `bullet_core` for creating `Graph`s is as follows:
 
