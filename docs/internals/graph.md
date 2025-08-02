@@ -109,8 +109,7 @@ A user may also define additional custom functions to run on the graph.
 
 You can see that for the forward pass, there is almost a one-to-one correspondence between the nodes in the GraphIR,
 and the operations run for the function - with two notable exceptions:
-- `MaybeUpdateBatchSize` handles reallocating buffers in the the `Graph` if needed, which only occurs when running the function
-for a batch size that is larger than has been used before
+- `MaybeUpdateBatchSize` for each non-leaf node in the graph, which handles reallocating buffers in the `Graph` if needed (only occurs when running the function for a batch size that is larger than has been used before)
 - The `Affine` operation is broken down into `Matmul` and `LinearCombinationSplat` because cuBLAS (or equivalent) is used for the matrix multiplication
 
 The details for each instruction have been removed because they tend to be rather lenthy, identifying the exact graph buffers that the instructions need to run on, as well as any other parameters.
