@@ -96,7 +96,7 @@ The `GraphIR` is a static-single-assignment (SSA) representation and hence can b
 For each node in the `GraphIR`, the resulting graph contains one or more buffers for it:
 - The `Values`, that get populated during the forward pass
 - The `Gradients` if needed, that get populated during the backward pass
-- Any number of additional "ancillary" buffers, depending on how the node was created, e.g. some operations may require intermediate results to be stored for efficiency reasons.
+- Any number of additional "ancillary" buffers, depending on how the node was created, e.g. some operations may require intermediate results to be stored for efficiency reasons
 
 The `GraphIR` is then used to define forwards and backwards pass functions based on each operation, as well as a function to zero the gradients of nodes for which gradients are tracked. These `GraphFunctions` are simply a sequence of `GraphInstruction`s that perform a specific operation on given buffers in the `Graph`, e.g.
 ```rust
