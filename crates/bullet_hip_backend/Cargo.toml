@@ -1,8 +1,12 @@
 [package]
 name = "bullet_hip_backend"
 version = "0.1.0"
-edition = "2021"
-authors = ["Jamie Whiting"]
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 bullet_core = { workspace = true }
