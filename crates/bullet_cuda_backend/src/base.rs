@@ -357,7 +357,24 @@ impl BaseOperations for CudaBuffer<f32> {
         offset_a: usize,
         stride_a: usize,
     ) -> Result<(), Self::BaseError> {
-        Err(CudaError::Generic)
+        let func = self.device.module().load_function("LinearCombStridedKernel").map_err(CudaError::Driver)?;
+
+        unsafe {
+            self.device
+                .stream()
+                .launch_builder(&func)
+                .arg(&i32::from(add))
+                .arg(&(rows as i32))
+                .arg(&(cols as i32))
+                .arg(&(stride_a as i32))
+                .arg(&(stride as i32))
+                .arg(&a.buf.slice(offset_a..))
+                .arg(&mut self.buf.slice_mut(offset..))
+                .launch(CudaDevice::elementwise_launch_params_single(rows * cols, 512))
+                .map_err(CudaError::Driver)?;
+        }
+
+        Ok(())
     }
 
     fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {
