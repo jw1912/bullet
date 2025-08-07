@@ -670,3 +670,32 @@ SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdCrelu, primeInvCReLU);
 SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdScrelu, primeInvSCReLU);
 SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdSqrRelu, primeInvSqrReLU);
 SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdSigmoid, primeInvSigmoid);
+
+BULLET_KERNEL LinearCombStridedKernel(
+    const int increment,
+    const int rows,
+    const int cols,
+    const int input_stride,
+    const int output_stride,
+    const float* input,
+    float* output)
+{
+    const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (tid >= (rows * cols))
+        return;
+
+    const int row = tid % rows;
+    const int col = tid / rows;
+
+    float* this_out = output + col * output_stride + row;
+    if (increment)
+    {
+        this_out[0] += input[col * input_stride + row];
+    }
+    else
+    {
+        this_out[0] = input[col * input_stride + row];
+    }
+    
+}
