@@ -1,6 +1,7 @@
 use crate::graph::ir::{
     node::NodeInfo,
     operation::{sparse::SparseAffineDualActivate, GraphIROperationCompilable},
+    transform::GraphIRTransform,
     BackendMarker,
 };
 
@@ -18,24 +19,10 @@ use super::{
     GraphIR, GraphIRError, GraphIRNode,
 };
 
-pub struct FusionDescription<B: BackendMarker> {
-    pub eliminated: Vec<usize>,
-    pub new_nodes: Vec<GraphIRNode<B>>,
-}
-
-impl<B: BackendMarker> FusionDescription<B> {
-    pub fn new(
-        eliminated: &[usize],
-        new_nodes: impl Into<Vec<GraphIRNode<B>>>,
-    ) -> Result<Option<FusionDescription<B>>, GraphIRError> {
-        Ok(Some(FusionDescription { eliminated: eliminated.to_vec(), new_nodes: new_nodes.into() }))
-    }
-}
-
 pub fn search_for_fusion<B: BackendMarker>(
     ir: &GraphIR<B>,
     node: usize,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let data = ir.get(node).unwrap();
 
     if let Some(op) = &data.parent_operation {
@@ -68,7 +55,7 @@ fn fuse_diffable_from_output<B: BackendMarker>(
     node: &AnnotatedNode,
     activation: DiffableFromOutput,
     old_data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
@@ -83,7 +70,7 @@ fn fuse_diffable_from_output<B: BackendMarker>(
             {
                 let new_data =
                     old_data.with_new_op(SparseAffineActivate { weights, biases, values, indices, activation });
-                return FusionDescription::new(&[node.idx], vec![new_data]);
+                return GraphIRTransform::new(&[node.idx], vec![new_data]);
             }
 
             if let Some(&SparseAffineDualActivate {
@@ -101,7 +88,7 @@ fn fuse_diffable_from_output<B: BackendMarker>(
                     biases,
                     activation,
                 });
-                return FusionDescription::new(&[node.idx], vec![new_data]);
+                return GraphIRTransform::new(&[node.idx], vec![new_data]);
             }
         }
     }
@@ -114,7 +101,7 @@ fn fuse_concat<B: BackendMarker>(
     a: &AnnotatedNode,
     b: &AnnotatedNode,
     old_data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let node_a = ir.get(a.idx)?;
     let node_b = ir.get(b.idx)?;
 
@@ -133,7 +120,7 @@ fn fuse_concat<B: BackendMarker>(
                         biases: ba,
                         activation: acta,
                     });
-                    return FusionDescription::new(&[a.idx, b.idx], vec![new_data]);
+                    return GraphIRTransform::new(&[a.idx, b.idx], vec![new_data]);
                 }
             }
 
@@ -159,7 +146,7 @@ fn fuse_concat<B: BackendMarker>(
                     };
 
                     let new_pairwise = old_data.with_new_op(PairwiseMul { input: new_b, post_concat: true });
-                    return FusionDescription::new(&[a.idx, b.idx], vec![new_concat, new_pairwise]);
+                    return GraphIRTransform::new(&[a.idx, b.idx], vec![new_concat, new_pairwise]);
                 }
             }
 
@@ -183,7 +170,7 @@ fn fuse_concat<B: BackendMarker>(
                     };
 
                     let new_op = old_data.with_new_op(Unary { input: new_b, op: op1 });
-                    return FusionDescription::new(&[a.idx, b.idx], vec![new_concat, new_op]);
+                    return GraphIRTransform::new(&[a.idx, b.idx], vec![new_concat, new_op]);
                 }
             }
         }
@@ -197,7 +184,7 @@ fn fuse_power_error<B: BackendMarker>(
     node: &AnnotatedNode,
     power: f32,
     old_data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
@@ -205,7 +192,7 @@ fn fuse_power_error<B: BackendMarker>(
             if let Some(&LinearCombination { a, b, alpha: 1.0, beta: -1.0 }) = downcast(op) {
                 if a.idx != b.idx && ir.get(a.idx)?.info.batched == ir.get(b.idx)?.info.batched {
                     let new_data = old_data.with_new_op(AbsPowerError { a, b, power });
-                    return FusionDescription::new(&[node.idx], [new_data]);
+                    return GraphIRTransform::new(&[node.idx], [new_data]);
                 }
             }
         }
@@ -219,7 +206,7 @@ fn fuse_scale<B: BackendMarker>(
     node: &AnnotatedNode,
     scale: f32,
     old_data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let ir_node = ir.get(node.idx)?;
 
     if ir_node.num_children == 1 {
@@ -227,7 +214,7 @@ fn fuse_scale<B: BackendMarker>(
             if let Some(&LinearCombination { a, b, alpha, beta }) = downcast(op) {
                 let new_data =
                     old_data.with_new_op(LinearCombination { a, b, alpha: alpha * scale, beta: beta * scale });
-                return FusionDescription::new(&[node.idx], [new_data]);
+                return GraphIRTransform::new(&[node.idx], [new_data]);
             }
         }
     }
@@ -242,7 +229,7 @@ fn fuse_linear_comb<B: BackendMarker>(
     beta: f32,
     rhs: &AnnotatedNode,
     data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     if alpha == 1.0 && beta == 1.0 {
         if let Some(fusion_data) = fuse_add_single(ir, lhs, rhs, data)? {
             return Ok(Some(fusion_data));
@@ -269,7 +256,7 @@ fn fuse_add_single<B: BackendMarker>(
     lhs: &AnnotatedNode,
     rhs: &AnnotatedNode,
     old_data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.num_children == 1 {
@@ -289,13 +276,13 @@ fn fuse_add_single<B: BackendMarker>(
                     biases: Some(*rhs),
                     activation: DiffableFromOutput::Identity,
                 });
-                return FusionDescription::new(&[lhs.idx], [new_data]);
+                return GraphIRTransform::new(&[lhs.idx], [new_data]);
             }
 
             if let Some(&Matmul { a, transa: false, b, transb: false }) = downcast(op) {
                 if !ir.get(rhs.idx)?.info.batched {
                     let new_data = old_data.with_new_op(Affine { weights: a, inputs: b, biases: *rhs });
-                    return FusionDescription::new(&[lhs.idx], [new_data]);
+                    return GraphIRTransform::new(&[lhs.idx], [new_data]);
                 }
             }
 
@@ -314,7 +301,7 @@ fn fuse_add_single<B: BackendMarker>(
                     biases: Some(*rhs),
                     activation: DiffableFromOutput::Identity,
                 });
-                return FusionDescription::new(&[lhs.idx], [new_data]);
+                return GraphIRTransform::new(&[lhs.idx], [new_data]);
             }
         }
     }
@@ -329,14 +316,14 @@ fn fuse_linear_comb_single<B: BackendMarker>(
     beta: f32,
     rhs: &AnnotatedNode,
     old_data: &GraphIRNode<B>,
-) -> Result<Option<FusionDescription<B>>, GraphIRError> {
+) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.num_children == 1 {
         if let Some(op) = &ir_node.parent_operation {
             if let Some(&Unary { input, op: UnaryOp::Mul(x) }) = downcast(op) {
                 let new_data = old_data.with_new_op(LinearCombination { a: input, b: *rhs, alpha: alpha * x, beta });
-                return FusionDescription::new(&[lhs.idx], vec![new_data]);
+                return GraphIRTransform::new(&[lhs.idx], vec![new_data]);
             }
         }
     }

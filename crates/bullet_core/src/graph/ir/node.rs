@@ -33,13 +33,6 @@ impl<B: BackendMarker> GraphIRNode<B> {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum GraphIRNodeError {
-    NodeWithIdAlreadyExists(String),
-    NodeDataDoesNotMatchExpected,
-    NodeDoesNotExist,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AnnotatedNode {
     pub idx: usize,
