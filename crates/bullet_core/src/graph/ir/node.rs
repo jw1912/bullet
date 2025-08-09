@@ -38,6 +38,7 @@ pub enum GraphIRNodeError {
     NodeWithIdAlreadyExists(String),
     NodeDataDoesNotMatchExpected,
     NodeDoesNotExist,
+    InvalidNumberOfChildren,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -69,7 +69,7 @@ impl<B: BackendMarker> GraphBuilder<B> {
     }
 
     pub fn new_constant<'a>(&'a self, shape: Shape, vals: &[f32]) -> GraphBuilderNode<'a, B> {
-        let node = self.ir().add_node(None, None, shape, false, false, None).unwrap();
+        let node = self.ir().add_constant(shape).unwrap();
         assert_eq!(shape.size(), vals.len(), "Shape of constant does not match provided values!");
         self.consts.try_lock().unwrap().insert(node.idx, vals.to_vec());
         GraphBuilderNode { node, builder: self }
