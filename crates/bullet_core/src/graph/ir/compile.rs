@@ -7,7 +7,7 @@ use crate::{
         instruction::{self, Set},
         ir::{
             node::{GraphIRNode, NodeInfo},
-            BackendMarker, GraphIR, GraphIRCompileError, GraphIRError, GraphIRNodeInfo,
+            passes, BackendMarker, GraphIR, GraphIRCompileError, GraphIRError, GraphIRNodeInfo,
         },
         tensor::Tensor,
         Graph, GraphFunction, NodeId, NodeIdTy,
@@ -18,22 +18,42 @@ impl<B: BackendMarker> GraphIR<B>
 where
     B::Backend: Device,
 {
+    pub fn optimise(&mut self) -> Result<(), GraphIRError> {
+        while self.try_fusion_pass()? {}
+
+        Ok(())
+    }
+
+    pub fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
+        for node in self.topo_order()? {
+            if self.get(node).is_ok() {
+                if let Some(mut transform) = passes::search_for_fusion(self, node)? {
+                    transform.eliminated.push(node);
+                    self.apply_transform(transform)?;
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
     pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRError> {
         self.is_valid()?;
 
         if let Some(path) = self.opts.dump_graphviz.clone() {
             use std::io::Write;
-            let opts = "style=filled;color=lightgrey;node [style=filled,color=white];";
+            let opts = "style=filled;\ncolor=lightgrey;\nnode [style=filled,color=white];\n";
             let unoptim = self.as_graphviz("unoptim").unwrap();
-            let unoptim = format!("subgraph cluster_0 {{ label=\"Unoptimised\";{opts}{unoptim} }}");
+            let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
 
             self.optimise()?;
 
             let optim = self.as_graphviz("optim").unwrap();
-            let optim = format!("subgraph cluster_1 {{ label=\"Optimised\";{opts}{optim} }}");
+            let optim = format!("subgraph cluster_1 {{\nlabel=\"Optimised\";\n{opts}{optim}}}");
 
             let mut file = std::fs::File::create(path).unwrap();
-            write!(&mut file, "digraph G {{ {unoptim} {optim} }}").unwrap();
+            write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
         } else {
             self.optimise()?;
         }
