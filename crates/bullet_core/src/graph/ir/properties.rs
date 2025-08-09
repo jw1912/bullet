@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::graph::ir::{
-    node::{AnnotatedNode, GraphIRNode, GraphIRNodeError},
+    node::{AnnotatedNode, GraphIRNode},
     BackendMarker, GraphIR, GraphIRError,
 };
 
@@ -25,7 +25,7 @@ impl<B: BackendMarker> GraphIR<B> {
         for node in self.topo_order()? {
             if let Ok(data) = self.get(node) {
                 if data.idx != node {
-                    return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+                    return Err(GraphIRError::NodeDataDoesNotMatchExpected);
                 }
 
                 self.is_data_valid(data)?;
@@ -34,10 +34,10 @@ impl<B: BackendMarker> GraphIR<B> {
                     for parent in op.nodes() {
                         *children_count.get_mut(&parent.idx).unwrap() += 1;
 
-                        let actual_parent = self.nodes.get(&parent.idx).ok_or(GraphIRNodeError::NodeDoesNotExist)?;
+                        let actual_parent = self.nodes.get(&parent.idx).ok_or(GraphIRError::NodeDoesNotExist)?;
 
                         if parent.idx != actual_parent.idx || parent.shape.size() != actual_parent.info.shape.size() {
-                            return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+                            return Err(GraphIRError::NodeDataDoesNotMatchExpected);
                         }
                     }
                 }
@@ -46,7 +46,7 @@ impl<B: BackendMarker> GraphIR<B> {
 
         for idx in self.nodes.keys() {
             if children_count.get(idx).copied() != self.nodes.get(idx).map(|x| x.num_children) {
-                return Err(GraphIRError::Node(GraphIRNodeError::InvalidNumberOfChildren));
+                return Err(GraphIRError::NodeHasInvalidNumberOfChildren);
             }
         }
 
@@ -60,7 +60,7 @@ impl<B: BackendMarker> GraphIR<B> {
             let requires_grad = op.output_requires_grad(self)?;
 
             if data.info.shape != shape || data.info.batched != batched || data.info.requires_grad != requires_grad {
-                return Err(GraphIRError::Node(GraphIRNodeError::NodeDataDoesNotMatchExpected));
+                return Err(GraphIRError::NodeDataDoesNotMatchExpected);
             }
         }
 

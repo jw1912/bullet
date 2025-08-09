@@ -7,7 +7,7 @@ use crate::{
         instruction::{self, Set},
         ir::{
             node::{GraphIRNode, NodeInfo},
-            passes, BackendMarker, GraphIR, GraphIRCompileError, GraphIRError, GraphIRNodeInfo,
+            passes, BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
         },
         tensor::Tensor,
         Graph, GraphFunction, NodeId, NodeIdTy,
@@ -64,7 +64,7 @@ where
         let root_data = self.get(root).unwrap().info;
 
         if !root_data.requires_grad || root_data.batched || root_data.shape != Shape::new(1, 1) {
-            return Err(GraphIRError::Compilation(GraphIRCompileError::InvalidRootNode));
+            return Err(GraphIRError::InvalidRootNode);
         }
 
         // populate ancillary buffers
@@ -97,14 +97,12 @@ where
             let idx = *idx;
             let NodeInfo { shape, sparse, requires_grad, .. } = *info;
 
-            let values = Tensor::new(device.clone(), shape, sparse)
-                .map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor))?;
+            let values = Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
 
             nodes.insert(NodeId::new(idx, NodeIdTy::Values), RefCell::new(values));
 
             if requires_grad {
-                let grads = Tensor::new(device.clone(), shape, sparse)
-                    .map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor))?;
+                let grads = Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
 
                 let id = NodeId::new(idx, NodeIdTy::Gradients);
                 nodes.insert(id, RefCell::new(grads));
@@ -114,8 +112,8 @@ where
 
             if let Some(op) = parent_operation {
                 for (num, &(shape, sparse)) in ancillary_buffers.get(&idx).unwrap().iter().enumerate() {
-                    let ancillary = Tensor::new(device.clone(), shape, sparse)
-                        .map_err(|_| GraphIRError::Compilation(GraphIRCompileError::FailedToInitTensor))?;
+                    let ancillary =
+                        Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
 
                     let id = NodeId::new(idx, NodeIdTy::Ancillary(num as u16));
                     nodes.insert(id, RefCell::new(ancillary));

@@ -12,7 +12,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use node::{AnnotatedNode, GraphIRNode, GraphIRNodeError, NodeInfo};
+use node::{AnnotatedNode, GraphIRNode, NodeInfo};
 use operation::*;
 use shape::Shape;
 
@@ -48,22 +48,19 @@ impl GraphIRNodeInfo {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum GraphIRCompileError {
+#[derive(Debug)]
+pub enum GraphIRError {
+    Op(GraphIROperationError),
+    MultipleRoots,
     InvalidRootNode,
     FailedToInitTensor,
     UnsupportedOperation(String),
-}
-
-#[derive(Debug)]
-pub enum GraphIRError {
-    Node(GraphIRNodeError),
-    Op(GraphIROperationError),
-    Compilation(GraphIRCompileError),
-    MultipleRoots,
-    NodeAlreadyExists,
-    NodeDoesNotExist,
     CannotBeTopologicallyOrdered,
+    NodeAlreadyExists,
+    NodeWithIdAlreadyExists(String),
+    NodeDataDoesNotMatchExpected,
+    NodeDoesNotExist,
+    NodeHasInvalidNumberOfChildren,
 }
 
 impl From<GraphIROperationError> for GraphIRError {
@@ -72,19 +69,13 @@ impl From<GraphIROperationError> for GraphIRError {
     }
 }
 
-impl From<GraphIRNodeError> for GraphIRError {
-    fn from(value: GraphIRNodeError) -> Self {
-        Self::Node(value)
-    }
-}
-
 impl<B: BackendMarker> GraphIR<B> {
     pub fn get(&self, idx: usize) -> Result<&GraphIRNode<B>, GraphIRError> {
-        self.nodes.get(&idx).ok_or(GraphIRError::Node(GraphIRNodeError::NodeDoesNotExist))
+        self.nodes.get(&idx).ok_or(GraphIRError::NodeDoesNotExist)
     }
 
     pub fn get_mut(&mut self, idx: usize) -> Result<&mut GraphIRNode<B>, GraphIRError> {
-        self.nodes.get_mut(&idx).ok_or(GraphIRError::Node(GraphIRNodeError::NodeDoesNotExist))
+        self.nodes.get_mut(&idx).ok_or(GraphIRError::NodeDoesNotExist)
     }
 
     pub fn new_idx(&self) -> usize {
@@ -102,7 +93,7 @@ impl<B: BackendMarker> GraphIR<B> {
     ) -> Result<AnnotatedNode, GraphIRError> {
         if let Some(id) = id.as_ref() {
             if self.ids.contains(id) {
-                return Err(GraphIRError::Node(GraphIRNodeError::NodeWithIdAlreadyExists(id.clone())));
+                return Err(GraphIRError::NodeWithIdAlreadyExists(id.clone()));
             }
 
             self.ids.insert(id.to_string());
