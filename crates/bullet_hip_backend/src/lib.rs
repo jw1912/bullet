@@ -350,24 +350,34 @@ impl Device for ExecutionContext {
 
     fn select(
         batch_size: usize,
+        input_batched: bool,
         input_size: usize,
         output_size: usize,
         input: &Self::BufferF32,
         indices: &Self::BufferI32,
         output: &mut Self::BufferF32,
     ) -> OperationResult {
-        sparse::select(batch_size, input_size, output_size, input, indices, output)
+        sparse::select(batch_size, input_batched, input_size, output_size, input, indices, output)
     }
 
     fn select_backprop(
         batch_size: usize,
+        input_grad_batched: bool,
         input_size: usize,
         output_size: usize,
         indices: &Self::BufferI32,
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
     ) -> OperationResult {
-        sparse::select_backprop(batch_size, input_size, output_size, indices, output_grad, input_grad)
+        sparse::select_backprop(
+            batch_size,
+            input_grad_batched,
+            input_size,
+            output_size,
+            indices,
+            output_grad,
+            input_grad,
+        )
     }
 
     fn sparse_to_dense(

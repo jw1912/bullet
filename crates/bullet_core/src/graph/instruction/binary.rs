@@ -134,7 +134,7 @@ impl<D: Device> GraphInstruction<D> for Select {
         let buckets = graph.get(self.buckets)?;
         let buckets = buckets.sparse()?;
 
-        if input.batch_size() != output.batch_size() || input.batch_size() != buckets.batch_size() {
+        if output.batch_size() != buckets.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
@@ -146,9 +146,10 @@ impl<D: Device> GraphInstruction<D> for Select {
         }
 
         D::select(
-            input.batch_size().unwrap_or(1),
-            input.single_size(),
-            output.single_size(),
+            output.batch_size().unwrap_or(1),
+            input.batch_size().is_some(),
+            input_size,
+            output_size,
             &input.buf,
             &buckets.buf,
             &mut output.buf,
@@ -174,7 +175,7 @@ impl<D: Device> GraphInstruction<D> for SelectBackprop {
         let buckets = graph.get(self.buckets)?;
         let buckets = buckets.sparse()?;
 
-        if input.batch_size() != output.batch_size() || input.batch_size() != buckets.batch_size() {
+        if input.batch_size() != buckets.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
@@ -187,8 +188,9 @@ impl<D: Device> GraphInstruction<D> for SelectBackprop {
 
         D::select_backprop(
             input.batch_size().unwrap_or(1),
-            output.single_size(),
-            input.single_size(),
+            output.batch_size().is_some(),
+            output_size,
+            input_size,
             &buckets.buf,
             &input.buf,
             &mut output.buf,

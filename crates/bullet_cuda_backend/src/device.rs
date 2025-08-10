@@ -217,13 +217,14 @@ impl Device for CudaDevice {
 
     fn select(
         batch_size: usize,
+        input_batched: bool,
         input_size: usize,
         output_size: usize,
         input: &Self::BufferF32,
         indices: &Self::BufferI32,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        if batch_size * input_size > input.size()
+        if if input_batched { batch_size } else { 1 } * input_size > input.size()
             || batch_size > indices.size()
             || batch_size * output_size > output.size()
         {
@@ -242,6 +243,7 @@ impl Device for CudaDevice {
                 .stream
                 .launch_builder(&func)
                 .arg(&(batch_size as i32))
+                .arg(&(input_batched as i32))
                 .arg(&(input_size as i32))
                 .arg(&(output_size as i32))
                 .arg(&indices.buf)
@@ -256,13 +258,14 @@ impl Device for CudaDevice {
 
     fn select_backprop(
         batch_size: usize,
+        input_grad_batched: bool,
         input_size: usize,
         output_size: usize,
         indices: &Self::BufferI32,
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        if batch_size * input_size > input_grad.size()
+        if if input_grad_batched { batch_size } else { 1 } * input_size > input_grad.size()
             || batch_size > indices.size()
             || batch_size * output_size > output_grad.size()
         {
@@ -281,6 +284,7 @@ impl Device for CudaDevice {
                 .stream
                 .launch_builder(&func)
                 .arg(&(batch_size as i32))
+                .arg(&(input_grad_batched as i32))
                 .arg(&(input_size as i32))
                 .arg(&(output_size as i32))
                 .arg(&indices.buf)

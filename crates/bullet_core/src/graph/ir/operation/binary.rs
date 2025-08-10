@@ -305,7 +305,11 @@ impl<B: BackendMarker> GraphIROperation<B> for Select {
     fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         util::check_dense_eq(ir, &self.input, true)?;
         util::check_dense_eq(ir, &self.buckets, false)?;
-        util::check_same_batching(ir, &[&self.input, &self.buckets])?;
+
+        if util::check_not_batched(ir, &self.buckets).is_ok() {
+            util::check_not_batched(ir, &self.input)?;
+        }
+
         let is = self.input.shape;
         let bs = self.buckets.shape;
 
@@ -325,7 +329,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input, output });
+        func.push(instruction::MaybeUpdateBatchSize { input: buckets, output });
         func.push(instruction::Select { input, output, buckets });
 
         func
@@ -340,8 +344,9 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
             let input = NodeId::new(output_node, NodeIdTy::Gradients);
             let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
             let buckets = NodeId::new(self.buckets.idx, NodeIdTy::Values);
+            let values = NodeId::new(self.input.idx, NodeIdTy::Values);
 
-            func.push(instruction::MaybeUpdateBatchSize { input, output });
+            func.push(instruction::MaybeUpdateBatchSize { input: values, output });
             func.push(instruction::SelectBackprop { input, output, buckets });
         }
 

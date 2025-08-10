@@ -463,6 +463,7 @@ SCALAR_KERNEL_BACKWARD(AbsPowScalarBackwardKernel, abs_pow_backward)
 
 BULLET_KERNEL select(
     const int batch_size,
+    const int input_batched,
     const int input_size,
     const int output_size,
     const int* buckets,
@@ -479,7 +480,8 @@ BULLET_KERNEL select(
 
     const int thisBucket = buckets[idxInBatch];
 
-    const float* thisInput = in + input_size * idxInBatch + output_size * thisBucket + idxInOutput;
+    const int inputOffset = input_batched ? input_size * idxInBatch : 0;
+    const float* thisInput = in + inputOffset + output_size * thisBucket + idxInOutput;
     float* thisOutput = out + output_size * idxInBatch + idxInOutput;
 
     thisOutput[0] = thisInput[0];
@@ -487,6 +489,7 @@ BULLET_KERNEL select(
 
 BULLET_KERNEL select_backprop(
     const int batch_size,
+    const int input_grad_batched,
     const int input_size,
     const int output_size,
     const int* buckets,
@@ -504,9 +507,16 @@ BULLET_KERNEL select_backprop(
     const int thisBucket = buckets[idxInBatch];
 
     const float* thisOutputGrad = output_grad + output_size * idxInBatch + idxInOutput;
-    float* thisInputGrad = input_grad + input_size * idxInBatch + output_size * thisBucket + idxInOutput;
 
-    thisInputGrad[0] += thisOutputGrad[0];
+    float* thisInputGrad = input_grad + output_size * thisBucket + idxInOutput;
+    if (input_grad_batched)
+    {
+        thisInputGrad[input_size * idxInBatch] += thisOutputGrad[0];
+    }
+    else
+    {
+        atomicAdd(thisInputGrad, thisOutputGrad[0]);
+    }
 }
 
 // it is assumed that we will only be using this on matrixs with small number of columns

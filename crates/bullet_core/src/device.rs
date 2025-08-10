@@ -115,6 +115,7 @@ pub trait Device: Sized + 'static {
 
     fn select(
         batch_size: usize,
+        input_batched: bool,
         input_size: usize,
         output_size: usize,
         input: &Self::BufferF32,
@@ -124,6 +125,7 @@ pub trait Device: Sized + 'static {
 
     fn select_backprop(
         batch_size: usize,
+        input_grad_batched: bool,
         input_size: usize,
         output_size: usize,
         indices: &Self::BufferI32,

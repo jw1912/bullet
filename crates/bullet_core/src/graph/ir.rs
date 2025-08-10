@@ -149,6 +149,23 @@ impl<B: BackendMarker> GraphIR<B> {
         Ok(node)
     }
 
+    pub fn make_result_of_op(
+        &self,
+        operation: impl GraphIROperationCompilable<B>,
+    ) -> Result<GraphIRNode<B>, GraphIRError> {
+        let shape = operation.output_shape(self)?;
+        let batched = operation.output_batched(self)?;
+        let requires_grad = operation.output_requires_grad(self)?;
+
+        Ok(GraphIRNode {
+            idx: self.new_idx(),
+            id: None,
+            num_children: 0,
+            parent_operation: Some(Box::new(operation)),
+            info: NodeInfo { requires_grad, sparse: None, batched, shape },
+        })
+    }
+
     pub fn add_op(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphIRError> {
         let shape = operation.output_shape(self)?;
         let batched = operation.output_batched(self)?;

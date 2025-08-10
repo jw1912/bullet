@@ -213,6 +213,7 @@ impl Device for CpuThread {
 
     fn select(
         batch_size: usize,
+        input_batched: bool,
         input_size: usize,
         output_size: usize,
         input: &Self::BufferF32,
@@ -224,6 +225,7 @@ impl Device for CpuThread {
 
     fn select_backprop(
         batch_size: usize,
+        input_batched: bool,
         input_size: usize,
         output_size: usize,
         indices: &Self::BufferI32,

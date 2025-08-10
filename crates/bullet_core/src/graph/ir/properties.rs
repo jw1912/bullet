@@ -60,6 +60,9 @@ impl<B: BackendMarker> GraphIR<B> {
             let requires_grad = op.output_requires_grad(self)?;
 
             if data.info.shape != shape || data.info.batched != batched || data.info.requires_grad != requires_grad {
+                println!("{op:#?}");
+                println!("{:#?}", data.info);
+                println!("{shape} {batched}, {requires_grad}");
                 return Err(GraphIRError::NodeDataDoesNotMatchExpected);
             }
         }

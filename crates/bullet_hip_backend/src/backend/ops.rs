@@ -20,8 +20,8 @@ extern "C" {
     pub fn sparse_affine_backward(activation: i32, nnz: usize, m: usize, n: usize, k: usize, bb: bool, x: *const i32, v: *const f32, y: *const f32, yg: *const f32, ag: *mut f32, bg: *mut f32);
     pub fn pairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output: *mut f32);
     pub fn backpropPairwiseMul(batch_size: usize, output_size: usize, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
-    pub fn selectForward(batchSize: usize, inputSize: usize, outputSize: usize, buckets: *const i32, inp: *const f32, out: *mut f32);
-    pub fn selectBackprop(batch_size: usize, input_size: usize, output_size: usize, buckets: *const i32, output_grad: *const f32, input_grad: *mut f32);
+    pub fn selectForward(batchSize: usize, inputBatched: i32, inputSize: usize, outputSize: usize, buckets: *const i32, inp: *const f32, out: *mut f32);
+    pub fn selectBackprop(batch_size: usize, inputGradBatched: i32, input_size: usize, output_size: usize, buckets: *const i32, output_grad: *const f32, input_grad: *mut f32);
     pub fn sparse_to_dense(rows: usize, cols: usize, max_active: usize, inputs: *const i32, outputs: *mut f32);
     pub fn softmax_across_columns(rows: usize, cols: usize, inp: *const f32, out: *mut f32);
     pub fn crossentropy(size: usize, pred: *const f32, target: *const f32, out: *mut f32);
