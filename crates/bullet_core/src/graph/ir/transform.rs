@@ -44,8 +44,6 @@ impl<B: BackendMarker> GraphIR<B> {
             for parent in op.nodes() {
                 self.get_mut(parent.idx)?.num_children += 1;
             }
-        } else if !self.leafs.insert(data.idx) {
-            return Err(GraphIRError::NodeAlreadyExists);
         }
 
         if self.nodes.insert(data.idx, data).is_some() {
