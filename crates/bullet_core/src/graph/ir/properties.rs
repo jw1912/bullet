@@ -68,49 +68,54 @@ impl<B: BackendMarker> GraphIR<B> {
     }
 
     pub fn topo_order(&self) -> Result<Vec<usize>, GraphIRError> {
-        let mut edges: HashMap<usize, HashSet<usize>> = self.nodes.keys().map(|idx| (*idx, HashSet::new())).collect();
-        let mut edgest: HashMap<usize, HashSet<usize>> = self.nodes.keys().map(|idx| (*idx, HashSet::new())).collect();
+        let edges_rev = self
+            .nodes
+            .iter()
+            .map(|(&idx, data)| {
+                let op = data.parent_operation.as_ref();
+                let set = op.map(|x| x.nodes()).unwrap_or(Vec::new()).iter().map(|x| x.idx).collect();
+                (idx, set)
+            })
+            .collect();
 
-        for (&idx, data) in self.nodes.iter() {
-            assert_eq!(idx, data.idx);
+        topo_order(edges_rev).ok_or(GraphIRError::CannotBeTopologicallyOrdered)
+    }
+}
 
-            if let Some(op) = &data.parent_operation {
-                for node in op.nodes() {
-                    edges.get_mut(&node.idx).unwrap().insert(idx);
-                    edgest.get_mut(&idx).unwrap().insert(node.idx);
-                }
-            }
-        }
+pub fn topo_order(mut edges_rev: HashMap<usize, HashSet<usize>>) -> Option<Vec<usize>> {
+    let mut edges: HashMap<usize, HashSet<usize>> = edges_rev.keys().map(|idx| (*idx, HashSet::new())).collect();
 
-        let mut leafs: HashSet<usize> = self.leafs.clone();
-
-        let mut topo = Vec::new();
-
-        loop {
-            if leafs.is_empty() {
-                break;
-            }
-
-            let n = *leafs.iter().next().unwrap();
-            leafs.remove(&n);
-            topo.push(n);
-
-            let children = edges.get(&n).unwrap().clone();
-            for child in children {
-                edges.get_mut(&n).unwrap().remove(&child);
-
-                let parents = edgest.get_mut(&child).unwrap();
-                parents.remove(&n);
-                if parents.is_empty() {
-                    leafs.insert(child);
-                }
-            }
-        }
-
-        if edges.values().all(HashSet::is_empty) && edgest.values().all(HashSet::is_empty) {
-            Ok(topo)
-        } else {
-            Err(GraphIRError::CannotBeTopologicallyOrdered)
+    for (&idx, parents) in edges_rev.iter() {
+        for parent in parents {
+            edges.get_mut(parent).unwrap().insert(idx);
         }
     }
+
+    let mut leafs: HashSet<usize> =
+        edges_rev.iter().filter_map(|(&idx, parents)| parents.is_empty().then_some(idx)).collect();
+
+    let mut topo = Vec::new();
+
+    loop {
+        if leafs.is_empty() {
+            break;
+        }
+
+        let n = *leafs.iter().next().unwrap();
+        leafs.remove(&n);
+        topo.push(n);
+
+        let children = edges.get(&n).unwrap().clone();
+        for child in children {
+            edges.get_mut(&n).unwrap().remove(&child);
+
+            let parents = edges_rev.get_mut(&child).unwrap();
+            parents.remove(&n);
+            if parents.is_empty() {
+                leafs.insert(child);
+            }
+        }
+    }
+
+    (edges.values().all(HashSet::is_empty) && edges_rev.values().all(HashSet::is_empty)).then_some(topo)
 }
