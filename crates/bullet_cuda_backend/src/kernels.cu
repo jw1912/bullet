@@ -587,7 +587,6 @@ BULLET_KERNEL sparse_to_dense(const int rows, const int cols, const int max_acti
 
 #define SPARSE_MATMUL_BWD_KERNEL(name, op)\
 BULLET_KERNEL name(\
-    const int stride,\
     const int nnz,\
     const int m,\
     const int k,\
@@ -596,12 +595,11 @@ BULLET_KERNEL name(\
     const float* Yg,\
     float* Ag)\
 {\
-    sparse_affine_backward_kernel<op>(stride, nnz, m, k, false, X, Y, Yg, Ag, nullptr);\
+    sparse_affine_backward_kernel<op>(nnz, m, k, false, X, Y, Yg, Ag, nullptr);\
 }\
 
 #define SPARSE_AFFINE_BWD_KERNEL(name, op)\
 BULLET_KERNEL name(\
-    const int stride,\
     const int nnz,\
     const int m,\
     const int k,\
@@ -612,12 +610,11 @@ BULLET_KERNEL name(\
     float* Ag,\
     float* Bg)\
 {\
-    sparse_affine_backward_kernel<op>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);\
+    sparse_affine_backward_kernel<op>(nnz, m, k, Bb, X, Y, Yg, Ag, Bg);\
 }\
 
 template<OpType op>
 BULLET_KERNEL_IMPL sparse_affine_backward_kernel(
-    const int stride,
     const int nnz,
     const int m,
     const int k,
@@ -635,7 +632,7 @@ BULLET_KERNEL_IMPL sparse_affine_backward_kernel(
         return;
 
     const int* tX = X + nnz * loc;
-    const int offset = stride * m * loc;
+    const int offset = m * loc;
 
     const float tE = op(Y[offset + row]) * Yg[offset + row];
 

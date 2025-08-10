@@ -13,7 +13,6 @@ const MAXIMUM_BLOCKS_Y: u32 = 32768;
 #[allow(clippy::too_many_arguments)]
 pub fn sparse_affine(
     batch_size: usize,
-    stride: Option<bool>,
     activation: DiffableFromOutput,
     input_a: &CudaBuffer<f32>,
     shape_a: Shape,
@@ -26,11 +25,9 @@ pub fn sparse_affine(
 ) -> Result<(), OperationError<CudaError>> {
     let shape_o = shape_a * shape_b;
 
-    let (stride, offset) = if let Some(b) = stride { (2, if b { shape_a.rows() } else { 0 }) } else { (1, 0) };
-
     if shape_a.size() > input_a.size()
         || batch_size * nnz > input_b.size()
-        || batch_size * shape_o.size() * stride > output.size()
+        || batch_size * shape_o.size() > output.size()
     {
         return Err(OperationError::IndexOutOfBounds);
     }
@@ -63,11 +60,9 @@ pub fn sparse_affine(
 
     let mut builder = output.device.stream.launch_builder(&func);
 
-    let stride = stride as i32;
     let k = k as i32;
-    let mut view = output.buf.slice_mut(offset..);
 
-    let mut builder = builder.arg(&stride).arg(&k).arg(&input_a.buf).arg(&input_b.buf).arg(&mut view);
+    let mut builder = builder.arg(&k).arg(&input_a.buf).arg(&input_b.buf).arg(&mut output.buf);
 
     if let Some(c) = input_c {
         if shape_o.size() * if input_c_batched { batch_size } else { 1 } > c.size() {
@@ -135,7 +130,6 @@ fn kernel(cfg: KernelConfig, vectorise: bool) -> String {
         {op}
 
         extern \"C\" __global__ void kernel(
-            const int stride,
             const int k,
             const float* A,
             const int* X,
@@ -197,7 +191,7 @@ fn vectorised_kernel(bias: Option<bool>) -> String {
         val.z = op(val.z);
         val.w = op(val.w);
 
-        reinterpret_cast<float4*>(Y)[stride * m4 * loc + row] = val;"
+        reinterpret_cast<float4*>(Y)[m4 * loc + row] = val;"
     )
 }
 
@@ -218,6 +212,6 @@ fn fallback_kernel(bias: Option<bool>) -> String {
             sum += A[j * m + row];
         }}
 
-        Y[stride * m * loc + row] = op(sum);"
+        Y[m * loc + row] = op(sum);"
     )
 }

@@ -2,7 +2,6 @@
 
 template<OpType op>
 __global__ void sparse_affine_kernel(
-    const int32_t stride,
     const int32_t nnz,
     const int32_t m,
     const int32_t k,
@@ -32,12 +31,11 @@ __global__ void sparse_affine_kernel(
         sum += val * A[j * m + row];
     }
 
-    Y[stride * m * loc + row] = op(sum);
+    Y[m * loc + row] = op(sum);
 }
 
 template<OpType op>
 __global__ void sparse_affine_aligned_kernel(
-    const int32_t stride,
     const int32_t nnz,
     const int32_t m,
     const int32_t k,
@@ -88,12 +86,11 @@ __global__ void sparse_affine_aligned_kernel(
     sum.z = op(sum.z);
     sum.w = op(sum.w);
 
-    Y[stride * m * loc / 4 + row] = sum;
+    Y[m * loc / 4 + row] = sum;
 }
 
 template<OpType op>
 void sparse_affine_internal(
-    const int32_t stride,
     const int32_t nnz,
     const int32_t m,
     const int32_t k,
@@ -118,7 +115,6 @@ void sparse_affine_internal(
         dim3 grid(chunks, ky, kz);
 
         sparse_affine_aligned_kernel<op><<<grid, threads, alloc>>>(
-            stride,
             nnz,
             m,
             k,
@@ -138,13 +134,12 @@ void sparse_affine_internal(
         int32_t kz = (k + maximumBlocks - 1) / maximumBlocks;
         dim3 grid(chunks, ky, kz);
 
-        sparse_affine_kernel<op><<<grid, threads>>>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+        sparse_affine_kernel<op><<<grid, threads>>>(nnz, m, k, Bb, A, X, V, B, Y);
     }
 }
 
 extern "C" void sparse_affine(
     const int32_t activation,
-    const size_t stride,
     const size_t nnz,
     const size_t m,
     [[maybe_unused]] const size_t n,
@@ -159,22 +154,22 @@ extern "C" void sparse_affine(
     switch (activation)
     {
         case 0:
-            sparse_affine_internal<Identity>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+            sparse_affine_internal<Identity>(nnz, m, k, Bb, A, X, V, B, Y);
             break;
         case 1:
-            sparse_affine_internal<ReLU>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+            sparse_affine_internal<ReLU>(nnz, m, k, Bb, A, X, V, B, Y);
             break;
         case 2:
-            sparse_affine_internal<CReLU>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+            sparse_affine_internal<CReLU>(nnz, m, k, Bb, A, X, V, B, Y);
             break;
         case 3:
-            sparse_affine_internal<SCReLU>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+            sparse_affine_internal<SCReLU>(nnz, m, k, Bb, A, X, V, B, Y);
             break;
         case 4:
-            sparse_affine_internal<SqrReLU>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+            sparse_affine_internal<SqrReLU>(nnz, m, k, Bb, A, X, V, B, Y);
             break;
         case 5:
-            sparse_affine_internal<sigmoid>(stride, nnz, m, k, Bb, A, X, V, B, Y);
+            sparse_affine_internal<sigmoid>(nnz, m, k, Bb, A, X, V, B, Y);
             break;
         default:
             std::abort();

@@ -153,7 +153,6 @@ impl Device for CudaDevice {
 
     fn sparse_affine_activate(
         batch_size: usize,
-        stride: Option<bool>,
         activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         shape_a: Shape,
@@ -171,7 +170,6 @@ impl Device for CudaDevice {
 
         sparse_fwd::sparse_affine(
             batch_size,
-            stride,
             activation,
             input_a,
             shape_a,
@@ -186,7 +184,6 @@ impl Device for CudaDevice {
 
     fn backprop_sparse_affine_activate(
         batch_size: usize,
-        stride: Option<bool>,
         activation: DiffableFromOutput,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -205,7 +202,6 @@ impl Device for CudaDevice {
 
         sparse_bwd::backprop_sparse_affine(
             batch_size,
-            stride,
             activation,
             input_a_grad,
             shape_a,

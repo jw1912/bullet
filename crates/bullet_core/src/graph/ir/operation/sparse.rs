@@ -79,14 +79,13 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
 
         func.push(instruction::MaybeUpdateBatchSize { input: indices, output });
 
-        func.push(instruction::SparseAffineActivateStrided {
+        func.push(instruction::SparseAffineActivate {
             weights: NodeId::new(self.weights.idx, NodeIdTy::Values),
             weights_shape: self.weights.shape,
             biases: self.biases.map(|b| NodeId::new(b.idx, NodeIdTy::Values)),
             input_shape: self.indices.shape,
             indices,
             values: self.values.map(|v| NodeId::new(v.idx, NodeIdTy::Values)),
-            stride: None,
             activation: self.activation,
             output,
         });
@@ -111,14 +110,13 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
                 }
             }
 
-            func.push(instruction::BackpropSparseAffineActivateStrided {
+            func.push(instruction::BackpropSparseAffineActivate {
                 weights_grads: NodeId::new(self.weights.idx, NodeIdTy::Gradients),
                 weights_shape: self.weights.shape,
                 biases_grads: self.biases.map(|b| NodeId::new(b.idx, NodeIdTy::Gradients)),
                 input_shape: self.indices.shape,
                 indices,
                 values: self.values.map(|v| NodeId::new(v.idx, NodeIdTy::Values)),
-                stride: None,
                 activation: self.activation,
                 output: NodeId::new(output_node, NodeIdTy::Values),
                 output_grads: NodeId::new(output_node, NodeIdTy::Gradients),

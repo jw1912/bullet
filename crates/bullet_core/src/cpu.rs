@@ -96,7 +96,6 @@ impl Device for CpuThread {
 
     fn sparse_affine_activate(
         batch_size: usize,
-        stride: Option<bool>,
         activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         shape_a: Shape,
@@ -110,11 +109,9 @@ impl Device for CpuThread {
     ) -> OperationResult<Self::DeviceError> {
         let shape_o = shape_a * shape_b;
 
-        let (stride, offset) = if let Some(b) = stride { (2, if b { shape_a.rows() } else { 0 }) } else { (1, 0) };
-
         if shape_a.size() > input_a.size()
             || batch_size * nnz > input_b.size()
-            || batch_size * shape_o.size() * stride > output.size()
+            || batch_size * shape_o.size() > output.size()
         {
             return Err(OperationError::IndexOutOfBounds);
         }
@@ -135,21 +132,15 @@ impl Device for CpuThread {
         let y = &mut output.buf;
 
         match activation {
-            DiffableFromOutput::Identity => sparse::affine_fwd(stride, offset, nnz, m, k, a, x, v, b, bb, y, |x| x),
-            DiffableFromOutput::ReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, v, b, bb, y, |x| x.max(0.0))
-            }
-            DiffableFromOutput::CReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, v, b, bb, y, |x| x.clamp(0.0, 1.0))
-            }
+            DiffableFromOutput::Identity => sparse::affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x),
+            DiffableFromOutput::ReLU => sparse::affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.max(0.0)),
+            DiffableFromOutput::CReLU => sparse::affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.clamp(0.0, 1.0)),
             DiffableFromOutput::SCReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, v, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2))
+                sparse::affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2))
             }
-            DiffableFromOutput::SqrReLU => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, v, b, bb, y, |x| x.max(0.0).powi(2))
-            }
+            DiffableFromOutput::SqrReLU => sparse::affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.max(0.0).powi(2)),
             DiffableFromOutput::Sigmoid => {
-                sparse::affine_fwd(stride, offset, nnz, m, k, a, x, v, b, bb, y, |x| 1.0 / (1.0 + (-x).exp()))
+                sparse::affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| 1.0 / (1.0 + (-x).exp()))
             }
         }
 
@@ -158,7 +149,6 @@ impl Device for CpuThread {
 
     fn backprop_sparse_affine_activate(
         batch_size: usize,
-        stride: Option<bool>,
         activation: DiffableFromOutput,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -173,14 +163,12 @@ impl Device for CpuThread {
     ) -> OperationResult<Self::DeviceError> {
         let shape_o = shape_a * shape_b;
 
-        let (stride, offset) = if let Some(b) = stride { (2, if b { shape_a.rows() } else { 0 }) } else { (1, 0) };
-
         assert_eq!(shape_b.cols(), 1);
         assert_eq!(shape_o.cols(), 1);
         if shape_a.size() > input_a_grad.size()
             || batch_size * nnz > input_b.size()
             || batch_size * shape_o.size() > outputs.size()
-            || batch_size * shape_o.size() * stride > output_grad.size()
+            || batch_size * shape_o.size() > output_grad.size()
         {
             return Err(OperationError::IndexOutOfBounds);
         }
@@ -202,20 +190,12 @@ impl Device for CpuThread {
         let bg = input_c_grad.map(|x| &mut *x.buf);
 
         match activation {
-            DiffableFromOutput::Identity => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, v, y, yg, bb, ag, bg, |x| 1.0)
+            DiffableFromOutput::Identity => sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| 1.0),
+            DiffableFromOutput::ReLU => sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| f32::from(x > 0.0)),
+            DiffableFromOutput::CReLU => {
+                sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| if x > 0.0 && x < 1.0 { 1.0 } else { 0.0 })
             }
-            DiffableFromOutput::ReLU => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, v, y, yg, bb, ag, bg, |x| f32::from(x > 0.0))
-            }
-            DiffableFromOutput::CReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, v, y, yg, bb, ag, bg, |x| {
-                if x > 0.0 && x < 1.0 {
-                    1.0
-                } else {
-                    0.0
-                }
-            }),
-            DiffableFromOutput::SCReLU => sparse::affine_bwd(stride, offset, nnz, m, k, x, v, y, yg, bb, ag, bg, |x| {
+            DiffableFromOutput::SCReLU => sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| {
                 if x > 0.0 && x < 1.0 {
                     2.0 * x.sqrt()
                 } else {
@@ -223,11 +203,9 @@ impl Device for CpuThread {
                 }
             }),
             DiffableFromOutput::SqrReLU => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, v, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt())
+                sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt())
             }
-            DiffableFromOutput::Sigmoid => {
-                sparse::affine_bwd(stride, offset, nnz, m, k, x, v, y, yg, bb, ag, bg, |x| x * (1.0 - x))
-            }
+            DiffableFromOutput::Sigmoid => sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| x * (1.0 - x)),
         }
 
         Ok(())

@@ -1,8 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
 pub fn affine_fwd<F: Fn(f32) -> f32>(
-    stride: usize,
-    offset: usize,
     nnz: usize,
     m: usize,
     k: usize,
@@ -17,7 +15,7 @@ pub fn affine_fwd<F: Fn(f32) -> f32>(
     let bias_stride = if bb { m } else { 0 };
 
     for loc in 0..k {
-        let base = stride * m * loc + offset;
+        let base = m * loc;
         let ty = &mut y[base..base + m];
         let tx = &x[nnz * loc..nnz * loc + nnz];
         let tv = v.map(|v| &v[nnz * loc..nnz * loc + nnz]);
@@ -32,8 +30,6 @@ pub fn affine_fwd<F: Fn(f32) -> f32>(
 }
 
 pub fn affine_bwd<F: Fn(f32) -> f32>(
-    stride: usize,
-    offset: usize,
     nnz: usize,
     m: usize,
     k: usize,
@@ -51,7 +47,7 @@ pub fn affine_bwd<F: Fn(f32) -> f32>(
     let mut grd = vec![0.0; m];
 
     for loc in 0..k {
-        let base = stride * m * loc + offset;
+        let base = m * loc;
         let tx = &x[nnz * loc..nnz * loc + nnz];
         let tv = v.map(|v| &v[nnz * loc..nnz * loc + nnz]);
         let ty = &y[base..base + m];

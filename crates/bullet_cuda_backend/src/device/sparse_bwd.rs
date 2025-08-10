@@ -22,7 +22,6 @@ fn activation_str(activation: DiffableFromOutput) -> &'static str {
 #[allow(clippy::too_many_arguments)]
 pub fn backprop_sparse_affine(
     batch_size: usize,
-    stride: Option<bool>,
     activation: DiffableFromOutput,
     input_a_grad: &mut CudaBuffer<f32>,
     shape_a: Shape,
@@ -36,14 +35,12 @@ pub fn backprop_sparse_affine(
 ) -> Result<(), OperationError<CudaError>> {
     let shape_o = shape_a * shape_b;
 
-    let (stride, offset) = if let Some(b) = stride { (2, if b { shape_a.rows() } else { 0 }) } else { (1, 0) };
-
     assert_eq!(shape_b.cols(), 1);
     assert_eq!(shape_o.cols(), 1);
     if shape_a.size() > input_a_grad.size()
         || batch_size * nnz > input_b.size()
         || batch_size * shape_o.size() > outputs.size()
-        || batch_size * shape_o.size() * stride > output_grad.size()
+        || batch_size * shape_o.size() > output_grad.size()
     {
         return Err(OperationError::IndexOutOfBounds);
     }
@@ -74,14 +71,13 @@ pub fn backprop_sparse_affine(
                 .device
                 .stream
                 .launch_builder(&func)
-                .arg(&(stride as i32))
                 .arg(&(nnz as i32))
                 .arg(&(m as i32))
                 .arg(&(k as i32))
                 .arg(&input_c_batched)
                 .arg(&input_b.buf)
-                .arg(&outputs.buf.slice(offset..))
-                .arg(&output_grad.buf.slice(offset..))
+                .arg(&outputs.buf)
+                .arg(&output_grad.buf)
                 .arg(&mut input_a_grad.buf)
                 .arg(&mut c_grad.buf)
                 .launch(cfg)
@@ -96,13 +92,12 @@ pub fn backprop_sparse_affine(
                 .device
                 .stream
                 .launch_builder(&func)
-                .arg(&(stride as i32))
                 .arg(&(nnz as i32))
                 .arg(&(m as i32))
                 .arg(&(k as i32))
                 .arg(&input_b.buf)
-                .arg(&outputs.buf.slice(offset..))
-                .arg(&output_grad.buf.slice(offset..))
+                .arg(&outputs.buf)
+                .arg(&output_grad.buf)
                 .arg(&mut input_a_grad.buf)
                 .launch(cfg)
                 .map_err(CudaError::Driver)?;
