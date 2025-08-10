@@ -188,7 +188,9 @@ impl<D: Device> Graph<D> {
             let dbg = format!("{instr:?}");
             let instr_name = dbg.split_whitespace().next().unwrap();
 
-            println!("{avg_time: >6} micros for {instr_name}");
+            if instr_name != "MaybeUpdateBatchSize" {
+                println!("{avg_time: >6} micros for {instr_name}");
+            }
         }
 
         Ok(())

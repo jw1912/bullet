@@ -4,7 +4,7 @@ use crate::{
     device::Device,
     graph::{
         builder::Shape,
-        instruction::{self, Set},
+        instruction::Set,
         ir::{
             node::{GraphIRNode, NodeInfo},
             passes::{HighPriority, LowPriority, SimplePass},
@@ -125,7 +125,7 @@ where
                 let id = NodeId::new(idx, NodeIdTy::Gradients);
                 nodes.insert(id, RefCell::new(grads));
 
-                zero_grads.push(Set(id, 0.0));
+                zero_grads.push(Set { id, val: 0.0 });
             }
 
             if let Some(op) = parent_operation {
@@ -146,7 +146,7 @@ where
         }
 
         let mut new_bwd = GraphFunction::default();
-        new_bwd.push(instruction::Set(NodeId { id: root, ty: NodeIdTy::Gradients }, 1.0));
+        new_bwd.push(Set { id: NodeId { id: root, ty: NodeIdTy::Gradients }, val: 1.0 });
         new_bwd.extend(backward);
         backward = new_bwd;
 
