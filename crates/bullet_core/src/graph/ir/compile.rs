@@ -7,7 +7,8 @@ use crate::{
         instruction::{self, Set},
         ir::{
             node::{GraphIRNode, NodeInfo},
-            passes, BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+            passes::{HighPriority, LowPriority, SimplePass},
+            BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
         },
         tensor::Tensor,
         Graph, GraphFunction, NodeId, NodeIdTy,
@@ -28,14 +29,15 @@ where
     B::Backend: Device,
 {
     pub fn optimise(&mut self) -> Result<(), GraphIRError> {
-        while self.try_fusion_pass()? {}
+        while self.try_fusion_pass::<HighPriority>()? {}
+        while self.try_fusion_pass::<LowPriority>()? {}
 
         Ok(())
     }
 
-    pub fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
+    pub fn try_fusion_pass<T: SimplePass<B>>(&mut self) -> Result<bool, GraphIRError> {
         for node in self.topo_order()? {
-            if let Some(mut transform) = passes::search_for_fusion(self, node)? {
+            if let Some(mut transform) = T::try_pass(self, node)? {
                 transform.delete.push(node);
                 self.apply_transform(transform)?;
                 return Ok(true);
