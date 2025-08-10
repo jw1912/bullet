@@ -303,4 +303,16 @@ impl BaseOperations for CpuBuffer<f32> {
 
         Ok(())
     }
+
+    #[allow(unused)]
+    fn transpose(
+        &mut self,
+        input: &Self,
+        rows: usize,
+        cols: usize,
+        input_mul: f32,
+        output_mul: f32,
+    ) -> Result<(), Self::BaseError> {
+        Err(CpuError)
+    }
 }
