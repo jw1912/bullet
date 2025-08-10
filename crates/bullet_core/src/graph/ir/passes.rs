@@ -18,7 +18,7 @@ pub fn search_for_fusion<B: BackendMarker>(
     ir: &GraphIR<B>,
     node: usize,
 ) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
-    let data = ir.get(node).unwrap();
+    let data = ir.get(node)?;
 
     if let Some(op) = &data.parent_operation {
         if let Some(Matmul { a, b, transa: false, transb: false }) = downcast(op) {
@@ -51,13 +51,13 @@ fn exchange_matmul_concat<B: BackendMarker>(
     b: AnnotatedNode,
     old_data: &GraphIRNode<B>,
 ) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
-    let bn = ir.get(b.idx).unwrap();
+    let bn = ir.get(b.idx)?;
 
     if bn.num_children == 1 {
         if let Some(Some(Concat { a: x, b: y })) = bn.parent_operation.as_ref().map(downcast) {
-            let an = ir.get(a.idx).unwrap();
-            let xn = ir.get(x.idx).unwrap();
-            let yn = ir.get(y.idx).unwrap();
+            let an = ir.get(a.idx)?;
+            let xn = ir.get(x.idx)?;
+            let yn = ir.get(y.idx)?;
 
             // exchange only worth it if the extraction of `a`
             // into pieces can be amortised by batching on `b`
