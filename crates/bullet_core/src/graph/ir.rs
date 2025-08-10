@@ -52,9 +52,6 @@ impl GraphIRNodeInfo {
 pub enum GraphIRError {
     Op(GraphIROperationError),
     MultipleRoots,
-    InvalidRootNode,
-    FailedToInitTensor,
-    UnsupportedOperation(String),
     CannotBeTopologicallyOrdered,
     NodeAlreadyExists,
     NodeWithIdAlreadyExists(String),

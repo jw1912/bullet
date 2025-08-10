@@ -115,7 +115,14 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
             ir.add_op(ReduceAcrossBatch { input: root, reduction: Reduce::Sum }).unwrap();
         }
 
-        let graph = ir.compile(device).unwrap();
+        let graph = match ir.compile(device) {
+            Ok(graph) => graph,
+            Err(e) => {
+                println!("Error building graph:");
+                println!("{}", e.0);
+                panic!();
+            }
+        };
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
             match *init_data {

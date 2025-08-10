@@ -14,6 +14,15 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
+pub struct GraphIRCompileError(pub String);
+
+impl From<GraphIRError> for GraphIRCompileError {
+    fn from(value: GraphIRError) -> Self {
+        GraphIRCompileError(format!("{value:?}"))
+    }
+}
+
 impl<B: BackendMarker> GraphIR<B>
 where
     B::Backend: Device,
@@ -36,8 +45,10 @@ where
         Ok(false)
     }
 
-    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRError> {
-        self.check_valid()?;
+    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
+        if let Err(e) = self.check_valid() {
+            return Err(GraphIRCompileError(format!("Compilation given invalid GraphIR: {e:?}")));
+        }
 
         if let Some(path) = self.opts.dump_graphviz.clone() {
             use std::io::Write;
@@ -45,24 +56,28 @@ where
             let unoptim = self.as_graphviz("unoptim").unwrap();
             let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
 
-            self.optimise()?;
+            if let Err(e) = self.optimise() {
+                return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIR: {e:?}")));
+            }
 
             let optim = self.as_graphviz("optim").unwrap();
             let optim = format!("subgraph cluster_1 {{\nlabel=\"Optimised\";\n{opts}{optim}}}");
 
             let mut file = std::fs::File::create(path).unwrap();
             write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
-        } else {
-            self.optimise()?;
+        } else if let Err(e) = self.optimise() {
+            return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIR: {e:?}")));
         }
 
-        self.check_valid()?;
+        if let Err(e) = self.check_valid() {
+            return Err(GraphIRCompileError(format!("Optimisation resulted in invalid GraphIR: {e:?}")));
+        }
 
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap().info;
 
         if !root_data.requires_grad || root_data.batched || root_data.shape != Shape::new(1, 1) {
-            return Err(GraphIRError::InvalidRootNode);
+            return Err(GraphIRCompileError("Invalid root node in GraphIR".to_string()));
         }
 
         // populate ancillary buffers
@@ -91,17 +106,20 @@ where
 
         let topo = self.topo_order()?;
 
+        let make_tensor = |device, shape, sparse| {
+            Tensor::new(device, shape, sparse)
+                .map_err(|_| GraphIRCompileError("Failed to initialsie tensor!".to_string()))
+        };
+
         for GraphIRNode { idx, info, parent_operation, .. } in topo.into_iter().map(|idx| self.get(idx).unwrap()) {
             let idx = *idx;
             let NodeInfo { shape, sparse, requires_grad, .. } = *info;
 
-            let values = Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
-
+            let values = make_tensor(device.clone(), shape, sparse)?;
             nodes.insert(NodeId::new(idx, NodeIdTy::Values), RefCell::new(values));
 
             if requires_grad {
-                let grads = Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
-
+                let grads = make_tensor(device.clone(), shape, sparse)?;
                 let id = NodeId::new(idx, NodeIdTy::Gradients);
                 nodes.insert(id, RefCell::new(grads));
 
@@ -110,9 +128,7 @@ where
 
             if let Some(op) = parent_operation {
                 for (num, &(shape, sparse)) in ancillary_buffers.get(&idx).unwrap().iter().enumerate() {
-                    let ancillary =
-                        Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
-
+                    let ancillary = make_tensor(device.clone(), shape, sparse)?;
                     let id = NodeId::new(idx, NodeIdTy::Ancillary(num as u16));
                     nodes.insert(id, RefCell::new(ancillary));
                 }
