@@ -1,4 +1,6 @@
-use crate::graph::ir::{node::GraphIRNode, BackendMarker, GraphIR, GraphIRError};
+use std::collections::{HashMap, HashSet};
+
+use crate::graph::ir::{node::GraphIRNode, properties::topo_order, BackendMarker, GraphIR, GraphIRError};
 
 pub struct GraphIRTransform<B: BackendMarker> {
     pub eliminated: Vec<usize>,
@@ -46,16 +48,44 @@ impl<B: BackendMarker> GraphIR<B> {
     }
 
     pub fn apply_transform(&mut self, desc: GraphIRTransform<B>) -> Result<(), GraphIRError> {
-        let GraphIRTransform { mut eliminated, mut new } = desc;
+        let GraphIRTransform { eliminated, new } = desc;
 
-        eliminated.sort();
+        let eliminated = eliminated.into_iter().collect::<HashSet<_>>();
+
+        let subgraph = eliminated
+            .iter()
+            .map(|&idx| {
+                let op = self.get(idx).unwrap().parent_operation.as_ref();
+                let set =
+                    op.map(|x| x.nodes().iter().filter_map(|x| eliminated.contains(&x.idx).then_some(x.idx)).collect());
+                let set = set.unwrap_or_default();
+                (idx, set)
+            })
+            .collect();
+
+        let eliminated = topo_order(subgraph).ok_or(GraphIRError::CannotBeTopologicallyOrdered)?;
+
         for dead in eliminated.into_iter().rev() {
             self.delete_node(dead)?;
         }
 
-        new.sort_by_key(|x| x.idx);
-        for new_data in new {
-            self.insert_node(new_data)?;
+        let mut map: HashMap<_, _> = new.into_iter().map(|data| (data.idx, data)).collect();
+
+        let subgraph = map
+            .iter()
+            .map(|(&idx, data)| {
+                let op = data.parent_operation.as_ref();
+                let set =
+                    op.map(|x| x.nodes().iter().filter_map(|x| map.contains_key(&x.idx).then_some(x.idx)).collect());
+                let set = set.unwrap_or_default();
+                (idx, set)
+            })
+            .collect();
+
+        let order = topo_order(subgraph).ok_or(GraphIRError::CannotBeTopologicallyOrdered)?;
+
+        for idx in order {
+            self.insert_node(map.remove(&idx).unwrap())?;
         }
 
         Ok(())
