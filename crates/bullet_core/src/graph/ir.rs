@@ -139,7 +139,7 @@ impl<B: BackendMarker> GraphIR<B> {
     }
 
     pub fn add_op(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphIRError> {
-        let node = self.make_result_of_op(operation)?;
+        let node = self.result_of(operation)?;
         let annotated = AnnotatedNode { idx: node.idx, shape: node.info.shape };
         self.insert_node(node)?;
         Ok(annotated)

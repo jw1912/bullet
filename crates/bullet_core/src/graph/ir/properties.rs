@@ -20,10 +20,7 @@ impl<B: BackendMarker> GraphIR<B> {
         Ok(AnnotatedNode { idx, shape: data.info.shape })
     }
 
-    pub fn make_result_of_op(
-        &self,
-        operation: impl GraphIROperationCompilable<B>,
-    ) -> Result<GraphIRNode<B>, GraphIRError> {
+    pub fn result_of(&self, operation: impl GraphIROperationCompilable<B>) -> Result<GraphIRNode<B>, GraphIRError> {
         let shape = operation.output_shape(self)?;
         let batched = operation.output_batched(self)?;
         let requires_grad = operation.output_requires_grad(self)?;
