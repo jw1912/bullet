@@ -26,12 +26,10 @@ where
 
     pub fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
         for node in self.topo_order()? {
-            if self.get(node).is_ok() {
-                if let Some(mut transform) = passes::search_for_fusion(self, node)? {
-                    transform.eliminated.push(node);
-                    self.apply_transform(transform)?;
-                    return Ok(true);
-                }
+            if let Some(mut transform) = passes::search_for_fusion(self, node)? {
+                transform.eliminated.push(node);
+                self.apply_transform(transform)?;
+                return Ok(true);
             }
         }
 
