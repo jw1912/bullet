@@ -2,9 +2,11 @@ pub mod exchange;
 pub mod fuse;
 
 use crate::graph::ir::{
+    node::AnnotatedNode,
     operation::{
         affine::Matmul,
-        binary::{LinearCombination, Select},
+        binary::Select,
+        nary::LinearCombination,
         unary::{Unary, UnaryOp},
         GraphIROperationCompilable,
     },
@@ -33,8 +35,17 @@ pub fn search_for_fusion<B: BackendMarker>(
             return exchange::matmul_concat(ir, *a, *b, data);
         }
 
-        if let Some(LinearCombination { a, b, alpha, beta }) = downcast(op) {
-            return fuse::linear_comb(ir, *alpha, a, *beta, b, data);
+        if let Some(LinearCombination { items, shape }) = downcast(op) {
+            if let Ok(Some(transform)) = fuse::compact_linear_comb(ir, data) {
+                return Ok(Some(transform));
+            }
+
+            if let [(a, alpha), (b, beta)] = &items[..] {
+                let a = AnnotatedNode { idx: *a, shape: *shape };
+                let b = AnnotatedNode { idx: *b, shape: *shape };
+
+                return fuse::linear_comb(ir, *alpha, &a, *beta, &b, data);
+            }
         }
 
         if let Some(Unary { input, op: UnaryOp::DiffableFromOutput(act) }) = downcast(op) {

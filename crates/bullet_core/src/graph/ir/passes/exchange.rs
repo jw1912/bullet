@@ -4,7 +4,8 @@ use crate::graph::{
         node::AnnotatedNode,
         operation::{
             affine::Matmul,
-            binary::{Concat, LinearCombination, Select},
+            binary::{Concat, Select},
+            nary::LinearCombination,
             unary::{Slice, Unary, UnaryOp},
         },
         transform::GraphIRTransform,
@@ -23,16 +24,22 @@ pub fn select<B: BackendMarker>(
     let node = ir.get(input.idx)?;
 
     if node.num_children == 1 {
-        if let Some(Some(&LinearCombination { alpha, beta, a, b })) = node.parent_operation.as_ref().map(downcast) {
-            let lhs_data = ir.result_of(Select { input: a, buckets })?;
-            let lhs = AnnotatedNode { idx: lhs_data.idx, shape: lhs_data.info.shape };
+        if let Some(Some(LinearCombination { items, shape })) = node.parent_operation.as_ref().map(downcast) {
+            let shape = *shape;
+            let mut items: Vec<_> =
+                items.iter().copied().map(|(idx, weight)| (AnnotatedNode { idx, shape }, weight)).collect();
+            let mut new = Vec::new();
 
-            let rhs_data = ir.result_of(Select { input: b, buckets })?;
-            let rhs = AnnotatedNode { idx: rhs_data.idx, shape: rhs_data.info.shape };
+            for (node, _) in &mut items {
+                let new_data = ir.result_of(Select { input: *node, buckets })?;
+                node.idx = new_data.idx;
+                node.shape = new_data.info.shape;
+                new.push(new_data);
+            }
 
-            let new_data = old_data.with_new_op(LinearCombination { alpha, beta, a: lhs, b: rhs });
+            new.push(old_data.with_new_op(LinearCombination::new(items)?));
 
-            return GraphIRTransform::new([node.idx], vec![lhs_data, rhs_data, new_data]);
+            return GraphIRTransform::new([node.idx], new);
         }
 
         if let Some(Some(&Unary { input, op })) = node.parent_operation.as_ref().map(downcast) {
@@ -120,8 +127,7 @@ pub fn matmul_concat<B: BackendMarker>(
                 };
                 let ab_upper = AnnotatedNode { idx: ab_upper_data.idx, shape: ab_upper_data.info.shape };
 
-                let new_data =
-                    old_data.with_new_op(LinearCombination { alpha: 1.0, beta: 1.0, a: ab_lower, b: ab_upper });
+                let new_data = old_data.with_new_op(LinearCombination::new([(ab_lower, 1.0), (ab_upper, 1.0)])?);
 
                 return GraphIRTransform::new(
                     [b.idx],

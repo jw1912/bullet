@@ -1,5 +1,6 @@
 pub mod affine;
 pub mod binary;
+pub mod nary;
 pub mod sparse;
 pub mod unary;
 pub mod util;

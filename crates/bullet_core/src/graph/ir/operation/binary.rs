@@ -4,110 +4,12 @@ use crate::graph::{
     instruction,
     ir::{
         node::AnnotatedNode,
-        operation::{unary::Reduce, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+        operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
         shape::Shape,
         BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
     },
     GraphFunction, NodeId, NodeIdTy,
 };
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LinearCombination {
-    pub a: AnnotatedNode,
-    pub b: AnnotatedNode,
-    pub alpha: f32,
-    pub beta: f32,
-}
-
-impl<B: BackendMarker> GraphIROperation<B> for LinearCombination {
-    fn nodes(&self) -> Vec<AnnotatedNode> {
-        vec![self.a, self.b]
-    }
-
-    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
-        util::check_dense_eq(ir, &self.a, true)?;
-        util::check_dense_eq(ir, &self.b, true)?;
-
-        if self.a.shape == self.b.shape {
-            Ok(self.a.shape)
-        } else {
-            Err(GraphIRError::Op(GraphIROperationError::MismatchedInputShapes(vec![self.a.shape, self.b.shape])))
-        }
-    }
-
-    fn shorthand(&self) -> String {
-        match (self.alpha, self.beta) {
-            (1.0, 1.0) => "Add".to_string(),
-            (1.0, -1.0) | (-1.0, 1.0) => "Sub".to_string(),
-            _ => format!("{self:?}"),
-        }
-    }
-}
-
-impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
-    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let output = NodeId::new(output_node, NodeIdTy::Values);
-        let bsn = util::batch_size_node(node_info, &[self.a, self.b]);
-
-        let mut func = GraphFunction::default();
-
-        func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
-
-        let mut push = |input_mul, output_mul, node| {
-            if !node_info.get(output_node).unwrap().batched || node_info.get(node).unwrap().batched {
-                func.push(instruction::LinearCombination {
-                    input_mul,
-                    output_mul,
-                    input: NodeId::new(node, NodeIdTy::Values),
-                    output,
-                });
-            } else {
-                func.push(instruction::LinearCombinationSplat {
-                    input_mul,
-                    output_mul,
-                    input: NodeId::new(node, NodeIdTy::Values),
-                    output,
-                });
-            }
-        };
-
-        push(self.alpha, 0.0, self.a.idx);
-        push(self.beta, 1.0, self.b.idx);
-
-        func
-    }
-
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(output_node, NodeIdTy::Gradients);
-
-        let mut func = GraphFunction::default();
-
-        let mut push = |input_mul, output_mul, node| {
-            if node_info.get(node).unwrap().requires_grad {
-                let output = NodeId::new(node, NodeIdTy::Gradients);
-
-                func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(node, NodeIdTy::Values), output });
-
-                if !node_info.get(output_node).unwrap().batched || node_info.get(node).unwrap().batched {
-                    func.push(instruction::LinearCombination { input_mul, output_mul, input, output });
-                } else {
-                    func.push(instruction::ReduceAcrossBatch {
-                        input_mul,
-                        output_mul,
-                        input,
-                        output,
-                        reduction: Reduce::Sum,
-                    });
-                }
-            }
-        };
-
-        push(self.alpha, 1.0, self.a.idx);
-        push(self.beta, 1.0, self.b.idx);
-
-        func
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AbsPowerError {
