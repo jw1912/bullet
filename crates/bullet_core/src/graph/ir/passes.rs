@@ -20,7 +20,7 @@ pub fn search_for_fusion<B: BackendMarker>(
 
     if let Some(op) = &data.parent_operation {
         if let Some(&Select { input, buckets }) = downcast(op) {
-            return exchange::add_select(ir, input, buckets, data);
+            return exchange::select(ir, input, buckets, data);
         }
 
         if let Some(Unary { input, op }) = downcast(op) {

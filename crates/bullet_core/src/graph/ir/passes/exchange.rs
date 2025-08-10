@@ -14,7 +14,7 @@ use crate::graph::{
 
 use super::downcast;
 
-pub fn add_select<B: BackendMarker>(
+pub fn select<B: BackendMarker>(
     ir: &GraphIR<B>,
     input: AnnotatedNode,
     buckets: AnnotatedNode,
@@ -33,6 +33,15 @@ pub fn add_select<B: BackendMarker>(
             let new_data = old_data.with_new_op(LinearCombination { alpha, beta, a: lhs, b: rhs });
 
             return GraphIRTransform::new(&[node.idx], vec![lhs_data, rhs_data, new_data]);
+        }
+
+        if let Some(Some(&Unary { input, op })) = node.parent_operation.as_ref().map(downcast) {
+            let select_data = ir.make_result_of_op(Select { input, buckets })?;
+            let select = AnnotatedNode { idx: select_data.idx, shape: select_data.info.shape };
+
+            let new_data = old_data.with_new_op(Unary { input: select, op });
+
+            return GraphIRTransform::new(&[node.idx], vec![select_data, new_data]);
         }
     }
 
