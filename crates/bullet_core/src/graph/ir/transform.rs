@@ -32,6 +32,14 @@ impl<B: BackendMarker> GraphIR<B> {
     }
 
     pub fn insert_node(&mut self, data: GraphIRNode<B>) -> Result<(), GraphIRError> {
+        if let Some(id) = data.id.as_ref() {
+            if self.ids.contains(id) {
+                return Err(GraphIRError::NodeWithIdAlreadyExists(id.clone()));
+            }
+
+            self.ids.insert(id.to_string());
+        }
+
         if let Some(op) = data.parent_operation.as_ref() {
             for parent in op.nodes() {
                 self.get_mut(parent.idx)?.num_children += 1;

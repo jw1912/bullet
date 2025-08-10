@@ -39,7 +39,7 @@ where
     }
 
     pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRError> {
-        self.is_valid()?;
+        self.check_valid()?;
 
         if let Some(path) = self.opts.dump_graphviz.clone() {
             use std::io::Write;
@@ -58,7 +58,7 @@ where
             self.optimise()?;
         }
 
-        self.is_valid()?;
+        self.check_valid()?;
 
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap().info;

@@ -91,14 +91,6 @@ impl<B: BackendMarker> GraphIR<B> {
         requires_grad: bool,
         sparse: Option<NonZeroUsize>,
     ) -> Result<AnnotatedNode, GraphIRError> {
-        if let Some(id) = id.as_ref() {
-            if self.ids.contains(id) {
-                return Err(GraphIRError::NodeWithIdAlreadyExists(id.clone()));
-            }
-
-            self.ids.insert(id.to_string());
-        }
-
         let idx = self.new_idx();
         let annotated = AnnotatedNode { idx, shape };
 
@@ -149,28 +141,11 @@ impl<B: BackendMarker> GraphIR<B> {
         Ok(node)
     }
 
-    pub fn make_result_of_op(
-        &self,
-        operation: impl GraphIROperationCompilable<B>,
-    ) -> Result<GraphIRNode<B>, GraphIRError> {
-        let shape = operation.output_shape(self)?;
-        let batched = operation.output_batched(self)?;
-        let requires_grad = operation.output_requires_grad(self)?;
-
-        Ok(GraphIRNode {
-            idx: self.new_idx(),
-            id: None,
-            num_children: 0,
-            parent_operation: Some(Box::new(operation)),
-            info: NodeInfo { requires_grad, sparse: None, batched, shape },
-        })
-    }
-
     pub fn add_op(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphIRError> {
-        let shape = operation.output_shape(self)?;
-        let batched = operation.output_batched(self)?;
-        let requires_grad = operation.output_requires_grad(self)?;
-        self.add_node(None, Some(Box::new(operation)), shape, batched, requires_grad, None)
+        let node = self.make_result_of_op(operation)?;
+        let annotated = AnnotatedNode { idx: node.idx, shape: node.info.shape };
+        self.insert_node(node)?;
+        Ok(annotated)
     }
 
     pub fn set_compile_opts(&mut self, opts: GraphIRCompileOptions) {
