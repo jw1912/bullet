@@ -36,7 +36,7 @@ where
     pub fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
         for node in self.topo_order()? {
             if let Some(mut transform) = passes::search_for_fusion(self, node)? {
-                transform.eliminated.push(node);
+                transform.delete.push(node);
                 self.apply_transform(transform)?;
                 return Ok(true);
             }

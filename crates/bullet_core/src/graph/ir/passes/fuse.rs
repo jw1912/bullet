@@ -32,7 +32,7 @@ pub fn diffable_from_output<B: BackendMarker>(
             {
                 let new_data =
                     old_data.with_new_op(SparseAffineActivate { weights, biases, values, indices, activation });
-                return GraphIRTransform::new(&[node.idx], vec![new_data]);
+                return GraphIRTransform::new([node.idx], vec![new_data]);
             }
         }
     }
@@ -53,7 +53,7 @@ pub fn power_error<B: BackendMarker>(
             if let Some(&LinearCombination { a, b, alpha: 1.0, beta: -1.0 }) = downcast(op) {
                 if a.idx != b.idx && ir.get(a.idx)?.info.batched == ir.get(b.idx)?.info.batched {
                     let new_data = old_data.with_new_op(AbsPowerError { a, b, power });
-                    return GraphIRTransform::new(&[node.idx], [new_data]);
+                    return GraphIRTransform::new([node.idx], [new_data]);
                 }
             }
         }
@@ -75,7 +75,7 @@ pub fn scale<B: BackendMarker>(
             if let Some(&LinearCombination { a, b, alpha, beta }) = downcast(op) {
                 let new_data =
                     old_data.with_new_op(LinearCombination { a, b, alpha: alpha * scale, beta: beta * scale });
-                return GraphIRTransform::new(&[node.idx], [new_data]);
+                return GraphIRTransform::new([node.idx], [new_data]);
             }
         }
     }
@@ -137,13 +137,13 @@ pub fn add_single<B: BackendMarker>(
                     biases: Some(*rhs),
                     activation: DiffableFromOutput::Identity,
                 });
-                return GraphIRTransform::new(&[lhs.idx], [new_data]);
+                return GraphIRTransform::new([lhs.idx], [new_data]);
             }
 
             if let Some(&Matmul { a, transa: false, b, transb: false }) = downcast(op) {
                 if !ir.get(rhs.idx)?.info.batched {
                     let new_data = old_data.with_new_op(Affine { weights: a, inputs: b, biases: *rhs });
-                    return GraphIRTransform::new(&[lhs.idx], [new_data]);
+                    return GraphIRTransform::new([lhs.idx], [new_data]);
                 }
             }
         }
@@ -166,7 +166,7 @@ pub fn linear_comb_single<B: BackendMarker>(
         if let Some(op) = &ir_node.parent_operation {
             if let Some(&Unary { input, op: UnaryOp::Mul(x) }) = downcast(op) {
                 let new_data = old_data.with_new_op(LinearCombination { a: input, b: *rhs, alpha: alpha * x, beta });
-                return GraphIRTransform::new(&[lhs.idx], vec![new_data]);
+                return GraphIRTransform::new([lhs.idx], vec![new_data]);
             }
         }
     }

@@ -32,7 +32,7 @@ pub fn select<B: BackendMarker>(
 
             let new_data = old_data.with_new_op(LinearCombination { alpha, beta, a: lhs, b: rhs });
 
-            return GraphIRTransform::new(&[node.idx], vec![lhs_data, rhs_data, new_data]);
+            return GraphIRTransform::new([node.idx], vec![lhs_data, rhs_data, new_data]);
         }
 
         if let Some(Some(&Unary { input, op })) = node.parent_operation.as_ref().map(downcast) {
@@ -41,7 +41,7 @@ pub fn select<B: BackendMarker>(
 
             let new_data = old_data.with_new_op(Unary { input: select, op });
 
-            return GraphIRTransform::new(&[node.idx], vec![select_data, new_data]);
+            return GraphIRTransform::new([node.idx], vec![select_data, new_data]);
         }
     }
 
@@ -66,7 +66,7 @@ pub fn unary_concat<B: BackendMarker>(
 
             let new_data = old_data.with_new_op(Concat { a: lower, b: upper });
 
-            return GraphIRTransform::new(&[node.idx], vec![lower_data, upper_data, new_data]);
+            return GraphIRTransform::new([node.idx], vec![lower_data, upper_data, new_data]);
         }
     }
 
@@ -124,7 +124,7 @@ pub fn matmul_concat<B: BackendMarker>(
                     old_data.with_new_op(LinearCombination { alpha: 1.0, beta: 1.0, a: ab_lower, b: ab_upper });
 
                 return GraphIRTransform::new(
-                    &[b.idx],
+                    [b.idx],
                     vec![a_lower_data, a_upper_data, ab_lower_data, ab_upper_data, new_data],
                 );
             }
