@@ -248,11 +248,11 @@ fn base_op_equal<D: Device>(device: Arc<D>, size: usize, op: BaseOp, fwd: bool) 
         }
         BaseOp::Pairwise => {
             if fwd {
-                ccpu.pairwise_fwd(size, 4, &acpu).unwrap();
-                cdev.pairwise_fwd(size, 4, &adev).unwrap();
+                ccpu.pairwise_fwd(0, size / 2, size, 4, &acpu).unwrap();
+                cdev.pairwise_fwd(0, size / 2, size, 4, &adev).unwrap();
             } else {
-                ccpu.pairwise_bwd(size, 4, &acpu, &bcpu).unwrap();
-                cdev.pairwise_bwd(size, 4, &adev, &bdev).unwrap();
+                ccpu.pairwise_bwd(0, size / 2, size, 4, &acpu, &bcpu).unwrap();
+                cdev.pairwise_bwd(0, size / 2, size, 4, &adev, &bdev).unwrap();
             }
         }
         BaseOp::PowerErr => {

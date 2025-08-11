@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::graph::ir::{
-    node::{AnnotatedNode, GraphIRNode},
+    node::{AnnotatedNode, GraphIRNode, NodeInfo},
+    operation::GraphIROperationCompilable,
     BackendMarker, GraphIR, GraphIRError,
 };
 
@@ -19,7 +20,21 @@ impl<B: BackendMarker> GraphIR<B> {
         Ok(AnnotatedNode { idx, shape: data.info.shape })
     }
 
-    pub fn is_valid(&self) -> Result<(), GraphIRError> {
+    pub fn result_of(&self, operation: impl GraphIROperationCompilable<B>) -> Result<GraphIRNode<B>, GraphIRError> {
+        let shape = operation.output_shape(self)?;
+        let batched = operation.output_batched(self)?;
+        let requires_grad = operation.output_requires_grad(self)?;
+
+        Ok(GraphIRNode {
+            idx: self.new_idx(),
+            id: None,
+            num_children: 0,
+            parent_operation: Some(Box::new(operation)),
+            info: NodeInfo { requires_grad, sparse: None, batched, shape },
+        })
+    }
+
+    pub fn check_valid(&self) -> Result<(), GraphIRError> {
         let mut children_count: HashMap<_, _> = self.nodes.keys().map(|&idx| (idx, 0)).collect();
 
         for node in self.topo_order()? {
@@ -28,7 +43,7 @@ impl<B: BackendMarker> GraphIR<B> {
                     return Err(GraphIRError::NodeDataDoesNotMatchExpected);
                 }
 
-                self.is_data_valid(data)?;
+                self.check_data_valid(data)?;
 
                 if let Some(op) = &data.parent_operation {
                     for parent in op.nodes() {
@@ -53,7 +68,7 @@ impl<B: BackendMarker> GraphIR<B> {
         Ok(())
     }
 
-    pub fn is_data_valid(&self, data: &GraphIRNode<B>) -> Result<(), GraphIRError> {
+    pub fn check_data_valid(&self, data: &GraphIRNode<B>) -> Result<(), GraphIRError> {
         if let Some(op) = &data.parent_operation {
             let shape = op.output_shape(self)?;
             let batched = op.output_batched(self)?;

@@ -78,9 +78,24 @@ pub trait BaseOperations {
         grd: &Self,
     ) -> Result<(), Self::BaseError>;
 
-    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError>;
+    fn pairwise_fwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+    ) -> Result<(), Self::BaseError>;
 
-    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError>;
+    fn pairwise_bwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError>;
 
     fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError>;
 
@@ -102,5 +117,14 @@ pub trait BaseOperations {
         grd: &Self,
         mom: &mut Self,
         vel: &mut Self,
+    ) -> Result<(), Self::BaseError>;
+
+    fn transpose(
+        &mut self,
+        input: &Self,
+        rows: usize,
+        cols: usize,
+        input_mul: f32,
+        output_mul: f32,
     ) -> Result<(), Self::BaseError>;
 }

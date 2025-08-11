@@ -4,42 +4,79 @@ use crate::{
     device::Device,
     graph::{
         builder::Shape,
-        instruction::{self, Set},
+        instruction::Set,
         ir::{
             node::{GraphIRNode, NodeInfo},
-            passes, BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+            passes::{self, GraphIRPass},
+            BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
         },
         tensor::Tensor,
         Graph, GraphFunction, NodeId, NodeIdTy,
     },
 };
 
+#[derive(Debug)]
+pub struct GraphIRCompileError(pub String);
+
+impl From<GraphIRError> for GraphIRCompileError {
+    fn from(value: GraphIRError) -> Self {
+        GraphIRCompileError(format!("{value:?}"))
+    }
+}
+
 impl<B: BackendMarker> GraphIR<B>
 where
     B::Backend: Device,
 {
     pub fn optimise(&mut self) -> Result<(), GraphIRError> {
-        while self.try_fusion_pass()? {}
+        // Elides concat:
+        // Concat(PairwiseMul(a), PairwiseMul(b)) -> FusedPairwiseMulConcat(a, b)
+        self.apply_pass(passes::FusePairwiseMulWithConcat)?;
+
+        // Strict speedup by performing elementwise on far less values:
+        // Select(Elementwise(op, [a, b, ..]), buckets) -> Elementwise(op, [Select(a, buckets), Select(b, buckets), ..])
+        self.apply_pass(passes::ExchangeElementwiseAndSelect)?;
+
+        // Looking to find a Matmul(c, Concat(a, b)):
+        // Unary(Concat(a, b), op) -> Concat(Unary(a, op), Unary(b, op))
+        self.apply_pass(passes::ExchangeConcatAndUnary)?;
+
+        // Elides concat:
+        // Matmul(c, Concat(a, b)) -> Add(Matmul(Slice(c, left half), a), Matmul(Slice(c, right half), b))
+        self.apply_pass(passes::ExchangeMatmulAndConcatWithSliceAndMatmul)?;
+
+        // Re-apply because above pass ends in an Add, which may be followed by a Select
+        self.apply_pass(passes::ExchangeElementwiseAndSelect)?;
+
+        // Add(SparseMatmul(..), b) -> SparseAffine(.., b)
+        self.apply_pass(passes::FuseSparseMatmulWithAdd)?;
+
+        // Unary(SparseAffine(..), DiffableFromOutput(activation)) -> SparseAffineActivate(.., activation)
+        self.apply_pass(passes::FuseSparseAffineWithDiffableFromOutput)?;
+
+        // Miscellaneous fusions that don't impact performance that much:
+        // : AbsPow(Sub(a, b), power) -> AbsPowerErr(a, b, power)
+        // : Mul(LinearCombination((a, a_wgt), ..), val) -> LinearCombination((a, val * a_wgt), ..)
+        // : LinearCombination(.., (LinearCombination((a0, a0wgt), .., (aN, aNwgt)), wgt), ..)
+        //       -> LinearCombination(.., (a0, wgt * a0wgt), .., (aN, wgt * aNwgt), ..)
+        // : Add(Matmul(a, b), c) -> Affine(a, b, c)
+        self.apply_pass(passes::LowPriorityFusions)?;
 
         Ok(())
     }
 
-    pub fn try_fusion_pass(&mut self) -> Result<bool, GraphIRError> {
-        for node in self.topo_order()? {
-            if self.get(node).is_ok() {
-                if let Some(mut transform) = passes::search_for_fusion(self, node)? {
-                    transform.eliminated.push(node);
-                    self.apply_transform(transform)?;
-                    return Ok(true);
-                }
-            }
+    pub fn apply_pass(&mut self, pass: impl GraphIRPass<B>) -> Result<(), GraphIRError> {
+        while let Some(transform) = pass.try_pass(self)? {
+            self.apply_transform(transform)?;
         }
 
-        Ok(false)
+        Ok(())
     }
 
-    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRError> {
-        self.is_valid()?;
+    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
+        if let Err(e) = self.check_valid() {
+            return Err(GraphIRCompileError(format!("Compilation given invalid GraphIR: {e:?}")));
+        }
 
         if let Some(path) = self.opts.dump_graphviz.clone() {
             use std::io::Write;
@@ -47,24 +84,28 @@ where
             let unoptim = self.as_graphviz("unoptim").unwrap();
             let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
 
-            self.optimise()?;
+            if let Err(e) = self.optimise() {
+                return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIR: {e:?}")));
+            }
 
             let optim = self.as_graphviz("optim").unwrap();
             let optim = format!("subgraph cluster_1 {{\nlabel=\"Optimised\";\n{opts}{optim}}}");
 
             let mut file = std::fs::File::create(path).unwrap();
             write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
-        } else {
-            self.optimise()?;
+        } else if let Err(e) = self.optimise() {
+            return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIR: {e:?}")));
         }
 
-        self.is_valid()?;
+        if let Err(e) = self.check_valid() {
+            return Err(GraphIRCompileError(format!("Optimisation resulted in invalid GraphIR: {e:?}")));
+        }
 
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap().info;
 
         if !root_data.requires_grad || root_data.batched || root_data.shape != Shape::new(1, 1) {
-            return Err(GraphIRError::InvalidRootNode);
+            return Err(GraphIRCompileError("Invalid root node in GraphIR".to_string()));
         }
 
         // populate ancillary buffers
@@ -93,28 +134,29 @@ where
 
         let topo = self.topo_order()?;
 
+        let make_tensor = |device, shape, sparse| {
+            Tensor::new(device, shape, sparse)
+                .map_err(|_| GraphIRCompileError("Failed to initialsie tensor!".to_string()))
+        };
+
         for GraphIRNode { idx, info, parent_operation, .. } in topo.into_iter().map(|idx| self.get(idx).unwrap()) {
             let idx = *idx;
             let NodeInfo { shape, sparse, requires_grad, .. } = *info;
 
-            let values = Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
-
+            let values = make_tensor(device.clone(), shape, sparse)?;
             nodes.insert(NodeId::new(idx, NodeIdTy::Values), RefCell::new(values));
 
             if requires_grad {
-                let grads = Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
-
+                let grads = make_tensor(device.clone(), shape, sparse)?;
                 let id = NodeId::new(idx, NodeIdTy::Gradients);
                 nodes.insert(id, RefCell::new(grads));
 
-                zero_grads.push(Set(id, 0.0));
+                zero_grads.push(Set { id, val: 0.0 });
             }
 
             if let Some(op) = parent_operation {
                 for (num, &(shape, sparse)) in ancillary_buffers.get(&idx).unwrap().iter().enumerate() {
-                    let ancillary =
-                        Tensor::new(device.clone(), shape, sparse).map_err(|_| GraphIRError::FailedToInitTensor)?;
-
+                    let ancillary = make_tensor(device.clone(), shape, sparse)?;
                     let id = NodeId::new(idx, NodeIdTy::Ancillary(num as u16));
                     nodes.insert(id, RefCell::new(ancillary));
                 }
@@ -130,7 +172,7 @@ where
         }
 
         let mut new_bwd = GraphFunction::default();
-        new_bwd.push(instruction::Set(NodeId { id: root, ty: NodeIdTy::Gradients }, 1.0));
+        new_bwd.push(Set { id: NodeId { id: root, ty: NodeIdTy::Gradients }, val: 1.0 });
         new_bwd.extend(backward);
         backward = new_bwd;
 

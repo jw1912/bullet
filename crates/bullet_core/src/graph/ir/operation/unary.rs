@@ -174,7 +174,6 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
 #[derive(Debug)]
 pub struct PairwiseMul {
     pub input: AnnotatedNode,
-    pub post_concat: bool,
 }
 
 impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
@@ -186,9 +185,8 @@ impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
         util::check_dense_eq(ir, &self.input, true)?;
 
         let is = self.input.shape;
-        let min = 2 + 2 * usize::from(self.post_concat);
 
-        if is.rows() % min == 0 {
+        if is.rows() % 2 == 0 {
             Ok(Shape::new(is.rows() / 2, is.cols()))
         } else {
             Err(GraphIRError::Op(GraphIROperationError::InvalidInputShape(is)))
@@ -196,11 +194,7 @@ impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
     }
 
     fn shorthand(&self) -> String {
-        if self.post_concat {
-            "PairwiseMulPostConcat".to_string()
-        } else {
-            "PairwiseMul".to_string()
-        }
+        "PairwiseMul".to_string()
     }
 }
 
@@ -210,8 +204,9 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
         let output = NodeId::new(output_node, NodeIdTy::Values);
 
         let mut func = GraphFunction::default();
+
         func.push(instruction::MaybeUpdateBatchSize { input, output });
-        func.push(instruction::PairwiseMul { post_concat: self.post_concat, input, output });
+        func.push(instruction::PairwiseMul { offset: 0, input, output });
 
         func
     }
@@ -225,7 +220,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::PairwiseMulBackward {
-                post_concat: self.post_concat,
+                offset: 0,
                 values: NodeId::new(self.input.idx, NodeIdTy::Values),
                 input,
                 output,

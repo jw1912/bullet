@@ -300,6 +300,7 @@ BULLET_KERNEL ClipKernel(const int size, float* params, const float min_weight, 
 }
 
 BULLET_KERNEL PairwiseMulKernel(
+    const int stride,
     const int output_size,
     const int batch_size,
     const float* input,
@@ -314,12 +315,12 @@ BULLET_KERNEL PairwiseMulKernel(
     const int idxInOutput = tid % output_size;
 
     const float* thisInp = input + 2 * output_size * idxInBatch + idxInOutput;
-    float* thisOut = output + output_size * idxInBatch + idxInOutput;
 
-    thisOut[0] = thisInp[0] * thisInp[output_size];
+    output[stride * idxInBatch + idxInOutput] = thisInp[0] * thisInp[output_size];
 }
 
 BULLET_KERNEL PairwiseMulBackwardKernel(
+    const int stride,
     const int output_size,
     const int batch_size,
     const float* input,
@@ -334,13 +335,11 @@ BULLET_KERNEL PairwiseMulBackwardKernel(
     const int idxInBatch = tid / output_size;
     const int idxInOutput = tid % output_size;
 
-    const float* thisOutputGrad = output_grad + output_size * idxInBatch + idxInOutput;
+    const float gradIn = output_grad[stride * idxInBatch + idxInOutput];
     
     const int inputOffset = 2 * output_size * idxInBatch + idxInOutput;
     const float* thisInput = input + inputOffset;
     float* thisInputGrad = input_grad + inputOffset;
-
-    const float gradIn = thisOutputGrad[0];
 
     thisInputGrad[0] += gradIn * thisInput[output_size];
     thisInputGrad[output_size] += gradIn * thisInput[0];
@@ -463,6 +462,7 @@ SCALAR_KERNEL_BACKWARD(AbsPowScalarBackwardKernel, abs_pow_backward)
 
 BULLET_KERNEL select(
     const int batch_size,
+    const int input_batched,
     const int input_size,
     const int output_size,
     const int* buckets,
@@ -479,7 +479,8 @@ BULLET_KERNEL select(
 
     const int thisBucket = buckets[idxInBatch];
 
-    const float* thisInput = in + input_size * idxInBatch + output_size * thisBucket + idxInOutput;
+    const int inputOffset = input_batched ? input_size * idxInBatch : 0;
+    const float* thisInput = in + inputOffset + output_size * thisBucket + idxInOutput;
     float* thisOutput = out + output_size * idxInBatch + idxInOutput;
 
     thisOutput[0] = thisInput[0];
@@ -487,6 +488,7 @@ BULLET_KERNEL select(
 
 BULLET_KERNEL select_backprop(
     const int batch_size,
+    const int input_grad_batched,
     const int input_size,
     const int output_size,
     const int* buckets,
@@ -504,9 +506,16 @@ BULLET_KERNEL select_backprop(
     const int thisBucket = buckets[idxInBatch];
 
     const float* thisOutputGrad = output_grad + output_size * idxInBatch + idxInOutput;
-    float* thisInputGrad = input_grad + input_size * idxInBatch + output_size * thisBucket + idxInOutput;
 
-    thisInputGrad[0] += thisOutputGrad[0];
+    float* thisInputGrad = input_grad + output_size * thisBucket + idxInOutput;
+    if (input_grad_batched)
+    {
+        thisInputGrad[input_size * idxInBatch] += thisOutputGrad[0];
+    }
+    else
+    {
+        atomicAdd(thisInputGrad, thisOutputGrad[0]);
+    }
 }
 
 // it is assumed that we will only be using this on matrixs with small number of columns
@@ -587,7 +596,6 @@ BULLET_KERNEL sparse_to_dense(const int rows, const int cols, const int max_acti
 
 #define SPARSE_MATMUL_BWD_KERNEL(name, op)\
 BULLET_KERNEL name(\
-    const int stride,\
     const int nnz,\
     const int m,\
     const int k,\
@@ -596,12 +604,11 @@ BULLET_KERNEL name(\
     const float* Yg,\
     float* Ag)\
 {\
-    sparse_affine_backward_kernel<op>(stride, nnz, m, k, false, X, Y, Yg, Ag, nullptr);\
+    sparse_affine_backward_kernel<op>(nnz, m, k, false, X, Y, Yg, Ag, nullptr);\
 }\
 
 #define SPARSE_AFFINE_BWD_KERNEL(name, op)\
 BULLET_KERNEL name(\
-    const int stride,\
     const int nnz,\
     const int m,\
     const int k,\
@@ -612,12 +619,11 @@ BULLET_KERNEL name(\
     float* Ag,\
     float* Bg)\
 {\
-    sparse_affine_backward_kernel<op>(stride, nnz, m, k, Bb, X, Y, Yg, Ag, Bg);\
+    sparse_affine_backward_kernel<op>(nnz, m, k, Bb, X, Y, Yg, Ag, Bg);\
 }\
 
 template<OpType op>
 BULLET_KERNEL_IMPL sparse_affine_backward_kernel(
-    const int stride,
     const int nnz,
     const int m,
     const int k,
@@ -635,7 +641,7 @@ BULLET_KERNEL_IMPL sparse_affine_backward_kernel(
         return;
 
     const int* tX = X + nnz * loc;
-    const int offset = stride * m * loc;
+    const int offset = m * loc;
 
     const float tE = op(Y[offset + row]) * Yg[offset + row];
 
@@ -697,5 +703,24 @@ BULLET_KERNEL LinearCombStridedKernel(
     {
         this_out[0] = input[col * input_stride + row];
     }
-    
+}
+
+BULLET_KERNEL TransposeKernel(
+    const int rows,
+    const int cols,
+    const float input_mul,
+    const float output_mul,
+    const float* input,
+    float* output)
+{
+    const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (tid >= (rows * cols))
+        return;
+
+    const int row = tid % rows;
+    const int col = tid / rows;
+
+    const int out_idx = row * cols + col;
+    output[out_idx] = output_mul * output[out_idx] + input_mul * input[col * rows + row];
 }

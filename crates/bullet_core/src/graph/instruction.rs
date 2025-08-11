@@ -20,11 +20,14 @@ pub trait GraphInstruction<D: Device>: std::fmt::Debug + 'static {
 }
 
 #[derive(Debug)]
-pub struct Set(pub NodeId, pub f32);
+pub struct Set {
+    pub id: NodeId,
+    pub val: f32,
+}
 
 impl<D: Device> GraphInstruction<D> for Set {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        graph.get_mut(self.0)?.dense_mut()?.set_to(self.1)?;
+        graph.get_mut(self.id)?.dense_mut()?.set_to(self.val)?;
 
         Ok(())
     }

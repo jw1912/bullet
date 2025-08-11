@@ -4,31 +4,21 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct SparseAffineActivateStrided {
+pub struct SparseAffineActivate {
     pub weights: NodeId,
     pub weights_shape: Shape,
     pub biases: Option<NodeId>,
     pub input_shape: Shape,
     pub indices: NodeId,
     pub values: Option<NodeId>,
-    pub stride: Option<bool>,
     pub activation: DiffableFromOutput,
     pub output: NodeId,
 }
 
-impl<D: Device> GraphInstruction<D> for SparseAffineActivateStrided {
+impl<D: Device> GraphInstruction<D> for SparseAffineActivate {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let SparseAffineActivateStrided {
-            weights,
-            weights_shape,
-            biases,
-            input_shape,
-            indices,
-            values,
-            stride,
-            activation,
-            output,
-        } = *self;
+        let SparseAffineActivate { weights, weights_shape, biases, input_shape, indices, values, activation, output } =
+            *self;
 
         let weights = graph.get(weights)?;
         let weights = weights.dense()?;
@@ -51,7 +41,6 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivateStrided {
 
         D::sparse_affine_activate(
             batch_size.unwrap_or(1),
-            stride,
             activation,
             &weights.buf,
             weights_shape,
@@ -67,29 +56,27 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivateStrided {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct BackpropSparseAffineActivateStrided {
+pub struct BackpropSparseAffineActivate {
     pub weights_grads: NodeId,
     pub weights_shape: Shape,
     pub biases_grads: Option<NodeId>,
     pub input_shape: Shape,
     pub indices: NodeId,
     pub values: Option<NodeId>,
-    pub stride: Option<bool>,
     pub activation: DiffableFromOutput,
     pub output: NodeId,
     pub output_grads: NodeId,
 }
 
-impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivateStrided {
+impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivate {
     fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let BackpropSparseAffineActivateStrided {
+        let BackpropSparseAffineActivate {
             weights_grads,
             weights_shape,
             biases_grads,
             input_shape,
             indices,
             values,
-            stride,
             activation,
             output,
             output_grads,
@@ -120,7 +107,6 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivateStrided {
 
         D::backprop_sparse_affine_activate(
             batch_size.unwrap_or(1),
-            stride,
             activation,
             &mut weights_grads.buf,
             weights_shape,

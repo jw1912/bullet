@@ -226,12 +226,27 @@ impl BaseOperations for Buffer<f32> {
         dense::copy_or_add_strided(rows, cols, a, offset_a, stride_a, self, offset, stride, add)
     }
 
-    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
-        dense::pairwise(size, batch_size, a, self)
+    fn pairwise_fwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+    ) -> Result<(), Self::BaseError> {
+        dense::pairwise(offset, stride, size, batch_size, a, self)
     }
 
-    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
-        dense::backprop_pairwise(size, batch_size, a, grd, self)
+    fn pairwise_bwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
+        dense::backprop_pairwise(offset, stride, size, batch_size, a, grd, self)
     }
 
     fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError> {
@@ -263,6 +278,25 @@ impl BaseOperations for Buffer<f32> {
     fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {
         dense::clip(size, self, min, max)
     }
+
+    fn transpose(
+        &mut self,
+        input: &Self,
+        rows: usize,
+        cols: usize,
+        input_mul: f32,
+        output_mul: f32,
+    ) -> Result<(), Self::BaseError> {
+        if (rows * cols) > input.size() || (rows * cols) > self.size() {
+            return Err(DeviceError::ExpectedIllegalAddressAccess);
+        }
+
+        unsafe {
+            ops::transpose(rows as i32, cols as i32, input_mul, output_mul, input.ptr(), self.mut_ptr());
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -292,7 +326,6 @@ impl Device for ExecutionContext {
 
     fn backprop_sparse_affine_activate(
         batch_size: usize,
-        stride: Option<bool>,
         activation: DiffableFromOutput,
         input_a_grad: &mut Self::BufferF32,
         shape_a: Shape,
@@ -307,7 +340,6 @@ impl Device for ExecutionContext {
     ) -> OperationResult {
         sparse::backprop_sparse_affine(
             batch_size,
-            stride,
             activation,
             input_a_grad,
             shape_a,
@@ -324,7 +356,6 @@ impl Device for ExecutionContext {
 
     fn sparse_affine_activate(
         batch_size: usize,
-        stride: Option<bool>,
         activation: DiffableFromOutput,
         input_a: &Self::BufferF32,
         shape_a: Shape,
@@ -338,7 +369,6 @@ impl Device for ExecutionContext {
     ) -> OperationResult {
         sparse::sparse_affine(
             batch_size,
-            stride,
             activation,
             input_a,
             shape_a,
@@ -354,24 +384,34 @@ impl Device for ExecutionContext {
 
     fn select(
         batch_size: usize,
+        input_batched: bool,
         input_size: usize,
         output_size: usize,
         input: &Self::BufferF32,
         indices: &Self::BufferI32,
         output: &mut Self::BufferF32,
     ) -> OperationResult {
-        sparse::select(batch_size, input_size, output_size, input, indices, output)
+        sparse::select(batch_size, input_batched, input_size, output_size, input, indices, output)
     }
 
     fn select_backprop(
         batch_size: usize,
+        input_grad_batched: bool,
         input_size: usize,
         output_size: usize,
         indices: &Self::BufferI32,
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
     ) -> OperationResult {
-        sparse::select_backprop(batch_size, input_size, output_size, indices, output_grad, input_grad)
+        sparse::select_backprop(
+            batch_size,
+            input_grad_batched,
+            input_size,
+            output_size,
+            indices,
+            output_grad,
+            input_grad,
+        )
     }
 
     fn sparse_to_dense(

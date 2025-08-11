@@ -9,6 +9,7 @@
 #include "base/pairwise.cu"
 #include "base/power_error.cu"
 #include "base/scalar.cu"
+#include "base/transpose.cu"
 #include "gather.cu"
 #include "select.cu"
 #include "softmax.cu"

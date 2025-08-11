@@ -31,7 +31,6 @@ pub struct GraphIRCompileOptions {
 pub struct GraphIR<B: BackendMarker> {
     nodes: HashMap<usize, GraphIRNode<B>>,
     counter: AtomicUsize,
-    leafs: HashSet<usize>,
     inputs: HashSet<usize>,
     weights: HashSet<usize>,
     ids: HashSet<String>,
@@ -52,9 +51,6 @@ impl GraphIRNodeInfo {
 pub enum GraphIRError {
     Op(GraphIROperationError),
     MultipleRoots,
-    InvalidRootNode,
-    FailedToInitTensor,
-    UnsupportedOperation(String),
     CannotBeTopologicallyOrdered,
     NodeAlreadyExists,
     NodeWithIdAlreadyExists(String),
@@ -82,29 +78,20 @@ impl<B: BackendMarker> GraphIR<B> {
         self.counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    pub fn add_node(
+    pub fn add_leaf(
         &mut self,
         id: Option<String>,
-        parent_operation: Option<Box<dyn GraphIROperationCompilable<B>>>,
         shape: Shape,
         batched: bool,
         requires_grad: bool,
         sparse: Option<NonZeroUsize>,
     ) -> Result<AnnotatedNode, GraphIRError> {
-        if let Some(id) = id.as_ref() {
-            if self.ids.contains(id) {
-                return Err(GraphIRError::NodeWithIdAlreadyExists(id.clone()));
-            }
-
-            self.ids.insert(id.to_string());
-        }
-
         let idx = self.new_idx();
         let annotated = AnnotatedNode { idx, shape };
 
         self.insert_node(GraphIRNode {
             id,
-            parent_operation,
+            parent_operation: None,
             info: NodeInfo { shape, requires_grad, batched, sparse },
             idx,
             num_children: 0,
@@ -114,19 +101,19 @@ impl<B: BackendMarker> GraphIR<B> {
     }
 
     pub fn add_constant(&mut self, shape: Shape) -> Result<AnnotatedNode, GraphIRError> {
-        let node = self.add_node(None, None, shape, false, false, None)?;
+        let node = self.add_leaf(None, shape, false, false, None)?;
         Ok(node)
     }
 
     pub fn add_dense_input(&mut self, id: &str, shape: Shape) -> Result<AnnotatedNode, GraphIRError> {
-        let node = self.add_node(Some(id.to_string()), None, shape, true, false, None)?;
+        let node = self.add_leaf(Some(id.to_string()), shape, true, false, None)?;
         self.inputs.insert(node.idx);
         Ok(node)
     }
 
     pub fn add_sparse_input(&mut self, id: &str, shape: Shape, nnz: usize) -> Result<AnnotatedNode, GraphIRError> {
         let nnz = NonZeroUsize::try_from(nnz).unwrap();
-        let node = self.add_node(Some(id.to_string()), None, shape, true, false, Some(nnz))?;
+        let node = self.add_leaf(Some(id.to_string()), shape, true, false, Some(nnz))?;
         self.inputs.insert(node.idx);
         Ok(node)
     }
@@ -138,22 +125,22 @@ impl<B: BackendMarker> GraphIR<B> {
         sparse: Option<usize>,
     ) -> Result<AnnotatedNode, GraphIRError> {
         let sparse = sparse.map(|nnz| NonZeroUsize::try_from(nnz).unwrap());
-        let node = self.add_node(Some(id.to_string()), None, shape, false, false, sparse)?;
+        let node = self.add_leaf(Some(id.to_string()), shape, false, false, sparse)?;
         self.inputs.insert(node.idx);
         Ok(node)
     }
 
     pub fn add_weights(&mut self, id: &str, shape: Shape) -> Result<AnnotatedNode, GraphIRError> {
-        let node = self.add_node(Some(id.to_string()), None, shape, false, true, None)?;
+        let node = self.add_leaf(Some(id.to_string()), shape, false, true, None)?;
         self.weights.insert(node.idx);
         Ok(node)
     }
 
     pub fn add_op(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphIRError> {
-        let shape = operation.output_shape(self)?;
-        let batched = operation.output_batched(self)?;
-        let requires_grad = operation.output_requires_grad(self)?;
-        self.add_node(None, Some(Box::new(operation)), shape, batched, requires_grad, None)
+        let node = self.result_of(operation)?;
+        let annotated = AnnotatedNode { idx: node.idx, shape: node.info.shape };
+        self.insert_node(node)?;
+        Ok(annotated)
     }
 
     pub fn set_compile_opts(&mut self, opts: GraphIRCompileOptions) {

@@ -6,7 +6,8 @@ use crate::graph::{
         node::AnnotatedNode,
         operation::{
             affine::Matmul,
-            binary::{Concat, LinearCombination, Select, SoftmaxCrossEntropy},
+            binary::{Concat, Select, SoftmaxCrossEntropy},
+            nary::LinearCombination,
             sparse::SparseAffineActivate,
             unary::{Copy, DiffableFromOutput, PairwiseMul, Reduce, ReduceAcrossBatch, Slice, ToDense, Unary, UnaryOp},
         },
@@ -188,7 +189,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     }
 
     pub fn linear_comb(self, alpha: f32, rhs: Self, beta: f32) -> Self {
-        self.builder.apply(LinearCombination { a: self.node, b: rhs.node, alpha, beta })
+        self.builder.apply(LinearCombination::new([(self.node, alpha), (rhs.node, beta)]).unwrap())
     }
 
     pub fn reduce_sum_across_batch(self) -> Self {
@@ -244,11 +245,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     }
 
     pub fn pairwise_mul(self) -> Self {
-        self.builder.apply(PairwiseMul { input: self.node, post_concat: false })
-    }
-
-    pub fn pairwise_mul_post_affine_dual(self) -> Self {
-        self.builder.apply(PairwiseMul { input: self.node, post_concat: true })
+        self.builder.apply(PairwiseMul { input: self.node })
     }
 
     pub fn abs_pow(self, power: f32) -> Self {
