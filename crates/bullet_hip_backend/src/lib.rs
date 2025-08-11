@@ -226,12 +226,27 @@ impl BaseOperations for Buffer<f32> {
         dense::copy_or_add_strided(rows, cols, a, offset_a, stride_a, self, offset, stride, add)
     }
 
-    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
-        dense::pairwise(size, batch_size, a, self)
+    fn pairwise_fwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+    ) -> Result<(), Self::BaseError> {
+        dense::pairwise(offset, stride, size, batch_size, a, self)
     }
 
-    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
-        dense::backprop_pairwise(size, batch_size, a, grd, self)
+    fn pairwise_bwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
+        dense::backprop_pairwise(offset, stride, size, batch_size, a, grd, self)
     }
 
     fn power_error_fwd(&mut self, power: f32, size: usize, a: &Self, b: &Self) -> Result<(), Self::BaseError> {

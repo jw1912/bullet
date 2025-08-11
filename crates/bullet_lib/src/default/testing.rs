@@ -6,12 +6,12 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::trainer::schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
-
-use super::{
-    gamerunner::{self, GameRunnerArgs, GameRunnerPathInternal},
+use crate::trainer::{
     logger,
+    schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule},
 };
+
+use super::gamerunner::{self, GameRunnerArgs, GameRunnerPathInternal};
 
 #[derive(Clone, Copy)]
 pub enum TimeControl {

@@ -245,11 +245,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     }
 
     pub fn pairwise_mul(self) -> Self {
-        self.builder.apply(PairwiseMul { input: self.node, post_concat: false })
-    }
-
-    pub fn pairwise_mul_post_affine_dual(self) -> Self {
-        self.builder.apply(PairwiseMul { input: self.node, post_concat: true })
+        self.builder.apply(PairwiseMul { input: self.node })
     }
 
     pub fn abs_pow(self, power: f32) -> Self {

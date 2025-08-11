@@ -165,21 +165,36 @@ impl BaseOperations for CpuBuffer<f32> {
         Ok(())
     }
 
-    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
+    fn pairwise_fwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+    ) -> Result<(), Self::BaseError> {
         for i in 0..batch_size {
             for j in 0..size / 2 {
                 let k = i * size + j;
-                self.buf[i * size / 2 + j] = a.buf[k] * a.buf[k + size / 2];
+                self.buf[offset + i * stride + j] = a.buf[k] * a.buf[k + size / 2];
             }
         }
 
         Ok(())
     }
 
-    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
+    fn pairwise_bwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
         for i in 0..batch_size {
             for j in 0..size / 2 {
-                let g = grd.buf[i * size / 2 + j];
+                let g = grd.buf[offset + i * stride + j];
                 let k = i * size + j;
                 self.buf[k] += g * a.buf[k + size / 2];
                 self.buf[k + size / 2] += g * a.buf[k];

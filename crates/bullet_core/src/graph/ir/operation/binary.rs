@@ -194,6 +194,87 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
 }
 
 #[derive(Debug)]
+pub struct FusedPairwiseMulConcat {
+    pub a: AnnotatedNode,
+    pub b: AnnotatedNode,
+}
+
+impl<B: BackendMarker> GraphIROperation<B> for FusedPairwiseMulConcat {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.a, self.b]
+    }
+
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.a, true)?;
+        util::check_dense_eq(ir, &self.b, true)?;
+        util::check_same_batching(ir, &[&self.a, &self.b])?;
+
+        let ash = self.a.shape;
+
+        if ash.cols() != 1 {
+            return Err(GraphIRError::Op(GraphIROperationError::InvalidInputShape(ash)));
+        }
+
+        if ash.cols() == self.b.shape.cols() {
+            Ok(Shape::new(ash.rows() / 2 + self.b.shape.rows() / 2, ash.cols()))
+        } else {
+            Err(GraphIRError::Op(GraphIROperationError::MismatchedInputShapes(vec![ash, self.b.shape])))
+        }
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for FusedPairwiseMulConcat {
+    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let output = NodeId::new(output_node, NodeIdTy::Values);
+        let a = NodeId::new(self.a.idx, NodeIdTy::Values);
+        let b = NodeId::new(self.b.idx, NodeIdTy::Values);
+
+        let mut func = GraphFunction::default();
+
+        let ainfo = node_info.get(self.a.idx).unwrap();
+
+        assert_eq!(ainfo.batched, node_info.get(self.b.idx).unwrap().batched);
+
+        func.push(instruction::MaybeUpdateBatchSize { input: a, output });
+
+        func.push(instruction::PairwiseMul { offset: 0, input: a, output });
+
+        func.push(instruction::PairwiseMul { offset: ainfo.shape.size() / 2, input: b, output });
+
+        func
+    }
+
+    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+        let input = NodeId::new(output_node, NodeIdTy::Gradients);
+
+        let ainfo = node_info.get(self.a.idx).unwrap();
+        let binfo = node_info.get(self.b.idx).unwrap();
+
+        let mut func = GraphFunction::default();
+
+        if ainfo.requires_grad {
+            let output = NodeId::new(self.a.idx, NodeIdTy::Gradients);
+            let values = NodeId::new(self.a.idx, NodeIdTy::Values);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+
+            func.push(instruction::PairwiseMulBackward { offset: 0, input, values, output });
+        }
+
+        if binfo.requires_grad {
+            let output = NodeId::new(self.b.idx, NodeIdTy::Gradients);
+            let values = NodeId::new(self.b.idx, NodeIdTy::Values);
+
+            func.push(instruction::MaybeUpdateBatchSize { input, output });
+
+            func.push(instruction::PairwiseMulBackward { offset: ainfo.shape.size() / 2, input, values, output });
+        }
+
+        func
+    }
+}
+
+#[derive(Debug)]
 pub struct Select {
     pub input: AnnotatedNode,
     pub buckets: AnnotatedNode,

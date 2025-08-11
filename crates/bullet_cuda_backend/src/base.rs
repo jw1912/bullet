@@ -241,17 +241,25 @@ impl BaseOperations for CudaBuffer<f32> {
         Ok(())
     }
 
-    fn pairwise_fwd(&mut self, size: usize, batch_size: usize, a: &Self) -> Result<(), Self::BaseError> {
-        if size * batch_size > a.size() {
-            return Err(CudaError::ExpectedIllegalAddressAccess);
-        }
-
-        if size % 2 != 0 || (size / 2) * batch_size > self.size() {
-            return Err(CudaError::ExpectedIllegalAddressAccess);
-        }
-
+    fn pairwise_fwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+    ) -> Result<(), Self::BaseError> {
         let output_size = size / 2;
-        let total_size = batch_size * output_size;
+
+        if size % 2 != 0
+            || size * batch_size > a.size()
+            || stride * batch_size > self.size()
+            || stride < output_size
+            || stride < offset + output_size
+        {
+            println!("{size}, {batch_size}, {stride}, {offset}");
+            return Err(CudaError::ExpectedIllegalAddressAccess);
+        }
 
         let func = self.device.module().load_function("PairwiseMulKernel").map_err(CudaError::Driver)?;
 
@@ -259,28 +267,38 @@ impl BaseOperations for CudaBuffer<f32> {
             self.device
                 .stream()
                 .launch_builder(&func)
+                .arg(&(stride as i32))
                 .arg(&(output_size as i32))
                 .arg(&(batch_size as i32))
-                .arg(&a.buf.slice(0..2 * total_size))
-                .arg(&mut self.buf.slice_mut(0..total_size))
-                .launch(CudaDevice::elementwise_launch_params_single(total_size, 1024))
+                .arg(&a.buf)
+                .arg(&mut self.buf.slice_mut(offset..))
+                .launch(CudaDevice::elementwise_launch_params_single(batch_size * output_size, 1024))
                 .map_err(CudaError::Driver)?;
         }
 
         Ok(())
     }
 
-    fn pairwise_bwd(&mut self, size: usize, batch_size: usize, a: &Self, grd: &Self) -> Result<(), Self::BaseError> {
-        if size * batch_size > a.size() {
-            return Err(CudaError::ExpectedIllegalAddressAccess);
-        }
-
-        if size % 2 != 0 || (size / 2) * batch_size > self.size() {
-            return Err(CudaError::ExpectedIllegalAddressAccess);
-        }
-
+    fn pairwise_bwd(
+        &mut self,
+        offset: usize,
+        stride: usize,
+        size: usize,
+        batch_size: usize,
+        a: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
         let output_size = size / 2;
-        let total_size = batch_size * output_size;
+
+        if size % 2 != 0
+            || size * batch_size > a.size()
+            || size * batch_size > self.size()
+            || stride * batch_size > grd.size()
+            || stride < output_size + offset
+        {
+            println!("{size}, {batch_size}, {stride}, {offset}");
+            return Err(CudaError::ExpectedIllegalAddressAccess);
+        }
 
         let func = self.device.module().load_function("PairwiseMulBackwardKernel").map_err(CudaError::Driver)?;
 
@@ -288,12 +306,13 @@ impl BaseOperations for CudaBuffer<f32> {
             self.device
                 .stream()
                 .launch_builder(&func)
+                .arg(&(stride as i32))
                 .arg(&(output_size as i32))
                 .arg(&(batch_size as i32))
-                .arg(&a.buf.slice(0..total_size))
-                .arg(&grd.buf.slice(0..total_size))
-                .arg(&mut self.buf.slice_mut(0..2 * total_size))
-                .launch(CudaDevice::elementwise_launch_params_single(total_size, 1024))
+                .arg(&a.buf)
+                .arg(&grd.buf.slice(offset..))
+                .arg(&mut self.buf)
+                .launch(CudaDevice::elementwise_launch_params_single(batch_size * output_size, 1024))
                 .map_err(CudaError::Driver)?;
         }
 

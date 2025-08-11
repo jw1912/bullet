@@ -7,7 +7,7 @@ use crate::{
         instruction::Set,
         ir::{
             node::{GraphIRNode, NodeInfo},
-            passes::{HighPriority, LowPriority, SimplePass},
+            passes::{self, GraphIRPass},
             BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
         },
         tensor::Tensor,
@@ -29,22 +29,48 @@ where
     B::Backend: Device,
 {
     pub fn optimise(&mut self) -> Result<(), GraphIRError> {
-        while self.try_fusion_pass::<HighPriority>()? {}
-        while self.try_fusion_pass::<LowPriority>()? {}
+        // Elides concat:
+        // Concat(PairwiseMul(a), PairwiseMul(b)) -> FusedPairwiseMulConcat(a, b)
+        self.apply_pass(passes::FusePairwiseMulWithConcat)?;
+
+        // Strict speedup by performing elementwise on far less values:
+        // Select(Elementwise(op, [a, b, ..]), buckets) -> Elementwise(op, [Select(a, buckets), Select(b, buckets), ..])
+        self.apply_pass(passes::ExchangeElementwiseAndSelect)?;
+
+        // Looking to find a Matmul(c, Concat(a, b)):
+        // Unary(Concat(a, b), op) -> Concat(Unary(a, op), Unary(b, op))
+        self.apply_pass(passes::ExchangeConcatAndUnary)?;
+
+        // Elides concat:
+        // Matmul(c, Concat(a, b)) -> Add(Matmul(Slice(c, left half), a), Matmul(Slice(c, right half), b))
+        self.apply_pass(passes::ExchangeMatmulAndConcatWithSliceAndMatmul)?;
+
+        // Re-apply because above pass ends in an Add, which may be followed by a Select
+        self.apply_pass(passes::ExchangeElementwiseAndSelect)?;
+
+        // Add(SparseMatmul(..), b) -> SparseAffine(.., b)
+        self.apply_pass(passes::FuseSparseMatmulWithAdd)?;
+
+        // Unary(SparseAffine(..), DiffableFromOutput(activation)) -> SparseAffineActivate(.., activation)
+        self.apply_pass(passes::FuseSparseAffineWithDiffableFromOutput)?;
+
+        // Miscellaneous fusions that don't impact performance that much:
+        // : AbsPow(Sub(a, b), power) -> AbsPowerErr(a, b, power)
+        // : Mul(LinearCombination((a, a_wgt), ..), val) -> LinearCombination((a, val * a_wgt), ..)
+        // : LinearCombination(.., (LinearCombination((a0, a0wgt), .., (aN, aNwgt)), wgt), ..)
+        //       -> LinearCombination(.., (a0, wgt * a0wgt), .., (aN, wgt * aNwgt), ..)
+        // : Add(Matmul(a, b), c) -> Affine(a, b, c)
+        self.apply_pass(passes::LowPriorityFusions)?;
 
         Ok(())
     }
 
-    pub fn try_fusion_pass<T: SimplePass<B>>(&mut self) -> Result<bool, GraphIRError> {
-        for node in self.topo_order()? {
-            if let Some(mut transform) = T::try_pass(self, node)? {
-                transform.delete.push(node);
-                self.apply_transform(transform)?;
-                return Ok(true);
-            }
+    pub fn apply_pass(&mut self, pass: impl GraphIRPass<B>) -> Result<(), GraphIRError> {
+        while let Some(transform) = pass.try_pass(self)? {
+            self.apply_transform(transform)?;
         }
 
-        Ok(false)
+        Ok(())
     }
 
     pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {

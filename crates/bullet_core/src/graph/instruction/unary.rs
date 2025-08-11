@@ -194,7 +194,7 @@ impl<D: Device> GraphInstruction<D> for SparseToDense {
 
 #[derive(Debug)]
 pub struct PairwiseMul {
-    pub post_concat: bool,
+    pub offset: usize,
     pub input: NodeId,
     pub output: NodeId,
 }
@@ -211,19 +211,15 @@ impl<D: Device> GraphInstruction<D> for PairwiseMul {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
-        if input.single_size() != 2 * output.single_size() {
+        if input.single_size() > 2 * output.single_size() {
             return Err(OperationError::InvalidTensorFormat);
         }
 
-        let mut single_size = input.single_size();
-        let mut batch_size = input.batch_size().unwrap_or(1);
+        let single_size = input.single_size();
+        let stride = output.single_size();
+        let batch_size = input.batch_size().unwrap_or(1);
 
-        if self.post_concat {
-            single_size /= 2;
-            batch_size *= 2;
-        }
-
-        output.buf.pairwise_fwd(single_size, batch_size, &input.buf)?;
+        output.buf.pairwise_fwd(self.offset, stride, single_size, batch_size, &input.buf)?;
 
         Ok(())
     }

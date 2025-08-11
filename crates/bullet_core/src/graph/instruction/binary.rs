@@ -78,7 +78,7 @@ impl<D: Device> GraphInstruction<D> for UnaryBackward {
 
 #[derive(Debug)]
 pub struct PairwiseMulBackward {
-    pub post_concat: bool,
+    pub offset: usize,
     pub values: NodeId,
     pub input: NodeId,
     pub output: NodeId,
@@ -98,19 +98,15 @@ impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
-        if output.single_size() != 2 * input.single_size() || output.single_size() != values.single_size() {
+        if output.single_size() > 2 * input.single_size() || output.single_size() != values.single_size() {
             return Err(OperationError::InvalidTensorFormat);
         }
 
-        let mut single_size = output.single_size();
-        let mut batch_size = input.batch_size().unwrap_or(1);
+        let single_size = output.single_size();
+        let stride = input.single_size();
+        let batch_size = input.batch_size().unwrap_or(1);
 
-        if self.post_concat {
-            single_size /= 2;
-            batch_size *= 2;
-        }
-
-        output.buf.pairwise_bwd(single_size, batch_size, &values.buf, &input.buf)?;
+        output.buf.pairwise_bwd(self.offset, stride, single_size, batch_size, &values.buf, &input.buf)?;
 
         Ok(())
     }
