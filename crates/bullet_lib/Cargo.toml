@@ -27,10 +27,6 @@ sfbinpack = "0.4.1"
 viriformat = "2.0.0"
 
 [[example]]
-name = "advanced"
-path = "../../examples/advanced/main.rs"
-
-[[example]]
 name = "simple"
 path = "../../examples/simple.rs"
 
@@ -41,10 +37,6 @@ path = "../../examples/tests/test1.rs"
 [[example]]
 name = "test2"
 path = "../../examples/tests/test2.rs"
-
-[[example]]
-name = "akimbo-main"
-path = "../../examples/extra/akimbo-main.rs"
 
 [[example]]
 name = "1_simple"
