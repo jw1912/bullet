@@ -2,7 +2,7 @@ use std::{collections::HashSet, fmt, rc::Rc};
 
 use acyclib::{Graph, GraphError, NodeId, Operation, Type};
 
-trait Binary: fmt::Debug {
+trait Binary: fmt::Debug + 'static {
     fn par(&self) -> (NodeId, NodeId);
 }
 
@@ -40,9 +40,9 @@ impl fmt::Debug for Op {
     }
 }
 
-impl Op {
-    fn new(inner: impl Binary + 'static) -> Self {
-        Self(Rc::new(inner))
+impl<T: Binary> From<T> for Op {
+    fn from(value: T) -> Self {
+        Self(Rc::new(value))
     }
 }
 
@@ -69,14 +69,18 @@ fn main() -> Result<(), GraphError> {
     let c = graph.add_leaf(Ty)?;
     let d = graph.add_leaf(Ty)?;
 
-    let x = graph.add_node(Ty, Op::new(Mul(a, b)))?;
-    let y = graph.add_node(Ty, Op::new(Mul(a, c)))?;
-    let z = graph.add_node(Ty, Op::new(Add(a, x)))?;
+    let x = graph.add_node(Ty, Mul(a, b))?;
+    let y = graph.add_node(Ty, Mul(a, c))?;
+    let z = graph.add_node(Ty, Add(a, x))?;
 
     let mut required = HashSet::new();
     required.insert(z);
 
     println!("unused: {d:?}, {y:?}");
+
+    println!("{graph}");
+
+    graph.replace_op(y, Add(a, c))?;
 
     println!("{graph}");
 

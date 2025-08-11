@@ -1,9 +1,9 @@
+pub mod format;
 pub mod topo;
 
 use std::{
     collections::{HashMap, HashSet},
-    fmt,
-    rc::Rc,
+    fmt::Debug,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -19,27 +19,30 @@ pub enum GraphError {
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct NodeId(usize);
 
-impl fmt::Debug for NodeId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "%{}", self.0)
-    }
-}
-
-pub trait Operation: Clone + fmt::Debug {
+pub trait Operation: Clone {
     fn parents(&self) -> HashSet<NodeId>;
 }
 
-pub trait Type: Clone + fmt::Debug {}
+pub trait Type: Clone {}
 
 #[derive(Clone)]
 pub struct Node<Ty: Type, Op: Operation> {
     id: NodeId,
     ty: Ty,
-    src: Option<Rc<Op>>,
+    src: Option<Op>,
     children: usize,
 }
 
 impl<Ty: Type, Op: Operation> Node<Ty, Op> {
+    fn new_node_id() -> NodeId {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        NodeId(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    pub fn new(ty: Ty, src: Option<Op>) -> Self {
+        Node { id: Self::new_node_id(), ty, src, children: 0 }
+    }
+
     pub fn id(&self) -> NodeId {
         self.id
     }
@@ -48,72 +51,31 @@ impl<Ty: Type, Op: Operation> Node<Ty, Op> {
         self.ty.clone()
     }
 
-    pub fn src(&self) -> &Option<Rc<Op>> {
+    pub fn src(&self) -> &Option<Op> {
         &self.src
     }
 }
 
 pub struct Graph<Ty: Type, Op: Operation> {
     nodes: HashMap<NodeId, Node<Ty, Op>>,
-    counter: AtomicUsize,
 }
 
 impl<Ty: Type, Op: Operation> Default for Graph<Ty, Op> {
     fn default() -> Self {
-        Self { nodes: HashMap::new(), counter: AtomicUsize::new(0) }
-    }
-}
-
-impl<Ty: Type, Op: Operation> fmt::Display for Graph<Ty, Op> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn map<T>(res: Result<T, GraphError>) -> Result<T, fmt::Error> {
-            res.map_err(|_| fmt::Error)
-        }
-
-        let order = map(self.topo_order())?;
-
-        write!(f, "## Graph ##")?;
-
-        for id in order {
-            writeln!(f)?;
-
-            let node = map(self.get(id))?;
-            let Node { id, ty, src, .. } = node;
-            write!(f, "{id:?}: {ty:?}")?;
-
-            if let Some(op) = src {
-                write!(f, " = [{op:?}] {:?}", op.parents())?;
-            }
-
-            write!(f, ";")?;
-        }
-
-        Ok(())
+        Self { nodes: HashMap::new() }
     }
 }
 
 impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
-    fn new_node_id(&self) -> NodeId {
-        NodeId(self.counter.fetch_add(1, Ordering::Relaxed))
-    }
-
-    pub fn new_leaf(&self, ty: Ty) -> Node<Ty, Op> {
-        Node { id: self.new_node_id(), ty, src: None, children: 0 }
-    }
-
-    pub fn new_node(&self, ty: Ty, op: Op) -> Node<Ty, Op> {
-        Node { id: self.new_node_id(), ty, src: Some(Rc::new(op)), children: 0 }
-    }
-
     pub fn add_leaf(&mut self, ty: Ty) -> Result<NodeId, GraphError> {
-        let node = self.new_leaf(ty);
+        let node = Node::new(ty, None);
         let id = node.id;
         self.insert(node)?;
         Ok(id)
     }
 
-    pub fn add_node(&mut self, ty: Ty, op: Op) -> Result<NodeId, GraphError> {
-        let node = self.new_node(ty, op);
+    pub fn add_node(&mut self, ty: Ty, op: impl Into<Op>) -> Result<NodeId, GraphError> {
+        let node = Node::new(ty, Some(op.into()));
         let id = node.id;
         self.insert(node)?;
         Ok(id)
@@ -177,7 +139,9 @@ impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
         Ok(())
     }
 
-    pub fn replace_op(&mut self, id: NodeId, new_op: Op) -> Result<(), GraphError> {
+    pub fn replace_op(&mut self, id: NodeId, new_op: impl Into<Op>) -> Result<(), GraphError> {
+        let new_op = new_op.into();
+
         for parent in new_op.parents() {
             if parent == id {
                 return Err(GraphError::NodeIsSelfReferential);
@@ -188,7 +152,7 @@ impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
 
         let node = self.get_mut(id)?;
 
-        let mut new_src = Some(Rc::new(new_op));
+        let mut new_src = Some(new_op);
 
         std::mem::swap(&mut new_src, &mut node.src);
 
