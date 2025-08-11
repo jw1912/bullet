@@ -9,6 +9,7 @@ edition = "2021"
 [workspace]
 resolver = "2"
 members = [
+    "crates/acyclib",
     "crates/bullet_core",
     "crates/bullet_cuda_backend",
     "crates/bullet_hip_backend",
