@@ -706,7 +706,7 @@ BULLET_KERNEL LinearCombStridedKernel(
     }
 }
 
-BULLET_KERNEL TranposeKernel(
+BULLET_KERNEL TransposeKernel(
     const int rows,
     const int cols,
     const float input_mul,
