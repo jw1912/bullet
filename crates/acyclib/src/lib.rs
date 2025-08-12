@@ -1,81 +1,45 @@
 pub mod format;
+pub mod node;
 pub mod topo;
 
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
-#[derive(Clone, Copy, Debug)]
+pub use node::{Node, NodeId};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GraphError {
     NodeDoesNotExist,
     NodeWithIdAlreadyExists,
     NodeIsSelfReferential,
     NodeIsNotRoot,
+    FailedTypeCheck,
     Cyclic,
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub struct NodeId(usize);
-
-pub trait Operation: Clone {
+pub trait Operation<Ty: Clone>: Clone {
     fn parents(&self) -> HashSet<NodeId>;
+
+    fn out_type(&self, graph: &Graph<Ty, Self>) -> Result<Ty, GraphError>;
 }
 
-pub trait Type: Clone {}
-
-#[derive(Clone)]
-pub struct Node<Ty: Type, Op: Operation> {
-    id: NodeId,
-    ty: Ty,
-    src: Option<Op>,
-    children: usize,
-}
-
-impl<Ty: Type, Op: Operation> Node<Ty, Op> {
-    fn new_node_id() -> NodeId {
-        static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        NodeId(COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
-
-    pub fn new(ty: Ty, src: Option<Op>) -> Self {
-        Node { id: Self::new_node_id(), ty, src, children: 0 }
-    }
-
-    pub fn id(&self) -> NodeId {
-        self.id
-    }
-
-    pub fn ty(&self) -> Ty {
-        self.ty.clone()
-    }
-
-    pub fn src(&self) -> &Option<Op> {
-        &self.src
-    }
-}
-
-pub struct Graph<Ty: Type, Op: Operation> {
+pub struct Graph<Ty: Clone, Op: Operation<Ty>> {
     nodes: HashMap<NodeId, Node<Ty, Op>>,
 }
 
-impl<Ty: Type, Op: Operation> Default for Graph<Ty, Op> {
+impl<Ty: Clone, Op: Operation<Ty>> Default for Graph<Ty, Op> {
     fn default() -> Self {
         Self { nodes: HashMap::new() }
     }
 }
 
-impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
-    pub fn add_leaf(&mut self, ty: Ty) -> Result<NodeId, GraphError> {
-        let node = Node::new(ty, None);
-        let id = node.id;
-        self.insert(node)?;
-        Ok(id)
-    }
-
-    pub fn add_node(&mut self, ty: Ty, op: impl Into<Op>) -> Result<NodeId, GraphError> {
-        let node = Node::new(ty, Some(op.into()));
+impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
+    pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, GraphError> {
+        let op = op.into();
+        let ty = op.out_type(self)?;
+        let node = Node::new(ty, op);
         let id = node.id;
         self.insert(node)?;
         Ok(id)
@@ -94,28 +58,23 @@ impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
     }
 
     pub fn topo_order(&self) -> Result<Vec<NodeId>, GraphError> {
-        let edges_rev = self
-            .nodes
-            .iter()
-            .map(|(&idx, data)| {
-                let op = data.src.as_ref();
-                let set = op.map(|x| x.parents().iter().map(|y| y.0).collect()).unwrap_or_default();
-                (idx.0, set)
-            })
-            .collect();
+        let edges_rev =
+            self.nodes.iter().map(|(&idx, data)| (idx.0, data.op.parents().iter().map(|x| x.0).collect())).collect();
 
         topo::topo_order(edges_rev).ok_or(GraphError::Cyclic).map(|x| x.into_iter().map(NodeId).collect())
     }
 
     pub fn insert(&mut self, node: Node<Ty, Op>) -> Result<(), GraphError> {
-        if let Some(op) = node.src.as_ref() {
-            for parent in op.parents() {
-                if parent == node.id {
-                    return Err(GraphError::NodeIsSelfReferential);
-                }
+        if node.op.out_type(self)? != node.ty {
+            return Err(GraphError::FailedTypeCheck);
+        }
 
-                self.get_mut(parent)?.children += 1;
+        for parent in node.op.parents() {
+            if parent == node.id {
+                return Err(GraphError::NodeIsSelfReferential);
             }
+
+            self.get_mut(parent)?.children += 1;
         }
 
         self.nodes.insert(node.id, node).map_or(Ok(()), |_| Err(GraphError::NodeWithIdAlreadyExists))
@@ -128,10 +87,8 @@ impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
             return Err(GraphError::NodeIsNotRoot);
         }
 
-        if let Some(op) = node.src.as_ref() {
-            for parent in op.parents() {
-                self.get_mut(parent)?.children -= 1;
-            }
+        for parent in node.op.parents() {
+            self.get_mut(parent)?.children -= 1;
         }
 
         self.nodes.remove(&id).expect("Already verified node is present!");
@@ -140,7 +97,11 @@ impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
     }
 
     pub fn replace_op(&mut self, id: NodeId, new_op: impl Into<Op>) -> Result<(), GraphError> {
-        let new_op = new_op.into();
+        let mut new_op = new_op.into();
+
+        if self.get(id)?.ty != new_op.out_type(self)? {
+            return Err(GraphError::FailedTypeCheck);
+        }
 
         for parent in new_op.parents() {
             if parent == id {
@@ -152,16 +113,10 @@ impl<Ty: Type, Op: Operation> Graph<Ty, Op> {
 
         let node = self.get_mut(id)?;
 
-        let mut new_src = Some(new_op);
+        std::mem::swap(&mut new_op, &mut node.op);
 
-        std::mem::swap(&mut new_src, &mut node.src);
-
-        let old_src = new_src;
-
-        if let Some(op) = old_src.as_ref() {
-            for parent in op.parents() {
-                self.get_mut(parent)?.children -= 1;
-            }
+        for parent in new_op.parents() {
+            self.get_mut(parent)?.children -= 1;
         }
 
         Ok(())
