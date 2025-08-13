@@ -9,17 +9,16 @@ impl<Ty: Clone + PartialEq + fmt::Debug, Op: Operation<Ty> + fmt::Debug> Graph<T
     pub fn formatted(&self) -> Result<FormattedGraph, GraphError> {
         let mut graph = Graph::default();
 
+        let mut node_map = HashMap::new();
+
         for id in self.topo_order()? {
             let Node { id, ty, op, .. } = self.get(id)?;
 
-            let ty = format!("{ty:?}");
+            let parents = op.parents().iter().map(|p| *node_map.get(p).unwrap()).collect();
+            let out_type = format!("{ty:?}");
+            let new_id = graph.add_node(StringOperation { parents, op: format!("{op:?}"), out_type })?;
 
-            graph.insert(Node {
-                id: *id,
-                op: StringOperation { parents: op.parents(), op: format!("{op:?}"), out_type: ty.clone() },
-                ty,
-                children: 0,
-            })?;
+            assert!(node_map.insert(*id, new_id).is_none());
         }
 
         Ok(graph)

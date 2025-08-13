@@ -13,7 +13,6 @@ pub use node::{Node, NodeId};
 pub enum GraphError {
     NodeDoesNotExist,
     NodeWithIdAlreadyExists,
-    NodeIsSelfReferential,
     NodeIsNotRoot,
     FailedTypeCheck,
     Cyclic,
@@ -36,15 +35,6 @@ impl<Ty: Clone, Op: Operation<Ty>> Default for Graph<Ty, Op> {
 }
 
 impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
-    pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, GraphError> {
-        let op = op.into();
-        let ty = op.out_type(self)?;
-        let node = Node::new(ty, op);
-        let id = node.id;
-        self.insert(node)?;
-        Ok(id)
-    }
-
     pub fn get(&self, id: NodeId) -> Result<&Node<Ty, Op>, GraphError> {
         self.nodes.get(&id).ok_or(GraphError::NodeDoesNotExist)
     }
@@ -64,20 +54,19 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
         topo::topo_order(edges_rev).ok_or(GraphError::Cyclic).map(|x| x.into_iter().map(NodeId).collect())
     }
 
-    pub fn insert(&mut self, node: Node<Ty, Op>) -> Result<(), GraphError> {
-        if node.op.out_type(self)? != node.ty {
-            return Err(GraphError::FailedTypeCheck);
-        }
+    pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, GraphError> {
+        let op = op.into();
+        let ty = op.out_type(self)?;
+        let node = Node::new(ty, op);
+        let id = node.id;
 
         for parent in node.op.parents() {
-            if parent == node.id {
-                return Err(GraphError::NodeIsSelfReferential);
-            }
-
             self.get_mut(parent)?.children += 1;
         }
 
-        self.nodes.insert(node.id, node).map_or(Ok(()), |_| Err(GraphError::NodeWithIdAlreadyExists))
+        self.nodes.insert(id, node).map_or(Ok(()), |_| Err(GraphError::NodeWithIdAlreadyExists))?;
+
+        Ok(id)
     }
 
     pub fn remove(&mut self, id: NodeId) -> Result<(), GraphError> {
@@ -104,10 +93,6 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
         }
 
         for parent in new_op.parents() {
-            if parent == id {
-                return Err(GraphError::NodeIsSelfReferential);
-            }
-
             self.get_mut(parent)?.children += 1;
         }
 
@@ -118,6 +103,9 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
         for parent in new_op.parents() {
             self.get_mut(parent)?.children -= 1;
         }
+
+        // replacing op is an opportunity to introduce cycles...
+        self.topo_order()?;
 
         Ok(())
     }

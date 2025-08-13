@@ -32,7 +32,7 @@ fn main() -> Result<(), GraphError> {
     println!("{}", graph.formatted()?);
 
     assert_eq!(graph.replace_op(w, Add(a, c)), Err(GraphError::NodeDoesNotExist));
-    assert_eq!(graph.replace_op(z, Add(a, c)), Err(GraphError::FailedTypeCheck));
+    assert_eq!(graph.replace_op(z, Add(z, c)), Err(GraphError::FailedTypeCheck));
 
     Ok(())
 }
