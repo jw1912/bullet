@@ -1,9 +1,12 @@
 use std::{collections::HashSet, fmt, rc::Rc};
 
-use acyclib::graph::{Graph, GraphError, NodeId, Operation};
+use acyclib::{
+    graph::{Graph, GraphError, NodeId, Operation},
+    manager::{GraphManager, GraphManagerError, GraphType},
+};
 
-fn main() -> Result<(), GraphError> {
-    let mut graph = Graph::<Ty, Op>::default();
+fn main() -> Result<(), GraphManagerError<DepthGraph>> {
+    let mut graph = GraphManager::<DepthGraph>::default();
 
     let a = graph.add_node(Leaf)?;
     let b = graph.add_node(Leaf)?;
@@ -21,20 +24,28 @@ fn main() -> Result<(), GraphError> {
 
     println!("unused: {w:?}");
 
-    println!("{}", graph.formatted()?);
+    println!("{}", graph.formatted().unwrap());
 
     graph.replace_op(y, Add(a, c))?;
 
-    println!("{}", graph.formatted()?);
+    println!("{}", graph.formatted().unwrap());
 
     graph.eliminate_dead_nodes(required)?;
 
-    println!("{}", graph.formatted()?);
+    println!("{}", graph.formatted().unwrap());
 
-    assert_eq!(graph.replace_op(w, Add(a, c)), Err(GraphError::NodeDoesNotExist));
-    assert_eq!(graph.replace_op(z, Add(z, c)), Err(GraphError::FailedTypeCheck));
+    println!("ABOUT TO INTENTIONALLY ERROR");
+    if let Err(e) = graph.replace_op(w, Add(a, c)) {
+        println!("{e}");
+    }
 
     Ok(())
+}
+
+struct DepthGraph;
+impl GraphType for DepthGraph {
+    type Type = Ty;
+    type Operation = Op;
 }
 
 trait Basic: fmt::Debug + 'static {

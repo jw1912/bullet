@@ -1,33 +1,37 @@
+pub mod format;
 pub mod node;
 pub mod topo;
 
 use std::{
     collections::{HashMap, HashSet},
+    error::Error,
     fmt::Debug,
 };
 
 pub use node::{Node, NodeId};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum GraphError {
     NodeDoesNotExist,
     NodeWithIdAlreadyExists,
     NodeIsNotRoot,
     FailedTypeCheck,
     Cyclic,
+    Custom(Box<dyn Error>),
 }
 
-pub trait Operation<Ty: Clone>: Clone {
+pub trait Operation<Ty: Clone + PartialEq>: Clone {
     fn parents(&self) -> HashSet<NodeId>;
 
     fn out_type(&self, graph: &Graph<Ty, Self>) -> Result<Ty, GraphError>;
 }
 
-pub struct Graph<Ty: Clone, Op: Operation<Ty>> {
+#[derive(Clone)]
+pub struct Graph<Ty: Clone + PartialEq, Op: Operation<Ty>> {
     nodes: HashMap<NodeId, Node<Ty, Op>>,
 }
 
-impl<Ty: Clone, Op: Operation<Ty>> Default for Graph<Ty, Op> {
+impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Default for Graph<Ty, Op> {
     fn default() -> Self {
         Self { nodes: HashMap::new() }
     }
