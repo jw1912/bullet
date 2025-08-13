@@ -3,7 +3,7 @@ use std::{
     fmt,
 };
 
-use crate::{Graph, GraphError, Node, NodeId, Operation};
+use crate::graph::{Graph, GraphError, NodeId, Operation};
 
 impl<Ty: Clone + PartialEq + fmt::Debug, Op: Operation<Ty> + fmt::Debug> Graph<Ty, Op> {
     pub fn formatted(&self) -> Result<FormattedGraph, GraphError> {
@@ -12,13 +12,13 @@ impl<Ty: Clone + PartialEq + fmt::Debug, Op: Operation<Ty> + fmt::Debug> Graph<T
         let mut node_map = HashMap::new();
 
         for id in self.topo_order()? {
-            let Node { id, ty, op, .. } = self.get(id)?;
+            let node = self.get(id)?;
 
-            let parents = op.parents().iter().map(|p| *node_map.get(p).unwrap()).collect();
-            let out_type = format!("{ty:?}");
-            let new_id = graph.add_node(StringOperation { parents, op: format!("{op:?}"), out_type })?;
+            let parents = node.op().parents().iter().map(|p| *node_map.get(p).unwrap()).collect();
+            let out_type = format!("{:?}", node.ty());
+            let new_id = graph.add_node(StringOperation { parents, op: format!("{:?}", node.op()), out_type })?;
 
-            assert!(node_map.insert(*id, new_id).is_none());
+            assert!(node_map.insert(node.id(), new_id).is_none());
         }
 
         Ok(graph)
@@ -64,10 +64,10 @@ impl fmt::Display for FormattedGraph {
             ids.insert(id, line);
 
             let node = map(self.get(id))?;
-            let Node { ty, op, .. } = node;
 
             let id = nd(line);
-            let ty = ty.to_string();
+            let ty = node.ty().to_string();
+            let op = node.op();
 
             idl = idl.max(id.len());
             tyl = tyl.max(ty.len());

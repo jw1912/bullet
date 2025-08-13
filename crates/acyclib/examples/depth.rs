@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt, rc::Rc};
 
-use acyclib::{Graph, GraphError, NodeId, Operation};
+use acyclib::graph::{Graph, GraphError, NodeId, Operation};
 
 fn main() -> Result<(), GraphError> {
     let mut graph = Graph::<Ty, Op>::default();
