@@ -14,7 +14,7 @@ use std::{
 };
 
 use acyclib::{
-    graph::{Graph, GraphError, Node, NodeId, Operation},
+    graph::{format::StringOperation, Graph, GraphError, Node, NodeId, Operation},
     manager::{GraphManager, GraphManagerError, GraphType},
 };
 use node::{AnnotatedNode, NodeInfo};
@@ -60,6 +60,10 @@ impl<B: BackendMarker> GraphIRManager<B> {
         let shape = self.get(idx)?.ty().shape;
 
         Ok(AnnotatedNode { idx, shape })
+    }
+
+    pub fn formatted(&self) -> Result<Graph<String, StringOperation>, GraphError> {
+        self.inner.formatted()
     }
 
     pub fn add_leaf(

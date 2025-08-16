@@ -29,8 +29,7 @@ impl<B: BackendMarker, T: GraphIRSimplePass<B>> GraphIRPass<B> for T {
     }
 }
 
-#[allow(clippy::borrowed_box)]
-fn downcast<B: BackendMarker, T: 'static>(op: &Rc<dyn GraphIROperationCompilable<B>>) -> Option<&T> {
+pub fn downcast<B: BackendMarker, T: 'static>(op: &Rc<dyn GraphIROperationCompilable<B>>) -> Option<&T> {
     let op: &dyn std::any::Any = op.as_ref();
     op.downcast_ref()
 }

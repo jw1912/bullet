@@ -41,7 +41,7 @@ pub struct GraphBuilder<B: BackendMarker> {
 }
 
 impl<B: BackendMarker> GraphBuilder<B> {
-    fn ir(&self) -> MutexGuard<'_, GraphIRManager<B>> {
+    pub fn ir(&self) -> MutexGuard<'_, GraphIRManager<B>> {
         self.ir.try_lock().unwrap()
     }
 
