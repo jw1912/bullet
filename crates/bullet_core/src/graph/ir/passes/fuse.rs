@@ -77,13 +77,13 @@ fn add_single_sparse<B: BackendMarker>(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.children() == 1 {
-        if let Some(&SparseAffineActivate {
+        if let Some(SparseAffineActivate {
             weights,
             indices,
             values,
             biases: None,
             activation: DiffableFromOutput::Identity,
-        }) = downcast(ir_node.op())
+        }) = downcast(ir_node.op()).cloned()
         {
             ir.replace(
                 target,
@@ -109,17 +109,17 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFrom
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let op = ir.get(target)?.op();
 
-        if let Some(&Unary { input, op: UnaryOp::DiffableFromOutput(activation) }) = downcast(op) {
+        if let Some(Unary { input, op: UnaryOp::DiffableFromOutput(activation) }) = downcast(op).cloned() {
             let ir_node = ir.get(input.idx)?;
 
             if ir_node.children() == 1 {
-                if let Some(&SparseAffineActivate {
+                if let Some(SparseAffineActivate {
                     weights,
                     biases,
                     values,
                     indices,
                     activation: DiffableFromOutput::Identity,
-                }) = downcast(ir_node.op())
+                }) = downcast(ir_node.op()).cloned()
                 {
                     ir.replace(target, SparseAffineActivate { weights, biases, values, indices, activation })?;
                     return Ok(true);
@@ -234,7 +234,7 @@ fn add_single_dense<B: BackendMarker>(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.children() == 1 {
-        if let Some(&Matmul { a, transa: false, b, transb: false }) = downcast(ir_node.op()) {
+        if let Some(Matmul { a, transa: false, b, transb: false }) = downcast(ir_node.op()).cloned() {
             if !ir.get(rhs.idx)?.ty().batched {
                 ir.replace(target, Affine { weights: a, inputs: b, biases: rhs })?;
                 return Ok(true);
@@ -256,7 +256,7 @@ fn linear_comb_single<B: BackendMarker>(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.children() == 1 {
-        if let Some(&Unary { input, op: UnaryOp::Mul(x) }) = downcast(ir_node.op()) {
+        if let Some(Unary { input, op: UnaryOp::Mul(x) }) = downcast(ir_node.op()).cloned() {
             ir.replace(target, LinearCombination::new([(input, alpha * x), (rhs, beta)])?)?;
             return Ok(true);
         }

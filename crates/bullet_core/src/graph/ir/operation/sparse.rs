@@ -13,7 +13,7 @@ use crate::graph::{
     GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SparseAffineActivate {
     pub weights: AnnotatedNode,
     pub biases: Option<AnnotatedNode>,

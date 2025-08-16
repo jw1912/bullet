@@ -25,7 +25,7 @@ fn matmul_ty(batched_a: bool, batched_b: bool) -> MatmulType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Matmul {
     pub a: AnnotatedNode,
     pub b: AnnotatedNode,

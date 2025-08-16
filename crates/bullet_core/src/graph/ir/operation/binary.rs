@@ -276,7 +276,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for FusedPairwiseMulConcat 
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Select {
     pub input: AnnotatedNode,
     pub buckets: AnnotatedNode,
