@@ -4,16 +4,16 @@ mod matmul;
 pub mod sparse;
 
 pub use backend::ExecutionContext;
-use backend::{bindings, ops, util, Buffer};
+use backend::{Buffer, bindings, ops, util};
 
 use bullet_core::{
     device::{
+        Device, DeviceBuffer, OperationError,
         base::{AdamConfig, BaseOperations},
         blas::{BlasOperations, GemmConfig},
-        Device, DeviceBuffer, OperationError,
     },
     graph::{
-        ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
+        ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
         tensor,
     },
 };
@@ -34,21 +34,13 @@ pub enum DeviceError {
 
 impl From<bindings::cublasStatus_t> for Result<(), DeviceError> {
     fn from(value: bindings::cublasStatus_t) -> Self {
-        if value == bindings::CUBLAS_SUCCESS {
-            Ok(())
-        } else {
-            Err(DeviceError::Cublas(value))
-        }
+        if value == bindings::CUBLAS_SUCCESS { Ok(()) } else { Err(DeviceError::Cublas(value)) }
     }
 }
 
 impl From<bindings::cudaError_t> for Result<(), DeviceError> {
     fn from(value: bindings::cudaError_t) -> Self {
-        if value == bindings::SUCCESS {
-            Ok(())
-        } else {
-            Err(DeviceError::Cuda(value))
-        }
+        if value == bindings::SUCCESS { Ok(()) } else { Err(DeviceError::Cuda(value)) }
     }
 }
 

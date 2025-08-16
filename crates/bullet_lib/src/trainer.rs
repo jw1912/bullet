@@ -7,7 +7,7 @@ pub mod settings;
 use bullet_core::optimiser::{Optimiser, OptimiserState};
 pub use preparer::DataPreparer;
 use save::SavedFormat;
-use schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule};
+use schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler};
 use settings::LocalSettings;
 
 #[allow(deprecated)]

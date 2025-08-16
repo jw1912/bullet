@@ -1,6 +1,6 @@
 use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 
-use crate::device::{base::BaseOperations, Device, DeviceBuffer, OperationError};
+use crate::device::{Device, DeviceBuffer, OperationError, base::BaseOperations};
 
 pub struct DenseMatrix<D: Device> {
     pub buf: D::BufferF32,
@@ -127,7 +127,8 @@ impl<D: Device> DenseMatrix<D> {
         }
 
         self.set_batch_size(batch_size)?;
-        self.buf.load_non_blocking_from_host(buf)
+
+        unsafe { self.buf.load_non_blocking_from_host(buf) }
     }
 
     pub fn set_to(&mut self, val: f32) -> Result<(), D::DeviceError> {

@@ -1,6 +1,6 @@
 use std::sync::mpsc::SyncSender;
 
-use super::schedule::{wdl::WdlScheduler, TrainingSteps};
+use super::schedule::{TrainingSteps, wdl::WdlScheduler};
 
 pub trait DataPreparer: Clone + Send + Sync {
     type DataType: Send + Sync;

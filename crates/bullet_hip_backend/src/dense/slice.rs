@@ -1,8 +1,8 @@
 use bullet_core::device::DeviceBuffer;
 
 use crate::{
-    backend::{blas, util::catch_cublas, Buffer},
     DeviceError,
+    backend::{Buffer, blas, util::catch_cublas},
 };
 
 #[allow(clippy::too_many_arguments)]

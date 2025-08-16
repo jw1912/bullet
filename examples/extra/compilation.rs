@@ -2,14 +2,14 @@ use acyclib::graph::NodeId;
 use bullet_core::{
     cpu::{CpuError, CpuMarker, CpuThread},
     graph::{
+        GraphFunction, GraphNodeId, GraphNodeIdTy,
         builder::{GraphBuilder, Shape},
         instruction,
         ir::{
-            node::AnnotatedNode,
-            operation::{util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
             BackendMarker, GraphIR, GraphIRError,
+            node::AnnotatedNode,
+            operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, util},
         },
-        GraphFunction, GraphNodeId, GraphNodeIdTy,
     },
 };
 

@@ -1,8 +1,8 @@
-use bullet_core::device::{base::AdamConfig, DeviceBuffer};
+use bullet_core::device::{DeviceBuffer, base::AdamConfig};
 
 use crate::{
-    backend::{ops, Buffer},
     DeviceError,
+    backend::{Buffer, ops},
 };
 
 #[allow(clippy::too_many_arguments)]

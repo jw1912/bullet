@@ -13,8 +13,8 @@ use std::{
 
 use acyclib::graph::NodeId;
 use instruction::GraphInstruction;
-use ir::{node::AnnotatedNode, shape::Shape, GraphIRError};
-use tensor::{read_from_byte_buffer, Tensor};
+use ir::{GraphIRError, node::AnnotatedNode, shape::Shape};
+use tensor::{Tensor, read_from_byte_buffer};
 
 use crate::device::{Device, OperationError};
 

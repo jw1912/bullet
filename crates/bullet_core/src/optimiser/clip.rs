@@ -5,7 +5,7 @@ use crate::{
     graph::tensor::DenseMatrix,
 };
 
-use super::{utils::Placement, OptimiserState};
+use super::{OptimiserState, utils::Placement};
 
 #[derive(Clone, Debug)]
 pub struct WeightClippingParams<T> {

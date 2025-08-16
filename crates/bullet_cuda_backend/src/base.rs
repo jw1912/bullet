@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use bullet_core::{
     device::{
+        DeviceBuffer,
         base::{AdamConfig, BaseOperations},
         blas::GemmConfig,
-        DeviceBuffer,
     },
     graph::{builder::Shape, ir::operation::unary::DiffableFromOutput},
 };

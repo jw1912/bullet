@@ -9,7 +9,7 @@ use anyhow::Context;
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 
-use crate::{interleave::InterleaveOptions, Rand};
+use crate::{Rand, interleave::InterleaveOptions};
 
 #[derive(StructOpt)]
 pub struct ShuffleOptions {

@@ -9,8 +9,8 @@ use std::{fs::File, io::Read, time::Instant};
 use bullet_core::{
     device::OperationError,
     graph::{
-        builder::{GraphBuilder, Shape},
         Graph, GraphNodeId, GraphNodeIdTy, Node,
+        builder::{GraphBuilder, Shape},
     },
 };
 use bullet_hip_backend::{DeviceError, ExecutionContext};

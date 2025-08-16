@@ -3,16 +3,16 @@ use std::num::NonZeroUsize;
 use acyclib::graph::NodeId;
 
 use crate::{
-    device::{blas::GemmConfig, Device},
+    device::{Device, blas::GemmConfig},
     graph::{
+        GraphFunction, GraphNodeId, GraphNodeIdTy,
         instruction::{self, MatmulType},
         ir::{
-            node::AnnotatedNode,
-            operation::{unary::Reduce, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
-            shape::Shape,
             BackendMarker, GraphIR, GraphIRError,
+            node::AnnotatedNode,
+            operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, unary::Reduce, util},
+            shape::Shape,
         },
-        GraphFunction, GraphNodeId, GraphNodeIdTy,
     },
 };
 

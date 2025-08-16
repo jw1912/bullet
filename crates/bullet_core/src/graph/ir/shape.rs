@@ -42,11 +42,7 @@ impl Shape {
     }
 
     pub fn maybe_transpose(&self, trans: bool) -> Self {
-        if trans {
-            self.transpose()
-        } else {
-            *self
-        }
+        if trans { self.transpose() } else { *self }
     }
 
     pub fn cols(&self) -> usize {

@@ -7,7 +7,7 @@ pub mod viribinpack;
 
 use bullet_core::{
     device::OperationError,
-    graph::{builder::Shape, GraphNodeId, GraphNodeIdTy},
+    graph::{GraphNodeId, GraphNodeIdTy, builder::Shape},
 };
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
@@ -284,37 +284,39 @@ where
     let batch_size = prepared.batch_size;
     let expected_inputs = prepared.input_getter.num_inputs();
 
-    if let Some(idx) = graph.input_idx("stm") {
-        let input = &prepared.stm;
-        let stm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+    unsafe {
+        if let Some(idx) = graph.input_idx("stm") {
+            let input = &prepared.stm;
+            let stm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-        if stm.values.single_size() != expected_inputs {
-            return Err(OperationError::InvalidTensorFormat);
+            if stm.values.single_size() != expected_inputs {
+                return Err(OperationError::InvalidTensorFormat);
+            }
+
+            stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
 
-        stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-    }
+        if let Some(idx) = graph.input_idx("nstm") {
+            let input = &prepared.nstm;
+            let ntm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-    if let Some(idx) = graph.input_idx("nstm") {
-        let input = &prepared.nstm;
-        let ntm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            if ntm.values.single_size() != expected_inputs {
+                return Err(OperationError::InvalidTensorFormat);
+            }
 
-        if ntm.values.single_size() != expected_inputs {
-            return Err(OperationError::InvalidTensorFormat);
+            ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
 
-        ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
-    }
+        if let Some(idx) = graph.input_idx("buckets") {
+            let input = &prepared.buckets;
+            let buckets = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-    if let Some(idx) = graph.input_idx("buckets") {
-        let input = &prepared.buckets;
-        let buckets = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            if buckets.values.single_size() != Out::BUCKETS {
+                return Err(OperationError::InvalidTensorFormat);
+            }
 
-        if buckets.values.single_size() != Out::BUCKETS {
-            return Err(OperationError::InvalidTensorFormat);
+            buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
-
-        buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
     }
 
     if let Some(idx) = graph.input_idx("entry_weights") {

@@ -4,8 +4,8 @@ use bullet_core::{
 };
 
 use crate::{
-    backend::{ops, Buffer},
     OperationResult,
+    backend::{Buffer, ops},
 };
 
 #[allow(clippy::too_many_arguments)]

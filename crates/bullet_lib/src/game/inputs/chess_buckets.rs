@@ -1,6 +1,6 @@
 use bulletformat::ChessBoard;
 
-use super::{get_num_buckets, Chess768, Factorises, SparseInputType};
+use super::{Chess768, Factorises, SparseInputType, get_num_buckets};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ChessBuckets {

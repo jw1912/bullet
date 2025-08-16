@@ -12,13 +12,14 @@ use bullet_core::{
     graph::{GraphNodeId, GraphNodeIdTy, Node},
     optimiser::OptimiserState,
     trainer::{
-        self,
+        self, Trainer,
         dataloader::{PreparedBatchDevice, PreparedBatchHost},
-        logger, Trainer,
+        logger,
     },
 };
 
 use crate::{
+    LocalSettings, TrainingSchedule,
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     lr::LrScheduler,
     trainer::save::SavedFormat,
@@ -27,7 +28,6 @@ use crate::{
         loader::{DefaultDataLoader, LoadableDataType},
     },
     wdl::WdlScheduler,
-    LocalSettings, TrainingSchedule,
 };
 
 /// Value network trainer, generally for training NNUE networks.
@@ -198,7 +198,7 @@ where
     {
         let vals = self.eval_raw_output(fen);
 
-        match &vals[..] {
+        match vals[..] {
             [mut loss, mut draw, mut win] => {
                 let max = win.max(draw).max(loss);
                 win = (win - max).exp();
@@ -207,7 +207,7 @@ where
 
                 (win + draw / 2.0) / (win + draw + loss)
             }
-            [score] => *score,
+            [score] => score,
             _ => panic!("Invalid output size!"),
         }
     }

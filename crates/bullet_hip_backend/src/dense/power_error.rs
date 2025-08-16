@@ -1,8 +1,8 @@
 use bullet_core::device::DeviceBuffer;
 
 use crate::{
-    backend::{ops, Buffer},
     DeviceError,
+    backend::{Buffer, ops},
 };
 
 pub fn abs_power_error(

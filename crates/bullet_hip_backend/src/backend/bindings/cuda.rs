@@ -21,7 +21,7 @@ pub enum cudaMemcpyKind {
     cudaMemcpyDefault = 4,
 }
 
-extern "C" {
+unsafe extern "C" {
     pub fn cudaDeviceReset() -> cudaError_t;
     pub fn cudaDeviceSynchronize() -> cudaError_t;
     pub fn cudaGetLastError() -> cudaError_t;
@@ -83,7 +83,7 @@ pub type CUstream = *mut CUstream_st;
 pub type cudaStream_t = *mut CUstream_st;
 
 #[rustfmt::skip]
-extern "C" {
+unsafe extern "C" {
     pub fn cublasCreate_v2(handle: *mut cublasHandle_t) -> cublasStatus_t;
     pub fn cublasDestroy_v2(handle: cublasHandle_t) -> cublasStatus_t;
     pub fn cublasSaxpy_v2(handle: cublasHandle_t, n: c_int, alpha: *const f32, x: *const f32, incx: c_int, y: *mut f32, incy: c_int) -> cublasStatus_t;

@@ -5,10 +5,11 @@ use std::{
     time::Instant,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use bulletformat::{
+    AtaxxBoard, BulletFormat, ChessBoard,
     chess::{CudADFormat, MarlinFormat},
-    convert_from_bin, convert_from_text, AtaxxBoard, BulletFormat, ChessBoard,
+    convert_from_bin, convert_from_text,
 };
 use structopt::StructOpt;
 

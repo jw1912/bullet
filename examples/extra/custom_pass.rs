@@ -4,9 +4,9 @@ use bullet_core::{
     graph::{
         builder::{GraphBuilder, Shape},
         ir::{
-            operation::unary::{DiffableFromOutput, Unary, UnaryOp},
-            passes::{downcast, GraphIRSimplePass},
             BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
+            operation::unary::{DiffableFromOutput, Unary, UnaryOp},
+            passes::{GraphIRSimplePass, downcast},
         },
     },
 };

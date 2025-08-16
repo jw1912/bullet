@@ -20,7 +20,7 @@ pub enum hipMemcpyKind {
 }
 
 #[rustfmt::skip]
-extern "C" {
+unsafe extern "C" {
     pub fn hipDeviceReset() -> hipError_t;
     pub fn hipDeviceSynchronize() -> hipError_t;
     pub fn hipGetLastError() -> hipError_t;
@@ -73,7 +73,7 @@ pub enum hipblasOperation_t {
 pub type hipblasHandle_t = *mut c_void;
 
 #[rustfmt::skip]
-extern "C" {
+unsafe extern "C" {
     pub fn hipblasCreate(handle: *mut hipblasHandle_t) -> hipblasStatus_t;
     pub fn hipblasDestroy(handle: hipblasHandle_t) -> hipblasStatus_t;
     pub fn hipblasSaxpy(handle: hipblasHandle_t, n: c_int, alpha: *const f32, x: *const f32, incx: c_int, y: *mut f32, incy: c_int) -> hipblasStatus_t;

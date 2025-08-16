@@ -7,13 +7,13 @@ use std::{
 
 use crate::{
     device::{
-        base::{AdamConfig, BaseOperations},
         Device, OperationError,
+        base::{AdamConfig, BaseOperations},
     },
     graph::tensor::DenseMatrix,
 };
 
-use super::{utils, OptimiserState};
+use super::{OptimiserState, utils};
 
 #[derive(Clone, Copy, Debug)]
 pub struct RAdamParams {

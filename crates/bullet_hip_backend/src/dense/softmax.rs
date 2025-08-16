@@ -1,6 +1,6 @@
 use bullet_core::device::{DeviceBuffer, OperationError};
 
-use crate::{backend::ops, Buffer, OperationResult};
+use crate::{Buffer, OperationResult, backend::ops};
 
 pub fn softmax_across_batch(
     batch_size: usize,

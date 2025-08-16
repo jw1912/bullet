@@ -1,4 +1,4 @@
-use bulletformat::{chess::MarlinFormat, ChessBoard};
+use bulletformat::{ChessBoard, chess::MarlinFormat};
 
 pub trait OutputBuckets<T>: Send + Sync + Copy + Default + 'static {
     const BUCKETS: usize;

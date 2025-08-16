@@ -9,9 +9,9 @@ mod factorised;
 mod legacy;
 
 pub use adapter::MarlinFormatAdapter;
-pub use ataxx147::{Ataxx147, Ataxx98};
-pub use chess768::Chess768;
+pub use ataxx147::{Ataxx98, Ataxx147};
 pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};
+pub use chess768::Chess768;
 pub use factorised::{Factorised, Factorises};
 
 #[allow(deprecated)]

@@ -1,7 +1,7 @@
 use bullet_core::trainer::{
+    DataLoadingError,
     dataloader::{DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost},
     schedule::TrainingSteps,
-    DataLoadingError,
 };
 
 use crate::{

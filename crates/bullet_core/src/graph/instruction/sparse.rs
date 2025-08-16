@@ -1,7 +1,7 @@
 use crate::{
     device::{Device, OperationError},
     graph::{
-        builder::Shape, instruction::GraphInstruction, ir::operation::unary::DiffableFromOutput, Graph, GraphNodeId,
+        Graph, GraphNodeId, builder::Shape, instruction::GraphInstruction, ir::operation::unary::DiffableFromOutput,
     },
 };
 
@@ -94,7 +94,7 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivate {
         let output_grads = output_grads.dense()?;
 
         let mut biases_grads = if let Some(b) = biases_grads { Some(graph.get_mut(b)?) } else { None };
-        let biases_grads = if let Some(ref mut b) = &mut biases_grads { Some(b.dense_mut()?) } else { None };
+        let biases_grads = if let Some(b) = &mut biases_grads { Some(b.dense_mut()?) } else { None };
 
         let values = if let Some(v) = values { Some(graph.get(v)?) } else { None };
         let values = if let Some(v) = &values { Some(v.dense()?) } else { None };

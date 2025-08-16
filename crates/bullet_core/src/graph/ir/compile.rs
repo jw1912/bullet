@@ -5,15 +5,15 @@ use acyclib::manager::GraphManagerError;
 use crate::{
     device::Device,
     graph::{
+        Graph, GraphFunction, GraphNodeId, GraphNodeIdTy,
         builder::Shape,
         instruction::Set,
         ir::{
+            BackendMarker, GraphIRError, GraphIRManager, GraphIRResult, GraphIRType,
             node::NodeInfo,
             passes::{self, GraphIRPass},
-            BackendMarker, GraphIRError, GraphIRManager, GraphIRResult, GraphIRType,
         },
         tensor::Tensor,
-        Graph, GraphFunction, GraphNodeId, GraphNodeIdTy,
     },
 };
 

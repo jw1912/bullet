@@ -1,6 +1,6 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::{backend::ops, Buffer, DeviceError};
+use crate::{Buffer, DeviceError, backend::ops};
 
 macro_rules! define_activation {
     (

@@ -1,8 +1,8 @@
 use bullet_core::device::{DeviceBuffer, OperationError};
 
 use crate::{
-    backend::{ops, Buffer},
     OperationResult,
+    backend::{Buffer, ops},
 };
 
 pub fn gather(

@@ -2,7 +2,7 @@
 
 use bulletformat::ChessBoard;
 
-use super::{get_num_buckets, Chess768, Factorised, Factorises, SparseInputType};
+use super::{Chess768, Factorised, Factorises, SparseInputType, get_num_buckets};
 
 pub type ChessBucketsMergedKingsFactorised = Factorised<ChessBucketsMergedKings, Chess768>;
 impl ChessBucketsMergedKingsFactorised {

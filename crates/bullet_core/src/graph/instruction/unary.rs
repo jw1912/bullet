@@ -1,9 +1,9 @@
 use crate::{
-    device::{base::BaseOperations, Device, OperationError},
+    device::{Device, OperationError, base::BaseOperations},
     graph::{
+        Graph, GraphNodeId,
         instruction::GraphInstruction,
         ir::operation::unary::{Reduce, UnaryOp},
-        Graph, GraphNodeId,
     },
 };
 

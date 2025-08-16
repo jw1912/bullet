@@ -7,8 +7,8 @@ use crate::{
 };
 
 use super::{
-    radam::{RAdam, RAdamParams},
     OptimiserState, WrapOptimiser,
+    radam::{RAdam, RAdamParams},
 };
 
 #[derive(Clone, Debug)]

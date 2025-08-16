@@ -3,6 +3,7 @@ use acyclib::graph::NodeId;
 use crate::graph::{
     builder::Shape,
     ir::{
+        BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
         node::AnnotatedNode,
         operation::{
             affine::Matmul,
@@ -11,7 +12,6 @@ use crate::graph::{
             unary::{Slice, Unary},
         },
         passes::GraphIRSimplePass,
-        BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
     },
 };
 
