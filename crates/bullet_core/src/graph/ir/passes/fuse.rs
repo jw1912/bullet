@@ -27,7 +27,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FusePairwiseMulWithConcat {
             let b_data = ir.get(b.idx)?;
 
             if a_data.children() == 1 && b_data.children() == 1 {
-                if let (Some(&PairwiseMul { input: x }), Some(&PairwiseMul { input: y })) =
+                if let (Some(PairwiseMul { input: x }), Some(PairwiseMul { input: y })) =
                     (downcast(a_data.op()), downcast(b_data.op()))
                 {
                     if x.idx != y.idx {
