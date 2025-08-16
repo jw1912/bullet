@@ -9,3 +9,5 @@ pub mod graph;
 pub mod optimiser;
 /// Contains the `Trainer` struct and `TrainerState` trait.
 pub mod trainer;
+
+pub use acyclib;

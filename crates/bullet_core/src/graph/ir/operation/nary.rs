@@ -1,19 +1,21 @@
 use std::collections::HashMap;
 
+use acyclib::graph::NodeId;
+
 use crate::graph::{
     instruction,
     ir::{
         node::AnnotatedNode,
-        operation::{unary::Reduce, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+        operation::{unary::Reduce, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
         shape::Shape,
-        BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+        BackendMarker, GraphIR, GraphIRError,
     },
-    GraphFunction, NodeId, NodeIdTy,
+    GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LinearCombination {
-    pub items: Vec<(usize, f32)>,
+    pub items: Vec<(NodeId, f32)>,
     pub shape: Shape,
 }
 
@@ -39,7 +41,7 @@ impl LinearCombination {
     }
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for LinearCombination {
+impl<B: BackendMarker> GraphIROperationBase<B> for LinearCombination {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         let shape = self.shape;
         self.items.iter().map(|x| AnnotatedNode { idx: x.0, shape }).collect()
@@ -65,27 +67,27 @@ impl<B: BackendMarker> GraphIROperation<B> for LinearCombination {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
-    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let output = NodeId::new(output_node, NodeIdTy::Values);
-        let bsn = util::batch_size_node(node_info, &<Self as GraphIROperation<B>>::nodes(self));
+    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+        let bsn = util::batch_size_node(ir, &<Self as GraphIROperationBase<B>>::nodes(self));
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
+        func.push(instruction::MaybeUpdateBatchSize { input: GraphNodeId::new(bsn, GraphNodeIdTy::Values), output });
 
         let mut push = |input_mul, output_mul, node| {
-            if !node_info.get(output_node).unwrap().batched || node_info.get(node).unwrap().batched {
+            if !ir.get(output_node).unwrap().ty().batched || ir.get(node).unwrap().ty().batched {
                 func.push(instruction::LinearCombination {
                     input_mul,
                     output_mul,
-                    input: NodeId::new(node, NodeIdTy::Values),
+                    input: GraphNodeId::new(node, GraphNodeIdTy::Values),
                     output,
                 });
             } else {
                 func.push(instruction::LinearCombinationSplat {
                     input_mul,
                     output_mul,
-                    input: NodeId::new(node, NodeIdTy::Values),
+                    input: GraphNodeId::new(node, GraphNodeIdTy::Values),
                     output,
                 });
             }
@@ -100,18 +102,21 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(output_node, NodeIdTy::Gradients);
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
 
         let mut func = GraphFunction::default();
 
         let mut push = |input_mul, output_mul, node| {
-            if node_info.get(node).unwrap().requires_grad {
-                let output = NodeId::new(node, NodeIdTy::Gradients);
+            if ir.get(node).unwrap().ty().requires_grad {
+                let output = GraphNodeId::new(node, GraphNodeIdTy::Gradients);
 
-                func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(node, NodeIdTy::Values), output });
+                func.push(instruction::MaybeUpdateBatchSize {
+                    input: GraphNodeId::new(node, GraphNodeIdTy::Values),
+                    output,
+                });
 
-                if !node_info.get(output_node).unwrap().batched || node_info.get(node).unwrap().batched {
+                if !ir.get(output_node).unwrap().ty().batched || ir.get(node).unwrap().ty().batched {
                     func.push(instruction::LinearCombination { input_mul, output_mul, input, output });
                 } else {
                     func.push(instruction::ReduceAcrossBatch {

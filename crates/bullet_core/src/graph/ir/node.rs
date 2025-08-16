@@ -1,10 +1,10 @@
-use std::num::NonZeroUsize;
+use std::{fmt, num::NonZeroUsize};
 
-use crate::graph::ir::{operation::GraphIROperationCompilable, BackendMarker};
+use acyclib::graph::NodeId;
 
 use super::shape::Shape;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NodeInfo {
     pub requires_grad: bool,
     pub sparse: Option<NonZeroUsize>,
@@ -12,31 +12,34 @@ pub struct NodeInfo {
     pub shape: Shape,
 }
 
-#[derive(Debug)]
-pub struct GraphIRNode<B: BackendMarker> {
-    pub idx: usize,
-    pub info: NodeInfo,
-    pub parent_operation: Option<Box<dyn GraphIROperationCompilable<B>>>,
-    pub num_children: usize,
-    pub id: Option<String>,
-}
-
-impl<B: BackendMarker> GraphIRNode<B> {
-    pub fn with_new_op(&self, op: impl GraphIROperationCompilable<B>) -> Self {
-        Self {
-            idx: self.idx,
-            info: self.info,
-            parent_operation: Some(Box::new(op)),
-            num_children: self.num_children,
-            id: self.id.clone(),
+impl fmt::Debug for NodeInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.requires_grad {
+            write!(f, "gr_")?;
         }
+
+        if let Some(val) = self.sparse {
+            write!(f, "sp{}_", val.get())?;
+        }
+
+        if self.batched {
+            write!(f, "?x")?;
+        }
+
+        write!(f, "{:?}", self.shape)
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct AnnotatedNode {
-    pub idx: usize,
+    pub idx: NodeId,
     pub shape: Shape,
+}
+
+impl fmt::Debug for AnnotatedNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ {:?}, {:?} }}", self.idx, self.shape)
+    }
 }
 
 #[derive(Debug)]

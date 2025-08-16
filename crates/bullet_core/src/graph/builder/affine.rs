@@ -18,8 +18,7 @@ impl<'a, B: BackendMarker> Affine<'a, B> {
 
     pub fn init_with_effective_input_size(&self, size: usize) {
         let builder = self.weights.builder.ir();
-        let w = builder.get(self.weights.node.idx).unwrap();
-        let id = w.id.clone().unwrap();
+        let id = builder.get_id(self.weights.node.idx).unwrap();
         *self.weights.builder.init().get_mut(&id).unwrap() =
             InitSettings::Normal { mean: 0.0, stdev: (2.0 / size as f32).sqrt() };
     }

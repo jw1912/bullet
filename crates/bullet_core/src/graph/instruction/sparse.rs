@@ -1,18 +1,20 @@
 use crate::{
     device::{Device, OperationError},
-    graph::{builder::Shape, instruction::GraphInstruction, ir::operation::unary::DiffableFromOutput, Graph, NodeId},
+    graph::{
+        builder::Shape, instruction::GraphInstruction, ir::operation::unary::DiffableFromOutput, Graph, GraphNodeId,
+    },
 };
 
 #[derive(Clone, Copy, Debug)]
 pub struct SparseAffineActivate {
-    pub weights: NodeId,
+    pub weights: GraphNodeId,
     pub weights_shape: Shape,
-    pub biases: Option<NodeId>,
+    pub biases: Option<GraphNodeId>,
     pub input_shape: Shape,
-    pub indices: NodeId,
-    pub values: Option<NodeId>,
+    pub indices: GraphNodeId,
+    pub values: Option<GraphNodeId>,
     pub activation: DiffableFromOutput,
-    pub output: NodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for SparseAffineActivate {
@@ -57,15 +59,15 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivate {
 
 #[derive(Clone, Copy, Debug)]
 pub struct BackpropSparseAffineActivate {
-    pub weights_grads: NodeId,
+    pub weights_grads: GraphNodeId,
     pub weights_shape: Shape,
-    pub biases_grads: Option<NodeId>,
+    pub biases_grads: Option<GraphNodeId>,
     pub input_shape: Shape,
-    pub indices: NodeId,
-    pub values: Option<NodeId>,
+    pub indices: GraphNodeId,
+    pub values: Option<GraphNodeId>,
     pub activation: DiffableFromOutput,
-    pub output: NodeId,
-    pub output_grads: NodeId,
+    pub output: GraphNodeId,
+    pub output_grads: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivate {

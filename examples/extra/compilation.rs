@@ -1,3 +1,4 @@
+use acyclib::graph::NodeId;
 use bullet_core::{
     cpu::{CpuError, CpuMarker, CpuThread},
     graph::{
@@ -5,10 +6,10 @@ use bullet_core::{
         instruction,
         ir::{
             node::AnnotatedNode,
-            operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
-            BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+            operation::{util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
+            BackendMarker, GraphIR, GraphIRError,
         },
-        GraphFunction, NodeId, NodeIdTy,
+        GraphFunction, GraphNodeId, GraphNodeIdTy,
     },
 };
 
@@ -59,7 +60,7 @@ struct MyCustomAdd {
     b: AnnotatedNode,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for MyCustomAdd {
+impl<B: BackendMarker> GraphIROperationBase<B> for MyCustomAdd {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.a, self.b]
     }
@@ -78,10 +79,10 @@ impl<B: BackendMarker> GraphIROperation<B> for MyCustomAdd {
 }
 
 impl GraphIROperationCompilable<CpuMarker> for MyCustomAdd {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CpuThread> {
-        let a = NodeId::new(self.a.idx, NodeIdTy::Values);
-        let b = NodeId::new(self.b.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _node_info: &GraphIR<CpuMarker>, output_node: NodeId) -> GraphFunction<CpuThread> {
+        let a = GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values);
+        let b = GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
 
@@ -92,20 +93,20 @@ impl GraphIROperationCompilable<CpuMarker> for MyCustomAdd {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CpuThread> {
-        let input = NodeId::new(output_node, NodeIdTy::Gradients);
+    fn backward_pass(&self, node_info: &GraphIR<CpuMarker>, output_node: NodeId) -> GraphFunction<CpuThread> {
+        let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
 
         let mut func = GraphFunction::default();
 
-        if node_info.get(self.a.idx).unwrap().requires_grad {
-            let output = NodeId::new(self.a.idx, NodeIdTy::Gradients);
+        if node_info.get(self.a.idx).unwrap().ty().requires_grad {
+            let output = GraphNodeId::new(self.a.idx, GraphNodeIdTy::Gradients);
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::LinearCombination { input, input_mul: 1.0, output, output_mul: 1.0 });
         }
 
-        if node_info.get(self.b.idx).unwrap().requires_grad {
-            let output = NodeId::new(self.b.idx, NodeIdTy::Gradients);
+        if node_info.get(self.b.idx).unwrap().ty().requires_grad {
+            let output = GraphNodeId::new(self.b.idx, GraphNodeIdTy::Gradients);
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::LinearCombination { input, input_mul: 1.0, output, output_mul: 1.0 });

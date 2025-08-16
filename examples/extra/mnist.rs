@@ -10,7 +10,7 @@ use bullet_core::{
     device::OperationError,
     graph::{
         builder::{GraphBuilder, Shape},
-        Graph, Node, NodeId, NodeIdTy,
+        Graph, GraphNodeId, GraphNodeIdTy, Node,
     },
 };
 use bullet_hip_backend::{DeviceError, ExecutionContext};
@@ -27,25 +27,7 @@ fn main() -> Result<(), OperationError<DeviceError>> {
     assert_eq!(batch_size, images.batch_size());
     assert_eq!(validation_batch_size, validation_images.batch_size());
 
-    let builder = GraphBuilder::default();
-
-    let inputs = builder.new_dense_input("inputs", Shape::new(images.rows, images.cols));
-    let targets = builder.new_dense_input("targets", Shape::new(10, 1));
-
-    let l0 = builder.new_affine("l0", 28 * 28, 128);
-    let l1 = builder.new_affine("l1", 128, 128);
-    let l2 = builder.new_affine("l2", 128, 10);
-
-    let f0 = l0.forward(inputs.reshape(Shape::new(28 * 28, 1))).sigmoid();
-    let f1 = l1.forward(f0).sigmoid();
-    let f2 = l2.forward(f1);
-    let losses = f2.softmax_crossentropy_loss(targets);
-
-    let ones = builder.new_constant(Shape::new(1, 10), &[1.0; 10]);
-    ones.matmul(losses);
-
-    let outputs = f2.node();
-    let mut graph = builder.build(ExecutionContext::default());
+    let (mut graph, outputs) = make_model(&images);
 
     graph.load_from_file("checkpoints/mnist.bin", false)?;
 
@@ -75,15 +57,37 @@ fn main() -> Result<(), OperationError<DeviceError>> {
 
         for id in &graph.weight_ids() {
             let idx = graph.weight_idx(id).unwrap();
-            let weight = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+            let weight = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-            if let Ok(grd) = graph.get(NodeId::new(idx, NodeIdTy::Gradients)) {
+            if let Ok(grd) = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
                 weight.values.dense_mut()?.add(-lr, grd.dense()?)?;
             }
         }
     }
 
     Ok(())
+}
+
+fn make_model(images: &Images) -> (Graph<ExecutionContext>, Node) {
+    let builder = GraphBuilder::default();
+
+    let inputs = builder.new_dense_input("inputs", Shape::new(images.rows, images.cols));
+    let targets = builder.new_dense_input("targets", Shape::new(10, 1));
+
+    let l0 = builder.new_affine("l0", 28 * 28, 128);
+    let l1 = builder.new_affine("l1", 128, 128);
+    let l2 = builder.new_affine("l2", 128, 10);
+
+    let f0 = l0.forward(inputs.reshape(Shape::new(28 * 28, 1))).sigmoid();
+    let f1 = l1.forward(f0).sigmoid();
+    let f2 = l2.forward(f1);
+    let losses = f2.softmax_crossentropy_loss(targets);
+
+    let ones = builder.new_constant(Shape::new(1, 10), &[1.0; 10]);
+    ones.matmul(losses);
+
+    let outputs = f2.node();
+    (builder.build(ExecutionContext::default()), outputs)
 }
 
 fn calculate_accuracy(
@@ -97,7 +101,7 @@ fn calculate_accuracy(
     graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
     let _ = graph.forward()?;
 
-    let vals = graph.get(NodeId::new(output_node.idx(), NodeIdTy::Values))?.get_dense_vals()?;
+    let vals = graph.get(GraphNodeId::new(output_node.idx(), GraphNodeIdTy::Values))?.get_dense_vals()?;
     let mut correct = 0;
     for (predicted, &expected) in vals.chunks(10).zip(labels.indices.iter()) {
         let mut max = f32::NEG_INFINITY;

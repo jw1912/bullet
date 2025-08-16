@@ -201,7 +201,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     }
 
     pub fn matmul(self, rhs: Self) -> Self {
-        if self.builder.ir().get(rhs.node.idx).unwrap().info.sparse.is_some() {
+        if self.builder.ir().get(rhs.node.idx).unwrap().ty().sparse.is_some() {
             self.builder.apply(SparseAffineActivate {
                 weights: self.node,
                 indices: rhs.node,

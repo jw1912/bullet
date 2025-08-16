@@ -12,7 +12,7 @@ pub use unary::*;
 
 use crate::{
     device::{Device, OperationError},
-    graph::{Graph, NodeId},
+    graph::{Graph, GraphNodeId},
 };
 
 pub trait GraphInstruction<D: Device>: std::fmt::Debug + 'static {
@@ -21,7 +21,7 @@ pub trait GraphInstruction<D: Device>: std::fmt::Debug + 'static {
 
 #[derive(Debug)]
 pub struct Set {
-    pub id: NodeId,
+    pub id: GraphNodeId,
     pub val: f32,
 }
 

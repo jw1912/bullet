@@ -1,14 +1,14 @@
 use crate::{
     device::{base::BaseOperations, Device, OperationError},
-    graph::{instruction::GraphInstruction, ir::operation::unary::UnaryOp, Graph, NodeId},
+    graph::{instruction::GraphInstruction, ir::operation::unary::UnaryOp, Graph, GraphNodeId},
 };
 
 #[derive(Debug)]
 pub struct AbsPowerError {
-    pub a: NodeId,
-    pub b: NodeId,
+    pub a: GraphNodeId,
+    pub b: GraphNodeId,
     pub power: f32,
-    pub output: NodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for AbsPowerError {
@@ -38,9 +38,9 @@ impl<D: Device> GraphInstruction<D> for AbsPowerError {
 
 #[derive(Debug)]
 pub struct UnaryBackward {
-    pub input: NodeId,
-    pub output_grad: NodeId,
-    pub input_grad: NodeId,
+    pub input: GraphNodeId,
+    pub output_grad: GraphNodeId,
+    pub input_grad: GraphNodeId,
     pub op: UnaryOp,
 }
 
@@ -79,9 +79,9 @@ impl<D: Device> GraphInstruction<D> for UnaryBackward {
 #[derive(Debug)]
 pub struct PairwiseMulBackward {
     pub offset: usize,
-    pub values: NodeId,
-    pub input: NodeId,
-    pub output: NodeId,
+    pub values: GraphNodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
@@ -114,9 +114,9 @@ impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
 
 #[derive(Debug)]
 pub struct Select {
-    pub input: NodeId,
-    pub output: NodeId,
-    pub buckets: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
+    pub buckets: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for Select {
@@ -155,9 +155,9 @@ impl<D: Device> GraphInstruction<D> for Select {
 
 #[derive(Debug)]
 pub struct SelectBackprop {
-    pub input: NodeId,
-    pub output: NodeId,
-    pub buckets: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
+    pub buckets: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for SelectBackprop {
@@ -196,9 +196,9 @@ impl<D: Device> GraphInstruction<D> for SelectBackprop {
 
 #[derive(Debug)]
 pub struct CrossEntropy {
-    pub a: NodeId,
-    pub b: NodeId,
-    pub output: NodeId,
+    pub a: GraphNodeId,
+    pub b: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for CrossEntropy {

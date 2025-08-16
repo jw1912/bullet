@@ -5,7 +5,7 @@ use std::{
 
 use crate::{nn::ExecutionContext, value::ValueTrainerState};
 use bullet_core::{
-    graph::{NodeId, NodeIdTy},
+    graph::{GraphNodeId, GraphNodeIdTy},
     optimiser::OptimiserState,
     trainer::Trainer,
 };
@@ -64,7 +64,7 @@ where
 
     for SavedFormat { id, .. } in &trainer.state.saved_format {
         if let Some(id) = id {
-            let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+            let idx = GraphNodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
             let weights = trainer.optimiser.graph.get(idx).unwrap();
             let weights = weights.dense().unwrap();
 
@@ -95,7 +95,7 @@ where
 
     for SavedFormat { custom, id, quant, layout, transforms, round } in &trainer.state.saved_format {
         if let Some(id) = id {
-            let idx = NodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+            let idx = GraphNodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
             let weights = trainer.optimiser.graph.get(idx).unwrap();
             let weights = weights.dense().unwrap();
 

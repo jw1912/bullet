@@ -9,9 +9,14 @@ rust-version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+acyclib = { workspace = true }
 rand = "0.9"
 rand_distr = "0.5.1"
 
 [[example]]
 name = "compilation"
 path = "../../examples/extra/compilation.rs"
+
+[[example]]
+name = "custom_pass"
+path = "../../examples/extra/custom_pass.rs"

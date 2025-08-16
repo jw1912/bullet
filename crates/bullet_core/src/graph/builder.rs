@@ -1,6 +1,7 @@
 mod affine;
 mod node;
 
+use acyclib::graph::NodeId;
 pub use affine::Affine;
 pub use node::{Activation, GraphBuilderNode};
 
@@ -17,9 +18,9 @@ use crate::{
                 unary::{Reduce, ReduceAcrossBatch},
                 GraphIROperationCompilable,
             },
-            BackendMarker, GraphIR, GraphIRCompileOptions,
+            BackendMarker, GraphIRCompileOptions, GraphIRManager,
         },
-        Graph, NodeId, NodeIdTy,
+        Graph, GraphNodeId, GraphNodeIdTy,
     },
 };
 
@@ -34,13 +35,13 @@ pub enum InitSettings {
 
 #[derive(Default)]
 pub struct GraphBuilder<B: BackendMarker> {
-    ir: Mutex<GraphIR<B>>,
+    ir: Mutex<GraphIRManager<B>>,
     init_data: Mutex<HashMap<String, InitSettings>>,
-    consts: Mutex<HashMap<usize, Vec<f32>>>,
+    consts: Mutex<HashMap<NodeId, Vec<f32>>>,
 }
 
 impl<B: BackendMarker> GraphBuilder<B> {
-    fn ir(&self) -> MutexGuard<'_, GraphIR<B>> {
+    pub fn ir(&self) -> MutexGuard<'_, GraphIRManager<B>> {
         self.ir.try_lock().unwrap()
     }
 
@@ -111,7 +112,7 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
         let mut ir = self.ir.into_inner().unwrap();
         let root = ir.root().unwrap();
 
-        if ir.get(root.idx).unwrap().info.batched {
+        if ir.get(root.idx).unwrap().ty().batched {
             ir.add_op(ReduceAcrossBatch { input: root, reduction: Reduce::Sum }).unwrap();
         }
 
@@ -128,12 +129,12 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
             match *init_data {
                 InitSettings::Zeroed => {}
                 InitSettings::Normal { mean, stdev } => graph
-                    .get_mut(NodeId::new(graph.weight_idx(id).unwrap(), NodeIdTy::Values))
+                    .get_mut(GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values))
                     .unwrap()
                     .seed_random(mean, stdev, true)
                     .unwrap(),
                 InitSettings::Uniform { mean, stdev } => graph
-                    .get_mut(NodeId::new(graph.weight_idx(id).unwrap(), NodeIdTy::Values))
+                    .get_mut(GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values))
                     .unwrap()
                     .seed_random(mean, stdev, false)
                     .unwrap(),
@@ -141,7 +142,11 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
         }
 
         for (&idx, vals) in self.consts.lock().unwrap().iter() {
-            graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap().load_dense_from_slice(None, vals).unwrap();
+            graph
+                .get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values))
+                .unwrap()
+                .load_dense_from_slice(None, vals)
+                .unwrap();
         }
 
         graph

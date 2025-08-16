@@ -7,7 +7,7 @@ pub mod viribinpack;
 
 use bullet_core::{
     device::OperationError,
-    graph::{builder::Shape, NodeId, NodeIdTy},
+    graph::{builder::Shape, GraphNodeId, GraphNodeIdTy},
 };
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
@@ -286,7 +286,7 @@ where
 
     if let Some(idx) = graph.input_idx("stm") {
         let input = &prepared.stm;
-        let stm = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+        let stm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
         if stm.values.single_size() != expected_inputs {
             return Err(OperationError::InvalidTensorFormat);
@@ -297,7 +297,7 @@ where
 
     if let Some(idx) = graph.input_idx("nstm") {
         let input = &prepared.nstm;
-        let ntm = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+        let ntm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
         if ntm.values.single_size() != expected_inputs {
             return Err(OperationError::InvalidTensorFormat);
@@ -308,7 +308,7 @@ where
 
     if let Some(idx) = graph.input_idx("buckets") {
         let input = &prepared.buckets;
-        let buckets = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+        let buckets = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
         if buckets.values.single_size() != Out::BUCKETS {
             return Err(OperationError::InvalidTensorFormat);
@@ -318,13 +318,13 @@ where
     }
 
     if let Some(idx) = graph.input_idx("entry_weights") {
-        let weights = &mut *graph.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+        let weights = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
         weights.load_dense_from_slice(Some(batch_size), &prepared.weights.value)?;
     }
 
     if let Some(idx) = graph.input_idx("targets") {
         graph
-            .get_mut(NodeId::new(idx, NodeIdTy::Values))
+            .get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values))
             .unwrap()
             .load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
     }

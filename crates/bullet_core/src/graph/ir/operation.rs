@@ -5,29 +5,35 @@ pub mod sparse;
 pub mod unary;
 pub mod util;
 
-use std::num::NonZeroUsize;
+use std::{fmt, num::NonZeroUsize};
+
+use acyclib::graph::NodeId;
 
 use crate::{
     device::Device,
     graph::{
-        ir::{BackendMarker, GraphIRNodeInfo},
+        ir::{node::NodeInfo, BackendMarker, GraphIR},
         GraphFunction,
     },
 };
 
-use super::{node::AnnotatedNode, GraphIR, GraphIRError, Shape};
+use super::{node::AnnotatedNode, GraphIRError, Shape};
 
-pub trait GraphIROperation<B: BackendMarker>: std::any::Any + std::fmt::Debug + 'static {
+pub trait GraphIROperationBase<B: BackendMarker>: std::any::Any + std::fmt::Debug + 'static {
     fn nodes(&self) -> Vec<AnnotatedNode>;
 
     fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError>;
 
     fn output_batched(&self, ir: &GraphIR<B>) -> Result<bool, GraphIRError> {
-        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().info.batched))
+        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().ty().batched))
     }
 
     fn output_requires_grad(&self, ir: &GraphIR<B>) -> Result<bool, GraphIRError> {
-        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().info.requires_grad))
+        Ok(self.nodes().iter().any(|node| ir.get(node.idx).unwrap().ty().requires_grad))
+    }
+
+    fn output_layout(&self, _ir: &GraphIR<B>) -> Result<Option<NonZeroUsize>, GraphIRError> {
+        Ok(None)
     }
 
     fn ancillary_buffers(&self, _ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
@@ -40,13 +46,60 @@ pub trait GraphIROperation<B: BackendMarker>: std::any::Any + std::fmt::Debug + 
     }
 }
 
-pub trait GraphIROperationCompilable<B: BackendMarker>: GraphIROperation<B>
+pub trait GraphIROperationCompilable<B: BackendMarker>: GraphIROperationBase<B>
 where
     B::Backend: Device,
 {
-    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend>;
+    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend>;
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend>;
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend>;
+}
+
+pub struct GraphIRLeaf {
+    pub id: Option<String>,
+    pub ty: NodeInfo,
+}
+
+impl fmt::Debug for GraphIRLeaf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.id.clone().unwrap_or("__unknown".to_string()))
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationBase<B> for GraphIRLeaf {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        Vec::new()
+    }
+
+    fn output_batched(&self, _ir: &GraphIR<B>) -> Result<bool, GraphIRError> {
+        Ok(self.ty.batched)
+    }
+
+    fn output_layout(&self, _ir: &GraphIR<B>) -> Result<Option<NonZeroUsize>, GraphIRError> {
+        Ok(self.ty.sparse)
+    }
+
+    fn output_requires_grad(&self, _ir: &GraphIR<B>) -> Result<bool, GraphIRError> {
+        Ok(self.ty.requires_grad)
+    }
+
+    fn output_shape(&self, _ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
+        Ok(self.ty.shape)
+    }
+
+    fn shorthand(&self) -> String {
+        self.id.clone().unwrap_or("__unknown".to_string())
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for GraphIRLeaf {
+    fn forward_pass(&self, _: &GraphIR<B>, _: NodeId) -> GraphFunction<B::Backend> {
+        GraphFunction::default()
+    }
+
+    fn backward_pass(&self, _: &GraphIR<B>, _: NodeId) -> GraphFunction<B::Backend> {
+        GraphFunction::default()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
