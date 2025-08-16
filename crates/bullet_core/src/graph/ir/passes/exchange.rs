@@ -17,6 +17,7 @@ use crate::graph::{
 
 use super::downcast;
 
+#[derive(Debug)]
 pub struct ExchangeElementwiseAndSelect;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect {
@@ -55,6 +56,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect {
     }
 }
 
+#[derive(Debug)]
 pub struct ExchangeConcatAndUnary;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeConcatAndUnary {
@@ -80,6 +82,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeConcatAndUnary {
     }
 }
 
+#[derive(Debug)]
 pub struct ExchangeMatmulAndConcatWithSliceAndMatmul;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeMatmulAndConcatWithSliceAndMatmul {

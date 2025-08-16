@@ -1,7 +1,7 @@
 mod exchange;
 mod fuse;
 
-use std::rc::Rc;
+use std::{fmt::Debug, rc::Rc};
 
 use acyclib::graph::NodeId;
 pub use exchange::*;
@@ -9,11 +9,11 @@ pub use fuse::*;
 
 use crate::graph::ir::{operation::GraphIROperationCompilable, BackendMarker, GraphIR, GraphIRError};
 
-pub trait GraphIRPass<B: BackendMarker> {
+pub trait GraphIRPass<B: BackendMarker>: Debug {
     fn try_pass(&self, ir: &mut GraphIR<B>) -> Result<bool, GraphIRError>;
 }
 
-pub trait GraphIRSimplePass<B: BackendMarker> {
+pub trait GraphIRSimplePass<B: BackendMarker>: Debug {
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, node: NodeId) -> Result<bool, GraphIRError>;
 }
 

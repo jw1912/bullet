@@ -31,7 +31,7 @@ impl<T: GraphType> fmt::Display for GraphManagerError<T> {
         for line in trace.lines() {
             let split = line.split_whitespace().collect::<Vec<_>>();
 
-            if !["rustc", "std", "core::", "toolchains"].iter().any(|x| split[1].contains(x)) {
+            if !["rustc", "std", " core::", "toolchains"].iter().any(|x| split[1].contains(x)) {
                 writeln!(f)?;
 
                 if split[0] != "at" {

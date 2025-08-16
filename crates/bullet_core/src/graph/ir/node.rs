@@ -26,7 +26,7 @@ impl fmt::Debug for NodeInfo {
             write!(f, "?x")?;
         }
 
-        write!(f, "{}", self.shape)
+        write!(f, "{:?}", self.shape)
     }
 }
 

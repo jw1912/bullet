@@ -15,6 +15,7 @@ use crate::graph::ir::{
 
 use super::downcast;
 
+#[derive(Debug)]
 pub struct FusePairwiseMulWithConcat;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for FusePairwiseMulWithConcat {
@@ -41,6 +42,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FusePairwiseMulWithConcat {
     }
 }
 
+#[derive(Debug)]
 pub struct FuseSparseMatmulWithAdd;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseMatmulWithAdd {
@@ -100,6 +102,7 @@ fn add_single_sparse<B: BackendMarker>(
     Ok(false)
 }
 
+#[derive(Debug)]
 pub struct FuseSparseAffineWithDiffableFromOutput;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFromOutput {
@@ -128,6 +131,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFrom
     }
 }
 
+#[derive(Debug)]
 pub struct LowPriorityFusions;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for LowPriorityFusions {
