@@ -24,11 +24,11 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect {
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let old_data = ir.get(target)?;
 
-        if let Some(Select { input, buckets }) = downcast(old_data.op()).cloned() {
+        if let Some(Select { input, buckets }) = downcast(old_data.op()) {
             let parent = ir.get(input.idx)?;
 
             if parent.children() == 1 {
-                if let Some(LinearCombination { items, shape }) = downcast(parent.op()).cloned() {
+                if let Some(LinearCombination { items, shape }) = downcast(parent.op()) {
                     let mut new = Vec::new();
 
                     for (node, weight) in items {
@@ -43,7 +43,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect {
             }
 
             if parent.children() == 1 {
-                if let Some(Unary { input, op }) = downcast(parent.op()).cloned() {
+                if let Some(Unary { input, op }) = downcast(parent.op()) {
                     let input = ir.create(Select { input, buckets })?;
                     ir.replace(target, Unary { input, op })?;
 
@@ -63,11 +63,11 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeConcatAndUnary {
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let old_data = ir.get(target)?;
 
-        if let Some(Unary { input, op }) = downcast(old_data.op()).cloned() {
+        if let Some(Unary { input, op }) = downcast(old_data.op()) {
             let parent = ir.get(input.idx)?;
 
             if parent.children() == 1 {
-                if let Some(Concat { a, b }) = downcast(parent.op()).cloned() {
+                if let Some(Concat { a, b }) = downcast(parent.op()) {
                     let lower = ir.create(Unary { input: a, op })?;
                     let upper = ir.create(Unary { input: b, op })?;
 
@@ -89,11 +89,11 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeMatmulAndConcatWithSlice
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let old_data = ir.get(target)?;
 
-        if let Some(Matmul { a, b, transa: false, transb: false }) = downcast(old_data.op()).cloned() {
+        if let Some(Matmul { a, b, transa: false, transb: false }) = downcast(old_data.op()) {
             let bn = ir.get(b.idx)?;
 
             if bn.children() == 1 {
-                if let Some(Concat { a: x, b: y }) = downcast(bn.op()).cloned() {
+                if let Some(Concat { a: x, b: y }) = downcast(bn.op()) {
                     let an = ir.get(a.idx)?.ty();
                     let xn = ir.get(x.idx)?.ty();
                     let yn = ir.get(y.idx)?.ty();

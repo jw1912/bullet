@@ -194,7 +194,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Concat {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FusedPairwiseMulConcat {
     pub a: AnnotatedNode,
     pub b: AnnotatedNode,
@@ -338,7 +338,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SoftmaxCrossEntropy {
     pub logits: AnnotatedNode,
     pub targets: AnnotatedNode,
