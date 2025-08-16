@@ -299,7 +299,7 @@ impl BaseOperations for Buffer<f32> {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct HipMarker;
 impl BackendMarker for HipMarker {
     type Backend = ExecutionContext;

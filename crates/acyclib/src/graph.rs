@@ -4,20 +4,19 @@ pub mod topo;
 
 use std::{
     collections::{HashMap, HashSet},
-    error::Error,
     fmt::Debug,
 };
 
 pub use node::{Node, NodeId};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GraphError {
     NodeDoesNotExist,
     NodeWithIdAlreadyExists,
     NodeIsNotRoot,
     FailedTypeCheck,
     Cyclic,
-    Custom(Box<dyn Error>),
+    Message(String),
 }
 
 pub trait Operation<Ty: Clone + PartialEq>: Clone {
@@ -60,7 +59,7 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
     pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, GraphError> {
         let op = op.into();
         let ty = op.out_type(self)?;
-        let node = Node::new(ty, op);
+        let node = Node::<Ty, Op>::new(ty, op);
         let id = node.id;
 
         for parent in node.op.parents() {

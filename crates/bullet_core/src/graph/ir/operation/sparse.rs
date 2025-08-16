@@ -1,14 +1,16 @@
+use acyclib::graph::NodeId;
+
 use crate::graph::{
     instruction,
     ir::{
         node::AnnotatedNode,
         operation::{
-            unary::DiffableFromOutput, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError,
+            unary::DiffableFromOutput, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError,
         },
         shape::Shape,
-        BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+        BackendMarker, GraphIR, GraphIRError,
     },
-    GraphFunction, NodeId, NodeIdTy,
+    GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
 #[derive(Debug)]
@@ -20,7 +22,7 @@ pub struct SparseAffineActivate {
     pub activation: DiffableFromOutput,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for SparseAffineActivate {
+impl<B: BackendMarker> GraphIROperationBase<B> for SparseAffineActivate {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         let mut nodes = vec![self.weights, self.indices];
 
@@ -53,7 +55,7 @@ impl<B: BackendMarker> GraphIROperation<B> for SparseAffineActivate {
             util::check_dense_eq(ir, v, true)?;
             util::check_same_batching(ir, &[&self.indices, v])?;
             util::check_no_grad(ir, &[v])?;
-            let nnz = ir.get(self.indices.idx).unwrap().info.sparse.unwrap();
+            let nnz = ir.get(self.indices.idx).unwrap().ty().sparse.unwrap();
             check &= v.shape.cols() == 1 && v.shape.rows() == nnz.get();
         }
 
@@ -71,21 +73,21 @@ impl<B: BackendMarker> GraphIROperation<B> for SparseAffineActivate {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let indices = NodeId::new(self.indices.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let indices = GraphNodeId::new(self.indices.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
 
         func.push(instruction::MaybeUpdateBatchSize { input: indices, output });
 
         func.push(instruction::SparseAffineActivate {
-            weights: NodeId::new(self.weights.idx, NodeIdTy::Values),
+            weights: GraphNodeId::new(self.weights.idx, GraphNodeIdTy::Values),
             weights_shape: self.weights.shape,
-            biases: self.biases.map(|b| NodeId::new(b.idx, NodeIdTy::Values)),
+            biases: self.biases.map(|b| GraphNodeId::new(b.idx, GraphNodeIdTy::Values)),
             input_shape: self.indices.shape,
             indices,
-            values: self.values.map(|v| NodeId::new(v.idx, NodeIdTy::Values)),
+            values: self.values.map(|v| GraphNodeId::new(v.idx, GraphNodeIdTy::Values)),
             activation: self.activation,
             output,
         });
@@ -93,36 +95,36 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
-        if node_info.get(self.weights.idx).unwrap().requires_grad {
-            let indices = NodeId::new(self.indices.idx, NodeIdTy::Values);
+        if ir.get(self.weights.idx).unwrap().ty().requires_grad {
+            let indices = GraphNodeId::new(self.indices.idx, GraphNodeIdTy::Values);
 
             if let Some(bias) = self.biases {
-                let info = node_info.get(bias.idx).unwrap();
+                let info = ir.get(bias.idx).unwrap().ty();
 
                 if info.requires_grad && info.batched {
                     func.push(instruction::MaybeUpdateBatchSize {
                         input: indices,
-                        output: NodeId::new(bias.idx, NodeIdTy::Gradients),
+                        output: GraphNodeId::new(bias.idx, GraphNodeIdTy::Gradients),
                     });
                 }
             }
 
             func.push(instruction::BackpropSparseAffineActivate {
-                weights_grads: NodeId::new(self.weights.idx, NodeIdTy::Gradients),
+                weights_grads: GraphNodeId::new(self.weights.idx, GraphNodeIdTy::Gradients),
                 weights_shape: self.weights.shape,
-                biases_grads: self.biases.map(|b| NodeId::new(b.idx, NodeIdTy::Gradients)),
+                biases_grads: self.biases.map(|b| GraphNodeId::new(b.idx, GraphNodeIdTy::Gradients)),
                 input_shape: self.indices.shape,
                 indices,
-                values: self.values.map(|v| NodeId::new(v.idx, NodeIdTy::Values)),
+                values: self.values.map(|v| GraphNodeId::new(v.idx, GraphNodeIdTy::Values)),
                 activation: self.activation,
-                output: NodeId::new(output_node, NodeIdTy::Values),
-                output_grads: NodeId::new(output_node, NodeIdTy::Gradients),
+                output: GraphNodeId::new(output_node, GraphNodeIdTy::Values),
+                output_grads: GraphNodeId::new(output_node, GraphNodeIdTy::Gradients),
             });
         } else if let Some(b) = self.biases {
-            if node_info.get(b.idx).unwrap().requires_grad {
+            if ir.get(b.idx).unwrap().ty().requires_grad {
                 todo!();
             }
         }

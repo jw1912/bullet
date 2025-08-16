@@ -1,16 +1,18 @@
 use std::num::NonZeroUsize;
 
+use acyclib::graph::NodeId;
+
 use crate::{
     device::{blas::GemmConfig, Device},
     graph::{
         instruction::{self, MatmulType},
         ir::{
             node::AnnotatedNode,
-            operation::{unary::Reduce, util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+            operation::{unary::Reduce, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
             shape::Shape,
-            BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+            BackendMarker, GraphIR, GraphIRError,
         },
-        GraphFunction, NodeId, NodeIdTy,
+        GraphFunction, GraphNodeId, GraphNodeIdTy,
     },
 };
 
@@ -31,7 +33,7 @@ pub struct Matmul {
     pub transb: bool,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for Matmul {
+impl<B: BackendMarker> GraphIROperationBase<B> for Matmul {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.a, self.b]
     }
@@ -53,20 +55,20 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Matmul
 where
     B::Backend: Device,
 {
-    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let output = NodeId::new(output_node, NodeIdTy::Values);
-        let bsn = util::batch_size_node(node_info, &[self.a, self.b]);
+    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+        let bsn = util::batch_size_node(ir, &[self.a, self.b]);
 
         let mut func = GraphFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(bsn, NodeIdTy::Values), output });
+        func.push(instruction::MaybeUpdateBatchSize { input: GraphNodeId::new(bsn, GraphNodeIdTy::Values), output });
 
-        let ty = matmul_ty(node_info.get(self.a.idx).unwrap().batched, node_info.get(self.b.idx).unwrap().batched);
+        let ty = matmul_ty(ir.get(self.a.idx).unwrap().ty().batched, ir.get(self.b.idx).unwrap().ty().batched);
 
         func.push(instruction::Matmul {
             cfg: GemmConfig::new(1.0, 0.0, self.a.shape, self.transa, self.b.shape, self.transb),
-            input_a: NodeId::new(self.a.idx, NodeIdTy::Values),
-            input_b: NodeId::new(self.b.idx, NodeIdTy::Values),
+            input_a: GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values),
+            input_b: GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values),
             output,
             ty,
         });
@@ -74,24 +76,27 @@ where
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
         let shape_o = self.a.shape.maybe_transpose(self.transa) * self.b.shape.maybe_transpose(self.transb);
 
-        let ty = matmul_ty(node_info.get(self.a.idx).unwrap().batched, node_info.get(self.b.idx).unwrap().batched);
+        let ty = matmul_ty(ir.get(self.a.idx).unwrap().ty().batched, ir.get(self.b.idx).unwrap().ty().batched);
 
-        if node_info.get(self.a.idx).unwrap().requires_grad {
-            let output = NodeId::new(self.a.idx, NodeIdTy::Gradients);
-            let b = NodeId::new(self.b.idx, NodeIdTy::Values);
-            let o = NodeId::new(output_node, NodeIdTy::Gradients);
+        if ir.get(self.a.idx).unwrap().ty().requires_grad {
+            let output = GraphNodeId::new(self.a.idx, GraphNodeIdTy::Gradients);
+            let b = GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values);
+            let o = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
             let ty = match ty {
                 MatmulType::BatBat | MatmulType::NobNob => ty,
                 MatmulType::NobBat => MatmulType::BatBatRed,
                 MatmulType::BatBatRed => unimplemented!(),
             };
 
-            func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(self.a.idx, NodeIdTy::Values), output });
+            func.push(instruction::MaybeUpdateBatchSize {
+                input: GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values),
+                output,
+            });
 
             let instr = if self.transa {
                 instruction::Matmul {
@@ -114,12 +119,15 @@ where
             func.push(instr);
         }
 
-        if node_info.get(self.b.idx).unwrap().requires_grad {
-            let output = NodeId::new(self.b.idx, NodeIdTy::Gradients);
-            let a = NodeId::new(self.a.idx, NodeIdTy::Values);
-            let o = NodeId::new(output_node, NodeIdTy::Gradients);
+        if ir.get(self.b.idx).unwrap().ty().requires_grad {
+            let output = GraphNodeId::new(self.b.idx, GraphNodeIdTy::Gradients);
+            let a = GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values);
+            let o = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
 
-            func.push(instruction::MaybeUpdateBatchSize { input: NodeId::new(self.b.idx, NodeIdTy::Values), output });
+            func.push(instruction::MaybeUpdateBatchSize {
+                input: GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values),
+                output,
+            });
 
             if self.transb {
                 if ty == MatmulType::NobBat {
@@ -134,7 +142,7 @@ where
                     ty,
                 });
             } else if !self.transa && self.a.shape.rows() > 1 && self.a.shape.cols() > 1 && ty == MatmulType::NobBat {
-                let a_trans = NodeId::new(output_node, NodeIdTy::Ancillary(0));
+                let a_trans = GraphNodeId::new(output_node, GraphNodeIdTy::Ancillary(0));
 
                 func.push(instruction::Transpose {
                     input: a,
@@ -174,7 +182,7 @@ pub struct Affine {
     pub inputs: AnnotatedNode,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for Affine {
+impl<B: BackendMarker> GraphIROperationBase<B> for Affine {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.weights, self.biases, self.inputs]
     }
@@ -203,15 +211,15 @@ impl<B: BackendMarker> GraphIROperation<B> for Affine {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
-    fn forward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
 
-        let mut func = <Matmul as GraphIROperationCompilable<B>>::forward_pass(&matmul, node_info, output_node);
+        let mut func = <Matmul as GraphIROperationCompilable<B>>::forward_pass(&matmul, ir, output_node);
 
-        let input = NodeId::new(self.biases.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+        let input = GraphNodeId::new(self.biases.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
-        if !node_info.get(output_node).unwrap().batched {
+        if !ir.get(output_node).unwrap().ty().batched {
             func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
         } else {
             func.push(instruction::LinearCombinationSplat { input_mul: 1.0, output_mul: 1.0, input, output });
@@ -220,17 +228,17 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
 
-        let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, node_info, output_node);
+        let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, ir, output_node);
 
-        let info = node_info.get(self.biases.idx).unwrap();
+        let info = ir.get(self.biases.idx).unwrap().ty();
 
         if info.requires_grad {
-            let input = NodeId::new(output_node, NodeIdTy::Gradients);
-            let output = NodeId::new(self.biases.idx, NodeIdTy::Gradients);
-            let values = NodeId::new(self.biases.idx, NodeIdTy::Values);
+            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+            let output = GraphNodeId::new(self.biases.idx, GraphNodeIdTy::Gradients);
+            let values = GraphNodeId::new(self.biases.idx, GraphNodeIdTy::Values);
 
             let input_mul = 1.0;
             let output_mul = 1.0;
@@ -238,7 +246,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
 
             func.push(instruction::MaybeUpdateBatchSize { input: values, output });
 
-            if info.batched || !node_info.get(output_node).unwrap().batched {
+            if info.batched || !ir.get(output_node).unwrap().ty().batched {
                 func.push(instruction::LinearCombination { input, output, input_mul, output_mul });
             } else {
                 func.push(instruction::ReduceAcrossBatch { input, output, input_mul, output_mul, reduction });

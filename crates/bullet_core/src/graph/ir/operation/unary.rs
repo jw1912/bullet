@@ -1,12 +1,14 @@
+use acyclib::graph::NodeId;
+
 use crate::graph::{
     instruction,
     ir::{
         node::AnnotatedNode,
-        operation::{util, GraphIROperation, GraphIROperationCompilable, GraphIROperationError},
+        operation::{util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
         shape::Shape,
-        BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+        BackendMarker, GraphIR, GraphIRError,
     },
-    GraphFunction, NodeId, NodeIdTy,
+    GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
 /// List of supported activation functions.
@@ -35,7 +37,7 @@ pub enum UnaryOp {
     AbsPow(f32),
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for Unary {
+impl<B: BackendMarker> GraphIROperationBase<B> for Unary {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
@@ -57,9 +59,9 @@ impl<B: BackendMarker> GraphIROperation<B> for Unary {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
         func.push(instruction::MaybeUpdateBatchSize { input, output });
@@ -68,21 +70,21 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        assert!(node_info.get(output_node).unwrap().requires_grad);
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        assert!(ir.get(output_node).unwrap().ty().requires_grad);
 
         let mut func = GraphFunction::default();
 
-        if node_info.get(self.input.idx).unwrap().requires_grad {
-            let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-            let input_grad = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+        if ir.get(self.input.idx).unwrap().ty().requires_grad {
+            let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+            let input_grad = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
 
             func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
 
             func.push(instruction::UnaryBackward {
                 input,
                 input_grad,
-                output_grad: NodeId::new(output_node, NodeIdTy::Gradients),
+                output_grad: GraphNodeId::new(output_node, GraphNodeIdTy::Gradients),
                 op: self.op,
             });
         }
@@ -103,7 +105,7 @@ pub struct ReduceAcrossBatch {
     pub reduction: Reduce,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for ReduceAcrossBatch {
+impl<B: BackendMarker> GraphIROperationBase<B> for ReduceAcrossBatch {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
@@ -127,9 +129,9 @@ impl<B: BackendMarker> GraphIROperation<B> for ReduceAcrossBatch {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
 
@@ -144,20 +146,20 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let info = node_info.get(output_node).unwrap();
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let info = ir.get(output_node).unwrap().ty();
         assert!(info.requires_grad);
         assert!(!info.batched);
 
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let input_grad = NodeId::new(self.input.idx, NodeIdTy::Gradients);
-        let output_grad = NodeId::new(output_node, NodeIdTy::Gradients);
+        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+        let input_grad = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
+        let output_grad = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
 
         let mut func = GraphFunction::default();
 
         func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
 
-        if node_info.get(self.input.idx).unwrap().requires_grad {
+        if ir.get(self.input.idx).unwrap().ty().requires_grad {
             func.push(instruction::SplatAcrossBatch {
                 input: output_grad,
                 output: input_grad,
@@ -176,7 +178,7 @@ pub struct PairwiseMul {
     pub input: AnnotatedNode,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
+impl<B: BackendMarker> GraphIROperationBase<B> for PairwiseMul {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
@@ -199,9 +201,9 @@ impl<B: BackendMarker> GraphIROperation<B> for PairwiseMul {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
 
@@ -211,17 +213,17 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
-        if node_info.get(self.input.idx).unwrap().requires_grad {
-            let input = NodeId::new(output_node, NodeIdTy::Gradients);
-            let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+        if ir.get(self.input.idx).unwrap().ty().requires_grad {
+            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+            let output = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::PairwiseMulBackward {
                 offset: 0,
-                values: NodeId::new(self.input.idx, NodeIdTy::Values),
+                values: GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values),
                 input,
                 output,
             });
@@ -238,7 +240,7 @@ pub struct Slice {
     pub end: usize,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for Slice {
+impl<B: BackendMarker> GraphIROperationBase<B> for Slice {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
@@ -255,9 +257,9 @@ impl<B: BackendMarker> GraphIROperation<B> for Slice {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
         func.push(instruction::MaybeUpdateBatchSize { input, output });
@@ -273,12 +275,12 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
-        if node_info.get(self.input.idx).unwrap().requires_grad {
-            let input = NodeId::new(output_node, NodeIdTy::Gradients);
-            let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+        if ir.get(self.input.idx).unwrap().ty().requires_grad {
+            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+            let output = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::CopyOrAddStrided {
@@ -298,7 +300,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
 #[derive(Debug)]
 pub struct ToDense(pub AnnotatedNode);
 
-impl<B: BackendMarker> GraphIROperation<B> for ToDense {
+impl<B: BackendMarker> GraphIROperationBase<B> for ToDense {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.0]
     }
@@ -310,9 +312,9 @@ impl<B: BackendMarker> GraphIROperation<B> for ToDense {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for ToDense {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(self.0.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(self.0.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
         func.push(instruction::MaybeUpdateBatchSize { input, output });
@@ -321,7 +323,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ToDense {
         func
     }
 
-    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, _output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, _ir: &GraphIR<B>, _output_node: NodeId) -> GraphFunction<B::Backend> {
         GraphFunction::default()
     }
 }
@@ -332,7 +334,7 @@ pub struct Copy {
     pub stop_grad: bool,
 }
 
-impl<B: BackendMarker> GraphIROperation<B> for Copy {
+impl<B: BackendMarker> GraphIROperationBase<B> for Copy {
     fn nodes(&self) -> Vec<AnnotatedNode> {
         vec![self.input]
     }
@@ -344,14 +346,14 @@ impl<B: BackendMarker> GraphIROperation<B> for Copy {
     }
 
     fn output_requires_grad(&self, ir: &GraphIR<B>) -> Result<bool, GraphIRError> {
-        Ok(!self.stop_grad && ir.get(self.input.idx).unwrap().info.requires_grad)
+        Ok(!self.stop_grad && ir.get(self.input.idx).unwrap().ty().requires_grad)
     }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
-    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
-        let input = NodeId::new(self.input.idx, NodeIdTy::Values);
-        let output = NodeId::new(output_node, NodeIdTy::Values);
+    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
+        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
 
         let mut func = GraphFunction::default();
         func.push(instruction::MaybeUpdateBatchSize { input, output });
@@ -360,12 +362,12 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
         func
     }
 
-    fn backward_pass(&self, node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
         let mut func = GraphFunction::default();
 
-        if !self.stop_grad && node_info.get(self.input.idx).unwrap().requires_grad {
-            let input = NodeId::new(output_node, NodeIdTy::Gradients);
-            let output = NodeId::new(self.input.idx, NodeIdTy::Gradients);
+        if !self.stop_grad && ir.get(self.input.idx).unwrap().ty().requires_grad {
+            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+            let output = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
 
             func.push(instruction::MaybeUpdateBatchSize { input, output });
             func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });

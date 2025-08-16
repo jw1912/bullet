@@ -3,7 +3,7 @@ use crate::{
         blas::{BlasOperations, GemmConfig},
         Device, OperationError,
     },
-    graph::{builder::Shape, Graph, NodeId},
+    graph::{builder::Shape, Graph, GraphNodeId},
 };
 
 use super::GraphInstruction;
@@ -19,9 +19,9 @@ pub enum MatmulType {
 #[derive(Clone, Copy, Debug)]
 pub struct Matmul {
     pub cfg: GemmConfig,
-    pub input_a: NodeId,
-    pub input_b: NodeId,
-    pub output: NodeId,
+    pub input_a: GraphNodeId,
+    pub input_b: GraphNodeId,
+    pub output: GraphNodeId,
     pub ty: MatmulType,
 }
 

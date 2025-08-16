@@ -1,14 +1,14 @@
 use crate::{
     device::{base::BaseOperations, Device, OperationError},
-    graph::{instruction::GraphInstruction, Graph, NodeId},
+    graph::{instruction::GraphInstruction, Graph, GraphNodeId},
 };
 
 #[derive(Debug)]
 pub struct AbsPowerErrorBackward {
-    pub a: NodeId,
-    pub b: NodeId,
-    pub c: NodeId,
-    pub output: NodeId,
+    pub a: GraphNodeId,
+    pub b: GraphNodeId,
+    pub c: GraphNodeId,
+    pub output: GraphNodeId,
     pub power: f32,
 }
 
@@ -46,10 +46,10 @@ impl<D: Device> GraphInstruction<D> for AbsPowerErrorBackward {
 
 #[derive(Debug)]
 pub struct SoftmaxCrossEntropyBackward {
-    pub softmax: NodeId,
-    pub targets: NodeId,
-    pub output_grads: NodeId,
-    pub output: NodeId,
+    pub softmax: GraphNodeId,
+    pub targets: GraphNodeId,
+    pub output_grads: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for SoftmaxCrossEntropyBackward {

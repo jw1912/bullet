@@ -21,7 +21,7 @@ pub struct CpuBuffer<T> {
     device: Arc<CpuThread>,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CpuMarker;
 
 impl BackendMarker for CpuMarker {

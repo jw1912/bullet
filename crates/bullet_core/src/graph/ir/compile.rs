@@ -1,17 +1,19 @@
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
+use acyclib::manager::GraphManagerError;
+
 use crate::{
     device::Device,
     graph::{
         builder::Shape,
         instruction::Set,
         ir::{
-            node::{GraphIRNode, NodeInfo},
+            node::NodeInfo,
             passes::{self, GraphIRPass},
-            BackendMarker, GraphIR, GraphIRError, GraphIRNodeInfo,
+            BackendMarker, GraphIRError, GraphIRManager, GraphIRResult, GraphIRType,
         },
         tensor::Tensor,
-        Graph, GraphFunction, NodeId, NodeIdTy,
+        Graph, GraphFunction, GraphNodeId, GraphNodeIdTy,
     },
 };
 
@@ -24,11 +26,17 @@ impl From<GraphIRError> for GraphIRCompileError {
     }
 }
 
-impl<B: BackendMarker> GraphIR<B>
+impl<B: BackendMarker> From<GraphManagerError<GraphIRType<B>>> for GraphIRCompileError {
+    fn from(value: GraphManagerError<GraphIRType<B>>) -> Self {
+        GraphIRCompileError(format!("{value:?}"))
+    }
+}
+
+impl<B: BackendMarker> GraphIRManager<B>
 where
     B::Backend: Device,
 {
-    pub fn optimise(&mut self) -> Result<(), GraphIRError> {
+    pub fn optimise(&mut self) -> GraphIRResult<(), B> {
         // Elides concat:
         // Concat(PairwiseMul(a), PairwiseMul(b)) -> FusedPairwiseMulConcat(a, b)
         self.apply_pass(passes::FusePairwiseMulWithConcat)?;
@@ -65,19 +73,21 @@ where
         Ok(())
     }
 
-    pub fn apply_pass(&mut self, pass: impl GraphIRPass<B>) -> Result<(), GraphIRError> {
-        while let Some(transform) = pass.try_pass(self)? {
-            self.apply_transform(transform)?;
+    pub fn apply_pass(&mut self, pass: impl GraphIRPass<B>) -> GraphIRResult<(), B> {
+        loop {
+            let roots = self.inner.roots();
+
+            if self.inner.modify(|ir| pass.try_pass(ir).map_err(Into::into))? {
+                self.inner.eliminate_dead_nodes(roots)?;
+            } else {
+                break;
+            }
         }
 
         Ok(())
     }
 
     pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
-        if let Err(e) = self.check_valid() {
-            return Err(GraphIRCompileError(format!("Compilation given invalid GraphIR: {e:?}")));
-        }
-
         if let Some(path) = self.opts.dump_graphviz.clone() {
             use std::io::Write;
             let opts = "style=filled;\ncolor=lightgrey;\nnode [style=filled,color=white];\n";
@@ -85,7 +95,7 @@ where
             let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
 
             if let Err(e) = self.optimise() {
-                return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIR: {e:?}")));
+                return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIRManager: {e:?}")));
             }
 
             let optim = self.as_graphviz("optim").unwrap();
@@ -94,27 +104,14 @@ where
             let mut file = std::fs::File::create(path).unwrap();
             write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
         } else if let Err(e) = self.optimise() {
-            return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIR: {e:?}")));
-        }
-
-        if let Err(e) = self.check_valid() {
-            return Err(GraphIRCompileError(format!("Optimisation resulted in invalid GraphIR: {e:?}")));
+            return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIRManager: {e:?}")));
         }
 
         let root = self.root()?.idx;
-        let root_data = self.get(root).unwrap().info;
+        let root_data = self.get(root).unwrap().ty();
 
         if !root_data.requires_grad || root_data.batched || root_data.shape != Shape::new(1, 1) {
-            return Err(GraphIRCompileError("Invalid root node in GraphIR".to_string()));
-        }
-
-        // populate ancillary buffers
-        let mut ancillary_buffers = HashMap::new();
-
-        for node in self.nodes.iter() {
-            if let Some(op) = &node.1.parent_operation {
-                ancillary_buffers.insert(node.0, op.ancillary_buffers(&self)?);
-            }
+            return Err(GraphIRCompileError("Invalid root node in GraphIRManager".to_string()));
         }
 
         let device = Arc::new(device);
@@ -125,54 +122,52 @@ where
 
         let mut zero_grads = GraphFunction::default();
 
-        let id_idx_pair = |&node| self.get(node).ok().map(|data| (data.id.clone().unwrap(), node));
+        let id_idx_pair = |node| self.ids.get(node).map(|data| (data.clone(), *node));
         let inputs = self.inputs.iter().filter_map(id_idx_pair).collect();
         let weights = self.weights.iter().filter_map(id_idx_pair).collect();
 
-        let node_info =
-            GraphIRNodeInfo { nodes: self.nodes.iter().map(|(idx, GraphIRNode { info, .. })| (*idx, *info)).collect() };
-
-        let topo = self.topo_order()?;
+        let topo = self.inner.topo_order()?;
 
         let make_tensor = |device, shape, sparse| {
             Tensor::new(device, shape, sparse)
                 .map_err(|_| GraphIRCompileError("Failed to initialsie tensor!".to_string()))
         };
 
-        for GraphIRNode { idx, info, parent_operation, .. } in topo.into_iter().map(|idx| self.get(idx).unwrap()) {
-            let idx = *idx;
-            let NodeInfo { shape, sparse, requires_grad, .. } = *info;
+        for ir_node in topo.into_iter().map(|idx| self.get(idx).unwrap()) {
+            let idx = ir_node.id();
+            let op = ir_node.op();
+            let NodeInfo { shape, sparse, requires_grad, .. } = ir_node.ty();
 
             let values = make_tensor(device.clone(), shape, sparse)?;
-            nodes.insert(NodeId::new(idx, NodeIdTy::Values), RefCell::new(values));
+            nodes.insert(GraphNodeId::new(idx, GraphNodeIdTy::Values), RefCell::new(values));
 
             if requires_grad {
                 let grads = make_tensor(device.clone(), shape, sparse)?;
-                let id = NodeId::new(idx, NodeIdTy::Gradients);
+                let id = GraphNodeId::new(idx, GraphNodeIdTy::Gradients);
                 nodes.insert(id, RefCell::new(grads));
 
                 zero_grads.push(Set { id, val: 0.0 });
             }
 
-            if let Some(op) = parent_operation {
-                for (num, &(shape, sparse)) in ancillary_buffers.get(&idx).unwrap().iter().enumerate() {
-                    let ancillary = make_tensor(device.clone(), shape, sparse)?;
-                    let id = NodeId::new(idx, NodeIdTy::Ancillary(num as u16));
-                    nodes.insert(id, RefCell::new(ancillary));
-                }
+            let ancillary_buffers = op.ancillary_buffers(self.inner.current())?;
 
-                forward.extend(op.forward_pass(&node_info, idx));
+            for (num, &(shape, sparse)) in ancillary_buffers.iter().enumerate() {
+                let ancillary = make_tensor(device.clone(), shape, sparse)?;
+                let id = GraphNodeId::new(idx, GraphNodeIdTy::Ancillary(num as u16));
+                nodes.insert(id, RefCell::new(ancillary));
+            }
 
-                if requires_grad {
-                    let mut this_bwd = op.backward_pass(&node_info, idx);
-                    this_bwd.extend(backward);
-                    backward = this_bwd;
-                }
+            forward.extend(op.forward_pass(self.inner.current(), idx));
+
+            if requires_grad {
+                let mut this_bwd = op.backward_pass(self.inner.current(), idx);
+                this_bwd.extend(backward);
+                backward = this_bwd;
             }
         }
 
         let mut new_bwd = GraphFunction::default();
-        new_bwd.push(Set { id: NodeId { id: root, ty: NodeIdTy::Gradients }, val: 1.0 });
+        new_bwd.push(Set { id: GraphNodeId { id: root, ty: GraphNodeIdTy::Gradients }, val: 1.0 });
         new_bwd.extend(backward);
         backward = new_bwd;
 

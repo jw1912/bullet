@@ -67,6 +67,7 @@ fn main() {
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
+            builder.dump_graphviz("a.txt");
             // input layer factoriser
             let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);
             let expanded_factoriser = l0f.repeat(NUM_INPUT_BUCKETS);

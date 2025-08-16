@@ -22,7 +22,7 @@ fn main() -> Result<(), GraphManagerError<DepthGraph>> {
     required.insert(z);
     required.insert(y);
 
-    println!("unused: {w:?}");
+    println!("unused: %{:?}", w.inner());
 
     println!("{}", graph.formatted().unwrap());
 

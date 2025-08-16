@@ -11,6 +11,7 @@ use std::{
     time::Instant,
 };
 
+use acyclib::graph::NodeId;
 use instruction::GraphInstruction;
 use ir::{node::AnnotatedNode, shape::Shape, GraphIRError};
 use tensor::{read_from_byte_buffer, Tensor};
@@ -40,27 +41,27 @@ impl<D: Device> GraphFunction<D> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum NodeIdTy {
+pub enum GraphNodeIdTy {
     Values,
     Gradients,
     Ancillary(u16),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeId {
-    id: usize,
-    ty: NodeIdTy,
+pub struct GraphNodeId {
+    id: NodeId,
+    ty: GraphNodeIdTy,
 }
 
-impl NodeId {
-    pub fn new(id: usize, ty: NodeIdTy) -> Self {
+impl GraphNodeId {
+    pub fn new(id: NodeId, ty: GraphNodeIdTy) -> Self {
         Self { id, ty }
     }
 }
 
-impl std::fmt::Debug for NodeId {
+impl std::fmt::Debug for GraphNodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Id({}, {:?})", self.id, self.ty)
+        write!(f, "Id({}, {:?})", self.id.inner(), self.ty)
     }
 }
 
@@ -71,13 +72,13 @@ struct ProfileInfo {
 }
 
 pub struct Graph<D: Device> {
-    nodes: HashMap<NodeId, RefCell<Tensor<D>>>,
-    inputs: HashMap<String, usize>,
-    weights: HashMap<String, usize>,
+    nodes: HashMap<GraphNodeId, RefCell<Tensor<D>>>,
+    inputs: HashMap<String, NodeId>,
+    weights: HashMap<String, NodeId>,
     functions: HashMap<String, GraphFunction<D>>,
     profiles: HashMap<String, Mutex<Vec<ProfileInfo>>>,
     device: Arc<D>,
-    root: usize,
+    root: NodeId,
 }
 
 #[derive(Debug)]
@@ -101,12 +102,12 @@ impl<T: Debug> From<OperationError<T>> for GraphError<T> {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Node {
-    idx: usize,
+    idx: NodeId,
     pub shape: Shape,
 }
 
 impl Node {
-    pub fn idx(&self) -> usize {
+    pub fn idx(&self) -> NodeId {
         self.idx
     }
 }
@@ -123,10 +124,10 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_node_values(&self, node: Node) -> Ref<'_, Tensor<D>> {
-        self.get(NodeId::new(node.idx, NodeIdTy::Values)).unwrap()
+        self.get(GraphNodeId::new(node.idx, GraphNodeIdTy::Values)).unwrap()
     }
 
-    pub fn get(&self, id: NodeId) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+    pub fn get(&self, id: GraphNodeId) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
         if let Some(tensor) = &self.nodes.get(&id) {
             Ok(tensor.borrow())
         } else {
@@ -135,7 +136,7 @@ impl<D: Device> Graph<D> {
         }
     }
 
-    pub fn get_mut(&self, id: NodeId) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+    pub fn get_mut(&self, id: GraphNodeId) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
         if let Some(tensor) = &self.nodes.get(&id) {
             Ok(tensor.borrow_mut())
         } else {
@@ -145,25 +146,25 @@ impl<D: Device> Graph<D> {
 
     pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
         let idx = self.weight_idx(id).unwrap();
-        self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+        self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
     }
 
     pub fn get_weights_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
         let idx = self.weight_idx(id).unwrap();
-        self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+        self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
     }
 
     pub fn get_input(&self, id: &str) -> Ref<'_, Tensor<D>> {
         let idx = self.input_idx(id).unwrap();
-        self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+        self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
     }
 
     pub fn get_input_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
         let idx = self.input_idx(id).unwrap();
-        self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap()
+        self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
     }
 
-    fn root(&self) -> usize {
+    fn root(&self) -> NodeId {
         self.root
     }
 
@@ -262,7 +263,7 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_output_val(&self) -> Result<f32, OperationError<D::DeviceError>> {
-        Ok(self.get(NodeId::new(self.root(), NodeIdTy::Values))?.get_scalar().unwrap())
+        Ok(self.get(GraphNodeId::new(self.root(), GraphNodeIdTy::Values))?.get_scalar().unwrap())
     }
 
     /// Writes the weights of a graph to a file. If `gradients` is true,
@@ -276,7 +277,7 @@ impl<D: Device> Graph<D> {
 
         for id in &weight_ids {
             let idx = *self.weights.get(id).unwrap();
-            let weights = self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+            let weights = self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
             let this_buf = weights.dense().unwrap().write_to_byte_buffer(id).unwrap();
 
             buf.extend_from_slice(&this_buf);
@@ -307,7 +308,7 @@ impl<D: Device> Graph<D> {
             }
 
             let idx = *self.weights.get(&id).unwrap();
-            let mut weights = self.get_mut(NodeId::new(idx, NodeIdTy::Values)).unwrap();
+            let mut weights = self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
             let weights = weights.dense_mut().unwrap();
             let exp_size = weights.size();
 
@@ -333,11 +334,11 @@ impl<D: Device> Graph<D> {
         self.weights.keys().cloned().collect()
     }
 
-    pub fn input_idx(&self, id: &str) -> Option<usize> {
+    pub fn input_idx(&self, id: &str) -> Option<NodeId> {
         self.inputs.get(id).copied()
     }
 
-    pub fn weight_idx(&self, id: &str) -> Option<usize> {
+    pub fn weight_idx(&self, id: &str) -> Option<NodeId> {
         self.weights.get(id).copied()
     }
 
@@ -346,7 +347,7 @@ impl<D: Device> Graph<D> {
 
         for weight in self.weight_ids() {
             let idx = *self.weights.get(&weight).unwrap();
-            total += self.get(NodeId::new(idx, NodeIdTy::Values)).unwrap().dense().unwrap().size();
+            total += self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap().dense().unwrap().size();
         }
 
         total

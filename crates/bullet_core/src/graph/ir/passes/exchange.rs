@@ -1,3 +1,5 @@
+use acyclib::graph::NodeId;
+
 use crate::graph::{
     builder::Shape,
     ir::{
@@ -9,8 +11,7 @@ use crate::graph::{
             unary::{Slice, Unary},
         },
         passes::GraphIRSimplePass,
-        transform::GraphIRTransform,
-        BackendMarker, GraphIR, GraphIRError, GraphIRNode,
+        BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
     },
 };
 
@@ -19,145 +20,107 @@ use super::downcast;
 pub struct ExchangeElementwiseAndSelect;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect {
-    fn try_pass_on_node(&self, ir: &GraphIR<B>, node: usize) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
-        let old_data = ir.get(node)?;
+    fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
+        let old_data = ir.get(target)?;
 
-        if let Some(&Select { input, buckets }) = downcast(&old_data.parent_operation) {
-            let node = ir.get(input.idx)?;
+        if let Some(&Select { input, buckets }) = downcast(old_data.op()) {
+            let parent = ir.get(input.idx)?;
 
-            if node.num_children == 1 {
-                if let Some(LinearCombination { items, shape }) = downcast(&node.parent_operation) {
-                    let shape = *shape;
-                    let mut items: Vec<_> =
-                        items.iter().copied().map(|(idx, weight)| (AnnotatedNode { idx, shape }, weight)).collect();
+            if parent.children() == 1 {
+                if let Some(LinearCombination { items, shape }) = downcast(parent.op()).cloned() {
                     let mut new = Vec::new();
 
-                    for (node, _) in &mut items {
-                        let new_data = ir.result_of(Select { input: *node, buckets })?;
-                        node.idx = new_data.idx;
-                        node.shape = new_data.info.shape;
-                        new.push(new_data);
+                    for (node, weight) in items {
+                        let input = AnnotatedNode { idx: node, shape };
+                        new.push((ir.create(Select { input, buckets })?, weight));
                     }
 
-                    new.push(old_data.with_new_op(LinearCombination::new(items)?));
+                    ir.replace(target, LinearCombination::new(new)?)?;
 
-                    return GraphIRTransform::new([node.idx], new);
+                    return Ok(true);
                 }
+            }
 
-                if let Some(&Unary { input, op }) = downcast(&node.parent_operation) {
-                    let select_data = ir.result_of(Select { input, buckets })?;
-                    let select = AnnotatedNode { idx: select_data.idx, shape: select_data.info.shape };
+            if parent.children() == 1 {
+                if let Some(&Unary { input, op }) = downcast(parent.op()) {
+                    let input = ir.create(Select { input, buckets })?;
+                    ir.replace(target, Unary { input, op })?;
 
-                    let new_data = old_data.with_new_op(Unary { input: select, op });
-
-                    return GraphIRTransform::new([node.idx], vec![select_data, new_data]);
+                    return Ok(true);
                 }
             }
         }
 
-        Ok(None)
+        Ok(false)
     }
 }
 
 pub struct ExchangeConcatAndUnary;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeConcatAndUnary {
-    fn try_pass_on_node(&self, ir: &GraphIR<B>, node: usize) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
-        let old_data = ir.get(node)?;
+    fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
+        let old_data = ir.get(target)?;
 
-        if let Some(&Unary { input, op }) = downcast(&old_data.parent_operation) {
-            let node = ir.get(input.idx)?;
+        if let Some(&Unary { input, op }) = downcast(old_data.op()).cloned() {
+            let parent = ir.get(input.idx)?;
 
-            if node.num_children == 1 {
-                if let Some(Concat { a, b }) = downcast(&node.parent_operation) {
-                    let lower_data = ir.result_of(Unary { input: *a, op })?;
-                    let lower = AnnotatedNode { idx: lower_data.idx, shape: a.shape };
+            if parent.children() == 1 {
+                if let Some(Concat { a, b }) = downcast(parent.op()).cloned() {
+                    let lower = ir.create(Unary { input: a, op })?;
+                    let upper = ir.create(Unary { input: b, op })?;
 
-                    let upper_data = ir.result_of(Unary { input: *b, op })?;
-                    let upper = AnnotatedNode { idx: upper_data.idx, shape: b.shape };
+                    ir.replace(target, Concat { a: lower, b: upper })?;
 
-                    let new_data = old_data.with_new_op(Concat { a: lower, b: upper });
-
-                    return GraphIRTransform::new([node.idx], vec![lower_data, upper_data, new_data]);
+                    return Ok(true);
                 }
             }
         }
 
-        Ok(None)
+        Ok(false)
     }
 }
 
 pub struct ExchangeMatmulAndConcatWithSliceAndMatmul;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeMatmulAndConcatWithSliceAndMatmul {
-    fn try_pass_on_node(&self, ir: &GraphIR<B>, node: usize) -> Result<Option<GraphIRTransform<B>>, GraphIRError> {
-        let old_data = ir.get(node)?;
+    fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
+        let old_data = ir.get(target)?;
 
-        if let Some(&Matmul { a, b, transa: false, transb: false }) = downcast(&old_data.parent_operation) {
+        if let Some(&Matmul { a, b, transa: false, transb: false }) = downcast(old_data.op()).cloned() {
             let bn = ir.get(b.idx)?;
 
-            if bn.num_children == 1 {
-                if let Some(Concat { a: x, b: y }) = downcast(&bn.parent_operation) {
-                    let an = ir.get(a.idx)?;
-                    let xn = ir.get(x.idx)?;
-                    let yn = ir.get(y.idx)?;
+            if bn.children() == 1 {
+                if let Some(Concat { a: x, b: y }) = downcast(bn.op()).cloned() {
+                    let an = ir.get(a.idx)?.ty();
+                    let xn = ir.get(x.idx)?.ty();
+                    let yn = ir.get(y.idx)?.ty();
 
                     // exchange only worth it if the extraction of `a`
                     // into pieces can be amortised by batching on `b`
-                    if !an.info.batched && xn.info.batched && yn.info.batched {
-                        let a_flat = Shape::new(a.shape.size(), 1);
-                        let a_resh = AnnotatedNode { idx: a.idx, shape: a_flat };
+                    if !an.batched && xn.batched && yn.batched {
+                        let flat = Shape::new(a.shape.size(), 1);
+                        let resh = AnnotatedNode { idx: a.idx, shape: flat };
 
-                        let a_lower_shape = Shape::new(a.shape.rows(), x.shape.rows());
-                        let a_lower_data =
-                            ir.result_of(Slice { input: a_resh, start: 0, end: a_lower_shape.size() })?;
-                        let a_lower = AnnotatedNode { idx: a_lower_data.idx, shape: a_lower_shape };
+                        let lower_shape = Shape::new(a.shape.rows(), x.shape.rows());
+                        let lower = ir.create(Slice { input: resh, start: 0, end: lower_shape.size() })?;
+                        let lower = AnnotatedNode { idx: lower.idx, shape: lower_shape };
 
-                        let a_upper_shape = Shape::new(a.shape.rows(), y.shape.rows());
-                        let a_upper_data =
-                            ir.result_of(Slice { input: a_resh, start: a_lower_shape.size(), end: a_flat.size() })?;
-                        let a_upper = AnnotatedNode { idx: a_upper_data.idx, shape: a_upper_shape };
+                        let upper_shape = Shape::new(a.shape.rows(), y.shape.rows());
+                        let upper = ir.create(Slice { input: resh, start: lower_shape.size(), end: flat.size() })?;
+                        let upper = AnnotatedNode { idx: upper.idx, shape: upper_shape };
 
-                        let ab_lower_data = GraphIRNode {
-                            idx: ir.new_idx(),
-                            info: old_data.info,
-                            parent_operation: Some(Box::new(Matmul {
-                                a: a_lower,
-                                b: *x,
-                                transa: false,
-                                transb: false,
-                            })),
-                            id: None,
-                            num_children: 0,
-                        };
-                        let ab_lower = AnnotatedNode { idx: ab_lower_data.idx, shape: ab_lower_data.info.shape };
+                        let ab_lower = ir.create(Matmul { a: lower, b: x, transa: false, transb: false })?;
 
-                        let ab_upper_data = GraphIRNode {
-                            idx: ir.new_idx(),
-                            info: old_data.info,
-                            parent_operation: Some(Box::new(Matmul {
-                                a: a_upper,
-                                b: *y,
-                                transa: false,
-                                transb: false,
-                            })),
-                            id: None,
-                            num_children: 0,
-                        };
-                        let ab_upper = AnnotatedNode { idx: ab_upper_data.idx, shape: ab_upper_data.info.shape };
+                        let ab_upper = ir.create(Matmul { a: upper, b: y, transa: false, transb: false })?;
 
-                        let new_data =
-                            old_data.with_new_op(LinearCombination::new([(ab_lower, 1.0), (ab_upper, 1.0)])?);
+                        ir.replace(target, LinearCombination::new([(ab_lower, 1.0), (ab_upper, 1.0)])?)?;
 
-                        return GraphIRTransform::new(
-                            [b.idx],
-                            vec![a_lower_data, a_upper_data, ab_lower_data, ab_upper_data, new_data],
-                        );
+                        return Ok(true);
                     }
                 }
             }
         }
 
-        Ok(None)
+        Ok(false)
     }
 }

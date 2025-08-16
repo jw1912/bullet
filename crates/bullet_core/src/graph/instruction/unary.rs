@@ -3,14 +3,14 @@ use crate::{
     graph::{
         instruction::GraphInstruction,
         ir::operation::unary::{Reduce, UnaryOp},
-        Graph, NodeId,
+        Graph, GraphNodeId,
     },
 };
 
 #[derive(Debug)]
 pub struct MaybeUpdateBatchSize {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for MaybeUpdateBatchSize {
@@ -30,8 +30,8 @@ impl<D: Device> GraphInstruction<D> for MaybeUpdateBatchSize {
 
 #[derive(Debug)]
 pub struct ReduceAcrossBatch {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
     pub input_mul: f32,
     pub output_mul: f32,
     pub reduction: Reduce,
@@ -68,8 +68,8 @@ impl<D: Device> GraphInstruction<D> for ReduceAcrossBatch {
 
 #[derive(Debug)]
 pub struct SplatAcrossBatch {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
     pub input_mul: f32,
     pub output_mul: f32,
     pub reduction: Reduce,
@@ -108,8 +108,8 @@ impl<D: Device> GraphInstruction<D> for SplatAcrossBatch {
 pub struct LinearCombination {
     pub input_mul: f32,
     pub output_mul: f32,
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for LinearCombination {
@@ -138,8 +138,8 @@ impl<D: Device> GraphInstruction<D> for LinearCombination {
 pub struct LinearCombinationSplat {
     pub input_mul: f32,
     pub output_mul: f32,
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for LinearCombinationSplat {
@@ -168,8 +168,8 @@ impl<D: Device> GraphInstruction<D> for LinearCombinationSplat {
 
 #[derive(Debug)]
 pub struct SparseToDense {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for SparseToDense {
@@ -195,8 +195,8 @@ impl<D: Device> GraphInstruction<D> for SparseToDense {
 #[derive(Debug)]
 pub struct PairwiseMul {
     pub offset: usize,
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for PairwiseMul {
@@ -227,8 +227,8 @@ impl<D: Device> GraphInstruction<D> for PairwiseMul {
 
 #[derive(Debug)]
 pub struct Unary {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
     pub op: UnaryOp,
 }
 
@@ -263,8 +263,8 @@ impl<D: Device> GraphInstruction<D> for Unary {
 
 #[derive(Debug)]
 pub struct CopyOrAddStrided {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
     pub input_offset: usize,
     pub output_offset: usize,
     pub add: bool,
@@ -302,8 +302,8 @@ impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
 
 #[derive(Debug)]
 pub struct Softmax {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
 }
 
 impl<D: Device> GraphInstruction<D> for Softmax {
@@ -331,8 +331,8 @@ impl<D: Device> GraphInstruction<D> for Softmax {
 
 #[derive(Debug)]
 pub struct Transpose {
-    pub input: NodeId,
-    pub output: NodeId,
+    pub input: GraphNodeId,
+    pub output: GraphNodeId,
     pub rows: usize,
     pub cols: usize,
     pub input_mul: f32,

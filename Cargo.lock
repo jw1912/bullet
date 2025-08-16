@@ -71,6 +71,7 @@ dependencies = [
 name = "bullet_core"
 version = "0.1.0"
 dependencies = [
+ "acyclib",
  "rand",
  "rand_distr",
 ]

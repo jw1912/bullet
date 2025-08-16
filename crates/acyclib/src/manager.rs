@@ -22,11 +22,15 @@ impl<T: GraphType> Default for GraphManager<T> {
 }
 
 impl<T: GraphType> GraphManager<T> {
-    fn current(&self) -> &Graph<T::Type, T::Operation> {
+    pub fn current(&self) -> &Graph<T::Type, T::Operation> {
         self.history.last().as_ref().unwrap()
     }
 
-    fn capture_error<U>(&self, result: Result<U, GraphError>) -> Result<U, GraphManagerError<T>> {
+    pub fn roots(&self) -> HashSet<NodeId> {
+        self.current().roots()
+    }
+
+    pub fn capture_error<U>(&self, result: Result<U, GraphError>) -> Result<U, GraphManagerError<T>> {
         result.map_err(|error| GraphManagerError {
             graph: self.current().clone(),
             trace: Backtrace::force_capture(),
@@ -38,10 +42,10 @@ impl<T: GraphType> GraphManager<T> {
         self.current().formatted()
     }
 
-    pub fn modify<U>(
-        &mut self,
-        f: impl FnOnce(&mut Graph<T::Type, T::Operation>) -> Result<U, GraphError>,
-    ) -> Result<U, GraphManagerError<T>> {
+    pub fn modify<U, F>(&mut self, f: F) -> Result<U, GraphManagerError<T>>
+    where
+        F: FnOnce(&mut Graph<T::Type, T::Operation>) -> Result<U, GraphError>,
+    {
         let mut new = self.current().clone();
 
         let res = self.capture_error(f(&mut new))?;
@@ -51,8 +55,8 @@ impl<T: GraphType> GraphManager<T> {
         Ok(res)
     }
 
-    pub fn get(&self, node: NodeId) -> Result<&Node<T::Type, T::Operation>, GraphError> {
-        self.current().get(node)
+    pub fn get(&self, node: NodeId) -> Result<&Node<T::Type, T::Operation>, GraphManagerError<T>> {
+        self.capture_error(self.current().get(node))
     }
 
     pub fn add_node(&mut self, op: impl Into<T::Operation>) -> Result<NodeId, GraphManagerError<T>> {
@@ -65,5 +69,9 @@ impl<T: GraphType> GraphManager<T> {
 
     pub fn eliminate_dead_nodes(&mut self, required: HashSet<NodeId>) -> Result<(), GraphManagerError<T>> {
         self.modify(|graph| graph.eliminate_dead_nodes(required))
+    }
+
+    pub fn topo_order(&self) -> Result<Vec<NodeId>, GraphManagerError<T>> {
+        self.capture_error(self.current().topo_order())
     }
 }

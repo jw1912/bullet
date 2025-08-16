@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use bullet_core::graph::{NodeId, NodeIdTy};
+use bullet_core::graph::{GraphNodeId, GraphNodeIdTy};
 
 use crate::nn::{Graph, Shape};
 
@@ -50,7 +50,7 @@ impl SavedFormat {
 
     pub fn transpose(self) -> Self {
         self.add_transform(|graph, id, weights| {
-            let id = NodeId::new(graph.weight_idx(id).unwrap(), NodeIdTy::Values);
+            let id = GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
             let shape = graph.get(id).unwrap().shape();
             Self::transpose_impl(shape, &weights)
         })
@@ -64,7 +64,7 @@ impl SavedFormat {
 
     pub fn write_to_byte_buffer(&self, graph: &Graph) -> io::Result<Vec<u8>> {
         if let Some(id_str) = &self.id {
-            let id = NodeId::new(graph.weight_idx(id_str).unwrap(), NodeIdTy::Values);
+            let id = GraphNodeId::new(graph.weight_idx(id_str).unwrap(), GraphNodeIdTy::Values);
             let mut weights = graph.get(id).unwrap().get_dense_vals().unwrap();
 
             if let Layout::Transposed(shape) = self.layout {

@@ -111,7 +111,7 @@ impl CudaDevice {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CudaMarker;
 impl BackendMarker for CudaMarker {
     type Backend = CudaDevice;

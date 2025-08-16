@@ -1,13 +1,13 @@
-use crate::graph::ir::{
-    node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, BackendMarker, GraphIR, GraphIRNodeInfo,
-};
+use acyclib::graph::NodeId;
+
+use crate::graph::ir::{node::AnnotatedNode, operation::GraphIROperationError, shape::Shape, BackendMarker, GraphIR};
 
 pub fn check_dense_eq<B: BackendMarker>(
     ir: &GraphIR<B>,
     node: &AnnotatedNode,
     dense: bool,
 ) -> Result<(), GraphIROperationError> {
-    if ir.get(node.idx).unwrap().info.sparse.is_none() == dense {
+    if ir.get(node.idx).unwrap().ty().sparse.is_none() == dense {
         Ok(())
     } else {
         Err(GraphIROperationError::IncorrectDataLayout)
@@ -15,7 +15,7 @@ pub fn check_dense_eq<B: BackendMarker>(
 }
 
 pub fn check_not_batched<B: BackendMarker>(ir: &GraphIR<B>, node: &AnnotatedNode) -> Result<(), GraphIROperationError> {
-    if ir.get(node.idx).unwrap().info.batched {
+    if ir.get(node.idx).unwrap().ty().batched {
         Err(GraphIROperationError::BatchedInputNotSupported)
     } else {
         Ok(())
@@ -34,7 +34,7 @@ pub fn check_same_batching<B: BackendMarker>(
     ir: &GraphIR<B>,
     x: &[&AnnotatedNode],
 ) -> Result<(), GraphIROperationError> {
-    if x.iter().all(|y| ir.get(y.idx).unwrap().info.batched == ir.get(x[0].idx).unwrap().info.batched) {
+    if x.iter().all(|y| ir.get(y.idx).unwrap().ty().batched == ir.get(x[0].idx).unwrap().ty().batched) {
         Ok(())
     } else {
         Err(GraphIROperationError::MismatchedBatching)
@@ -42,13 +42,13 @@ pub fn check_same_batching<B: BackendMarker>(
 }
 
 pub fn check_no_grad<B: BackendMarker>(ir: &GraphIR<B>, x: &[&AnnotatedNode]) -> Result<(), GraphIROperationError> {
-    if x.iter().any(|y| ir.get(y.idx).unwrap().info.requires_grad) {
+    if x.iter().any(|y| ir.get(y.idx).unwrap().ty().requires_grad) {
         Err(GraphIROperationError::GradientNotSupported)
     } else {
         Ok(())
     }
 }
 
-pub fn batch_size_node(node_info: &GraphIRNodeInfo, nodes: &[AnnotatedNode]) -> usize {
-    nodes.iter().find(|x| node_info.get(x.idx).unwrap().batched).unwrap_or(&nodes[0]).idx
+pub fn batch_size_node<B: BackendMarker>(ir: &GraphIR<B>, nodes: &[AnnotatedNode]) -> NodeId {
+    nodes.iter().find(|x| ir.get(x.idx).unwrap().ty().batched).unwrap_or(&nodes[0]).idx
 }
