@@ -175,7 +175,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Affine {
     pub weights: AnnotatedNode,
     pub biases: AnnotatedNode,

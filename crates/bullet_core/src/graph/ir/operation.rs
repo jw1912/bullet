@@ -55,6 +55,7 @@ where
     fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend>;
 }
 
+#[derive(Clone)]
 pub struct GraphIRLeaf {
     pub id: Option<String>,
     pub ty: NodeInfo,

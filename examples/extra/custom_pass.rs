@@ -35,7 +35,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseCreluWithSquare {
         let op = ir.get(target)?.op();
 
         // Is this node a result of a `Square` operation?
-        if let Some(Unary { input: parent, op: UnaryOp::AbsPow(2.0) }) = downcast(op).cloned() {
+        if let Some(Unary { input: parent, op: UnaryOp::AbsPow(2.0) }) = downcast(op) {
             let parent = ir.get(parent.idx)?;
 
             // If the parent is used by other nodes, it needs to be
@@ -43,7 +43,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseCreluWithSquare {
             if parent.children() == 1 {
                 // Is the parent node a result of a `CReLU` operation?
                 if let Some(Unary { input, op: UnaryOp::DiffableFromOutput(DiffableFromOutput::CReLU) }) =
-                    downcast(parent.op()).cloned()
+                    downcast(parent.op())
                 {
                     // We started with
                     //   parent = CReLU(input)

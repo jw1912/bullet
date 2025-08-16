@@ -22,7 +22,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FusePairwiseMulWithConcat {
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let op = ir.get(target)?.op();
 
-        if let Some(Concat { a, b }) = downcast(op).cloned() {
+        if let Some(Concat { a, b }) = downcast(op) {
             let a_data = ir.get(a.idx)?;
             let b_data = ir.get(b.idx)?;
 
@@ -51,8 +51,8 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseMatmulWithAdd {
 
         if let Some(LinearCombination { items, shape }) = downcast(op) {
             if let &[(a, 1.0), (b, 1.0)] = &items[..] {
-                let a = AnnotatedNode { idx: a, shape: *shape };
-                let b = AnnotatedNode { idx: b, shape: *shape };
+                let a = AnnotatedNode { idx: a, shape };
+                let b = AnnotatedNode { idx: b, shape };
 
                 if add_single_sparse(ir, a, b, target)? {
                     return Ok(true);
@@ -83,7 +83,7 @@ fn add_single_sparse<B: BackendMarker>(
             values,
             biases: None,
             activation: DiffableFromOutput::Identity,
-        }) = downcast(ir_node.op()).cloned()
+        }) = downcast(ir_node.op())
         {
             ir.replace(
                 target,
@@ -109,7 +109,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFrom
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let op = ir.get(target)?.op();
 
-        if let Some(Unary { input, op: UnaryOp::DiffableFromOutput(activation) }) = downcast(op).cloned() {
+        if let Some(Unary { input, op: UnaryOp::DiffableFromOutput(activation) }) = downcast(op) {
             let ir_node = ir.get(input.idx)?;
 
             if ir_node.children() == 1 {
@@ -119,7 +119,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFrom
                     values,
                     indices,
                     activation: DiffableFromOutput::Identity,
-                }) = downcast(ir_node.op()).cloned()
+                }) = downcast(ir_node.op())
                 {
                     ir.replace(target, SparseAffineActivate { weights, biases, values, indices, activation })?;
                     return Ok(true);
@@ -138,7 +138,7 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for LowPriorityFusions {
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let op = ir.get(target)?.op();
 
-        if let Some(LinearCombination { items, shape }) = downcast(op).cloned() {
+        if let Some(LinearCombination { items, shape }) = downcast(op) {
             if let [(a, alpha), (b, beta)] = &items[..] {
                 let a = AnnotatedNode { idx: *a, shape };
                 let b = AnnotatedNode { idx: *b, shape };
@@ -166,11 +166,11 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for LowPriorityFusions {
         }
 
         if let Some(Unary { input, op: UnaryOp::AbsPow(x) }) = downcast(op) {
-            return power_error(ir, *input, *x, target);
+            return power_error(ir, input, x, target);
         }
 
         if let Some(Unary { input, op: UnaryOp::Mul(x) }) = downcast(op) {
-            return scale(ir, *input, *x, target);
+            return scale(ir, input, x, target);
         }
 
         Ok(false)
@@ -188,8 +188,8 @@ fn power_error<B: BackendMarker>(
     if ir_node.children() == 1 {
         if let Some(LinearCombination { items, shape }) = downcast(ir_node.op()) {
             if let [(a, 1.0), (b, -1.0)] | [(a, -1.0), (b, 1.0)] = items[..] {
-                let a = AnnotatedNode { idx: a, shape: *shape };
-                let b = AnnotatedNode { idx: b, shape: *shape };
+                let a = AnnotatedNode { idx: a, shape };
+                let b = AnnotatedNode { idx: b, shape };
 
                 if a.idx != b.idx && ir.get(a.idx)?.ty().batched == ir.get(b.idx)?.ty().batched {
                     ir.replace(target, AbsPowerError { a, b, power })?;
@@ -213,8 +213,8 @@ fn scale<B: BackendMarker>(
     if ir_node.children() == 1 {
         if let Some(LinearCombination { items, shape }) = downcast(ir_node.op()) {
             if let [(a, alpha), (b, beta)] = items[..] {
-                let a = AnnotatedNode { idx: a, shape: *shape };
-                let b = AnnotatedNode { idx: b, shape: *shape };
+                let a = AnnotatedNode { idx: a, shape };
+                let b = AnnotatedNode { idx: b, shape };
 
                 ir.replace(target, LinearCombination::new([(a, alpha * scale), (b, beta * scale)])?)?;
                 return Ok(true);
@@ -234,7 +234,7 @@ fn add_single_dense<B: BackendMarker>(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.children() == 1 {
-        if let Some(Matmul { a, transa: false, b, transb: false }) = downcast(ir_node.op()).cloned() {
+        if let Some(Matmul { a, transa: false, b, transb: false }) = downcast(ir_node.op()) {
             if !ir.get(rhs.idx)?.ty().batched {
                 ir.replace(target, Affine { weights: a, inputs: b, biases: rhs })?;
                 return Ok(true);
@@ -256,7 +256,7 @@ fn linear_comb_single<B: BackendMarker>(
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.children() == 1 {
-        if let Some(Unary { input, op: UnaryOp::Mul(x) }) = downcast(ir_node.op()).cloned() {
+        if let Some(Unary { input, op: UnaryOp::Mul(x) }) = downcast(ir_node.op()) {
             ir.replace(target, LinearCombination::new([(input, alpha * x), (rhs, beta)])?)?;
             return Ok(true);
         }
@@ -266,7 +266,7 @@ fn linear_comb_single<B: BackendMarker>(
 }
 
 fn compact_linear_comb<B: BackendMarker>(ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
-    let LinearCombination { items, shape } = downcast(ir.get(target)?.op()).cloned().unwrap();
+    let LinearCombination { items, shape } = downcast(ir.get(target)?.op()).unwrap();
 
     for &(node, weight) in &items {
         let ir_node = ir.get(node)?;
@@ -280,7 +280,7 @@ fn compact_linear_comb<B: BackendMarker>(ir: &mut GraphIR<B>, target: NodeId) ->
                 .filter_map(|(idx, weight)| (idx != node).then_some((AnnotatedNode { idx, shape }, weight)))
                 .collect();
 
-            for &(par_node, par_weight) in par_items {
+            for (par_node, par_weight) in par_items {
                 items.push((AnnotatedNode { idx: par_node, shape }, par_weight * weight));
             }
 

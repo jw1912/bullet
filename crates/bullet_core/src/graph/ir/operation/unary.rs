@@ -172,7 +172,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PairwiseMul {
     pub input: AnnotatedNode,
 }
@@ -232,7 +232,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Slice {
     pub input: AnnotatedNode,
     pub start: usize,
@@ -296,7 +296,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ToDense(pub AnnotatedNode);
 
 impl<B: BackendMarker> GraphIROperationBase<B> for ToDense {
@@ -327,7 +327,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ToDense {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Copy {
     pub input: AnnotatedNode,
     pub stop_grad: bool,
