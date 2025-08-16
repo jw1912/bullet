@@ -27,7 +27,7 @@ fn main() {
     println!("{}", ir.formatted().unwrap());
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FuseCreluWithSquare;
 
 impl<B: BackendMarker> GraphIRSimplePass<B> for FuseCreluWithSquare {
