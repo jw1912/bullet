@@ -39,35 +39,19 @@ impl<D: Device> Matrix<D> {
     }
 
     pub fn dense(&self) -> Result<&DenseMatrix<D>, OperationError<D::DeviceError>> {
-        if let Self::Dense(matrix) = self {
-            Ok(matrix)
-        } else {
-            Err(OperationError::InvalidTensorFormat)
-        }
+        if let Self::Dense(matrix) = self { Ok(matrix) } else { Err(OperationError::InvalidTensorFormat) }
     }
 
     pub fn dense_mut(&mut self) -> Result<&mut DenseMatrix<D>, OperationError<D::DeviceError>> {
-        if let Self::Dense(matrix) = self {
-            Ok(matrix)
-        } else {
-            Err(OperationError::InvalidTensorFormat)
-        }
+        if let Self::Dense(matrix) = self { Ok(matrix) } else { Err(OperationError::InvalidTensorFormat) }
     }
 
     pub fn sparse(&self) -> Result<&SparseMatrix<D>, OperationError<D::DeviceError>> {
-        if let Self::Sparse(matrix) = self {
-            Ok(matrix)
-        } else {
-            Err(OperationError::InvalidTensorFormat)
-        }
+        if let Self::Sparse(matrix) = self { Ok(matrix) } else { Err(OperationError::InvalidTensorFormat) }
     }
 
     pub fn sparse_mut(&mut self) -> Result<&mut SparseMatrix<D>, OperationError<D::DeviceError>> {
-        if let Self::Sparse(matrix) = self {
-            Ok(matrix)
-        } else {
-            Err(OperationError::InvalidTensorFormat)
-        }
+        if let Self::Sparse(matrix) = self { Ok(matrix) } else { Err(OperationError::InvalidTensorFormat) }
     }
 
     pub fn swap_with(&mut self, other: &mut Self) -> Result<(), OperationError<D::DeviceError>> {

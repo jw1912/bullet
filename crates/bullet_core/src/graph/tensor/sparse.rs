@@ -95,7 +95,8 @@ impl<D: Device> SparseMatrix<D> {
         }
 
         self.set_batch_size(batch_size)?;
-        self.buf.load_non_blocking_from_host(buf)
+
+        unsafe { self.buf.load_non_blocking_from_host(buf) }
     }
 
     pub fn copy_into_dense(&self, dst: &mut DenseMatrix<D>) -> Result<(), OperationError<D::DeviceError>> {

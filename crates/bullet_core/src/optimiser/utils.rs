@@ -1,6 +1,6 @@
 use crate::{
     device::Device,
-    graph::tensor::{read_from_byte_buffer, DenseMatrix},
+    graph::tensor::{DenseMatrix, read_from_byte_buffer},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

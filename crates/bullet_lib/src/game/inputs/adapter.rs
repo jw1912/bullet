@@ -1,4 +1,4 @@
-use bulletformat::{chess::MarlinFormat, ChessBoard};
+use bulletformat::{ChessBoard, chess::MarlinFormat};
 
 use super::SparseInputType;
 

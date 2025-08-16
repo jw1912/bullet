@@ -21,7 +21,7 @@ pub use nn::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
-    schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+    schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
     settings::LocalSettings,
 };
 

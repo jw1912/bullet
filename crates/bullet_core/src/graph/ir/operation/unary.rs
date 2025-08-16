@@ -1,14 +1,13 @@
 use acyclib::graph::NodeId;
 
 use crate::graph::{
-    instruction,
+    GraphFunction, GraphNodeId, GraphNodeIdTy, instruction,
     ir::{
-        node::AnnotatedNode,
-        operation::{util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
-        shape::Shape,
         BackendMarker, GraphIR, GraphIRError,
+        node::AnnotatedNode,
+        operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, util},
+        shape::Shape,
     },
-    GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
 /// List of supported activation functions.

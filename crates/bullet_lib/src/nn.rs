@@ -1,8 +1,8 @@
 pub use bullet_core::graph::{
+    Node,
     builder::{
         Activation, Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings, Shape,
     },
-    Node,
 };
 pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
 
@@ -17,12 +17,12 @@ pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as Devic
 
 pub mod optimiser {
     use crate::nn::ExecutionContext;
-    use bullet_core::optimiser::{self, radam, OptimiserState};
+    use bullet_core::optimiser::{self, OptimiserState, radam};
 
     pub type AdamWOptimiser = optimiser::adam::AdamW<ExecutionContext>;
     pub type RAdamOptimiser = radam::RAdam<ExecutionContext>;
     pub type RangerOptimiser = optimiser::ranger::Ranger<ExecutionContext>;
-    pub use optimiser::{adam::AdamWParams, ranger::RangerParams, Optimiser};
+    pub use optimiser::{Optimiser, adam::AdamWParams, ranger::RangerParams};
 
     pub trait OptimiserType: Default {
         type Optimiser: OptimiserState<ExecutionContext>;

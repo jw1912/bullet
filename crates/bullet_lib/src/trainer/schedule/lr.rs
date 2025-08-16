@@ -38,11 +38,7 @@ pub struct DropLR {
 
 impl LrScheduler for DropLR {
     fn lr(&self, _batch: usize, superbatch: usize) -> f32 {
-        if superbatch > self.drop {
-            self.start * self.gamma
-        } else {
-            self.start
-        }
+        if superbatch > self.drop { self.start * self.gamma } else { self.start }
     }
 
     fn colourful(&self) -> String {

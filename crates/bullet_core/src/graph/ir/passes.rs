@@ -7,7 +7,7 @@ use acyclib::graph::NodeId;
 pub use exchange::*;
 pub use fuse::*;
 
-use crate::graph::ir::{operation::GraphIROperationCompilable, BackendMarker, GraphIR, GraphIRError};
+use crate::graph::ir::{BackendMarker, GraphIR, GraphIRError, operation::GraphIROperationCompilable};
 
 pub trait GraphIRPass<B: BackendMarker>: Debug {
     fn try_pass(&self, ir: &mut GraphIR<B>) -> Result<bool, GraphIRError>;

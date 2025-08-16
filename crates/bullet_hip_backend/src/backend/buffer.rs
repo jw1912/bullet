@@ -80,8 +80,9 @@ impl<T: ValidType> DeviceBuffer<ExecutionContext, T> for Buffer<T> {
     }
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 pub mod util {
-    use crate::{backend::bindings::cudaStream_t, DeviceError};
+    use crate::{DeviceError, backend::bindings::cudaStream_t};
 
     use super::super::{bindings, util::catch};
     use std::ffi::c_void;

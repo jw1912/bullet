@@ -1,7 +1,7 @@
 use bullet_core::{device::blas, graph::ir::shape::Shape};
 use cudarc::cublas::{
-    sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
     Gemm, GemmConfig, StridedBatchedConfig,
+    sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
 };
 
 use crate::{CudaBuffer, CudaError};

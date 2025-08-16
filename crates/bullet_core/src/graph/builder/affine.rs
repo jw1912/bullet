@@ -1,6 +1,6 @@
 use crate::graph::ir::{
-    operation::{sparse::SparseAffineActivate, unary::DiffableFromOutput},
     BackendMarker,
+    operation::{sparse::SparseAffineActivate, unary::DiffableFromOutput},
 };
 
 use super::{Activation, GraphBuilderNode, InitSettings};

@@ -13,7 +13,7 @@ use bullet_core::{
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     trainer::save::{Layout, QuantTarget, SavedFormat},
-    value::{loader::LoadableDataType, ValueTrainer},
+    value::{ValueTrainer, loader::LoadableDataType},
 };
 
 type ValueTrainerInner<Opt, Inp, Out> = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;

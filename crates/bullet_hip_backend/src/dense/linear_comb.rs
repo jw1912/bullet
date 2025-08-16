@@ -1,6 +1,6 @@
 use bullet_core::device::DeviceBuffer;
 
-use crate::{backend::ops, Buffer, DeviceError};
+use crate::{Buffer, DeviceError, backend::ops};
 
 pub fn linear_comb_single(
     size: usize,

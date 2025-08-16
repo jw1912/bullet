@@ -1,8 +1,8 @@
-use bullet_core::device::{blas::GemmConfig, DeviceBuffer};
+use bullet_core::device::{DeviceBuffer, blas::GemmConfig};
 
 use crate::{
-    backend::{blas, util::catch_cublas, Buffer},
     DeviceError,
+    backend::{Buffer, blas, util::catch_cublas},
 };
 
 #[allow(clippy::too_many_arguments)]

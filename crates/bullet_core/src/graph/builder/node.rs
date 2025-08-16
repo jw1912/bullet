@@ -1,8 +1,10 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::graph::{
+    Node,
     builder::GraphBuilder,
     ir::{
+        BackendMarker,
         node::AnnotatedNode,
         operation::{
             affine::Matmul,
@@ -12,9 +14,7 @@ use crate::graph::{
             unary::{Copy, DiffableFromOutput, PairwiseMul, Reduce, ReduceAcrossBatch, Slice, ToDense, Unary, UnaryOp},
         },
         shape::Shape,
-        BackendMarker,
     },
-    Node,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 use crate::{
-    device::{base::BaseOperations, Device, OperationError},
-    graph::{instruction::GraphInstruction, ir::operation::unary::UnaryOp, Graph, GraphNodeId},
+    device::{Device, OperationError, base::BaseOperations},
+    graph::{Graph, GraphNodeId, instruction::GraphInstruction, ir::operation::unary::UnaryOp},
 };
 
 #[derive(Debug)]

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     device::{Device, DeviceBuffer, OperationError, OperationResult},
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
+    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
 };
 
 #[derive(Debug, Default)]
@@ -196,11 +196,7 @@ impl Device for CpuThread {
                 sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| if x > 0.0 && x < 1.0 { 1.0 } else { 0.0 })
             }
             DiffableFromOutput::SCReLU => sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| {
-                if x > 0.0 && x < 1.0 {
-                    2.0 * x.sqrt()
-                } else {
-                    0.0
-                }
+                if x > 0.0 && x < 1.0 { 2.0 * x.sqrt() } else { 0.0 }
             }),
             DiffableFromOutput::SqrReLU => {
                 sparse::affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt())

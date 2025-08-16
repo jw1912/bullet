@@ -1,9 +1,9 @@
 use crate::{
     device::{
-        blas::{BlasOperations, GemmConfig},
         Device, OperationError,
+        blas::{BlasOperations, GemmConfig},
     },
-    graph::{builder::Shape, Graph, GraphNodeId},
+    graph::{Graph, GraphNodeId, builder::Shape},
 };
 
 use super::GraphInstruction;

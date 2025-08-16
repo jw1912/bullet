@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use crate::{
     device::{
+        Device, DeviceBuffer,
         base::{AdamConfig, BaseOperations},
         blas::{BlasOperations, GemmConfig},
-        Device, DeviceBuffer,
     },
     graph::{
         ir::{operation::unary::DiffableFromOutput, shape::Shape},
@@ -32,7 +32,9 @@ impl CpuThread {
             let shape_a = Shape::new(m, n).maybe_transpose(trans_a);
             let shape_b = Shape::new(n, k).maybe_transpose(trans_b);
             let config = GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b };
-            print!("gemm alpha={alpha} beta={beta} shape_a=({shape_a}) shape_b=({shape_b}) trans_a={trans_a} trans_b={trans_b}... ");
+            print!(
+                "gemm alpha={alpha} beta={beta} shape_a=({shape_a}) shape_b=({shape_b}) trans_a={trans_a} trans_b={trans_b}... "
+            );
             display_passed(gemm_equal(device.clone(), config));
         }
     }
@@ -47,7 +49,9 @@ impl CpuThread {
             let shape_a = Shape::new(m, n).maybe_transpose(trans_a);
             let shape_b = Shape::new(n, k).maybe_transpose(trans_b);
             let config = GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b };
-            print!("gebmm batch_size={bs} alpha={alpha} beta={beta} shape_a=({shape_a}) shape_b=({shape_b}) trans_a={trans_a} trans_b={trans_b}... ");
+            print!(
+                "gebmm batch_size={bs} alpha={alpha} beta={beta} shape_a=({shape_a}) shape_b=({shape_b}) trans_a={trans_a} trans_b={trans_b}... "
+            );
             display_passed(gebmm_equal(device.clone(), bs, config));
         }
     }

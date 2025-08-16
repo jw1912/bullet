@@ -5,7 +5,7 @@ mod sparse;
 
 use std::{num::NonZeroUsize, sync::Arc};
 
-pub use dense::{read_from_byte_buffer, DenseMatrix};
+pub use dense::{DenseMatrix, read_from_byte_buffer};
 pub use matrix::Matrix;
 pub use sparse::SparseMatrix;
 
@@ -129,7 +129,10 @@ impl<D: Device> Tensor<D> {
         batch_size: Option<usize>,
         values: &[i32],
     ) -> Result<(), OperationError<D::DeviceError>> {
-        self.values.sparse_mut()?.load_from_slice(nnz, batch_size, values)?;
+        unsafe {
+            self.values.sparse_mut()?.load_from_slice(nnz, batch_size, values)?;
+        }
+
         Ok(())
     }
 }

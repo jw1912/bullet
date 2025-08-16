@@ -14,7 +14,7 @@ use std::{
 };
 
 use acyclib::{
-    graph::{format::StringOperation, Graph, GraphError, Node, NodeId, Operation},
+    graph::{Graph, GraphError, Node, NodeId, Operation, format::StringOperation},
     manager::{GraphManager, GraphManagerError, GraphType},
 };
 use node::{AnnotatedNode, NodeInfo};

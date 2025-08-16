@@ -3,9 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     device::{Device, OperationError},
     graph::{
+        Graph, GraphNodeId, GraphNodeIdTy,
         builder::Shape,
         tensor::{DenseMatrix, Matrix, SparseMatrix},
-        Graph, GraphNodeId, GraphNodeIdTy,
     },
     trainer::TrainerError,
 };

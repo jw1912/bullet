@@ -8,10 +8,10 @@ use std::{
 
 use bullet_core::{
     device::{Device, DeviceBuffer, OperationError, OperationResult},
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
+    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
 };
 use cudarc::{
-    cublas::{result::CublasError, CudaBlas},
+    cublas::{CudaBlas, result::CublasError},
     driver::{CudaContext, CudaFunction, CudaModule, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
     nvrtc::{self, CompileError},
 };

@@ -8,18 +8,18 @@ and lr schedulers, depending on your dataset.
 use bullet_lib::{
     game::{
         formats::sfbinpack::{
-            chess::{piecetype::PieceType, r#move::MoveType},
             TrainingDataEntry,
+            chess::{r#move::MoveType, piecetype::PieceType},
         },
         inputs,
     },
     nn::optimiser,
     trainer::{
         save::SavedFormat,
-        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+        schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::LocalSettings,
     },
-    value::{loader, ValueTrainerBuilder},
+    value::{ValueTrainerBuilder, loader},
 };
 
 const HIDDEN_SIZE: usize = 128;

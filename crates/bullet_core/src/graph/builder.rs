@@ -13,14 +13,14 @@ use std::{
 use crate::{
     device::Device,
     graph::{
-        ir::{
-            operation::{
-                unary::{Reduce, ReduceAcrossBatch},
-                GraphIROperationCompilable,
-            },
-            BackendMarker, GraphIRCompileOptions, GraphIRManager,
-        },
         Graph, GraphNodeId, GraphNodeIdTy,
+        ir::{
+            BackendMarker, GraphIRCompileOptions, GraphIRManager,
+            operation::{
+                GraphIROperationCompilable,
+                unary::{Reduce, ReduceAcrossBatch},
+            },
+        },
     },
 };
 

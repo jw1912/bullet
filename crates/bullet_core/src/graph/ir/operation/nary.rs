@@ -3,14 +3,13 @@ use std::collections::HashMap;
 use acyclib::graph::NodeId;
 
 use crate::graph::{
-    instruction,
+    GraphFunction, GraphNodeId, GraphNodeIdTy, instruction,
     ir::{
-        node::AnnotatedNode,
-        operation::{unary::Reduce, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError},
-        shape::Shape,
         BackendMarker, GraphIR, GraphIRError,
+        node::AnnotatedNode,
+        operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, unary::Reduce, util},
+        shape::Shape,
     },
-    GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
 #[derive(Clone, Debug, PartialEq)]

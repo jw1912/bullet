@@ -4,7 +4,7 @@ pub use error::GraphManagerError;
 
 use std::{backtrace::Backtrace, collections::HashSet, fmt};
 
-use crate::graph::{format::FormattedGraph, Graph, GraphError, Node, NodeId, Operation};
+use crate::graph::{Graph, GraphError, Node, NodeId, Operation, format::FormattedGraph};
 
 pub trait GraphType {
     type Type: Clone + PartialEq + fmt::Debug;

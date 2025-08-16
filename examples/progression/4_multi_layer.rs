@@ -1,18 +1,18 @@
 use bullet_lib::{
     game::{
-        inputs::{get_num_buckets, ChessBucketsMirrored},
+        inputs::{ChessBucketsMirrored, get_num_buckets},
         outputs::MaterialCount,
     },
     nn::{
-        optimiser::{AdamW, AdamWParams},
         InitSettings, Shape,
+        optimiser::{AdamW, AdamWParams},
     },
     trainer::{
         save::SavedFormat,
-        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+        schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::LocalSettings,
     },
-    value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder},
+    value::{ValueTrainerBuilder, loader::DirectSequentialDataLoader},
 };
 
 fn main() {

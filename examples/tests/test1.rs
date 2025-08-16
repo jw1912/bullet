@@ -2,10 +2,10 @@ use bullet_lib::{
     game::inputs::Chess768,
     nn::optimiser::AdamW,
     trainer::{
-        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
+        schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::LocalSettings,
     },
-    value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder},
+    value::{ValueTrainerBuilder, loader::DirectSequentialDataLoader},
 };
 
 fn main() {

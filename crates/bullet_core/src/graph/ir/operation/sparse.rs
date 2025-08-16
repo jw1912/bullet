@@ -1,16 +1,15 @@
 use acyclib::graph::NodeId;
 
 use crate::graph::{
-    instruction,
+    GraphFunction, GraphNodeId, GraphNodeIdTy, instruction,
     ir::{
+        BackendMarker, GraphIR, GraphIRError,
         node::AnnotatedNode,
         operation::{
-            unary::DiffableFromOutput, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError,
+            GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, unary::DiffableFromOutput, util,
         },
         shape::Shape,
-        BackendMarker, GraphIR, GraphIRError,
     },
-    GraphFunction, GraphNodeId, GraphNodeIdTy,
 };
 
 #[derive(Clone, Debug)]

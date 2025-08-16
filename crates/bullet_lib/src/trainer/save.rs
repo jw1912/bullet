@@ -130,11 +130,7 @@ pub enum QuantTarget {
 }
 
 fn round_or_trunc(x: f64, round: bool) -> f64 {
-    if round {
-        x.round()
-    } else {
-        x.trunc()
-    }
+    if round { x.round() } else { x.trunc() }
 }
 
 impl QuantTarget {

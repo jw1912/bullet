@@ -2,7 +2,7 @@
 #[allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 #[allow(non_camel_case_types)]
 #[link(name = "kernels", kind = "static")]
-extern "C" {
+unsafe extern "C" {
     pub fn activateReLU(size: usize, inp: *const f32, out: *mut f32);
     pub fn activateCReLU(size: usize, inp: *const f32, out: *mut f32);
     pub fn activateSCReLU(size: usize, inp: *const f32, out: *mut f32);

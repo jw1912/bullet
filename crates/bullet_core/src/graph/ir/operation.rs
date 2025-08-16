@@ -12,12 +12,12 @@ use acyclib::graph::NodeId;
 use crate::{
     device::Device,
     graph::{
-        ir::{node::NodeInfo, BackendMarker, GraphIR},
         GraphFunction,
+        ir::{BackendMarker, GraphIR, node::NodeInfo},
     },
 };
 
-use super::{node::AnnotatedNode, GraphIRError, Shape};
+use super::{GraphIRError, Shape, node::AnnotatedNode};
 
 pub trait GraphIROperationBase<B: BackendMarker>: std::any::Any + std::fmt::Debug + 'static {
     fn nodes(&self) -> Vec<AnnotatedNode>;

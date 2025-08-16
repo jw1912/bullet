@@ -1,6 +1,7 @@
 use acyclib::graph::NodeId;
 
 use crate::graph::ir::{
+    BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
     node::AnnotatedNode,
     operation::{
         affine::{Affine, Matmul},
@@ -10,7 +11,6 @@ use crate::graph::ir::{
         unary::{DiffableFromOutput, PairwiseMul, Unary, UnaryOp},
     },
     passes::GraphIRSimplePass,
-    BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
 };
 
 use super::downcast;

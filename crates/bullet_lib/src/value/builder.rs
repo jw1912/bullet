@@ -3,14 +3,14 @@ use std::marker::PhantomData;
 use bullet_core::{graph::builder::Shape, optimiser::Optimiser, trainer::Trainer};
 
 use crate::{
+    ExecutionContext,
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{optimiser::OptimiserType, BackendMarker, NetworkBuilder, NetworkBuilderNode},
+    nn::{BackendMarker, NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
     trainer::save::SavedFormat,
     value::ValueTrainerState,
-    ExecutionContext,
 };
 
-use super::{ValueTrainer, B};
+use super::{B, ValueTrainer};
 
 type Wgt<I> = fn(&<I as SparseInputType>::RequiredDataType) -> f32;
 type LossFn = for<'a> fn(Nbn<'a>, Nbn<'a>) -> Nbn<'a>;

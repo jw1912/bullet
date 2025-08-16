@@ -8,7 +8,7 @@ use std::{
 
 use crate::trainer::{
     logger,
-    schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule},
+    schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
 };
 
 use super::gamerunner::{self, GameRunnerArgs, GameRunnerPathInternal};
@@ -260,10 +260,6 @@ impl EngineType for OpenBenchCompliant {
             prev = word;
         }
 
-        if let Some(bench) = bench {
-            Ok(bench)
-        } else {
-            Err(String::from("Failed to run bench!"))
-        }
+        if let Some(bench) = bench { Ok(bench) } else { Err(String::from("Failed to run bench!")) }
     }
 }
