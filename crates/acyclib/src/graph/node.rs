@@ -1,7 +1,16 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    fmt,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct NodeId(pub(super) usize);
+
+impl fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "%{}", self.0)
+    }
+}
 
 impl NodeId {
     pub fn inner(self) -> usize {

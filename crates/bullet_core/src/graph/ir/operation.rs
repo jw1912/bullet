@@ -5,7 +5,7 @@ pub mod sparse;
 pub mod unary;
 pub mod util;
 
-use std::num::NonZeroUsize;
+use std::{fmt, num::NonZeroUsize};
 
 use acyclib::graph::NodeId;
 
@@ -55,10 +55,15 @@ where
     fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend>;
 }
 
-#[derive(Debug)]
 pub struct GraphIRLeaf {
     pub id: Option<String>,
     pub ty: NodeInfo,
+}
+
+impl fmt::Debug for GraphIRLeaf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.id.clone().unwrap_or("__unknown".to_string()))
+    }
 }
 
 impl<B: BackendMarker> GraphIROperationBase<B> for GraphIRLeaf {

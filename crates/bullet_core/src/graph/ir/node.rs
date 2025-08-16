@@ -1,10 +1,10 @@
-use std::num::NonZeroUsize;
+use std::{fmt, num::NonZeroUsize};
 
 use acyclib::graph::NodeId;
 
 use super::shape::Shape;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NodeInfo {
     pub requires_grad: bool,
     pub sparse: Option<NonZeroUsize>,
@@ -12,10 +12,34 @@ pub struct NodeInfo {
     pub shape: Shape,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl fmt::Debug for NodeInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.requires_grad {
+            write!(f, "gr_")?;
+        }
+
+        if let Some(val) = self.sparse {
+            write!(f, "sp{}_", val.get())?;
+        }
+
+        if self.batched {
+            write!(f, "?x")?;
+        }
+
+        write!(f, "{}", self.shape)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct AnnotatedNode {
     pub idx: NodeId,
     pub shape: Shape,
+}
+
+impl fmt::Debug for AnnotatedNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ {:?}, {:?} }}", self.idx, self.shape)
+    }
 }
 
 #[derive(Debug)]

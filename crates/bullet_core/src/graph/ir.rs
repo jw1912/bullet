@@ -6,7 +6,7 @@ pub mod shape;
 
 use std::{
     collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{self, Debug},
     marker::PhantomData,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -181,8 +181,14 @@ pub struct GraphIRCompileOptions {
     pub dump_graphviz: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GraphIROperation<B>(Rc<dyn GraphIROperationCompilable<B>>);
+
+impl<B> fmt::Debug for GraphIROperation<B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 impl<B: BackendMarker> From<Rc<dyn GraphIROperationCompilable<B>>> for GraphIROperation<B> {
     fn from(value: Rc<dyn GraphIROperationCompilable<B>>) -> Self {
