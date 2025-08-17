@@ -65,9 +65,9 @@ impl<D: Device> fmt::Display for DeviceFunction<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Instructions:")?;
 
-        for instr in &self.instructions {
+        for (i, instr) in self.instructions.iter().enumerate() {
             writeln!(f)?;
-            write!(f, "{}", instr.opname())?;
+            write!(f, "{i: <2}: {}", instr.opname())?;
         }
 
         Ok(())

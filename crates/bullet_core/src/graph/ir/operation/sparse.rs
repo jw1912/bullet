@@ -106,6 +106,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
 
             if let Some(bias) = self.biases
                 && let Some(output) = graph.maybe_get_ref(bias.idx, GraphNodeIdTy::Gradients)
+                && output.borrow().batch_size().is_some()
             {
                 func.push(function::MaybeUpdateBatchSize { input: indices.clone(), output });
             }
