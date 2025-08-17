@@ -118,13 +118,4 @@ pub trait BaseOperations {
         mom: &mut Self,
         vel: &mut Self,
     ) -> Result<(), Self::BaseError>;
-
-    fn transpose(
-        &mut self,
-        input: &Self,
-        rows: usize,
-        cols: usize,
-        input_mul: f32,
-        output_mul: f32,
-    ) -> Result<(), Self::BaseError>;
 }

@@ -328,37 +328,3 @@ impl<D: Device> GraphInstruction<D> for Softmax {
         D::softmax_across_batch(batch_size.unwrap_or(1), single_size, &input.buf, &mut output.buf)
     }
 }
-
-#[derive(Debug)]
-pub struct Transpose {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
-    pub rows: usize,
-    pub cols: usize,
-    pub input_mul: f32,
-    pub output_mul: f32,
-}
-
-impl<D: Device> GraphInstruction<D> for Transpose {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
-
-        let mut output = graph.get_mut(self.output)?;
-        let output = output.dense_mut()?;
-
-        let single_size = input.single_size();
-
-        if input.batch_size().is_some() || output.batch_size().is_some() {
-            return Err(OperationError::MismatchedBatchSizes);
-        }
-
-        if single_size != output.single_size() {
-            return Err(OperationError::InvalidTensorFormat);
-        }
-
-        output.buf.transpose(&input.buf, self.rows, self.cols, self.input_mul, self.output_mul)?;
-
-        Ok(())
-    }
-}

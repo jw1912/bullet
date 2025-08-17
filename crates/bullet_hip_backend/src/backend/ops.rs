@@ -37,5 +37,4 @@ unsafe extern "C" {
     pub fn abs_pow_scalar(size: usize, alpha: f32, inp: *const f32, out: *mut f32);
     pub fn abs_pow_scalar_backward(size: usize, alpha: f32, input: *const f32, output_grad: *const f32, input_grad: *mut f32);
     pub fn set(out: *mut f32, size: usize, val: f32);
-    pub fn transpose(rows: i32, cols: i32, input_mul: f32, output_mul: f32, input: *const f32, output: *mut f32);
 }
