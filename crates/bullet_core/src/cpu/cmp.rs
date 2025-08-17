@@ -6,10 +6,8 @@ use crate::{
         base::{AdamConfig, BaseOperations},
         blas::{BlasOperations, GemmConfig},
     },
-    graph::{
-        ir::{operation::unary::DiffableFromOutput, shape::Shape},
-        tensor::rng,
-    },
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
+    tensor::rng,
 };
 
 use super::{CpuBuffer, CpuThread};

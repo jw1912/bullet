@@ -2,11 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     device::{Device, OperationError},
-    graph::{
-        Graph, GraphNodeId, GraphNodeIdTy,
-        builder::Shape,
-        tensor::{DenseMatrix, Matrix, SparseMatrix},
-    },
+    graph::{Graph, GraphNodeId, GraphNodeIdTy, builder::Shape},
+    tensor::{DenseMatrix, Matrix, SparseMatrix},
     trainer::TrainerError,
 };
 
@@ -30,59 +27,64 @@ pub struct HostSparseMatrix {
     vals: Vec<i32>,
     shape: Shape,
     nnz: usize,
+    batch_size: Option<usize>,
 }
 
 impl HostSparseMatrix {
     /// # Safety
     /// All values must be in the range -1..shape.size()
-    pub unsafe fn new(vals: Vec<i32>, batch_size: usize, shape: Shape, nnz: usize) -> Self {
-        assert_eq!(batch_size * nnz, vals.len());
+    pub unsafe fn new(vals: Vec<i32>, batch_size: Option<usize>, shape: Shape, nnz: usize) -> Self {
+        assert_eq!(batch_size.unwrap_or(1) * nnz, vals.len());
 
-        Self { vals, shape, nnz }
+        Self { vals, shape, nnz, batch_size }
     }
 }
 
 pub struct HostDenseMatrix {
     vals: Vec<f32>,
     shape: Shape,
+    batch_size: Option<usize>,
 }
 
 impl HostDenseMatrix {
-    pub fn new(vals: Vec<f32>, batch_size: usize, shape: Shape) -> Self {
-        assert_eq!(batch_size * shape.size(), vals.len());
+    pub fn new(vals: Vec<f32>, batch_size: Option<usize>, shape: Shape) -> Self {
+        assert_eq!(batch_size.unwrap_or(1) * shape.size(), vals.len());
 
-        Self { vals, shape }
+        Self { vals, shape, batch_size }
     }
 }
 
 pub struct PreparedBatchDevice<D: Device> {
     pub device: Arc<D>,
-    pub batch_size: usize,
     pub inputs: HashMap<String, Matrix<D>>,
+    pub batch_size: usize,
 }
 
 impl<D: Device> PreparedBatchDevice<D> {
     pub fn new(device: Arc<D>, data: &PreparedBatchHost) -> Result<Self, D::DeviceError> {
-        let batch_size = data.batch_size;
-
         let mut inputs = HashMap::new();
+
+        let mut max_batch_size = 1;
 
         for (id, matrix) in &data.inputs {
             let matrix = match matrix {
-                HostMatrix::Sparse(HostSparseMatrix { vals, shape, nnz }) => {
-                    let mut sparse = SparseMatrix::zeroed(device.clone(), shape.size(), *nnz)?;
+                HostMatrix::Sparse(HostSparseMatrix { vals, shape, nnz, batch_size }) => {
+                    max_batch_size = batch_size.unwrap_or(1).max(max_batch_size);
+
+                    let mut sparse = SparseMatrix::zeroed(device.clone(), shape.size(), *nnz, *batch_size)?;
 
                     // # Safety
                     // HostMatrix::Sparse is verified on construction.
                     unsafe {
-                        sparse.load_from_slice(*nnz, Some(batch_size), vals)?;
+                        sparse.load_from_slice(*nnz, *batch_size, vals)?;
                     }
 
                     Matrix::Sparse(sparse)
                 }
-                HostMatrix::Dense(HostDenseMatrix { vals, shape }) => {
-                    let mut dense = DenseMatrix::zeroed(device.clone(), shape.size())?;
-                    dense.load_from_slice(Some(batch_size), vals)?;
+                HostMatrix::Dense(HostDenseMatrix { vals, shape, batch_size }) => {
+                    max_batch_size = batch_size.unwrap_or(1).max(max_batch_size);
+                    let mut dense = DenseMatrix::zeroed(device.clone(), shape.size(), *batch_size)?;
+                    dense.load_from_slice(*batch_size, vals)?;
                     Matrix::Dense(dense)
                 }
             };
@@ -92,15 +94,13 @@ impl<D: Device> PreparedBatchDevice<D> {
 
         device.synchronise()?;
 
-        Ok(Self { device, batch_size, inputs })
+        Ok(Self { device, inputs, batch_size: max_batch_size })
     }
 
     pub fn load_new_data(&mut self, data: &PreparedBatchHost) -> Result<(), OperationError<D::DeviceError>> {
-        let batch_size = data.batch_size;
-
         for (id, matrix) in &data.inputs {
             match matrix {
-                HostMatrix::Sparse(HostSparseMatrix { vals, shape, nnz }) => {
+                HostMatrix::Sparse(HostSparseMatrix { vals, shape, nnz, batch_size }) => {
                     let sparse = self.inputs.get_mut(id).unwrap().sparse_mut()?;
 
                     if shape.size() != sparse.single_size || *nnz != sparse.nnz {
@@ -110,10 +110,10 @@ impl<D: Device> PreparedBatchDevice<D> {
                     // # Safety
                     // HostMatrix::Sparse is verified on construction.
                     unsafe {
-                        sparse.load_non_blocking_from_host(*nnz, Some(batch_size), vals)?;
+                        sparse.load_non_blocking_from_host(*nnz, *batch_size, vals)?;
                     }
                 }
-                HostMatrix::Dense(HostDenseMatrix { vals, shape }) => {
+                HostMatrix::Dense(HostDenseMatrix { vals, shape, batch_size }) => {
                     let dense = self.inputs.get_mut(id).unwrap().dense_mut()?;
 
                     if shape.size() != dense.single_size {
@@ -121,13 +121,11 @@ impl<D: Device> PreparedBatchDevice<D> {
                     }
 
                     unsafe {
-                        dense.load_non_blocking_from_host(Some(batch_size), vals)?;
+                        dense.load_non_blocking_from_host(*batch_size, vals)?;
                     }
                 }
             }
         }
-
-        self.batch_size = batch_size;
 
         self.device.synchronise()?;
 
@@ -135,11 +133,7 @@ impl<D: Device> PreparedBatchDevice<D> {
     }
 
     pub fn load_into_graph(&mut self, graph: &mut Graph<D>) -> Result<(), TrainerError<D>> {
-        let batch_size = self.batch_size;
-
         for (id, matrix) in &mut self.inputs {
-            assert_eq!(batch_size, matrix.batch_size().unwrap_or(1));
-
             if let Some(idx) = graph.input_idx(id) {
                 matrix
                     .swap_with(&mut graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap().values)

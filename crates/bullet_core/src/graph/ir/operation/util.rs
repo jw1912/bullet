@@ -1,6 +1,9 @@
 use acyclib::graph::NodeId;
 
-use crate::graph::ir::{BackendMarker, GraphIR, node::AnnotatedNode, operation::GraphIROperationError, shape::Shape};
+use crate::graph::{
+    Graph, GraphNodeIdTy,
+    ir::{BackendMarker, GraphIR, node::AnnotatedNode, operation::GraphIROperationError, shape::Shape},
+};
 
 pub fn check_dense_eq<B: BackendMarker>(
     ir: &GraphIR<B>,
@@ -45,6 +48,10 @@ pub fn check_no_grad<B: BackendMarker>(ir: &GraphIR<B>, x: &[&AnnotatedNode]) ->
     }
 }
 
-pub fn batch_size_node<B: BackendMarker>(ir: &GraphIR<B>, nodes: &[AnnotatedNode]) -> NodeId {
-    nodes.iter().find(|x| ir.get(x.idx).unwrap().ty().batched).unwrap_or(&nodes[0]).idx
+pub fn batch_size_node<B: BackendMarker>(graph: &Graph<B::Backend>, nodes: &[AnnotatedNode]) -> NodeId {
+    nodes
+        .iter()
+        .find(|x| graph.get_ref(x.idx, GraphNodeIdTy::Values).borrow().batch_size().is_some())
+        .unwrap_or(&nodes[0])
+        .idx
 }

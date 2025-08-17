@@ -1,29 +1,32 @@
 use crate::{
     device::{Device, OperationError, base::BaseOperations},
-    graph::{Graph, GraphNodeId, instruction::GraphInstruction},
+    function::DeviceOperation,
+    tensor::TensorRef,
 };
 
 #[derive(Debug)]
-pub struct AbsPowerErrorBackward {
-    pub a: GraphNodeId,
-    pub b: GraphNodeId,
-    pub c: GraphNodeId,
-    pub output: GraphNodeId,
+pub struct AbsPowerErrorBackward<D: Device> {
+    pub a: TensorRef<D>,
+    pub b: TensorRef<D>,
+    pub c: TensorRef<D>,
+    pub output: TensorRef<D>,
     pub power: f32,
 }
 
-impl<D: Device> GraphInstruction<D> for AbsPowerErrorBackward {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let a = graph.get(self.a)?;
+impl<D: Device> DeviceOperation<D> for AbsPowerErrorBackward<D> {
+    fn opname(&self) -> String {
+        format!("AbsPowerErrorBackward({:?})", self.power)
+    }
+
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let a = self.a.borrow();
         let a = a.dense()?;
-
-        let b = graph.get(self.b)?;
+        let b = self.b.borrow();
         let b = b.dense()?;
-
-        let c = graph.get(self.c)?;
+        let c = self.c.borrow();
         let c = c.dense()?;
 
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if a.batch_size() != b.batch_size() || a.batch_size() != c.batch_size() || a.batch_size() != output.batch_size()
@@ -45,25 +48,26 @@ impl<D: Device> GraphInstruction<D> for AbsPowerErrorBackward {
 }
 
 #[derive(Debug)]
-pub struct SoftmaxCrossEntropyBackward {
-    pub softmax: GraphNodeId,
-    pub targets: GraphNodeId,
-    pub output_grads: GraphNodeId,
-    pub output: GraphNodeId,
+pub struct SoftmaxCrossEntropyBackward<D: Device> {
+    pub softmax: TensorRef<D>,
+    pub targets: TensorRef<D>,
+    pub output_grads: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for SoftmaxCrossEntropyBackward {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let softmax = graph.get(self.softmax)?;
+impl<D: Device> DeviceOperation<D> for SoftmaxCrossEntropyBackward<D> {
+    fn opname(&self) -> String {
+        "SoftmaxCrossEntropyBackward".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let softmax = self.softmax.borrow();
         let softmax = softmax.dense()?;
-
-        let targets = graph.get(self.targets)?;
+        let targets = self.targets.borrow();
         let targets = targets.dense()?;
-
-        let output_grads = graph.get(self.output_grads)?;
+        let output_grads = self.output_grads.borrow();
         let output_grads = output_grads.dense()?;
-
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if softmax.batch_size() != targets.batch_size()

@@ -2,13 +2,16 @@ use std::collections::HashMap;
 
 use acyclib::graph::NodeId;
 
-use crate::graph::{
-    GraphFunction, GraphNodeId, GraphNodeIdTy, instruction,
-    ir::{
-        BackendMarker, GraphIR, GraphIRError,
-        node::AnnotatedNode,
-        operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, unary::Reduce, util},
-        shape::Shape,
+use crate::{
+    function,
+    graph::{
+        DeviceFunction, Graph, GraphNodeIdTy,
+        ir::{
+            BackendMarker, GraphIR, GraphIRError,
+            node::AnnotatedNode,
+            operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, unary::Reduce, util},
+            shape::Shape,
+        },
     },
 };
 
@@ -66,29 +69,24 @@ impl<B: BackendMarker> GraphIROperationBase<B> for LinearCombination {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
-    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
-        let bsn = util::batch_size_node(ir, &<Self as GraphIROperationBase<B>>::nodes(self));
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
+        let bsn = util::batch_size_node::<B>(graph, &<Self as GraphIROperationBase<B>>::nodes(self));
 
-        let mut func = GraphFunction::default();
+        let mut func = DeviceFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input: GraphNodeId::new(bsn, GraphNodeIdTy::Values), output });
+        func.push(function::MaybeUpdateBatchSize {
+            input: graph.get_ref(bsn, GraphNodeIdTy::Values),
+            output: output.clone(),
+        });
 
         let mut push = |input_mul, output_mul, node| {
-            if !ir.get(output_node).unwrap().ty().batched || ir.get(node).unwrap().ty().batched {
-                func.push(instruction::LinearCombination {
-                    input_mul,
-                    output_mul,
-                    input: GraphNodeId::new(node, GraphNodeIdTy::Values),
-                    output,
-                });
+            let input = graph.get_ref(node, GraphNodeIdTy::Values);
+
+            if output.borrow().batch_size().is_none() || input.borrow().batch_size().is_some() {
+                func.push(function::LinearCombination { input_mul, output_mul, input, output: output.clone() });
             } else {
-                func.push(instruction::LinearCombinationSplat {
-                    input_mul,
-                    output_mul,
-                    input: GraphNodeId::new(node, GraphNodeIdTy::Values),
-                    output,
-                });
+                func.push(function::LinearCombinationSplat { input_mul, output_mul, input, output: output.clone() });
             }
         };
 
@@ -101,27 +99,25 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for LinearCombination {
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
 
-        let mut func = GraphFunction::default();
+        let mut func = DeviceFunction::default();
 
         let mut push = |input_mul, output_mul, node| {
-            if ir.get(node).unwrap().ty().requires_grad {
-                let output = GraphNodeId::new(node, GraphNodeIdTy::Gradients);
-
-                func.push(instruction::MaybeUpdateBatchSize {
-                    input: GraphNodeId::new(node, GraphNodeIdTy::Values),
-                    output,
+            if let Some(output) = graph.maybe_get_ref(node, GraphNodeIdTy::Gradients) {
+                func.push(function::MaybeUpdateBatchSize {
+                    input: graph.get_ref(node, GraphNodeIdTy::Values),
+                    output: output.clone(),
                 });
 
-                if !ir.get(output_node).unwrap().ty().batched || ir.get(node).unwrap().ty().batched {
-                    func.push(instruction::LinearCombination { input_mul, output_mul, input, output });
+                if input.borrow().batch_size().is_none() || output.borrow().batch_size().is_some() {
+                    func.push(function::LinearCombination { input_mul, output_mul, input: input.clone(), output });
                 } else {
-                    func.push(instruction::ReduceAcrossBatch {
+                    func.push(function::ReduceAcrossBatch {
                         input_mul,
                         output_mul,
-                        input,
+                        input: input.clone(),
                         output,
                         reduction: Reduce::Sum,
                     });

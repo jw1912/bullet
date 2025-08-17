@@ -1,23 +1,24 @@
 use crate::{
     device::{Device, OperationError, base::BaseOperations},
-    graph::{
-        Graph, GraphNodeId,
-        instruction::GraphInstruction,
-        ir::operation::unary::{Reduce, UnaryOp},
-    },
+    function::DeviceOperation,
+    graph::ir::operation::unary::{Reduce, UnaryOp},
+    tensor::TensorRef,
 };
 
-#[derive(Debug)]
-pub struct MaybeUpdateBatchSize {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct MaybeUpdateBatchSize<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for MaybeUpdateBatchSize {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
+impl<D: Device> DeviceOperation<D> for MaybeUpdateBatchSize<D> {
+    fn opname(&self) -> String {
+        "MaybeUpdateBatchSize".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if output.batch_size() != input.values.batch_size() {
@@ -28,21 +29,24 @@ impl<D: Device> GraphInstruction<D> for MaybeUpdateBatchSize {
     }
 }
 
-#[derive(Debug)]
-pub struct ReduceAcrossBatch {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct ReduceAcrossBatch<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
     pub input_mul: f32,
     pub output_mul: f32,
     pub reduction: Reduce,
 }
 
-impl<D: Device> GraphInstruction<D> for ReduceAcrossBatch {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for ReduceAcrossBatch<D> {
+    fn opname(&self) -> String {
+        format!("ReduceAcrossBatch({:?})", self.reduction)
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size().is_none() || output.batch_size().is_some() {
@@ -66,21 +70,24 @@ impl<D: Device> GraphInstruction<D> for ReduceAcrossBatch {
     }
 }
 
-#[derive(Debug)]
-pub struct SplatAcrossBatch {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct SplatAcrossBatch<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
     pub input_mul: f32,
     pub output_mul: f32,
     pub reduction: Reduce,
 }
 
-impl<D: Device> GraphInstruction<D> for SplatAcrossBatch {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for SplatAcrossBatch<D> {
+    fn opname(&self) -> String {
+        format!("SplatAcrossBatch({:?})", self.reduction)
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size().is_some() || output.batch_size().is_none() {
@@ -104,20 +111,23 @@ impl<D: Device> GraphInstruction<D> for SplatAcrossBatch {
     }
 }
 
-#[derive(Debug)]
-pub struct LinearCombination {
+#[derive(Clone)]
+pub struct LinearCombination<D: Device> {
     pub input_mul: f32,
     pub output_mul: f32,
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for LinearCombination {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for LinearCombination<D> {
+    fn opname(&self) -> String {
+        "LinearCombination".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size() != output.batch_size() {
@@ -134,20 +144,23 @@ impl<D: Device> GraphInstruction<D> for LinearCombination {
     }
 }
 
-#[derive(Debug)]
-pub struct LinearCombinationSplat {
+#[derive(Clone)]
+pub struct LinearCombinationSplat<D: Device> {
     pub input_mul: f32,
     pub output_mul: f32,
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for LinearCombinationSplat {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for LinearCombinationSplat<D> {
+    fn opname(&self) -> String {
+        "LinearCombinationSplat".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size().is_some() || output.batch_size().is_none() {
@@ -166,18 +179,21 @@ impl<D: Device> GraphInstruction<D> for LinearCombinationSplat {
     }
 }
 
-#[derive(Debug)]
-pub struct SparseToDense {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct SparseToDense<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for SparseToDense {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.sparse()?;
+impl<D: Device> DeviceOperation<D> for SparseToDense<D> {
+    fn opname(&self) -> String {
+        "SparseToDense".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.sparse()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size() != output.batch_size() {
@@ -192,19 +208,22 @@ impl<D: Device> GraphInstruction<D> for SparseToDense {
     }
 }
 
-#[derive(Debug)]
-pub struct PairwiseMul {
+#[derive(Clone)]
+pub struct PairwiseMul<D: Device> {
     pub offset: usize,
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for PairwiseMul {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for PairwiseMul<D> {
+    fn opname(&self) -> String {
+        "PairwiseMul".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size() != output.batch_size() {
@@ -225,19 +244,22 @@ impl<D: Device> GraphInstruction<D> for PairwiseMul {
     }
 }
 
-#[derive(Debug)]
-pub struct Unary {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct Unary<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
     pub op: UnaryOp,
 }
 
-impl<D: Device> GraphInstruction<D> for Unary {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for Unary<D> {
+    fn opname(&self) -> String {
+        format!("Unary({:?})", self.op)
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size() != output.batch_size() {
@@ -261,22 +283,25 @@ impl<D: Device> GraphInstruction<D> for Unary {
     }
 }
 
-#[derive(Debug)]
-pub struct CopyOrAddStrided {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct CopyOrAddStrided<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
     pub input_offset: usize,
     pub output_offset: usize,
     pub add: bool,
     pub len_is_out: bool,
 }
 
-impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for CopyOrAddStrided<D> {
+    fn opname(&self) -> String {
+        "CopyOrAddStrided".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size() != output.batch_size() {
@@ -300,18 +325,21 @@ impl<D: Device> GraphInstruction<D> for CopyOrAddStrided {
     }
 }
 
-#[derive(Debug)]
-pub struct Softmax {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+#[derive(Clone)]
+pub struct Softmax<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for Softmax {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = graph.get(self.input)?;
-        let input = input.dense()?;
+impl<D: Device> DeviceOperation<D> for Softmax<D> {
+    fn opname(&self) -> String {
+        "Softmax".to_string()
+    }
 
-        let mut output = graph.get_mut(self.output)?;
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = self.input.borrow();
+        let input = input.dense()?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         let batch_size = input.batch_size();

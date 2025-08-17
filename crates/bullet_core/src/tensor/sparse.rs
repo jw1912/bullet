@@ -1,4 +1,4 @@
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{fmt, num::NonZeroUsize, sync::Arc};
 
 use crate::device::{Device, DeviceBuffer, OperationError};
 
@@ -11,9 +11,21 @@ pub struct SparseMatrix<D: Device> {
     pub batch_size: Option<NonZeroUsize>,
 }
 
+impl<D: Device> fmt::Debug for SparseMatrix<D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}x{:?}xf32", self.single_size, self.batch_size)
+    }
+}
+
 impl<D: Device> SparseMatrix<D> {
-    pub fn zeroed(device: Arc<D>, single_size: usize, nnz: usize) -> Result<Self, D::DeviceError> {
-        Ok(Self { buf: D::BufferI32::new(device, nnz)?, single_size, nnz, batch_size: None })
+    pub fn zeroed(
+        device: Arc<D>,
+        single_size: usize,
+        nnz: usize,
+        batch_size: Option<usize>,
+    ) -> Result<Self, D::DeviceError> {
+        let buf = D::BufferI32::new(device, nnz * batch_size.unwrap_or(1))?;
+        Ok(Self { buf, single_size, nnz, batch_size: batch_size.map(|b| b.try_into().unwrap()) })
     }
 
     pub fn allocated_size(&self) -> usize {

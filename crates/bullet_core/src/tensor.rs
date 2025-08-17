@@ -3,7 +3,12 @@ mod matrix;
 pub mod rng;
 mod sparse;
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    num::NonZeroUsize,
+    rc::Rc,
+    sync::Arc,
+};
 
 pub use dense::{DenseMatrix, read_from_byte_buffer};
 pub use matrix::Matrix;
@@ -14,19 +19,51 @@ use crate::{
     graph::ir::shape::Shape,
 };
 
+#[derive(Debug)]
+pub struct TensorRef<D: Device> {
+    inner: Rc<RefCell<Tensor<D>>>,
+}
+
+impl<D: Device> Clone for TensorRef<D> {
+    fn clone(&self) -> Self {
+        Self { inner: self.inner.clone() }
+    }
+}
+
+impl<D: Device> TensorRef<D> {
+    pub fn new(tensor: Tensor<D>) -> Self {
+        Self { inner: Rc::new(RefCell::new(tensor)) }
+    }
+
+    pub fn borrow(&self) -> Ref<'_, Tensor<D>> {
+        self.inner.borrow()
+    }
+
+    pub fn borrow_mut(&self) -> RefMut<'_, Tensor<D>> {
+        self.inner.borrow_mut()
+    }
+}
+
+#[derive(Debug)]
 pub struct Tensor<D: Device> {
     pub values: Matrix<D>,
     pub shape: Shape,
 }
 
 impl<D: Device> Tensor<D> {
-    pub fn new(device: Arc<D>, shape: Shape, sparse: Option<NonZeroUsize>) -> Result<Self, D::DeviceError> {
+    pub fn new(
+        device: Arc<D>,
+        shape: Shape,
+        sparse: Option<NonZeroUsize>,
+        batched: bool,
+    ) -> Result<Self, D::DeviceError> {
         let single_size = shape.size();
+        let batch_size = batched.then_some(1);
 
         let values = if let Some(nnz) = sparse.map(usize::from) {
-            Matrix::Sparse(SparseMatrix::zeroed(device.clone(), single_size, nnz)?)
+            Matrix::Sparse(SparseMatrix::zeroed(device.clone(), single_size, nnz, batch_size)?)
         } else {
-            Matrix::Dense(DenseMatrix::zeroed(device.clone(), single_size)?)
+            Matrix::Dense(DenseMatrix::zeroed(device.clone(), single_size, batch_size)?)
         };
 
         Ok(Self { values, shape })
@@ -39,6 +76,13 @@ impl<D: Device> Tensor<D> {
 
     pub fn shape(&self) -> Shape {
         self.shape
+    }
+
+    pub fn batch_size(&self) -> Option<usize> {
+        match &self.values {
+            Matrix::Dense(x) => x.batch_size(),
+            Matrix::Sparse(x) => x.batch_size(),
+        }
     }
 
     pub fn get_scalar(&self) -> Option<f32> {

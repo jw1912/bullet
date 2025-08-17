@@ -1,4 +1,4 @@
-use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
+use std::{fmt, num::NonZeroUsize, sync::Arc};
 
 use crate::device::{Device, DeviceBuffer, OperationError, base::BaseOperations};
 
@@ -8,16 +8,16 @@ pub struct DenseMatrix<D: Device> {
     pub batch_size: Option<NonZeroUsize>,
 }
 
-impl<D: Device> Debug for DenseMatrix<D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}x{:?}", self.single_size, self.batch_size)
+impl<D: Device> fmt::Debug for DenseMatrix<D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}x{:?}xf32", self.single_size, self.batch_size)
     }
 }
 
 impl<D: Device> DenseMatrix<D> {
-    pub fn zeroed(device: Arc<D>, single_size: usize) -> Result<Self, D::DeviceError> {
-        let buf = D::BufferF32::new(device, single_size)?;
-        Ok(Self { buf, single_size, batch_size: None })
+    pub fn zeroed(device: Arc<D>, single_size: usize, batch_size: Option<usize>) -> Result<Self, D::DeviceError> {
+        let buf = D::BufferF32::new(device, single_size * batch_size.unwrap_or(1))?;
+        Ok(Self { buf, single_size, batch_size: batch_size.map(|b| b.try_into().unwrap()) })
     }
 
     pub fn ones(device: Arc<D>, size: usize) -> Result<Self, D::DeviceError> {

@@ -10,7 +10,7 @@ use crate::{
         Device, OperationError,
         base::{AdamConfig, BaseOperations},
     },
-    graph::tensor::DenseMatrix,
+    tensor::DenseMatrix,
 };
 
 use super::{OptimiserState, utils};
@@ -42,8 +42,8 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
 
     fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Result<Self, D::DeviceError> {
         Ok(Self {
-            momentum: DenseMatrix::zeroed(device.clone(), size)?,
-            velocity: DenseMatrix::zeroed(device, size)?,
+            momentum: DenseMatrix::zeroed(device.clone(), size, None)?,
+            velocity: DenseMatrix::zeroed(device, size, None)?,
             params: default_params,
             step: 0,
         })

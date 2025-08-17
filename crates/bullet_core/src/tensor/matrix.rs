@@ -4,6 +4,7 @@ use crate::device::{Device, DeviceBuffer, OperationError};
 
 use super::{dense::DenseMatrix, sparse::SparseMatrix};
 
+#[derive(Debug)]
 pub enum Matrix<D: Device> {
     Dense(DenseMatrix<D>),
     Sparse(SparseMatrix<D>),

@@ -12,10 +12,8 @@ use bullet_core::{
         base::{AdamConfig, BaseOperations},
         blas::{BlasOperations, GemmConfig},
     },
-    graph::{
-        ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
-        tensor,
-    },
+    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
+    tensor,
 };
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;

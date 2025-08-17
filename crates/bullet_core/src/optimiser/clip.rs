@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     device::{Device, OperationError},
-    graph::tensor::DenseMatrix,
+    tensor::DenseMatrix,
 };
 
 use super::{OptimiserState, utils::Placement};
