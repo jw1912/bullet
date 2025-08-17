@@ -87,26 +87,7 @@ where
         Ok(())
     }
 
-    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
-        if let Some(path) = self.opts.dump_graphviz.clone() {
-            use std::io::Write;
-            let opts = "style=filled;\ncolor=lightgrey;\nnode [style=filled,color=white];\n";
-            let unoptim = self.as_graphviz("unoptim").unwrap();
-            let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
-
-            if let Err(e) = self.optimise() {
-                return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIRManager: {e:?}")));
-            }
-
-            let optim = self.as_graphviz("optim").unwrap();
-            let optim = format!("subgraph cluster_1 {{\nlabel=\"Optimised\";\n{opts}{optim}}}");
-
-            let mut file = std::fs::File::create(path).unwrap();
-            write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
-        } else if let Err(e) = self.optimise() {
-            return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIRManager: {e:?}")));
-        }
-
+    pub fn compile(self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap().ty();
 
