@@ -73,24 +73,24 @@ impl<I: SparseInputType, O> From<DefaultDataPreparer<I, O>> for PreparedBatchHos
 
         unsafe {
             let SparseInput { value, max_active, shape } = prepared_data.stm;
-            let stm = HostSparseMatrix::new(value, batch_size, shape, max_active);
+            let stm = HostSparseMatrix::new(value, Some(batch_size), shape, max_active);
             let _ = host_data.inputs.insert("stm".to_string(), HostMatrix::Sparse(stm));
 
             let SparseInput { value, max_active, shape } = prepared_data.nstm;
-            let ntm = HostSparseMatrix::new(value, batch_size, shape, max_active);
+            let ntm = HostSparseMatrix::new(value, Some(batch_size), shape, max_active);
             let _ = host_data.inputs.insert("nstm".to_string(), HostMatrix::Sparse(ntm));
 
             let SparseInput { value, max_active, shape } = prepared_data.buckets;
-            let buckets = HostSparseMatrix::new(value, batch_size, shape, max_active);
+            let buckets = HostSparseMatrix::new(value, Some(batch_size), shape, max_active);
             let _ = host_data.inputs.insert("buckets".to_string(), HostMatrix::Sparse(buckets));
         }
 
         let DenseInput { value, shape } = prepared_data.targets;
-        let targets = HostDenseMatrix::new(value, batch_size, shape);
+        let targets = HostDenseMatrix::new(value, Some(batch_size), shape);
         let _ = host_data.inputs.insert("targets".to_string(), HostMatrix::Dense(targets));
 
         let DenseInput { value, shape } = prepared_data.weights;
-        let weights = HostDenseMatrix::new(value, batch_size, shape);
+        let weights = HostDenseMatrix::new(value, Some(batch_size), shape);
         let _ = host_data.inputs.insert("entry_weights".to_string(), HostMatrix::Dense(weights));
 
         host_data

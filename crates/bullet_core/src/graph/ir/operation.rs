@@ -11,8 +11,9 @@ use acyclib::graph::NodeId;
 
 use crate::{
     device::Device,
+    function::DeviceFunction,
     graph::{
-        GraphFunction,
+        Graph,
         ir::{BackendMarker, GraphIR, node::NodeInfo},
     },
 };
@@ -36,7 +37,7 @@ pub trait GraphIROperationBase<B: BackendMarker>: std::any::Any + std::fmt::Debu
         Ok(None)
     }
 
-    fn ancillary_buffers(&self, _ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
+    fn ancillary_buffers(&self, _ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>, bool)>, GraphIRError> {
         Ok(Vec::new())
     }
 
@@ -50,9 +51,9 @@ pub trait GraphIROperationCompilable<B: BackendMarker>: GraphIROperationBase<B>
 where
     B::Backend: Device,
 {
-    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend>;
+    fn forward_pass(&self, ir: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend>;
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend>;
+    fn backward_pass(&self, ir: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend>;
 }
 
 #[derive(Clone)]
@@ -94,12 +95,12 @@ impl<B: BackendMarker> GraphIROperationBase<B> for GraphIRLeaf {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for GraphIRLeaf {
-    fn forward_pass(&self, _: &GraphIR<B>, _: NodeId) -> GraphFunction<B::Backend> {
-        GraphFunction::default()
+    fn forward_pass(&self, _: &Graph<B::Backend>, _: NodeId) -> DeviceFunction<B::Backend> {
+        DeviceFunction::default()
     }
 
-    fn backward_pass(&self, _: &GraphIR<B>, _: NodeId) -> GraphFunction<B::Backend> {
-        GraphFunction::default()
+    fn backward_pass(&self, _: &Graph<B::Backend>, _: NodeId) -> DeviceFunction<B::Backend> {
+        DeviceFunction::default()
     }
 }
 

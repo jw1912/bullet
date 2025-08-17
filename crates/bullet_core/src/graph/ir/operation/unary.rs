@@ -1,12 +1,15 @@
 use acyclib::graph::NodeId;
 
-use crate::graph::{
-    GraphFunction, GraphNodeId, GraphNodeIdTy, instruction,
-    ir::{
-        BackendMarker, GraphIR, GraphIRError,
-        node::AnnotatedNode,
-        operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, util},
-        shape::Shape,
+use crate::{
+    function,
+    graph::{
+        DeviceFunction, Graph, GraphNodeIdTy,
+        ir::{
+            BackendMarker, GraphIR, GraphIRError,
+            node::AnnotatedNode,
+            operation::{GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, util},
+            shape::Shape,
+        },
     },
 };
 
@@ -58,32 +61,29 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Unary {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Unary {
-    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        let mut func = GraphFunction::default();
-        func.push(instruction::MaybeUpdateBatchSize { input, output });
-        func.push(instruction::Unary { input, output, op: self.op });
+        let mut func = DeviceFunction::default();
+        func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+        func.push(function::Unary { input, output, op: self.op });
 
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        assert!(ir.get(output_node).unwrap().ty().requires_grad);
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
 
-        let mut func = GraphFunction::default();
+        if let Some(grd) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
 
-        if ir.get(self.input.idx).unwrap().ty().requires_grad {
-            let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-            let input_grad = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: grd.clone() });
 
-            func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
-
-            func.push(instruction::UnaryBackward {
+            func.push(function::UnaryBackward {
                 input,
-                input_grad,
-                output_grad: GraphNodeId::new(output_node, GraphNodeIdTy::Gradients),
+                input_grad: grd,
+                output_grad: graph.get_ref(output_node, GraphNodeIdTy::Gradients),
                 op: self.op,
             });
         }
@@ -128,13 +128,13 @@ impl<B: BackendMarker> GraphIROperationBase<B> for ReduceAcrossBatch {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
-    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        let mut func = GraphFunction::default();
+        let mut func = DeviceFunction::default();
 
-        func.push(instruction::ReduceAcrossBatch {
+        func.push(function::ReduceAcrossBatch {
             input,
             output,
             input_mul: 1.0,
@@ -145,21 +145,16 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ReduceAcrossBatch {
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let info = ir.get(output_node).unwrap().ty();
-        assert!(info.requires_grad);
-        assert!(!info.batched);
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
 
-        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-        let input_grad = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
-        let output_grad = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+        if let Some(input_grad) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+            let output_grad = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
 
-        let mut func = GraphFunction::default();
+            func.push(function::MaybeUpdateBatchSize { input, output: input_grad.clone() });
 
-        func.push(instruction::MaybeUpdateBatchSize { input, output: input_grad });
-
-        if ir.get(self.input.idx).unwrap().ty().requires_grad {
-            func.push(instruction::SplatAcrossBatch {
+            func.push(function::SplatAcrossBatch {
                 input: output_grad,
                 output: input_grad,
                 reduction: self.reduction,
@@ -200,29 +195,28 @@ impl<B: BackendMarker> GraphIROperationBase<B> for PairwiseMul {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for PairwiseMul {
-    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        let mut func = GraphFunction::default();
+        let mut func = DeviceFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input, output });
-        func.push(instruction::PairwiseMul { offset: 0, input, output });
+        func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+        func.push(function::PairwiseMul { offset: 0, input, output });
 
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let mut func = GraphFunction::default();
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
 
-        if ir.get(self.input.idx).unwrap().ty().requires_grad {
-            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
-            let output = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
+        if let Some(output) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
 
-            func.push(instruction::MaybeUpdateBatchSize { input, output });
-            func.push(instruction::PairwiseMulBackward {
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+            func.push(function::PairwiseMulBackward {
                 offset: 0,
-                values: GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values),
+                values: graph.get_ref(self.input.idx, GraphNodeIdTy::Values),
                 input,
                 output,
             });
@@ -256,13 +250,13 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Slice {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
-    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        let mut func = GraphFunction::default();
-        func.push(instruction::MaybeUpdateBatchSize { input, output });
-        func.push(instruction::CopyOrAddStrided {
+        let mut func = DeviceFunction::default();
+        func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+        func.push(function::CopyOrAddStrided {
             input,
             output,
             input_offset: self.start,
@@ -274,15 +268,14 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Slice {
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let mut func = GraphFunction::default();
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
 
-        if ir.get(self.input.idx).unwrap().ty().requires_grad {
-            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
-            let output = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
+        if let Some(output) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
 
-            func.push(instruction::MaybeUpdateBatchSize { input, output });
-            func.push(instruction::CopyOrAddStrided {
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+            func.push(function::CopyOrAddStrided {
                 input,
                 output,
                 input_offset: 0,
@@ -311,19 +304,19 @@ impl<B: BackendMarker> GraphIROperationBase<B> for ToDense {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for ToDense {
-    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(self.0.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.0.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        let mut func = GraphFunction::default();
-        func.push(instruction::MaybeUpdateBatchSize { input, output });
-        func.push(instruction::SparseToDense { input, output });
+        let mut func = DeviceFunction::default();
+        func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+        func.push(function::SparseToDense { input, output });
 
         func
     }
 
-    fn backward_pass(&self, _ir: &GraphIR<B>, _output_node: NodeId) -> GraphFunction<B::Backend> {
-        GraphFunction::default()
+    fn backward_pass(&self, _graph: &Graph<B::Backend>, _output_node: NodeId) -> DeviceFunction<B::Backend> {
+        DeviceFunction::default()
     }
 }
 
@@ -350,26 +343,27 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Copy {
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
-    fn forward_pass(&self, _ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let input = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        let mut func = GraphFunction::default();
-        func.push(instruction::MaybeUpdateBatchSize { input, output });
-        func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 0.0, input, output });
+        let mut func = DeviceFunction::default();
+        func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+        func.push(function::LinearCombination { input_mul: 1.0, output_mul: 0.0, input, output });
 
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let mut func = GraphFunction::default();
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
 
-        if !self.stop_grad && ir.get(self.input.idx).unwrap().ty().requires_grad {
-            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
-            let output = GraphNodeId::new(self.input.idx, GraphNodeIdTy::Gradients);
+        if !self.stop_grad
+            && let Some(output) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients)
+        {
+            let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
 
-            func.push(instruction::MaybeUpdateBatchSize { input, output });
-            func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+            func.push(function::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
         }
 
         func

@@ -1,25 +1,29 @@
 use crate::{
     device::{Device, OperationError, base::BaseOperations},
-    graph::{Graph, GraphNodeId, instruction::GraphInstruction, ir::operation::unary::UnaryOp},
+    function::DeviceOperation,
+    graph::ir::operation::unary::UnaryOp,
+    tensor::TensorRef,
 };
 
-#[derive(Debug)]
-pub struct AbsPowerError {
-    pub a: GraphNodeId,
-    pub b: GraphNodeId,
+#[derive(Clone)]
+pub struct AbsPowerError<D: Device> {
+    pub a: TensorRef<D>,
+    pub b: TensorRef<D>,
     pub power: f32,
-    pub output: GraphNodeId,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for AbsPowerError {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let a = graph.get(self.a)?;
+impl<D: Device> DeviceOperation<D> for AbsPowerError<D> {
+    fn opname(&self) -> String {
+        format!("AbsPowerError({})", self.power)
+    }
+
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let a = self.a.borrow();
         let a = a.dense()?;
-
-        let b = graph.get(self.b)?;
+        let b = self.b.borrow();
         let b = b.dense()?;
-
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if a.batch_size() != b.batch_size() || a.batch_size() != output.batch_size() {
@@ -36,21 +40,25 @@ impl<D: Device> GraphInstruction<D> for AbsPowerError {
     }
 }
 
-#[derive(Debug)]
-pub struct UnaryBackward {
-    pub input: GraphNodeId,
-    pub output_grad: GraphNodeId,
-    pub input_grad: GraphNodeId,
+#[derive(Clone)]
+pub struct UnaryBackward<D: Device> {
+    pub input: TensorRef<D>,
+    pub output_grad: TensorRef<D>,
+    pub input_grad: TensorRef<D>,
     pub op: UnaryOp,
 }
 
-impl<D: Device> GraphInstruction<D> for UnaryBackward {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let mut input_grad = graph.get_mut(self.input_grad)?;
+impl<D: Device> DeviceOperation<D> for UnaryBackward<D> {
+    fn opname(&self) -> String {
+        format!("UnaryBackward({:?})", self.op)
+    }
+
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let mut input_grad = self.input_grad.borrow_mut();
         let input_grad = input_grad.dense_mut()?;
-        let output_grad = graph.get(self.output_grad)?;
+        let output_grad = self.output_grad.borrow();
         let output_grad = output_grad.dense()?;
-        let input = graph.get(self.input)?;
+        let input = self.input.borrow();
         let input = input.dense()?;
 
         if input.batch_size() != input_grad.batch_size() || input.batch_size() != output_grad.batch_size() {
@@ -76,22 +84,25 @@ impl<D: Device> GraphInstruction<D> for UnaryBackward {
     }
 }
 
-#[derive(Debug)]
-pub struct PairwiseMulBackward {
+pub struct PairwiseMulBackward<D: Device> {
     pub offset: usize,
-    pub values: GraphNodeId,
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
+    pub values: TensorRef<D>,
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = graph.get(self.input)?;
+impl<D: Device> DeviceOperation<D> for PairwiseMulBackward<D> {
+    fn opname(&self) -> String {
+        "PairwiseMulBackward".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = self.input.borrow();
         let input = input.dense()?;
-        let values = graph.get(self.values)?;
+        let values = self.values.borrow();
         let values = values.dense()?;
 
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input.batch_size() != output.batch_size() || input.batch_size() != values.batch_size() {
@@ -112,22 +123,25 @@ impl<D: Device> GraphInstruction<D> for PairwiseMulBackward {
     }
 }
 
-#[derive(Debug)]
-pub struct Select {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
-    pub buckets: GraphNodeId,
+pub struct Select<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
+    pub buckets: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for Select {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = graph.get(self.input)?;
+impl<D: Device> DeviceOperation<D> for Select<D> {
+    fn opname(&self) -> String {
+        "Select".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = self.input.borrow();
         let input = input.dense()?;
 
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
-        let buckets = graph.get(self.buckets)?;
+        let buckets = self.buckets.borrow();
         let buckets = buckets.sparse()?;
 
         if output.batch_size() != buckets.batch_size() {
@@ -153,22 +167,25 @@ impl<D: Device> GraphInstruction<D> for Select {
     }
 }
 
-#[derive(Debug)]
-pub struct SelectBackprop {
-    pub input: GraphNodeId,
-    pub output: GraphNodeId,
-    pub buckets: GraphNodeId,
+pub struct SelectBackprop<D: Device> {
+    pub input: TensorRef<D>,
+    pub output: TensorRef<D>,
+    pub buckets: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for SelectBackprop {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = graph.get(self.input)?;
+impl<D: Device> DeviceOperation<D> for SelectBackprop<D> {
+    fn opname(&self) -> String {
+        "SelectBackprop".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let input = self.input.borrow();
         let input = input.dense()?;
 
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
-        let buckets = graph.get(self.buckets)?;
+        let buckets = self.buckets.borrow();
         let buckets = buckets.sparse()?;
 
         if input.batch_size() != buckets.batch_size() {
@@ -194,22 +211,25 @@ impl<D: Device> GraphInstruction<D> for SelectBackprop {
     }
 }
 
-#[derive(Debug)]
-pub struct CrossEntropy {
-    pub a: GraphNodeId,
-    pub b: GraphNodeId,
-    pub output: GraphNodeId,
+pub struct CrossEntropy<D: Device> {
+    pub a: TensorRef<D>,
+    pub b: TensorRef<D>,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for CrossEntropy {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let a = graph.get(self.a)?;
+impl<D: Device> DeviceOperation<D> for CrossEntropy<D> {
+    fn opname(&self) -> String {
+        "CrossEntropy".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let a = self.a.borrow();
         let a = a.dense()?;
 
-        let b = graph.get(self.b)?;
+        let b = self.b.borrow();
         let b = b.dense()?;
 
-        let mut output = graph.get_mut(self.output)?;
+        let mut output = self.output.borrow_mut();
         let output = output.dense_mut()?;
 
         if a.batch_size() != b.batch_size() || a.batch_size() != output.batch_size() {

@@ -1,20 +1,20 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use acyclib::manager::GraphManagerError;
 
 use crate::{
     device::Device,
+    function::{DeviceFunction, Set},
     graph::{
-        Graph, GraphFunction, GraphNodeId, GraphNodeIdTy,
+        Graph, GraphNodeId, GraphNodeIdTy,
         builder::Shape,
-        instruction::Set,
         ir::{
             BackendMarker, GraphIRError, GraphIRManager, GraphIRResult, GraphIRType,
             node::NodeInfo,
             passes::{self, GraphIRPass},
         },
-        tensor::Tensor,
     },
+    tensor::{Tensor, TensorRef},
 };
 
 #[derive(Debug)]
@@ -87,26 +87,7 @@ where
         Ok(())
     }
 
-    pub fn compile(mut self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
-        if let Some(path) = self.opts.dump_graphviz.clone() {
-            use std::io::Write;
-            let opts = "style=filled;\ncolor=lightgrey;\nnode [style=filled,color=white];\n";
-            let unoptim = self.as_graphviz("unoptim").unwrap();
-            let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
-
-            if let Err(e) = self.optimise() {
-                return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIRManager: {e:?}")));
-            }
-
-            let optim = self.as_graphviz("optim").unwrap();
-            let optim = format!("subgraph cluster_1 {{\nlabel=\"Optimised\";\n{opts}{optim}}}");
-
-            let mut file = std::fs::File::create(path).unwrap();
-            write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
-        } else if let Err(e) = self.optimise() {
-            return Err(GraphIRCompileError(format!("Error encountered in optimising GraphIRManager: {e:?}")));
-        }
-
+    pub fn compile(self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap().ty();
 
@@ -117,10 +98,6 @@ where
         let device = Arc::new(device);
 
         let mut nodes = HashMap::new();
-        let mut forward = GraphFunction::default();
-        let mut backward = GraphFunction::default();
-
-        let mut zero_grads = GraphFunction::default();
 
         let id_idx_pair = |node| self.ids.get(node).map(|data| (data.clone(), *node));
         let inputs = self.inputs.iter().filter_map(id_idx_pair).collect();
@@ -128,54 +105,68 @@ where
 
         let topo = self.inner.topo_order()?;
 
-        let make_tensor = |device, shape, sparse| {
-            Tensor::new(device, shape, sparse)
-                .map_err(|_| GraphIRCompileError("Failed to initialsie tensor!".to_string()))
+        let make_tensor = |device, shape, sparse, batched| {
+            Tensor::new(device, shape, sparse, batched)
+                .map_err(|_| GraphIRCompileError("Failed to initialise tensor!".to_string()))
+                .map(TensorRef::new)
         };
 
-        for ir_node in topo.into_iter().map(|idx| self.get(idx).unwrap()) {
+        for ir_node in topo.iter().map(|&idx| self.get(idx).unwrap()) {
             let idx = ir_node.id();
             let op = ir_node.op();
-            let NodeInfo { shape, sparse, requires_grad, .. } = ir_node.ty();
+            let NodeInfo { shape, sparse, requires_grad, batched } = ir_node.ty();
 
-            let values = make_tensor(device.clone(), shape, sparse)?;
-            nodes.insert(GraphNodeId::new(idx, GraphNodeIdTy::Values), RefCell::new(values));
+            let values = make_tensor(device.clone(), shape, sparse, batched)?;
+            nodes.insert(GraphNodeId::new(idx, GraphNodeIdTy::Values), values);
 
             if requires_grad {
-                let grads = make_tensor(device.clone(), shape, sparse)?;
+                let grads = make_tensor(device.clone(), shape, sparse, batched)?;
                 let id = GraphNodeId::new(idx, GraphNodeIdTy::Gradients);
-                nodes.insert(id, RefCell::new(grads));
-
-                zero_grads.push(Set { id, val: 0.0 });
+                nodes.insert(id, grads.clone());
             }
 
             let ancillary_buffers = op.ancillary_buffers(self.inner.current())?;
 
-            for (num, &(shape, sparse)) in ancillary_buffers.iter().enumerate() {
-                let ancillary = make_tensor(device.clone(), shape, sparse)?;
+            for (num, &(shape, sparse, batched)) in ancillary_buffers.iter().enumerate() {
+                let ancillary = make_tensor(device.clone(), shape, sparse, batched)?;
                 let id = GraphNodeId::new(idx, GraphNodeIdTy::Ancillary(num as u16));
-                nodes.insert(id, RefCell::new(ancillary));
+                nodes.insert(id, ancillary);
             }
+        }
 
-            forward.extend(op.forward_pass(self.inner.current(), idx));
+        let mut graph = Graph { nodes, inputs, weights, functions: HashMap::new(), device, root };
+
+        let mut forward = DeviceFunction::default();
+        let mut backward = DeviceFunction::default();
+        let mut zero_grads = DeviceFunction::default();
+
+        for ir_node in topo.into_iter().map(|idx| self.get(idx).unwrap()) {
+            let idx = ir_node.id();
+            let op = ir_node.op();
+            let requires_grad = ir_node.ty().requires_grad;
+
+            forward.extend(op.forward_pass(&graph, idx));
 
             if requires_grad {
-                let mut this_bwd = op.backward_pass(self.inner.current(), idx);
+                let id = graph.get_ref(idx, GraphNodeIdTy::Gradients);
+                zero_grads.push(Set { id, val: 0.0 });
+
+                let mut this_bwd = op.backward_pass(&graph, idx);
                 this_bwd.extend(backward);
                 backward = this_bwd;
             }
         }
 
-        let mut new_bwd = GraphFunction::default();
-        new_bwd.push(Set { id: GraphNodeId { id: root, ty: GraphNodeIdTy::Gradients }, val: 1.0 });
+        let mut new_bwd = DeviceFunction::default();
+        let id = graph.get_ref(root, GraphNodeIdTy::Gradients);
+        new_bwd.push(Set { id, val: 1.0 });
         new_bwd.extend(backward);
         backward = new_bwd;
 
-        let functions = [("forward", forward), ("backward", backward), ("zero_grads", zero_grads)]
-            .into_iter()
-            .map(|(x, y)| (x.to_string(), y))
-            .collect();
+        graph.functions.insert("forward".to_string(), forward);
+        graph.functions.insert("backward".to_string(), backward);
+        graph.functions.insert("zero_grads".to_string(), zero_grads);
 
-        Ok(Graph { nodes, inputs, weights, functions, device, root, profiles: HashMap::new() })
+        Ok(graph)
     }
 }

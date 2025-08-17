@@ -1,44 +1,21 @@
 pub mod builder;
-pub mod instruction;
 pub mod ir;
-pub mod tensor;
 
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefMut},
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, Mutex},
-    time::Instant,
+    sync::Arc,
 };
 
 use acyclib::graph::NodeId;
-use instruction::GraphInstruction;
 use ir::{GraphIRError, node::AnnotatedNode, shape::Shape};
-use tensor::{Tensor, read_from_byte_buffer};
 
-use crate::device::{Device, OperationError};
-
-pub struct GraphFunction<D: Device> {
-    instructions: Vec<Box<dyn GraphInstruction<D>>>,
-}
-
-impl<D: Device> Default for GraphFunction<D> {
-    fn default() -> Self {
-        Self { instructions: Vec::new() }
-    }
-}
-
-impl<D: Device> GraphFunction<D> {
-    pub fn push(&mut self, instruction: impl GraphInstruction<D>) {
-        self.instructions.push(Box::new(instruction));
-    }
-
-    pub fn extend(&mut self, rhs: Self) {
-        for instr in rhs.instructions {
-            self.instructions.push(instr);
-        }
-    }
-}
+use crate::{
+    device::{Device, OperationError},
+    function::DeviceFunction,
+    tensor::{Tensor, TensorRef, read_from_byte_buffer},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GraphNodeIdTy {
@@ -65,18 +42,11 @@ impl std::fmt::Debug for GraphNodeId {
     }
 }
 
-#[derive(Clone, Copy)]
-struct ProfileInfo {
-    executions: usize,
-    total_time_micros: u128,
-}
-
 pub struct Graph<D: Device> {
-    nodes: HashMap<GraphNodeId, RefCell<Tensor<D>>>,
+    nodes: HashMap<GraphNodeId, TensorRef<D>>,
     inputs: HashMap<String, NodeId>,
     weights: HashMap<String, NodeId>,
-    functions: HashMap<String, GraphFunction<D>>,
-    profiles: HashMap<String, Mutex<Vec<ProfileInfo>>>,
+    functions: HashMap<String, DeviceFunction<D>>,
     device: Arc<D>,
     root: NodeId,
 }
@@ -127,8 +97,16 @@ impl<D: Device> Graph<D> {
         self.get(GraphNodeId::new(node.idx, GraphNodeIdTy::Values)).unwrap()
     }
 
+    pub fn get_ref(&self, id: NodeId, ty: GraphNodeIdTy) -> TensorRef<D> {
+        self.nodes.get(&GraphNodeId::new(id, ty)).cloned().unwrap()
+    }
+
+    pub fn maybe_get_ref(&self, id: NodeId, ty: GraphNodeIdTy) -> Option<TensorRef<D>> {
+        self.nodes.get(&GraphNodeId::new(id, ty)).cloned()
+    }
+
     pub fn get(&self, id: GraphNodeId) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = &self.nodes.get(&id) {
+        if let Some(tensor) = self.nodes.get(&id) {
             Ok(tensor.borrow())
         } else {
             println!("Cant find: {id:?}");
@@ -137,7 +115,7 @@ impl<D: Device> Graph<D> {
     }
 
     pub fn get_mut(&self, id: GraphNodeId) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = &self.nodes.get(&id) {
+        if let Some(tensor) = self.nodes.get(&id) {
             Ok(tensor.borrow_mut())
         } else {
             Err(OperationError::TensorOptimisedOut)
@@ -168,77 +146,24 @@ impl<D: Device> Graph<D> {
         self.root
     }
 
-    pub fn profile_function(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
-        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
-
-        let _ = self.profiles.insert(
-            id.to_string(),
-            Mutex::new(vec![ProfileInfo { executions: 0, total_time_micros: 0 }; func.instructions.len()]),
-        );
-
-        Ok(())
+    pub fn profile_function(&mut self, _id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        todo!();
     }
 
-    pub fn display_profile(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
-        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
-        let profile = self.profiles.get(id).ok_or(OperationError::UnsupportedOperation)?;
-
-        println!("Profile for function '{id}':");
-        for (instr, info) in func.instructions.iter().zip(profile.lock().unwrap().iter()) {
-            let avg_time = info.total_time_micros / info.executions as u128;
-            let dbg = format!("{instr:?}");
-            let instr_name = dbg.split_whitespace().next().unwrap();
-
-            if instr_name != "MaybeUpdateBatchSize" {
-                println!("{avg_time: >6} micros for {instr_name}");
-            }
-        }
-
-        Ok(())
+    pub fn display_profile(&self, _id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        todo!();
     }
 
     pub fn display_function_code(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
-        for instr in &self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.instructions {
-            println!("{instr:?}");
-        }
+        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
+
+        println!("{func}");
 
         Ok(())
     }
 
     pub fn execute(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
-        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
-
-        if let Some(profile) = self.profiles.get(id) {
-            for (instr, info) in func.instructions.iter().zip(profile.lock().unwrap().iter_mut()) {
-                if let Err(e) = self.device().synchronise() {
-                    println!("Error {e:?} in function '{id}' before executing {instr:?}");
-                    return Err(OperationError::DeviceError(Box::new(e)));
-                }
-                let t = Instant::now();
-
-                if let Err(e) = instr.execute(self) {
-                    println!("Error {e:?} in function '{id}' executing {instr:?}");
-                    return Err(e);
-                }
-
-                if let Err(e) = self.device().synchronise() {
-                    println!("Error {e:?} in function '{id}' after executing {instr:?}");
-                    return Err(OperationError::DeviceError(Box::new(e)));
-                }
-
-                info.executions += 1;
-                info.total_time_micros += t.elapsed().as_micros();
-            }
-        } else {
-            for instr in &func.instructions {
-                if let Err(e) = instr.execute(self) {
-                    println!("Error {e:?} in function '{id}' executing {instr:?}");
-                    return Err(e);
-                }
-            }
-        }
-
-        Ok(())
+        self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.execute()
     }
 
     pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {

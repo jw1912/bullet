@@ -33,7 +33,6 @@ pub struct GraphIRManager<B: BackendMarker> {
     inputs: HashSet<NodeId>,
     weights: HashSet<NodeId>,
     ids: HashMap<NodeId, String>,
-    opts: GraphIRCompileOptions,
 }
 
 impl<B: BackendMarker> GraphIRManager<B> {
@@ -130,10 +129,6 @@ impl<B: BackendMarker> GraphIRManager<B> {
         Ok(AnnotatedNode { idx, shape })
     }
 
-    pub fn set_compile_opts(&mut self, opts: GraphIRCompileOptions) {
-        self.opts = opts;
-    }
-
     pub fn as_graphviz(&self, prefix: &str) -> Result<String, std::fmt::Error> {
         use std::fmt::Write;
 
@@ -178,11 +173,6 @@ impl<B: BackendMarker> GraphIRMethods<B> for GraphIR<B> {
     fn replace(&mut self, node: NodeId, operation: impl GraphIROperationCompilable<B>) -> Result<(), GraphError> {
         self.replace_op(node, GraphIROperation(Rc::new(operation)))
     }
-}
-
-#[derive(Debug, Default)]
-pub struct GraphIRCompileOptions {
-    pub dump_graphviz: Option<String>,
 }
 
 #[derive(Clone)]

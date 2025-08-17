@@ -1,38 +1,41 @@
 use crate::{
     device::{Device, OperationError},
-    graph::{
-        Graph, GraphNodeId, builder::Shape, instruction::GraphInstruction, ir::operation::unary::DiffableFromOutput,
-    },
+    function::DeviceOperation,
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
+    tensor::TensorRef,
 };
 
-#[derive(Clone, Copy, Debug)]
-pub struct SparseAffineActivate {
-    pub weights: GraphNodeId,
+#[derive(Clone)]
+pub struct SparseAffineActivate<D: Device> {
+    pub weights: TensorRef<D>,
     pub weights_shape: Shape,
-    pub biases: Option<GraphNodeId>,
+    pub biases: Option<TensorRef<D>>,
     pub input_shape: Shape,
-    pub indices: GraphNodeId,
-    pub values: Option<GraphNodeId>,
+    pub indices: TensorRef<D>,
+    pub values: Option<TensorRef<D>>,
     pub activation: DiffableFromOutput,
-    pub output: GraphNodeId,
+    pub output: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for SparseAffineActivate {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<D::DeviceError>> {
-        let SparseAffineActivate { weights, weights_shape, biases, input_shape, indices, values, activation, output } =
-            *self;
+impl<D: Device> DeviceOperation<D> for SparseAffineActivate<D> {
+    fn opname(&self) -> String {
+        "SparseAffineActivate".to_string()
+    }
 
-        let weights = graph.get(weights)?;
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let SparseAffineActivate { weights, weights_shape, biases, input_shape, indices, values, activation, output } =
+            self;
+
+        let weights = weights.borrow();
         let weights = weights.dense()?;
-        let indices = graph.get(indices)?;
+        let indices = indices.borrow();
         let indices = indices.sparse()?;
-        let mut output = graph.get_mut(output)?;
+        let mut output = output.borrow_mut();
         let output = output.dense_mut()?;
 
-        let biases = if let Some(b) = biases { Some(graph.get(b)?) } else { None };
+        let biases = biases.as_ref().map(|b| b.borrow());
         let biases = if let Some(b) = &biases { Some(b.dense()?) } else { None };
-
-        let values = if let Some(v) = values { Some(graph.get(v)?) } else { None };
+        let values = values.as_ref().map(|v| v.borrow());
         let values = if let Some(v) = &values { Some(v.dense()?) } else { None };
 
         let batch_size = indices.batch_size();
@@ -43,12 +46,12 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivate {
 
         D::sparse_affine_activate(
             batch_size.unwrap_or(1),
-            activation,
+            *activation,
             &weights.buf,
-            weights_shape,
+            *weights_shape,
             &indices.buf,
             values.map(|v| &v.buf),
-            input_shape,
+            *input_shape,
             indices.nnz,
             biases.map(|b| &b.buf),
             biases.map(|b| b.batch_size.is_some()).unwrap_or(false),
@@ -57,21 +60,25 @@ impl<D: Device> GraphInstruction<D> for SparseAffineActivate {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct BackpropSparseAffineActivate {
-    pub weights_grads: GraphNodeId,
+#[derive(Clone)]
+pub struct BackpropSparseAffineActivate<D: Device> {
+    pub weights_grads: TensorRef<D>,
     pub weights_shape: Shape,
-    pub biases_grads: Option<GraphNodeId>,
+    pub biases_grads: Option<TensorRef<D>>,
     pub input_shape: Shape,
-    pub indices: GraphNodeId,
-    pub values: Option<GraphNodeId>,
+    pub indices: TensorRef<D>,
+    pub values: Option<TensorRef<D>>,
     pub activation: DiffableFromOutput,
-    pub output: GraphNodeId,
-    pub output_grads: GraphNodeId,
+    pub output: TensorRef<D>,
+    pub output_grads: TensorRef<D>,
 }
 
-impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivate {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+impl<D: Device> DeviceOperation<D> for BackpropSparseAffineActivate<D> {
+    fn opname(&self) -> String {
+        "BackpropSparseAffineActivate".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
         let BackpropSparseAffineActivate {
             weights_grads,
             weights_shape,
@@ -82,21 +89,20 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivate {
             activation,
             output,
             output_grads,
-        } = *self;
+        } = self;
 
-        let mut weights_grads = graph.get_mut(weights_grads)?;
+        let mut weights_grads = weights_grads.borrow_mut();
         let weights_grads = weights_grads.dense_mut()?;
-        let indices = graph.get(indices)?;
+        let indices = indices.borrow();
         let indices = indices.sparse()?;
-        let output = graph.get(output)?;
+        let output = output.borrow();
         let output = output.dense()?;
-        let output_grads = graph.get(output_grads)?;
+        let output_grads = output_grads.borrow();
         let output_grads = output_grads.dense()?;
 
-        let mut biases_grads = if let Some(b) = biases_grads { Some(graph.get_mut(b)?) } else { None };
+        let mut biases_grads = biases_grads.as_ref().map(|b| b.borrow_mut());
         let biases_grads = if let Some(b) = &mut biases_grads { Some(b.dense_mut()?) } else { None };
-
-        let values = if let Some(v) = values { Some(graph.get(v)?) } else { None };
+        let values = values.as_ref().map(|v| v.borrow());
         let values = if let Some(v) = &values { Some(v.dense()?) } else { None };
 
         let biases_batched = biases_grads.as_ref().map(|b| b.batch_size.is_some()).unwrap_or(false);
@@ -109,12 +115,12 @@ impl<D: Device> GraphInstruction<D> for BackpropSparseAffineActivate {
 
         D::backprop_sparse_affine_activate(
             batch_size.unwrap_or(1),
-            activation,
+            *activation,
             &mut weights_grads.buf,
-            weights_shape,
+            *weights_shape,
             &indices.buf,
             values.map(|v| &v.buf),
-            input_shape,
+            *input_shape,
             indices.nnz,
             biases_grads.map(|b| &mut b.buf),
             biases_batched,

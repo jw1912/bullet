@@ -9,7 +9,8 @@ use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use crate::{
     device::{Device, OperationError},
-    graph::{Graph, GraphNodeId, GraphNodeIdTy, tensor::DenseMatrix},
+    graph::{Graph, GraphNodeId, GraphNodeIdTy},
+    tensor::DenseMatrix,
 };
 
 pub trait OptimiserState<D: Device>: Sized {

@@ -4,9 +4,9 @@ use acyclib::graph::NodeId;
 
 use crate::{
     device::{Device, blas::GemmConfig},
+    function::{self, DeviceFunction, MatmulType},
     graph::{
-        GraphFunction, GraphNodeId, GraphNodeIdTy,
-        instruction::{self, MatmulType},
+        Graph, GraphNodeIdTy,
         ir::{
             BackendMarker, GraphIR, GraphIRError,
             node::AnnotatedNode,
@@ -50,20 +50,26 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Matmul
 where
     B::Backend: Device,
 {
-    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
-        let bsn = util::batch_size_node(ir, &[self.a, self.b]);
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
+        let bsn = util::batch_size_node::<B>(graph, &[self.a, self.b]);
 
-        let mut func = GraphFunction::default();
+        let mut func = DeviceFunction::default();
 
-        func.push(instruction::MaybeUpdateBatchSize { input: GraphNodeId::new(bsn, GraphNodeIdTy::Values), output });
+        func.push(function::MaybeUpdateBatchSize {
+            input: graph.get_ref(bsn, GraphNodeIdTy::Values),
+            output: output.clone(),
+        });
 
-        let ty = matmul_ty(ir.get(self.a.idx).unwrap().ty().batched, ir.get(self.b.idx).unwrap().ty().batched);
+        let input_a = graph.get_ref(self.a.idx, GraphNodeIdTy::Values);
+        let input_b = graph.get_ref(self.b.idx, GraphNodeIdTy::Values);
 
-        func.push(instruction::Matmul {
+        let ty = matmul_ty(input_a.borrow().batch_size().is_some(), input_b.borrow().batch_size().is_some());
+
+        func.push(function::Matmul {
             cfg: GemmConfig::new(1.0, 0.0, self.a.shape, self.transa, self.b.shape, self.transb),
-            input_a: GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values),
-            input_b: GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values),
+            input_a,
+            input_b,
             output,
             ty,
         });
@@ -71,42 +77,39 @@ where
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
-        let mut func = GraphFunction::default();
-
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
         let shape_o = self.a.shape.maybe_transpose(self.transa) * self.b.shape.maybe_transpose(self.transb);
 
-        let ty = matmul_ty(ir.get(self.a.idx).unwrap().ty().batched, ir.get(self.b.idx).unwrap().ty().batched);
+        let input_a = graph.get_ref(self.a.idx, GraphNodeIdTy::Values);
+        let input_b = graph.get_ref(self.b.idx, GraphNodeIdTy::Values);
 
-        if ir.get(self.a.idx).unwrap().ty().requires_grad {
-            let output = GraphNodeId::new(self.a.idx, GraphNodeIdTy::Gradients);
-            let b = GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values);
-            let o = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+        let ty = matmul_ty(input_a.borrow().batch_size().is_some(), input_b.borrow().batch_size().is_some());
+
+        if let Some(output) = graph.maybe_get_ref(self.a.idx, GraphNodeIdTy::Gradients) {
+            let o = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
             let ty = match ty {
                 MatmulType::BatBat | MatmulType::NobNob => ty,
                 MatmulType::NobBat => MatmulType::BatBatRed,
                 MatmulType::BatBatRed => unimplemented!(),
             };
 
-            func.push(instruction::MaybeUpdateBatchSize {
-                input: GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values),
-                output,
-            });
+            func.push(function::MaybeUpdateBatchSize { input: input_a.clone(), output: output.clone() });
 
             let instr = if self.transa {
-                instruction::Matmul {
+                function::Matmul {
                     cfg: GemmConfig::new(1.0, 1.0, self.b.shape, self.transb, shape_o, true),
                     output,
-                    input_a: b,
+                    input_a: input_b.clone(),
                     input_b: o,
                     ty,
                 }
             } else {
-                instruction::Matmul {
+                function::Matmul {
                     cfg: GemmConfig::new(1.0, 1.0, shape_o, false, self.b.shape, !self.transb),
                     output,
                     input_a: o,
-                    input_b: b,
+                    input_b: input_b.clone(),
                     ty,
                 }
             };
@@ -114,33 +117,28 @@ where
             func.push(instr);
         }
 
-        if ir.get(self.b.idx).unwrap().ty().requires_grad {
-            let output = GraphNodeId::new(self.b.idx, GraphNodeIdTy::Gradients);
-            let a = GraphNodeId::new(self.a.idx, GraphNodeIdTy::Values);
-            let o = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
+        if let Some(output) = graph.maybe_get_ref(self.b.idx, GraphNodeIdTy::Gradients) {
+            let o = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
 
-            func.push(instruction::MaybeUpdateBatchSize {
-                input: GraphNodeId::new(self.b.idx, GraphNodeIdTy::Values),
-                output,
-            });
+            func.push(function::MaybeUpdateBatchSize { input: input_b, output: output.clone() });
 
             if self.transb {
                 if ty == MatmulType::NobBat {
                     unimplemented!();
                 }
 
-                func.push(instruction::Matmul {
+                func.push(function::Matmul {
                     cfg: GemmConfig::new(1.0, 1.0, shape_o, true, self.a.shape, self.transa),
                     output,
                     input_a: o,
-                    input_b: a,
+                    input_b: input_a,
                     ty,
                 });
             } else {
-                func.push(instruction::Matmul {
+                func.push(function::Matmul {
                     cfg: GemmConfig::new(1.0, 1.0, self.a.shape, !self.transa, shape_o, false),
                     output,
-                    input_a: a,
+                    input_a,
                     input_b: o,
                     ty,
                 });
@@ -185,52 +183,49 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Affine {
         }
     }
 
-    fn ancillary_buffers(&self, ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
+    fn ancillary_buffers(&self, ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>, bool)>, GraphIRError> {
         let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
         matmul.ancillary_buffers(ir)
     }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
-    fn forward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
         let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
 
-        let mut func = <Matmul as GraphIROperationCompilable<B>>::forward_pass(&matmul, ir, output_node);
+        let mut func = <Matmul as GraphIROperationCompilable<B>>::forward_pass(&matmul, graph, output_node);
 
-        let input = GraphNodeId::new(self.biases.idx, GraphNodeIdTy::Values);
-        let output = GraphNodeId::new(output_node, GraphNodeIdTy::Values);
+        let input = graph.get_ref(self.biases.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
 
-        if !ir.get(output_node).unwrap().ty().batched {
-            func.push(instruction::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
+        if input.borrow().batch_size().is_some() || output.borrow().batch_size().is_none() {
+            func.push(function::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
         } else {
-            func.push(instruction::LinearCombinationSplat { input_mul: 1.0, output_mul: 1.0, input, output });
+            func.push(function::LinearCombinationSplat { input_mul: 1.0, output_mul: 1.0, input, output });
         }
 
         func
     }
 
-    fn backward_pass(&self, ir: &GraphIR<B>, output_node: NodeId) -> GraphFunction<B::Backend> {
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
         let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
 
-        let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, ir, output_node);
+        let mut func = <Matmul as GraphIROperationCompilable<B>>::backward_pass(&matmul, graph, output_node);
 
-        let info = ir.get(self.biases.idx).unwrap().ty();
-
-        if info.requires_grad {
-            let input = GraphNodeId::new(output_node, GraphNodeIdTy::Gradients);
-            let output = GraphNodeId::new(self.biases.idx, GraphNodeIdTy::Gradients);
-            let values = GraphNodeId::new(self.biases.idx, GraphNodeIdTy::Values);
+        if let Some(output) = graph.maybe_get_ref(self.biases.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
+            let values = graph.get_ref(self.biases.idx, GraphNodeIdTy::Values);
 
             let input_mul = 1.0;
             let output_mul = 1.0;
             let reduction = Reduce::Sum;
 
-            func.push(instruction::MaybeUpdateBatchSize { input: values, output });
+            func.push(function::MaybeUpdateBatchSize { input: values.clone(), output: output.clone() });
 
-            if info.batched || !ir.get(output_node).unwrap().ty().batched {
-                func.push(instruction::LinearCombination { input, output, input_mul, output_mul });
+            if values.borrow().batch_size().is_some() || input.borrow().batch_size().is_none() {
+                func.push(function::LinearCombination { input, output, input_mul, output_mul });
             } else {
-                func.push(instruction::ReduceAcrossBatch { input, output, input_mul, output_mul, reduction });
+                func.push(function::ReduceAcrossBatch { input, output, input_mul, output_mul, reduction });
             }
         }
 

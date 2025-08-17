@@ -15,7 +15,7 @@ use crate::{
     graph::{
         Graph, GraphNodeId, GraphNodeIdTy,
         ir::{
-            BackendMarker, GraphIRCompileOptions, GraphIRManager,
+            BackendMarker, GraphIRManager,
             operation::{
                 GraphIROperationCompilable,
                 unary::{Reduce, ReduceAcrossBatch},
@@ -38,6 +38,7 @@ pub struct GraphBuilder<B: BackendMarker> {
     ir: Mutex<GraphIRManager<B>>,
     init_data: Mutex<HashMap<String, InitSettings>>,
     consts: Mutex<HashMap<NodeId, Vec<f32>>>,
+    dump_graphviz: Mutex<Option<String>>,
 }
 
 impl<B: BackendMarker> GraphBuilder<B> {
@@ -103,7 +104,7 @@ impl<B: BackendMarker> GraphBuilder<B> {
 
     /// Outputs the `GraphIR` before and after optimisation to the given `path`, at compilation time.
     pub fn dump_graphviz(&self, path: &str) {
-        self.ir().set_compile_opts(GraphIRCompileOptions { dump_graphviz: Some(path.to_string()) });
+        *self.dump_graphviz.try_lock().unwrap() = Some(path.to_string());
     }
 }
 
@@ -116,14 +117,24 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
             ir.add_op(ReduceAcrossBatch { input: root, reduction: Reduce::Sum }).unwrap();
         }
 
-        let graph = match ir.compile(device) {
-            Ok(graph) => graph,
-            Err(e) => {
-                println!("Error building graph:");
-                println!("{}", e.0);
-                panic!();
-            }
-        };
+        if let Some(path) = self.dump_graphviz.try_lock().unwrap().clone() {
+            use std::io::Write;
+            let opts = "style=filled;\ncolor=lightgrey;\nnode [style=filled,color=white];\n";
+            let unoptim = ir.as_graphviz("unoptim").unwrap();
+            let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
+
+            ir.optimise().unwrap();
+
+            let optim = ir.as_graphviz("optim").unwrap();
+            let optim = format!("subgraph cluster_1 {{\nlabel=\"Optimised\";\n{opts}{optim}}}");
+
+            let mut file = std::fs::File::create(path).unwrap();
+            write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
+        } else {
+            ir.optimise().unwrap();
+        }
+
+        let graph = ir.compile(device).unwrap();
 
         for (id, init_data) in self.init_data.lock().unwrap().iter() {
             match *init_data {

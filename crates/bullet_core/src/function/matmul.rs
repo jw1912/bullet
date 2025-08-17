@@ -3,10 +3,10 @@ use crate::{
         Device, OperationError,
         blas::{BlasOperations, GemmConfig},
     },
-    graph::{Graph, GraphNodeId, builder::Shape},
+    function::DeviceOperation,
+    graph::ir::shape::Shape,
+    tensor::TensorRef,
 };
-
-use super::GraphInstruction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatmulType {
@@ -16,24 +16,28 @@ pub enum MatmulType {
     BatBatRed,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Matmul {
+#[derive(Clone)]
+pub struct Matmul<D: Device> {
     pub cfg: GemmConfig,
-    pub input_a: GraphNodeId,
-    pub input_b: GraphNodeId,
-    pub output: GraphNodeId,
+    pub input_a: TensorRef<D>,
+    pub input_b: TensorRef<D>,
+    pub output: TensorRef<D>,
     pub ty: MatmulType,
 }
 
-impl<D: Device> GraphInstruction<D> for Matmul {
-    fn execute(&self, graph: &Graph<D>) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let Matmul { cfg, input_a, input_b, output, ty } = *self;
+impl<D: Device> DeviceOperation<D> for Matmul<D> {
+    fn opname(&self) -> String {
+        format!("Matmul({:?})", self.ty)
+    }
 
-        let input_a = graph.get(input_a)?;
+    fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        let Matmul { cfg, input_a, input_b, output, ty } = self;
+
+        let input_a = input_a.borrow();
         let input_a = input_a.dense()?;
-        let input_b = graph.get(input_b)?;
+        let input_b = input_b.borrow();
         let input_b = input_b.dense()?;
-        let mut output = graph.get_mut(output)?;
+        let mut output = output.borrow_mut();
         let output = output.dense_mut()?;
 
         if input_a.single_size() != cfg.shape_a.size() || input_b.single_size() != cfg.shape_b.size() {
@@ -48,14 +52,14 @@ impl<D: Device> GraphInstruction<D> for Matmul {
                     return Err(OperationError::MismatchedBatchSizes);
                 }
 
-                output.buf.gebmm(&cfg, bs.unwrap_or(1), &input_a.buf, &input_b.buf)?;
+                output.buf.gebmm(cfg, bs.unwrap_or(1), &input_a.buf, &input_b.buf)?;
             }
             MatmulType::NobNob => {
                 if input_a.batch_size().is_some() || input_b.batch_size().is_some() || output.batch_size().is_some() {
                     return Err(OperationError::MismatchedBatchSizes);
                 }
 
-                output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
+                output.buf.gemm(cfg, &input_a.buf, &input_b.buf)?;
             }
             MatmulType::NobBat => {
                 if input_a.batch_size().is_some()
@@ -72,7 +76,7 @@ impl<D: Device> GraphInstruction<D> for Matmul {
                 let bs = input_b.batch_size().unwrap();
 
                 let shape_b = Shape::new(cfg.shape_b.rows(), bs * cfg.shape_b.cols());
-                let cfg = GemmConfig { shape_b, ..cfg };
+                let cfg = GemmConfig { shape_b, ..*cfg };
                 output.buf.gemm(&cfg, &input_a.buf, &input_b.buf)?;
             }
             MatmulType::BatBatRed => {
