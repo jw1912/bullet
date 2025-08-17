@@ -208,6 +208,11 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Affine {
             ])))
         }
     }
+
+    fn ancillary_buffers(&self, ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
+        let matmul = Matmul { a: self.weights, b: self.inputs, transa: false, transb: false };
+        matmul.ancillary_buffers(ir)
+    }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Affine {
