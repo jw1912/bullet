@@ -449,33 +449,4 @@ impl BaseOperations for CudaBuffer<f32> {
 
         Ok(())
     }
-
-    fn transpose(
-        &mut self,
-        input: &Self,
-        rows: usize,
-        cols: usize,
-        input_mul: f32,
-        output_mul: f32,
-    ) -> Result<(), Self::BaseError> {
-        let func = self.device.module().load_function("TransposeKernel").map_err(CudaError::Driver)?;
-
-        let size = rows * cols;
-
-        unsafe {
-            self.device
-                .stream()
-                .launch_builder(&func)
-                .arg(&(rows as i32))
-                .arg(&(cols as i32))
-                .arg(&input_mul)
-                .arg(&output_mul)
-                .arg(&input.buf)
-                .arg(&mut self.buf)
-                .launch(CudaDevice::elementwise_launch_params_single(size, 1024))
-                .map_err(CudaError::Driver)?;
-        }
-
-        Ok(())
-    }
 }

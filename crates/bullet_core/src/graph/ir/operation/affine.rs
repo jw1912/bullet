@@ -44,11 +44,6 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Matmul {
         util::check_matmul(self.a.shape.maybe_transpose(self.transa), self.b.shape.maybe_transpose(self.transb))
             .map_err(GraphIRError::Op)
     }
-
-    fn ancillary_buffers(&self, _ir: &GraphIR<B>) -> Result<Vec<(Shape, Option<NonZeroUsize>)>, GraphIRError> {
-        let trans_on_bprop = !self.transa && !self.transb && self.a.shape.rows() > 1 && self.a.shape.cols() > 1;
-        Ok(if trans_on_bprop { vec![(self.a.shape.transpose(), None)] } else { Vec::new() })
-    }
 }
 
 impl<B: BackendMarker> GraphIROperationCompilable<B> for Matmul
@@ -139,25 +134,6 @@ where
                     output,
                     input_a: o,
                     input_b: a,
-                    ty,
-                });
-            } else if !self.transa && self.a.shape.rows() > 1 && self.a.shape.cols() > 1 && ty == MatmulType::NobBat {
-                let a_trans = GraphNodeId::new(output_node, GraphNodeIdTy::Ancillary(0));
-
-                func.push(instruction::Transpose {
-                    input: a,
-                    output: a_trans,
-                    rows: self.a.shape.rows(),
-                    cols: self.a.shape.cols(),
-                    input_mul: 1.0,
-                    output_mul: 0.0,
-                });
-
-                func.push(instruction::Matmul {
-                    cfg: GemmConfig::new(1.0, 1.0, self.a.shape.transpose(), false, shape_o, false),
-                    output,
-                    input_a: a_trans,
-                    input_b: o,
                     ty,
                 });
             } else {

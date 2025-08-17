@@ -270,25 +270,6 @@ impl BaseOperations for Buffer<f32> {
     fn clip(&mut self, size: usize, min: f32, max: f32) -> Result<(), Self::BaseError> {
         dense::clip(size, self, min, max)
     }
-
-    fn transpose(
-        &mut self,
-        input: &Self,
-        rows: usize,
-        cols: usize,
-        input_mul: f32,
-        output_mul: f32,
-    ) -> Result<(), Self::BaseError> {
-        if (rows * cols) > input.size() || (rows * cols) > self.size() {
-            return Err(DeviceError::ExpectedIllegalAddressAccess);
-        }
-
-        unsafe {
-            ops::transpose(rows as i32, cols as i32, input_mul, output_mul, input.ptr(), self.mut_ptr());
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

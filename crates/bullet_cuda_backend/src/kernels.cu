@@ -704,23 +704,3 @@ BULLET_KERNEL LinearCombStridedKernel(
         this_out[0] = input[col * input_stride + row];
     }
 }
-
-BULLET_KERNEL TransposeKernel(
-    const int rows,
-    const int cols,
-    const float input_mul,
-    const float output_mul,
-    const float* input,
-    float* output)
-{
-    const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (tid >= (rows * cols))
-        return;
-
-    const int row = tid % rows;
-    const int col = tid / rows;
-
-    const int out_idx = row * cols + col;
-    output[out_idx] = output_mul * output[out_idx] + input_mul * input[col * rows + row];
-}
