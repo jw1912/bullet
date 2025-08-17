@@ -73,7 +73,7 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for AbsPowerError {
             func.push(function::MaybeUpdateBatchSize { input: a.clone(), output: grd.clone() });
             func.push(function::AbsPowerErrorBackward {
                 a: a.clone(),
-                b: a.clone(),
+                b: b.clone(),
                 c: output_grad.clone(),
                 output: grd,
                 power: self.power,
