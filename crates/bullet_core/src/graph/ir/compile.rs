@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use acyclib::manager::GraphManagerError;
+use acyclib::manager::DAGraphManagerError;
 
 use crate::{
     device::Device,
@@ -26,8 +26,8 @@ impl From<GraphIRError> for GraphIRCompileError {
     }
 }
 
-impl<B: BackendMarker> From<GraphManagerError<GraphIRType<B>>> for GraphIRCompileError {
-    fn from(value: GraphManagerError<GraphIRType<B>>) -> Self {
+impl<B: BackendMarker> From<DAGraphManagerError<GraphIRType<B>>> for GraphIRCompileError {
+    fn from(value: DAGraphManagerError<GraphIRType<B>>) -> Self {
         GraphIRCompileError(format!("{value:?}"))
     }
 }

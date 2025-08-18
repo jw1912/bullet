@@ -14,8 +14,8 @@ use std::{
 };
 
 use acyclib::{
-    graph::{Graph, GraphError, Node, NodeId, Operation, format::StringOperation},
-    manager::{GraphManager, GraphManagerError, GraphType},
+    graph::{DAGraph, DAGraphError, Node, NodeId, Operation, format::StringOperation},
+    manager::{DAGraphManager, DAGraphManagerError, DAGraphType},
 };
 use node::{AnnotatedNode, NodeInfo};
 use operation::*;
@@ -29,7 +29,7 @@ pub trait BackendMarker: Copy + Debug + Default + 'static {
 
 #[derive(Default)]
 pub struct GraphIRManager<B: BackendMarker> {
-    inner: GraphManager<GraphIRType<B>>,
+    inner: DAGraphManager<GraphIRType<B>>,
     inputs: HashSet<NodeId>,
     weights: HashSet<NodeId>,
     ids: HashMap<NodeId, String>,
@@ -44,7 +44,7 @@ impl<B: BackendMarker> GraphIRManager<B> {
         self.inner.get(id)
     }
 
-    pub fn modify<T>(&mut self, f: impl FnOnce(&mut GraphIR<B>) -> Result<T, GraphError>) -> GraphIRResult<T, B> {
+    pub fn modify<T>(&mut self, f: impl FnOnce(&mut GraphIR<B>) -> Result<T, DAGraphError>) -> GraphIRResult<T, B> {
         self.inner.modify(f)
     }
 
@@ -61,7 +61,7 @@ impl<B: BackendMarker> GraphIRManager<B> {
         Ok(AnnotatedNode { idx, shape })
     }
 
-    pub fn formatted(&self) -> Result<Graph<String, StringOperation>, GraphError> {
+    pub fn formatted(&self) -> Result<DAGraph<String, StringOperation>, DAGraphError> {
         self.inner.formatted()
     }
 
@@ -72,7 +72,7 @@ impl<B: BackendMarker> GraphIRManager<B> {
         batched: bool,
         requires_grad: bool,
         sparse: Option<NonZeroUsize>,
-    ) -> Result<AnnotatedNode, GraphManagerError<GraphIRType<B>>> {
+    ) -> Result<AnnotatedNode, DAGraphManagerError<GraphIRType<B>>> {
         let ty = NodeInfo { shape, batched, requires_grad, sparse };
         let node = self.add_op(GraphIRLeaf { id: id.clone(), ty })?;
 
@@ -156,21 +156,21 @@ impl<B: BackendMarker> GraphIRManager<B> {
     }
 }
 
-pub type GraphIR<B> = Graph<NodeInfo, GraphIROperation<B>>;
+pub type GraphIR<B> = DAGraph<NodeInfo, GraphIROperation<B>>;
 
 pub trait GraphIRMethods<B: BackendMarker> {
-    fn create(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphError>;
-    fn replace(&mut self, node: NodeId, operation: impl GraphIROperationCompilable<B>) -> Result<(), GraphError>;
+    fn create(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, DAGraphError>;
+    fn replace(&mut self, node: NodeId, operation: impl GraphIROperationCompilable<B>) -> Result<(), DAGraphError>;
 }
 
 impl<B: BackendMarker> GraphIRMethods<B> for GraphIR<B> {
-    fn create(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, GraphError> {
+    fn create(&mut self, operation: impl GraphIROperationCompilable<B>) -> Result<AnnotatedNode, DAGraphError> {
         let idx = self.add_node(GraphIROperation(Rc::new(operation)))?;
         let shape = self.get(idx)?.ty().shape;
         Ok(AnnotatedNode { idx, shape })
     }
 
-    fn replace(&mut self, node: NodeId, operation: impl GraphIROperationCompilable<B>) -> Result<(), GraphError> {
+    fn replace(&mut self, node: NodeId, operation: impl GraphIROperationCompilable<B>) -> Result<(), DAGraphError> {
         self.replace_op(node, GraphIROperation(Rc::new(operation)))
     }
 }
@@ -195,7 +195,7 @@ impl<B: BackendMarker> Operation<NodeInfo> for GraphIROperation<B> {
         self.nodes().iter().map(|x| x.idx).collect()
     }
 
-    fn out_type(&self, graph: &Graph<NodeInfo, Self>) -> Result<NodeInfo, GraphError> {
+    fn out_type(&self, graph: &DAGraph<NodeInfo, Self>) -> Result<NodeInfo, DAGraphError> {
         let shape = self.output_shape(graph)?;
         let batched = self.output_batched(graph)?;
         let requires_grad = self.output_requires_grad(graph)?;
@@ -220,12 +220,12 @@ impl<B: BackendMarker> DerefMut for GraphIROperation<B> {
 }
 
 pub struct GraphIRType<B>(PhantomData<B>);
-impl<B: BackendMarker> GraphType for GraphIRType<B> {
+impl<B: BackendMarker> DAGraphType for GraphIRType<B> {
     type Type = NodeInfo;
     type Operation = GraphIROperation<B>;
 }
 
-pub type GraphIRResult<T, B> = Result<T, GraphManagerError<GraphIRType<B>>>;
+pub type GraphIRResult<T, B> = Result<T, DAGraphManagerError<GraphIRType<B>>>;
 
 #[derive(Debug)]
 pub enum GraphIRError {
@@ -237,11 +237,11 @@ pub enum GraphIRError {
     NodeDataDoesNotMatchExpected,
     NodeDoesNotExist,
     NodeHasInvalidNumberOfChildren,
-    AcyclibGraphError(GraphError),
+    AcyclibGraphError(DAGraphError),
 }
 
-impl From<GraphError> for GraphIRError {
-    fn from(value: GraphError) -> Self {
+impl From<DAGraphError> for GraphIRError {
+    fn from(value: DAGraphError) -> Self {
         Self::AcyclibGraphError(value)
     }
 }
@@ -252,7 +252,7 @@ impl From<GraphIROperationError> for GraphIRError {
     }
 }
 
-impl From<GraphIRError> for GraphError {
+impl From<GraphIRError> for DAGraphError {
     fn from(value: GraphIRError) -> Self {
         Self::Message(format!("{value:?}"))
     }

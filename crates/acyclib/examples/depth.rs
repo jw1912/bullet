@@ -1,12 +1,12 @@
 use std::{collections::HashSet, fmt, rc::Rc};
 
 use acyclib::{
-    graph::{Graph, GraphError, NodeId, Operation},
-    manager::{GraphManager, GraphManagerError, GraphType},
+    graph::{DAGraph, DAGraphError, NodeId, Operation},
+    manager::{DAGraphManager, DAGraphManagerError, DAGraphType},
 };
 
-fn main() -> Result<(), GraphManagerError<DepthGraph>> {
-    let mut graph = GraphManager::<DepthGraph>::default();
+fn main() -> Result<(), DAGraphManagerError<DepthGraph>> {
+    let mut graph = DAGraphManager::<DepthGraph>::default();
 
     let a = graph.add_node(Leaf)?;
     let b = graph.add_node(Leaf)?;
@@ -43,7 +43,7 @@ fn main() -> Result<(), GraphManagerError<DepthGraph>> {
 }
 
 struct DepthGraph;
-impl GraphType for DepthGraph {
+impl DAGraphType for DepthGraph {
     type Type = Ty;
     type Operation = Op;
 }
@@ -110,7 +110,7 @@ impl Operation<Ty> for Op {
         self.0.par()
     }
 
-    fn out_type(&self, graph: &Graph<Ty, Self>) -> Result<Ty, GraphError> {
+    fn out_type(&self, graph: &DAGraph<Ty, Self>) -> Result<Ty, DAGraphError> {
         let mut ty = 0;
 
         for parent in self.0.par() {
