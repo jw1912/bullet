@@ -10,7 +10,7 @@ use std::{
 pub use node::{Node, NodeId};
 
 #[derive(Clone, Debug)]
-pub enum GraphError {
+pub enum DAGraphError {
     NodeDoesNotExist,
     NodeWithIdAlreadyExists,
     NodeIsNotRoot,
@@ -22,41 +22,41 @@ pub enum GraphError {
 pub trait Operation<Ty: Clone + PartialEq>: Clone {
     fn parents(&self) -> HashSet<NodeId>;
 
-    fn out_type(&self, graph: &Graph<Ty, Self>) -> Result<Ty, GraphError>;
+    fn out_type(&self, graph: &DAGraph<Ty, Self>) -> Result<Ty, DAGraphError>;
 }
 
 #[derive(Clone)]
-pub struct Graph<Ty: Clone + PartialEq, Op: Operation<Ty>> {
+pub struct DAGraph<Ty: Clone + PartialEq, Op: Operation<Ty>> {
     nodes: HashMap<NodeId, Node<Ty, Op>>,
 }
 
-impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Default for Graph<Ty, Op> {
+impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Default for DAGraph<Ty, Op> {
     fn default() -> Self {
         Self { nodes: HashMap::new() }
     }
 }
 
-impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
-    pub fn get(&self, id: NodeId) -> Result<&Node<Ty, Op>, GraphError> {
-        self.nodes.get(&id).ok_or(GraphError::NodeDoesNotExist)
+impl<Ty: Clone + PartialEq, Op: Operation<Ty>> DAGraph<Ty, Op> {
+    pub fn get(&self, id: NodeId) -> Result<&Node<Ty, Op>, DAGraphError> {
+        self.nodes.get(&id).ok_or(DAGraphError::NodeDoesNotExist)
     }
 
-    fn get_mut(&mut self, id: NodeId) -> Result<&mut Node<Ty, Op>, GraphError> {
-        self.nodes.get_mut(&id).ok_or(GraphError::NodeDoesNotExist)
+    fn get_mut(&mut self, id: NodeId) -> Result<&mut Node<Ty, Op>, DAGraphError> {
+        self.nodes.get_mut(&id).ok_or(DAGraphError::NodeDoesNotExist)
     }
 
     pub fn roots(&self) -> HashSet<NodeId> {
         self.nodes.values().filter_map(|node| (node.children == 0).then_some(node.id)).collect()
     }
 
-    pub fn topo_order(&self) -> Result<Vec<NodeId>, GraphError> {
+    pub fn topo_order(&self) -> Result<Vec<NodeId>, DAGraphError> {
         let edges_rev =
             self.nodes.iter().map(|(&idx, data)| (idx.0, data.op.parents().iter().map(|x| x.0).collect())).collect();
 
-        topo::topo_order(edges_rev).ok_or(GraphError::Cyclic).map(|x| x.into_iter().map(NodeId).collect())
+        topo::topo_order(edges_rev).ok_or(DAGraphError::Cyclic).map(|x| x.into_iter().map(NodeId).collect())
     }
 
-    pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, GraphError> {
+    pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, DAGraphError> {
         let op = op.into();
         let ty = op.out_type(self)?;
         let node = Node::<Ty, Op>::new(ty, op);
@@ -66,16 +66,16 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
             self.get_mut(parent)?.children += 1;
         }
 
-        self.nodes.insert(id, node).map_or(Ok(()), |_| Err(GraphError::NodeWithIdAlreadyExists))?;
+        self.nodes.insert(id, node).map_or(Ok(()), |_| Err(DAGraphError::NodeWithIdAlreadyExists))?;
 
         Ok(id)
     }
 
-    pub fn remove(&mut self, id: NodeId) -> Result<(), GraphError> {
+    pub fn remove(&mut self, id: NodeId) -> Result<(), DAGraphError> {
         let node = self.get(id)?;
 
         if node.children > 0 {
-            return Err(GraphError::NodeIsNotRoot);
+            return Err(DAGraphError::NodeIsNotRoot);
         }
 
         for parent in node.op.parents() {
@@ -87,11 +87,11 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
         Ok(())
     }
 
-    pub fn replace_op(&mut self, id: NodeId, new_op: impl Into<Op>) -> Result<(), GraphError> {
+    pub fn replace_op(&mut self, id: NodeId, new_op: impl Into<Op>) -> Result<(), DAGraphError> {
         let mut new_op = new_op.into();
 
         if self.get(id)?.ty != new_op.out_type(self)? {
-            return Err(GraphError::FailedTypeCheck);
+            return Err(DAGraphError::FailedTypeCheck);
         }
 
         for parent in new_op.parents() {
@@ -112,7 +112,7 @@ impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Graph<Ty, Op> {
         Ok(())
     }
 
-    pub fn eliminate_dead_nodes(&mut self, required: HashSet<NodeId>) -> Result<(), GraphError> {
+    pub fn eliminate_dead_nodes(&mut self, required: HashSet<NodeId>) -> Result<(), DAGraphError> {
         for id in self.topo_order()?.into_iter().rev() {
             if !required.contains(&id) && self.get(id)?.children == 0 {
                 self.remove(id)?;

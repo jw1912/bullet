@@ -1,23 +1,23 @@
 use std::{backtrace::Backtrace, error::Error, fmt};
 
 use crate::{
-    graph::{Graph, GraphError},
-    manager::GraphType,
+    graph::{DAGraph, DAGraphError},
+    manager::DAGraphType,
 };
 
-pub struct GraphManagerError<T: GraphType> {
+pub struct DAGraphManagerError<T: DAGraphType> {
     pub trace: Backtrace,
-    pub graph: Graph<T::Type, T::Operation>,
-    pub error: GraphError,
+    pub graph: DAGraph<T::Type, T::Operation>,
+    pub error: DAGraphError,
 }
 
-impl<T: GraphType> fmt::Debug for GraphManagerError<T> {
+impl<T: DAGraphType> fmt::Debug for DAGraphManagerError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         <Self as fmt::Display>::fmt(self, f)
     }
 }
 
-impl<T: GraphType> fmt::Display for GraphManagerError<T> {
+impl<T: DAGraphType> fmt::Display for DAGraphManagerError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "## Error Occurred ##")?;
         writeln!(f, "{:?}", self.error)?;
@@ -51,4 +51,4 @@ impl<T: GraphType> fmt::Display for GraphManagerError<T> {
     }
 }
 
-impl<T: GraphType> Error for GraphManagerError<T> {}
+impl<T: DAGraphType> Error for DAGraphManagerError<T> {}

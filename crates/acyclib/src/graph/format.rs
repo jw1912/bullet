@@ -3,11 +3,11 @@ use std::{
     fmt,
 };
 
-use crate::graph::{Graph, GraphError, NodeId, Operation};
+use crate::graph::{DAGraph, DAGraphError, NodeId, Operation};
 
-impl<Ty: Clone + PartialEq + fmt::Debug, Op: Operation<Ty> + fmt::Debug> Graph<Ty, Op> {
-    pub fn formatted(&self) -> Result<FormattedGraph, GraphError> {
-        let mut graph = Graph::default();
+impl<Ty: Clone + PartialEq + fmt::Debug, Op: Operation<Ty> + fmt::Debug> DAGraph<Ty, Op> {
+    pub fn formatted(&self) -> Result<FormattedGraph, DAGraphError> {
+        let mut graph = DAGraph::default();
 
         let mut node_map = HashMap::new();
 
@@ -37,16 +37,16 @@ impl Operation<String> for StringOperation {
         self.parents.clone()
     }
 
-    fn out_type(&self, _graph: &Graph<String, Self>) -> Result<String, GraphError> {
+    fn out_type(&self, _graph: &DAGraph<String, Self>) -> Result<String, DAGraphError> {
         Ok(self.out_type.clone())
     }
 }
 
-pub type FormattedGraph = Graph<String, StringOperation>;
+pub type FormattedGraph = DAGraph<String, StringOperation>;
 
 impl fmt::Display for FormattedGraph {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn map<T>(res: Result<T, GraphError>) -> Result<T, fmt::Error> {
+        fn map<T>(res: Result<T, DAGraphError>) -> Result<T, fmt::Error> {
             res.map_err(|_| fmt::Error)
         }
 
