@@ -135,9 +135,8 @@ impl<D: Device> PreparedBatchDevice<D> {
     pub fn load_into_graph(&mut self, graph: &mut Graph<D>) -> Result<(), TrainerError<D>> {
         for (id, matrix) in &mut self.inputs {
             if let Some(idx) = graph.input_idx(id) {
-                matrix
-                    .swap_with(&mut graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap().values)
-                    .map_err(TrainerError::Unexpected)?;
+                let tensor = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+                tensor.swap_with(matrix).map_err(TrainerError::Unexpected)?;
             }
         }
 

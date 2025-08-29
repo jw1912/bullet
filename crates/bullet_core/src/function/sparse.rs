@@ -26,17 +26,14 @@ impl<D: Device> DeviceOperation<D> for SparseAffineActivate<D> {
         let SparseAffineActivate { weights, weights_shape, biases, input_shape, indices, values, activation, output } =
             self;
 
-        let weights = weights.borrow();
-        let weights = weights.dense()?;
-        let indices = indices.borrow();
-        let indices = indices.sparse()?;
-        let mut output = output.borrow_mut();
-        let output = output.dense_mut()?;
+        let weights = weights.dense();
+        let indices = indices.sparse();
+        let mut output = output.dense_mut();
 
-        let biases = biases.as_ref().map(|b| b.borrow());
-        let biases = if let Some(b) = &biases { Some(b.dense()?) } else { None };
-        let values = values.as_ref().map(|v| v.borrow());
-        let values = if let Some(v) = &values { Some(v.dense()?) } else { None };
+        let biases = biases.as_ref().map(|b| b.dense());
+        let biases = biases.as_deref();
+        let values = values.as_ref().map(|v| v.dense());
+        let values = values.as_deref();
 
         let batch_size = indices.batch_size();
 
@@ -91,19 +88,15 @@ impl<D: Device> DeviceOperation<D> for BackpropSparseAffineActivate<D> {
             output_grads,
         } = self;
 
-        let mut weights_grads = weights_grads.borrow_mut();
-        let weights_grads = weights_grads.dense_mut()?;
-        let indices = indices.borrow();
-        let indices = indices.sparse()?;
-        let output = output.borrow();
-        let output = output.dense()?;
-        let output_grads = output_grads.borrow();
-        let output_grads = output_grads.dense()?;
+        let mut weights_grads = weights_grads.dense_mut();
+        let indices = indices.sparse();
+        let output = output.dense();
+        let output_grads = output_grads.dense();
 
-        let mut biases_grads = biases_grads.as_ref().map(|b| b.borrow_mut());
-        let biases_grads = if let Some(b) = &mut biases_grads { Some(b.dense_mut()?) } else { None };
-        let values = values.as_ref().map(|v| v.borrow());
-        let values = if let Some(v) = &values { Some(v.dense()?) } else { None };
+        let mut biases_grads = biases_grads.as_ref().map(|b| b.dense_mut());
+        let biases_grads = biases_grads.as_deref_mut();
+        let values = values.as_ref().map(|v| v.dense_mut());
+        let values = values.as_deref();
 
         let biases_batched = biases_grads.as_ref().map(|b| b.batch_size.is_some()).unwrap_or(false);
 

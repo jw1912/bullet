@@ -19,12 +19,9 @@ impl<D: Device> DeviceOperation<D> for AbsPowerError<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let a = self.a.borrow();
-        let a = a.dense()?;
-        let b = self.b.borrow();
-        let b = b.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let a = self.a.dense();
+        let b = self.b.dense();
+        let mut output = self.output.dense_mut();
 
         if a.batch_size() != b.batch_size() || a.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -54,12 +51,9 @@ impl<D: Device> DeviceOperation<D> for UnaryBackward<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let mut input_grad = self.input_grad.borrow_mut();
-        let input_grad = input_grad.dense_mut()?;
-        let output_grad = self.output_grad.borrow();
-        let output_grad = output_grad.dense()?;
-        let input = self.input.borrow();
-        let input = input.dense()?;
+        let mut input_grad = self.input_grad.dense_mut();
+        let output_grad = self.output_grad.dense();
+        let input = self.input.dense();
 
         if input.batch_size() != input_grad.batch_size() || input.batch_size() != output_grad.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -97,13 +91,9 @@ impl<D: Device> DeviceOperation<D> for PairwiseMulBackward<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let values = self.values.borrow();
-        let values = values.dense()?;
-
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let values = self.values.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size() != output.batch_size() || input.batch_size() != values.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -135,14 +125,9 @@ impl<D: Device> DeviceOperation<D> for Select<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
-
-        let buckets = self.buckets.borrow();
-        let buckets = buckets.sparse()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
+        let buckets = self.buckets.sparse();
 
         if output.batch_size() != buckets.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -179,14 +164,9 @@ impl<D: Device> DeviceOperation<D> for SelectBackprop<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
-
-        let buckets = self.buckets.borrow();
-        let buckets = buckets.sparse()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
+        let buckets = self.buckets.sparse();
 
         if input.batch_size() != buckets.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -223,14 +203,9 @@ impl<D: Device> DeviceOperation<D> for CrossEntropy<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let a = self.a.borrow();
-        let a = a.dense()?;
-
-        let b = self.b.borrow();
-        let b = b.dense()?;
-
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let a = self.a.dense();
+        let b = self.b.dense();
+        let mut output = self.output.dense_mut();
 
         if a.batch_size() != b.batch_size() || a.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);

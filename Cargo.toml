@@ -12,6 +12,7 @@ members = [
     "crates/acyclib",
     "crates/bullet_core",
     "crates/bullet_cuda_backend",
+    "crates/bullet_gpu",
     "crates/bullet_hip_backend",
     "crates/bullet_lib",
     "crates/bullet_utils",

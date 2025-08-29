@@ -287,48 +287,49 @@ where
     unsafe {
         if let Some(idx) = graph.input_idx("stm") {
             let input = &prepared.stm;
-            let stm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let stm = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-            if stm.values.single_size() != expected_inputs {
+            if stm.single_size() != expected_inputs {
                 return Err(OperationError::InvalidTensorFormat);
             }
 
-            stm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+            stm.sparse_mut().load_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
 
         if let Some(idx) = graph.input_idx("nstm") {
             let input = &prepared.nstm;
-            let ntm = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let ntm = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-            if ntm.values.single_size() != expected_inputs {
+            if ntm.single_size() != expected_inputs {
                 return Err(OperationError::InvalidTensorFormat);
             }
 
-            ntm.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+            ntm.sparse_mut().load_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
 
         if let Some(idx) = graph.input_idx("buckets") {
             let input = &prepared.buckets;
-            let buckets = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let buckets = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
-            if buckets.values.single_size() != Out::BUCKETS {
+            if buckets.single_size() != Out::BUCKETS {
                 return Err(OperationError::InvalidTensorFormat);
             }
 
-            buckets.load_sparse_from_slice(input.max_active, Some(batch_size), &input.value)?;
+            buckets.sparse_mut().load_from_slice(input.max_active, Some(batch_size), &input.value)?;
         }
     }
 
     if let Some(idx) = graph.input_idx("entry_weights") {
-        let weights = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-        weights.load_dense_from_slice(Some(batch_size), &prepared.weights.value)?;
+        let weights = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+        weights.dense_mut().load_from_slice(Some(batch_size), &prepared.weights.value)?;
     }
 
     if let Some(idx) = graph.input_idx("targets") {
         graph
-            .get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values))
+            .get(GraphNodeId::new(idx, GraphNodeIdTy::Values))
             .unwrap()
-            .load_dense_from_slice(Some(batch_size), &prepared.targets.value)?;
+            .dense_mut()
+            .load_from_slice(Some(batch_size), &prepared.targets.value)?;
     }
 
     Ok(batch_size)

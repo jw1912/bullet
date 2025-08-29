@@ -66,7 +66,7 @@ where
         if let Some(id) = id {
             let idx = GraphNodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
             let weights = trainer.optimiser.graph.get(idx).unwrap();
-            let weights = weights.dense().unwrap();
+            let weights = weights.dense();
 
             let mut weight_buf = vec![0.0; weights.size()];
             let written = weights.write_to_slice(&mut weight_buf).unwrap();
@@ -97,7 +97,7 @@ where
         if let Some(id) = id {
             let idx = GraphNodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
             let weights = trainer.optimiser.graph.get(idx).unwrap();
-            let weights = weights.dense().unwrap();
+            let weights = weights.dense();
 
             let mut weight_buf = vec![0.0; weights.size()];
             let written = weights.write_to_slice(&mut weight_buf).unwrap();

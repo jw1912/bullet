@@ -65,7 +65,7 @@ impl SavedFormat {
     pub fn write_to_byte_buffer(&self, graph: &Graph) -> io::Result<Vec<u8>> {
         if let Some(id_str) = &self.id {
             let id = GraphNodeId::new(graph.weight_idx(id_str).unwrap(), GraphNodeIdTy::Values);
-            let mut weights = graph.get(id).unwrap().get_dense_vals().unwrap();
+            let mut weights = graph.get(id).unwrap().borrow().get_dense_vals().unwrap();
 
             if let Layout::Transposed(shape) = self.layout {
                 assert_eq!(shape.size(), weights.len());

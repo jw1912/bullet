@@ -85,7 +85,7 @@ impl<D: Device> DeviceOperation<D> for Set<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        self.id.borrow_mut().dense_mut()?.set_to(self.val)?;
+        self.id.dense_mut().set_to(self.val)?;
         Ok(())
     }
 }

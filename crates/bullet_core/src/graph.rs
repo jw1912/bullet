@@ -1,12 +1,7 @@
 pub mod builder;
 pub mod ir;
 
-use std::{
-    cell::{Ref, RefMut},
-    collections::HashMap,
-    fmt::Debug,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use acyclib::graph::NodeId;
 use ir::{GraphIRError, node::AnnotatedNode, shape::Shape};
@@ -14,7 +9,7 @@ use ir::{GraphIRError, node::AnnotatedNode, shape::Shape};
 use crate::{
     device::{Device, OperationError},
     function::DeviceFunction,
-    tensor::{Tensor, TensorRef, read_from_byte_buffer},
+    tensor::{TensorRef, read_from_byte_buffer},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -93,7 +88,7 @@ impl<D: Device> Graph<D> {
         self.device().sanity_check();
     }
 
-    pub fn get_node_values(&self, node: Node) -> Ref<'_, Tensor<D>> {
+    pub fn get_node_values(&self, node: Node) -> TensorRef<D> {
         self.get(GraphNodeId::new(node.idx, GraphNodeIdTy::Values)).unwrap()
     }
 
@@ -105,41 +100,23 @@ impl<D: Device> Graph<D> {
         self.nodes.get(&GraphNodeId::new(id, ty)).cloned()
     }
 
-    pub fn get(&self, id: GraphNodeId) -> Result<Ref<'_, Tensor<D>>, OperationError<D::DeviceError>> {
+    pub fn get(&self, id: GraphNodeId) -> Result<TensorRef<D>, OperationError<D::DeviceError>> {
         if let Some(tensor) = self.nodes.get(&id) {
-            Ok(tensor.borrow())
+            Ok(tensor.clone())
         } else {
             println!("Cant find: {id:?}");
             Err(OperationError::TensorOptimisedOut)
         }
     }
 
-    pub fn get_mut(&self, id: GraphNodeId) -> Result<RefMut<'_, Tensor<D>>, OperationError<D::DeviceError>> {
-        if let Some(tensor) = self.nodes.get(&id) {
-            Ok(tensor.borrow_mut())
-        } else {
-            Err(OperationError::TensorOptimisedOut)
-        }
-    }
-
-    pub fn get_weights(&self, id: &str) -> Ref<'_, Tensor<D>> {
+    pub fn get_weights(&self, id: &str) -> TensorRef<D> {
         let idx = self.weight_idx(id).unwrap();
         self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
     }
 
-    pub fn get_weights_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
-        let idx = self.weight_idx(id).unwrap();
-        self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
-    }
-
-    pub fn get_input(&self, id: &str) -> Ref<'_, Tensor<D>> {
+    pub fn get_input(&self, id: &str) -> TensorRef<D> {
         let idx = self.input_idx(id).unwrap();
         self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
-    }
-
-    pub fn get_input_mut(&self, id: &str) -> RefMut<'_, Tensor<D>> {
-        let idx = self.input_idx(id).unwrap();
-        self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
     }
 
     fn root(&self) -> NodeId {
@@ -202,8 +179,8 @@ impl<D: Device> Graph<D> {
 
         for id in &weight_ids {
             let idx = *self.weights.get(id).unwrap();
-            let weights = self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-            let this_buf = weights.dense().unwrap().write_to_byte_buffer(id).unwrap();
+            let weights = self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let this_buf = weights.dense().write_to_byte_buffer(id).unwrap();
 
             buf.extend_from_slice(&this_buf);
         }
@@ -233,8 +210,8 @@ impl<D: Device> Graph<D> {
             }
 
             let idx = *self.weights.get(&id).unwrap();
-            let mut weights = self.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-            let weights = weights.dense_mut().unwrap();
+            let weights = self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let mut weights = weights.dense_mut();
             let exp_size = weights.size();
 
             if buffer.len() != exp_size {
@@ -272,7 +249,7 @@ impl<D: Device> Graph<D> {
 
         for weight in self.weight_ids() {
             let idx = *self.weights.get(&weight).unwrap();
-            total += self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap().dense().unwrap().size();
+            total += self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap().dense().size();
         }
 
         total

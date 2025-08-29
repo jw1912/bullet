@@ -31,8 +31,8 @@ fn main() -> Result<(), OperationError<DeviceError>> {
 
     graph.load_from_file("checkpoints/mnist.bin", false)?;
 
-    graph.get_input_mut("inputs").load_dense_from_slice(Some(batch_size), &images.vals)?;
-    graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
+    graph.get_input("inputs").dense_mut().load_from_slice(Some(batch_size), &images.vals)?;
+    graph.get_input("targets").dense_mut().load_from_slice(Some(batch_size), &labels.vals)?;
 
     let t = Instant::now();
     let lr = 0.0001;
@@ -51,16 +51,16 @@ fn main() -> Result<(), OperationError<DeviceError>> {
                 t.elapsed().as_secs_f32()
             );
 
-            graph.get_input_mut("inputs").load_dense_from_slice(Some(batch_size), &images.vals)?;
-            graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
+            graph.get_input("inputs").dense_mut().load_from_slice(Some(batch_size), &images.vals)?;
+            graph.get_input("targets").dense_mut().load_from_slice(Some(batch_size), &labels.vals)?;
         }
 
         for id in &graph.weight_ids() {
             let idx = graph.weight_idx(id).unwrap();
-            let weight = &mut *graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let weight = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
 
             if let Ok(grd) = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
-                weight.values.dense_mut()?.add(-lr, grd.dense()?)?;
+                weight.dense_mut().add(-lr, &*grd.dense())?;
             }
         }
     }
@@ -97,11 +97,11 @@ fn calculate_accuracy(
     labels: &Labels,
 ) -> Result<f32, OperationError<DeviceError>> {
     let batch_size = images.batch_size();
-    graph.get_input_mut("inputs").load_dense_from_slice(Some(batch_size), &images.vals)?;
-    graph.get_input_mut("targets").load_dense_from_slice(Some(batch_size), &labels.vals)?;
+    graph.get_input("inputs").dense_mut().load_from_slice(Some(batch_size), &images.vals)?;
+    graph.get_input("targets").dense_mut().load_from_slice(Some(batch_size), &labels.vals)?;
     let _ = graph.forward()?;
 
-    let vals = graph.get(GraphNodeId::new(output_node.idx(), GraphNodeIdTy::Values))?.get_dense_vals()?;
+    let vals = graph.get(GraphNodeId::new(output_node.idx(), GraphNodeIdTy::Values))?.borrow().get_dense_vals()?;
     let mut correct = 0;
     for (predicted, &expected) in vals.chunks(10).zip(labels.indices.iter()) {
         let mut max = f32::NEG_INFINITY;
