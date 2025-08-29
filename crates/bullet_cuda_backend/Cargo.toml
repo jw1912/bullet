@@ -10,4 +10,4 @@ edition = { workspace = true }
 
 [dependencies]
 bullet_core = { workspace = true }
-cudarc = { version = "=0.16.4", features = ["cuda-version-from-build-system"] }
+cudarc = { version = "0.17.3", features = ["cuda-version-from-build-system"] }
