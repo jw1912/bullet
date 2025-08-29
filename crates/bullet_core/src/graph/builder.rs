@@ -18,6 +18,8 @@ use crate::{
             BackendMarker, GraphIRManager,
             operation::{
                 GraphIROperationCompilable,
+                binary::Select,
+                sparse::SparseAffineActivate,
                 unary::{Reduce, ReduceAcrossBatch},
             },
         },
@@ -108,7 +110,11 @@ impl<B: BackendMarker> GraphBuilder<B> {
     }
 }
 
-impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
+impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B>
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+    Select: GraphIROperationCompilable<B>,
+{
     pub fn build(self, device: D) -> Graph<D> {
         let mut ir = self.ir.into_inner().unwrap();
         let root = ir.root().unwrap();

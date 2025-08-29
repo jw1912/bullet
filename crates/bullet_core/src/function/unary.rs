@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, OperationError, base::BaseOperations},
+    device::{CoreDeviceOps, Device, OperationError, base::BaseOperations},
     function::DeviceOperation,
     graph::ir::operation::unary::{Reduce, UnaryOp},
     tensor::TensorRef,
@@ -315,7 +315,7 @@ pub struct Softmax<D: Device> {
     pub output: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for Softmax<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for Softmax<D> {
     fn opname(&self) -> String {
         "Softmax".to_string()
     }

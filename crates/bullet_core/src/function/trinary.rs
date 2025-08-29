@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, OperationError, base::BaseOperations},
+    device::{CoreDeviceOps, Device, OperationError, base::BaseOperations},
     function::DeviceOperation,
     tensor::TensorRef,
 };
@@ -50,7 +50,7 @@ pub struct SoftmaxCrossEntropyBackward<D: Device> {
     pub output: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for SoftmaxCrossEntropyBackward<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for SoftmaxCrossEntropyBackward<D> {
     fn opname(&self) -> String {
         "SoftmaxCrossEntropyBackward".to_string()
     }

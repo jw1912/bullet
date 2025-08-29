@@ -7,6 +7,7 @@ use crate::graph::{
         BackendMarker,
         node::AnnotatedNode,
         operation::{
+            GraphIROperationCompilable,
             affine::Matmul,
             binary::{Concat, Select, SoftmaxCrossEntropy},
             nary::LinearCombination,
@@ -122,6 +123,51 @@ impl<B: BackendMarker> Div<f32> for GraphBuilderNode<'_, B> {
     }
 }
 
+impl<B: BackendMarker> GraphBuilderNode<'_, B>
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+{
+    pub fn matmul(self, rhs: Self) -> Self {
+        if self.builder.ir().get(rhs.node.idx).unwrap().ty().sparse.is_some() {
+            self.builder.apply(SparseAffineActivate {
+                weights: self.node,
+                indices: rhs.node,
+                values: None,
+                biases: None,
+                activation: DiffableFromOutput::Identity,
+            })
+        } else {
+            self.builder.apply(Matmul { a: self.node, transa: false, b: rhs.node, transb: false })
+        }
+    }
+
+    pub fn repeat(self, n: usize) -> Self {
+        let shape = self.node.shape;
+        let ones = self.builder.new_constant(Shape::new(1, n), &vec![1.0; n]);
+        let resh = self.reshape(Shape::new(shape.size(), 1));
+        let reps = resh.matmul(ones);
+        reps.reshape(Shape::new(shape.rows(), shape.cols() * n))
+    }
+}
+
+impl<B: BackendMarker> GraphBuilderNode<'_, B>
+where
+    Select: GraphIROperationCompilable<B>,
+{
+    pub fn select(self, buckets: Self) -> Self {
+        self.builder.apply(Select { input: self.node, buckets: buckets.node })
+    }
+}
+
+impl<B: BackendMarker> GraphBuilderNode<'_, B>
+where
+    SoftmaxCrossEntropy: GraphIROperationCompilable<B>,
+{
+    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
+        self.builder.apply(SoftmaxCrossEntropy { logits: self.annotated_node(), targets: targets.annotated_node() })
+    }
+}
+
 impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     pub fn annotated_node(&self) -> AnnotatedNode {
         self.node
@@ -172,10 +218,6 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
         }
     }
 
-    pub fn select(self, buckets: Self) -> Self {
-        self.builder.apply(Select { input: self.node, buckets: buckets.node })
-    }
-
     pub fn concat(self, rhs: Self) -> Self {
         self.builder.apply(Concat { a: self.node, b: rhs.node })
     }
@@ -200,20 +242,6 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
         self.builder.apply(ReduceAcrossBatch { input: self.node, reduction: Reduce::Avg })
     }
 
-    pub fn matmul(self, rhs: Self) -> Self {
-        if self.builder.ir().get(rhs.node.idx).unwrap().ty().sparse.is_some() {
-            self.builder.apply(SparseAffineActivate {
-                weights: self.node,
-                indices: rhs.node,
-                values: None,
-                biases: None,
-                activation: DiffableFromOutput::Identity,
-            })
-        } else {
-            self.builder.apply(Matmul { a: self.node, transa: false, b: rhs.node, transb: false })
-        }
-    }
-
     pub fn gemm(self, transa: bool, rhs: Self, transb: bool) -> Self {
         self.builder.apply(Matmul { a: self.node, transa, b: rhs.node, transb })
     }
@@ -231,14 +259,6 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
         self.power_error(targets, power)
     }
 
-    pub fn repeat(self, n: usize) -> Self {
-        let shape = self.node.shape;
-        let ones = self.builder.new_constant(Shape::new(1, n), &vec![1.0; n]);
-        let resh = self.reshape(Shape::new(shape.size(), 1));
-        let reps = resh.matmul(ones);
-        reps.reshape(Shape::new(shape.rows(), shape.cols() * n))
-    }
-
     #[deprecated]
     pub fn mse(self, targets: Self) -> Self {
         self.squared_error(targets)
@@ -250,10 +270,6 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
 
     pub fn abs_pow(self, power: f32) -> Self {
         self.builder.apply(Unary { input: self.node, op: UnaryOp::AbsPow(power) })
-    }
-
-    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
-        self.builder.apply(SoftmaxCrossEntropy { logits: self.annotated_node(), targets: targets.annotated_node() })
     }
 
     pub fn slice_rows(self, start: usize, end: usize) -> Self {

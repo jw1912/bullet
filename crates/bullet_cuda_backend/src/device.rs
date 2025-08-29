@@ -7,7 +7,7 @@ use std::{
 };
 
 use bullet_core::{
-    device::{Device, DeviceBuffer, OperationError, OperationResult},
+    device::{CoreDeviceOps, Device, DeviceBuffer, OperationError, OperationResult},
     graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
 };
 use cudarc::{
@@ -117,7 +117,6 @@ impl BackendMarker for CudaMarker {
     type Backend = CudaDevice;
 }
 
-#[allow(unused)]
 impl Device for CudaDevice {
     type Marker = CudaMarker;
     type IdType = usize;
@@ -151,6 +150,43 @@ impl Device for CudaDevice {
         self.synchronise()
     }
 
+    fn sparse_to_dense(
+        batch_size: usize,
+        size: usize,
+        nnz: usize,
+        sparse: &Self::BufferI32,
+        dense: &mut Self::BufferF32,
+    ) -> OperationResult<Self::DeviceError> {
+        if batch_size * nnz > sparse.size() || batch_size * size > dense.size() {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        dense.set_zero()?;
+
+        let func = sparse.device.module.load_function("sparse_to_dense").unwrap();
+        let threads = batch_size.min(1024);
+        let blocks = batch_size.div_ceil(threads) as u32;
+        let cfg = LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads as u32, 1, 1), shared_mem_bytes: 0 };
+
+        unsafe {
+            sparse
+                .device
+                .stream
+                .launch_builder(&func)
+                .arg(&(size as i32))
+                .arg(&(batch_size as i32))
+                .arg(&(nnz as i32))
+                .arg(&sparse.buf)
+                .arg(&mut dense.buf)
+                .launch(cfg)
+                .map_err(CudaError::Driver)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl CoreDeviceOps for CudaDevice {
     fn sparse_affine_activate(
         batch_size: usize,
         activation: DiffableFromOutput,
@@ -323,7 +359,8 @@ impl Device for CudaDevice {
                 .arg(&(batch_size as i32))
                 .arg(&input.buf.slice(0..size))
                 .arg(&mut output.buf.slice_mut(0..size))
-                .launch(cfg);
+                .launch(cfg)
+                .map_err(CudaError::Driver)?;
         }
 
         Ok(())
@@ -352,7 +389,8 @@ impl Device for CudaDevice {
                 .arg(&pred.buf.slice(0..size))
                 .arg(&target.buf.slice(0..size))
                 .arg(&mut output.buf.slice_mut(0..size))
-                .launch(cfg);
+                .launch(cfg)
+                .map_err(CudaError::Driver)?;
         }
 
         Ok(())
@@ -384,41 +422,8 @@ impl Device for CudaDevice {
                 .arg(&target.buf.slice(0..size))
                 .arg(&output_grad.buf.slice(0..size))
                 .arg(&mut input_grad.buf.slice_mut(0..size))
-                .launch(cfg);
-        }
-
-        Ok(())
-    }
-
-    fn sparse_to_dense(
-        batch_size: usize,
-        size: usize,
-        nnz: usize,
-        sparse: &Self::BufferI32,
-        dense: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        if batch_size * nnz > sparse.size() || batch_size * size > dense.size() {
-            return Err(OperationError::IndexOutOfBounds);
-        }
-
-        dense.set_zero()?;
-
-        let func = sparse.device.module.load_function("sparse_to_dense").unwrap();
-        let threads = batch_size.min(1024);
-        let blocks = batch_size.div_ceil(threads) as u32;
-        let cfg = LaunchConfig { grid_dim: (blocks, 1, 1), block_dim: (threads as u32, 1, 1), shared_mem_bytes: 0 };
-
-        unsafe {
-            sparse
-                .device
-                .stream
-                .launch_builder(&func)
-                .arg(&(size as i32))
-                .arg(&(batch_size as i32))
-                .arg(&(nnz as i32))
-                .arg(&sparse.buf)
-                .arg(&mut dense.buf)
-                .launch(cfg);
+                .launch(cfg)
+                .map_err(CudaError::Driver)?;
         }
 
         Ok(())

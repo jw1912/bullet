@@ -4,6 +4,7 @@ use crate::graph::ir::{
     BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
     node::AnnotatedNode,
     operation::{
+        GraphIROperationCompilable,
         affine::{Affine, Matmul},
         binary::{AbsPowerError, Concat, FusedPairwiseMulConcat},
         nary::LinearCombination,
@@ -45,7 +46,10 @@ impl<B: BackendMarker> GraphIRSimplePass<B> for FusePairwiseMulWithConcat {
 #[derive(Debug)]
 pub struct FuseSparseMatmulWithAdd;
 
-impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseMatmulWithAdd {
+impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseMatmulWithAdd
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+{
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let op = ir.get(target)?.op();
 
@@ -73,7 +77,10 @@ fn add_single_sparse<B: BackendMarker>(
     lhs: AnnotatedNode,
     rhs: AnnotatedNode,
     target: NodeId,
-) -> Result<bool, GraphIRError> {
+) -> Result<bool, GraphIRError>
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+{
     let ir_node = ir.get(lhs.idx)?;
 
     if ir_node.children() == 1 {
@@ -105,7 +112,10 @@ fn add_single_sparse<B: BackendMarker>(
 #[derive(Debug)]
 pub struct FuseSparseAffineWithDiffableFromOutput;
 
-impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFromOutput {
+impl<B: BackendMarker> GraphIRSimplePass<B> for FuseSparseAffineWithDiffableFromOutput
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+{
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let op = ir.get(target)?.op();
 

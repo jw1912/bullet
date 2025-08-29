@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, OperationError},
+    device::{CoreDeviceOps, Device, OperationError},
     function::DeviceOperation,
     graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
     tensor::TensorRef,
@@ -17,7 +17,7 @@ pub struct SparseAffineActivate<D: Device> {
     pub output: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for SparseAffineActivate<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for SparseAffineActivate<D> {
     fn opname(&self) -> String {
         "SparseAffineActivate".to_string()
     }
@@ -70,7 +70,7 @@ pub struct BackpropSparseAffineActivate<D: Device> {
     pub output_grads: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for BackpropSparseAffineActivate<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for BackpropSparseAffineActivate<D> {
     fn opname(&self) -> String {
         "BackpropSparseAffineActivate".to_string()
     }

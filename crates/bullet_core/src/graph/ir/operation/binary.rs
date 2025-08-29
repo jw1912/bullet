@@ -3,6 +3,7 @@ use std::num::NonZeroUsize;
 use acyclib::graph::NodeId;
 
 use crate::{
+    device::CoreDeviceOps,
     function,
     graph::{
         DeviceFunction, Graph, GraphNodeIdTy,
@@ -294,7 +295,10 @@ impl<B: BackendMarker> GraphIROperationBase<B> for Select {
     }
 }
 
-impl<B: BackendMarker> GraphIROperationCompilable<B> for Select {
+impl<B: BackendMarker> GraphIROperationCompilable<B> for Select
+where
+    B::Backend: CoreDeviceOps,
+{
     fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
         let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
         let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
@@ -356,7 +360,10 @@ impl<B: BackendMarker> GraphIROperationBase<B> for SoftmaxCrossEntropy {
     }
 }
 
-impl<B: BackendMarker> GraphIROperationCompilable<B> for SoftmaxCrossEntropy {
+impl<B: BackendMarker> GraphIROperationCompilable<B> for SoftmaxCrossEntropy
+where
+    B::Backend: CoreDeviceOps,
+{
     fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
         let logits = graph.get_ref(self.logits.idx, GraphNodeIdTy::Values);
         let targets = graph.get_ref(self.targets.idx, GraphNodeIdTy::Values);

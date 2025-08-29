@@ -1,6 +1,6 @@
 use crate::graph::ir::{
     BackendMarker,
-    operation::{sparse::SparseAffineActivate, unary::DiffableFromOutput},
+    operation::{GraphIROperationCompilable, sparse::SparseAffineActivate, unary::DiffableFromOutput},
 };
 
 use super::{Activation, GraphBuilderNode, InitSettings};
@@ -11,7 +11,10 @@ pub struct Affine<'a, B: BackendMarker> {
     pub bias: GraphBuilderNode<'a, B>,
 }
 
-impl<'a, B: BackendMarker> Affine<'a, B> {
+impl<'a, B: BackendMarker> Affine<'a, B>
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+{
     pub fn forward(self, input: GraphBuilderNode<'a, B>) -> GraphBuilderNode<'a, B> {
         self.weights.matmul(input) + self.bias
     }

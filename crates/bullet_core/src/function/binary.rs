@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, OperationError, base::BaseOperations},
+    device::{CoreDeviceOps, Device, OperationError, base::BaseOperations},
     function::DeviceOperation,
     graph::ir::operation::unary::UnaryOp,
     tensor::TensorRef,
@@ -119,7 +119,7 @@ pub struct Select<D: Device> {
     pub buckets: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for Select<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for Select<D> {
     fn opname(&self) -> String {
         "Select".to_string()
     }
@@ -158,7 +158,7 @@ pub struct SelectBackprop<D: Device> {
     pub buckets: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for SelectBackprop<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for SelectBackprop<D> {
     fn opname(&self) -> String {
         "SelectBackprop".to_string()
     }
@@ -197,7 +197,7 @@ pub struct CrossEntropy<D: Device> {
     pub output: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for CrossEntropy<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for CrossEntropy<D> {
     fn opname(&self) -> String {
         "CrossEntropy".to_string()
     }

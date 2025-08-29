@@ -10,7 +10,7 @@ impl Usable for i32 {}
 
 #[derive(Clone)]
 pub enum VariableExpression<T: Usable> {
-    Variable(usize),
+    Variable,
     Const(T),
     Mul(Box<Self>, Box<Self>),
     Div(Box<Self>, Box<Self>),
@@ -18,15 +18,28 @@ pub enum VariableExpression<T: Usable> {
     Sub(Box<Self>, Box<Self>),
 }
 
-impl<T: Usable> VariableExpression<T> {
-    pub fn evaluate(&self, variables: &[T]) -> T {
+impl VariableExpression<i32> {
+    pub fn provably_multiple_of(&self, factor: i32) -> bool {
         match self {
-            Self::Variable(idx) => variables[*idx],
+            Self::Const(x) => x % factor == 0,
+            Self::Variable => false,
+            Self::Mul(x, y) => x.provably_multiple_of(factor) | y.provably_multiple_of(factor),
+            Self::Div(_, _) => false,
+            Self::Add(x, y) => x.provably_multiple_of(factor) & y.provably_multiple_of(factor),
+            Self::Sub(x, y) => x.provably_multiple_of(factor) & y.provably_multiple_of(factor),
+        }
+    }
+}
+
+impl<T: Usable> VariableExpression<T> {
+    pub fn evaluate(&self, var: T) -> T {
+        match self {
+            Self::Variable => var,
             Self::Const(val) => *val,
-            Self::Mul(x, y) => x.evaluate(variables) * y.evaluate(variables),
-            Self::Div(x, y) => x.evaluate(variables) / y.evaluate(variables),
-            Self::Add(x, y) => x.evaluate(variables) + y.evaluate(variables),
-            Self::Sub(x, y) => x.evaluate(variables) - y.evaluate(variables),
+            Self::Mul(x, y) => x.evaluate(var) * y.evaluate(var),
+            Self::Div(x, y) => x.evaluate(var) / y.evaluate(var),
+            Self::Add(x, y) => x.evaluate(var) + y.evaluate(var),
+            Self::Sub(x, y) => x.evaluate(var) - y.evaluate(var),
         }
     }
 }

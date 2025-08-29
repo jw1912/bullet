@@ -6,6 +6,7 @@ use crate::graph::{
         BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
         node::AnnotatedNode,
         operation::{
+            GraphIROperationCompilable,
             affine::Matmul,
             binary::{Concat, Select},
             nary::LinearCombination,
@@ -20,7 +21,10 @@ use super::downcast;
 #[derive(Debug)]
 pub struct ExchangeElementwiseAndSelect;
 
-impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect {
+impl<B: BackendMarker> GraphIRSimplePass<B> for ExchangeElementwiseAndSelect
+where
+    Select: GraphIROperationCompilable<B>,
+{
     fn try_pass_on_node(&self, ir: &mut GraphIR<B>, target: NodeId) -> Result<bool, GraphIRError> {
         let old_data = ir.get(target)?;
 
