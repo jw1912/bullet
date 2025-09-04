@@ -38,10 +38,10 @@ fn main() {
         .inputs(inputs::Chess768)
         // chosen such that inference may be efficiently implemented in-engine
         .save_format(&[
-            SavedFormat::id("l0w").quantise::<i16>(255),
-            SavedFormat::id("l0b").quantise::<i16>(255),
-            SavedFormat::id("l1w").quantise::<i16>(64),
-            SavedFormat::id("l1b").quantise::<i16>(255 * 64),
+            SavedFormat::id("l0w").quantise::<i16>(QA),
+            SavedFormat::id("l0b").quantise::<i16>(QA),
+            SavedFormat::id("l1w").quantise::<i16>(QB),
+            SavedFormat::id("l1b").quantise::<i16>(QA * QB),
         ])
         // map output into ranges [0, 1] to fit against our labels which
         // are in the same range
@@ -109,6 +109,7 @@ static NNUE: Network =
 #[inline]
 /// Square Clipped ReLU - Activation Function.
 /// Note that this takes the i16s in the accumulator to i32s.
+/// Range is 0.0 .. 1.0 (in other words, 0 to QA*QA quantized).
 fn screlu(x: i16) -> i32 {
     let y = i32::from(x).clamp(0, i32::from(QA));
     y * y
@@ -118,14 +119,18 @@ fn screlu(x: i16) -> i32 {
 #[repr(C)]
 pub struct Network {
     /// Column-Major `HIDDEN_SIZE x 768` matrix.
+    /// Values have quantization of QA.
     feature_weights: [Accumulator; 768],
     /// Vector with dimension `HIDDEN_SIZE`.
+    /// Values have quantization of QA.
     feature_bias: Accumulator,
     /// Column-Major `1 x (2 * HIDDEN_SIZE)`
     /// matrix, we use it like this to make the
     /// code nicer in `Network::evaluate`.
+    /// Values have quantization of QB.
     output_weights: [i16; 2 * HIDDEN_SIZE],
     /// Scalar output bias.
+    /// Value has quantization of QA * QB.
     output_bias: i16,
 }
 
@@ -146,6 +151,7 @@ impl Network {
             output += screlu(input) * i32::from(weight);
         }
 
+        // Reduce quantization from QA * QA * QB to QA * QB.
         output /= i32::from(QA);
 
         // Add bias.
@@ -154,7 +160,7 @@ impl Network {
         // Apply eval scale.
         output *= SCALE;
 
-        // Remove quantisation.
+        // Remove quantisation altogether.
         output /= i32::from(QA) * i32::from(QB);
 
         output
