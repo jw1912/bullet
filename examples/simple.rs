@@ -146,15 +146,16 @@ impl Network {
             output += screlu(input) * i32::from(weight);
         }
 
+        output /= i32::from(QA);
+
         // Add bias.
-        output += self.output_bias * i32::from(QA);
+        output += self.output_bias;
 
         // Apply eval scale.
         output *= SCALE;
 
         // Remove quantisation.
-        // The two QA factors come from squaring in screlu.
-        output /= i32::from(QA) * i32::from(QA) * i32::from(QB);
+        output /= i32::from(QA) * i32::from(QB);
 
         output
     }
