@@ -85,6 +85,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bullet_gpu"
+version = "0.1.0"
+dependencies = [
+ "bullet_core",
+]
+
+[[package]]
 name = "bullet_hip_backend"
 version = "0.1.0"
 dependencies = [

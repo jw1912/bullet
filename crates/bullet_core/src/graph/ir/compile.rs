@@ -11,6 +11,7 @@ use crate::{
         ir::{
             BackendMarker, GraphIRError, GraphIRManager, GraphIRResult, GraphIRType,
             node::NodeInfo,
+            operation::{GraphIROperationCompilable, binary::Select, sparse::SparseAffineActivate},
             passes::{self, GraphIRPass},
         },
     },
@@ -35,6 +36,8 @@ impl<B: BackendMarker> From<DAGraphManagerError<GraphIRType<B>>> for GraphIRComp
 impl<B: BackendMarker> GraphIRManager<B>
 where
     B::Backend: Device,
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+    Select: GraphIROperationCompilable<B>,
 {
     pub fn optimise(&mut self) -> GraphIRResult<(), B> {
         // Elides concat:
@@ -72,7 +75,12 @@ where
 
         Ok(())
     }
+}
 
+impl<B: BackendMarker> GraphIRManager<B>
+where
+    B::Backend: Device,
+{
     pub fn apply_pass(&mut self, pass: impl GraphIRPass<B>) -> GraphIRResult<(), B> {
         loop {
             let roots = self.inner.roots();

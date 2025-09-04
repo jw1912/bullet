@@ -6,7 +6,7 @@ pub mod sparse;
 use std::sync::Arc;
 
 use crate::{
-    device::{Device, DeviceBuffer, OperationError, OperationResult},
+    device::{CoreDeviceOps, Device, DeviceBuffer, OperationError, OperationResult},
     graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
 };
 
@@ -71,7 +71,6 @@ impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
     }
 }
 
-#[allow(unused)]
 impl Device for CpuThread {
     type Marker = CpuMarker;
 
@@ -94,6 +93,19 @@ impl Device for CpuThread {
         Ok(())
     }
 
+    fn sparse_to_dense(
+        _batch_size: usize,
+        _size: usize,
+        _nnz: usize,
+        _sparse: &Self::BufferI32,
+        _dense: &mut Self::BufferF32,
+    ) -> OperationResult<Self::DeviceError> {
+        Err(OperationError::UnsupportedOperation)
+    }
+}
+
+#[allow(unused)]
+impl CoreDeviceOps for CpuThread {
     fn sparse_affine_activate(
         batch_size: usize,
         activation: DiffableFromOutput,
@@ -255,16 +267,6 @@ impl Device for CpuThread {
         target: &Self::BufferF32,
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
-    }
-
-    fn sparse_to_dense(
-        batch_size: usize,
-        size: usize,
-        nnz: usize,
-        sparse: &Self::BufferI32,
-        dense: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
         Err(OperationError::UnsupportedOperation)
     }

@@ -186,7 +186,7 @@ where
         let id = GraphNodeId::new(self.state.output_node.idx(), GraphNodeIdTy::Values);
         let eval = self.optimiser.graph.get(id).unwrap();
 
-        let dense_vals = eval.dense().unwrap();
+        let dense_vals = eval.dense();
         let mut vals = vec![0.0; dense_vals.size()];
         dense_vals.write_to_slice(&mut vals).unwrap();
         vals

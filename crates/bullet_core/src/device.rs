@@ -1,15 +1,14 @@
 pub mod base;
 pub mod blas;
+pub mod core;
 
 use std::{fmt::Debug, sync::Arc};
 
 use base::BaseOperations;
 use blas::BlasOperations;
+pub use core::CoreDeviceOps;
 
-use crate::{
-    cpu::CpuThread,
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
-};
+use crate::cpu::CpuThread;
 
 #[derive(Debug)]
 pub enum OperationError<T: Debug> {
@@ -53,7 +52,6 @@ pub trait DeviceBuffer<D, T>: Sized {
     fn write_into_slice(&self, buf: &mut [T], num: usize) -> Result<(), Self::BufferError>;
 }
 
-#[allow(clippy::too_many_arguments)]
 pub trait Device: Sized + 'static {
     type IdType;
     type Marker;
@@ -83,77 +81,6 @@ pub trait Device: Sized + 'static {
         CpuThread::compare_add(self.clone());
         CpuThread::compare_abs_pow(self.clone());
     }
-
-    fn sparse_affine_activate(
-        batch_size: usize,
-        activation: DiffableFromOutput,
-        input_a: &Self::BufferF32,
-        shape_a: Shape,
-        input_b: &Self::BufferI32,
-        input_b_vals: Option<&Self::BufferF32>,
-        shape_b: Shape,
-        nnz: usize,
-        input_c: Option<&Self::BufferF32>,
-        input_c_batched: bool,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn backprop_sparse_affine_activate(
-        batch_size: usize,
-        activation: DiffableFromOutput,
-        input_a_grad: &mut Self::BufferF32,
-        shape_a: Shape,
-        input_b: &Self::BufferI32,
-        input_b_vals: Option<&Self::BufferF32>,
-        shape_b: Shape,
-        nnz: usize,
-        input_c_grad: Option<&mut Self::BufferF32>,
-        input_c_batched: bool,
-        outputs: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn select(
-        batch_size: usize,
-        input_batched: bool,
-        input_size: usize,
-        output_size: usize,
-        input: &Self::BufferF32,
-        indices: &Self::BufferI32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn select_backprop(
-        batch_size: usize,
-        input_grad_batched: bool,
-        input_size: usize,
-        output_size: usize,
-        indices: &Self::BufferI32,
-        output_grad: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn softmax_across_batch(
-        batch_size: usize,
-        single_size: usize,
-        input: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn crossentropy(
-        size: usize,
-        pred: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
-
-    fn backprop_softmax_crossentropy(
-        size: usize,
-        softmaxed: &Self::BufferF32,
-        target: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-        input_grad: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError>;
 
     fn sparse_to_dense(
         batch_size: usize,

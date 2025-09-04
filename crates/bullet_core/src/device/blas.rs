@@ -26,17 +26,4 @@ pub trait BlasOperations {
     fn gemm(&mut self, config: &GemmConfig, a: &Self, b: &Self) -> Result<(), Self::BlasError>;
 
     fn gebmm(&mut self, config: &GemmConfig, batch_size: usize, a: &Self, b: &Self) -> Result<(), Self::BlasError>;
-
-    // If `input_a = None`, then take `input_a = output`, i.e. perform the
-    // in place operation `output = alpha * output + beta * input_b`.
-    //
-    // If `input_b = None` then this is equivalent to a scaling operation.
-    //fn geam(
-    //    &mut self,
-    //    size: usize,
-    //    alpha: f32,
-    //    a: Option<&Self>,
-    //    beta: f32,
-    //    b: Option<&Self>,
-    //) -> Result<(), Self::BlasError>;
 }

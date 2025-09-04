@@ -33,12 +33,9 @@ impl<D: Device> DeviceOperation<D> for Matmul<D> {
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
         let Matmul { cfg, input_a, input_b, output, ty } = self;
 
-        let input_a = input_a.borrow();
-        let input_a = input_a.dense()?;
-        let input_b = input_b.borrow();
-        let input_b = input_b.dense()?;
-        let mut output = output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input_a = input_a.dense();
+        let input_b = input_b.dense();
+        let mut output = output.dense_mut();
 
         if input_a.single_size() != cfg.shape_a.size() || input_b.single_size() != cfg.shape_b.size() {
             return Err(OperationError::InvalidTensorFormat);

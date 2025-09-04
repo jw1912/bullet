@@ -1,6 +1,9 @@
 use std::{fmt, num::NonZeroUsize, sync::Arc};
 
-use crate::device::{Device, DeviceBuffer, OperationError, base::BaseOperations};
+use crate::{
+    device::{Device, DeviceBuffer, OperationError, base::BaseOperations},
+    tensor::rng,
+};
 
 pub struct DenseMatrix<D: Device> {
     pub buf: D::BufferF32,
@@ -35,6 +38,11 @@ impl<D: Device> DenseMatrix<D> {
         self.buf.linear_comb(self.size(), 1.0, scale, &rhs.buf)?;
 
         Ok(())
+    }
+
+    pub fn seed_random(&mut self, mean: f32, stdev: f32, use_gaussian: bool) -> Result<(), D::DeviceError> {
+        let values = rng::vec_f32(self.size(), mean, stdev, use_gaussian);
+        self.load_from_slice(self.batch_size(), &values)
     }
 
     /// Calculates `self = (1 - lambda) * self + lambda * rhs`

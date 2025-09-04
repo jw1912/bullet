@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, OperationError, base::BaseOperations},
+    device::{CoreDeviceOps, Device, OperationError, base::BaseOperations},
     function::DeviceOperation,
     graph::ir::operation::unary::{Reduce, UnaryOp},
     tensor::TensorRef,
@@ -18,8 +18,7 @@ impl<D: Device> DeviceOperation<D> for MaybeUpdateBatchSize<D> {
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
         let input = self.input.borrow();
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let mut output = self.output.dense_mut();
 
         if output.batch_size() != input.values.batch_size() {
             output.set_batch_size(input.values.batch_size())?;
@@ -44,10 +43,8 @@ impl<D: Device> DeviceOperation<D> for ReduceAcrossBatch<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size().is_none() || output.batch_size().is_some() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -85,10 +82,8 @@ impl<D: Device> DeviceOperation<D> for SplatAcrossBatch<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size().is_some() || output.batch_size().is_none() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -125,10 +120,8 @@ impl<D: Device> DeviceOperation<D> for LinearCombination<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -158,10 +151,8 @@ impl<D: Device> DeviceOperation<D> for LinearCombinationSplat<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size().is_some() || output.batch_size().is_none() {
             println!("{:?} {:?}", input.batch_size(), output.batch_size());
@@ -191,10 +182,8 @@ impl<D: Device> DeviceOperation<D> for SparseToDense<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.sparse()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.sparse();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -221,10 +210,8 @@ impl<D: Device> DeviceOperation<D> for PairwiseMul<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -257,10 +244,8 @@ impl<D: Device> DeviceOperation<D> for Unary<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
@@ -299,23 +284,22 @@ impl<D: Device> DeviceOperation<D> for CopyOrAddStrided<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         if input.batch_size() != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
-        let rows = if self.len_is_out { output.single_size() } else { input.single_size() };
+        let output_size = output.single_size();
+        let rows = if self.len_is_out { output_size } else { input.single_size() };
 
         output.buf.copy_or_add_strided(
             self.add,
             rows,
             input.batch_size().unwrap_or(1),
             self.output_offset,
-            output.single_size(),
+            output_size,
             &input.buf,
             self.input_offset,
             input.single_size(),
@@ -331,16 +315,14 @@ pub struct Softmax<D: Device> {
     pub output: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for Softmax<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for Softmax<D> {
     fn opname(&self) -> String {
         "Softmax".to_string()
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let input = self.input.borrow();
-        let input = input.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let input = self.input.dense();
+        let mut output = self.output.dense_mut();
 
         let batch_size = input.batch_size();
         let single_size = input.single_size();

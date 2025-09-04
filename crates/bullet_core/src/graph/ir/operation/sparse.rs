@@ -1,6 +1,7 @@
 use acyclib::graph::NodeId;
 
 use crate::{
+    device::CoreDeviceOps,
     function::{self, DeviceFunction},
     graph::{
         Graph, GraphNodeIdTy,
@@ -75,7 +76,10 @@ impl<B: BackendMarker> GraphIROperationBase<B> for SparseAffineActivate {
     }
 }
 
-impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate {
+impl<B: BackendMarker> GraphIROperationCompilable<B> for SparseAffineActivate
+where
+    B::Backend: CoreDeviceOps,
+{
     fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
         let indices = graph.get_ref(self.indices.idx, GraphNodeIdTy::Values);
         let output = graph.get_ref(output_node, GraphNodeIdTy::Values);

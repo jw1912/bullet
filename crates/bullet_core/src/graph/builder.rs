@@ -18,6 +18,8 @@ use crate::{
             BackendMarker, GraphIRManager,
             operation::{
                 GraphIROperationCompilable,
+                binary::Select,
+                sparse::SparseAffineActivate,
                 unary::{Reduce, ReduceAcrossBatch},
             },
         },
@@ -108,7 +110,11 @@ impl<B: BackendMarker> GraphBuilder<B> {
     }
 }
 
-impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
+impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B>
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+    Select: GraphIROperationCompilable<B>,
+{
     pub fn build(self, device: D) -> Graph<D> {
         let mut ir = self.ir.into_inner().unwrap();
         let root = ir.root().unwrap();
@@ -140,13 +146,15 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
             match *init_data {
                 InitSettings::Zeroed => {}
                 InitSettings::Normal { mean, stdev } => graph
-                    .get_mut(GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values))
+                    .get(GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values))
                     .unwrap()
+                    .dense_mut()
                     .seed_random(mean, stdev, true)
                     .unwrap(),
                 InitSettings::Uniform { mean, stdev } => graph
-                    .get_mut(GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values))
+                    .get(GraphNodeId::new(graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values))
                     .unwrap()
+                    .dense_mut()
                     .seed_random(mean, stdev, false)
                     .unwrap(),
             };
@@ -154,9 +162,10 @@ impl<D: Device<Marker = B>, B: BackendMarker<Backend = D>> GraphBuilder<B> {
 
         for (&idx, vals) in self.consts.lock().unwrap().iter() {
             graph
-                .get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values))
+                .get(GraphNodeId::new(idx, GraphNodeIdTy::Values))
                 .unwrap()
-                .load_dense_from_slice(None, vals)
+                .dense_mut()
+                .load_from_slice(None, vals)
                 .unwrap();
         }
 

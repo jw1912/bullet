@@ -39,8 +39,52 @@ impl<D: Device> TensorRef<D> {
         self.inner.borrow()
     }
 
-    pub fn borrow_mut(&self) -> RefMut<'_, Tensor<D>> {
-        self.inner.borrow_mut()
+    pub fn dense(&self) -> Ref<'_, DenseMatrix<D>> {
+        Ref::map(self.inner.borrow(), |x| x.dense().unwrap())
+    }
+
+    pub fn dense_mut(&self) -> RefMut<'_, DenseMatrix<D>> {
+        RefMut::map(self.inner.borrow_mut(), |x| x.dense_mut().unwrap())
+    }
+
+    pub fn sparse(&self) -> Ref<'_, SparseMatrix<D>> {
+        Ref::map(self.inner.borrow(), |x| x.sparse().unwrap())
+    }
+
+    pub fn sparse_mut(&self) -> RefMut<'_, SparseMatrix<D>> {
+        RefMut::map(self.inner.borrow_mut(), |x| x.sparse_mut().unwrap())
+    }
+
+    pub fn get_scalar(&self) -> Option<f32> {
+        let tensor = self.inner.borrow();
+
+        if tensor.values.size() == 1 {
+            let mut buf = [0.0];
+            tensor.values.dense().ok()?.write_to_slice(&mut buf).unwrap();
+            Some(buf[0])
+        } else {
+            None
+        }
+    }
+
+    pub fn swap_with(&self, matrix: &mut Matrix<D>) -> Result<(), OperationError<D::DeviceError>> {
+        matrix.swap_with(&mut self.inner.borrow_mut().values)
+    }
+
+    pub fn single_size(&self) -> usize {
+        self.inner.borrow().values.single_size()
+    }
+
+    pub fn batch_size(&self) -> Option<usize> {
+        self.inner.borrow().batch_size()
+    }
+
+    pub fn shape(&self) -> Shape {
+        self.inner.borrow().shape
+    }
+
+    pub fn get_dense_vals(&self) -> Result<Vec<f32>, OperationError<D::DeviceError>> {
+        self.borrow().get_dense_vals()
     }
 }
 
@@ -82,16 +126,6 @@ impl<D: Device> Tensor<D> {
         match &self.values {
             Matrix::Dense(x) => x.batch_size(),
             Matrix::Sparse(x) => x.batch_size(),
-        }
-    }
-
-    pub fn get_scalar(&self) -> Option<f32> {
-        if self.values.size() == 1 {
-            let mut buf = [0.0];
-            self.values.dense().ok()?.write_to_slice(&mut buf).unwrap();
-            Some(buf[0])
-        } else {
-            None
         }
     }
 

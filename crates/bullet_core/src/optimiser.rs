@@ -53,8 +53,9 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
         for id in &weight_ids {
             let idx = graph.weight_idx(id).unwrap();
             let w = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-            assert!(w.values.batch_size().is_none());
-            let size = w.values.size();
+            let w = w.dense();
+            assert!(w.batch_size().is_none());
+            let size = w.size();
 
             let single = S::new(graph.device(), size, params.clone())?;
 
@@ -68,11 +69,11 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     pub fn update(&mut self, gradient_factor: f32, learning_rate: f32) -> Result<(), OperationError<D::DeviceError>> {
         for id in &self.graph.weight_ids() {
             let idx = self.graph.weight_idx(id).unwrap();
-            let weights = &mut self.graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Values))?;
+            let weights = &mut self.graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values))?;
             let single = self.state.get_mut(id).unwrap();
 
-            if let Ok(mut grads) = self.graph.get_mut(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
-                single.update(weights.dense_mut()?, grads.dense_mut()?, gradient_factor, learning_rate)?;
+            if let Ok(grads) = self.graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
+                single.update(&mut *weights.dense_mut(), &mut *grads.dense_mut(), gradient_factor, learning_rate)?;
             }
         }
 

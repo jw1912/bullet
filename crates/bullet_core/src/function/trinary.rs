@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, OperationError, base::BaseOperations},
+    device::{CoreDeviceOps, Device, OperationError, base::BaseOperations},
     function::DeviceOperation,
     tensor::TensorRef,
 };
@@ -19,15 +19,10 @@ impl<D: Device> DeviceOperation<D> for AbsPowerErrorBackward<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let a = self.a.borrow();
-        let a = a.dense()?;
-        let b = self.b.borrow();
-        let b = b.dense()?;
-        let c = self.c.borrow();
-        let c = c.dense()?;
-
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let a = self.a.dense();
+        let b = self.b.dense();
+        let c = self.c.dense();
+        let mut output = self.output.dense_mut();
 
         if a.batch_size() != b.batch_size() || a.batch_size() != c.batch_size() || a.batch_size() != output.batch_size()
         {
@@ -55,20 +50,16 @@ pub struct SoftmaxCrossEntropyBackward<D: Device> {
     pub output: TensorRef<D>,
 }
 
-impl<D: Device> DeviceOperation<D> for SoftmaxCrossEntropyBackward<D> {
+impl<D: CoreDeviceOps> DeviceOperation<D> for SoftmaxCrossEntropyBackward<D> {
     fn opname(&self) -> String {
         "SoftmaxCrossEntropyBackward".to_string()
     }
 
     fn execute(&self) -> Result<(), OperationError<<D as Device>::DeviceError>> {
-        let softmax = self.softmax.borrow();
-        let softmax = softmax.dense()?;
-        let targets = self.targets.borrow();
-        let targets = targets.dense()?;
-        let output_grads = self.output_grads.borrow();
-        let output_grads = output_grads.dense()?;
-        let mut output = self.output.borrow_mut();
-        let output = output.dense_mut()?;
+        let softmax = self.softmax.dense();
+        let targets = self.targets.dense();
+        let output_grads = self.output_grads.dense();
+        let mut output = self.output.dense_mut();
 
         if softmax.batch_size() != targets.batch_size()
             || softmax.batch_size() != output_grads.batch_size()
