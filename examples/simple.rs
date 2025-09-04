@@ -155,7 +155,7 @@ impl Network {
         output /= i32::from(QA);
 
         // Add bias.
-        output += self.output_bias;
+        output += i32::from(self.output_bias);
 
         // Apply eval scale.
         output *= SCALE;
