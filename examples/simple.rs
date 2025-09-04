@@ -107,10 +107,11 @@ static NNUE: Network =
 */
 
 #[inline]
-/// Clipped ReLU - Activation Function.
+/// Square Clipped ReLU - Activation Function.
 /// Note that this takes the i16s in the accumulator to i32s.
-fn crelu(x: i16) -> i32 {
-    i32::from(x).clamp(0, i32::from(QA))
+fn screlu(x: i16) -> i32 {
+    let y = i32::from(x).clamp(0, i32::from(QA));
+    y * y
 }
 
 /// This is the quantised format that bullet outputs.
@@ -132,24 +133,28 @@ impl Network {
     /// Calculates the output of the network, starting from the already
     /// calculated hidden layer (done efficiently during makemoves).
     pub fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
-        // Initialise output with bias.
-        let mut output = i32::from(self.output_bias);
+        // Initialise output.
+        let mut output = 0;
 
         // Side-To-Move Accumulator -> Output.
         for (&input, &weight) in us.vals.iter().zip(&self.output_weights[..HIDDEN_SIZE]) {
-            output += crelu(input) * i32::from(weight);
+            output += screlu(input) * i32::from(weight);
         }
 
         // Not-Side-To-Move Accumulator -> Output.
         for (&input, &weight) in them.vals.iter().zip(&self.output_weights[HIDDEN_SIZE..]) {
-            output += crelu(input) * i32::from(weight);
+            output += screlu(input) * i32::from(weight);
         }
+
+        // Add bias.
+        output += self.output_bias * i32::from(QA);
 
         // Apply eval scale.
         output *= SCALE;
 
         // Remove quantisation.
-        output /= i32::from(QA) * i32::from(QB);
+        // The two QA factors come from squaring in screlu.
+        output /= i32::from(QA) * i32::from(QA) * i32::from(QB);
 
         output
     }
