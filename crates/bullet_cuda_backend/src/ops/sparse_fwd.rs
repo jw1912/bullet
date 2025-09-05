@@ -4,9 +4,7 @@ use bullet_core::{
 };
 use cudarc::driver::{LaunchConfig, PushKernelArg};
 
-use crate::CudaBuffer;
-
-use super::CudaError;
+use crate::{CudaBuffer, CudaError};
 
 const MAXIMUM_BLOCKS_Y: u32 = 32768;
 
@@ -58,7 +56,8 @@ pub fn sparse_affine(
     let name = kernel_cfg.name();
     let func = unsafe { output.device.get_custom_func_or_rtc(&name, || kernel(kernel_cfg, vectorise))? };
 
-    let mut builder = output.device.stream.launch_builder(&func);
+    let stream = output.device.stream();
+    let mut builder = stream.launch_builder(&func);
 
     let k = k as i32;
 

@@ -4,9 +4,7 @@ use bullet_core::{
 };
 use cudarc::driver::{LaunchConfig, PushKernelArg};
 
-use crate::CudaBuffer;
-
-use super::CudaError;
+use crate::{CudaBuffer, CudaError};
 
 fn activation_str(activation: DiffableFromOutput) -> &'static str {
     match activation {
@@ -64,12 +62,12 @@ pub fn backprop_sparse_affine(
         }
 
         let func_name = format!("SparseAffineBwd{act}");
-        let func = input_b.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
+        let func = input_b.device.module().load_function(&func_name).map_err(CudaError::Driver)?;
 
         unsafe {
             input_b
                 .device
-                .stream
+                .stream()
                 .launch_builder(&func)
                 .arg(&(nnz as i32))
                 .arg(&(m as i32))
@@ -85,12 +83,12 @@ pub fn backprop_sparse_affine(
         }
     } else {
         let func_name = format!("SparseMatmulBwd{act}");
-        let func = input_b.device.module.load_function(&func_name).map_err(CudaError::Driver)?;
+        let func = input_b.device.module().load_function(&func_name).map_err(CudaError::Driver)?;
 
         unsafe {
             input_b
                 .device
-                .stream
+                .stream()
                 .launch_builder(&func)
                 .arg(&(nnz as i32))
                 .arg(&(m as i32))

@@ -1,5 +1,8 @@
-mod sparse_bwd;
-mod sparse_fwd;
+mod blas;
+mod buffer;
+
+pub use blas::convert_gemm_config;
+pub use buffer::CudaBuffer;
 
 use std::{
     collections::HashMap,
@@ -7,8 +10,8 @@ use std::{
 };
 
 use bullet_core::{
-    device::{CoreDeviceOps, Device, DeviceBuffer, OperationError, OperationResult},
-    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
+    device::{CoreDeviceOps, Device, DeviceBuffer, OperationError, OperationResult, SparseAffineOps},
+    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
 };
 use cudarc::{
     cublas::{CudaBlas, result::CublasError},
@@ -16,7 +19,7 @@ use cudarc::{
     nvrtc::{self, CompileError},
 };
 
-use crate::CudaBuffer;
+use crate::ops;
 
 #[derive(Debug, Default)]
 pub enum CudaError {
@@ -186,7 +189,7 @@ impl Device for CudaDevice {
     }
 }
 
-impl CoreDeviceOps for CudaDevice {
+impl SparseAffineOps for CudaDevice {
     fn sparse_affine_activate(
         batch_size: usize,
         activation: DiffableFromOutput,
@@ -204,7 +207,7 @@ impl CoreDeviceOps for CudaDevice {
             return Err(OperationError::UnsupportedOperation);
         }
 
-        sparse_fwd::sparse_affine(
+        ops::sparse_affine(
             batch_size,
             activation,
             input_a,
@@ -236,7 +239,7 @@ impl CoreDeviceOps for CudaDevice {
             return Err(OperationError::UnsupportedOperation);
         }
 
-        sparse_bwd::backprop_sparse_affine(
+        ops::backprop_sparse_affine(
             batch_size,
             activation,
             input_a_grad,
@@ -250,7 +253,9 @@ impl CoreDeviceOps for CudaDevice {
             output_grad,
         )
     }
+}
 
+impl CoreDeviceOps for CudaDevice {
     fn select(
         batch_size: usize,
         input_batched: bool,

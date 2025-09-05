@@ -17,6 +17,7 @@ cc = "1.2.5"
 [features]
 hip = []
 gh-actions = []
+error = []
 
 [[example]]
 name = "mnist"
