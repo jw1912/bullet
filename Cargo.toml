@@ -12,7 +12,6 @@ members = [
     "crates/acyclib",
     "crates/bullet_core",
     "crates/bullet_cuda_backend",
-    "crates/bullet_gpu",
     "crates/bullet_hip_backend",
     "crates/bullet_lib",
     "crates/bullet_utils",
@@ -21,7 +20,6 @@ members = [
 [workspace.dependencies]
 acyclib = { path = "crates/acyclib", version = "0.2.0" }
 bullet_core = { path = "crates/bullet_core", version = "0.1.0" }
-bullet_gpu = { path = "crates/bullet_gpu", version = "0.1.0" }
 bullet_hip_backend = { path = "crates/bullet_hip_backend", version = "0.1.0" }
 bullet_cuda_backend = { path = "crates/bullet_cuda_backend", version = "0.1.0" }
 bulletformat = "1.8.0"
