@@ -1,5 +1,4 @@
-mod base;
-mod device;
+pub mod device;
 pub mod kernel;
 pub mod ops;
 

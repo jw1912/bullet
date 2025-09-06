@@ -1,17 +1,20 @@
 use std::num::NonZeroUsize;
 
-use bullet_core::{
-    acyclib::graph::NodeId,
-    function::{DeviceFunction, MaybeUpdateBatchSize, Set},
+use acyclib::{
+    dag::NodeId,
+    device::{
+        function::{DeviceFunction, MaybeUpdateBatchSize, Set},
+        operation::DiffableFromOutput,
+        tensor::Shape,
+    },
     graph::{
         Graph, GraphNodeIdTy,
-        builder::Shape,
         ir::{
             GraphIR, GraphIRError, GraphIRMethods,
             node::AnnotatedNode,
             operation::{
                 GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, affine::Matmul,
-                sparse::SparseAffineActivate, unary::DiffableFromOutput, util,
+                sparse::SparseAffineActivate, util,
             },
             passes::{GraphIRSimplePass, downcast},
         },

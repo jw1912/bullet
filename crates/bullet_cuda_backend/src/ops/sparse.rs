@@ -1,7 +1,7 @@
 mod bwd;
 mod fwd;
 
-use bullet_core::{function, graph::ir::operation::sparse::SparseAffineImpl};
+use acyclib::{device::function, graph::ir::operation::sparse::SparseAffineImpl};
 
 use crate::{CudaDevice, kernel::Kernel};
 

@@ -8,13 +8,13 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use crate::{nn::ExecutionContext, value::loader::DefaultDataPreparer};
-use bullet_core::{
+use acyclib::{
     graph::{GraphNodeId, GraphNodeIdTy, Node},
-    optimiser::OptimiserState,
     trainer::{
         self, Trainer,
         dataloader::{PreparedBatchDevice, PreparedBatchHost},
         logger,
+        optimiser::OptimiserState,
     },
 };
 

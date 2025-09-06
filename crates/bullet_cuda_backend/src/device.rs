@@ -1,3 +1,4 @@
+mod base;
 mod blas;
 mod buffer;
 
@@ -9,8 +10,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bullet_core::{
-    device::{CoreDeviceOps, Device, DeviceBuffer, OperationError, OperationResult},
+use acyclib::{
+    device::{Device, DeviceBuffer, OperationError, OperationResult, operation::CoreDeviceOps},
     graph::ir::BackendMarker,
 };
 use cudarc::{
@@ -94,7 +95,7 @@ impl CudaDevice {
         if count > ones.len() {
             *ones = self.stream.alloc_zeros(count).map_err(CudaError::Driver)?;
 
-            crate::base::set_to(self.clone(), &mut ones, count, 1.0).map_err(CudaError::Driver)?;
+            base::set_to(self.clone(), &mut ones, count, 1.0).map_err(CudaError::Driver)?;
         }
 
         f(&ones)

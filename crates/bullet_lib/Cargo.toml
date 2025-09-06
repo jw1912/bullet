@@ -17,9 +17,9 @@ hip = ["bullet_hip_backend", "bullet_hip_backend/hip", "bullet_cuda_backend?/err
 hip-cuda = ["bullet_hip_backend"]
 
 [dependencies]
+acyclib = { workspace = true }
 bullet_cuda_backend = { workspace = true, optional = true }
 bullet_hip_backend = { workspace = true, optional = true }
-bullet_core = { workspace = true }
 bulletformat = { workspace = true }
 montyformat = { workspace = true }
 sfbinpack = "0.4.1"

@@ -1,4 +1,4 @@
-use bullet_core::{device::blas, graph::ir::shape::Shape};
+use acyclib::device::{operation, tensor::Shape};
 use cudarc::cublas::{
     Gemm, GemmConfig, StridedBatchedConfig,
     sys::cublasOperation_t::{CUBLAS_OP_N, CUBLAS_OP_T},
@@ -7,10 +7,10 @@ use cudarc::cublas::{
 use crate::{CudaBuffer, CudaError};
 
 #[allow(unused)]
-impl blas::BlasOperations for CudaBuffer<f32> {
+impl operation::BlasOperations for CudaBuffer<f32> {
     type BlasError = CudaError;
 
-    fn gemm(&mut self, config: &blas::GemmConfig, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
+    fn gemm(&mut self, config: &operation::GemmConfig, a: &Self, b: &Self) -> Result<(), Self::BlasError> {
         let (cfg, _) = convert_gemm_config(config);
 
         unsafe { self.device.blas().gemm(cfg, &a.buf, &b.buf, &mut self.buf).map_err(CudaError::Blas) }
@@ -18,7 +18,7 @@ impl blas::BlasOperations for CudaBuffer<f32> {
 
     fn gebmm(
         &mut self,
-        config: &blas::GemmConfig,
+        config: &operation::GemmConfig,
         batch_size: usize,
         a: &Self,
         b: &Self,
@@ -37,8 +37,8 @@ impl blas::BlasOperations for CudaBuffer<f32> {
     }
 }
 
-pub fn convert_gemm_config(config: &blas::GemmConfig) -> (GemmConfig<f32>, Shape) {
-    let blas::GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b } = *config;
+pub fn convert_gemm_config(config: &operation::GemmConfig) -> (GemmConfig<f32>, Shape) {
+    let operation::GemmConfig { alpha, beta, shape_a, trans_a, shape_b, trans_b } = *config;
     let shape_o = shape_a.maybe_transpose(trans_a) * shape_b.maybe_transpose(trans_b);
 
     let m = if trans_a { shape_a.cols() } else { shape_a.rows() };

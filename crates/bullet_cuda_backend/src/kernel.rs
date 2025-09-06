@@ -4,7 +4,7 @@ mod expr;
 pub use args::{ConcreteKernelArgs, ConcreteKernelInput, KernelArgs, KernelInput};
 pub use expr::Expr;
 
-use bullet_core::{device::OperationError, function::DeviceOperation};
+use acyclib::device::{OperationError, function::DeviceOperation};
 use cudarc::{
     driver::{CudaFunction, LaunchConfig, PushKernelArg},
     nvrtc,

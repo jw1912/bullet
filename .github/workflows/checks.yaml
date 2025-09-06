@@ -18,18 +18,6 @@ jobs:
         - run: cargo clippy --package acyclib
         - run: cargo test --package acyclib
 
-  bullet_core:
-    name: bullet_core
-    runs-on: ubuntu-latest
-    steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            component: clippy
-        - run: cargo check --package bullet_core
-        - run: cargo clippy --package bullet_core
-        - run: cargo test --package bullet_core
-
   bullet_hip_backend:
     name: bullet_hip_backend
     runs-on: ubuntu-latest

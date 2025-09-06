@@ -1,11 +1,11 @@
-use bullet_core::{
-    acyclib::graph::NodeId,
-    cpu::CpuMarker,
+use acyclib::{
+    dag::NodeId,
+    device::{cpu::CpuMarker, function::UnaryOp, operation::DiffableFromOutput, tensor::Shape},
     graph::{
-        builder::{GraphBuilder, Shape},
+        builder::GraphBuilder,
         ir::{
             BackendMarker, GraphIR, GraphIRError, GraphIRMethods,
-            operation::unary::{DiffableFromOutput, Unary, UnaryOp},
+            operation::unary::Unary,
             passes::{GraphIRSimplePass, downcast},
         },
     },

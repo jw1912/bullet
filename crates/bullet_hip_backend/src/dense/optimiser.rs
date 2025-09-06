@@ -1,4 +1,4 @@
-use bullet_core::device::{DeviceBuffer, base::AdamConfig};
+use acyclib::device::{DeviceBuffer, operation::AdamConfig};
 
 use crate::{
     DeviceError,

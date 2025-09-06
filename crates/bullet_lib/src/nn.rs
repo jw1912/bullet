@@ -1,13 +1,14 @@
-pub use bullet_core::graph::{
-    Node,
-    builder::{
-        Activation, Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings, Shape,
+pub use acyclib::{
+    device::tensor::Shape,
+    graph::{
+        Node,
+        builder::{Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings},
     },
 };
-pub type Graph = bullet_core::graph::Graph<ExecutionContext>;
+pub type Graph = acyclib::graph::Graph<ExecutionContext>;
 
 #[cfg(all(feature = "cpu", not(feature = "cuda")))]
-pub use bullet_core::cpu::{CpuError as DeviceError, CpuMarker as BackendMarker, CpuThread as ExecutionContext};
+pub use acyclib::device::cpu::{CpuError as DeviceError, CpuMarker as BackendMarker, CpuThread as ExecutionContext};
 
 #[cfg(all(any(feature = "hip", feature = "hip-cuda"), not(feature = "cpu"), not(feature = "cuda")))]
 pub use bullet_hip_backend::{DeviceError, ExecutionContext, HipMarker as BackendMarker};
@@ -17,7 +18,7 @@ pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as Devic
 
 pub mod optimiser {
     use crate::nn::ExecutionContext;
-    use bullet_core::optimiser::{self, OptimiserState, radam};
+    use acyclib::trainer::optimiser::{self, OptimiserState, radam};
 
     pub type AdamWOptimiser = optimiser::adam::AdamW<ExecutionContext>;
     pub type RAdamOptimiser = radam::RAdam<ExecutionContext>;

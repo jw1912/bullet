@@ -1,10 +1,22 @@
 [package]
 name = "acyclib"
-version = "0.2.0"
-description = "Typed directed acyclic graph library."
+version = "0.3.0"
+description = "ML library for directed acyclic tensor graphs."
 authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 readme = { workspace = true }
 rust-version = { workspace = true }
 edition = { workspace = true }
+
+[dependencies]
+rand = "0.9"
+rand_distr = "0.5.1"
+
+[[example]]
+name = "compilation"
+path = "../../examples/extra/compilation.rs"
+
+[[example]]
+name = "custom_pass"
+path = "../../examples/extra/custom_pass.rs"

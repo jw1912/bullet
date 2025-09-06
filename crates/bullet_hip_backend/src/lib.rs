@@ -6,14 +6,15 @@ pub mod sparse;
 pub use backend::ExecutionContext;
 use backend::{Buffer, bindings, ops, util};
 
-use bullet_core::{
+use acyclib::{
     device::{
-        CoreDeviceOps, Device, DeviceBuffer, OperationError, SparseAffineOps,
-        base::{AdamConfig, BaseOperations},
-        blas::{BlasOperations, GemmConfig},
+        Device, DeviceBuffer, OperationError,
+        operation::{
+            AdamConfig, BaseOperations, BlasOperations, CoreDeviceOps, DiffableFromOutput, GemmConfig, SparseAffineOps,
+        },
+        tensor::{self, Shape},
     },
-    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
-    tensor,
+    graph::ir::BackendMarker,
 };
 
 pub type DenseMatrix = tensor::DenseMatrix<ExecutionContext>;

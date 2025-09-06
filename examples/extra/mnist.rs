@@ -6,12 +6,9 @@
 /// - t10k-labels.idx1-ubyte
 use std::{fs::File, io::Read, time::Instant};
 
-use bullet_core::{
-    device::OperationError,
-    graph::{
-        Graph, GraphNodeId, GraphNodeIdTy, Node,
-        builder::{GraphBuilder, Shape},
-    },
+use acyclib::{
+    device::{OperationError, tensor::Shape},
+    graph::{Graph, GraphNodeId, GraphNodeIdTy, Node, builder::GraphBuilder},
 };
 use bullet_lib::nn::{DeviceError, ExecutionContext};
 

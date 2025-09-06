@@ -1,124 +1,271 @@
-pub mod format;
-pub mod node;
-pub mod topo;
+pub mod builder;
+pub mod ir;
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+
+use ir::{GraphIRError, node::AnnotatedNode};
+
+use crate::{
+    dag::NodeId,
+    device::{
+        Device, OperationError,
+        function::DeviceFunction,
+        tensor::{Shape, TensorRef, read_from_byte_buffer},
+    },
 };
 
-pub use node::{Node, NodeId};
-
-#[derive(Clone, Debug)]
-pub enum DAGraphError {
-    NodeDoesNotExist,
-    NodeWithIdAlreadyExists,
-    NodeIsNotRoot,
-    FailedTypeCheck,
-    Cyclic,
-    Message(String),
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GraphNodeIdTy {
+    Values,
+    Gradients,
+    Ancillary(u16),
 }
 
-pub trait Operation<Ty: Clone + PartialEq>: Clone {
-    fn parents(&self) -> HashSet<NodeId>;
-
-    fn out_type(&self, graph: &DAGraph<Ty, Self>) -> Result<Ty, DAGraphError>;
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GraphNodeId {
+    id: NodeId,
+    ty: GraphNodeIdTy,
 }
 
-#[derive(Clone)]
-pub struct DAGraph<Ty: Clone + PartialEq, Op: Operation<Ty>> {
-    nodes: HashMap<NodeId, Node<Ty, Op>>,
-}
-
-impl<Ty: Clone + PartialEq, Op: Operation<Ty>> Default for DAGraph<Ty, Op> {
-    fn default() -> Self {
-        Self { nodes: HashMap::new() }
+impl GraphNodeId {
+    pub fn new(id: NodeId, ty: GraphNodeIdTy) -> Self {
+        Self { id, ty }
     }
 }
 
-impl<Ty: Clone + PartialEq, Op: Operation<Ty>> DAGraph<Ty, Op> {
-    pub fn get(&self, id: NodeId) -> Result<&Node<Ty, Op>, DAGraphError> {
-        self.nodes.get(&id).ok_or(DAGraphError::NodeDoesNotExist)
+impl std::fmt::Debug for GraphNodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id({}, {:?})", self.id.inner(), self.ty)
+    }
+}
+
+pub struct Graph<D: Device> {
+    nodes: HashMap<GraphNodeId, TensorRef<D>>,
+    inputs: HashMap<String, NodeId>,
+    weights: HashMap<String, NodeId>,
+    functions: HashMap<String, DeviceFunction<D>>,
+    device: Arc<D>,
+    root: NodeId,
+}
+
+#[derive(Debug)]
+pub enum GraphError<T: Debug> {
+    Builder(GraphIRError),
+    Operation(OperationError<T>),
+    DeviceError(T),
+}
+
+impl<T: Debug> From<GraphIRError> for GraphError<T> {
+    fn from(value: GraphIRError) -> Self {
+        Self::Builder(value)
+    }
+}
+
+impl<T: Debug> From<OperationError<T>> for GraphError<T> {
+    fn from(value: OperationError<T>) -> Self {
+        Self::Operation(value)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Node {
+    idx: NodeId,
+    pub shape: Shape,
+}
+
+impl Node {
+    pub fn idx(&self) -> NodeId {
+        self.idx
+    }
+}
+
+impl From<AnnotatedNode> for Node {
+    fn from(value: AnnotatedNode) -> Self {
+        Self { idx: value.idx, shape: value.shape }
+    }
+}
+
+impl<D: Device> Graph<D> {
+    pub fn sanity_check(&self) {
+        self.device().sanity_check();
     }
 
-    fn get_mut(&mut self, id: NodeId) -> Result<&mut Node<Ty, Op>, DAGraphError> {
-        self.nodes.get_mut(&id).ok_or(DAGraphError::NodeDoesNotExist)
+    pub fn get_node_values(&self, node: Node) -> TensorRef<D> {
+        self.get(GraphNodeId::new(node.idx, GraphNodeIdTy::Values)).unwrap()
     }
 
-    pub fn roots(&self) -> HashSet<NodeId> {
-        self.nodes.values().filter_map(|node| (node.children == 0).then_some(node.id)).collect()
+    pub fn get_ref(&self, id: NodeId, ty: GraphNodeIdTy) -> TensorRef<D> {
+        self.nodes.get(&GraphNodeId::new(id, ty)).cloned().unwrap()
     }
 
-    pub fn topo_order(&self) -> Result<Vec<NodeId>, DAGraphError> {
-        let edges_rev =
-            self.nodes.iter().map(|(&idx, data)| (idx.0, data.op.parents().iter().map(|x| x.0).collect())).collect();
-
-        topo::topo_order(edges_rev).ok_or(DAGraphError::Cyclic).map(|x| x.into_iter().map(NodeId).collect())
+    pub fn maybe_get_ref(&self, id: NodeId, ty: GraphNodeIdTy) -> Option<TensorRef<D>> {
+        self.nodes.get(&GraphNodeId::new(id, ty)).cloned()
     }
 
-    pub fn add_node(&mut self, op: impl Into<Op>) -> Result<NodeId, DAGraphError> {
-        let op = op.into();
-        let ty = op.out_type(self)?;
-        let node = Node::<Ty, Op>::new(ty, op);
-        let id = node.id;
-
-        for parent in node.op.parents() {
-            self.get_mut(parent)?.children += 1;
+    pub fn get(&self, id: GraphNodeId) -> Result<TensorRef<D>, OperationError<D::DeviceError>> {
+        if let Some(tensor) = self.nodes.get(&id) {
+            Ok(tensor.clone())
+        } else {
+            println!("Cant find: {id:?}");
+            Err(OperationError::TensorOptimisedOut)
         }
-
-        self.nodes.insert(id, node).map_or(Ok(()), |_| Err(DAGraphError::NodeWithIdAlreadyExists))?;
-
-        Ok(id)
     }
 
-    pub fn remove(&mut self, id: NodeId) -> Result<(), DAGraphError> {
-        let node = self.get(id)?;
+    pub fn get_weights(&self, id: &str) -> TensorRef<D> {
+        let idx = self.weight_idx(id).unwrap();
+        self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
+    }
 
-        if node.children > 0 {
-            return Err(DAGraphError::NodeIsNotRoot);
-        }
+    pub fn get_input(&self, id: &str) -> TensorRef<D> {
+        let idx = self.input_idx(id).unwrap();
+        self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap()
+    }
 
-        for parent in node.op.parents() {
-            self.get_mut(parent)?.children -= 1;
-        }
+    fn root(&self) -> NodeId {
+        self.root
+    }
 
-        self.nodes.remove(&id).expect("Already verified node is present!");
+    pub fn profile_function(&mut self, _id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        todo!();
+    }
+
+    pub fn display_profile(&self, _id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        todo!();
+    }
+
+    pub fn display_function_code(&self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        let func = self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?;
+
+        println!("{func}");
 
         Ok(())
     }
 
-    pub fn replace_op(&mut self, id: NodeId, new_op: impl Into<Op>) -> Result<(), DAGraphError> {
-        let mut new_op = new_op.into();
+    pub fn execute(&mut self, id: &str) -> Result<(), OperationError<D::DeviceError>> {
+        self.functions.get(id).ok_or(OperationError::UnsupportedOperation)?.execute()
+    }
 
-        if self.get(id)?.ty != new_op.out_type(self)? {
-            return Err(DAGraphError::FailedTypeCheck);
-        }
+    pub fn forward(&mut self) -> Result<f32, OperationError<D::DeviceError>> {
+        self.execute("forward")?;
+        self.device.synchronise()?;
+        self.device.get_last_device_error()?;
+        self.get_output_val()
+    }
 
-        for parent in new_op.parents() {
-            self.get_mut(parent)?.children += 1;
-        }
-
-        let node = self.get_mut(id)?;
-
-        std::mem::swap(&mut new_op, &mut node.op);
-
-        for parent in new_op.parents() {
-            self.get_mut(parent)?.children -= 1;
-        }
-
-        // replacing op is an opportunity to introduce cycles...
-        self.topo_order()?;
-
+    pub fn backward(&mut self) -> Result<(), OperationError<D::DeviceError>> {
+        self.execute("backward")?;
+        self.device.synchronise()?;
+        self.device.get_last_device_error()?;
         Ok(())
     }
 
-    pub fn eliminate_dead_nodes(&mut self, required: HashSet<NodeId>) -> Result<(), DAGraphError> {
-        for id in self.topo_order()?.into_iter().rev() {
-            if !required.contains(&id) && self.get(id)?.children == 0 {
-                self.remove(id)?;
+    pub fn zero_grads(&mut self) -> Result<(), OperationError<D::DeviceError>> {
+        self.execute("zero_grads")?;
+        self.device.synchronise()?;
+        self.device.get_last_device_error()?;
+        Ok(())
+    }
+
+    pub fn get_output_val(&self) -> Result<f32, OperationError<D::DeviceError>> {
+        Ok(self.get(GraphNodeId::new(self.root(), GraphNodeIdTy::Values))?.get_scalar().unwrap())
+    }
+
+    /// Writes the weights of a graph to a file. If `gradients` is true,
+    /// it will instead write the gradients of those weights.
+    pub fn write_to_file(&self, path: &str) {
+        use std::{fs::File, io::Write};
+
+        let weight_ids = self.weight_ids();
+
+        let mut buf = Vec::new();
+
+        for id in &weight_ids {
+            let idx = *self.weights.get(id).unwrap();
+            let weights = self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let this_buf = weights.dense().write_to_byte_buffer(id).unwrap();
+
+            buf.extend_from_slice(&this_buf);
+        }
+
+        let mut file = File::create(path).unwrap();
+        file.write_all(&buf).unwrap();
+    }
+
+    /// Loads the weights of a graph from a file. If `gradients` is true,
+    /// it will instead load the gradients of those weights.
+    pub fn load_from_file(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
+        use std::{fs::File, io::Read};
+
+        let mut buf = Vec::new();
+        let mut file = File::open(path).unwrap();
+        file.read_to_end(&mut buf).unwrap();
+
+        let weight_ids = self.weight_ids();
+
+        let mut offset = 0;
+
+        while offset < buf.len() {
+            let (buffer, id, bytes_read) = read_from_byte_buffer(&buf[offset..], old_format);
+
+            if !weight_ids.contains(&id) {
+                return Err(OperationError::NoWeightWithID(id));
             }
+
+            let idx = *self.weights.get(&id).unwrap();
+            let weights = self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let mut weights = weights.dense_mut();
+            let exp_size = weights.size();
+
+            if buffer.len() != exp_size {
+                return Err(OperationError::WeightLoadingError(id, Some((buffer.len(), exp_size))));
+            }
+
+            if weights.load_from_slice(None, &buffer).is_err() {
+                return Err(OperationError::WeightLoadingError(id, None));
+            }
+
+            offset += bytes_read;
         }
 
         Ok(())
+    }
+
+    pub fn input_ids(&self) -> Vec<String> {
+        self.inputs.keys().cloned().collect()
+    }
+
+    pub fn weight_ids(&self) -> Vec<String> {
+        self.weights.keys().cloned().collect()
+    }
+
+    pub fn input_idx(&self, id: &str) -> Option<NodeId> {
+        self.inputs.get(id).copied()
+    }
+
+    pub fn weight_idx(&self, id: &str) -> Option<NodeId> {
+        self.weights.get(id).copied()
+    }
+
+    pub fn get_num_params(&self) -> usize {
+        let mut total = 0;
+
+        for weight in self.weight_ids() {
+            let idx = *self.weights.get(&weight).unwrap();
+            total += self.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap().dense().size();
+        }
+
+        total
+    }
+
+    pub fn synchronise(&self) -> Result<(), D::DeviceError> {
+        self.device.synchronise()
+    }
+
+    pub fn get_last_device_error(&self) -> Result<(), D::DeviceError> {
+        self.device.get_last_device_error()
+    }
+
+    pub fn device(&self) -> Arc<D> {
+        self.device.clone()
     }
 }

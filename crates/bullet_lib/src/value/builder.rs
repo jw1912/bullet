@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use bullet_core::{graph::builder::Shape, optimiser::Optimiser, trainer::Trainer};
+use acyclib::{
+    device::tensor::Shape,
+    trainer::{Trainer, optimiser::Optimiser},
+};
 
 use crate::{
     ExecutionContext,

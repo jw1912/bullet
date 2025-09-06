@@ -1,7 +1,4 @@
-use bullet_core::{
-    device::{DeviceBuffer, OperationError},
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
-};
+use acyclib::device::{DeviceBuffer, OperationError, operation::DiffableFromOutput, tensor::Shape};
 
 use crate::{
     OperationResult,
