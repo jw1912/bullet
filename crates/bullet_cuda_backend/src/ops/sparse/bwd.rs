@@ -24,8 +24,6 @@ pub fn kernel(desc: function::BackpropSparseAffineActivate<CudaDevice>) -> Kerne
 
     let code = kernel_str(bias, nnz, m, desc.activation);
 
-    println!("{code}");
-
     let batch_size = Expr::Var;
 
     let mut inputs = vec![

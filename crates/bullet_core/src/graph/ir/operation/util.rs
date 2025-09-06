@@ -48,6 +48,14 @@ pub fn check_no_grad<B: BackendMarker>(ir: &GraphIR<B>, x: &[&AnnotatedNode]) ->
     }
 }
 
+pub fn check_has_grad<B: BackendMarker>(ir: &GraphIR<B>, x: &[&AnnotatedNode]) -> Result<(), GraphIROperationError> {
+    if x.iter().any(|y| !ir.get(y.idx).unwrap().ty().requires_grad) {
+        Err(GraphIROperationError::RequiresGradient)
+    } else {
+        Ok(())
+    }
+}
+
 pub fn batch_size_node<B: BackendMarker>(graph: &Graph<B::Backend>, nodes: &[AnnotatedNode]) -> NodeId {
     nodes
         .iter()

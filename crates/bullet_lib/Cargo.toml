@@ -10,10 +10,10 @@ rust-version = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["hip-cuda"]
+default = ["cuda"]
 cpu = []
-cuda = ["bullet_cuda_backend", "bullet_hip_backend?/error"]
-hip = ["bullet_hip_backend", "bullet_hip_backend/hip"]
+cuda = ["bullet_cuda_backend"]
+hip = ["bullet_hip_backend", "bullet_hip_backend/hip", "bullet_cuda_backend?/error"]
 hip-cuda = ["bullet_hip_backend"]
 gh-actions = ["bullet_hip_backend/gh-actions"]
 
@@ -37,6 +37,10 @@ path = "../../examples/tests/test1.rs"
 [[example]]
 name = "test2"
 path = "../../examples/tests/test2.rs"
+
+[[example]]
+name = "test3"
+path = "../../examples/tests/test3.rs"
 
 [[example]]
 name = "1_simple"

@@ -4,17 +4,6 @@ use std::{
 };
 
 fn main() {
-    #[cfg(feature = "error")]
-    compile_error!(
-        "\
-        You have enabled the `cuda` feature on bullet_lib but have not disabled default features!\
-        \nIf you are running an example, try the following:\
-        \n    cargo r -r --example <example name> --features cuda --no-default-features
-        \nIf you are using bullet as a crate, ammend your Cargo.toml to
-        \n    bullet_lib = { ... other stuff ..., default-features = false }
-    "
-    );
-
     if !cfg!(feature = "gh-actions") {
         let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
 

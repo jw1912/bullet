@@ -38,7 +38,7 @@ pub struct AnnotatedNode {
 
 impl fmt::Debug for AnnotatedNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{ {:?}, {:?} }}", self.idx, self.shape)
+        write!(f, "{:?}", self.shape)
     }
 }
 
