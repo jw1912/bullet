@@ -30,6 +30,18 @@ jobs:
         - run: cargo clippy --package bullet_core
         - run: cargo test --package bullet_core
 
+  bullet_hip_backend:
+    name: bullet_hip_backend
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            component: clippy
+        - run: cargo check --package bullet_hip_backend --features gh-actions
+        - run: cargo clippy --package bullet_hip_backend --features gh-actions
+        - run: cargo test --package bullet_hip_backend --features gh-actions
+
   bullet_lib:
     name: bullet_lib
     runs-on: ubuntu-latest
