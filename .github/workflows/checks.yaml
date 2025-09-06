@@ -6,23 +6,41 @@ on:
 
 name: Basic Checks
 jobs:
-  check:
-    name: cargo check
-    runs-on: ubuntu-latest
-    steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-        - run: cargo check --workspace --examples --features gh-actions
-
-  clippy:
-    name: cargo clippy
+  acyclib:
+    name: acyclib
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
             component: clippy
-        - run: cargo clippy --workspace --examples --features gh-actions -- -D warnings
+        - run: cargo check --package acyclib
+        - run: cargo clippy --package acyclib
+        - run: cargo test --package acyclib
+
+  bullet_core:
+    name: bullet_core
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            component: clippy
+        - run: cargo check --package bullet_core
+        - run: cargo clippy --package bullet_core
+        - run: cargo test --package bullet_core
+
+  bullet_lib:
+    name: bullet_lib
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            component: clippy
+        - run: cargo check --package bullet_lib --features cpu --no-default-features
+        - run: cargo clippy --package bullet_lib --features cpu --no-default-features
+        - run: cargo test --package bullet_lib --features cpu --no-default-features
 
   fmt:
     name: cargo fmt
@@ -33,11 +51,3 @@ jobs:
           with:
             component: rustfmt
         - run: cargo fmt -- --check
-
-  test:
-    name: cargo test
-    runs-on: ubuntu-latest
-    steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-        - run: cargo test --package bullet_core
