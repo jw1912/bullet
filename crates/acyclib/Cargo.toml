@@ -1,7 +1,7 @@
 [package]
 name = "acyclib"
-version = "0.2.0"
-description = "Typed directed acyclic graph library."
+version = "0.3.0"
+description = "ML library for directed acyclic tensor graphs."
 authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }

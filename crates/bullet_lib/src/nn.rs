@@ -8,7 +8,7 @@ pub use acyclib::{
 pub type Graph = acyclib::graph::Graph<ExecutionContext>;
 
 #[cfg(all(feature = "cpu", not(feature = "cuda")))]
-pub use acyclib::cpu::{CpuError as DeviceError, CpuMarker as BackendMarker, CpuThread as ExecutionContext};
+pub use acyclib::device::cpu::{CpuError as DeviceError, CpuMarker as BackendMarker, CpuThread as ExecutionContext};
 
 #[cfg(all(any(feature = "hip", feature = "hip-cuda"), not(feature = "cpu"), not(feature = "cuda")))]
 pub use bullet_hip_backend::{DeviceError, ExecutionContext, HipMarker as BackendMarker};

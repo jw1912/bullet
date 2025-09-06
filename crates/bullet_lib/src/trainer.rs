@@ -13,7 +13,7 @@ use settings::LocalSettings;
 #[allow(deprecated)]
 pub use crate::default;
 
-use crate::ExecutionContext;
+use crate::nn::ExecutionContext;
 
 use std::{
     fs::File,
