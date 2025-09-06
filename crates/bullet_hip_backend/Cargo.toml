@@ -17,7 +17,3 @@ cc = "1.2.5"
 [features]
 hip = []
 gh-actions = []
-
-[[example]]
-name = "mnist"
-path = "../../examples/extra/mnist.rs"

@@ -73,6 +73,6 @@ jobs:
         - uses: dtolnay/rust-toolchain@stable
           with:
             component: clippy
-        - run: cargo check --examples
-        - run: cargo clippy --examples
-        - run: cargo test --examples
+        - run: cargo check --examples --features cpu --no-default-features
+        - run: cargo clippy --examples --features cpu --no-default-features
+        - run: cargo test --examples --features cpu --no-default-features
