@@ -1,6 +1,5 @@
 use bullet_core::{
     acyclib::graph::NodeId,
-    cpu::CpuMarker,
     graph::{
         builder::{GraphBuilder, Shape},
         ir::{
