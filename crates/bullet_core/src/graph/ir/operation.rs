@@ -51,9 +51,9 @@ pub trait GraphIROperationCompilable<B: BackendMarker>: GraphIROperationBase<B>
 where
     B::Backend: Device,
 {
-    fn forward_pass(&self, ir: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend>;
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend>;
 
-    fn backward_pass(&self, ir: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend>;
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend>;
 }
 
 #[derive(Clone)]
@@ -115,4 +115,5 @@ pub enum GraphIROperationError {
     AnnotatedNodeWithIdAlreadyExists,
     MismatchedBatching,
     GradientNotSupported,
+    RequiresGradient,
 }

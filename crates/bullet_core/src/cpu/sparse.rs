@@ -1,5 +1,134 @@
 #![allow(clippy::too_many_arguments)]
 
+use crate::{
+    cpu::CpuThread,
+    device::{DeviceBuffer, OperationError, OperationResult, SparseAffineOps},
+    graph::{builder::Shape, ir::operation::unary::DiffableFromOutput},
+};
+
+impl SparseAffineOps for CpuThread {
+    fn sparse_affine_activate(
+        batch_size: usize,
+        activation: DiffableFromOutput,
+        input_a: &Self::BufferF32,
+        shape_a: Shape,
+        input_b: &Self::BufferI32,
+        input_b_vals: Option<&Self::BufferF32>,
+        shape_b: Shape,
+        nnz: usize,
+        input_c: Option<&Self::BufferF32>,
+        input_c_batched: bool,
+        output: &mut Self::BufferF32,
+    ) -> OperationResult<Self::DeviceError> {
+        let shape_o = shape_a * shape_b;
+
+        if shape_a.size() > input_a.size()
+            || batch_size * nnz > input_b.size()
+            || batch_size * shape_o.size() > output.size()
+        {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        if let Some(c) = input_c {
+            if shape_o.size() * if input_c_batched { batch_size } else { 1 } > c.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+        }
+
+        let m = shape_a.rows();
+        let k = batch_size;
+        let a = &input_a.buf;
+        let x = &input_b.buf;
+        let v = input_b_vals.map(|v| &*v.buf);
+        let b = input_c.map(|c| &*c.buf);
+        let bb = input_c_batched;
+        let y = &mut output.buf;
+
+        match activation {
+            DiffableFromOutput::Identity => affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x),
+            DiffableFromOutput::ReLU => affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.max(0.0)),
+            DiffableFromOutput::CReLU => affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.clamp(0.0, 1.0)),
+            DiffableFromOutput::SCReLU => affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.clamp(0.0, 1.0).powi(2)),
+            DiffableFromOutput::SqrReLU => affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| x.max(0.0).powi(2)),
+            DiffableFromOutput::Sigmoid => affine_fwd(nnz, m, k, a, x, v, b, bb, y, |x| 1.0 / (1.0 + (-x).exp())),
+        }
+
+        Ok(())
+    }
+
+    fn backprop_sparse_affine_activate(
+        batch_size: usize,
+        activation: DiffableFromOutput,
+        input_a_grad: &mut Self::BufferF32,
+        shape_a: Shape,
+        input_b: &Self::BufferI32,
+        input_b_vals: Option<&Self::BufferF32>,
+        shape_b: Shape,
+        nnz: usize,
+        input_c_grad: Option<&mut Self::BufferF32>,
+        input_c_batched: bool,
+        outputs: &Self::BufferF32,
+        output_grad: &Self::BufferF32,
+    ) -> OperationResult<Self::DeviceError> {
+        let shape_o = shape_a * shape_b;
+
+        assert_eq!(shape_b.cols(), 1);
+        assert_eq!(shape_o.cols(), 1);
+        if shape_a.size() > input_a_grad.size()
+            || batch_size * nnz > input_b.size()
+            || batch_size * shape_o.size() > outputs.size()
+            || batch_size * shape_o.size() > output_grad.size()
+        {
+            return Err(OperationError::IndexOutOfBounds);
+        }
+
+        if let Some(ref grad) = input_c_grad {
+            if shape_o.size() * if input_c_batched { batch_size } else { 1 } > grad.size() {
+                return Err(OperationError::IndexOutOfBounds);
+            }
+        }
+
+        let m = shape_a.rows();
+        let k = batch_size;
+        let x = &input_b.buf;
+        let v = input_b_vals.map(|v| &*v.buf);
+        let y = &outputs.buf;
+        let yg = &output_grad.buf;
+        let bb = input_c_batched;
+        let ag = &mut input_a_grad.buf;
+        let bg = input_c_grad.map(|x| &mut *x.buf);
+
+        match activation {
+            DiffableFromOutput::Identity => affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |_| 1.0),
+            DiffableFromOutput::ReLU => affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| f32::from(x > 0.0)),
+            DiffableFromOutput::CReLU => {
+                affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| if x > 0.0 && x < 1.0 { 1.0 } else { 0.0 })
+            }
+            DiffableFromOutput::SCReLU => {
+                affine_bwd(
+                    nnz,
+                    m,
+                    k,
+                    x,
+                    v,
+                    y,
+                    yg,
+                    bb,
+                    ag,
+                    bg,
+                    |x| {
+                        if x > 0.0 && x < 1.0 { 2.0 * x.sqrt() } else { 0.0 }
+                    },
+                )
+            }
+            DiffableFromOutput::SqrReLU => affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| 2.0 * x.max(0.0).sqrt()),
+            DiffableFromOutput::Sigmoid => affine_bwd(nnz, m, k, x, v, y, yg, bb, ag, bg, |x| x * (1.0 - x)),
+        }
+
+        Ok(())
+    }
+}
+
 pub fn affine_fwd<F: Fn(f32) -> f32>(
     nnz: usize,
     m: usize,

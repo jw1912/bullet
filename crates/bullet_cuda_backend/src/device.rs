@@ -1,5 +1,8 @@
-mod sparse_bwd;
-mod sparse_fwd;
+mod blas;
+mod buffer;
+
+pub use blas::convert_gemm_config;
+pub use buffer::CudaBuffer;
 
 use std::{
     collections::HashMap,
@@ -8,15 +11,13 @@ use std::{
 
 use bullet_core::{
     device::{CoreDeviceOps, Device, DeviceBuffer, OperationError, OperationResult},
-    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
+    graph::ir::BackendMarker,
 };
 use cudarc::{
     cublas::{CudaBlas, result::CublasError},
     driver::{CudaContext, CudaFunction, CudaModule, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
     nvrtc::{self, CompileError},
 };
-
-use crate::CudaBuffer;
 
 #[derive(Debug, Default)]
 pub enum CudaError {
@@ -187,70 +188,6 @@ impl Device for CudaDevice {
 }
 
 impl CoreDeviceOps for CudaDevice {
-    fn sparse_affine_activate(
-        batch_size: usize,
-        activation: DiffableFromOutput,
-        input_a: &Self::BufferF32,
-        shape_a: Shape,
-        input_b: &Self::BufferI32,
-        input_b_vals: Option<&Self::BufferF32>,
-        shape_b: Shape,
-        nnz: usize,
-        input_c: Option<&Self::BufferF32>,
-        input_c_batched: bool,
-        output: &mut Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        if input_b_vals.is_some() {
-            return Err(OperationError::UnsupportedOperation);
-        }
-
-        sparse_fwd::sparse_affine(
-            batch_size,
-            activation,
-            input_a,
-            shape_a,
-            input_b,
-            shape_b,
-            nnz,
-            input_c,
-            input_c_batched,
-            output,
-        )
-    }
-
-    fn backprop_sparse_affine_activate(
-        batch_size: usize,
-        activation: DiffableFromOutput,
-        input_a_grad: &mut Self::BufferF32,
-        shape_a: Shape,
-        input_b: &Self::BufferI32,
-        input_b_vals: Option<&Self::BufferF32>,
-        shape_b: Shape,
-        nnz: usize,
-        input_c_grad: Option<&mut Self::BufferF32>,
-        input_c_batched: bool,
-        outputs: &Self::BufferF32,
-        output_grad: &Self::BufferF32,
-    ) -> OperationResult<Self::DeviceError> {
-        if input_b_vals.is_some() {
-            return Err(OperationError::UnsupportedOperation);
-        }
-
-        sparse_bwd::backprop_sparse_affine(
-            batch_size,
-            activation,
-            input_a_grad,
-            shape_a,
-            input_b,
-            shape_b,
-            nnz,
-            input_c_grad,
-            input_c_batched,
-            outputs,
-            output_grad,
-        )
-    }
-
     fn select(
         batch_size: usize,
         input_batched: bool,

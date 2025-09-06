@@ -1,41 +1,54 @@
-use bullet_core::{
-    device::{DeviceBuffer, OperationError},
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape},
+use bullet_core::{function, graph::ir::operation::unary::DiffableFromOutput};
+
+use crate::{
+    CudaDevice,
+    kernel::{Expr, Kernel, KernelArgs, KernelInput},
 };
-use cudarc::driver::{LaunchConfig, PushKernelArg};
-
-use crate::CudaBuffer;
-
-use super::CudaError;
 
 const MAXIMUM_BLOCKS_Y: u32 = 32768;
 
-#[allow(clippy::too_many_arguments)]
-pub fn sparse_affine(
-    batch_size: usize,
-    activation: DiffableFromOutput,
-    input_a: &CudaBuffer<f32>,
-    shape_a: Shape,
-    input_b: &CudaBuffer<i32>,
-    shape_b: Shape,
-    nnz: usize,
-    input_c: Option<&CudaBuffer<f32>>,
-    input_c_batched: bool,
-    output: &mut CudaBuffer<f32>,
-) -> Result<(), OperationError<CudaError>> {
-    let shape_o = shape_a * shape_b;
+pub fn kernel(desc: function::SparseAffineActivate<CudaDevice>) -> Kernel {
+    let output_shape = desc.weights_shape * desc.input_shape;
+    let indices = desc.indices;
 
-    if shape_a.size() > input_a.size()
-        || batch_size * nnz > input_b.size()
-        || batch_size * shape_o.size() > output.size()
-    {
-        return Err(OperationError::IndexOutOfBounds);
+    assert_eq!(desc.weights_shape.size(), desc.weights.shape().size());
+    assert_eq!(desc.input_shape.size(), indices.shape().size());
+    assert_eq!(desc.input_shape.cols(), 1);
+    assert_eq!(output_shape.cols(), 1);
+
+    let bias = desc.biases.as_ref().map(|x| x.batch_size().is_some());
+
+    let batched = indices.batch_size().is_some();
+    let nnz = indices.sparse().nnz;
+    let m = output_shape.rows();
+    let vectorise = m % 4 == 0 && m >= 128;
+
+    let code = kernel_str(bias, nnz, m, desc.activation, vectorise);
+
+    let batch_size = Expr::Var;
+
+    let mut inputs = vec![
+        KernelInput::Size(batch_size.clone()),
+        KernelInput::Slice {
+            slice: desc.weights,
+            layout: None,
+            mutable: false,
+            batched: false,
+            shape: desc.weights_shape,
+        },
+        KernelInput::Slice { slice: indices, layout: Some(nnz), mutable: false, batched, shape: desc.input_shape },
+        KernelInput::Slice { slice: desc.output, layout: None, mutable: true, batched, shape: output_shape },
+    ];
+
+    if let Some(bias) = desc.biases {
+        let batched = bias.batch_size().is_some();
+        let shape = bias.shape();
+        assert_eq!(shape.size(), output_shape.size());
+
+        inputs.push(KernelInput::Slice { slice: bias, layout: None, mutable: false, batched, shape: output_shape });
     }
 
-    let m = shape_a.rows() as u32;
-    let k = batch_size as u32;
-
-    let vectorise = m % 4 == 0 && m >= 128;
+    const MAXIMUM_BLOCKS_Y: Expr<i32> = Expr::Const(32768);
 
     let (chunks, threads, smem) = if vectorise {
         let m4 = m / 4;
@@ -48,59 +61,15 @@ pub fn sparse_affine(
         (chunks, threads, 0)
     };
 
-    let ky = k.min(MAXIMUM_BLOCKS_Y);
-    let kz = k.div_ceil(MAXIMUM_BLOCKS_Y);
-    let grid_dim = (chunks, ky, kz);
-    let cfg = LaunchConfig { grid_dim, block_dim: (threads, 1, 1), shared_mem_bytes: smem };
+    let ky = batch_size.min(&MAXIMUM_BLOCKS_Y);
+    let kz = (batch_size + MAXIMUM_BLOCKS_Y - 1) / MAXIMUM_BLOCKS_Y;
+    let grid_dim = [Expr::Const(chunks as i32), ky, kz];
+    let block_dim = [Expr::Const(threads as i32), Expr::Const(1), Expr::Const(1)];
+    let shared_mem_bytes = Expr::Const(smem as i32);
 
-    let kernel_cfg = KernelConfig { bias: input_c.map(|_| input_c_batched), m, act: activation, nnz: nnz as u32 };
+    let args = KernelArgs { inputs, grid_dim, block_dim, shared_mem_bytes };
 
-    let name = kernel_cfg.name();
-    let func = unsafe { output.device.get_custom_func_or_rtc(&name, || kernel(kernel_cfg, vectorise))? };
-
-    let mut builder = output.device.stream.launch_builder(&func);
-
-    let k = k as i32;
-
-    let mut builder = builder.arg(&k).arg(&input_a.buf).arg(&input_b.buf).arg(&mut output.buf);
-
-    if let Some(c) = input_c {
-        if shape_o.size() * if input_c_batched { batch_size } else { 1 } > c.size() {
-            return Err(OperationError::IndexOutOfBounds);
-        }
-
-        builder = builder.arg(&c.buf);
-    }
-
-    unsafe {
-        builder.launch(cfg).map_err(CudaError::Driver)?;
-    }
-
-    Ok(())
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct KernelConfig {
-    pub m: u32,
-    pub nnz: u32,
-    pub act: DiffableFromOutput,
-    pub bias: Option<bool>,
-}
-
-impl KernelConfig {
-    pub fn name(self) -> String {
-        let KernelConfig { m, nnz, act, bias } = self;
-        let act = match act {
-            DiffableFromOutput::Identity => "Identity",
-            DiffableFromOutput::ReLU => "Relu",
-            DiffableFromOutput::CReLU => "Crelu",
-            DiffableFromOutput::SCReLU => "Screlu",
-            DiffableFromOutput::SqrReLU => "SqrRelu",
-            DiffableFromOutput::Sigmoid => "Sigmoid",
-        };
-
-        format!("SparseAffine{act}_{m}_{nnz}_{bias:?}")
-    }
+    unsafe { Kernel::new("SparseAffineActiveBackward".to_string(), code, args).unwrap() }
 }
 
 fn act_str(act: DiffableFromOutput) -> &'static str {
@@ -114,10 +83,8 @@ fn act_str(act: DiffableFromOutput) -> &'static str {
     }
 }
 
-fn kernel(cfg: KernelConfig, vectorise: bool) -> String {
-    let KernelConfig { m, nnz, act, bias } = cfg;
-
-    let op = format!("__device__ float op(float x) {{ return {}; }}", act_str(act));
+fn kernel_str(bias: Option<bool>, nnz: usize, m: usize, activation: DiffableFromOutput, vectorise: bool) -> String {
+    let op = format!("__device__ float op(float x) {{ return {}; }}", act_str(activation));
 
     let code = if vectorise { vectorised_kernel(bias) } else { fallback_kernel(bias) };
 

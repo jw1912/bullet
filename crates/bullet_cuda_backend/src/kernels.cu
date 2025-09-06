@@ -24,13 +24,6 @@ __device__ float primeSigmoid(float in) {
     return act * (1.0F - act);
 }
 
-__device__ float primeInvIdentity([[maybe_unused]] float in) { return 1.0F; }
-__device__ float primeInvReLU(float in) { return in > 0.0F ? 1.0F : 0.0F; }
-__device__ float primeInvCReLU(float in) { return in > 0.0F && in < 1.0F ? 1.0F : 0.0F; }
-__device__ float primeInvSCReLU(float in) { return in > 0.0F && in < 1.0F ? 2.0F * sqrtf(in) : 0.0F; }
-__device__ float primeInvSqrReLU(float in) { return in > 0.0F ? 2.0F * sqrtf(in) : 0.0F; }
-__device__ float primeInvSigmoid(float in) { return in * (1.0F - in); }
-
 #define ACTIVATE(name, op)\
 BULLET_KERNEL name(const int size, const float* in, float* out)\
 {\
@@ -593,89 +586,6 @@ BULLET_KERNEL sparse_to_dense(const int rows, const int cols, const int max_acti
         thisOutput[inp] = 1.0F;
     }
 }
-
-#define SPARSE_MATMUL_BWD_KERNEL(name, op)\
-BULLET_KERNEL name(\
-    const int nnz,\
-    const int m,\
-    const int k,\
-    const int* X,\
-    const float* Y,\
-    const float* Yg,\
-    float* Ag)\
-{\
-    sparse_affine_backward_kernel<op>(nnz, m, k, false, X, Y, Yg, Ag, nullptr);\
-}\
-
-#define SPARSE_AFFINE_BWD_KERNEL(name, op)\
-BULLET_KERNEL name(\
-    const int nnz,\
-    const int m,\
-    const int k,\
-    const bool Bb,\
-    const int* X,\
-    const float* Y,\
-    const float* Yg,\
-    float* Ag,\
-    float* Bg)\
-{\
-    sparse_affine_backward_kernel<op>(nnz, m, k, Bb, X, Y, Yg, Ag, Bg);\
-}\
-
-template<OpType op>
-BULLET_KERNEL_IMPL sparse_affine_backward_kernel(
-    const int nnz,
-    const int m,
-    const int k,
-    const bool Bb,
-    const int* X,
-    const float* Y,
-    const float* Yg,
-    float* Ag,
-    float* Bg)
-{
-    const int loc = MaximumBlocksY * blockIdx.z + blockIdx.y;
-    const int row = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (row >= m || loc >= k)
-        return;
-
-    const int* tX = X + nnz * loc;
-    const int offset = m * loc;
-
-    const float tE = op(Y[offset + row]) * Yg[offset + row];
-
-    if (Bg != nullptr && tE != 0.0F)
-    {   
-        const int offset2 = Bb ? m * loc : 0;
-        atomicAdd(&Bg[offset2 + row], tE);
-    }
-
-    for (int i = 0; i < nnz; i++)
-    {
-        const int j = tX[i];
-
-        if (j == -1)
-            break;
-
-        if (tE != 0.0F)
-            atomicAdd(&Ag[j * m + row], tE);
-    }
-}
-
-SPARSE_MATMUL_BWD_KERNEL(SparseMatmulBwd, primeInvIdentity);
-SPARSE_MATMUL_BWD_KERNEL(SparseMatmulBwdRelu, primeInvReLU);
-SPARSE_MATMUL_BWD_KERNEL(SparseMatmulBwdCrelu, primeInvCReLU);
-SPARSE_MATMUL_BWD_KERNEL(SparseMatmulBwdScrelu, primeInvSCReLU);
-SPARSE_MATMUL_BWD_KERNEL(SparseMatmulBwdSqrRelu, primeInvSqrReLU);
-SPARSE_MATMUL_BWD_KERNEL(SparseMatmulBwdSigmoid, primeInvSigmoid);
-
-SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwd, primeInvIdentity);
-SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdRelu, primeInvReLU);
-SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdCrelu, primeInvCReLU);
-SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdScrelu, primeInvSCReLU);
-SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdSqrRelu, primeInvSqrReLU);
-SPARSE_AFFINE_BWD_KERNEL(SparseAffineBwdSigmoid, primeInvSigmoid);
 
 BULLET_KERNEL LinearCombStridedKernel(
     const int increment,

@@ -8,7 +8,7 @@ use backend::{Buffer, bindings, ops, util};
 
 use bullet_core::{
     device::{
-        CoreDeviceOps, Device, DeviceBuffer, OperationError,
+        CoreDeviceOps, Device, DeviceBuffer, OperationError, SparseAffineOps,
         base::{AdamConfig, BaseOperations},
         blas::{BlasOperations, GemmConfig},
     },
@@ -306,7 +306,7 @@ impl Device for ExecutionContext {
     }
 }
 
-impl CoreDeviceOps for ExecutionContext {
+impl SparseAffineOps for ExecutionContext {
     fn backprop_sparse_affine_activate(
         batch_size: usize,
         activation: DiffableFromOutput,
@@ -364,7 +364,9 @@ impl CoreDeviceOps for ExecutionContext {
             output,
         )
     }
+}
 
+impl CoreDeviceOps for ExecutionContext {
     fn select(
         batch_size: usize,
         input_batched: bool,

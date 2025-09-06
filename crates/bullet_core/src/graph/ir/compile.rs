@@ -82,6 +82,10 @@ where
     B::Backend: Device,
 {
     pub fn apply_pass(&mut self, pass: impl GraphIRPass<B>) -> GraphIRResult<(), B> {
+        self.apply_any_pass(&pass)
+    }
+
+    pub fn apply_any_pass(&mut self, pass: &dyn GraphIRPass<B>) -> GraphIRResult<(), B> {
         loop {
             let roots = self.inner.roots();
 

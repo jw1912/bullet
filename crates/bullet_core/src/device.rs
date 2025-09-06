@@ -1,12 +1,14 @@
 pub mod base;
 pub mod blas;
 pub mod core;
+pub mod sparse;
 
 use std::{fmt::Debug, sync::Arc};
 
-use base::BaseOperations;
-use blas::BlasOperations;
+pub use base::BaseOperations;
+pub use blas::BlasOperations;
 pub use core::CoreDeviceOps;
+pub use sparse::SparseAffineOps;
 
 use crate::cpu::CpuThread;
 

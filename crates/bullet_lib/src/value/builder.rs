@@ -27,6 +27,7 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     factorised: Vec<String>,
     wdl_output: bool,
     use_win_rate_model: bool,
+    print_ir: bool,
 }
 
 impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
@@ -46,6 +47,7 @@ where
             wdl_output: false,
             use_win_rate_model: false,
             factorised: Vec::new(),
+            print_ir: false,
         }
     }
 }
@@ -92,6 +94,11 @@ where
         self
     }
 
+    pub fn print_ir(mut self) -> Self {
+        self.print_ir = true;
+        self
+    }
+
     pub fn wdl_adjust_function(mut self, f: B<I>) -> Self {
         self.blend_getter = f;
         self
@@ -121,7 +128,7 @@ where
         let inputs = input_getter.num_inputs();
         let nnz = input_getter.max_active();
 
-        let builder = NetworkBuilder::default();
+        let mut builder = NetworkBuilder::default();
 
         let output_size = if self.wdl_output { 3 } else { 1 };
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
@@ -133,6 +140,14 @@ where
         }
 
         let output_node = out.node();
+
+        #[cfg(feature = "cuda")]
+        builder.add_custom_pass(bullet_cuda_backend::ops::FuseSparseAffineActivateWithMatmul);
+
+        if self.print_ir {
+            builder.dump_ir_on_build();
+        }
+
         let graph = builder.build(ExecutionContext::default());
 
         ValueTrainer(Trainer {
@@ -229,6 +244,7 @@ where
             factorised: self.factorised,
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
+            print_ir: self.print_ir,
         }
     }
 }
@@ -256,6 +272,7 @@ where
             factorised: self.factorised,
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
+            print_ir: self.print_ir,
         }
     }
 }

@@ -13,7 +13,7 @@ use cudarc::{
     driver::{CudaSlice, DriverError, PushKernelArg},
 };
 
-use crate::{CudaBuffer, CudaDevice, CudaError};
+use crate::{CudaBuffer, CudaDevice, CudaError, convert_gemm_config};
 
 pub(crate) fn set_to(
     device: Arc<CudaDevice>,
@@ -156,7 +156,7 @@ impl BaseOperations for CudaBuffer<f32> {
 
         device.with_ones(reps, |ones| {
             let cfg = GemmConfig::new(beta, alpha, Shape::new(size, 1), false, Shape::new(1, reps), false);
-            let cfg = crate::blas::convert_config(&cfg).0;
+            let cfg = convert_gemm_config(&cfg).0;
 
             unsafe { self.device.blas().gemm(cfg, &input.buf, ones, &mut self.buf).map_err(CudaError::Blas) }
         })
@@ -174,7 +174,7 @@ impl BaseOperations for CudaBuffer<f32> {
 
         device.with_ones(reps, |ones| {
             let cfg = GemmConfig::new(input_mul, output_mul, Shape::new(size, reps), false, Shape::new(reps, 1), false);
-            let cfg = crate::blas::convert_config(&cfg).0;
+            let cfg = convert_gemm_config(&cfg).0;
 
             unsafe { self.device.blas().gemm(cfg, &input.buf, ones, &mut self.buf).map_err(CudaError::Blas) }
         })
