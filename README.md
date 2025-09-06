@@ -26,7 +26,7 @@ Specific API documentation is covered by Rust's docstrings. You can create local
 
 - **acyclib**
     - Core ML library for directed acyclic tensor graphs
-    - Graphs are defined once (ahead of use), then optimsed and compiled for a given backend device
+    - Graphs are defined once (ahead of use), then optimised and compiled for a given backend device
     - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
     - Contains training abstractions to take care of asynchronous data loading and transfer from CPU to GPU
     - See the [MNIST](examples/extra/mnist.rs) example for using it at a lower level
