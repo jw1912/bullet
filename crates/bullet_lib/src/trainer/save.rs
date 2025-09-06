@@ -1,10 +1,13 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    rc::Rc,
+};
 
 use bullet_core::graph::{GraphNodeId, GraphNodeIdTy};
 
 use crate::nn::{Graph, Shape};
 
-type F = fn(&Graph, &str, Vec<f32>) -> Vec<f32>;
+type Transform = Rc<dyn Fn(&Graph, &str, Vec<f32>) -> Vec<f32>>;
 
 #[derive(Clone)]
 pub struct SavedFormat {
@@ -12,7 +15,7 @@ pub struct SavedFormat {
     pub(crate) id: Option<String>,
     pub(crate) quant: QuantTarget,
     pub(crate) layout: Layout,
-    pub(crate) transforms: Vec<F>,
+    pub(crate) transforms: Vec<Transform>,
     pub(crate) round: bool,
 }
 
@@ -56,9 +59,9 @@ impl SavedFormat {
         })
     }
 
-    pub fn add_transform(mut self, f: F) -> Self {
+    pub fn add_transform(mut self, f: impl Fn(&Graph, &str, Vec<f32>) -> Vec<f32> + 'static) -> Self {
         assert!(self.custom.is_none());
-        self.transforms.push(f);
+        self.transforms.push(Rc::new(f));
         self
     }
 
