@@ -7,7 +7,6 @@ use std::cell::RefCell;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
-use crate::{nn::ExecutionContext, value::loader::DefaultDataPreparer};
 use acyclib::{
     graph::{GraphNodeId, GraphNodeIdTy, Node},
     trainer::{
@@ -19,15 +18,17 @@ use acyclib::{
 };
 
 use crate::{
-    LocalSettings, TrainingSchedule,
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    lr::LrScheduler,
-    trainer::save::SavedFormat,
+    nn::ExecutionContext,
+    trainer::{
+        save::SavedFormat,
+        schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
+        settings::LocalSettings,
+    },
     value::{
         dataloader::ValueDataLoader,
-        loader::{DefaultDataLoader, LoadableDataType},
+        loader::{DefaultDataLoader, LoadableDataType, PreparedData},
     },
-    wdl::WdlScheduler,
 };
 
 /// Value network trainer, generally for training NNUE networks.
@@ -162,7 +163,7 @@ where
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
-        let prepared = DefaultDataPreparer::prepare(
+        let prepared = PreparedData::new(
             self.state.input_getter.clone(),
             self.state.output_getter,
             self.state.blend_getter,

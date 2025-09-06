@@ -3,12 +3,10 @@ use std::fmt::Debug;
 use lr::LrScheduler;
 use wdl::WdlScheduler;
 
-use super::logger::ansi;
-
 pub mod lr;
 pub mod wdl;
 
-pub use acyclib::trainer::schedule::TrainingSteps;
+pub use acyclib::trainer::{logger::ansi, schedule::TrainingSteps};
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {
