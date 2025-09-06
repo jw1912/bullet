@@ -61,9 +61,9 @@ jobs:
         - uses: dtolnay/rust-toolchain@stable
           with:
             component: clippy
-        - run: cargo check --package bullet_utils
-        - run: cargo clippy --package bullet_utils
-        - run: cargo test --package bullet_utils
+        - run: cargo check --package bullet-utils
+        - run: cargo clippy --package bullet-utils
+        - run: cargo test --package bullet-utils
 
   examples:
     name: examples
