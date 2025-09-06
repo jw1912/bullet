@@ -1,3 +1,6 @@
+/// Re-export of `acyclib`
+pub use acyclib;
+
 /// Contains `Trainer`, the default implementation
 /// of `NetworkTrainer`, for training value networks.
 #[deprecated]
@@ -7,6 +10,10 @@ pub mod default;
 /// and value network traiing (e.g. sparse input types).
 pub mod game;
 
+/// Contains the Graph API, by which neural networks are created with
+/// `NetworkBuilder`, and then compiled into an executable `Graph`
+pub mod nn;
+
 /// Contains the `NetworkTrainer` trait and
 /// associated structs for its use
 pub mod trainer;
@@ -15,27 +22,8 @@ pub mod trainer;
 /// way to train value networks.
 pub mod value;
 
-// TODO: Remove these re-exports as they are exported in the `nn` module
-pub use nn::ExecutionContext;
-
 // TODO: Remove these re-exports as they are exported in the `trainer` module
 pub use trainer::{
     schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
     settings::LocalSettings,
 };
-
-/// Re-export of `acyclib`
-pub use acyclib;
-
-/// Contains the Graph API, by which neural networks are created with
-/// `NetworkBuilder`, and then compiled into an executable `Graph`
-pub mod nn;
-
-#[cfg(all(feature = "hip-cuda", any(feature = "cpu", feature = "cuda")))]
-compile_error!(
-    "In order to use a non-HIP backend, you must pass the `--no-default-features` flag.
-If running an example, this would be
-    cargo r -r --example <example name> --features <your feature> --no-default-features
-If using bullet as a crate, it is instead
-    bullet_lib = { .. other stuff here .. , default-features = false }"
-);

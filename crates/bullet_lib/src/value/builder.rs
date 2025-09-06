@@ -6,9 +6,8 @@ use acyclib::{
 };
 
 use crate::{
-    ExecutionContext,
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{BackendMarker, NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
+    nn::{BackendMarker, ExecutionContext, NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
     trainer::save::SavedFormat,
     value::ValueTrainerState,
 };
