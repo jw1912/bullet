@@ -160,7 +160,7 @@ where
                 output_node,
                 use_win_rate_model: self.use_win_rate_model,
                 wdl: self.wdl_output,
-                saved_format: saved_format.clone(),
+                saved_format,
             },
         })
     }
