@@ -1,4 +1,7 @@
-use std::{io::{self, Write}, rc::Rc};
+use std::{
+    io::{self, Write},
+    rc::Rc,
+};
 
 use bullet_core::graph::{GraphNodeId, GraphNodeIdTy};
 
