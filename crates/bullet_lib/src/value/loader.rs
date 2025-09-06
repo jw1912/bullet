@@ -5,22 +5,16 @@ mod sfbinpack;
 mod text;
 pub mod viribinpack;
 
-use acyclib::{
-    device::{OperationError, tensor::Shape},
-    graph::{GraphNodeId, GraphNodeIdTy},
-};
-use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
 pub use sfbinpack::SfBinpackLoader;
 pub use text::InMemoryTextLoader;
 pub use viribinpack::ViriBinpackLoader;
 
-use crate::{
-    game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{DeviceError, Graph},
-    trainer::DataPreparer,
-};
+use acyclib::device::tensor::Shape;
+use bulletformat::BulletFormat;
+
+use crate::game::{inputs::SparseInputType, outputs::OutputBuckets};
 
 use super::Wgt;
 
@@ -96,30 +90,24 @@ impl<I: SparseInputType, O, D> DefaultDataLoader<I, O, D> {
     }
 }
 
-impl<I, O, D> DataPreparer for DefaultDataLoader<I, O, D>
+impl<I, O, D> DefaultDataLoader<I, O, D>
 where
     I: SparseInputType,
     O: OutputBuckets<I::RequiredDataType>,
     D: DataLoader<I::RequiredDataType>,
     I::RequiredDataType: LoadableDataType,
 {
-    type DataType = I::RequiredDataType;
-    type PreparedData = DefaultDataPreparer<I, O>;
-
-    fn get_data_file_paths(&self) -> &[String] {
-        self.loader.data_file_paths()
-    }
-
-    fn try_count_positions(&self) -> Option<u64> {
-        self.loader.count_positions()
-    }
-
-    fn load_and_map_batches<F: FnMut(&[Self::DataType]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F) {
+    pub fn load_and_map_batches<F: FnMut(&[I::RequiredDataType]) -> bool>(
+        &self,
+        start_batch: usize,
+        batch_size: usize,
+        f: F,
+    ) {
         self.loader.map_batches(start_batch, batch_size, f);
     }
 
-    fn prepare(&self, data: &[Self::DataType], threads: usize, blend: f32) -> Self::PreparedData {
-        DefaultDataPreparer::prepare(
+    pub fn prepare(&self, data: &[I::RequiredDataType], threads: usize, blend: f32) -> PreparedData<I, O> {
+        PreparedData::new(
             self.input_getter.clone(),
             self.output_getter,
             self.blend_getter,
@@ -147,7 +135,7 @@ pub(crate) struct SparseInput {
 }
 
 /// A batch of data, in the correct format for the GPU.
-pub struct DefaultDataPreparer<I: SparseInputType, O> {
+pub struct PreparedData<I: SparseInputType, O> {
     pub(crate) input_getter: I,
     pub(crate) output_getter: O,
     pub(crate) batch_size: usize,
@@ -158,14 +146,14 @@ pub struct DefaultDataPreparer<I: SparseInputType, O> {
     pub(crate) weights: DenseInput,
 }
 
-impl<I, O> DefaultDataPreparer<I, O>
+impl<I, O> PreparedData<I, O>
 where
     I: SparseInputType,
     O: OutputBuckets<I::RequiredDataType>,
     I::RequiredDataType: LoadableDataType,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn prepare(
+    pub fn new(
         input_getter: I,
         output_getter: O,
         blend_getter: B<I>,
@@ -267,70 +255,4 @@ where
 
 fn sigmoid(x: f32) -> f32 {
     1. / (1. + (-x).exp())
-}
-
-/// # Safety
-///
-/// The graph needs to take sparse `stm` and optionally `nstm` inputs
-/// in the correct format
-pub unsafe fn load_into_graph<Inp, Out>(
-    graph: &mut Graph,
-    prepared: &DefaultDataPreparer<Inp, Out>,
-) -> Result<usize, OperationError<DeviceError>>
-where
-    Inp: SparseInputType,
-    Out: OutputBuckets<Inp::RequiredDataType>,
-{
-    let batch_size = prepared.batch_size;
-    let expected_inputs = prepared.input_getter.num_inputs();
-
-    unsafe {
-        if let Some(idx) = graph.input_idx("stm") {
-            let input = &prepared.stm;
-            let stm = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-
-            if stm.single_size() != expected_inputs {
-                return Err(OperationError::InvalidTensorFormat);
-            }
-
-            stm.sparse_mut().load_from_slice(input.max_active, Some(batch_size), &input.value)?;
-        }
-
-        if let Some(idx) = graph.input_idx("nstm") {
-            let input = &prepared.nstm;
-            let ntm = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-
-            if ntm.single_size() != expected_inputs {
-                return Err(OperationError::InvalidTensorFormat);
-            }
-
-            ntm.sparse_mut().load_from_slice(input.max_active, Some(batch_size), &input.value)?;
-        }
-
-        if let Some(idx) = graph.input_idx("buckets") {
-            let input = &prepared.buckets;
-            let buckets = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-
-            if buckets.single_size() != Out::BUCKETS {
-                return Err(OperationError::InvalidTensorFormat);
-            }
-
-            buckets.sparse_mut().load_from_slice(input.max_active, Some(batch_size), &input.value)?;
-        }
-    }
-
-    if let Some(idx) = graph.input_idx("entry_weights") {
-        let weights = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-        weights.dense_mut().load_from_slice(Some(batch_size), &prepared.weights.value)?;
-    }
-
-    if let Some(idx) = graph.input_idx("targets") {
-        graph
-            .get(GraphNodeId::new(idx, GraphNodeIdTy::Values))
-            .unwrap()
-            .dense_mut()
-            .load_from_slice(Some(batch_size), &prepared.targets.value)?;
-    }
-
-    Ok(batch_size)
 }

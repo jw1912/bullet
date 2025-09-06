@@ -1,6 +1,6 @@
 use std::{f32::consts::PI, fmt::Debug};
 
-use crate::trainer::logger::ansi;
+use acyclib::trainer::logger::ansi;
 
 /// Learning rate scheduling. Types implementing this trait output a learning rate
 /// at each point in training, indexed by batch and superbatch.

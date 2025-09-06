@@ -1,4 +1,4 @@
-use super::logger::ansi;
+use acyclib::trainer::logger::ansi;
 
 #[derive(Clone, Copy)]
 pub struct TestDataset<'a> {

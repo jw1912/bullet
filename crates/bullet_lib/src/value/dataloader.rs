@@ -6,9 +6,8 @@ use acyclib::trainer::{
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    trainer::DataPreparer,
-    value::loader::{self, DefaultDataPreparer, DenseInput, SparseInput},
-    wdl::WdlScheduler,
+    trainer::schedule::wdl::WdlScheduler,
+    value::loader::{self, DenseInput, PreparedData, SparseInput},
 };
 
 pub struct ValueDataLoader<I, O, D, W>
@@ -65,8 +64,8 @@ where
     }
 }
 
-impl<I: SparseInputType, O> From<DefaultDataPreparer<I, O>> for PreparedBatchHost {
-    fn from(prepared_data: DefaultDataPreparer<I, O>) -> Self {
+impl<I: SparseInputType, O> From<PreparedData<I, O>> for PreparedBatchHost {
+    fn from(prepared_data: PreparedData<I, O>) -> Self {
         let batch_size = prepared_data.batch_size;
 
         let mut host_data = PreparedBatchHost { batch_size, inputs: Default::default() };
