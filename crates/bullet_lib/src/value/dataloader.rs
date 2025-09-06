@@ -1,4 +1,4 @@
-use bullet_core::trainer::{
+use acyclib::trainer::{
     DataLoadingError,
     dataloader::{DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost},
     schedule::TrainingSteps,

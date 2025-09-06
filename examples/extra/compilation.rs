@@ -1,10 +1,13 @@
-use acyclib::graph::NodeId;
-use bullet_core::{
-    cpu::{CpuError, CpuMarker, CpuThread},
-    function::{self, DeviceFunction},
+use acyclib::{
+    dag::NodeId,
+    device::{
+        cpu::{CpuError, CpuMarker, CpuThread},
+        function::{self, DeviceFunction},
+        tensor::Shape,
+    },
     graph::{
         Graph, GraphNodeIdTy,
-        builder::{GraphBuilder, Shape},
+        builder::GraphBuilder,
         ir::{
             BackendMarker, GraphIR, GraphIRError,
             node::AnnotatedNode,

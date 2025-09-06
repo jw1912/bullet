@@ -5,9 +5,9 @@ mod sfbinpack;
 mod text;
 pub mod viribinpack;
 
-use bullet_core::{
-    device::OperationError,
-    graph::{GraphNodeId, GraphNodeIdTy, builder::Shape},
+use acyclib::{
+    device::{OperationError, tensor::Shape},
+    graph::{GraphNodeId, GraphNodeIdTy},
 };
 use bulletformat::BulletFormat;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};

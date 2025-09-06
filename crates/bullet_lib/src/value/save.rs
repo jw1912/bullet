@@ -4,10 +4,9 @@ use std::{
 };
 
 use crate::{nn::ExecutionContext, value::ValueTrainerState};
-use bullet_core::{
+use acyclib::{
     graph::{GraphNodeId, GraphNodeIdTy},
-    optimiser::OptimiserState,
-    trainer::Trainer,
+    trainer::{Trainer, optimiser::OptimiserState},
 };
 
 use crate::{

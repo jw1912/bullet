@@ -24,11 +24,11 @@ Specific API documentation is covered by Rust's docstrings. You can create local
 
 ### Constituent Crates
 
-- **bullet_core**
+- **acyclib**
     - Core ML framework
     - Graphs are defined once (ahead of use), then optimsed and compiled for a given backend device
     - A token single-threaded CPU backend is included for verifying correctness of the crate and other backend implementations
-    - See the [MNIST](examples/extra/mnist.rs) example for using `bullet_core` as a general-purpose ML framework
+    - See the [MNIST](examples/extra/mnist.rs) example for using it at a lower level
 - **bullet_cuda_backend**
 - **bullet_hip_backend**
 - **bullet_lib**

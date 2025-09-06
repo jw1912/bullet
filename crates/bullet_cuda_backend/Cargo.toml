@@ -12,5 +12,5 @@ edition = { workspace = true }
 error = []
 
 [dependencies]
-bullet_core = { workspace = true }
+acyclib = { workspace = true }
 cudarc = { version = "0.17.3", features = ["cuda-version-from-build-system"] }

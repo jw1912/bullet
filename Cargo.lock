@@ -5,6 +5,10 @@ version = 4
 [[package]]
 name = "acyclib"
 version = "0.2.0"
+dependencies = [
+ "rand",
+ "rand_distr",
+]
 
 [[package]]
 name = "ansi_term"
@@ -68,19 +72,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "bullet_core"
-version = "0.1.0"
-dependencies = [
- "acyclib",
- "rand",
- "rand_distr",
-]
-
-[[package]]
 name = "bullet_cuda_backend"
 version = "0.1.0"
 dependencies = [
- "bullet_core",
+ "acyclib",
  "cudarc",
 ]
 
@@ -88,7 +83,7 @@ dependencies = [
 name = "bullet_hip_backend"
 version = "0.1.0"
 dependencies = [
- "bullet_core",
+ "acyclib",
  "cc",
 ]
 
@@ -96,7 +91,7 @@ dependencies = [
 name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
- "bullet_core",
+ "acyclib",
  "bullet_cuda_backend",
  "bullet_hip_backend",
  "bulletformat",

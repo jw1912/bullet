@@ -4,7 +4,7 @@ pub mod save;
 pub mod schedule;
 pub mod settings;
 
-use bullet_core::optimiser::{Optimiser, OptimiserState};
+use acyclib::trainer::optimiser::{Optimiser, OptimiserState};
 pub use preparer::DataPreparer;
 use save::SavedFormat;
 use schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler};

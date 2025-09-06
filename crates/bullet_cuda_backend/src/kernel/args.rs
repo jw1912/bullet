@@ -3,7 +3,10 @@ use std::{
     sync::Arc,
 };
 
-use bullet_core::{device::OperationError, graph::builder::Shape, tensor::TensorRef};
+use acyclib::device::{
+    OperationError,
+    tensor::{Shape, TensorRef},
+};
 use cudarc::driver::CudaSlice;
 
 use crate::{CudaDevice, CudaError, kernel::Expr};

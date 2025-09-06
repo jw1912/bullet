@@ -16,7 +16,6 @@ pub mod trainer;
 pub mod value;
 
 // TODO: Remove these re-exports as they are exported in the `nn` module
-pub use bullet_core::graph::builder::{Activation, Shape};
 pub use nn::ExecutionContext;
 
 // TODO: Remove these re-exports as they are exported in the `trainer` module
@@ -25,8 +24,8 @@ pub use trainer::{
     settings::LocalSettings,
 };
 
-/// Re-export of `bullet_core`
-pub use bullet_core as core;
+/// Re-export of `acyclib`
+pub use acyclib;
 
 /// Contains the Graph API, by which neural networks are created with
 /// `NetworkBuilder`, and then compiled into an executable `Graph`

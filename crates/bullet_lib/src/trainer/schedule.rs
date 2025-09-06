@@ -8,7 +8,7 @@ use super::logger::ansi;
 pub mod lr;
 pub mod wdl;
 
-pub use bullet_core::trainer::schedule::TrainingSteps;
+pub use acyclib::trainer::schedule::TrainingSteps;
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {

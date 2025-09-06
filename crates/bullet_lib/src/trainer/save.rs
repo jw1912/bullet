@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use bullet_core::graph::{GraphNodeId, GraphNodeIdTy};
+use acyclib::graph::{GraphNodeId, GraphNodeIdTy};
 
 use crate::nn::{Graph, Shape};
 

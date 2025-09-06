@@ -1,4 +1,4 @@
-use bullet_core::{function, graph::ir::operation::unary::DiffableFromOutput};
+use acyclib::device::{function, operation::DiffableFromOutput};
 
 use crate::{
     CudaDevice,

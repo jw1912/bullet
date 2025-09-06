@@ -1,4 +1,4 @@
-use bullet_core::device::{DeviceBuffer, blas::GemmConfig};
+use acyclib::device::{DeviceBuffer, operation::GemmConfig};
 
 use crate::{
     DeviceError,

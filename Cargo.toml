@@ -10,7 +10,6 @@ edition = "2024"
 resolver = "2"
 members = [
     "crates/acyclib",
-    "crates/bullet_core",
     "crates/bullet_cuda_backend",
     "crates/bullet_hip_backend",
     "crates/bullet_lib",
@@ -19,7 +18,6 @@ members = [
 
 [workspace.dependencies]
 acyclib = { path = "crates/acyclib", version = "0.2.0" }
-bullet_core = { path = "crates/bullet_core", version = "0.1.0" }
 bullet_hip_backend = { path = "crates/bullet_hip_backend", version = "0.1.0" }
 bullet_cuda_backend = { path = "crates/bullet_cuda_backend", version = "0.1.0" }
 bulletformat = "1.8.0"

@@ -11,7 +11,7 @@
 We look at the following example code:
 
 ```rust
-use bullet_core::{
+use acyclib::{
     cpu::{CpuError, CpuThread},
     graph::builder::{GraphBuilder, Shape},
 };

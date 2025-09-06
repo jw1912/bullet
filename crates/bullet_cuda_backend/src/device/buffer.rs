@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bullet_core::device::DeviceBuffer;
+use acyclib::device::DeviceBuffer;
 use cudarc::driver::{CudaSlice, DeviceRepr, ValidAsZeroBits};
 
 use crate::{CudaDevice, CudaError};

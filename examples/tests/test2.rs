@@ -1,10 +1,9 @@
 use bullet_lib::{
-    Shape,
     game::{
         inputs::{ChessBucketsMirrored, get_num_buckets},
         outputs::MaterialCount,
     },
-    nn::{InitSettings, optimiser::AdamW},
+    nn::{InitSettings, Shape, optimiser::AdamW},
     trainer::{
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::LocalSettings,
