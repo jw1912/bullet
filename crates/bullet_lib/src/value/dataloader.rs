@@ -6,8 +6,8 @@ use acyclib::trainer::{
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    value::loader::{self, DenseInput, PreparedData, SparseInput},
     trainer::schedule::wdl::WdlScheduler,
+    value::loader::{self, DenseInput, PreparedData, SparseInput},
 };
 
 pub struct ValueDataLoader<I, O, D, W>
