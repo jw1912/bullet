@@ -1,4 +1,7 @@
-use crate::{device::{Device, OperationResult}, graph::{builder::Shape, ir::operation::unary::DiffableFromOutput}};
+use crate::{
+    device::{Device, OperationResult},
+    graph::{builder::Shape, ir::operation::unary::DiffableFromOutput},
+};
 
 pub trait SparseAffineOps: Device {
     #[allow(clippy::too_many_arguments)]

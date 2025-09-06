@@ -13,7 +13,7 @@ use cudarc::{
     driver::{CudaSlice, DriverError, PushKernelArg},
 };
 
-use crate::{convert_gemm_config, CudaBuffer, CudaDevice, CudaError};
+use crate::{CudaBuffer, CudaDevice, CudaError, convert_gemm_config};
 
 pub(crate) fn set_to(
     device: Arc<CudaDevice>,

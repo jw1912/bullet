@@ -4,11 +4,16 @@ use crate::{
     device::{Device, SparseAffineOps},
     function::{self, DeviceFunction, DeviceOperation},
     graph::{
+        Graph, GraphNodeIdTy,
         ir::{
-            node::AnnotatedNode, operation::{
-                unary::DiffableFromOutput, util, GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError
-            }, shape::Shape, BackendMarker, GraphIR, GraphIRError
-        }, Graph, GraphNodeIdTy
+            BackendMarker, GraphIR, GraphIRError,
+            node::AnnotatedNode,
+            operation::{
+                GraphIROperationBase, GraphIROperationCompilable, GraphIROperationError, unary::DiffableFromOutput,
+                util,
+            },
+            shape::Shape,
+        },
     },
 };
 

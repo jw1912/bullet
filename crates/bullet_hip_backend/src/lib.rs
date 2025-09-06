@@ -8,9 +8,11 @@ use backend::{Buffer, bindings, ops, util};
 
 use bullet_core::{
     device::{
-        base::{AdamConfig, BaseOperations}, blas::{BlasOperations, GemmConfig}, CoreDeviceOps, Device, DeviceBuffer, OperationError, SparseAffineOps
+        CoreDeviceOps, Device, DeviceBuffer, OperationError, SparseAffineOps,
+        base::{AdamConfig, BaseOperations},
+        blas::{BlasOperations, GemmConfig},
     },
-    graph::ir::{operation::unary::DiffableFromOutput, shape::Shape, BackendMarker},
+    graph::ir::{BackendMarker, operation::unary::DiffableFromOutput, shape::Shape},
     tensor,
 };
 
