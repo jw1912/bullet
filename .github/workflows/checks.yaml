@@ -52,3 +52,27 @@ jobs:
         - run: cargo check --package bullet_lib --features cpu --no-default-features
         - run: cargo clippy --package bullet_lib --features cpu --no-default-features
         - run: cargo test --package bullet_lib --features cpu --no-default-features
+
+  bullet_utils:
+    name: bullet_utils
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            component: clippy
+        - run: cargo check --package bullet-utils
+        - run: cargo clippy --package bullet-utils
+        - run: cargo test --package bullet-utils
+
+  examples:
+    name: examples
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            component: clippy
+        - run: cargo check --examples --features cpu --no-default-features
+        - run: cargo clippy --examples --features cpu --no-default-features
+        - run: cargo test --examples --features cpu --no-default-features

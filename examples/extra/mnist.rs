@@ -13,7 +13,7 @@ use bullet_core::{
         builder::{GraphBuilder, Shape},
     },
 };
-use bullet_hip_backend::{DeviceError, ExecutionContext};
+use bullet_lib::nn::{DeviceError, ExecutionContext};
 
 fn main() -> Result<(), OperationError<DeviceError>> {
     let images = Images::new("data/mnist/train-images.idx3-ubyte");
