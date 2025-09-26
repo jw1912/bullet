@@ -11,7 +11,6 @@ use bullet_lib::{
 fn main() {
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
-        .use_devices([(); 8])
         .optimiser(AdamW)
         .inputs(Chess768)
         .save_format(&[])
