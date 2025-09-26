@@ -26,7 +26,7 @@ pub enum TrainerError<D: Device> {
     DataLoadingError(DataLoadingError),
     GradientCalculationError(OperationError<D::DeviceError>),
     Unexpected(OperationError<D::DeviceError>),
-    MoreDevicesThanBatchSize,
+    MoreDevicesThanBatchSize(usize, usize),
     IoError,
 }
 
@@ -57,7 +57,7 @@ impl<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> Trainer<D, G, O, S> {
         let steps = schedule.steps;
 
         if self.optimiser.graph.devices().len() > steps.batch_size {
-            return Err(TrainerError::MoreDevicesThanBatchSize);
+            return Err(TrainerError::MoreDevicesThanBatchSize(self.optimiser.graph.devices().len(), steps.batch_size));
         }
 
         let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost>(32);
