@@ -12,11 +12,15 @@ pub trait GraphLike<D: Device> {
 
     fn primary_mut(&mut self) -> &mut Graph<D>;
 
-    fn get_all(&self, id: GraphNodeId) -> Vec<Result<TensorRef<D>, OperationError<D::DeviceError>>>;
+    fn get_all(&self, id: GraphNodeId) -> Result<Vec<TensorRef<D>>, OperationError<<D as Device>::DeviceError>>;
 
     fn get_output_value(&self) -> Result<f32, OperationError<D::DeviceError>>;
 
     fn execute_fn(&mut self, name: &str) -> Result<(), OperationError<D::DeviceError>>;
+
+    fn reduce_sum_into_first(buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
+
+    fn scatter_first_into_rest(buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
 }
 
 impl<D: Device> GraphLike<D> for Graph<D> {
@@ -32,8 +36,8 @@ impl<D: Device> GraphLike<D> for Graph<D> {
         self
     }
 
-    fn get_all(&self, id: GraphNodeId) -> Vec<Result<TensorRef<D>, OperationError<<D as Device>::DeviceError>>> {
-        vec![self.get(id)]
+    fn get_all(&self, id: GraphNodeId) -> Result<Vec<TensorRef<D>>, OperationError<<D as Device>::DeviceError>> {
+        self.get(id).map(|x| vec![x])
     }
 
     fn get_output_value(&self) -> Result<f32, OperationError<<D as Device>::DeviceError>> {
@@ -42,5 +46,13 @@ impl<D: Device> GraphLike<D> for Graph<D> {
 
     fn execute_fn(&mut self, name: &str) -> Result<(), OperationError<<D as Device>::DeviceError>> {
         self.execute(name)
+    }
+
+    fn reduce_sum_into_first(_: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+        Ok(())
+    }
+
+    fn scatter_first_into_rest(_: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+        Ok(())
     }
 }

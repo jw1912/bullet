@@ -3,9 +3,12 @@ use std::{
     io::{self, Write},
 };
 
-use crate::{nn::{ExecutionContext, Graph}, value::ValueTrainerState};
+use crate::{
+    nn::{ExecutionContext, Graph},
+    value::ValueTrainerState,
+};
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy},
+    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
     trainer::{Trainer, optimiser::OptimiserState},
 };
 
@@ -15,8 +18,7 @@ use crate::{
     value::{ValueTrainer, loader::LoadableDataType},
 };
 
-type ValueTrainerInner<Opt, Inp, Out> =
-    Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>;
+type ValueTrainerInner<Opt, Inp, Out> = Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>;
 
 pub(super) fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
     use std::io::Write;
@@ -64,8 +66,9 @@ where
 
     for SavedFormat { id, .. } in &trainer.state.saved_format {
         if let Some(id) = id {
-            let idx = GraphNodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
-            let weights = trainer.optimiser.graph.get(idx).unwrap();
+            let idx =
+                GraphNodeId::new(trainer.optimiser.graph.primary().weight_idx(id).unwrap(), GraphNodeIdTy::Values);
+            let weights = trainer.optimiser.graph.primary().get(idx).unwrap();
             let weights = weights.dense();
 
             let mut weight_buf = vec![0.0; weights.size()];
@@ -95,8 +98,9 @@ where
 
     for SavedFormat { custom, id, quant, layout, transforms, round } in &trainer.state.saved_format {
         if let Some(id) = id {
-            let idx = GraphNodeId::new(trainer.optimiser.graph.weight_idx(id).unwrap(), GraphNodeIdTy::Values);
-            let weights = trainer.optimiser.graph.get(idx).unwrap();
+            let idx =
+                GraphNodeId::new(trainer.optimiser.graph.primary().weight_idx(id).unwrap(), GraphNodeIdTy::Values);
+            let weights = trainer.optimiser.graph.primary().get(idx).unwrap();
             let weights = weights.dense();
 
             let mut weight_buf = vec![0.0; weights.size()];

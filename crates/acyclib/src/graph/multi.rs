@@ -1,0 +1,54 @@
+use std::sync::Arc;
+
+use crate::{
+    device::{Device, OperationError, multi::MultiDevice, tensor::TensorRef},
+    graph::{Graph, GraphNodeId, like::GraphLike},
+};
+
+pub struct MultiDeviceGraph<D: Device> {
+    pub(super) graphs: Vec<Graph<D>>,
+}
+
+impl<D: Device + MultiDevice> GraphLike<D> for MultiDeviceGraph<D> {
+    fn devices(&self) -> Vec<Arc<D>> {
+        self.graphs.iter().map(Graph::device).collect()
+    }
+
+    fn primary(&self) -> &Graph<D> {
+        &self.graphs[0]
+    }
+
+    fn primary_mut(&mut self) -> &mut Graph<D> {
+        &mut self.graphs[0]
+    }
+
+    fn get_all(&self, id: GraphNodeId) -> Result<Vec<TensorRef<D>>, OperationError<<D as Device>::DeviceError>> {
+        self.graphs.iter().map(|g| g.get(id)).collect()
+    }
+
+    fn get_output_value(&self) -> Result<f32, OperationError<<D as Device>::DeviceError>> {
+        let mut sum = 0.0;
+
+        for g in &self.graphs {
+            sum += g.get_output_val()?;
+        }
+
+        Ok(sum)
+    }
+
+    fn execute_fn(&mut self, name: &str) -> Result<(), OperationError<<D as Device>::DeviceError>> {
+        for g in &mut self.graphs {
+            g.execute(name)?;
+        }
+
+        Ok(())
+    }
+
+    fn reduce_sum_into_first(buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+        D::reduce_sum_into_first(buffers)
+    }
+
+    fn scatter_first_into_rest(buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+        D::scatter_first_into_rest(buffers)
+    }
+}

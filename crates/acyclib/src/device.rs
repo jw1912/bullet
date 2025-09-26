@@ -1,5 +1,6 @@
 pub mod cpu;
 pub mod function;
+pub mod multi;
 pub mod operation;
 pub mod tensor;
 

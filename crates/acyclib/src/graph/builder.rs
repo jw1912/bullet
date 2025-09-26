@@ -21,6 +21,7 @@ use crate::{
             },
             passes::GraphIRPass,
         },
+        multi::MultiDeviceGraph,
     },
 };
 
@@ -121,8 +122,8 @@ where
     SparseAffineActivate: GraphIROperationCompilable<B>,
     Select: GraphIROperationCompilable<B>,
 {
-    pub fn build(self, device: D) -> Graph<D> {
-        let mut ir = self.ir.into_inner().unwrap();
+    fn optimise(&mut self) {
+        let mut ir = self.ir.try_lock().unwrap();
         let root = ir.root().unwrap();
 
         if ir.get(root.idx).unwrap().ty().batched {
@@ -136,7 +137,7 @@ where
             let unoptim = format!("subgraph cluster_0 {{\nlabel=\"Unoptimised\";\n{opts}{unoptim}}}");
 
             ir.optimise().unwrap();
-            for pass in self.custom_passes.into_inner().unwrap() {
+            for pass in self.custom_passes.try_lock().unwrap().iter() {
                 ir.apply_any_pass(pass.as_ref()).unwrap();
             }
 
@@ -147,7 +148,7 @@ where
             write!(&mut file, "digraph G {{\n{unoptim}\n{optim}}}").unwrap();
         } else {
             ir.optimise().unwrap();
-            for pass in self.custom_passes.into_inner().unwrap() {
+            for pass in self.custom_passes.try_lock().unwrap().iter() {
                 ir.apply_any_pass(pass.as_ref()).unwrap();
             }
         }
@@ -155,6 +156,10 @@ where
         if self.dump_ir_on_build {
             println!("{}", ir.formatted().unwrap());
         }
+    }
+
+    fn compile(&self, device: D) -> Graph<D> {
+        let ir = self.ir.try_lock().unwrap();
 
         let graph = ir.compile(device).unwrap();
 
@@ -186,5 +191,20 @@ where
         }
 
         graph
+    }
+
+    pub fn build(mut self, device: D) -> Graph<D> {
+        self.optimise();
+        self.compile(device)
+    }
+
+    pub fn build_multi(mut self, devices: Vec<D>) -> MultiDeviceGraph<D> {
+        if devices.is_empty() {
+            panic!("No devices specified for multi-device training!");
+        }
+
+        self.optimise();
+
+        MultiDeviceGraph { graphs: devices.into_iter().map(|d| self.compile(d)).collect() }
     }
 }

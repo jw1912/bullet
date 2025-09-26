@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use acyclib::{
-    device::tensor::Shape,
+    device::{Device, tensor::Shape},
     trainer::{Trainer, optimiser::Optimiser},
 };
 
@@ -30,6 +30,7 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     wdl_output: bool,
     use_win_rate_model: bool,
     print_ir: bool,
+    device_ids: Vec<<ExecutionContext as Device>::IdType>,
 }
 
 impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
@@ -50,6 +51,7 @@ where
             use_win_rate_model: false,
             factorised: Vec::new(),
             print_ir: false,
+            device_ids: Vec::new(),
         }
     }
 }
@@ -112,6 +114,15 @@ where
         self
     }
 
+    pub fn use_devices(mut self, ids: impl Into<Vec<<ExecutionContext as Device>::IdType>>) -> Self {
+        if cfg!(not(feature = "multigpu")) {
+            println!("Specifying device list does nothing without `multigpu` feature enabled!");
+        }
+
+        self.device_ids = ids.into();
+        self
+    }
+
     pub fn use_win_rate_model(mut self) -> Self {
         self.use_win_rate_model = true;
         self
@@ -150,6 +161,17 @@ where
             builder.dump_ir_on_build();
         }
 
+        #[cfg(feature = "multigpu")]
+        let graph = {
+            if cfg!(feature = "cpu") {
+                println!("CPU with multi-gpu simulates multiple devices, but these do not run on separate threads currently!")
+            }
+
+            let devices = self.device_ids.into_iter().map(ExecutionContext::new);
+            builder.build_multi(devices.collect::<Result<Vec<_>, _>>().unwrap())
+        };
+
+        #[cfg(not(feature = "multigpu"))]
         let graph = builder.build(ExecutionContext::default());
 
         ValueTrainer(Trainer {
@@ -159,7 +181,7 @@ where
                 output_getter: buckets,
                 blend_getter: self.blend_getter,
                 weight_getter: self.weight_getter,
-                output_node,
+                _output_node: output_node,
                 use_win_rate_model: self.use_win_rate_model,
                 wdl: self.wdl_output,
                 saved_format,
@@ -247,6 +269,7 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
+            device_ids: self.device_ids,
         }
     }
 }
@@ -275,6 +298,7 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
+            device_ids: self.device_ids,
         }
     }
 }

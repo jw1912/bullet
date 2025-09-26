@@ -69,11 +69,16 @@ impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
     pub fn update(&mut self, gradient_factor: f32, learning_rate: f32) -> Result<(), OperationError<D::DeviceError>> {
         for id in &self.graph.primary().weight_ids() {
             let idx = self.graph.primary().weight_idx(id).unwrap();
-            let weights = &mut self.graph.primary().get(GraphNodeId::new(idx, GraphNodeIdTy::Values))?;
+            let weight_id = GraphNodeId::new(idx, GraphNodeIdTy::Values);
+
+            let weights = &mut self.graph.primary().get(weight_id)?;
             let single = self.state.get_mut(id).unwrap();
 
-            if let Ok(grads) = self.graph.primary().get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
+            let grad_id = GraphNodeId::new(idx, GraphNodeIdTy::Gradients);
+            if let Ok(grads) = self.graph.primary().get(grad_id) {
+                G::reduce_sum_into_first(&self.graph.get_all(grad_id)?)?;
                 single.update(&mut *weights.dense_mut(), &mut *grads.dense_mut(), gradient_factor, learning_rate)?;
+                G::scatter_first_into_rest(&self.graph.get_all(weight_id)?)?;
             }
         }
 
@@ -121,7 +126,16 @@ impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
     }
 
     fn load_weights_from_file_(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
-        self.graph.primary_mut().load_from_file(path, old_format)
+        self.graph.primary_mut().load_from_file(path, old_format)?;
+
+        let primary = self.graph.primary();
+
+        for id in primary.weight_ids() {
+            let idx = GraphNodeId::new(primary.weight_idx(&id).unwrap(), GraphNodeIdTy::Values);
+            G::scatter_first_into_rest(&self.graph.get_all(idx)?)?;
+        }
+
+        Ok(())
     }
 
     fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {

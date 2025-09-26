@@ -8,13 +8,14 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy, Node, like::GraphLike},
-    trainer::{
-        self, Trainer,
-        dataloader::{PreparedBatchDevice, PreparedBatchHost},
-        logger,
-        optimiser::OptimiserState,
-    },
+    graph::Node,
+    trainer::{self, Trainer, logger, optimiser::OptimiserState},
+};
+
+#[cfg(not(feature = "multigpu"))]
+use acyclib::{
+    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
+    trainer::dataloader::{PreparedBatchDevice, PreparedBatchHost},
 };
 
 use crate::{
@@ -22,14 +23,17 @@ use crate::{
     nn::{ExecutionContext, Graph},
     trainer::{
         save::SavedFormat,
-        schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule},
+        schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
     },
     value::{
         dataloader::ValueDataLoader,
-        loader::{DefaultDataLoader, LoadableDataType, PreparedData},
+        loader::{DefaultDataLoader, LoadableDataType},
     },
 };
+
+#[cfg(not(feature = "multigpu"))]
+use crate::value::loader::PreparedData;
 
 /// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<
@@ -70,7 +74,7 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
     output_getter: Out,
     blend_getter: B<Inp>,
     weight_getter: Option<Wgt<Inp>>,
-    output_node: Node,
+    _output_node: Node,
     saved_format: Vec<SavedFormat>,
     use_win_rate_model: bool,
     wdl: bool,
@@ -157,6 +161,7 @@ where
         .unwrap();
     }
 
+    #[cfg(not(feature = "multigpu"))]
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
@@ -184,7 +189,7 @@ where
         self.optimiser.graph.synchronise().unwrap();
         self.optimiser.graph.forward().unwrap();
 
-        let id = GraphNodeId::new(self.state.output_node.idx(), GraphNodeIdTy::Values);
+        let id = GraphNodeId::new(self.state._output_node.idx(), GraphNodeIdTy::Values);
         let eval = self.optimiser.graph.get(id).unwrap();
 
         let dense_vals = eval.dense();
@@ -193,6 +198,7 @@ where
         vals
     }
 
+    #[cfg(not(feature = "multigpu"))]
     pub fn eval(&mut self, fen: &str) -> f32
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,

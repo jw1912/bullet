@@ -243,10 +243,11 @@ impl<D: Device> PreparedBatchDevice<D> {
     pub fn load_into_graph<G: GraphLike<D>>(&mut self, graph: &mut G) -> Result<(), TrainerError<D>> {
         for (id, matrices) in &mut self.inputs {
             if let Some(idx) = graph.primary().input_idx(id) {
-                let tensors = graph.get_all(GraphNodeId::new(idx, GraphNodeIdTy::Values));
+                let tensors =
+                    graph.get_all(GraphNodeId::new(idx, GraphNodeIdTy::Values)).map_err(TrainerError::Unexpected)?;
 
                 for (tensor, matrix) in tensors.into_iter().zip(matrices.iter_mut()) {
-                    tensor.map_err(TrainerError::Unexpected)?.swap_with(matrix).map_err(TrainerError::Unexpected)?;
+                    tensor.swap_with(matrix).map_err(TrainerError::Unexpected)?;
                 }
             }
         }

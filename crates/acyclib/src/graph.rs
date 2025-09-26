@@ -1,6 +1,7 @@
 pub mod builder;
 pub mod ir;
 pub mod like;
+pub mod multi;
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
