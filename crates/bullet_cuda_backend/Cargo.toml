@@ -9,7 +9,6 @@ rust-version = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["nccl"]
 error = []
 nccl = ["cudarc/nccl"]
 
