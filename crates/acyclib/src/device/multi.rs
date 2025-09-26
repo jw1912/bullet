@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::device::{
     Device,
     cpu::{CpuError, CpuThread},
@@ -5,13 +7,21 @@ use crate::device::{
 };
 
 pub trait MultiDevice: Device {
-    fn reduce_sum_into_first(buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError>;
+    type Comm;
 
-    fn scatter_first_into_rest(buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError>;
+    fn make_comm(devices: Vec<Arc<Self>>) -> Self::Comm;
+
+    fn reduce_sum_into_first(comm: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError>;
+
+    fn scatter_first_into_rest(comm: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError>;
 }
 
 impl MultiDevice for CpuThread {
-    fn reduce_sum_into_first(buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError> {
+    type Comm = ();
+
+    fn make_comm(_: Vec<Arc<Self>>) -> Self::Comm {}
+
+    fn reduce_sum_into_first(_: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError> {
         let mut buf = buffers[0].dense_mut();
 
         for other in buffers.iter().skip(1) {
@@ -21,7 +31,7 @@ impl MultiDevice for CpuThread {
         Ok(())
     }
 
-    fn scatter_first_into_rest(buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError> {
+    fn scatter_first_into_rest(_: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError> {
         let buf = buffers[0].dense();
 
         for other in buffers.iter().skip(1) {

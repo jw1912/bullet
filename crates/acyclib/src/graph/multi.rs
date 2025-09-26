@@ -5,7 +5,8 @@ use crate::{
     graph::{Graph, GraphNodeId, like::GraphLike},
 };
 
-pub struct MultiDeviceGraph<D: Device> {
+pub struct MultiDeviceGraph<D: Device + MultiDevice> {
+    pub(super) comm: D::Comm,
     pub(super) graphs: Vec<Graph<D>>,
 }
 
@@ -44,11 +45,11 @@ impl<D: Device + MultiDevice> GraphLike<D> for MultiDeviceGraph<D> {
         Ok(())
     }
 
-    fn reduce_sum_into_first(buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
-        D::reduce_sum_into_first(buffers)
+    fn reduce_sum_into_first(&self, buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+        D::reduce_sum_into_first(&self.comm, buffers)
     }
 
-    fn scatter_first_into_rest(buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
-        D::scatter_first_into_rest(buffers)
+    fn scatter_first_into_rest(&self, buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+        D::scatter_first_into_rest(&self.comm, buffers)
     }
 }

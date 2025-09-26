@@ -11,7 +11,7 @@ use std::{
 
 use crate::{
     dag::NodeId,
-    device::{Device, function::Reduce, tensor::Shape},
+    device::{Device, function::Reduce, multi::MultiDevice, tensor::Shape},
     graph::{
         Graph, GraphNodeId, GraphNodeIdTy,
         ir::{
@@ -197,7 +197,13 @@ where
         self.optimise();
         self.compile(device)
     }
+}
 
+impl<D: Device<Marker = B> + MultiDevice, B: BackendMarker<Backend = D>> GraphBuilder<B>
+where
+    SparseAffineActivate: GraphIROperationCompilable<B>,
+    Select: GraphIROperationCompilable<B>,
+{
     pub fn build_multi(mut self, devices: Vec<D>) -> MultiDeviceGraph<D> {
         if devices.is_empty() {
             panic!("No devices specified for multi-device training!");
@@ -205,6 +211,9 @@ where
 
         self.optimise();
 
-        MultiDeviceGraph { graphs: devices.into_iter().map(|d| self.compile(d)).collect() }
+        let graphs = devices.into_iter().map(|d| self.compile(d)).collect::<Vec<_>>();
+        let comm = D::make_comm(graphs.iter().map(|g| g.device()).collect());
+
+        MultiDeviceGraph { comm, graphs }
     }
 }

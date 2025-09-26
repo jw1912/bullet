@@ -76,9 +76,9 @@ impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
 
             let grad_id = GraphNodeId::new(idx, GraphNodeIdTy::Gradients);
             if let Ok(grads) = self.graph.primary().get(grad_id) {
-                G::reduce_sum_into_first(&self.graph.get_all(grad_id)?)?;
+                self.graph.reduce_sum_into_first(&self.graph.get_all(grad_id)?)?;
                 single.update(&mut *weights.dense_mut(), &mut *grads.dense_mut(), gradient_factor, learning_rate)?;
-                G::scatter_first_into_rest(&self.graph.get_all(weight_id)?)?;
+                self.graph.scatter_first_into_rest(&self.graph.get_all(weight_id)?)?;
             }
         }
 
@@ -132,7 +132,7 @@ impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
 
         for id in primary.weight_ids() {
             let idx = GraphNodeId::new(primary.weight_idx(&id).unwrap(), GraphNodeIdTy::Values);
-            G::scatter_first_into_rest(&self.graph.get_all(idx)?)?;
+            self.graph.scatter_first_into_rest(&self.graph.get_all(idx)?)?;
         }
 
         Ok(())

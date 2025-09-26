@@ -18,9 +18,9 @@ pub trait GraphLike<D: Device> {
 
     fn execute_fn(&mut self, name: &str) -> Result<(), OperationError<D::DeviceError>>;
 
-    fn reduce_sum_into_first(buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
+    fn reduce_sum_into_first(&self, buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
 
-    fn scatter_first_into_rest(buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
+    fn scatter_first_into_rest(&self, buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
 }
 
 impl<D: Device> GraphLike<D> for Graph<D> {
@@ -48,11 +48,11 @@ impl<D: Device> GraphLike<D> for Graph<D> {
         self.execute(name)
     }
 
-    fn reduce_sum_into_first(_: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+    fn reduce_sum_into_first(&self, _: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
         Ok(())
     }
 
-    fn scatter_first_into_rest(_: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
+    fn scatter_first_into_rest(&self, _: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
         Ok(())
     }
 }
