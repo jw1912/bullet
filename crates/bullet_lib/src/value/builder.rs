@@ -164,7 +164,9 @@ where
         #[cfg(feature = "multigpu")]
         let graph = {
             if cfg!(feature = "cpu") {
-                println!("CPU with multi-gpu simulates multiple devices, but these do not run on separate threads currently!")
+                println!(
+                    "CPU with multi-gpu simulates multiple devices, but these do not run on separate threads currently!"
+                )
             }
 
             let devices = self.device_ids.into_iter().map(ExecutionContext::new);
