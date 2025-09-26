@@ -3,9 +3,9 @@ use std::{
     io::{self, Write},
 };
 
-use crate::{nn::ExecutionContext, value::ValueTrainerState};
+use crate::{nn::{ExecutionContext, Graph}, value::ValueTrainerState};
 use acyclib::{
-    graph::{Graph, GraphNodeId, GraphNodeIdTy},
+    graph::{GraphNodeId, GraphNodeIdTy},
     trainer::{Trainer, optimiser::OptimiserState},
 };
 
@@ -16,7 +16,7 @@ use crate::{
 };
 
 type ValueTrainerInner<Opt, Inp, Out> =
-    Trainer<ExecutionContext, Graph<ExecutionContext>, Opt, ValueTrainerState<Inp, Out>>;
+    Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>;
 
 pub(super) fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
     use std::io::Write;

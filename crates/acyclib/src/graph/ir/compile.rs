@@ -99,7 +99,7 @@ where
         Ok(())
     }
 
-    pub fn compile(self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
+    pub fn compile(&self, device: B::Backend) -> Result<Graph<B::Backend>, GraphIRCompileError> {
         let root = self.root()?.idx;
         let root_data = self.get(root).unwrap().ty();
 

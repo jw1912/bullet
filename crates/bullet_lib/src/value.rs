@@ -8,7 +8,7 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use acyclib::{
-    graph::{Graph, GraphNodeId, GraphNodeIdTy, Node, like::GraphLike},
+    graph::{GraphNodeId, GraphNodeIdTy, Node, like::GraphLike},
     trainer::{
         self, Trainer,
         dataloader::{PreparedBatchDevice, PreparedBatchHost},
@@ -19,10 +19,10 @@ use acyclib::{
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::ExecutionContext,
+    nn::{ExecutionContext, Graph},
     trainer::{
         save::SavedFormat,
-        schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
+        schedule::{lr::LrScheduler, wdl::WdlScheduler, TrainingSchedule},
         settings::LocalSettings,
     },
     value::{
@@ -36,7 +36,7 @@ pub struct ValueTrainer<
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
->(Trainer<ExecutionContext, Graph<ExecutionContext>, Opt, ValueTrainerState<Inp, Out>>);
+>(Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>);
 
 impl<Opt, Inp, Out> std::ops::Deref for ValueTrainer<Opt, Inp, Out>
 where
@@ -44,7 +44,7 @@ where
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    type Target = Trainer<ExecutionContext, Graph<ExecutionContext>, Opt, ValueTrainerState<Inp, Out>>;
+    type Target = Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
