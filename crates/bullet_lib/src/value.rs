@@ -8,7 +8,7 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy, Node},
+    graph::{Graph, GraphNodeId, GraphNodeIdTy, Node, like::GraphLike},
     trainer::{
         self, Trainer,
         dataloader::{PreparedBatchDevice, PreparedBatchHost},
@@ -36,7 +36,7 @@ pub struct ValueTrainer<
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
->(Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>);
+>(Trainer<ExecutionContext, Graph<ExecutionContext>, Opt, ValueTrainerState<Inp, Out>>);
 
 impl<Opt, Inp, Out> std::ops::Deref for ValueTrainer<Opt, Inp, Out>
 where
@@ -44,7 +44,7 @@ where
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    type Target = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;
+    type Target = Trainer<ExecutionContext, Graph<ExecutionContext>, Opt, ValueTrainerState<Inp, Out>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -177,7 +177,7 @@ where
         );
 
         let host_data = PreparedBatchHost::from(prepared);
-        let mut device_data = PreparedBatchDevice::new(self.optimiser.graph.device(), &host_data).unwrap();
+        let mut device_data = PreparedBatchDevice::new(self.optimiser.graph.devices(), &host_data).unwrap();
 
         device_data.load_into_graph(&mut self.optimiser.graph).unwrap();
 

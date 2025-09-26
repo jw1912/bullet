@@ -5,7 +5,7 @@ use std::{
 
 use crate::{nn::ExecutionContext, value::ValueTrainerState};
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy},
+    graph::{Graph, GraphNodeId, GraphNodeIdTy},
     trainer::{Trainer, optimiser::OptimiserState},
 };
 
@@ -15,7 +15,8 @@ use crate::{
     value::{ValueTrainer, loader::LoadableDataType},
 };
 
-type ValueTrainerInner<Opt, Inp, Out> = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;
+type ValueTrainerInner<Opt, Inp, Out> =
+    Trainer<ExecutionContext, Graph<ExecutionContext>, Opt, ValueTrainerState<Inp, Out>>;
 
 pub(super) fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
     use std::io::Write;

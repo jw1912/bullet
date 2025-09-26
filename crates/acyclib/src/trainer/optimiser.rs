@@ -9,7 +9,7 @@ use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use crate::{
     device::{Device, OperationError, tensor::DenseMatrix},
-    graph::{Graph, GraphNodeId, GraphNodeIdTy},
+    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
 };
 
 pub trait OptimiserState<D: Device>: Sized {
@@ -38,40 +38,41 @@ pub trait OptimiserState<D: Device>: Sized {
     fn set_params(&mut self, params: Self::Params);
 }
 
-pub struct Optimiser<D: Device, S: OptimiserState<D>> {
-    pub graph: Graph<D>,
+pub struct Optimiser<D: Device, G: GraphLike<D>, S: OptimiserState<D>> {
+    phantom: PhantomData<D>,
+    pub graph: G,
     pub state: HashMap<String, S>,
 }
 
-impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
-    pub fn new(graph: Graph<D>, params: S::Params) -> Result<Self, D::DeviceError> {
-        let weight_ids = graph.weight_ids();
+impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
+    pub fn new(graph: G, params: S::Params) -> Result<Self, D::DeviceError> {
+        let weight_ids = graph.primary().weight_ids();
 
         let mut state = HashMap::new();
 
         for id in &weight_ids {
-            let idx = graph.weight_idx(id).unwrap();
-            let w = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
+            let idx = graph.primary().weight_idx(id).unwrap();
+            let w = graph.primary().get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
             let w = w.dense();
             assert!(w.batch_size().is_none());
             let size = w.size();
 
-            let single = S::new(graph.device(), size, params.clone())?;
+            let single = S::new(graph.primary().device(), size, params.clone())?;
 
             let old = state.insert(id.clone(), single);
             assert!(old.is_none());
         }
 
-        Ok(Self { graph, state })
+        Ok(Self { phantom: PhantomData, graph, state })
     }
 
     pub fn update(&mut self, gradient_factor: f32, learning_rate: f32) -> Result<(), OperationError<D::DeviceError>> {
-        for id in &self.graph.weight_ids() {
-            let idx = self.graph.weight_idx(id).unwrap();
-            let weights = &mut self.graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values))?;
+        for id in &self.graph.primary().weight_ids() {
+            let idx = self.graph.primary().weight_idx(id).unwrap();
+            let weights = &mut self.graph.primary().get(GraphNodeId::new(idx, GraphNodeIdTy::Values))?;
             let single = self.state.get_mut(id).unwrap();
 
-            if let Ok(grads) = self.graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
+            if let Ok(grads) = self.graph.primary().get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
                 single.update(&mut *weights.dense_mut(), &mut *grads.dense_mut(), gradient_factor, learning_rate)?;
             }
         }
@@ -92,13 +93,13 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     }
 
     pub fn set_params(&mut self, params: S::Params) {
-        for id in self.graph.weight_ids() {
+        for id in self.graph.primary().weight_ids() {
             self.set_params_for_weight(&id, params.clone());
         }
     }
 
     pub fn write_to_checkpoint(&self, path: &str) -> Result<(), D::DeviceError> {
-        self.graph.write_to_file(&format!("{path}/weights.bin"));
+        self.graph.primary().write_to_file(&format!("{path}/weights.bin"));
         let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
         S::write_to_checkpoint(&map, path)
     }
@@ -120,7 +121,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     }
 
     fn load_weights_from_file_(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
-        self.graph.load_from_file(path, old_format)
+        self.graph.primary_mut().load_from_file(path, old_format)
     }
 
     fn load_from_checkpoint_(&mut self, path: &str, old_format: bool) -> Result<(), OperationError<D::DeviceError>> {
