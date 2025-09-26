@@ -28,6 +28,8 @@ pub enum CudaError {
     Driver(DriverError),
     Blas(CublasError),
     ExpectedIllegalAddressAccess,
+    #[cfg(feature = "nccl")]
+    Nccl(cudarc::nccl::result::NcclError),
 }
 
 #[derive(Debug)]
