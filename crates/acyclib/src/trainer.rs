@@ -9,7 +9,10 @@ use schedule::TrainingSchedule;
 
 use std::{sync::mpsc, thread, time::Instant};
 
-use crate::device::{Device, OperationError};
+use crate::{
+    device::{Device, OperationError},
+    graph::like::GraphLike,
+};
 
 #[derive(Debug)]
 pub enum DataLoadingError {
@@ -23,6 +26,7 @@ pub enum TrainerError<D: Device> {
     DataLoadingError(DataLoadingError),
     GradientCalculationError(OperationError<D::DeviceError>),
     Unexpected(OperationError<D::DeviceError>),
+    MoreDevicesThanBatchSize(usize, usize),
     IoError,
 }
 
@@ -32,12 +36,12 @@ impl<D: Device> From<DataLoadingError> for TrainerError<D> {
     }
 }
 
-pub struct Trainer<D: Device, O: OptimiserState<D>, S> {
-    pub optimiser: Optimiser<D, O>,
+pub struct Trainer<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> {
+    pub optimiser: Optimiser<D, G, O>,
     pub state: S,
 }
 
-impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
+impl<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> Trainer<D, G, O, S> {
     pub fn train_custom(
         &mut self,
         schedule: TrainingSchedule,
@@ -52,7 +56,9 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         let lr = schedule.lr_schedule;
         let steps = schedule.steps;
 
-        self.optimiser.graph.synchronise().unwrap();
+        if self.optimiser.graph.devices().len() > steps.batch_size {
+            return Err(TrainerError::MoreDevicesThanBatchSize(self.optimiser.graph.devices().len(), steps.batch_size));
+        }
 
         let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost>(32);
 
@@ -88,7 +94,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         let first_batch =
             receiver.recv().map_err(|_| TrainerError::DataLoadingError(DataLoadingError::NoBatchesReceived))?;
 
-        let mut batch_on_device = PreparedBatchDevice::new(self.optimiser.graph.device(), &first_batch)
+        let mut batch_on_device = PreparedBatchDevice::new(self.optimiser.graph.devices(), &first_batch)
             .map_err(|_| TrainerError::DataLoadingError(DataLoadingError::CopyToDevice))?;
 
         let mut batch_queued = true;
@@ -122,14 +128,14 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
             batch_on_device.load_into_graph(&mut self.optimiser.graph)?;
 
-            fn step<D: Device, S: OptimiserState<D>>(
-                optim: &mut Optimiser<D, S>,
+            fn step<D: Device, G: GraphLike<D>, S: OptimiserState<D>>(
+                optim: &mut Optimiser<D, G, S>,
                 gradient_factor: f32,
                 learning_rate: f32,
             ) -> Result<(), OperationError<D::DeviceError>> {
-                optim.graph.execute("zero_grads")?;
-                optim.graph.execute("forward")?;
-                optim.graph.execute("backward")?;
+                optim.graph.execute_fn("zero_grads")?;
+                optim.graph.execute_fn("forward")?;
+                optim.graph.execute_fn("backward")?;
                 optim.update(gradient_factor, learning_rate)
             }
 
@@ -143,7 +149,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
                 batch_queued = false;
             }
 
-            let error = self.optimiser.graph.get_output_val().unwrap() / this_batch_size as f32;
+            let error = self.optimiser.graph.get_output_value().unwrap() / this_batch_size as f32;
 
             running_loss += error;
             superbatch_positions += this_batch_size;

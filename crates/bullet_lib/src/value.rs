@@ -8,18 +8,19 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy, Node},
-    trainer::{
-        self, Trainer,
-        dataloader::{PreparedBatchDevice, PreparedBatchHost},
-        logger,
-        optimiser::OptimiserState,
-    },
+    graph::Node,
+    trainer::{self, Trainer, logger, optimiser::OptimiserState},
+};
+
+#[cfg(not(feature = "multigpu"))]
+use acyclib::{
+    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
+    trainer::dataloader::{PreparedBatchDevice, PreparedBatchHost},
 };
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::ExecutionContext,
+    nn::{ExecutionContext, Graph},
     trainer::{
         save::SavedFormat,
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
@@ -27,16 +28,19 @@ use crate::{
     },
     value::{
         dataloader::ValueDataLoader,
-        loader::{DefaultDataLoader, LoadableDataType, PreparedData},
+        loader::{DefaultDataLoader, LoadableDataType},
     },
 };
+
+#[cfg(not(feature = "multigpu"))]
+use crate::value::loader::PreparedData;
 
 /// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
->(Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>);
+>(Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>);
 
 impl<Opt, Inp, Out> std::ops::Deref for ValueTrainer<Opt, Inp, Out>
 where
@@ -44,7 +48,7 @@ where
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    type Target = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;
+    type Target = Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -70,7 +74,7 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
     output_getter: Out,
     blend_getter: B<Inp>,
     weight_getter: Option<Wgt<Inp>>,
-    output_node: Node,
+    _output_node: Node,
     saved_format: Vec<SavedFormat>,
     use_win_rate_model: bool,
     wdl: bool,
@@ -157,6 +161,7 @@ where
         .unwrap();
     }
 
+    #[cfg(not(feature = "multigpu"))]
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
@@ -177,14 +182,14 @@ where
         );
 
         let host_data = PreparedBatchHost::from(prepared);
-        let mut device_data = PreparedBatchDevice::new(self.optimiser.graph.device(), &host_data).unwrap();
+        let mut device_data = PreparedBatchDevice::new(self.optimiser.graph.devices(), &host_data).unwrap();
 
         device_data.load_into_graph(&mut self.optimiser.graph).unwrap();
 
         self.optimiser.graph.synchronise().unwrap();
         self.optimiser.graph.forward().unwrap();
 
-        let id = GraphNodeId::new(self.state.output_node.idx(), GraphNodeIdTy::Values);
+        let id = GraphNodeId::new(self.state._output_node.idx(), GraphNodeIdTy::Values);
         let eval = self.optimiser.graph.get(id).unwrap();
 
         let dense_vals = eval.dense();
@@ -193,6 +198,7 @@ where
         vals
     }
 
+    #[cfg(not(feature = "multigpu"))]
     pub fn eval(&mut self, fen: &str) -> f32
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,

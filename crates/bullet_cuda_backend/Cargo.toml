@@ -10,6 +10,7 @@ edition = { workspace = true }
 
 [features]
 error = []
+nccl = ["cudarc/nccl"]
 
 [dependencies]
 acyclib = { workspace = true }
