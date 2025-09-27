@@ -11,7 +11,12 @@ use std::{
 
 use crate::{
     dag::NodeId,
-    device::{Device, function::Reduce, multi::MultiDevice, tensor::Shape},
+    device::{
+        Device,
+        function::Reduce,
+        multi::{MultiDevice, MultiDeviceComm},
+        tensor::Shape,
+    },
     graph::{
         Graph, GraphNodeId, GraphNodeIdTy,
         ir::{
@@ -212,7 +217,7 @@ where
         self.optimise();
 
         let graphs = devices.into_iter().map(|d| self.compile(d)).collect::<Vec<_>>();
-        let comm = D::make_comm(graphs.iter().map(|g| g.device()).collect());
+        let comm = D::Comm::new(graphs.iter().map(|g| g.device()).collect());
 
         MultiDeviceGraph { comm, graphs }
     }

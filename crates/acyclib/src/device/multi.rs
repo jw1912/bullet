@@ -6,36 +6,44 @@ use crate::device::{
     tensor::TensorRef,
 };
 
+pub trait MultiDeviceComm<D: Device> {
+    fn new(devices: Vec<Arc<D>>) -> Self;
+
+    fn reduce_sum_into_rank(&self, rank: usize, buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
+
+    fn scatter_rank_into_rest(&self, rank: usize, buffers: &[TensorRef<D>]) -> Result<(), D::DeviceError>;
+}
+
 pub trait MultiDevice: Device {
-    type Comm;
-
-    fn make_comm(devices: Vec<Arc<Self>>) -> Self::Comm;
-
-    fn reduce_sum_into_first(comm: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError>;
-
-    fn scatter_first_into_rest(comm: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError>;
+    type Comm: MultiDeviceComm<Self>;
 }
 
 impl MultiDevice for CpuThread {
     type Comm = ();
+}
 
-    fn make_comm(_: Vec<Arc<Self>>) -> Self::Comm {}
+impl MultiDeviceComm<CpuThread> for () {
+    fn new(_: Vec<Arc<CpuThread>>) -> Self {}
 
-    fn reduce_sum_into_first(_: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError> {
-        let mut buf = buffers[0].dense_mut();
+    fn reduce_sum_into_rank(&self, rank: usize, buffers: &[TensorRef<CpuThread>]) -> Result<(), CpuError> {
+        let mut buf = buffers[rank].dense_mut();
 
-        for other in buffers.iter().skip(1) {
-            buf.add(1.0, &other.dense()).map_err(|_| CpuError)?;
+        for (i, other) in buffers.iter().enumerate() {
+            if rank != i {
+                buf.add(1.0, &other.dense()).map_err(|_| CpuError)?;
+            }
         }
 
         Ok(())
     }
 
-    fn scatter_first_into_rest(_: &Self::Comm, buffers: &[TensorRef<Self>]) -> Result<(), Self::DeviceError> {
-        let buf = buffers[0].dense();
+    fn scatter_rank_into_rest(&self, rank: usize, buffers: &[TensorRef<CpuThread>]) -> Result<(), CpuError> {
+        let buf = buffers[rank].dense();
 
-        for other in buffers.iter().skip(1) {
-            other.dense_mut().copy_from(&buf)?;
+        for (i, other) in buffers.iter().enumerate() {
+            if rank != i {
+                other.dense_mut().copy_from(&buf)?;
+            }
         }
 
         Ok(())

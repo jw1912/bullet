@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use crate::{
-    device::{Device, OperationError, multi::MultiDevice, tensor::TensorRef},
+    device::{
+        Device, OperationError,
+        multi::{MultiDevice, MultiDeviceComm},
+        tensor::TensorRef,
+    },
     graph::{Graph, GraphNodeId, like::GraphLike},
 };
 
@@ -46,10 +50,10 @@ impl<D: Device + MultiDevice> GraphLike<D> for MultiDeviceGraph<D> {
     }
 
     fn reduce_sum_into_first(&self, buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
-        D::reduce_sum_into_first(&self.comm, buffers)
+        self.comm.reduce_sum_into_rank(0, buffers)
     }
 
     fn scatter_first_into_rest(&self, buffers: &[TensorRef<D>]) -> Result<(), <D as Device>::DeviceError> {
-        D::scatter_first_into_rest(&self.comm, buffers)
+        self.comm.scatter_rank_into_rest(0, buffers)
     }
 }
