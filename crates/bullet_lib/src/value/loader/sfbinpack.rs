@@ -1,4 +1,4 @@
-use std::{sync::mpsc, thread};
+use std::{fs::File, sync::mpsc, thread};
 
 use sfbinpack::{
     CompressedTrainingDataEntryReader, TrainingDataEntry,
@@ -86,6 +86,7 @@ where
 
             'dataloading: loop {
                 for file in &file_paths {
+                    let file = File::open(file).unwrap();
                     let mut reader = CompressedTrainingDataEntryReader::new(file).unwrap();
 
                     while reader.has_next() {
