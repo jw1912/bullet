@@ -23,7 +23,7 @@ bullet_cuda_backend = { workspace = true, optional = true }
 bullet_hip_backend = { workspace = true, optional = true }
 bulletformat = { workspace = true }
 montyformat = { workspace = true }
-sfbinpack = "0.4.1"
+sfbinpack = "0.6.0"
 viriformat = "2.0.0"
 
 [[example]]
