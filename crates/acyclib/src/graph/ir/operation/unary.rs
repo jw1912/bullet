@@ -344,3 +344,50 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for Copy {
         func
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct ClipPassThroughGrad {
+    pub input: AnnotatedNode,
+    pub min: f32,
+    pub max: f32,
+}
+
+impl<B: BackendMarker> GraphIROperationBase<B> for ClipPassThroughGrad {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.input]
+    }
+
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.input, true)?;
+
+        Ok(self.input.shape)
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for ClipPassThroughGrad {
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
+
+        let mut func = DeviceFunction::default();
+
+        func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+        func.push(function::LinearCombination { input_mul: 1.0, output_mul: 0.0, input, output: output.clone() });
+        func.push(function::ClipInPlace { value: output, min: self.min, max: self.max });
+
+        func
+    }
+
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
+
+        if let Some(output) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
+
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+            func.push(function::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
+        }
+
+        func
+    }
+}
