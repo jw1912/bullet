@@ -20,6 +20,9 @@ pub struct Buffer<T: ValidType> {
     pub(super) ctx: Arc<ExecutionContext>,
 }
 
+unsafe impl<T: ValidType> Send for Buffer<T> {}
+unsafe impl<T: ValidType> Sync for Buffer<T> {}
+
 impl<T: ValidType> Drop for Buffer<T> {
     fn drop(&mut self) {
         unsafe {

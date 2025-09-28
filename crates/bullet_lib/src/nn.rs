@@ -6,10 +6,10 @@ pub use acyclib::{
     },
 };
 
-#[cfg(feature = "multigpu")]
+#[cfg(any(feature = "multigpu", feature = "cpu"))]
 pub type Graph = acyclib::graph::multi::MultiDeviceGraph<ExecutionContext>;
 
-#[cfg(not(feature = "multigpu"))]
+#[cfg(not(any(feature = "multigpu", feature = "cpu")))]
 pub type Graph = acyclib::graph::Graph<ExecutionContext>;
 
 #[cfg(all(feature = "cpu", not(feature = "cuda")))]

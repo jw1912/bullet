@@ -55,4 +55,9 @@ For users with AMD GPUs.
 - On Linux, you will need to specify the `GCN_ARCH_NAME` environment variable, which you should be able to find using `rocminfo`.
 
 #### CPU
-If you need to train on CPU you can use the [legacy branch](https://github.com/jw1912/bullet/tree/legacy).
+- For users with no GPU AMD/NVIDIA only - **do not use CPU backend if you have a GPU** it will be so much slower
+- Enable the `cpu` feature and disable default features (e.g. `cargo r -r --example <example name> --features cpu --no-default-features`)
+- Add to `ValueTrainerBuilder` the number of threads to use with `.use_threads(<num threads>)`
+- Be conscious of how many threads you are using in total
+    - Most likely only need 1/2 threads in `LocalSettings`
+    - Binpack dataloaders may require more threads

@@ -114,8 +114,21 @@ where
         self
     }
 
+    pub fn use_threads(self, _count: usize) -> Self {
+        #[cfg(feature = "cpu")]
+        {
+            self.use_devices(vec![(); _count])
+        }
+
+        #[cfg(not(feature = "cpu"))]
+        {
+            println!("Setting `ValueTrainerBuilder::use_threads` does nothing on non-CPU backends!");
+            self
+        }
+    }
+
     pub fn use_devices(mut self, ids: impl Into<Vec<<ExecutionContext as Device>::IdType>>) -> Self {
-        if cfg!(not(feature = "multigpu")) {
+        if cfg!(not(any(feature = "multigpu", feature = "cpu"))) {
             println!("Specifying device list does nothing without `multigpu` feature enabled!");
         }
 
@@ -161,19 +174,13 @@ where
             builder.dump_ir_on_build();
         }
 
-        #[cfg(feature = "multigpu")]
+        #[cfg(any(feature = "multigpu", feature = "cpu"))]
         let graph = {
-            if cfg!(feature = "cpu") {
-                println!(
-                    "CPU with multi-gpu simulates multiple devices, but these do not run on separate threads currently!"
-                )
-            }
-
             let devices = self.device_ids.into_iter().map(ExecutionContext::new);
             builder.build_multi(devices.collect::<Result<Vec<_>, _>>().unwrap())
         };
 
-        #[cfg(not(feature = "multigpu"))]
+        #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
         let graph = builder.build(ExecutionContext::default());
 
         ValueTrainer(Trainer {

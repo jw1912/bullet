@@ -30,7 +30,7 @@ impl<T: Debug> From<T> for OperationError<T> {
 
 pub type OperationResult<T> = Result<(), OperationError<T>>;
 
-pub trait DeviceBuffer<D, T>: Sized {
+pub trait DeviceBuffer<D, T>: Sized + Send + Sync {
     type BufferError;
 
     fn new(device: Arc<D>, size: usize) -> Result<Self, Self::BufferError>;
@@ -55,7 +55,7 @@ pub trait DeviceBuffer<D, T>: Sized {
 pub trait Device: Sized + 'static {
     type IdType;
     type Marker;
-    type DeviceError: std::fmt::Debug + Default;
+    type DeviceError: std::fmt::Debug + Default + Send + Sync;
     type BufferI32: DeviceBuffer<Self, i32, BufferError = Self::DeviceError>;
     type BufferF32: DeviceBuffer<Self, f32, BufferError = Self::DeviceError>
         + BaseOperations<BaseError = Self::DeviceError>

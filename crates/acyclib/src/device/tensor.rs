@@ -4,23 +4,20 @@ pub mod rng;
 mod shape;
 mod sparse;
 
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    num::NonZeroUsize,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{num::NonZeroUsize, sync::Arc};
 
 pub use dense::{DenseMatrix, read_from_byte_buffer};
 pub use matrix::Matrix;
 pub use shape::Shape;
 pub use sparse::SparseMatrix;
 
+use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
 use crate::device::{Device, DeviceBuffer, OperationError};
 
 #[derive(Debug)]
 pub struct TensorRef<D: Device> {
-    inner: Rc<RefCell<Tensor<D>>>,
+    inner: Arc<RwLock<Tensor<D>>>,
 }
 
 impl<D: Device> Clone for TensorRef<D> {
@@ -31,31 +28,35 @@ impl<D: Device> Clone for TensorRef<D> {
 
 impl<D: Device> TensorRef<D> {
     pub fn new(tensor: Tensor<D>) -> Self {
-        Self { inner: Rc::new(RefCell::new(tensor)) }
+        Self { inner: Arc::new(RwLock::new(tensor)) }
     }
 
-    pub fn borrow(&self) -> Ref<'_, Tensor<D>> {
-        self.inner.borrow()
+    pub fn borrow(&self) -> RwLockReadGuard<'_, Tensor<D>> {
+        self.inner.try_read().unwrap()
     }
 
-    pub fn dense(&self) -> Ref<'_, DenseMatrix<D>> {
-        Ref::map(self.inner.borrow(), |x| x.dense().unwrap())
+    fn borrow_mut(&self) -> RwLockWriteGuard<'_, Tensor<D>> {
+        self.inner.try_write().unwrap()
     }
 
-    pub fn dense_mut(&self) -> RefMut<'_, DenseMatrix<D>> {
-        RefMut::map(self.inner.borrow_mut(), |x| x.dense_mut().unwrap())
+    pub fn dense(&self) -> MappedRwLockReadGuard<'_, DenseMatrix<D>> {
+        RwLockReadGuard::map(self.borrow(), |x| x.dense().unwrap())
     }
 
-    pub fn sparse(&self) -> Ref<'_, SparseMatrix<D>> {
-        Ref::map(self.inner.borrow(), |x| x.sparse().unwrap())
+    pub fn dense_mut(&self) -> MappedRwLockWriteGuard<'_, DenseMatrix<D>> {
+        RwLockWriteGuard::map(self.borrow_mut(), |x| x.dense_mut().unwrap())
     }
 
-    pub fn sparse_mut(&self) -> RefMut<'_, SparseMatrix<D>> {
-        RefMut::map(self.inner.borrow_mut(), |x| x.sparse_mut().unwrap())
+    pub fn sparse(&self) -> MappedRwLockReadGuard<'_, SparseMatrix<D>> {
+        RwLockReadGuard::map(self.borrow(), |x| x.sparse().unwrap())
+    }
+
+    pub fn sparse_mut(&self) -> MappedRwLockWriteGuard<'_, SparseMatrix<D>> {
+        RwLockWriteGuard::map(self.borrow_mut(), |x| x.sparse_mut().unwrap())
     }
 
     pub fn get_scalar(&self) -> Option<f32> {
-        let tensor = self.inner.borrow();
+        let tensor = self.borrow();
 
         if tensor.values.size() == 1 {
             let mut buf = [0.0];
@@ -67,19 +68,19 @@ impl<D: Device> TensorRef<D> {
     }
 
     pub fn swap_with(&self, matrix: &mut Matrix<D>) -> Result<(), OperationError<D::DeviceError>> {
-        matrix.swap_with(&mut self.inner.borrow_mut().values)
+        matrix.swap_with(&mut self.borrow_mut().values)
     }
 
     pub fn single_size(&self) -> usize {
-        self.inner.borrow().values.single_size()
+        self.borrow().values.single_size()
     }
 
     pub fn batch_size(&self) -> Option<usize> {
-        self.inner.borrow().batch_size()
+        self.borrow().batch_size()
     }
 
     pub fn shape(&self) -> Shape {
-        self.inner.borrow().shape
+        self.borrow().shape
     }
 
     pub fn get_dense_vals(&self) -> Result<Vec<f32>, OperationError<D::DeviceError>> {
