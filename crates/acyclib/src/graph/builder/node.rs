@@ -18,7 +18,7 @@ use crate::{
                 binary::{Concat, Select, SoftmaxCrossEntropy},
                 nary::LinearCombination,
                 sparse::SparseAffineActivate,
-                unary::{Copy, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary},
+                unary::{ClipPassThroughGrad, Copy, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary},
             },
         },
     },
@@ -195,6 +195,12 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
 
     pub fn sigmoid(self) -> Self {
         self.diffable_from_output(DiffableFromOutput::Sigmoid)
+    }
+
+    /// Clamps the values elementwise into the range [min, max],
+    /// but on backpropagation it acts as if it was the identity.
+    pub fn clip_pass_through_grad(self, min: f32, max: f32) -> Self {
+        self.builder.apply(ClipPassThroughGrad { input: self.node, min, max })
     }
 
     fn diffable_from_output(self, act: DiffableFromOutput) -> Self {
