@@ -1,4 +1,4 @@
-use crate::device::{function::DeviceOperation, tensor::TensorRef, Device, OperationError};
+use crate::device::{Device, OperationError, function::DeviceOperation, tensor::TensorRef};
 
 #[derive(Clone)]
 pub struct ClipInPlace<D: Device> {

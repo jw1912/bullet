@@ -7,11 +7,20 @@ use crate::{
         tensor::Shape,
     },
     graph::{
-        builder::GraphBuilder, ir::{
-            node::AnnotatedNode, operation::{
-                affine::Matmul, binary::{Concat, Select, SoftmaxCrossEntropy}, nary::LinearCombination, sparse::SparseAffineActivate, unary::{ClipPassThroughGrad, Copy, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary}, GraphIROperationCompilable
-            }, BackendMarker
-        }, Node
+        Node,
+        builder::GraphBuilder,
+        ir::{
+            BackendMarker,
+            node::AnnotatedNode,
+            operation::{
+                GraphIROperationCompilable,
+                affine::Matmul,
+                binary::{Concat, Select, SoftmaxCrossEntropy},
+                nary::LinearCombination,
+                sparse::SparseAffineActivate,
+                unary::{ClipPassThroughGrad, Copy, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary},
+            },
+        },
     },
 };
 
@@ -190,7 +199,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
 
     /// Clamps the values elementwise into the range [min, max],
     /// but on backpropagation it acts as if it was the identity.
-    pub fn clip_pass_through_grad(self, min: f32, max: f32,) -> Self {
+    pub fn clip_pass_through_grad(self, min: f32, max: f32) -> Self {
         self.builder.apply(ClipPassThroughGrad { input: self.node, min, max })
     }
 
