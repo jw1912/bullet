@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use acyclib::device::{
     multi::{MultiDevice, MultiDeviceComm},
@@ -12,6 +12,11 @@ pub struct CudaComm(Vec<Comm>);
 
 impl MultiDeviceComm<CudaDevice> for CudaComm {
     fn new(devices: Vec<Arc<CudaDevice>>) -> Self {
+        let ids = devices.iter().map(|d| d.stream().context().cu_device());
+        if ids.collect::<HashSet<_>>().len() != devices.len() {
+            panic!("Cannot use the same CUDA device more than once!");
+        }
+
         CudaComm(Comm::from_devices(devices.iter().map(|d| d.stream()).collect()).unwrap())
     }
 
