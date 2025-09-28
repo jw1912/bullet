@@ -13,10 +13,6 @@ impl<D: Device> DeviceOperation<D> for ClipInPlace<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let mut value = self.value.dense_mut();
-
-        value.clamp(self.min, self.max)?;
-
-        Ok(())
+        self.value.dense_mut().clamp(self.min, self.max)
     }
 }
