@@ -14,7 +14,7 @@ pub struct WeightClippingParams<T> {
 
 impl<T: Default> Default for WeightClippingParams<T> {
     fn default() -> Self {
-        Self { inner: T::default(), placement: Placement::Before, min: -1.98, max: 1.98 }
+        Self { inner: T::default(), placement: Placement::After, min: -1.98, max: 1.98 }
     }
 }
 

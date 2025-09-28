@@ -9,7 +9,7 @@ use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use crate::{
     device::{Device, OperationError, tensor::DenseMatrix},
-    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
+    graph::{Graph, GraphNodeId, GraphNodeIdTy, like::GraphLike},
 };
 
 pub trait OptimiserState<D: Device>: Sized {
@@ -42,6 +42,12 @@ pub struct Optimiser<D: Device, G: GraphLike<D>, S: OptimiserState<D>> {
     phantom: PhantomData<D>,
     pub graph: G,
     pub state: HashMap<String, S>,
+    pre_update: Vec<Box<dyn AdditionalUpdate<D>>>,
+    post_update: Vec<Box<dyn AdditionalUpdate<D>>>,
+}
+
+pub trait AdditionalUpdate<D: Device> {
+    fn apply_update(&mut self, graph: &mut Graph<D>) -> Result<(), OperationError<D::DeviceError>>;
 }
 
 impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
@@ -63,10 +69,22 @@ impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
             assert!(old.is_none());
         }
 
-        Ok(Self { phantom: PhantomData, graph, state })
+        Ok(Self { phantom: PhantomData, graph, state, pre_update: Vec::new(), post_update: Vec::new() })
+    }
+
+    pub fn add_pre_update(&mut self, additional: impl AdditionalUpdate<D> + 'static) {
+        self.pre_update.push(Box::new(additional));
+    }
+
+    pub fn add_post_update(&mut self, additional: impl AdditionalUpdate<D> + 'static) {
+        self.post_update.push(Box::new(additional));
     }
 
     pub fn update(&mut self, gradient_factor: f32, learning_rate: f32) -> Result<(), OperationError<D::DeviceError>> {
+        for additional in &mut self.pre_update {
+            additional.apply_update(self.graph.primary_mut())?;
+        }
+
         for id in &self.graph.primary().weight_ids() {
             let idx = self.graph.primary().weight_idx(id).unwrap();
             let weight_id = GraphNodeId::new(idx, GraphNodeIdTy::Values);
@@ -80,6 +98,10 @@ impl<D: Device, G: GraphLike<D>, S: OptimiserState<D>> Optimiser<D, G, S> {
                 single.update(&mut *weights.dense_mut(), &mut *grads.dense_mut(), gradient_factor, learning_rate)?;
                 self.graph.scatter_first_into_rest(&self.graph.get_all(weight_id)?)?;
             }
+        }
+
+        for additional in &mut self.post_update {
+            additional.apply_update(self.graph.primary_mut())?;
         }
 
         Ok(())
