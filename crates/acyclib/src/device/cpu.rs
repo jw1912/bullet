@@ -1,6 +1,7 @@
 pub mod base;
 pub mod blas;
 pub mod cmp;
+pub mod multi;
 pub mod sparse;
 
 use std::sync::Arc;
@@ -28,7 +29,7 @@ impl BackendMarker for CpuMarker {
     type Backend = CpuThread;
 }
 
-impl<T: Copy + Default> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
+impl<T: Copy + Default + Send + Sync> DeviceBuffer<CpuThread, T> for CpuBuffer<T> {
     type BufferError = CpuError;
 
     fn device(&self) -> Arc<CpuThread> {

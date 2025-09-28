@@ -14,7 +14,7 @@ pub use unary::*;
 
 use super::{Device, OperationError, tensor::TensorRef};
 
-pub trait DeviceOperation<D: Device>: 'static {
+pub trait DeviceOperation<D: Device>: 'static + Send + Sync {
     fn opname(&self) -> String;
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>>;

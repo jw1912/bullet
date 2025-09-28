@@ -12,7 +12,7 @@ use acyclib::{
     trainer::{self, Trainer, logger, optimiser::OptimiserState},
 };
 
-#[cfg(not(feature = "multigpu"))]
+#[cfg(not(any(feature = "multigpu", feature = "cpu")))]
 use acyclib::{
     graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
     trainer::dataloader::{PreparedBatchDevice, PreparedBatchHost},
@@ -32,7 +32,7 @@ use crate::{
     },
 };
 
-#[cfg(not(feature = "multigpu"))]
+#[cfg(not(any(feature = "multigpu", feature = "cpu")))]
 use crate::value::loader::PreparedData;
 
 /// Value network trainer, generally for training NNUE networks.
@@ -161,7 +161,7 @@ where
         .unwrap();
     }
 
-    #[cfg(not(feature = "multigpu"))]
+    #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
@@ -198,7 +198,7 @@ where
         vals
     }
 
-    #[cfg(not(feature = "multigpu"))]
+    #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
     pub fn eval(&mut self, fen: &str) -> f32
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,

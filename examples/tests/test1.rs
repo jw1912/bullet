@@ -11,6 +11,7 @@ use bullet_lib::{
 fn main() {
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
+        .use_threads(4)
         .optimiser(AdamW)
         .inputs(Chess768)
         .save_format(&[])
@@ -44,7 +45,7 @@ fn main() {
 
     trainer.run(&schedule, &settings, &data_loader);
 
-    #[cfg(not(feature = "multigpu"))]
+    #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
     {
         let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
         println!("Eval: {eval:.3}cp");

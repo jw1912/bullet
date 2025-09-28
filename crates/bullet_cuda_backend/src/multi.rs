@@ -1,8 +1,12 @@
 use std::{collections::HashSet, sync::Arc};
 
-use acyclib::device::{
-    multi::{MultiDevice, MultiDeviceComm},
-    tensor::TensorRef,
+use acyclib::{
+    device::{
+        OperationError,
+        multi::{MultiDevice, MultiDeviceComm},
+        tensor::TensorRef,
+    },
+    graph::Graph,
 };
 use cudarc::nccl::{Comm, ReduceOp, group_end, group_start};
 
@@ -40,6 +44,14 @@ impl MultiDeviceComm<CudaDevice> for CudaComm {
         }
 
         group_end().map_err(CudaError::Nccl)?;
+
+        Ok(())
+    }
+
+    fn execute_fn(&self, name: &str, graphs: &mut [Graph<CudaDevice>]) -> Result<(), OperationError<CudaError>> {
+        for graph in graphs {
+            graph.execute(name)?;
+        }
 
         Ok(())
     }

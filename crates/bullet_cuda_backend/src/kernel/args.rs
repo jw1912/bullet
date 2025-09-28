@@ -1,13 +1,11 @@
-use std::{
-    cell::{Ref, RefMut},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use acyclib::device::{
     OperationError,
     tensor::{Shape, TensorRef},
 };
 use cudarc::driver::CudaSlice;
+use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
 
 use crate::{CudaDevice, CudaError, kernel::Expr};
 
@@ -91,11 +89,19 @@ impl KernelArgs {
             KernelInput::F32(x) => ConcreteKernelInput::F32(x.evaluate(batch_size as f32)),
             KernelInput::Size(x) => ConcreteKernelInput::Size(x.evaluate(batch_size)),
             KernelInput::Slice { slice, layout, mutable, .. } => match (layout, *mutable) {
-                (None, false) => ConcreteKernelInput::SliceF32(Ref::map(slice.dense(), |x| &x.buf.buf)),
-                (Some(_), false) => ConcreteKernelInput::SliceI32(Ref::map(slice.sparse(), |x| &x.buf.buf)),
-                (None, true) => ConcreteKernelInput::MutSliceF32(RefMut::map(slice.dense_mut(), |x| &mut x.buf.buf)),
+                (None, false) => {
+                    ConcreteKernelInput::SliceF32(MappedRwLockReadGuard::map(slice.dense(), |x| &x.buf.buf))
+                }
+                (Some(_), false) => {
+                    ConcreteKernelInput::SliceI32(MappedRwLockReadGuard::map(slice.sparse(), |x| &x.buf.buf))
+                }
+                (None, true) => {
+                    ConcreteKernelInput::MutSliceF32(MappedRwLockWriteGuard::map(slice.dense_mut(), |x| &mut x.buf.buf))
+                }
                 (Some(_), true) => {
-                    ConcreteKernelInput::MutSliceI32(RefMut::map(slice.sparse_mut(), |x| &mut x.buf.buf))
+                    ConcreteKernelInput::MutSliceI32(MappedRwLockWriteGuard::map(slice.sparse_mut(), |x| {
+                        &mut x.buf.buf
+                    }))
                 }
             },
         };
@@ -113,10 +119,10 @@ impl KernelArgs {
 pub enum ConcreteKernelInput<'a> {
     Size(i32),
     F32(f32),
-    SliceF32(Ref<'a, CudaSlice<f32>>),
-    SliceI32(Ref<'a, CudaSlice<i32>>),
-    MutSliceF32(RefMut<'a, CudaSlice<f32>>),
-    MutSliceI32(RefMut<'a, CudaSlice<i32>>),
+    SliceF32(MappedRwLockReadGuard<'a, CudaSlice<f32>>),
+    SliceI32(MappedRwLockReadGuard<'a, CudaSlice<i32>>),
+    MutSliceF32(MappedRwLockWriteGuard<'a, CudaSlice<f32>>),
+    MutSliceI32(MappedRwLockWriteGuard<'a, CudaSlice<i32>>),
 }
 
 pub struct ConcreteKernelArgs<'a> {
