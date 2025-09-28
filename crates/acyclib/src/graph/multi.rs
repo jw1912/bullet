@@ -14,6 +14,16 @@ pub struct MultiDeviceGraph<D: Device + MultiDevice> {
     pub(super) graphs: Vec<Graph<D>>,
 }
 
+impl<D: Device + MultiDevice> MultiDeviceGraph<D> {
+    pub fn get_weights(&self, id: &str) -> TensorRef<D> {
+        self.primary().get_weights(id)
+    }
+
+    pub fn get_input(&self, id: &str) -> TensorRef<D> {
+        self.primary().get_input(id)
+    }
+}
+
 impl<D: Device + MultiDevice> GraphLike<D> for MultiDeviceGraph<D> {
     fn devices(&self) -> Vec<Arc<D>> {
         self.graphs.iter().map(Graph::device).collect()
