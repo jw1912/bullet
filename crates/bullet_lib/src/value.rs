@@ -198,7 +198,15 @@ where
         vals
     }
 
-    #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
+    #[cfg(any(feature = "multigpu", feature = "cpu"))]
+    pub fn eval_raw_output(&mut self, _fen: &str) -> Vec<f32>
+    where
+        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
+    {
+        println!("ValueTrainer::eval_raw_output not supported on the CPU or Multi-GPU backends!");
+        vec![0.0]
+    }
+
     pub fn eval(&mut self, fen: &str) -> f32
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
