@@ -12,7 +12,6 @@ use acyclib::{
     trainer::{self, Trainer, logger, optimiser::OptimiserState},
 };
 
-#[cfg(not(any(feature = "multigpu", feature = "cpu")))]
 use acyclib::{
     graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
     trainer::dataloader::{PreparedBatchDevice, PreparedBatchHost},
@@ -32,7 +31,6 @@ use crate::{
     },
 };
 
-#[cfg(not(any(feature = "multigpu", feature = "cpu")))]
 use crate::value::loader::PreparedData;
 
 /// Value network trainer, generally for training NNUE networks.
@@ -161,7 +159,6 @@ where
         .unwrap();
     }
 
-    #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
@@ -182,29 +179,28 @@ where
         );
 
         let host_data = PreparedBatchHost::from(prepared);
-        let mut device_data = PreparedBatchDevice::new(self.optimiser.graph.devices(), &host_data).unwrap();
-
-        device_data.load_into_graph(&mut self.optimiser.graph).unwrap();
-
-        self.optimiser.graph.synchronise().unwrap();
-        self.optimiser.graph.forward().unwrap();
 
         let id = GraphNodeId::new(self.state._output_node.idx(), GraphNodeIdTy::Values);
-        let eval = self.optimiser.graph.get(id).unwrap();
+
+        #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
+        let graph = &mut self.optimiser.graph;
+
+        #[cfg(any(feature = "multigpu", feature = "cpu"))]
+        let graph = self.optimiser.graph.primary_mut();
+
+        let mut device_data = PreparedBatchDevice::new(graph.devices(), &host_data).unwrap();
+
+        device_data.load_into_graph(graph).unwrap();
+
+        graph.synchronise().unwrap();
+        graph.forward().unwrap();
+
+        let eval = graph.get(id).unwrap();
 
         let dense_vals = eval.dense();
         let mut vals = vec![0.0; dense_vals.size()];
         dense_vals.write_to_slice(&mut vals).unwrap();
         vals
-    }
-
-    #[cfg(any(feature = "multigpu", feature = "cpu"))]
-    pub fn eval_raw_output(&mut self, _fen: &str) -> Vec<f32>
-    where
-        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
-    {
-        println!("ValueTrainer::eval_raw_output not supported on the CPU or Multi-GPU backends!");
-        vec![0.0]
     }
 
     pub fn eval(&mut self, fen: &str) -> f32
