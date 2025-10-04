@@ -16,7 +16,6 @@ use crate::{
 
 #[derive(Debug)]
 pub enum DataLoadingError {
-    CopyToDevice,
     TooManyBatchesReceived,
     NoBatchesReceived,
 }
@@ -95,7 +94,7 @@ impl<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> Trainer<D, G, O, S> {
             receiver.recv().map_err(|_| TrainerError::DataLoadingError(DataLoadingError::NoBatchesReceived))?;
 
         let mut batch_on_device = PreparedBatchDevice::new(self.optimiser.graph.devices(), &first_batch)
-            .map_err(|_| TrainerError::DataLoadingError(DataLoadingError::CopyToDevice))?;
+            .map_err(|e| TrainerError::Unexpected(e.into()))?;
 
         let mut batch_queued = true;
 
@@ -142,9 +141,7 @@ impl<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> Trainer<D, G, O, S> {
             step(&mut self.optimiser, gf, lrate).map_err(TrainerError::GradientCalculationError)?;
 
             if let Ok(next_batch) = receiver.recv() {
-                batch_on_device
-                    .load_new_data(&next_batch)
-                    .map_err(|_| TrainerError::DataLoadingError(DataLoadingError::CopyToDevice))?;
+                batch_on_device.load_new_data(&next_batch).map_err(TrainerError::Unexpected)?;
             } else {
                 batch_queued = false;
             }
