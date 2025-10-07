@@ -105,7 +105,6 @@ impl Device for CpuThread {
     }
 }
 
-#[allow(unused)]
 impl CoreDeviceOps for CpuThread {
     fn select(
         batch_size: usize,
@@ -116,7 +115,16 @@ impl CoreDeviceOps for CpuThread {
         indices: &Self::BufferI32,
         output: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        for i in 0..batch_size {
+            let bucket = indices.buf[i] as usize;
+            let offset = if input_batched { i * input_size } else { 0 };
+
+            for j in 0..output_size {
+                output.buf[output_size * i + j] = input.buf[offset + output_size * bucket + j];
+            }
+        }
+
+        Ok(())
     }
 
     fn select_backprop(
@@ -128,9 +136,19 @@ impl CoreDeviceOps for CpuThread {
         output_grad: &Self::BufferF32,
         input_grad: &mut Self::BufferF32,
     ) -> OperationResult<Self::DeviceError> {
-        Err(OperationError::UnsupportedOperation)
+        for i in 0..batch_size {
+            let bucket = indices.buf[i] as usize;
+            let offset = if input_batched { i * input_size } else { 0 };
+
+            for j in 0..output_size {
+                input_grad.buf[offset + output_size * bucket + j] += output_grad.buf[output_size * i + j];
+            }
+        }
+
+        Ok(())
     }
 
+    #[allow(unused)]
     fn softmax_across_batch(
         batch_size: usize,
         single_size: usize,
@@ -140,6 +158,7 @@ impl CoreDeviceOps for CpuThread {
         Err(OperationError::UnsupportedOperation)
     }
 
+    #[allow(unused)]
     fn crossentropy(
         size: usize,
         pred: &Self::BufferF32,
@@ -149,6 +168,7 @@ impl CoreDeviceOps for CpuThread {
         Err(OperationError::UnsupportedOperation)
     }
 
+    #[allow(unused)]
     fn backprop_softmax_crossentropy(
         size: usize,
         softmaxed: &Self::BufferF32,
