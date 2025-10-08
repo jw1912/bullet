@@ -62,5 +62,5 @@ You can apply arbitrary transformations to the float values by chaining `SavedFo
 An example of this can be found in the [input buckets example](https://github.com/jw1912/bullet/blob/update-docs/examples/progression/4_multi_layer.rs#L47)
 to merge the input factoriser.
 
-The placement of `.round` and `.quantise::<T>` **does not matter**, they are always applied as the final transformation from float to `T`.
+The placement of `.round` and `.quantise::<T>` **does not matter**, they are always applied at the end, directly before writing to a file.
 All transformations are applied in the order they are specified (and note that `.transpose` simply uses `.add_transform` internally).
