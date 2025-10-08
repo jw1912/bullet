@@ -67,6 +67,8 @@ pub struct SavedFormat {
 }
 
 impl SavedFormat {
+    /// Save a custom set of bytes.
+    /// This should be used to add a network header, padding, etc.
     pub fn custom(bytes: impl Into<Vec<u8>>) -> Self {
         Self { custom: Some(bytes.into()), ..Self::empty() }
     }
@@ -75,32 +77,40 @@ impl SavedFormat {
         self.id.clone()
     }
 
+    /// Create a `SavedFormat` that is initialised with the weights from `id`.
     pub fn id(id: &str) -> Self {
         let id = id.to_string();
         Self { id: Some(id.clone()), ..Self::empty() }.transform(move |store, _| store.get(&id).values)
     }
 
+    /// Create an empty `SavedFormat`, where the initial values are empty.
+    /// Appropriate for constructing save formats where multiple weights are interleaved.
     pub fn empty() -> Self {
         SavedFormat { custom: None, id: None, quant: QuantTarget::Float, transforms: Vec::new(), round: false }
     }
 
+    /// If quantising, round rather than truncate.
     pub fn round(mut self) -> Self {
         assert!(self.custom.is_none());
         self.round = true;
         self
     }
 
+    /// Write weights quantised by factor `multiplier` as type `T`.
     pub fn quantise<T: Quant>(mut self, multiplier: T::Multiplier) -> Self {
         assert!(self.custom.is_none());
         self.quant = T::to_target(multiplier);
         self
     }
 
+    /// Transpose current values using the shape of the weights from weight `id`.
+    /// Panics if this `SavedFormat` was constructed without an associated weight `id`.
     pub fn transpose(self) -> Self {
         let id = self.id.clone().unwrap();
         self.transform(move |graph, weights| Self::transpose_impl(graph.get(&id).shape, &weights))
     }
 
+    /// Transform current values using the provided closure.
     pub fn transform(mut self, f: impl Fn(&GraphWeights, Vec<f32>) -> Vec<f32> + 'static) -> Self {
         assert!(self.custom.is_none());
         self.transforms.push(Rc::new(f));
