@@ -25,12 +25,12 @@ fn main() {
         .inputs(Chess768)
         .output_buckets(MaterialCount::<NUM_OUTPUT_BUCKETS>)
         .save_format(&[
-            SavedFormat::id("l0w").quantise::<i16>(255),
-            SavedFormat::id("l0b").quantise::<i16>(255),
+            SavedFormat::id("l0w").round().quantise::<i16>(255),
+            SavedFormat::id("l0b").round().quantise::<i16>(255),
             // we want to save output-bucketed weights in a format
             // that is suitable for fast cpu inference
-            SavedFormat::id("l1w").quantise::<i16>(64).transpose(),
-            SavedFormat::id("l1b").quantise::<i16>(255 * 64),
+            SavedFormat::id("l1w").round().quantise::<i16>(64).transpose(),
+            SavedFormat::id("l1b").round().quantise::<i16>(255 * 64),
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
