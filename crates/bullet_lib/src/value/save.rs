@@ -8,13 +8,16 @@ use crate::{
     value::ValueTrainerState,
 };
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
+    graph::{
+        GraphNodeId, GraphNodeIdTy,
+        like::GraphLike,
+        save::{GraphWeights, QuantTarget},
+    },
     trainer::{Trainer, optimiser::OptimiserState},
 };
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    trainer::save::{Layout, QuantTarget, SavedFormat},
     value::{ValueTrainer, loader::LoadableDataType},
 };
 
@@ -64,8 +67,8 @@ where
 
     let mut buf = Vec::new();
 
-    for SavedFormat { id, .. } in &trainer.state.saved_format {
-        if let Some(id) = id {
+    for fmt in &trainer.state.saved_format {
+        if let Some(id) = &fmt.get_id() {
             let idx =
                 GraphNodeId::new(trainer.optimiser.graph.primary().weight_idx(id).unwrap(), GraphNodeIdTy::Values);
             let weights = trainer.optimiser.graph.primary().get(idx).unwrap();
@@ -92,42 +95,13 @@ where
     Inp::RequiredDataType: LoadableDataType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    let mut file = File::create(path).unwrap();
+    let weight_store = GraphWeights::from(trainer.optimiser.graph.primary());
 
+    let mut file = File::create(path).unwrap();
     let mut buf = Vec::new();
 
-    for SavedFormat { custom, id, quant, layout, transforms, round } in &trainer.state.saved_format {
-        if let Some(id) = id {
-            let idx =
-                GraphNodeId::new(trainer.optimiser.graph.primary().weight_idx(id).unwrap(), GraphNodeIdTy::Values);
-            let weights = trainer.optimiser.graph.primary().get(idx).unwrap();
-            let weights = weights.dense();
-
-            let mut weight_buf = vec![0.0; weights.size()];
-            let written = weights.write_to_slice(&mut weight_buf).unwrap();
-            assert_eq!(written, weights.size());
-
-            if let Layout::Transposed(shape) = layout {
-                assert_eq!(shape.size(), weights.size());
-                weight_buf = SavedFormat::transpose_impl(*shape, &weight_buf);
-            }
-
-            for transform in transforms {
-                weight_buf = transform(&trainer.optimiser.graph, id, weight_buf);
-            }
-
-            let quantised = match quant.quantise(*round, &weight_buf) {
-                Ok(q) => q,
-                Err(err) => {
-                    println!("Quantisation failed for id: {id}");
-                    return Err(err);
-                }
-            };
-
-            buf.extend_from_slice(&quantised);
-        } else {
-            buf.extend_from_slice(custom.as_ref().unwrap());
-        }
+    for fmt in &trainer.state.saved_format {
+        buf.extend_from_slice(&fmt.write_to_byte_buffer(&weight_store)?);
     }
 
     let bytes = buf.len() % 64;

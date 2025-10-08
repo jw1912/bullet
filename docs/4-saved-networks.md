@@ -58,9 +58,9 @@ by adding `.round()` like so:
 SavedFormat::id("affinew").round().quantise::<i16>(256),
 ```
 
-You can apply arbitrary transformations to the float values by chaining `SavedFormat::add_transform`.
+You can apply arbitrary transformations to the float values by chaining `SavedFormat::transform`.
 An example of this can be found in the [input buckets example](https://github.com/jw1912/bullet/blob/update-docs/examples/progression/4_multi_layer.rs#L47)
 to merge the input factoriser.
 
 The placement of `.round` and `.quantise::<T>` **does not matter**, they are always applied at the end, directly before writing to a file.
-All transformations are applied in the order they are specified (and note that `.transpose` simply uses `.add_transform` internally).
+All transformations are applied in the order they are specified (and note that `.transpose` simply uses `.transform` internally).

@@ -2,13 +2,13 @@ use std::marker::PhantomData;
 
 use acyclib::{
     device::{Device, tensor::Shape},
+    graph::save::SavedFormat,
     trainer::{Trainer, optimiser::Optimiser},
 };
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     nn::{BackendMarker, ExecutionContext, NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
-    trainer::save::SavedFormat,
     value::ValueTrainerState,
 };
 

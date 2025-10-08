@@ -46,11 +46,10 @@ fn main() {
         .save_format(&[
             // merge in the factoriser weights
             SavedFormat::id("l0w")
-                .add_transform(|graph, _, mut weights| {
-                    let factoriser = graph.get_weights("l0f").get_dense_vals().unwrap();
-                    let expanded = factoriser.repeat(NUM_INPUT_BUCKETS);
+                .transform(|store, mut weights| {
+                    let factoriser = store.get("l0f").values.repeat(NUM_INPUT_BUCKETS);
 
-                    for (i, &j) in weights.iter_mut().zip(expanded.iter()) {
+                    for (i, &j) in weights.iter_mut().zip(factoriser.iter()) {
                         *i += j;
                     }
 

@@ -45,11 +45,10 @@ fn main() {
         .output_buckets(MaterialCount::<NUM_OUTPUT_BUCKETS>)
         .save_format(&[
             SavedFormat::id("l0w")
-                .add_transform(|graph, _, mut weights| {
-                    let factoriser = graph.get_weights("l0f").get_dense_vals().unwrap();
-                    let expanded = factoriser.repeat(NUM_INPUT_BUCKETS);
+                .transform(|store, mut weights| {
+                    let factoriser = store.get("l0f").values.repeat(NUM_INPUT_BUCKETS);
 
-                    for (i, &j) in weights.iter_mut().zip(expanded.iter()) {
+                    for (i, &j) in weights.iter_mut().zip(factoriser.iter()) {
                         *i += j;
                     }
 
@@ -57,7 +56,8 @@ fn main() {
                 })
                 .round()
                 .quantise::<i16>(255),
-            SavedFormat::id("l0b").round().quantise::<i16>(255),
+            // this **is not** the format you want for fast inference,
+            // but you can use `.add_transform` to transform it appropriately
             SavedFormat::id("l1w").round().quantise::<i8>(64).transpose(),
             SavedFormat::id("l1b"),
             SavedFormat::id("l2w").transpose(),
