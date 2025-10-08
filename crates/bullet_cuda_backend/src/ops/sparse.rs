@@ -28,7 +28,7 @@ impl SparseAffineImpl for CudaDevice {
         let bias = desc.biases_grads.as_ref().map(|x| x.batch_size().is_some());
 
         let batched = indices.batch_size().is_some();
-        let nnz = indices.sparse().nnz;
+        let nnz = indices.sparse().nnz();
         let m = output_shape.rows();
 
         let code = include_str!("sparse/bwd.cu")

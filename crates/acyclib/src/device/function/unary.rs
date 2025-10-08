@@ -207,7 +207,13 @@ impl<D: Device> DeviceOperation<D> for SparseToDense<D> {
             return Err(OperationError::InvalidTensorFormat);
         }
 
-        D::sparse_to_dense(input.batch_size().unwrap_or(1), input.single_size, input.nnz, &input.buf, &mut output.buf)
+        D::sparse_to_dense(
+            input.batch_size().unwrap_or(1),
+            input.single_size(),
+            input.nnz(),
+            &input.buf,
+            &mut output.buf,
+        )
     }
 }
 

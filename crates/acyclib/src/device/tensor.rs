@@ -143,7 +143,7 @@ impl<D: Device> Tensor<D> {
     pub fn get_sparse_vals(&self) -> Result<Vec<i32>, OperationError<D::DeviceError>> {
         match &self.values {
             Matrix::Sparse(sparse) => {
-                let size = sparse.nnz * sparse.batch_size().unwrap_or(1);
+                let size = sparse.nnz() * sparse.batch_size().unwrap_or(1);
                 let mut buf = vec![0; size];
                 sparse.buf.write_into_slice(&mut buf, size)?;
                 Ok(buf)

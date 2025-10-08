@@ -4,8 +4,8 @@ use crate::device::{Device, DeviceBuffer, OperationError, operation::BaseOperati
 
 pub struct DenseMatrix<D: Device> {
     pub buf: D::BufferF32,
-    pub single_size: usize,
-    pub batch_size: Option<NonZeroUsize>,
+    single_size: usize,
+    batch_size: Option<NonZeroUsize>,
 }
 
 impl<D: Device> fmt::Debug for DenseMatrix<D> {

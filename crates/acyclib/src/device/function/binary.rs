@@ -136,7 +136,7 @@ impl<D: CoreDeviceOps> DeviceOperation<D> for Select<D> {
         let input_size = input.single_size();
         let output_size = output.single_size();
 
-        if input_size != buckets.single_size() * output_size || buckets.nnz != 1 {
+        if input_size != buckets.single_size() * output_size || buckets.nnz() != 1 {
             return Err(OperationError::InvalidTensorFormat);
         }
 
@@ -175,7 +175,7 @@ impl<D: CoreDeviceOps> DeviceOperation<D> for SelectBackprop<D> {
         let input_size = input.single_size();
         let output_size = output.single_size();
 
-        if output_size != buckets.single_size() * input_size || buckets.nnz != 1 {
+        if output_size != buckets.single_size() * input_size || buckets.nnz() != 1 {
             return Err(OperationError::InvalidTensorFormat);
         }
 

@@ -6,9 +6,9 @@ use super::DenseMatrix;
 
 pub struct SparseMatrix<D: Device> {
     pub buf: D::BufferI32,
-    pub nnz: usize,
-    pub single_size: usize,
-    pub batch_size: Option<NonZeroUsize>,
+    nnz: usize,
+    single_size: usize,
+    batch_size: Option<NonZeroUsize>,
 }
 
 impl<D: Device> fmt::Debug for SparseMatrix<D> {
@@ -74,6 +74,10 @@ impl<D: Device> SparseMatrix<D> {
 
     pub fn size(&self) -> usize {
         self.single_size * self.batch_size().unwrap_or(1)
+    }
+
+    pub fn nnz(&self) -> usize {
+        self.nnz
     }
 
     /// #### Safety

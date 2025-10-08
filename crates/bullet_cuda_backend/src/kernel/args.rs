@@ -47,7 +47,7 @@ impl KernelArgs {
                         }
                     }
                     Some(nnz) => {
-                        if *nnz != slice.sparse()?.nnz {
+                        if *nnz != slice.sparse()?.nnz() {
                             return Err(OperationError::InvalidTensorFormat);
                         }
                     }

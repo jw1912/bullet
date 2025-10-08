@@ -85,7 +85,7 @@ unsafe fn load_sparse_nonblocking<D: Device>(
     batch_size: Option<usize>,
     vals: &[i32],
 ) -> Result<(), OperationError<D::DeviceError>> {
-    if shape.size() != sparse.single_size || nnz != sparse.nnz {
+    if shape.size() != sparse.single_size() || nnz != sparse.nnz() {
         return Err(OperationError::InvalidTensorFormat);
     }
 
@@ -113,7 +113,7 @@ unsafe fn load_dense_nonblocking<D: Device>(
     batch_size: Option<usize>,
     vals: &[f32],
 ) -> Result<(), OperationError<D::DeviceError>> {
-    if shape.size() != dense.single_size {
+    if shape.size() != dense.single_size() {
         return Err(OperationError::InvalidTensorFormat);
     }
 

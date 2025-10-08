@@ -19,7 +19,7 @@ pub fn kernel(desc: function::SparseAffineActivate<CudaDevice>) -> Kernel {
     let bias = desc.biases.as_ref().map(|x| x.batch_size().is_some());
 
     let batched = indices.batch_size().is_some();
-    let nnz = indices.sparse().nnz;
+    let nnz = indices.sparse().nnz();
     let m = output_shape.rows();
     let vectorise = m % 4 == 0 && m >= 128;
 
