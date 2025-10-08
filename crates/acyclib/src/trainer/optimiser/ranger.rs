@@ -53,7 +53,7 @@ impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S
         self.inner.update(weights, grads, gradient_factor, learning_rate)?;
 
         if self.step % self.k == 0 {
-            assert_eq!(weights.single_size, self.slow_params.single_size);
+            assert_eq!(weights.single_size(), self.slow_params.single_size());
             assert!(self.slow_params.batch_size().is_none());
 
             self.slow_params.lerp(self.alpha, weights)?;

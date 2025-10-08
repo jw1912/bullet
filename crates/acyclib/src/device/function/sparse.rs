@@ -49,9 +49,9 @@ impl<D: SparseAffineOps> DeviceOperation<D> for SparseAffineActivate<D> {
             &indices.buf,
             values.map(|v| &v.buf),
             *input_shape,
-            indices.nnz,
+            indices.nnz(),
             biases.map(|b| &b.buf),
-            biases.map(|b| b.batch_size.is_some()).unwrap_or(false),
+            biases.map(|b| b.batch_size().is_some()).unwrap_or(false),
             &mut output.buf,
         )
     }
@@ -98,7 +98,7 @@ impl<D: SparseAffineOps> DeviceOperation<D> for BackpropSparseAffineActivate<D> 
         let values = values.as_ref().map(|v| v.dense_mut());
         let values = values.as_deref();
 
-        let biases_batched = biases_grads.as_ref().map(|b| b.batch_size.is_some()).unwrap_or(false);
+        let biases_batched = biases_grads.as_ref().map(|b| b.batch_size().is_some()).unwrap_or(false);
 
         let batch_size = indices.batch_size();
 
@@ -114,7 +114,7 @@ impl<D: SparseAffineOps> DeviceOperation<D> for BackpropSparseAffineActivate<D> 
             &indices.buf,
             values.map(|v| &v.buf),
             *input_shape,
-            indices.nnz,
+            indices.nnz(),
             biases_grads.map(|b| &mut b.buf),
             biases_batched,
             &output.buf,
