@@ -18,6 +18,7 @@ use bullet_lib::{
 fn main() {
     // hyperparams to fiddle with
     let hl_size = 1024;
+    let l2 = 16;
     let dataset_path = "data/baseline.data";
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);
@@ -45,20 +46,15 @@ fn main() {
         .output_buckets(MaterialCount::<NUM_OUTPUT_BUCKETS>)
         .save_format(&[
             SavedFormat::id("l0w")
-                .transform(|store, mut weights| {
+                .transform(|store, weights| {
                     let factoriser = store.get("l0f").values.repeat(NUM_INPUT_BUCKETS);
-
-                    for (i, &j) in weights.iter_mut().zip(factoriser.iter()) {
-                        *i += j;
-                    }
-
-                    weights
+                    weights.into_iter().zip(factoriser).map(|(a, b)| a + b).collect()
                 })
                 .round()
                 .quantise::<i16>(255),
             // this **is not** the format you want for fast inference,
             // but you can use `.transform` to transform it appropriately
-            SavedFormat::id("l1w").round().quantise::<i8>(64).transpose(),
+            SavedFormat::id("l1w").transpose().round().quantise::<i8>(64),
             SavedFormat::id("l1b"),
             SavedFormat::id("l2w").transpose(),
             SavedFormat::id("l2b"),
@@ -77,8 +73,8 @@ fn main() {
             l0.weights = l0.weights + expanded_factoriser;
 
             // layerstack weights
-            let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * 16);
-            let l2 = builder.new_affine("l2", 16, NUM_OUTPUT_BUCKETS * 32);
+            let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * l2);
+            let l2 = builder.new_affine("l2", l2, NUM_OUTPUT_BUCKETS * 32);
             let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
 
             // inference

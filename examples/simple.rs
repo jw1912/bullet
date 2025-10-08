@@ -38,10 +38,10 @@ fn main() {
         .inputs(inputs::Chess768)
         // chosen such that inference may be efficiently implemented in-engine
         .save_format(&[
-            SavedFormat::id("l0w").quantise::<i16>(QA),
-            SavedFormat::id("l0b").quantise::<i16>(QA),
-            SavedFormat::id("l1w").quantise::<i16>(QB),
-            SavedFormat::id("l1b").quantise::<i16>(QA * QB),
+            SavedFormat::id("l0w").round().quantise::<i16>(QA),
+            SavedFormat::id("l0b").round().quantise::<i16>(QA),
+            SavedFormat::id("l1w").round().quantise::<i16>(QB),
+            SavedFormat::id("l1b").round().quantise::<i16>(QA * QB),
         ])
         // map output into ranges [0, 1] to fit against our labels which
         // are in the same range
