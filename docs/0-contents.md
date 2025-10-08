@@ -23,7 +23,7 @@ Basic Usage:
 4. [Saved Networks](4-saved-networks.md)
     - [Checkpoint Layout](4-saved-networks.md#checkpoint-layout)
     - [Loading Checkpoints](4-saved-networks.md#loading-checkpoints)
-    - [Network Layout with `TrainerBuilder`](4-saved-networks.md#network-layout-with-trainerbuilder)
+    - [Layout of `SavedFormat`](4-saved-networks.md#layout-of-saved-format)
 
 NNUE Progression:
 0. [Progression Overview](progression/0-overview.md)

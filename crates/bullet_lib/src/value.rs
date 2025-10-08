@@ -13,7 +13,7 @@ use acyclib::{
 };
 
 use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike},
+    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike, save::SavedFormat},
     trainer::dataloader::{PreparedBatchDevice, PreparedBatchHost},
 };
 
@@ -21,7 +21,6 @@ use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     nn::{ExecutionContext, Graph},
     trainer::{
-        save::SavedFormat,
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
     },

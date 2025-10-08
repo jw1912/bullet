@@ -1,87 +1,142 @@
 use std::{
+    collections::HashMap,
     io::{self, Write},
     rc::Rc,
 };
 
-use acyclib::graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike};
+use crate::{
+    device::Device,
+    graph::{Graph, Shape},
+};
 
-use crate::nn::{Graph, Shape};
+#[derive(Clone)]
+pub struct TensorStore {
+    pub values: Vec<f32>,
+    pub shape: Shape,
+}
 
-type Transform = Rc<dyn Fn(&Graph, &str, Vec<f32>) -> Vec<f32>>;
+impl TensorStore {
+    #[deprecated(note = "You can access `.values` directly!")]
+    pub fn get_dense_vals(&self) -> Option<Vec<f32>> {
+        Some(self.values.clone())
+    }
+}
+
+pub struct GraphWeights {
+    stores: HashMap<String, TensorStore>,
+}
+
+impl<D: Device> From<&Graph<D>> for GraphWeights {
+    fn from(graph: &Graph<D>) -> Self {
+        let ids = graph.weight_ids();
+
+        let mut stores = HashMap::new();
+
+        for id in ids {
+            let weight = graph.get_weights(&id);
+            let values = weight.get_dense_vals().unwrap();
+            let shape = weight.shape();
+            let existing = stores.insert(id, TensorStore { values, shape });
+            assert!(existing.is_none(), "Duplicate weight IDs in graph?!?");
+        }
+
+        Self { stores }
+    }
+}
+
+impl GraphWeights {
+    pub fn get(&self, id: &str) -> TensorStore {
+        self.stores.get(id).cloned().unwrap()
+    }
+
+    #[deprecated(note = "Use `.get` instead!")]
+    pub fn get_weights(&self, id: &str) -> TensorStore {
+        self.get(id)
+    }
+}
+
+type Transform = Rc<dyn Fn(&GraphWeights, Vec<f32>) -> Vec<f32>>;
 
 #[derive(Clone)]
 pub struct SavedFormat {
-    pub(crate) custom: Option<Vec<u8>>,
-    pub(crate) id: Option<String>,
-    pub(crate) quant: QuantTarget,
-    pub(crate) layout: Layout,
-    pub(crate) transforms: Vec<Transform>,
-    pub(crate) round: bool,
+    custom: Option<Vec<u8>>,
+    quant: QuantTarget,
+    transforms: Vec<Transform>,
+    round: bool,
+    id: Option<String>,
 }
 
 impl SavedFormat {
+    /// Save a custom set of bytes.
+    /// This should be used to add a network header, padding, etc.
     pub fn custom(bytes: impl Into<Vec<u8>>) -> Self {
-        Self {
-            custom: Some(bytes.into()),
-            id: None,
-            quant: QuantTarget::Float,
-            layout: Layout::Normal,
-            transforms: Vec::new(),
-            round: false,
-        }
+        Self { custom: Some(bytes.into()), ..Self::empty() }
     }
 
+    pub fn get_id(&self) -> Option<String> {
+        self.id.clone()
+    }
+
+    /// Create a `SavedFormat` that is initialised with the weights from `id`.
     pub fn id(id: &str) -> Self {
-        Self::new(id, QuantTarget::Float, Layout::Normal)
+        let id = id.to_string();
+        Self { id: Some(id.clone()), ..Self::empty() }.transform(move |store, _| store.get(&id).values)
     }
 
-    pub fn new(id: &str, quant: QuantTarget, layout: Layout) -> Self {
-        SavedFormat { custom: None, id: Some(id.to_string()), quant, layout, transforms: Vec::new(), round: false }
+    /// Create an empty `SavedFormat`, where the initial values are empty.
+    /// Appropriate for constructing save formats where multiple weights are interleaved.
+    pub fn empty() -> Self {
+        SavedFormat { custom: None, id: None, quant: QuantTarget::Float, transforms: Vec::new(), round: false }
     }
 
+    /// If quantising, round rather than truncate.
     pub fn round(mut self) -> Self {
         assert!(self.custom.is_none());
         self.round = true;
         self
     }
 
+    /// Write weights quantised by factor `multiplier` as type `T`.
     pub fn quantise<T: Quant>(mut self, multiplier: T::Multiplier) -> Self {
         assert!(self.custom.is_none());
         self.quant = T::to_target(multiplier);
         self
     }
 
+    /// Transpose current values using the shape of the weights from weight `id`.
+    /// Panics if this `SavedFormat` was constructed without an associated weight `id`.
     pub fn transpose(self) -> Self {
-        self.add_transform(|graph, id, weights| {
-            let id = GraphNodeId::new(graph.primary().weight_idx(id).unwrap(), GraphNodeIdTy::Values);
-            let shape = graph.primary().get(id).unwrap().shape();
-            Self::transpose_impl(shape, &weights)
-        })
+        let id = self.id.clone().unwrap();
+        self.transform(move |graph, weights| Self::transpose_impl(graph.get(&id).shape, &weights))
     }
 
-    pub fn add_transform(mut self, f: impl Fn(&Graph, &str, Vec<f32>) -> Vec<f32> + 'static) -> Self {
+    /// Transform current values using the provided closure.
+    pub fn transform(mut self, f: impl Fn(&GraphWeights, Vec<f32>) -> Vec<f32> + 'static) -> Self {
         assert!(self.custom.is_none());
         self.transforms.push(Rc::new(f));
         self
     }
 
-    pub fn write_to_byte_buffer(&self, graph: &Graph) -> io::Result<Vec<u8>> {
-        if let Some(id_str) = &self.id {
-            let id = GraphNodeId::new(graph.primary().weight_idx(id_str).unwrap(), GraphNodeIdTy::Values);
-            let mut weights = graph.primary().get(id).unwrap().borrow().get_dense_vals().unwrap();
+    #[deprecated(note = "Use `.transform(|store, mut values| { ... })` instead!")]
+    pub fn add_transform(mut self, f: impl Fn(&GraphWeights, &str, Vec<f32>) -> Vec<f32> + 'static) -> Self {
+        assert!(self.custom.is_none());
+        let id = self.get_id().unwrap();
+        self.transforms.push(Rc::new(move |store, vals| f(store, &id, vals)));
+        self
+    }
 
-            if let Layout::Transposed(shape) = self.layout {
-                assert_eq!(shape.size(), weights.len());
-                weights = Self::transpose_impl(shape, &weights);
+    pub fn write_to_byte_buffer(&self, graph: &GraphWeights) -> io::Result<Vec<u8>> {
+        match &self.custom {
+            Some(bytes) => Ok(bytes.clone()),
+            None => {
+                let mut weights = Vec::new();
+
+                for transform in &self.transforms {
+                    weights = transform(graph, weights);
+                }
+
+                self.quant.quantise(self.round, &weights)
             }
-
-            for transform in &self.transforms {
-                weights = transform(graph, id_str, weights);
-            }
-
-            self.quant.quantise(self.round, &weights)
-        } else {
-            Ok(self.custom.clone().unwrap())
         }
     }
 
@@ -100,26 +155,6 @@ impl SavedFormat {
 
         new_buf
     }
-
-    pub fn submatrix_transpose(shape: Shape, weights: &[f32]) -> Vec<f32> {
-        assert_eq!(weights.len() % shape.size(), 0);
-
-        let mut new_buf = vec![0.0; weights.len()];
-
-        for (new, old) in new_buf.chunks_exact_mut(shape.size()).zip(weights.chunks_exact(shape.size())) {
-            new.copy_from_slice(&Self::transpose_impl(shape, old));
-        }
-
-        new_buf
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Layout {
-    /// Column-major
-    Normal,
-    /// Row-major
-    Transposed(Shape),
 }
 
 #[derive(Clone, Copy)]
