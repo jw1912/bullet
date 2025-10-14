@@ -15,7 +15,7 @@ use crate::{
             operation::{
                 GraphIROperationCompilable,
                 affine::Matmul,
-                binary::{Concat, Select, SoftmaxCrossEntropy},
+                binary::{BCELogitLoss, Concat, Select, SoftmaxCrossEntropy},
                 nary::LinearCombination,
                 sparse::SparseAffineActivate,
                 unary::{
@@ -243,6 +243,18 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
 
     pub fn squared_error(self, targets: Self) -> Self {
         self.power_error(targets, 2.0)
+    }
+
+    /// Calculates the binary cross entropy loss of `self.sigmoid()` compared to `target`
+    ///
+    /// This is the recommended way to calculate a loss where the target is a 0/1 variable with probability `target`.
+    ///
+    /// This is equivalent to cross entropy loss with an implicit additional 0 as input.
+    /// This is what's used in logistic regression as a loss function.
+    ///
+    /// `self` should an unconstrained value, you should not apply an activation function.
+    pub fn bce_logit_loss(self, target: Self) -> Self {
+        self.builder.apply(BCELogitLoss { input: self.node, target: target.node })
     }
 
     #[deprecated]

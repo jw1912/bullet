@@ -127,4 +127,14 @@ pub trait BaseOperations {
         mom: &mut Self,
         vel: &mut Self,
     ) -> Result<(), Self::BaseError>;
+
+    fn bce_logit_loss_fwd(&mut self, size: usize, input: &Self, target: &Self) -> Result<(), Self::BaseError>;
+
+    fn bce_logit_loss_bwd(
+        &mut self,
+        size: usize,
+        input: &Self,
+        target: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError>;
 }

@@ -2,6 +2,16 @@ use crate::device::operation::{AdamConfig, BaseOperations, DiffableFromOutput};
 
 use super::{CpuBuffer, CpuError};
 
+fn sigmoid(x: f32) -> f32 {
+    1.0 / (1.0 + (-x).exp())
+}
+fn ln_sigmoid(x: f32) -> f32 {
+    //Separate cases for positive/negative to prevent overflow
+    // (An alternative is to use the "log sum exp" trick, and introduce a variable with the max of 0.0 and -x.
+    //  Then no branch is needed).
+    if x >= 0.0 { -(1.0 + (-x).exp()).ln() } else { x - (1.0 + x.exp()).ln() }
+}
+
 impl BaseOperations for CpuBuffer<f32> {
     type BaseError = CpuError;
 
@@ -311,6 +321,44 @@ impl BaseOperations for CpuBuffer<f32> {
             if let Some((min, max)) = clip {
                 *p = (*p).clamp(min, max);
             }
+        }
+
+        Ok(())
+    }
+
+    fn bce_logit_loss_fwd(&mut self, size: usize, input: &Self, target: &Self) -> Result<(), Self::BaseError> {
+        for ((o, &input), &target) in
+            self.buf[..size].iter_mut().zip(input.buf[..size].iter()).zip(target.buf[..size].iter())
+        {
+            //Separately handle 0.0/1.0 to prevent NaN
+            match target {
+                1.0 => *o = -ln_sigmoid(input),
+                0.0 => *o = -ln_sigmoid(-input),
+                target => {
+                    *o = target * (target.ln() - ln_sigmoid(input))
+                        + (1.0 - target) * ((1.0 - target).ln() - ln_sigmoid(-input))
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn bce_logit_loss_bwd(
+        &mut self,
+        size: usize,
+        input: &Self,
+        target: &Self,
+        grd: &Self,
+    ) -> Result<(), Self::BaseError> {
+        for (((igrd, &ogrd), &iinput), &itarget) in self.buf[..size]
+            .iter_mut()
+            .zip(grd.buf[..size].iter())
+            .zip(input.buf[..size].iter())
+            .zip(target.buf[..size].iter())
+        {
+            let input_sigmoid = sigmoid(iinput);
+            *igrd += ogrd * (-itarget * (1.0 - input_sigmoid) + (1.0 - itarget) * input_sigmoid);
         }
 
         Ok(())

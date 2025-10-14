@@ -393,3 +393,73 @@ where
         func
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BCELogitLoss {
+    pub input: AnnotatedNode,
+    pub target: AnnotatedNode,
+}
+
+impl<B: BackendMarker> GraphIROperationBase<B> for BCELogitLoss {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.input, self.target]
+    }
+
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.input, true)?;
+        util::check_dense_eq(ir, &self.target, true)?;
+        util::check_same_batching(ir, &[&self.input, &self.target])?;
+        util::check_no_grad(ir, &[&self.target])?;
+
+        if self.input.shape == self.target.shape {
+            Ok(self.input.shape)
+        } else {
+            Err(GraphIRError::Op(GraphIROperationError::MismatchedInputShapes(vec![
+                self.input.shape,
+                self.target.shape,
+            ])))
+        }
+    }
+}
+
+impl<B: BackendMarker> GraphIROperationCompilable<B> for BCELogitLoss {
+    fn forward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let output = graph.get_ref(output_node, GraphNodeIdTy::Values);
+        let bsn = util::batch_size_node::<B>(graph, &[self.input, self.target]);
+
+        let mut func = DeviceFunction::default();
+
+        func.push(function::MaybeUpdateBatchSize {
+            input: graph.get_ref(bsn, GraphNodeIdTy::Values),
+            output: output.clone(),
+        });
+
+        func.push(function::BCELogitLoss {
+            input: graph.get_ref(self.input.idx, GraphNodeIdTy::Values),
+            target: graph.get_ref(self.target.idx, GraphNodeIdTy::Values),
+            output,
+        });
+
+        func
+    }
+
+    fn backward_pass(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+        let input = graph.get_ref(self.input.idx, GraphNodeIdTy::Values);
+        let target = graph.get_ref(self.target.idx, GraphNodeIdTy::Values);
+        let output_grad = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
+
+        let mut func = DeviceFunction::default();
+
+        if let Some(grd) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: grd.clone() });
+            func.push(function::BCELogitLossBackward {
+                input: input.clone(),
+                target: target.clone(),
+                output_grad: output_grad.clone(),
+                output: grd,
+            });
+        }
+
+        func
+    }
+}

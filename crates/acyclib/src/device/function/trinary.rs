@@ -80,3 +80,42 @@ impl<D: CoreDeviceOps> DeviceOperation<D> for SoftmaxCrossEntropyBackward<D> {
         D::backprop_softmax_crossentropy(size, &softmax.buf, &targets.buf, &output_grads.buf, &mut output.buf)
     }
 }
+
+#[derive(Debug)]
+pub struct BCELogitLossBackward<D: Device> {
+    pub input: TensorRef<D>,
+    pub target: TensorRef<D>,
+    pub output_grad: TensorRef<D>,
+    pub output: TensorRef<D>,
+}
+
+impl<D: Device> DeviceOperation<D> for BCELogitLossBackward<D> {
+    fn opname(&self) -> String {
+        "BCELogitLossBackward".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.dense();
+        let target = self.target.dense();
+        let output_grad = self.output_grad.dense();
+        let mut output = self.output.dense_mut();
+
+        if input.batch_size() != target.batch_size()
+            || input.batch_size() != output_grad.batch_size()
+            || input.batch_size() != output.batch_size()
+        {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if input.single_size() != target.single_size()
+            || input.single_size() != output_grad.single_size()
+            || input.single_size() != output.single_size()
+        {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        output.buf.bce_logit_loss_bwd(input.size(), &input.buf, &target.buf, &output_grad.buf)?;
+
+        Ok(())
+    }
+}

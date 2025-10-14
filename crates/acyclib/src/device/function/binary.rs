@@ -218,3 +218,34 @@ impl<D: CoreDeviceOps> DeviceOperation<D> for CrossEntropy<D> {
         D::crossentropy(a.size(), &a.buf, &b.buf, &mut output.buf)
     }
 }
+
+#[derive(Clone)]
+pub struct BCELogitLoss<D: Device> {
+    pub input: TensorRef<D>,
+    pub target: TensorRef<D>,
+    pub output: TensorRef<D>,
+}
+
+impl<D: Device> DeviceOperation<D> for BCELogitLoss<D> {
+    fn opname(&self) -> String {
+        "BCELogitLoss".to_string()
+    }
+
+    fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
+        let input = self.input.dense();
+        let target = self.target.dense();
+        let mut output = self.output.dense_mut();
+
+        if input.batch_size() != target.batch_size() || input.batch_size() != output.batch_size() {
+            return Err(OperationError::MismatchedBatchSizes);
+        }
+
+        if input.single_size() != target.single_size() || input.single_size() != output.single_size() {
+            return Err(OperationError::InvalidTensorFormat);
+        }
+
+        output.buf.bce_logit_loss_fwd(input.size(), &input.buf, &target.buf)?;
+
+        Ok(())
+    }
+}
