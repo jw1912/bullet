@@ -52,6 +52,7 @@ fn main() {
                 })
                 .round()
                 .quantise::<i16>(255),
+            SavedFormat::id("l0b").round().quantise::<i16>(255),
             // this **is not** the format you want for fast inference,
             // but you can use `.transform` to transform it appropriately
             SavedFormat::id("l1w").transpose().round().quantise::<i8>(64),
