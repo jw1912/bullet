@@ -7,20 +7,11 @@ use crate::{
         tensor::Shape,
     },
     graph::{
-        Node,
-        builder::GraphBuilder,
-        ir::{
-            BackendMarker,
-            node::AnnotatedNode,
-            operation::{
-                GraphIROperationCompilable,
-                affine::Matmul,
-                binary::{Concat, Select, SoftmaxCrossEntropy},
-                nary::LinearCombination,
-                sparse::SparseAffineActivate,
-                unary::{ClipPassThroughGrad, Copy, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary},
-            },
-        },
+        builder::GraphBuilder, ir::{
+            node::AnnotatedNode, operation::{
+                affine::Matmul, binary::{Concat, Select, SoftmaxCrossEntropy}, nary::LinearCombination, sparse::SparseAffineActivate, unary::{ClipPassThroughGrad, Copy, FauxQuantise, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary}, GraphIROperationCompilable
+            }, BackendMarker
+        }, Node
     },
 };
 
@@ -268,5 +259,14 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     pub fn to_dense(self) -> Self {
         let node = self.builder.ir().add_op(ToDense(self.node)).unwrap();
         Self { node, builder: self.builder }
+    }
+}
+
+impl<B: BackendMarker> GraphBuilderNode<'_, B>
+where
+    FauxQuantise: GraphIROperationCompilable<B>,
+{
+    pub fn faux_quantise(self, value: f32, round: bool) -> Self {
+        self.builder.apply(FauxQuantise { input: self.node, value, round })
     }
 }
