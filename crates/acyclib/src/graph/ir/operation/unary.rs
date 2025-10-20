@@ -412,7 +412,11 @@ impl<B: BackendMarker> GraphIROperationBase<B> for FauxQuantise {
 }
 
 impl FauxQuantise {
-    pub fn backward<B: BackendMarker>(&self, graph: &Graph<B::Backend>, output_node: NodeId) -> DeviceFunction<B::Backend> {
+    pub fn backward<B: BackendMarker>(
+        &self,
+        graph: &Graph<B::Backend>,
+        output_node: NodeId,
+    ) -> DeviceFunction<B::Backend> {
         let mut func = DeviceFunction::default();
 
         if let Some(output) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {

@@ -1,6 +1,16 @@
-use acyclib::{dag::NodeId, device::function::{self, DeviceFunction}, graph::{ir::operation::{unary::FauxQuantise, GraphIROperationCompilable}, Graph, GraphNodeIdTy}};
+use acyclib::{
+    dag::NodeId,
+    device::function::{self, DeviceFunction},
+    graph::{
+        Graph, GraphNodeIdTy,
+        ir::operation::{GraphIROperationCompilable, unary::FauxQuantise},
+    },
+};
 
-use crate::{kernel::{Expr, Kernel, KernelArgs, KernelInput}, CudaDevice, CudaMarker};
+use crate::{
+    CudaDevice, CudaMarker,
+    kernel::{Expr, Kernel, KernelArgs, KernelInput},
+};
 
 impl GraphIROperationCompilable<CudaMarker> for FauxQuantise {
     fn forward_pass(&self, graph: &Graph<CudaDevice>, output_node: NodeId) -> DeviceFunction<CudaDevice> {
@@ -13,7 +23,8 @@ impl GraphIROperationCompilable<CudaMarker> for FauxQuantise {
 
         let op = if self.round { "roundf" } else { "truncf" };
         let q = self.value;
-        let code = format!("
+        let code = format!(
+            "
             constexpr float Q = static_cast<float>({q});
 
             extern \"C\" __global__ void kernel(const int size, const float* input, float* output)
@@ -24,7 +35,8 @@ impl GraphIROperationCompilable<CudaMarker> for FauxQuantise {
                 {{
                     output[tid] = {op}(Q * input[tid]) / Q;
                 }}
-            }}");
+            }}"
+        );
 
         let threads = Expr::Const(512);
         let size = Expr::Var * input.single_size() as i32;

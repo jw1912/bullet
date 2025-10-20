@@ -7,11 +7,22 @@ use crate::{
         tensor::Shape,
     },
     graph::{
-        builder::GraphBuilder, ir::{
-            node::AnnotatedNode, operation::{
-                affine::Matmul, binary::{Concat, Select, SoftmaxCrossEntropy}, nary::LinearCombination, sparse::SparseAffineActivate, unary::{ClipPassThroughGrad, Copy, FauxQuantise, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary}, GraphIROperationCompilable
-            }, BackendMarker
-        }, Node
+        Node,
+        builder::GraphBuilder,
+        ir::{
+            BackendMarker,
+            node::AnnotatedNode,
+            operation::{
+                GraphIROperationCompilable,
+                affine::Matmul,
+                binary::{Concat, Select, SoftmaxCrossEntropy},
+                nary::LinearCombination,
+                sparse::SparseAffineActivate,
+                unary::{
+                    ClipPassThroughGrad, Copy, FauxQuantise, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary,
+                },
+            },
+        },
     },
 };
 
