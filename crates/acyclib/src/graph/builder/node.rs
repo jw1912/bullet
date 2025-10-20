@@ -18,7 +18,9 @@ use crate::{
                 binary::{Concat, Select, SoftmaxCrossEntropy},
                 nary::LinearCombination,
                 sparse::SparseAffineActivate,
-                unary::{ClipPassThroughGrad, Copy, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary},
+                unary::{
+                    ClipPassThroughGrad, Copy, FauxQuantise, PairwiseMul, ReduceAcrossBatch, Slice, ToDense, Unary,
+                },
             },
         },
     },
@@ -268,5 +270,14 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
     pub fn to_dense(self) -> Self {
         let node = self.builder.ir().add_op(ToDense(self.node)).unwrap();
         Self { node, builder: self.builder }
+    }
+}
+
+impl<B: BackendMarker> GraphBuilderNode<'_, B>
+where
+    FauxQuantise: GraphIROperationCompilable<B>,
+{
+    pub fn faux_quantise(self, value: f32, round: bool) -> Self {
+        self.builder.apply(FauxQuantise { input: self.node, value, round })
     }
 }

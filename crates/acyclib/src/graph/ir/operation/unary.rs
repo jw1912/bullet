@@ -391,3 +391,41 @@ impl<B: BackendMarker> GraphIROperationCompilable<B> for ClipPassThroughGrad {
         func
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct FauxQuantise {
+    pub input: AnnotatedNode,
+    pub value: f32,
+    pub round: bool,
+}
+
+impl<B: BackendMarker> GraphIROperationBase<B> for FauxQuantise {
+    fn nodes(&self) -> Vec<AnnotatedNode> {
+        vec![self.input]
+    }
+
+    fn output_shape(&self, ir: &GraphIR<B>) -> Result<Shape, GraphIRError> {
+        util::check_dense_eq(ir, &self.input, true)?;
+
+        Ok(self.input.shape)
+    }
+}
+
+impl FauxQuantise {
+    pub fn backward<B: BackendMarker>(
+        &self,
+        graph: &Graph<B::Backend>,
+        output_node: NodeId,
+    ) -> DeviceFunction<B::Backend> {
+        let mut func = DeviceFunction::default();
+
+        if let Some(output) = graph.maybe_get_ref(self.input.idx, GraphNodeIdTy::Gradients) {
+            let input = graph.get_ref(output_node, GraphNodeIdTy::Gradients);
+
+            func.push(function::MaybeUpdateBatchSize { input: input.clone(), output: output.clone() });
+            func.push(function::LinearCombination { input_mul: 1.0, output_mul: 1.0, input, output });
+        }
+
+        func
+    }
+}

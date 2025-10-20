@@ -1,3 +1,4 @@
+mod qat;
 mod sl;
 mod sparse;
 
