@@ -4,63 +4,62 @@
 /// - train-labels.idx1-ubyte
 /// - t10k-images.idx3-ubyte
 /// - t10k-labels.idx1-ubyte
-use std::{fs::File, io::Read, time::Instant};
+use std::{collections::HashMap, fs::File, io::Read};
 
 use acyclib::{
     device::{OperationError, tensor::Shape},
-    graph::{Graph, GraphNodeId, GraphNodeIdTy, Node, builder::GraphBuilder},
+    graph::{Graph, GraphNodeId, GraphNodeIdTy, Node, builder::GraphBuilder, like::GraphLike},
+    trainer::{
+        DataLoadingError, Trainer,
+        dataloader::{DataLoader, HostDenseMatrix, HostMatrix, PreparedBatchDevice, PreparedBatchHost},
+        optimiser::{Optimiser, adam::AdamW},
+        schedule::{TrainingSchedule, TrainingSteps},
+    },
 };
-use bullet_lib::nn::{DeviceError, ExecutionContext};
+use bullet_lib::nn::{DeviceError, ExecutionContext, optimiser::AdamWParams};
 
 fn main() -> Result<(), OperationError<DeviceError>> {
     let images = Images::new("data/mnist/train-images.idx3-ubyte");
     let labels = Labels::new("data/mnist/train-labels.idx1-ubyte");
-    let batch_size = labels.vals.len() / 10;
 
-    let validation_images = Images::new("data/mnist/t10k-images.idx3-ubyte");
-    let validation_labels = Labels::new("data/mnist/t10k-labels.idx1-ubyte");
-    let validation_batch_size = validation_labels.vals.len() / 10;
+    let valid_images = Images::new("data/mnist/t10k-images.idx3-ubyte");
+    let valid_labels = Labels::new("data/mnist/t10k-labels.idx1-ubyte");
 
-    assert_eq!(batch_size, images.batch_size());
-    assert_eq!(validation_batch_size, validation_images.batch_size());
+    let (graph, outputs) = make_model(&images);
+    let params = AdamWParams { min_weight: -1000.0, max_weight: 1000.0, ..Default::default() };
+    let optimiser = Optimiser::<_, _, AdamW<_>>::new(graph, params)?;
+    let mut trainer = Trainer { optimiser, state: () };
 
-    let (mut graph, outputs) = make_model(&images);
+    let schedule = TrainingSchedule {
+        steps: TrainingSteps {
+            batch_size: labels.vals.len() / 10,
+            batches_per_superbatch: 100,
+            start_superbatch: 1,
+            end_superbatch: 20,
+        },
+        log_rate: 10,
+        lr_schedule: Box::new(|_, sb| 0.001 * 0.9f32.powi(sb as i32 - 1)),
+    };
 
-    graph.load_from_file("checkpoints/mnist.bin", false)?;
+    let dataloader = ImageDataLoader { images: images.clone(), labels: labels.clone() };
 
-    graph.get_input("inputs").dense_mut().load_from_slice(Some(batch_size), &images.vals)?;
-    graph.get_input("targets").dense_mut().load_from_slice(Some(batch_size), &labels.vals)?;
+    let valid = prepare(&valid_images, &valid_labels);
+    let valid_gpu = PreparedBatchDevice::new(trainer.optimiser.graph.devices(), &valid)?;
 
-    let t = Instant::now();
-    let lr = 0.0001;
-
-    for epoch in 1..=10 {
-        graph.zero_grads()?;
-        graph.forward()?;
-        graph.backward()?;
-
-        if epoch % 10 == 0 {
-            let valid_acc = calculate_accuracy(&mut graph, outputs, &validation_images, &validation_labels)?;
-            let train_acc = calculate_accuracy(&mut graph, outputs, &images, &labels)?;
-
-            println!(
-                "epoch {epoch} train accuracy {train_acc:.2}% validation accuarcy {valid_acc:.2}% time {:.3}s",
-                t.elapsed().as_secs_f32()
-            );
-
-            graph.get_input("inputs").dense_mut().load_from_slice(Some(batch_size), &images.vals)?;
-            graph.get_input("targets").dense_mut().load_from_slice(Some(batch_size), &labels.vals)?;
-        }
-
-        for id in &graph.weight_ids() {
-            let idx = graph.weight_idx(id).unwrap();
-            let weight = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Values)).unwrap();
-
-            if let Ok(grd) = graph.get(GraphNodeId::new(idx, GraphNodeIdTy::Gradients)) {
-                weight.dense_mut().add(-lr, &*grd.dense())?;
-            }
-        }
-    }
+    trainer
+        .train_custom(
+            schedule,
+            dataloader,
+            |_, _, _, _| {},
+            |trainer, _| {
+                let graph = &mut trainer.optimiser.graph;
+                let train_accuracy = calculate_accuracy(graph, outputs, &images, &labels).unwrap();
+                valid_gpu.copy_into_graph(graph).unwrap();
+                let valid_accuracy = calculate_accuracy(graph, outputs, &valid_images, &valid_labels).unwrap();
+                println!("Train accuracy {train_accuracy:.2}% validation accuracy {valid_accuracy:.2}%");
+            },
+        )
+        .unwrap();
 
     Ok(())
 }
@@ -68,7 +67,7 @@ fn main() -> Result<(), OperationError<DeviceError>> {
 fn make_model(images: &Images) -> (Graph<ExecutionContext>, Node) {
     let builder = GraphBuilder::default();
 
-    let inputs = builder.new_dense_input("inputs", Shape::new(images.rows, images.cols));
+    let inputs = builder.new_dense_input("inputs", images.shape);
     let targets = builder.new_dense_input("targets", Shape::new(10, 1));
 
     let l0 = builder.new_affine("l0", 28 * 28, 128);
@@ -94,8 +93,6 @@ fn calculate_accuracy(
     labels: &Labels,
 ) -> Result<f32, OperationError<DeviceError>> {
     let batch_size = images.batch_size();
-    graph.get_input("inputs").dense_mut().load_from_slice(Some(batch_size), &images.vals)?;
-    graph.get_input("targets").dense_mut().load_from_slice(Some(batch_size), &labels.vals)?;
     let _ = graph.forward()?;
 
     let vals = graph.get(GraphNodeId::new(output_node.idx(), GraphNodeIdTy::Values))?.borrow().get_dense_vals()?;
@@ -118,15 +115,45 @@ fn calculate_accuracy(
         }
     }
 
-    assert_eq!(batch_size, labels.indices.len());
-
     Ok(100.0 * correct as f32 / batch_size as f32)
 }
 
+fn prepare(images: &Images, labels: &Labels) -> PreparedBatchHost {
+    let batch_size = labels.vals.len() / 10;
+    let mut inputs = HashMap::new();
+
+    let wrap = |x: &Vec<f32>, s| HostMatrix::Dense(HostDenseMatrix::new(x.clone(), Some(batch_size), s));
+
+    let x = wrap(&images.vals, images.shape);
+    inputs.insert("inputs".to_string(), x);
+
+    let y = wrap(&labels.vals, Shape::new(10, 1));
+    inputs.insert("targets".to_string(), y);
+
+    PreparedBatchHost { batch_size, inputs }
+}
+
+struct ImageDataLoader {
+    images: Images,
+    labels: Labels,
+}
+
+impl DataLoader for ImageDataLoader {
+    type Error = DataLoadingError;
+
+    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(self, batch_size: usize, mut f: F) -> Result<(), Self::Error> {
+        assert_eq!(batch_size, self.labels.vals.len() / 10);
+
+        while !f(prepare(&self.images, &self.labels)) {}
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 struct Images {
     vals: Vec<f32>,
-    rows: usize,
-    cols: usize,
+    shape: Shape,
 }
 
 impl Images {
@@ -152,16 +179,16 @@ impl Images {
 
         Self {
             vals: bytes.iter().map(|&x| f32::from(x) / f32::from(u8::MAX)).collect(),
-            rows: rows as usize,
-            cols: cols as usize,
+            shape: Shape::new(rows as usize, cols as usize),
         }
     }
 
     pub fn batch_size(&self) -> usize {
-        self.vals.len() / (self.rows * self.cols)
+        self.vals.len() / self.shape.size()
     }
 }
 
+#[derive(Clone)]
 struct Labels {
     vals: Vec<f32>,
     indices: Vec<u8>,

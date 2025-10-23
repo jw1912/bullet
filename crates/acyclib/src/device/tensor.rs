@@ -35,7 +35,7 @@ impl<D: Device> TensorRef<D> {
         self.inner.try_read().unwrap()
     }
 
-    fn borrow_mut(&self) -> RwLockWriteGuard<'_, Tensor<D>> {
+    pub(crate) fn borrow_mut(&self) -> RwLockWriteGuard<'_, Tensor<D>> {
         self.inner.try_write().unwrap()
     }
 
