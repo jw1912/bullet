@@ -254,4 +254,19 @@ impl<D: Device> PreparedBatchDevice<D> {
 
         Ok(())
     }
+
+    pub fn copy_into_graph<G: GraphLike<D>>(&self, graph: &mut G) -> Result<(), TrainerError<D>> {
+        for (id, matrices) in &self.inputs {
+            if let Some(idx) = graph.primary().input_idx(id) {
+                let tensors =
+                    graph.get_all(GraphNodeId::new(idx, GraphNodeIdTy::Values)).map_err(TrainerError::Unexpected)?;
+
+                for (tensor, matrix) in tensors.into_iter().zip(matrices.iter()) {
+                    matrix.copy_into(&mut tensor.borrow_mut().values).map_err(TrainerError::Unexpected)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
