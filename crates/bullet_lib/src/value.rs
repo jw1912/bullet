@@ -121,7 +121,7 @@ where
         let steps = schedule.steps;
 
         let error_record = RefCell::new(Vec::new());
-        let mut prev32_loss = 0.0;
+        let mut loss_sum = 0.0;
         let mut ticks_since_last = 0.0;
 
         self.train_custom(
@@ -132,17 +132,17 @@ where
             },
             ValueDataLoader { steps, threads: settings.threads, dataloader, wdl: schedule.wdl_scheduler.clone() },
             |_, superbatch, curr_batch, error| {
-                prev32_loss += error;
+                loss_sum += error;
                 ticks_since_last += 1.0;
 
                 if curr_batch % 32 == 0
                     || (steps.batches_per_superbatch < 32 && curr_batch == steps.batches_per_superbatch)
                 {
-                    prev32_loss /= f32::min(ticks_since_last, steps.batches_per_superbatch as f32);
+                    let normalised_loss = loss_sum / f32::min(ticks_since_last, steps.batches_per_superbatch as f32);
 
-                    error_record.borrow_mut().push((superbatch, curr_batch, prev32_loss));
+                    error_record.borrow_mut().push((superbatch, curr_batch, normalised_loss));
 
-                    prev32_loss = 0.0;
+                    loss_sum = 0.0;
                     ticks_since_last = 0.0;
                 }
             },
