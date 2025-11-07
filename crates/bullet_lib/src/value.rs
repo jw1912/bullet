@@ -189,7 +189,14 @@ where
 
     pub fn get_output_values(&self) -> Vec<f32> {
         let id = GraphNodeId::new(self.state.output_node.idx(), GraphNodeIdTy::Values);
-        self.optimiser.graph.get(id).unwrap().get_dense_vals().unwrap()
+
+        #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
+        {
+            self.optimiser.graph.get(id).unwrap().get_dense_vals().unwrap()
+        }
+
+        #[cfg(any(feature = "multigpu", feature = "cpu"))]
+        self.optimiser.graph.get_all(id).unwrap().iter().flat_map(|x| x.get_dense_vals().unwrap()).collect()
     }
 
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>

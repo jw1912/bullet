@@ -51,8 +51,8 @@ fn main() {
         let prepared = state.prepare(batch, threads, 1.0, 1.0);
         let mut device_data = PreparedBatchDevice::new(trainer.optimiser.graph.devices(), &prepared).unwrap();
         device_data.load_into_graph(&mut trainer.optimiser.graph).unwrap();
+        trainer.optimiser.graph.execute_fn("forward").unwrap();
         trainer.optimiser.graph.synchronise().unwrap();
-        trainer.optimiser.graph.forward().unwrap();
 
         let mut batch = batch.to_vec();
         let new_evals = trainer.get_output_values();
