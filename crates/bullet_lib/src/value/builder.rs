@@ -190,7 +190,7 @@ where
                 output_getter: buckets,
                 blend_getter: self.blend_getter,
                 weight_getter: self.weight_getter,
-                _output_node: output_node,
+                output_node,
                 use_win_rate_model: self.use_win_rate_model,
                 wdl: self.wdl_output,
                 saved_format,

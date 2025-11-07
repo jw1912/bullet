@@ -61,3 +61,7 @@ path = "../../examples/progression/3_input_buckets.rs"
 [[example]]
 name = "4_multi_layer"
 path = "../../examples/progression/4_multi_layer.rs"
+
+[[example]]
+name = "relabel"
+path = "../../examples/extra/relabel.rs"

@@ -22,6 +22,10 @@ impl<D: Device + MultiDevice> MultiDeviceGraph<D> {
     pub fn get_input(&self, id: &str) -> TensorRef<D> {
         self.primary().get_input(id)
     }
+
+    pub fn synchronise(&self) -> Result<(), D::DeviceError> {
+        self.graphs.iter().try_for_each(|g| g.device().synchronise())
+    }
 }
 
 impl<D: Device + MultiDevice> GraphLike<D> for MultiDeviceGraph<D> {
