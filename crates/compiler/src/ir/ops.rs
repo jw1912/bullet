@@ -97,7 +97,7 @@ pub struct Leaf(pub IrType);
 
 impl IrOperation for Leaf {
     fn opname(&self) -> String {
-        format!("leaf.{:?}", self.0)
+        format!("leaf<{:?}>", self.0)
     }
 
     fn inputs(&self) -> Vec<IrNodeId> {

@@ -5,10 +5,19 @@ use std::{
 
 use crate::ir::size::Size;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DType {
     F32,
     I32,
+}
+
+impl fmt::Debug for DType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::F32 => write!(f, "f32"),
+            Self::I32 => write!(f, "i32"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -19,7 +28,7 @@ pub struct IrType {
 
 impl fmt::Debug for IrType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}x{:?}", self.size, self.dtype)
+        write!(f, "{:?}[{:?}]", self.dtype, self.size)
     }
 }
 

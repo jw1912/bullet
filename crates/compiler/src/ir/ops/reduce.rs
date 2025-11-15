@@ -26,7 +26,7 @@ impl Reduce {
 
 impl IrOperation for Reduce {
     fn opname(&self) -> String {
-        format!("reduce.{}[{:?}, {:?}]", format!("{:?}", self.op).to_lowercase(), self.start, self.end)
+        format!("reduce.{}<{:?}, {:?}>", format!("{:?}", self.op).to_lowercase(), self.start, self.end)
     }
 
     fn inputs(&self) -> Vec<IrNodeId> {

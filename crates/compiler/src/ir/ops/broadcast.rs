@@ -26,7 +26,7 @@ impl Broadcast {
 
 impl IrOperation for Broadcast {
     fn opname(&self) -> String {
-        format!("broadcast[{:?}, {:?}]", self.start, self.end)
+        format!("broadcast<{:?}, {:?}>", self.start, self.end)
     }
 
     fn inputs(&self) -> Vec<IrNodeId> {
