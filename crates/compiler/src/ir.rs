@@ -305,8 +305,11 @@ impl fmt::Display for IrGraph {
 
 #[cfg(test)]
 mod tests {
-    use super::{node::DType, *};
-    use crate::map::{BinaryOp, MapOp};
+    use super::{
+        node::DType,
+        ops::{BinaryOp, MapOp},
+        *,
+    };
 
     #[test]
     fn construct_deconstruct() -> Result<(), IrError> {

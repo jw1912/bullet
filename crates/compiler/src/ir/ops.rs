@@ -1,4 +1,5 @@
 mod broadcast;
+mod map;
 mod reduce;
 mod shape;
 
@@ -9,13 +10,11 @@ use std::{
 };
 
 pub use broadcast::Broadcast;
+pub use map::{BinaryOp, MapOp, UnaryOp};
 pub use reduce::{Reduce, ReduceOp};
 pub use shape::Shape;
 
-use crate::{
-    ir::{IrError, IrGraph, IrNodeId, IrType},
-    map::MapOp,
-};
+use crate::ir::{IrError, IrGraph, IrNodeId, IrType};
 
 pub trait IrOperation: Debug + 'static {
     fn opname(&self) -> String;

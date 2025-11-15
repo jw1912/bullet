@@ -2,9 +2,8 @@ use crate::{
     frontend::ProgramBuilder,
     ir::{
         node::IrNodeId,
-        ops::{Broadcast, Reduce, ReduceOp, Shape},
+        ops::{BinaryOp, Broadcast, MapOp, Reduce, ReduceOp, Shape, UnaryOp},
     },
-    map::{BinaryOp, MapOp, UnaryOp},
 };
 
 #[derive(Clone, Copy)]

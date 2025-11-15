@@ -1,6 +1,5 @@
 pub mod frontend;
 pub mod ir;
-pub mod map;
 pub mod program;
 
 pub use frontend::{ProgramBuilder, ProgramNode};
