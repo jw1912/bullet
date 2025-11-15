@@ -62,6 +62,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
 
 [[package]]
+name = "bullet-compiler"
+version = "0.1.0"
+
+[[package]]
+name = "bullet-runtime"
+version = "0.1.0"
+
+[[package]]
 name = "bullet-utils"
 version = "0.1.0"
 dependencies = [
