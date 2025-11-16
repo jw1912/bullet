@@ -35,6 +35,10 @@ impl ProgramBuilder {
         self.new_node(node)
     }
 
+    pub fn display_ir(&self) {
+        println!("{}", self.ir.borrow())
+    }
+
     pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> Program {
         let mut ir = self.ir.borrow_mut();
 
@@ -44,9 +48,7 @@ impl ProgramBuilder {
 
         ir.eliminate_dead_ops().unwrap();
 
-        println!("{ir}");
-
-        Program::default()
+        ir.lower().unwrap()
     }
 }
 

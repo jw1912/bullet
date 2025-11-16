@@ -40,6 +40,10 @@ impl Size {
     pub const fn is_multiple_of(&self, size: Size) -> bool {
         self.batch_power >= size.batch_power && self.factor.get().is_multiple_of(size.factor.get())
     }
+
+    pub fn is_le(&self, rhs: Self) -> bool {
+        self.batch_power <= rhs.batch_power && self.factor <= rhs.factor
+    }
 }
 
 impl Add<Size> for Size {

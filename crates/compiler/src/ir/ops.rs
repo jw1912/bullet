@@ -14,7 +14,7 @@ pub use map::{BinaryOp, MapOp, UnaryOp};
 pub use reduce::{Reduce, ReduceOp};
 pub use shape::Shape;
 
-use crate::ir::{IrError, IrGraph, IrNodeId, IrType};
+use crate::ir::{IrError, IrGraph, IrNodeId, IrType, lower::IrLower};
 
 pub trait IrOperation: Debug + 'static {
     fn opname(&self) -> String;
@@ -22,6 +22,8 @@ pub trait IrOperation: Debug + 'static {
     fn inputs(&self) -> Vec<IrNodeId>;
 
     fn output_types(&self, ir: &IrGraph) -> Result<Vec<IrType>, IrError>;
+
+    fn lower(&self, lower: &mut IrLower, inputs: &[IrNodeId], outputs: &[IrNodeId]) -> Result<(), IrError>;
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -35,7 +37,7 @@ impl Default for IrOpId {
 }
 
 impl IrOpId {
-    pub fn from_inner(id: usize) -> Self {
+    pub(super) fn from_inner(id: usize) -> Self {
         Self(id)
     }
 
@@ -106,33 +108,8 @@ impl IrOperation for Leaf {
     fn output_types(&self, _ir: &IrGraph) -> Result<Vec<IrType>, IrError> {
         Ok(vec![self.0])
     }
-}
 
-impl IrOperation for MapOp<IrNodeId> {
-    fn opname(&self) -> String {
-        self.opname()
-    }
-
-    fn inputs(&self) -> Vec<IrNodeId> {
-        self.inputs()
-    }
-
-    fn output_types(&self, ir: &IrGraph) -> Result<Vec<IrType>, IrError> {
-        let types = self.inputs().iter().map(|input| ir.get_node_type(*input)).collect::<Result<Vec<_>, _>>()?;
-        let size = types[0].size();
-
-        if types.iter().any(|x| x.size() != size) {
-            return Err(IrError::InvalidOperationInputs);
-        }
-
-        let dtype = match *self {
-            MapOp::Binary { lhs, rhs, .. } => {
-                let dtype = ir.get_node(lhs)?.ty().dtype();
-                (dtype == ir.get_node(rhs)?.ty().dtype()).then_some(dtype).ok_or(IrError::FailedTypeCheck)
-            }
-            MapOp::Unary { inp, .. } => Ok(ir.get_node(inp)?.ty().dtype()),
-        }?;
-
-        Ok(vec![IrType::new(size, dtype)])
+    fn lower(&self, _lower: &mut IrLower, _inputs: &[IrNodeId], _outputs: &[IrNodeId]) -> Result<(), IrError> {
+        Ok(())
     }
 }

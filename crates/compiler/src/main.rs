@@ -17,5 +17,9 @@ fn main() {
 
     let program = builder.build([loss]);
 
+    println!("Intermediate Representation:");
+    builder.display_ir();
+    println!();
+    println!("Program Code:");
     println!("{program}");
 }

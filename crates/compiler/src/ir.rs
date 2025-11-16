@@ -1,3 +1,4 @@
+pub mod lower;
 pub mod node;
 pub mod ops;
 pub mod size;
@@ -11,7 +12,10 @@ use std::{
 use node::{IrNodeId, IrType};
 use ops::{IrOp, IrOpId, IrOperation};
 
-use crate::ir::node::IrNode;
+use crate::{
+    ir::{lower::IrLower, node::IrNode},
+    program::{Program, ProgramError},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IrError {
@@ -23,6 +27,7 @@ pub enum IrError {
     InvalidOperationInputs,
     InvalidOperationOutputs,
     Cyclic,
+    Lowering(ProgramError),
     Message(String),
 }
 
@@ -244,6 +249,19 @@ impl IrGraph {
         }
 
         Ok(())
+    }
+
+    pub fn lower(&self) -> Result<Program, IrError> {
+        let mut lower = IrLower::new(self);
+
+        let topo = self.topo_order_ops()?;
+
+        for op_id in topo {
+            let op = self.get_op(op_id)?;
+            op.op().lower(&mut lower, op.inputs(), op.outputs())?;
+        }
+
+        Ok(lower.finalise())
     }
 }
 

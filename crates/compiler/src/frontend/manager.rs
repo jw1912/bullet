@@ -1,10 +1,13 @@
 use std::{backtrace::Backtrace, error::Error, fmt};
 
-use crate::ir::{
-    IrError, IrGraph,
-    node::{DType, IrNode, IrNodeId, IrType},
-    ops::IrOperation,
-    size::Size,
+use crate::{
+    ir::{
+        IrError, IrGraph,
+        node::{DType, IrNode, IrNodeId, IrType},
+        ops::IrOperation,
+        size::Size,
+    },
+    program::Program,
 };
 
 pub struct IrManager {
@@ -64,6 +67,10 @@ impl IrManager {
 
     pub fn eliminate_dead_ops(&mut self) -> Result<(), IrManagerError> {
         self.modify(|graph| graph.eliminate_dead_ops())
+    }
+
+    pub fn lower(&self) -> Result<Program, IrManagerError> {
+        self.capture_error(self.current().lower())
     }
 }
 
