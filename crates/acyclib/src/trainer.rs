@@ -5,7 +5,7 @@ pub mod schedule;
 
 use dataloader::{DataLoader, PreparedBatchDevice, PreparedBatchHost};
 use optimiser::{Optimiser, OptimiserState};
-use schedule::TrainingSchedule;
+use schedule::{TrainingSchedule, TrainingSteps};
 
 use std::{sync::mpsc, thread, time::Instant};
 
@@ -195,6 +195,38 @@ impl<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> Trainer<D, G, O, S> {
         );
 
         dataloader.join().unwrap()?;
+
+        Ok(())
+    }
+
+    pub fn measure_max_cpu_throughput(
+        &self,
+        dataloader: impl DataLoader<Error = DataLoadingError>,
+        steps: TrainingSteps,
+    ) -> Result<(), TrainerError<D>> {
+        let mut batch_no = 0;
+        let mut superbatch = steps.start_superbatch;
+
+        let t = Instant::now();
+        let mut total = 0;
+
+        dataloader.map_batches(steps.batch_size, |batch| {
+            batch_no += 1;
+            total += batch.batch_size;
+
+            if batch_no % steps.batches_per_superbatch == 0 {
+                batch_no = 0;
+                superbatch += 1;
+
+                println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
+
+                if superbatch > steps.end_superbatch {
+                    return true;
+                }
+            }
+
+            false
+        })?;
 
         Ok(())
     }

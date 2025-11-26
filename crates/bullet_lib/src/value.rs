@@ -245,4 +245,29 @@ where
             _ => panic!("Invalid output size!"),
         }
     }
+
+    pub fn measure_max_cpu_throughput(
+        &self,
+        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
+        settings: &LocalSettings,
+        dataloader: &impl loader::DataLoader<Inp::RequiredDataType>,
+    ) {
+        let steps = schedule.steps;
+        let threads = settings.threads;
+        let wdl = schedule.wdl_scheduler.clone();
+        let dataloader = DefaultDataLoader::new(
+            self.state.input_getter.clone(),
+            self.state.output_getter,
+            self.state.blend_getter,
+            self.state.weight_getter,
+            self.state.use_win_rate_model,
+            self.state.wdl,
+            schedule.eval_scale,
+            dataloader.clone(),
+        );
+
+        let dataloader = ValueDataLoader { steps, threads, dataloader, wdl };
+
+        self.0.measure_max_cpu_throughput(dataloader, steps).unwrap()
+    }
 }
