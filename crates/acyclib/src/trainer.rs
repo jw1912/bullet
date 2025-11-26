@@ -218,17 +218,15 @@ impl<D: Device, G: GraphLike<D>, O: OptimiserState<D>, S> Trainer<D, G, O, S> {
                 batch_no = 0;
                 superbatch += 1;
 
+                println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
+
                 if superbatch > steps.end_superbatch {
                     return true;
                 }
-
-                println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
             }
 
             false
         })?;
-
-        println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
 
         Ok(())
     }
