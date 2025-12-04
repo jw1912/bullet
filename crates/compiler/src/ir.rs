@@ -1,7 +1,6 @@
 pub mod lower;
 pub mod node;
 pub mod ops;
-pub mod size;
 pub mod topo;
 
 use std::{
@@ -13,6 +12,7 @@ use node::{IrNodeId, IrType};
 use ops::{IrOp, IrOpId, IrOperation};
 
 use crate::{
+    common::{BinaryOp, MapNode, MapOp, UnaryOp},
     ir::{lower::IrLower, node::IrNode},
     program::{Program, ProgramError},
 };
@@ -145,6 +145,14 @@ impl IrGraph {
     #[must_use]
     pub fn add_leaf(&mut self, ty: IrType) -> IrNodeId {
         self.add_op(ops::Leaf(ty)).expect("Constructing leaf is infallible!")[0]
+    }
+
+    pub fn add_unary(&mut self, node: IrNodeId, op: UnaryOp) -> Result<IrNodeId, IrError> {
+        self.add_op(MapOp::Unary { inp: MapNode::Value(node), op }).map(|x| x[0])
+    }
+
+    pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: BinaryOp) -> Result<IrNodeId, IrError> {
+        self.add_op(MapOp::Binary { lhs: MapNode::Value(lhs), rhs: MapNode::Value(rhs), op }).map(|x| x[0])
     }
 
     pub fn register_output(&mut self, node: IrNodeId) {
@@ -323,11 +331,8 @@ impl fmt::Display for IrGraph {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        node::DType,
-        ops::{BinaryOp, MapOp},
-        *,
-    };
+    use super::*;
+    use crate::common::{BinaryOp, DType, MapOp};
 
     #[test]
     fn construct_deconstruct() -> Result<(), IrError> {
@@ -337,9 +342,9 @@ mod tests {
         let y = ir.add_leaf(IrType::new(8, DType::F32));
         let z = ir.add_leaf(IrType::new(8, DType::F32));
 
-        let w = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?[0];
-        let t = ir.add_op(MapOp::Binary { lhs: z, rhs: w, op: BinaryOp::Mul })?[0];
-        let u = ir.add_op(MapOp::Binary { lhs: t, rhs: x, op: BinaryOp::Add })?[0];
+        let w = ir.add_binary(x, y, BinaryOp::Add)?;
+        let t = ir.add_binary(z, w, BinaryOp::Mul)?;
+        let u = ir.add_binary(t, x, BinaryOp::Add)?;
 
         assert_eq!(ir.get_node(u)?.ty(), IrType::new(8, DType::F32));
 
@@ -363,13 +368,13 @@ mod tests {
 
         let x = ir.add_leaf(IrType::new(8, DType::F32));
         let y = ir.add_leaf(IrType::new(8, DType::F32));
-        let z = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?[0];
-        let w = ir.add_op(MapOp::Binary { lhs: z, rhs: y, op: BinaryOp::Add })?[0];
-        let t = ir.add_op(MapOp::Binary { lhs: w, rhs: y, op: BinaryOp::Sub })?[0];
+        let z = ir.add_binary(x, y, BinaryOp::Add)?;
+        let w = ir.add_binary(z, y, BinaryOp::Add)?;
+        let t = ir.add_binary(w, y, BinaryOp::Sub)?;
 
         ir.register_output(t);
 
-        let new_t = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?[0];
+        let new_t = ir.add_binary(x, y, BinaryOp::Add)?;
         ir.swap_outputs(new_t, t)?;
         ir.eliminate_dead_ops()?;
 
@@ -391,13 +396,14 @@ mod tests {
 
         let x = ir.add_leaf(IrType::new(8, DType::F32));
         let y = ir.add_leaf(IrType::new(8, DType::F32));
-        let z = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?[0];
-        let w = ir.add_op(MapOp::Binary { lhs: z, rhs: y, op: BinaryOp::Add })?[0];
-        let t = ir.add_op(MapOp::Binary { lhs: w, rhs: y, op: BinaryOp::Sub })?[0];
+        let z = ir.add_binary(x, y, BinaryOp::Add)?;
+        let w = ir.add_binary(z, y, BinaryOp::Add)?;
+        let t = ir.add_binary(w, y, BinaryOp::Sub)?;
 
         ir.register_output(t);
 
-        ir.replace_op(ir.get_parent_op(t)?, MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?;
+        let new_op = MapOp::Binary { lhs: MapNode::Value(x), rhs: MapNode::Value(y), op: BinaryOp::Add };
+        ir.replace_op(ir.get_parent_op(t)?, new_op)?;
         ir.eliminate_dead_ops()?;
 
         assert_eq!(ir.num_ops(), 3);
@@ -418,7 +424,7 @@ mod tests {
         let x = ir.add_leaf(IrType::new(8, DType::F32));
         let y = ir.add_leaf(IrType::new(16, DType::F32));
 
-        let z = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add });
+        let z = ir.add_binary(x, y, BinaryOp::Add);
         assert_eq!(z, Err(IrError::InvalidOperationInputs), "{z:?}");
 
         Ok(())
@@ -431,7 +437,7 @@ mod tests {
         let x = ir.add_leaf(IrType::new(8, DType::F32));
         let y = ir.add_leaf(IrType::new(8, DType::I32));
 
-        let z = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add });
+        let z = ir.add_binary(x, y, BinaryOp::Add);
         assert_eq!(z, Err(IrError::FailedTypeCheck), "{z:?}");
 
         Ok(())
@@ -443,7 +449,7 @@ mod tests {
 
         let x = ir.add_leaf(IrType::new(8, DType::F32));
         let y = ir.add_leaf(IrType::new(8, DType::F32));
-        let z = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?[0];
+        let z = ir.add_binary(x, y, BinaryOp::Add)?;
 
         assert_eq!(ir.get_node(z)?.ty(), IrType::new(8, DType::F32));
         assert_eq!(ir.remove_op(ir.get_parent_op(y)?), Err(IrError::OpIsNotRoot));
@@ -457,9 +463,9 @@ mod tests {
 
         let x = ir.add_leaf(IrType::new(8, DType::F32));
         let y = ir.add_leaf(IrType::new(8, DType::F32));
-        let z = ir.add_op(MapOp::Binary { lhs: x, rhs: y, op: BinaryOp::Add })?[0];
-        let w = ir.add_op(MapOp::Binary { lhs: z, rhs: y, op: BinaryOp::Add })?[0];
-        let t = ir.add_op(MapOp::Binary { lhs: w, rhs: y, op: BinaryOp::Sub })?[0];
+        let z = ir.add_binary(x, y, BinaryOp::Add)?;
+        let w = ir.add_binary(z, y, BinaryOp::Add)?;
+        let t = ir.add_binary(w, y, BinaryOp::Sub)?;
 
         assert_eq!(ir.swap_outputs(z, t), Err(IrError::Cyclic));
 

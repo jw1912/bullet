@@ -1,7 +1,6 @@
 mod broadcast;
 mod map;
 mod reduce;
-mod shape;
 
 use std::{
     fmt::Debug,
@@ -10,9 +9,7 @@ use std::{
 };
 
 pub use broadcast::Broadcast;
-pub use map::{BinaryOp, MapOp, UnaryOp};
 pub use reduce::{Reduce, ReduceOp};
-pub use shape::Shape;
 
 use crate::ir::{IrError, IrGraph, IrNodeId, IrType, lower::IrLower};
 

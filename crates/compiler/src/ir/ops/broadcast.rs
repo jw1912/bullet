@@ -1,9 +1,6 @@
 use crate::{
-    ir::{
-        IrError, IrGraph, IrNodeId, IrType,
-        lower::IrLower,
-        ops::{IrOperation, shape::Shape},
-    },
+    common::Shape,
+    ir::{IrError, IrGraph, IrNodeId, IrType, lower::IrLower, ops::IrOperation},
     program::{Program, ProgramError, buffer::ProgramBufferId, instruction::ProgramInstruction},
 };
 

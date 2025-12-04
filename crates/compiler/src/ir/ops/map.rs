@@ -1,6 +1,5 @@
-use std::fmt::Debug;
-
 use crate::{
+    common::{MapNode, MapOp},
     ir::{
         IrError, IrGraph,
         lower::IrLower,
@@ -10,77 +9,9 @@ use crate::{
     program::{Program, ProgramError, buffer::ProgramBufferId, instruction::ProgramInstruction},
 };
 
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MapOp<T> {
-    Unary { inp: T, op: UnaryOp },
-    Binary { lhs: T, rhs: T, op: BinaryOp },
-}
-
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnaryOp {
-    Sin,
-    Cos,
-    Tan,
-    Sinh,
-    Cosh,
-    Tanh,
-    Exp,
-    Log,
-    Sgn,
-    Abs,
-}
-
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinaryOp {
-    Add,
-    Mul,
-    Sub,
-    Div,
-    Min,
-    Max,
-    AbsPow,
-}
-
-impl<T: Copy> MapOp<T> {
-    pub fn opname(&self) -> String {
-        format!(
-            "map.{}",
-            match *self {
-                MapOp::Unary { op, .. } => format!("{op:?}"),
-                MapOp::Binary { op, .. } => format!("{op:?}"),
-            }
-            .to_lowercase()
-        )
-    }
-
-    pub fn inputs(&self) -> Vec<T> {
-        match *self {
-            MapOp::Binary { lhs, rhs, .. } => vec![lhs, rhs],
-            MapOp::Unary { inp, .. } => vec![inp],
-        }
-    }
-
-    pub fn to<U>(&self, f: impl Fn(&T) -> U) -> MapOp<U> {
-        match self {
-            Self::Unary { inp, op } => MapOp::Unary { inp: f(inp), op: *op },
-            Self::Binary { lhs, rhs, op } => MapOp::Binary { lhs: f(lhs), rhs: f(rhs), op: *op },
-        }
-    }
-
-    pub fn arity(&self) -> usize {
-        match self {
-            Self::Unary { .. } => 1,
-            Self::Binary { .. } => 2,
-        }
-    }
-}
-
 impl ProgramInstruction for MapOp<()> {
     fn opname(&self) -> String {
-        self.opname()
+        self.mapname()
     }
 
     fn validate(
@@ -97,30 +28,48 @@ impl ProgramInstruction for MapOp<()> {
     }
 }
 
-impl IrOperation for MapOp<IrNodeId> {
+impl IrOperation for MapOp<MapNode<IrNodeId>> {
     fn opname(&self) -> String {
-        self.opname()
+        self.mapname()
     }
 
     fn inputs(&self) -> Vec<IrNodeId> {
-        self.inputs()
+        self.args()
+            .iter()
+            .filter_map(|node| match node {
+                MapNode::Value(node) => Some(*node),
+                MapNode::Constant(_) => None,
+            })
+            .collect()
     }
 
     fn output_types(&self, ir: &IrGraph) -> Result<Vec<IrType>, IrError> {
-        let types = self.inputs().iter().map(|input| ir.get_node_type(*input)).collect::<Result<Vec<_>, _>>()?;
-        let size = types[0].size();
+        let dtype = |node| match node {
+            MapNode::Value(x) => ir.get_node(x).map(|y| y.ty().dtype()),
+            MapNode::Constant(x) => Ok(x.dtype()),
+        };
 
-        if types.iter().any(|x| x.size() != size) {
-            return Err(IrError::InvalidOperationInputs);
-        }
+        let size = |node| match node {
+            MapNode::Value(x) => ir.get_node(x).map(|y| Some(y.ty().size())),
+            MapNode::Constant(_) => Ok(None),
+        };
 
-        let dtype = match *self {
+        let (size, dtype) = match *self {
             MapOp::Binary { lhs, rhs, .. } => {
-                let dtype = ir.get_node(lhs)?.ty().dtype();
-                (dtype == ir.get_node(rhs)?.ty().dtype()).then_some(dtype).ok_or(IrError::FailedTypeCheck)
+                let size = match (size(lhs)?, size(rhs)?) {
+                    (None, None) => Err(IrError::FailedTypeCheck),
+                    (Some(x), None) => Ok(x),
+                    (None, Some(x)) => Ok(x),
+                    (Some(x), Some(y)) => (x == y).then_some(x).ok_or(IrError::InvalidOperationInputs),
+                }?;
+
+                let ldtype = dtype(lhs)?;
+                let dtype = (ldtype == dtype(rhs)?).then_some(ldtype).ok_or(IrError::FailedTypeCheck)?;
+
+                (size, dtype)
             }
-            MapOp::Unary { inp, .. } => Ok(ir.get_node(inp)?.ty().dtype()),
-        }?;
+            MapOp::Unary { inp, .. } => (size(inp)?.ok_or(IrError::InvalidOperationInputs)?, dtype(inp)?),
+        };
 
         Ok(vec![IrType::new(size, dtype)])
     }

@@ -3,7 +3,7 @@ pub mod instruction;
 
 use std::{collections::HashMap, fmt};
 
-use crate::ir::{node::DType, size::Size};
+use crate::common::{DType, Size};
 
 use buffer::{ProgramBuffer, ProgramBufferId};
 use instruction::{ProgramInst, ProgramInstruction};

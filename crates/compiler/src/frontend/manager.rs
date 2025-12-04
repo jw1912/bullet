@@ -1,11 +1,11 @@
 use std::{backtrace::Backtrace, error::Error, fmt};
 
 use crate::{
+    common::{DType, Size},
     ir::{
         IrError, IrGraph,
-        node::{DType, IrNode, IrNodeId, IrType},
+        node::{IrNode, IrNodeId, IrType},
         ops::IrOperation,
-        size::Size,
     },
     program::Program,
 };

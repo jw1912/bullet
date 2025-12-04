@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::ir::{node::DType, size::Size};
+use crate::common::{DType, Size};
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ProgramBufferId(usize);

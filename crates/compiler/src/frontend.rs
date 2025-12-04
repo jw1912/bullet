@@ -7,11 +7,8 @@ use manager::IrManager;
 pub use node::ProgramNode;
 
 use crate::{
-    ir::{
-        node::{DType, IrNodeId},
-        ops::IrOperation,
-        size::Size,
-    },
+    common::{DType, Size},
+    ir::{node::IrNodeId, ops::IrOperation},
     program::Program,
 };
 

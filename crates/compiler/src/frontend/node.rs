@@ -1,8 +1,9 @@
 use crate::{
+    common::{BinaryOp, MapNode, MapOp, Shape, UnaryOp},
     frontend::ProgramBuilder,
     ir::{
         node::IrNodeId,
-        ops::{BinaryOp, Broadcast, MapOp, Reduce, ReduceOp, Shape, UnaryOp},
+        ops::{Broadcast, Reduce, ReduceOp},
     },
 };
 
@@ -30,11 +31,11 @@ impl<'a> ProgramNode<'a> {
     }
 
     fn unary(self, op: UnaryOp) -> Self {
-        self.builder.add_op(MapOp::Unary { inp: self.node, op })[0]
+        self.builder.add_op(MapOp::Unary { inp: MapNode::Value(self.node), op })[0]
     }
 
     fn binary(self, rhs: Self, op: BinaryOp) -> Self {
-        self.builder.add_op(MapOp::Binary { lhs: self.node, rhs: rhs.node, op })[0]
+        self.builder.add_op(MapOp::Binary { lhs: MapNode::Value(self.node), rhs: MapNode::Value(rhs.node), op })[0]
     }
 
     pub fn abs_pow(self, rhs: Self) -> Self {
@@ -76,6 +77,6 @@ unary_impl!(sinh, Sinh);
 unary_impl!(cosh, Cosh);
 unary_impl!(tanh, Tanh);
 unary_impl!(exp, Exp);
-unary_impl!(log, Log);
+unary_impl!(log1pabs, Log1pAbs);
 unary_impl!(sgn, Sgn);
 unary_impl!(abs, Abs);
