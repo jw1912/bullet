@@ -1,0 +1,174 @@
+use std::{
+    fmt,
+    num::NonZeroUsize,
+    ops::{Add, Div, Mul, Sub},
+};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Size {
+    batch_power: usize,
+    factor: NonZeroUsize,
+}
+
+impl From<usize> for Size {
+    fn from(value: usize) -> Self {
+        Self::constant(value)
+    }
+}
+
+impl fmt::Debug for Size {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.batch_power, self.factor.get()) {
+            (0, x) => write!(f, "{x}"),
+            (1, 1) => write!(f, "B"),
+            (1, x) => write!(f, "{x}B"),
+            (x, 1) => write!(f, "B^{x}"),
+            (x, y) => write!(f, "{y}B^{x}"),
+        }
+    }
+}
+
+impl Size {
+    pub const fn batched() -> Self {
+        Self { batch_power: 1, factor: NonZeroUsize::new(1).unwrap() }
+    }
+
+    pub const fn constant(size: usize) -> Self {
+        Self { batch_power: 0, factor: NonZeroUsize::new(size).unwrap() }
+    }
+
+    pub const fn is_multiple_of(&self, size: Size) -> bool {
+        self.batch_power >= size.batch_power && self.factor.get().is_multiple_of(size.factor.get())
+    }
+
+    pub fn is_le(&self, rhs: Self) -> bool {
+        self.batch_power <= rhs.batch_power && self.factor <= rhs.factor
+    }
+}
+
+impl Add<Size> for Size {
+    type Output = Size;
+
+    fn add(self, rhs: Size) -> Self::Output {
+        assert_eq!(self.batch_power, rhs.batch_power, "Can only add with the same power of batch size!");
+        let factor = NonZeroUsize::new(self.factor.get() + rhs.factor.get()).unwrap();
+        Self { batch_power: self.batch_power, factor }
+    }
+}
+
+impl Sub<Size> for Size {
+    type Output = Size;
+
+    fn sub(self, rhs: Size) -> Self::Output {
+        assert_eq!(self.batch_power, rhs.batch_power, "Can only sub with the same power of batch size!");
+        assert!(self.factor.get() > rhs.factor.get(), "Cannot have non-positive size!");
+        let factor = NonZeroUsize::new(self.factor.get() - rhs.factor.get()).unwrap();
+        Self { batch_power: self.batch_power, factor }
+    }
+}
+
+impl<T: Into<Size>> Mul<T> for Size {
+    type Output = Size;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        let factor = NonZeroUsize::new(self.factor.get() * rhs.factor.get()).unwrap();
+        Self { batch_power: self.batch_power + rhs.batch_power, factor }
+    }
+}
+
+impl<T: Into<Size>> Div<T> for Size {
+    type Output = Size;
+
+    fn div(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        assert!(self.is_multiple_of(rhs), "Cannot divide by non-factor size!");
+        let factor = NonZeroUsize::new(self.factor.get() / rhs.factor.get()).unwrap();
+        Self { batch_power: self.batch_power - rhs.batch_power, factor }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Shape(Vec<Size>);
+
+impl From<Size> for Shape {
+    fn from(value: Size) -> Self {
+        Self(vec![value])
+    }
+}
+
+impl<T: AsRef<[usize]>> From<T> for Shape {
+    fn from(value: T) -> Self {
+        Self(value.as_ref().iter().map(|&x| x.into()).collect())
+    }
+}
+
+impl<T: Into<Shape>> std::ops::Add<T> for Shape {
+    type Output = Shape;
+
+    fn add(mut self, rhs: T) -> Shape {
+        self.0.extend_from_slice(&rhs.into().0);
+        self
+    }
+}
+
+impl std::ops::Add<Shape> for Size {
+    type Output = Shape;
+
+    fn add(self, rhs: Shape) -> Shape {
+        let mut shape = Shape(vec![self]);
+        shape.0.extend_from_slice(&rhs.0);
+        shape
+    }
+}
+
+impl<T: AsRef<[usize]>> std::ops::Add<T> for Size {
+    type Output = Shape;
+
+    fn add(self, rhs: T) -> Shape {
+        let mut shape = Shape(vec![self]);
+        let v: Vec<_> = rhs.as_ref().iter().map(|&x| x.into()).collect();
+        shape.0.extend_from_slice(&v);
+        shape
+    }
+}
+
+impl std::ops::Add<Shape> for usize {
+    type Output = Shape;
+
+    fn add(self, rhs: Shape) -> Shape {
+        let mut shape = Shape(vec![self.into()]);
+        shape.0.extend_from_slice(&rhs.0);
+        shape
+    }
+}
+
+impl std::ops::Index<usize> for Shape {
+    type Output = Size;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl std::fmt::Debug for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0[0])?;
+
+        for x in self.0.iter().skip(1) {
+            write!(f, "x{x:?}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Shape {
+    pub fn size(&self) -> Size {
+        self.0.iter().fold(Size::constant(1), |x, &y| x * y)
+    }
+
+    pub fn inner(&self) -> &[Size] {
+        &self.0
+    }
+}
