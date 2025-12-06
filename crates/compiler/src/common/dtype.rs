@@ -29,3 +29,12 @@ impl DTypeValue {
         }
     }
 }
+
+impl fmt::Display for DTypeValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::F32(x) => write!(f, "{x}"),
+            Self::I32(x) => write!(f, "{x}"),
+        }
+    }
+}

@@ -1,4 +1,5 @@
 pub mod buffer;
+pub mod elementwise;
 pub mod instruction;
 
 use std::{collections::HashMap, fmt};

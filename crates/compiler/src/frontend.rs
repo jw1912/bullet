@@ -8,6 +8,7 @@ pub use node::ProgramNode;
 
 use crate::{
     common::{DType, Size},
+    elementwise::ElementwiseNode,
     ir::{node::IrNodeId, ops::IrOperation},
     program::Program,
 };
@@ -30,6 +31,21 @@ impl ProgramBuilder {
     pub fn add_leaf<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> ProgramNode<'a> {
         let node = self.ir.borrow_mut().add_leaf(size, dtype).unwrap();
         self.new_node(node)
+    }
+
+    pub fn elementwise<'a, F, const M: usize, const N: usize>(
+        &'a self,
+        inputs: [ProgramNode<'a>; M],
+        f: F,
+    ) -> [ProgramNode<'a>; N]
+    where
+        for<'b> F: Fn([ElementwiseNode<'b>; M]) -> [ElementwiseNode<'b>; N],
+    {
+        self.ir
+            .borrow_mut()
+            .modify(|x| x.add_elementwise(inputs.map(|y| y.node()), |x| Some(f(x))))
+            .unwrap()
+            .map(|id| ProgramNode::new(self, id))
     }
 
     pub fn display_ir(&self) {

@@ -75,11 +75,7 @@ impl IrOperation for Broadcast {
         Ok(vec![IrType::new(self.1.end.size(), node.ty().dtype())])
     }
 
-    fn lower(&self, lower: &mut IrLower, inputs: &[IrNodeId], outputs: &[IrNodeId]) -> Result<(), IrError> {
-        if inputs[0] != self.0 {
-            return Err(IrError::Lowering(ProgramError::InvalidBuffers));
-        }
-
-        lower.add_instruction(lower.get_bufs(inputs)?, lower.get_bufs(outputs)?, self.1.clone())
+    fn lower(&self, lower: &mut IrLower, outputs: &[IrNodeId]) -> Result<(), IrError> {
+        lower.add_instruction(lower.get_bufs(self.inputs())?, lower.get_bufs(outputs)?, self.1.clone())
     }
 }

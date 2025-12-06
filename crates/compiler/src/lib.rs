@@ -1,4 +1,5 @@
 pub mod common;
+pub mod elementwise;
 pub mod frontend;
 pub mod ir;
 pub mod program;

@@ -199,7 +199,7 @@ impl<B: BackendMarker> GraphBuilderNode<'_, B> {
         self.diffable_from_output(DiffableFromOutput::Sigmoid)
     }
 
-    /// Clamps the values elementwise into the range [min, max],
+    /// Clamps the values ElementwiseDescription into the range [min, max],
     /// but on backpropagation it acts as if it was the identity.
     pub fn clip_pass_through_grad(self, min: f32, max: f32) -> Self {
         self.builder.apply(ClipPassThroughGrad { input: self.node, min, max })

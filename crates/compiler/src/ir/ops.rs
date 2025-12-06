@@ -1,5 +1,5 @@
 mod broadcast;
-mod map;
+mod elementwise;
 mod reduce;
 
 use std::{
@@ -9,6 +9,7 @@ use std::{
 };
 
 pub use broadcast::Broadcast;
+pub use elementwise::IrElementwise;
 pub use reduce::{Reduce, ReduceOp};
 
 use crate::ir::{IrError, IrGraph, IrNodeId, IrType, lower::IrLower};
@@ -20,7 +21,7 @@ pub trait IrOperation: Debug + 'static {
 
     fn output_types(&self, ir: &IrGraph) -> Result<Vec<IrType>, IrError>;
 
-    fn lower(&self, lower: &mut IrLower, inputs: &[IrNodeId], outputs: &[IrNodeId]) -> Result<(), IrError>;
+    fn lower(&self, lower: &mut IrLower, outputs: &[IrNodeId]) -> Result<(), IrError>;
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -106,7 +107,7 @@ impl IrOperation for Leaf {
         Ok(vec![self.0])
     }
 
-    fn lower(&self, _lower: &mut IrLower, _inputs: &[IrNodeId], _outputs: &[IrNodeId]) -> Result<(), IrError> {
+    fn lower(&self, _lower: &mut IrLower, _outputs: &[IrNodeId]) -> Result<(), IrError> {
         Ok(())
     }
 }

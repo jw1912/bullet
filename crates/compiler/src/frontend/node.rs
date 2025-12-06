@@ -1,5 +1,6 @@
 use crate::{
-    common::{BinaryOp, MapNode, MapOp, Shape, UnaryOp},
+    common::Shape,
+    elementwise::{Binary, Unary},
     frontend::ProgramBuilder,
     ir::{
         node::IrNodeId,
@@ -30,16 +31,18 @@ impl<'a> ProgramNode<'a> {
         self.builder.add_op(Reduce::new(self.node, start, end, op))[0]
     }
 
-    fn unary(self, op: UnaryOp) -> Self {
-        self.builder.add_op(MapOp::Unary { inp: MapNode::Value(self.node), op })[0]
+    fn unary(self, op: Unary) -> Self {
+        let node = self.builder.ir.borrow_mut().modify(|inner| inner.add_unary(self.node, op)).unwrap();
+        Self { builder: self.builder, node }
     }
 
-    fn binary(self, rhs: Self, op: BinaryOp) -> Self {
-        self.builder.add_op(MapOp::Binary { lhs: MapNode::Value(self.node), rhs: MapNode::Value(rhs.node), op })[0]
+    fn binary(self, rhs: Self, op: Binary) -> Self {
+        let node = self.builder.ir.borrow_mut().modify(|inner| inner.add_binary(self.node, rhs.node, op)).unwrap();
+        Self { builder: self.builder, node }
     }
 
     pub fn abs_pow(self, rhs: Self) -> Self {
-        self.binary(rhs, BinaryOp::AbsPow)
+        self.binary(rhs, Binary::AbsPow)
     }
 }
 
@@ -49,7 +52,7 @@ macro_rules! binary_impl {
             type Output = ProgramNode<'a>;
 
             fn $fnname(self, rhs: ProgramNode<'a>) -> Self::Output {
-                self.binary(rhs, BinaryOp::$mapop)
+                self.binary(rhs, Binary::$mapop)
             }
         }
     };
@@ -64,7 +67,7 @@ macro_rules! unary_impl {
     ($fnname:ident, $mapop:ident) => {
         impl<'a> ProgramNode<'a> {
             pub fn $fnname(self) -> Self {
-                self.unary(UnaryOp::$mapop)
+                self.unary(Unary::$mapop)
             }
         }
     };
