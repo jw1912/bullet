@@ -44,8 +44,8 @@ where
         // Concat(PairwiseMul(a), PairwiseMul(b)) -> FusedPairwiseMulConcat(a, b)
         self.apply_pass(passes::FusePairwiseMulWithConcat)?;
 
-        // Strict speedup by performing elementwise on far less values:
-        // Select(Elementwise(op, [a, b, ..]), buckets) -> Elementwise(op, [Select(a, buckets), Select(b, buckets), ..])
+        // Strict speedup by performing ElementwiseDescription on far less values:
+        // Select(ElementwiseDescription(op, [a, b, ..]), buckets) -> ElementwiseDescription(op, [Select(a, buckets), Select(b, buckets), ..])
         self.apply_pass(passes::ExchangeElementwiseAndSelect)?;
 
         // Looking to find a Matmul(c, Concat(a, b)):
