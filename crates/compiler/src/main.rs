@@ -3,7 +3,7 @@ use bullet_compiler::{DType, ProgramBuilder, ReduceOp, Size};
 fn main() {
     let builder = ProgramBuilder::default();
 
-    let batch = Size::batched();
+    let batch = Size::variable();
 
     let inputs = builder.add_leaf(batch * 8, DType::F32);
     let target = builder.add_leaf(batch, DType::F32);

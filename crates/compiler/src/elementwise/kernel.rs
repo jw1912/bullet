@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, hash_map},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use crate::{
@@ -78,7 +79,7 @@ impl ElementwiseKernelBuilder {
         let idx = *muts;
         *muts += 1;
 
-        ElementwiseMut { builder: self, idx, dtype }
+        ElementwiseMut { builder: self, idx, dtype, read: AtomicBool::new(false) }
     }
 
     pub fn build(self, size: Size) -> ElementwiseKernel {
@@ -106,10 +107,14 @@ pub struct ElementwiseMut<'a> {
     builder: &'a ElementwiseKernelBuilder,
     idx: usize,
     dtype: DType,
+    read: AtomicBool,
 }
 
 impl<'a> ElementwiseMut<'a> {
     pub fn read(&self) -> ElementwiseNode<'a> {
+        let read = self.read.fetch_or(true, Ordering::Relaxed);
+        assert!(!read, "Already read!");
+
         let out = self.builder.builder.add_input(self.dtype);
 
         self.builder.reads.borrow_mut().insert(out.node, (true, self.idx));
@@ -119,5 +124,45 @@ impl<'a> ElementwiseMut<'a> {
 
     pub fn write(self, node: ElementwiseNode<'a>) {
         self.builder.writes.borrow_mut().insert(node.node, self.idx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adamw() {
+        let beta1 = 0.99;
+        let beta2 = 0.999;
+        let lr = 0.001;
+
+        let builder = ElementwiseKernelBuilder::default();
+        let weights = builder.add_input_mut(DType::F32);
+        let momentum = builder.add_input_mut(DType::F32);
+        let velocity = builder.add_input_mut(DType::F32);
+        let gradients = builder.add_input(DType::F32);
+
+        let mut p = weights.read();
+        let mut m = momentum.read();
+        let mut v = velocity.read();
+        let g = gradients.read();
+
+        m = beta1 * m + (1.0 - beta1) * g;
+        v = beta2 * v + (1.0 - beta2) * g * g;
+
+        p = 0.99 * p;
+        p = p - lr * m / (v.abs_powf(0.5) + 0.00000001);
+        p = p.max(-0.99).min(0.99);
+
+        weights.write(p);
+        momentum.write(m);
+        velocity.write(v);
+
+        let kernel = builder.build(Size::variable());
+        let desc = kernel.desc();
+
+        assert_eq!(desc.roots(), 1);
+        assert_eq!(desc.leaves(), 4);
     }
 }

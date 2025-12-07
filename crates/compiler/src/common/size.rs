@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Size {
-    batch_power: usize,
+    var_power: usize,
     factor: NonZeroUsize,
 }
 
@@ -18,7 +18,7 @@ impl From<usize> for Size {
 
 impl fmt::Debug for Size {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (self.batch_power, self.factor.get()) {
+        match (self.var_power, self.factor.get()) {
             (0, x) => write!(f, "{x}"),
             (1, 1) => write!(f, "B"),
             (1, x) => write!(f, "{x}B"),
@@ -29,20 +29,20 @@ impl fmt::Debug for Size {
 }
 
 impl Size {
-    pub const fn batched() -> Self {
-        Self { batch_power: 1, factor: NonZeroUsize::new(1).unwrap() }
+    pub const fn variable() -> Self {
+        Self { var_power: 1, factor: NonZeroUsize::new(1).unwrap() }
     }
 
     pub const fn constant(size: usize) -> Self {
-        Self { batch_power: 0, factor: NonZeroUsize::new(size).unwrap() }
+        Self { var_power: 0, factor: NonZeroUsize::new(size).unwrap() }
     }
 
     pub const fn is_multiple_of(&self, size: Size) -> bool {
-        self.batch_power >= size.batch_power && self.factor.get().is_multiple_of(size.factor.get())
+        self.var_power >= size.var_power && self.factor.get().is_multiple_of(size.factor.get())
     }
 
     pub fn is_le(&self, rhs: Self) -> bool {
-        self.batch_power <= rhs.batch_power && self.factor <= rhs.factor
+        self.var_power <= rhs.var_power && self.factor <= rhs.factor
     }
 }
 
@@ -50,9 +50,9 @@ impl Add<Size> for Size {
     type Output = Size;
 
     fn add(self, rhs: Size) -> Self::Output {
-        assert_eq!(self.batch_power, rhs.batch_power, "Can only add with the same power of batch size!");
+        assert_eq!(self.var_power, rhs.var_power, "Can only add with the same power of batch size!");
         let factor = NonZeroUsize::new(self.factor.get() + rhs.factor.get()).unwrap();
-        Self { batch_power: self.batch_power, factor }
+        Self { var_power: self.var_power, factor }
     }
 }
 
@@ -60,10 +60,10 @@ impl Sub<Size> for Size {
     type Output = Size;
 
     fn sub(self, rhs: Size) -> Self::Output {
-        assert_eq!(self.batch_power, rhs.batch_power, "Can only sub with the same power of batch size!");
+        assert_eq!(self.var_power, rhs.var_power, "Can only sub with the same power of batch size!");
         assert!(self.factor.get() > rhs.factor.get(), "Cannot have non-positive size!");
         let factor = NonZeroUsize::new(self.factor.get() - rhs.factor.get()).unwrap();
-        Self { batch_power: self.batch_power, factor }
+        Self { var_power: self.var_power, factor }
     }
 }
 
@@ -73,7 +73,7 @@ impl<T: Into<Size>> Mul<T> for Size {
     fn mul(self, rhs: T) -> Self::Output {
         let rhs = rhs.into();
         let factor = NonZeroUsize::new(self.factor.get() * rhs.factor.get()).unwrap();
-        Self { batch_power: self.batch_power + rhs.batch_power, factor }
+        Self { var_power: self.var_power + rhs.var_power, factor }
     }
 }
 
@@ -84,7 +84,7 @@ impl<T: Into<Size>> Div<T> for Size {
         let rhs = rhs.into();
         assert!(self.is_multiple_of(rhs), "Cannot divide by non-factor size!");
         let factor = NonZeroUsize::new(self.factor.get() / rhs.factor.get()).unwrap();
-        Self { batch_power: self.batch_power - rhs.batch_power, factor }
+        Self { var_power: self.var_power - rhs.var_power, factor }
     }
 }
 

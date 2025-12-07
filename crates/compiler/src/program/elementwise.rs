@@ -51,7 +51,7 @@ impl ProgramInstruction for ElementwiseKernel {
         });
 
         for (&id, &idx) in self.writes() {
-            writeln!(&mut s, "  muts[{idx}] = {}", get(Input::Index(id))).unwrap();
+            writeln!(&mut s, "  muts[{idx}] = .{}", get(Input::Index(id))).unwrap();
         }
 
         write!(&mut s, "]").unwrap();

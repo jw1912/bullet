@@ -2,7 +2,7 @@ use super::{Binary, Unary};
 use crate::common::{DType, DTypeValue, topo_order};
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -51,7 +51,7 @@ impl From<DTypeValue> for Input {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Operation {
     Leaf(DType),
     Unary { input: Input, op: Unary },
@@ -95,13 +95,13 @@ impl Operation {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Node {
     op: Operation,
     ty: DType,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ElementwiseDescription {
     nodes: HashMap<ElementwiseId, Node>,
 }
@@ -212,37 +212,53 @@ impl ElementwiseDescription {
         self.add_op(Operation::Binary { lhs, rhs, op })
     }
 
-    pub fn merge_with(&self, rhs: &Self, equivalencies: Vec<(ElementwiseId, ElementwiseId)>) -> Self {
+    pub fn merge_with(&self, rhs: &Self, equivalencies: &[(ElementwiseId, ElementwiseId)]) -> Option<Self> {
         let mut res = self.clone();
 
         for (&id, &node) in rhs.nodes.iter() {
             res.nodes.insert(id, node);
         }
 
-        for (a, b) in equivalencies {
+        for &(a, b) in equivalencies {
             let &Node { op: op_a, ty } = res.nodes.get(&a).unwrap();
             let &Node { op: op_b, ty: ty_b } = res.nodes.get(&b).unwrap();
 
             assert_eq!(ty, ty_b);
 
-            match (op_a, op_b) {
-                (Operation::Leaf(_), _) => {
-                    res.nodes.remove(&a);
-                    for node in res.nodes.values_mut() {
-                        node.op.replace(a, b);
-                    }
-                }
-                (_, Operation::Leaf(_)) => {
-                    res.nodes.remove(&b);
-                    for node in res.nodes.values_mut() {
-                        node.op.replace(b, a);
-                    }
-                }
-                (_, _) => panic!(),
+            if let Operation::Leaf(_) = op_a {
+                res.nodes.get_mut(&a).unwrap().op = op_b;
+            } else if let Operation::Leaf(_) = op_b {
+            } else {
+                return None;
+            }
+
+            res.nodes.remove(&b);
+            for node in res.nodes.values_mut() {
+                node.op.replace(b, a);
             }
         }
 
-        res
+        Some(res)
+    }
+
+    pub fn relabel(&mut self, relabels: &[(ElementwiseId, ElementwiseId)]) -> Option<()> {
+        let removals = relabels.iter().map(|x| x.0).collect::<HashSet<_>>();
+        let insertions = relabels.iter().map(|x| x.1).collect::<HashSet<_>>();
+
+        if !removals.is_disjoint(&insertions) {
+            return None;
+        }
+
+        for &(a, b) in relabels {
+            let node = self.nodes.remove(&a)?;
+            self.nodes.insert(b, node);
+
+            for node in self.nodes.values_mut() {
+                node.op.replace(a, b);
+            }
+        }
+
+        Some(())
     }
 }
 
@@ -262,5 +278,55 @@ mod tests {
         assert_eq!(elmt.roots(), 1);
         assert_eq!(elmt.leaves(), 2);
         assert!(elmt.is_root(c));
+    }
+
+    #[test]
+    fn merge() {
+        let mut elmt1 = ElementwiseDescription::default();
+        let a = elmt1.add_input(DType::F32);
+        let b = elmt1.add_input(DType::F32);
+
+        let c = elmt1.binary(a, b, Binary::Add).unwrap();
+
+        let mut elmt2 = ElementwiseDescription::default();
+        let c2 = elmt2.add_input(DType::F32);
+        let d = elmt2.add_input(DType::F32);
+
+        let e = elmt2.binary(c2, d, Binary::Add).unwrap();
+
+        let elmt = elmt1.merge_with(&elmt2, &[(c, c2)]).unwrap();
+
+        assert_eq!(elmt.len(), 5);
+        assert_eq!(elmt.roots(), 1);
+        assert_eq!(elmt.leaves(), 3);
+        assert!(elmt.is_root(e));
+
+        let mut expected = ElementwiseDescription::default();
+        let exp_a = expected.add_input(DType::F32);
+        let exp_b = expected.add_input(DType::F32);
+        let exp_c = expected.binary(exp_a, exp_b, Binary::Add).unwrap();
+        let exp_d = expected.add_input(DType::F32);
+        let exp_e = expected.binary(exp_c, exp_d, Binary::Add).unwrap();
+
+        expected.relabel(&[(exp_a, a), (exp_b, b), (exp_c, c), (exp_d, d), (exp_e, e)]).unwrap();
+
+        assert_eq!(elmt, expected);
+    }
+
+    #[test]
+    fn invalid_merge() {
+        let mut elmt1 = ElementwiseDescription::default();
+        let a = elmt1.add_input(DType::F32);
+        let b = elmt1.add_input(DType::F32);
+
+        let c = elmt1.binary(a, b, Binary::Add).unwrap();
+
+        let mut elmt2 = ElementwiseDescription::default();
+        let c2 = elmt2.add_input(DType::F32);
+        let d = elmt2.add_input(DType::F32);
+
+        let e = elmt2.binary(c2, d, Binary::Add).unwrap();
+
+        assert!(elmt1.merge_with(&elmt2, &[(c, e)]).is_none());
     }
 }
