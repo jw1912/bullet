@@ -2,7 +2,7 @@ use crate::device::{
     Device, OperationError,
     function::DeviceOperation,
     operation::{BaseOperations, CoreDeviceOps, DiffableFromOutput},
-    tensor::TensorRef,
+    tensor::{Matrix, TensorRef},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,11 +31,13 @@ impl<D: Device> DeviceOperation<D> for MaybeUpdateBatchSize<D> {
     }
 
     fn execute(&self) -> Result<(), OperationError<D::DeviceError>> {
-        let input = self.input.borrow();
-        let mut output = self.output.dense_mut();
+        let batch_size = self.input.batch_size();
 
-        if output.batch_size() != input.values.batch_size() {
-            output.set_batch_size(input.values.batch_size())?;
+        if self.output.batch_size() != batch_size {
+            match &mut self.output.borrow_mut().values {
+                Matrix::Dense(x) => x.set_batch_size(batch_size)?,
+                Matrix::Sparse(x) => x.set_batch_size(batch_size)?,
+            }
         }
 
         Ok(())
