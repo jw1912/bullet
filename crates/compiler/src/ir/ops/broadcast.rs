@@ -1,7 +1,6 @@
 use crate::{
     common::Shape,
-    ir::{IrError, IrGraph, IrNodeId, IrType, lower::IrLower, ops::IrOperation},
-    program::{Program, ProgramError, buffer::ProgramBufferId, instruction::ProgramInstruction},
+    ir::{IrError, IrGraph, IrNodeId, IrType, ops::IrOperation},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,31 +10,6 @@ pub struct Broadcast(IrNodeId, BroadcastDesc);
 pub struct BroadcastDesc {
     pub start: Shape,
     pub end: Shape,
-}
-
-impl ProgramInstruction for BroadcastDesc {
-    fn opname(&self) -> String {
-        format!("broadcast<{:?}, {:?}>", self.start, self.end)
-    }
-
-    fn validate(
-        &self,
-        program: &Program,
-        refs: &[ProgramBufferId],
-        muts: &[ProgramBufferId],
-    ) -> Result<(), ProgramError> {
-        if refs.len() != 1 || muts.len() != 1 {
-            return Err(ProgramError::InvalidBuffers);
-        }
-
-        if !(self.start.size().is_le(program.get_buffer(refs[0])?.len())
-            && self.end.size().is_le(program.get_buffer(muts[0])?.len()))
-        {
-            return Err(ProgramError::InvalidBuffers);
-        }
-
-        Ok(())
-    }
 }
 
 impl Broadcast {
@@ -54,7 +28,7 @@ impl Broadcast {
 
 impl IrOperation for Broadcast {
     fn opname(&self) -> String {
-        self.1.opname()
+        format!("broadcast<{:?}, {:?}>", self.1.start, self.1.end)
     }
 
     fn inputs(&self) -> Vec<IrNodeId> {
@@ -73,9 +47,5 @@ impl IrOperation for Broadcast {
         }
 
         Ok(vec![IrType::new(self.1.end.size(), node.ty().dtype())])
-    }
-
-    fn lower(&self, lower: &mut IrLower, outputs: &[IrNodeId]) -> Result<(), IrError> {
-        lower.add_instruction(lower.get_bufs(self.inputs())?, lower.get_bufs(outputs)?, self.1.clone())
     }
 }

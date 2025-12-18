@@ -9,8 +9,7 @@ pub use node::ProgramNode;
 use crate::{
     common::{DType, Size},
     elementwise::ElementwiseNode,
-    ir::{node::IrNodeId, ops::IrOperation},
-    program::Program,
+    ir::{IrGraph, node::IrNodeId, ops::IrOperation},
 };
 
 #[derive(Default)]
@@ -52,7 +51,7 @@ impl ProgramBuilder {
         println!("{}", self.ir.borrow())
     }
 
-    pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> Program {
+    pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> IrGraph {
         let mut ir = self.ir.borrow_mut();
 
         for ret in returns.as_ref() {
@@ -61,7 +60,7 @@ impl ProgramBuilder {
 
         ir.eliminate_dead_ops().unwrap();
 
-        ir.lower().unwrap()
+        ir.current().clone()
     }
 }
 

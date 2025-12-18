@@ -2,10 +2,8 @@ use crate::{
     common::Shape,
     ir::{
         IrError, IrGraph, IrNodeId, IrType,
-        lower::IrLower,
         ops::{IrOperation, broadcast::Broadcast},
     },
-    program::{Program, ProgramError, buffer::ProgramBufferId, instruction::ProgramInstruction},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,31 +20,6 @@ pub struct ReduceDesc {
     pub op: ReduceOp,
 }
 
-impl ProgramInstruction for ReduceDesc {
-    fn opname(&self) -> String {
-        format!("reduce.{}<{:?}, {:?}>", format!("{:?}", self.op).to_lowercase(), self.start, self.end)
-    }
-
-    fn validate(
-        &self,
-        program: &Program,
-        refs: &[ProgramBufferId],
-        muts: &[ProgramBufferId],
-    ) -> Result<(), ProgramError> {
-        if refs.len() != 1 || muts.len() != 1 {
-            return Err(ProgramError::InvalidBuffers);
-        }
-
-        if !(self.start.size().is_le(program.get_buffer(refs[0])?.len())
-            && self.end.size().is_le(program.get_buffer(muts[0])?.len()))
-        {
-            return Err(ProgramError::InvalidBuffers);
-        }
-
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reduce(IrNodeId, ReduceDesc);
 
@@ -58,7 +31,7 @@ impl Reduce {
 
 impl IrOperation for Reduce {
     fn opname(&self) -> String {
-        self.1.opname()
+        format!("reduce.{:?}<{:?}, {:?}>", self.1.op, self.1.start, self.1.end)
     }
 
     fn inputs(&self) -> Vec<IrNodeId> {
@@ -77,9 +50,5 @@ impl IrOperation for Reduce {
         }
 
         Ok(vec![IrType::new(self.1.end.size(), node.ty().dtype())])
-    }
-
-    fn lower(&self, lower: &mut IrLower, outputs: &[IrNodeId]) -> Result<(), IrError> {
-        lower.add_instruction(lower.get_bufs(self.inputs())?, lower.get_bufs(outputs)?, self.1.clone())
     }
 }

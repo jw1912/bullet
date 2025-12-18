@@ -1,11 +1,8 @@
 use crate::{
     Size,
-    elementwise::{
-        Binary, ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseKernel, ElementwiseNode, Unary,
-    },
+    elementwise::{Binary, ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode, Unary},
     ir::{
         IrError, IrGraph,
-        lower::IrLower,
         node::{IrNode, IrNodeId, IrType},
         ops::IrOperation,
     },
@@ -63,16 +60,5 @@ impl IrOperation for IrElementwise {
 
     fn output_types(&self, _ir: &IrGraph) -> Result<Vec<IrType>, IrError> {
         Ok(self.outputs.iter().map(|&out| IrType::new(self.size, self.op.get_dtype(out.into()))).collect())
-    }
-
-    fn lower(&self, lower: &mut IrLower, outputs: &[IrNodeId]) -> Result<(), IrError> {
-        let kernel = ElementwiseKernel::new(
-            self.size,
-            self.inputs.iter().enumerate().map(|(x, &y)| (y.0, (false, x))).collect(),
-            self.outputs.iter().enumerate().map(|(x, &y)| (y, x)).collect(),
-            self.op.clone(),
-        );
-
-        lower.add_instruction(lower.get_bufs(self.inputs())?, lower.get_bufs(outputs)?, kernel)
     }
 }

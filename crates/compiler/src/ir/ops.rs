@@ -12,7 +12,7 @@ pub use broadcast::Broadcast;
 pub use elementwise::IrElementwise;
 pub use reduce::{Reduce, ReduceOp};
 
-use crate::ir::{IrError, IrGraph, IrNodeId, IrType, lower::IrLower};
+use crate::ir::{IrError, IrGraph, IrNodeId, IrType};
 
 pub trait IrOperation: Debug + 'static {
     fn opname(&self) -> String;
@@ -20,8 +20,6 @@ pub trait IrOperation: Debug + 'static {
     fn inputs(&self) -> Vec<IrNodeId>;
 
     fn output_types(&self, ir: &IrGraph) -> Result<Vec<IrType>, IrError>;
-
-    fn lower(&self, lower: &mut IrLower, outputs: &[IrNodeId]) -> Result<(), IrError>;
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -75,15 +73,34 @@ impl IrOp {
         &self.outputs
     }
 
-    pub fn swap_output_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
-        for id in &mut self.outputs {
+    pub fn swap_input_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
+        let mut found = false;
+
+        for id in &mut self.inputs {
             if *id == old {
                 *id = new;
-                return Ok(());
+                found = true;
             }
         }
 
-        Err(IrError::NodeDoesNotExist)
+        found.then_some(()).ok_or(IrError::NodeDoesNotExist)
+    }
+
+    pub fn swap_output_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
+        let mut found = false;
+
+        for id in &mut self.outputs {
+            if *id == old {
+                if found {
+                    return Err(IrError::InvalidOperationOutputs);
+                }
+
+                *id = new;
+                found = true;
+            }
+        }
+
+        found.then_some(()).ok_or(IrError::NodeDoesNotExist)
     }
 
     pub fn op(&self) -> &Rc<dyn IrOperation> {
@@ -105,9 +122,5 @@ impl IrOperation for Leaf {
 
     fn output_types(&self, _ir: &IrGraph) -> Result<Vec<IrType>, IrError> {
         Ok(vec![self.0])
-    }
-
-    fn lower(&self, _lower: &mut IrLower, _outputs: &[IrNodeId]) -> Result<(), IrError> {
-        Ok(())
     }
 }
