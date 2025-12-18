@@ -1,4 +1,4 @@
-use bullet_compiler::{DType, ProgramBuilder, ReduceOp, Size};
+use bullet_compiler::{DType, ProgramBuilder, Size};
 
 fn main() {
     let builder = ProgramBuilder::default();
@@ -11,7 +11,7 @@ fn main() {
     let a = builder.add_leaf(8, DType::F32).broadcast([8], batch + [8]);
     let b = builder.add_leaf(1, DType::F32).broadcast([1], batch + [1]);
 
-    let dot = (a * inputs).reduce(batch + [8], batch, ReduceOp::Sum);
+    let dot = (a * inputs).reduce_sum(batch + [8], batch);
 
     let [prediction, loss] = builder.elementwise([dot, b, target], |[dot, b, target]| {
         let prediction = dot + b;
@@ -19,7 +19,7 @@ fn main() {
         [prediction, diff * diff]
     });
 
-    let loss = loss.reduce(batch, [1], ReduceOp::Sum);
+    let loss = loss.reduce_sum(batch, [1]);
 
     let program = builder.build([prediction, loss]);
 

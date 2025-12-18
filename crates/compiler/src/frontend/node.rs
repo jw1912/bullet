@@ -27,8 +27,20 @@ impl<'a> ProgramNode<'a> {
         self.builder.add_op(Broadcast::new(self.node, start, end))[0]
     }
 
-    pub fn reduce(self, start: impl Into<Shape>, end: impl Into<Shape>, op: ReduceOp) -> Self {
+    fn reduce(self, start: impl Into<Shape>, end: impl Into<Shape>, op: ReduceOp) -> Self {
         self.builder.add_op(Reduce::new(self.node, start, end, op))[0]
+    }
+
+    pub fn reduce_sum(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
+        self.reduce(start, end, ReduceOp::Sum)
+    }
+
+    pub fn reduce_min(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
+        self.reduce(start, end, ReduceOp::Min)
+    }
+
+    pub fn reduce_max(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
+        self.reduce(start, end, ReduceOp::Max)
     }
 
     fn unary(self, op: Unary) -> Self {

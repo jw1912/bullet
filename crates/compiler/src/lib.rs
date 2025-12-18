@@ -5,4 +5,3 @@ pub mod ir;
 
 pub use common::{DType, Shape, Size};
 pub use frontend::{ProgramBuilder, ProgramNode};
-pub use ir::ops::ReduceOp;
