@@ -25,6 +25,8 @@ pub trait IrOperationType: Debug + 'static {
     fn outputs(&self) -> Vec<IrType>;
 
     fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]);
+
+    fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool;
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -119,6 +121,11 @@ impl IrOperation {
     pub fn op(&self) -> &Rc<dyn IrOperationType> {
         &self.op
     }
+
+    pub fn downcast<T: IrOperationType + 'static>(input: &Rc<dyn IrOperationType>) -> Option<&T> {
+        let op: &dyn std::any::Any = input;
+        op.downcast_ref().cloned()
+    }
 }
 
 #[derive(Debug)]
@@ -138,4 +145,8 @@ impl IrOperationType for Leaf {
     }
 
     fn evaluate(&self, _: &[&DTypeTensor], _: &mut [&mut DTypeTensor]) {}
+
+    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
+        false
+    }
 }

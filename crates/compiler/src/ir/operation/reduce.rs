@@ -1,8 +1,8 @@
-use std::{cmp::Ordering, ops::Add};
+use std::{cmp::Ordering, ops::Add, rc::Rc};
 
 use crate::{
     common::{DType, DTypeTensor, Shape, Size},
-    ir::{IrError, IrType},
+    ir::{IrError, IrType, operation::IrOperation},
 };
 
 use super::IrOperationType;
@@ -123,6 +123,10 @@ impl IrOperationType for ReduceAcrossDimension {
                 self.apply(input, output);
             }
         }
+    }
+
+    fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool {
+        if let Some(other) = IrOperation::downcast::<Self>(other) { self == other } else { false }
     }
 }
 

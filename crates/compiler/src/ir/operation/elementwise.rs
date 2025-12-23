@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, rc::Rc};
 
 use crate::{
     Size,
@@ -6,10 +6,14 @@ use crate::{
     elementwise::{
         Binary, ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode, Unary, description::Input,
     },
-    ir::{IrError, node::IrType, operation::IrOperationType},
+    ir::{
+        IrError,
+        node::IrType,
+        operation::{IrOperation, IrOperationType},
+    },
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct IrElementwise {
     size: Size,
     inputs: Vec<ElementwiseId>,
@@ -80,6 +84,10 @@ impl IrOperationType for IrElementwise {
                 out.write(idx, val);
             }
         }
+    }
+
+    fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool {
+        if let Some(other) = IrOperation::downcast::<Self>(other) { self == other } else { false }
     }
 }
 
