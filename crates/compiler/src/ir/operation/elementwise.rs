@@ -1,11 +1,8 @@
 use std::{collections::HashSet, rc::Rc};
 
 use crate::{
-    Size,
-    common::DTypeTensor,
-    elementwise::{
-        Binary, ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode, Unary, description::Input,
-    },
+    common::{Binary, DTypeTensor, Size, Unary},
+    elementwise::{ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode},
     ir::{
         IrError,
         node::IrType,
@@ -60,11 +57,11 @@ impl IrOperationType for IrElementwise {
     }
 
     fn inputs(&self) -> Vec<IrType> {
-        self.inputs.iter().map(|&x| IrType::new(self.size, self.op.get_dtype(Input::Index(x)))).collect()
+        self.inputs.iter().map(|&x| IrType::new(self.size, self.op.get_dtype(x))).collect()
     }
 
     fn outputs(&self) -> Vec<IrType> {
-        self.outputs.iter().map(|&out| IrType::new(self.size, self.op.get_dtype(out.into()))).collect()
+        self.outputs.iter().map(|&out| IrType::new(self.size, self.op.get_dtype(out))).collect()
     }
 
     fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
@@ -93,7 +90,7 @@ impl IrOperationType for IrElementwise {
 
 #[cfg(test)]
 mod tests {
-    use crate::DType;
+    use crate::common::DType;
 
     use super::*;
 

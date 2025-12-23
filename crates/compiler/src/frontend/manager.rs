@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, error::Error, fmt};
 
 use crate::{
-    common::{DType, Size},
+    common::{DType, DTypeTensor, Size},
     ir::{
         IrError, IrGraph,
         node::{IrNode, IrNodeId, IrType},
@@ -53,23 +53,16 @@ impl IrManager {
         self.modify(|graph| Ok(graph.add_leaf(IrType::new(size, dtype))))
     }
 
+    pub fn add_const(&mut self, value: DTypeTensor) -> Result<IrNodeId, IrManagerError> {
+        self.modify(|graph| Ok(graph.add_const(value)))
+    }
+
     pub fn add_op(
         &mut self,
         inputs: impl AsRef<[IrNodeId]>,
         op: impl IrOperationType,
     ) -> Result<Vec<IrNodeId>, IrManagerError> {
         self.modify(|graph| graph.add_op(inputs, op))
-    }
-
-    pub fn register_output(&mut self, node: IrNodeId) -> Result<(), IrManagerError> {
-        self.modify(|graph| {
-            graph.register_output(node);
-            Ok(())
-        })
-    }
-
-    pub fn eliminate_dead_ops(&mut self) -> Result<(), IrManagerError> {
-        self.modify(|graph| graph.eliminate_dead_ops())
     }
 }
 

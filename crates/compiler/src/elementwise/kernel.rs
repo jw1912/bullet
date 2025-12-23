@@ -1,11 +1,11 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, hash_map},
+    collections::{HashMap, HashSet, hash_map},
     sync::atomic::{AtomicBool, Ordering},
 };
 
 use crate::{
-    DType, Size,
+    common::{DType, DTypeTensor, Size},
     elementwise::{ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode},
 };
 
@@ -53,6 +53,41 @@ impl ElementwiseKernel {
 
     pub fn desc(&self) -> &ElementwiseDescription {
         &self.desc
+    }
+
+    pub fn evaluate(&self, reads: &[&DTypeTensor], writes: &mut [&mut DTypeTensor]) -> Option<()> {
+        if reads.len() != self.num_refs || writes.len() != self.num_muts {
+            return None;
+        }
+
+        let read_size = reads.iter().map(|x| x.size()).collect::<HashSet<_>>();
+        let write_size = writes.iter().map(|x| x.size()).collect::<HashSet<_>>();
+
+        let sizes = read_size.union(&write_size).collect::<Vec<_>>();
+
+        if sizes.len() != 1 {
+            return None;
+        }
+
+        let size = *sizes[0];
+
+        for idx in 0..size {
+            let inputs = self
+                .reads
+                .iter()
+                .map(|(&id, &(from_write, i))| (id, if from_write { writes[i].read(idx) } else { reads[i].read(idx) }))
+                .collect();
+
+            let outputs = self.writes.keys().cloned().collect::<Vec<_>>();
+
+            let values = self.desc.evaluate(inputs, &outputs)?;
+
+            for (out, value) in outputs.iter().zip(values) {
+                writes[*self.writes.get(out)?].write(idx, value);
+            }
+        }
+
+        Some(())
     }
 }
 
@@ -164,5 +199,63 @@ mod tests {
 
         assert_eq!(desc.roots(), 1);
         assert_eq!(desc.leaves(), 4);
+    }
+
+    #[test]
+    fn evaluate() {
+        let builder = ElementwiseKernelBuilder::default();
+        let a = builder.add_input(DType::F32);
+        let b = builder.add_input_mut(DType::F32);
+        let c = builder.add_input_mut(DType::F32);
+
+        let x = a.read();
+        let y = b.read();
+        let z = x + y;
+
+        c.write(y);
+        b.write(z);
+
+        let kernel = builder.build(Size::variable());
+
+        let a = DTypeTensor::F32(vec![1.0; 8]);
+        let mut b = DTypeTensor::F32(vec![1.0; 8]);
+        let mut c = DTypeTensor::F32(vec![0.0; 8]);
+
+        kernel.evaluate(&[&a], &mut [&mut b, &mut c]).unwrap();
+
+        assert_eq!(b, DTypeTensor::F32(vec![2.0; 8]));
+        assert_eq!(c, DTypeTensor::F32(vec![1.0; 8]));
+    }
+
+    #[test]
+    fn evaluate_wrong_num_args() {
+        let builder = ElementwiseKernelBuilder::default();
+
+        let a = builder.add_input_mut(DType::F32);
+        let x = a.read();
+        let y = 1.0 + x;
+        a.write(y);
+
+        let kernel = builder.build(Size::variable());
+
+        let a = DTypeTensor::F32(vec![1.0; 8]);
+
+        assert!(kernel.evaluate(&[&a], &mut []).is_none());
+    }
+
+    #[test]
+    fn evaluate_wrong_dtype() {
+        let builder = ElementwiseKernelBuilder::default();
+
+        let a = builder.add_input_mut(DType::F32);
+        let x = a.read();
+        let y = 1.0 + x;
+        a.write(y);
+
+        let kernel = builder.build(Size::variable());
+
+        let mut a = DTypeTensor::I32(vec![1; 8]);
+
+        assert!(kernel.evaluate(&[], &mut [&mut a]).is_none());
     }
 }

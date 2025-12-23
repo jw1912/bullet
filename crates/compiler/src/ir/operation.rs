@@ -1,4 +1,4 @@
-//mod broadcast;
+mod broadcast;
 mod elementwise;
 mod reduce;
 
@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-//pub use broadcast::Broadcast;
+pub use broadcast::BroadcastAcrossDimension;
 pub use elementwise::IrElementwise;
 pub use reduce::{ReduceAcrossDimension, Reduction};
 
@@ -17,7 +17,7 @@ use crate::{
     ir::{IrError, IrNodeId, IrType, node::IrNode},
 };
 
-pub trait IrOperationType: Debug + 'static {
+pub trait IrOperationType: std::any::Any + Debug + 'static {
     fn opname(&self) -> String;
 
     fn inputs(&self) -> Vec<IrType>;
@@ -123,8 +123,8 @@ impl IrOperation {
     }
 
     pub fn downcast<T: IrOperationType + 'static>(input: &Rc<dyn IrOperationType>) -> Option<&T> {
-        let op: &dyn std::any::Any = input;
-        op.downcast_ref().cloned()
+        let op: &dyn std::any::Any = input.as_ref();
+        op.downcast_ref::<T>()
     }
 }
 
@@ -145,6 +145,42 @@ impl IrOperationType for Leaf {
     }
 
     fn evaluate(&self, _: &[&DTypeTensor], _: &mut [&mut DTypeTensor]) {}
+
+    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Constant(pub DTypeTensor);
+
+impl Constant {
+    pub fn ty(&self) -> IrType {
+        IrType::new(self.0.size(), self.0.dtype())
+    }
+}
+
+impl IrOperationType for Constant {
+    fn opname(&self) -> String {
+        format!("constant<{:?}>", self.ty())
+    }
+
+    fn inputs(&self) -> Vec<IrType> {
+        Vec::new()
+    }
+
+    fn outputs(&self) -> Vec<IrType> {
+        vec![self.ty()]
+    }
+
+    fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
+        assert_eq!(inputs.len(), 0);
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].size(), self.0.size());
+        assert_eq!(outputs[0].dtype(), self.0.dtype());
+
+        *outputs[0] = self.0.clone();
+    }
 
     fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
         false

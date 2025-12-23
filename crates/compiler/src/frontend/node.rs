@@ -1,10 +1,9 @@
 use crate::{
-    common::Shape,
-    elementwise::{Binary, Unary},
+    common::{Binary, Shape, Size, Unary},
     frontend::ProgramBuilder,
     ir::{
         node::{IrNodeId, IrType},
-        operation::{/*Broadcast,*/ ReduceAcrossDimension, Reduction},
+        operation::{BroadcastAcrossDimension, ReduceAcrossDimension, Reduction},
     },
 };
 
@@ -27,9 +26,10 @@ impl<'a> ProgramNode<'a> {
         self.builder.ir.borrow().get(self.node).unwrap().ty()
     }
 
-    //pub fn broadcast(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
-    //    self.builder.add_op(Broadcast::new(self.node, start, end))[0]
-    //}
+    pub fn broadcast(self, shape: impl Into<Shape>, dim: usize, repeats: impl Into<Size>) -> Self {
+        let op = BroadcastAcrossDimension::new(self.ty().dtype(), shape, dim, repeats).unwrap();
+        self.builder.add_op([self], op)[0]
+    }
 
     fn reduce(self, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Self {
         let op = ReduceAcrossDimension::new(self.ty().dtype(), shape, dim, reduction).unwrap();

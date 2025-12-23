@@ -1,15 +1,17 @@
-use bullet_compiler::{DType, DTypeTensor, ProgramBuilder};
+use bullet_compiler::prelude::*;
 
 fn main() {
     let builder = ProgramBuilder::default();
 
-    let inputs = builder.add_leaf(8, DType::F32);
-    let target = builder.add_leaf(1, DType::F32);
+    let batch = Size::variable();
 
-    let a = builder.add_leaf(8, DType::F32);
-    let b = builder.add_leaf(1, DType::F32);
+    let inputs = builder.add_leaf(batch * 8, DType::F32);
+    let target = builder.add_leaf(batch, DType::F32);
 
-    let dot = (a * inputs).reduce_sum([8], 0);
+    let a = builder.constant(DTypeTensor::F32(vec![2.0; 8])).broadcast([8], 0, batch);
+    let b = builder.constant(DTypeTensor::F32(vec![1.0])).broadcast([1], 0, batch);
+
+    let dot = (a * inputs).reduce_sum(batch + [8], 1);
 
     let [prediction, loss] = builder.elementwise([dot, b, target], |[dot, b, target]| {
         let prediction = dot + b;
@@ -21,14 +23,9 @@ fn main() {
 
     println!("{program}");
 
-    let outputs = program
-        .evaluate([
-            (inputs.node(), DTypeTensor::F32(vec![1.0; 8])),
-            (target.node(), DTypeTensor::F32(vec![1.0])),
-            (a.node(), DTypeTensor::F32(vec![2.0; 8])),
-            (b.node(), DTypeTensor::F32(vec![1.0])),
-        ])
-        .unwrap();
+    let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 32]));
+    let target = (target.node(), DTypeTensor::F32(vec![1.0; 4]));
+    let outputs = program.evaluate([inputs, target]).unwrap();
 
     println!("prediction: {:?}", outputs.get(&prediction.node()).unwrap());
     println!("loss: {:?}", outputs.get(&loss.node()).unwrap());

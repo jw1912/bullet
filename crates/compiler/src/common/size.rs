@@ -49,6 +49,10 @@ impl Size {
         self.factor.get() * var_size.pow(self.var_power)
     }
 
+    pub fn evaluate_constant(&self) -> Option<usize> {
+        if self.var_power == 0 { Some(self.factor.get()) } else { None }
+    }
+
     pub fn get_var_size(&self, size: usize) -> Option<usize> {
         if self.var_power == 0 {
             return None;

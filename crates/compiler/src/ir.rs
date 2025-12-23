@@ -1,5 +1,8 @@
+pub mod display;
 pub mod node;
 pub mod operation;
+pub mod passes;
+pub mod transform;
 
 #[cfg(test)]
 mod tests;
@@ -7,17 +10,13 @@ mod tests;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    fmt::{self, Debug},
+    fmt::Debug,
 };
 
-use node::{IrNodeId, IrType};
-use operation::{IrOperation, IrOperationId, IrOperationType};
+use node::{IrNode, IrNodeId, IrType};
+use operation::{IrOperation, IrOperationId, Leaf};
 
-use crate::{
-    common::{DType, DTypeTensor, topo_order},
-    elementwise::{Binary, ElementwiseNode, Unary},
-    ir::{node::IrNode, operation::IrElementwise},
-};
+use crate::common::{DType, DTypeTensor, topo_order};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IrError {
@@ -95,102 +94,8 @@ impl IrGraph {
         topo_order(edges_rev).ok_or(IrError::Cyclic).map(|x| x.into_iter().map(IrOperationId::from_inner).collect())
     }
 
-    pub fn add_op(
-        &mut self,
-        inputs: impl AsRef<[IrNodeId]>,
-        op: impl IrOperationType,
-    ) -> Result<Vec<IrNodeId>, IrError> {
-        let output_ids = (0..op.outputs().len()).map(|_| IrNodeId::default()).collect::<Vec<_>>();
-        let output_tys = op.outputs();
-
-        let mut error = false;
-
-        for (&out_id, &out_ty) in output_ids.iter().zip(output_tys.iter()) {
-            error |= self.nodes.insert(out_id, IrNode::new(out_id, out_ty)).is_some();
-        }
-
-        let inputs = inputs.as_ref().iter().map(|&id| self.get_node(id)).collect::<Result<_, _>>()?;
-        let outputs = output_ids.iter().map(|&id| self.get_node(id)).collect::<Result<_, _>>()?;
-        let op = IrOperation::new(inputs, outputs, op)?;
-        let op_id = op.id();
-
-        for &input in op.inputs() {
-            self.get_node_mut(input)?.inc_children();
-        }
-
-        error |= self.ops.insert(op_id, op).is_some();
-
-        for &out_id in &output_ids {
-            error |= self.links.insert(out_id, op_id).is_some();
-        }
-
-        if error {
-            return Err(IrError::InvalidOperationOutputs);
-        }
-
-        Ok(output_ids)
-    }
-
-    pub fn remove_op(&mut self, id: IrOperationId) -> Result<(), IrError> {
-        for output in self.get_op(id)?.outputs().to_vec() {
-            let node = self.nodes.remove(&output).expect("Node must be present `nodes`!");
-            if node.children() > 0 {
-                return Err(IrError::OpIsNotRoot);
-            }
-
-            if self.outputs.contains(&output) {
-                return Err(IrError::NodeIsRequired);
-            }
-
-            let op_id = self.links.remove(&output).expect("Node must be present `links`!");
-            if op_id != id {
-                return Err(IrError::InvalidOperationOutputs);
-            }
-        }
-
-        for input in self.get_op(id)?.inputs().to_vec() {
-            self.get_node_mut(input)?.dec_children();
-        }
-
-        self.ops.remove(&id).expect("Already verified node is present `ops`!");
-
-        Ok(())
-    }
-
-    #[must_use]
-    pub fn add_leaf(&mut self, ty: IrType) -> IrNodeId {
-        self.add_op([], operation::Leaf(ty)).expect("Constructing leaf is infallible!")[0]
-    }
-
-    pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IrError> {
-        self.add_op([node], IrElementwise::unary(self.get_node_type(node)?, op)?).map(|x| x[0])
-    }
-
-    pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IrError> {
-        self.add_op([lhs, rhs], IrElementwise::binary(self.get_node_type(lhs)?, self.get_node_type(rhs)?, op)?)
-            .map(|x| x[0])
-    }
-
-    pub fn add_elementwise<const M: usize, const N: usize, F>(
-        &mut self,
-        inputs: [IrNodeId; M],
-        f: F,
-    ) -> Result<[IrNodeId; N], IrError>
-    where
-        F: for<'a> Fn([ElementwiseNode<'a>; M]) -> Option<[ElementwiseNode<'a>; N]>,
-    {
-        let nodes = inputs.map(|x| self.get_node_type(x).unwrap());
-        let op = IrElementwise::new(nodes, f)?;
-
-        let outs = self.add_op(inputs, op)?;
-
-        let mut output = [outs[0]; N];
-
-        for (i, j) in output.iter_mut().zip(outs) {
-            *i = j;
-        }
-
-        Ok(output)
+    pub fn is_output(&self, node: IrNodeId) -> bool {
+        self.outputs.contains(&node)
     }
 
     pub fn register_output(&mut self, node: IrNodeId) {
@@ -199,64 +104,6 @@ impl IrGraph {
 
     pub fn unregister_output(&mut self, node: IrNodeId) {
         self.outputs.remove(&node);
-    }
-
-    pub fn swap_outputs(&mut self, id1: IrNodeId, id2: IrNodeId) -> Result<(), IrError> {
-        let node1 = self.get_node(id1)?;
-        let node2 = self.get_node(id2)?;
-
-        if node1.ty() != node2.ty() {
-            return Err(IrError::FailedTypeCheck);
-        }
-
-        let op1 = self.get_parent_op(id1)?;
-        let op2 = self.get_parent_op(id2)?;
-
-        *self.links.get_mut(&id1).ok_or(IrError::NodeDoesNotExist)? = op2;
-        *self.links.get_mut(&id2).ok_or(IrError::NodeDoesNotExist)? = op1;
-
-        self.get_op_mut(op1)?.swap_output_with(id2, id1)?;
-        self.get_op_mut(op2)?.swap_output_with(id1, id2)?;
-
-        // swapping is an opportunity to introduce cycles...
-        let _ = self.topo_order_ops()?;
-
-        Ok(())
-    }
-
-    pub fn replace_op(
-        &mut self,
-        target: IrOperationId,
-        inputs: impl AsRef<[IrNodeId]>,
-        op: impl IrOperationType,
-    ) -> Result<(), IrError> {
-        let new_outs = self.add_op(inputs, op)?;
-        let old_outs = self.get_op(target)?.outputs().to_vec();
-
-        if new_outs.len() != old_outs.len() {
-            return Err(IrError::InvalidOperationOutputs);
-        }
-
-        for (new_out, old_out) in new_outs.into_iter().zip(old_outs) {
-            self.swap_outputs(new_out, old_out)?;
-        }
-
-        Ok(())
-    }
-
-    pub fn eliminate_dead_ops(&mut self) -> Result<(), IrError> {
-        for op_id in self.topo_order_ops()?.into_iter().rev() {
-            let dead_op = self.get_op(op_id)?.outputs().iter().all(|output| {
-                let node = self.get_node(*output).unwrap();
-                node.children() == 0 && !self.outputs.contains(output)
-            });
-
-            if dead_op {
-                self.remove_op(op_id)?;
-            }
-        }
-
-        Ok(())
     }
 
     pub fn check_valid(&self) -> Result<(), IrError> {
@@ -309,11 +156,14 @@ impl IrGraph {
         let mut values: HashMap<_, _> =
             inputs.into().into_iter().map(|(id, tensor)| (id, RefCell::new(tensor))).collect();
 
-        let inputs = values.keys().cloned().collect::<HashSet<_>>();
-
         let mut vars = HashSet::new();
 
         for (id, tensor) in &values {
+            let op = self.get_op(self.get_parent_op(*id)?)?;
+            if IrOperation::downcast::<Leaf>(op.op()).is_none() {
+                return Err("Seeded non-leaf node!".to_string().into());
+            }
+
             let concrete_size = tensor.borrow().size();
             let size = self.get_node_type(*id)?.size();
 
@@ -340,12 +190,13 @@ impl IrGraph {
                     DType::I32 => DTypeTensor::I32(vec![0; size]),
                 };
 
-                if inputs.contains(&output) {
-                    if !values.contains_key(&output) {
-                        return Err("Leaf node not seeded!".to_string().into());
-                    }
-                } else if values.insert(output, RefCell::new(tensor)).is_some() {
-                    return Err(IrError::InvalidOperationOutputs);
+                let is_prev = values.contains_key(&output);
+                let is_leaf = IrOperation::downcast::<Leaf>(op.op()).is_some();
+
+                if !is_leaf {
+                    assert!(values.insert(output, RefCell::new(tensor)).is_none(), "Cannot happen!");
+                } else if !is_prev {
+                    return Err("Leaf node not seeded!".to_string().into());
                 }
             }
 
@@ -370,61 +221,5 @@ impl IrGraph {
         }
 
         Ok(values.into_iter().filter_map(|x| self.outputs.contains(&x.0).then(|| (x.0, x.1.into_inner()))).collect())
-    }
-}
-
-impl fmt::Display for IrGraph {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn map<T>(x: Result<T, IrError>) -> Result<T, fmt::Error> {
-            x.map_err(|_| fmt::Error)
-        }
-
-        writeln!(f, "start")?;
-
-        for id in map(self.topo_order_ops())? {
-            let op = map(self.get_op(id))?;
-            let inputs = op.inputs();
-            let outputs = op.outputs();
-
-            if outputs.len() > 1 {
-                write!(f, "[")?;
-            }
-
-            let output_tys =
-                map(outputs.iter().map(|x| self.get_node(*x).map(IrNode::ty)).collect::<Result<Vec<_>, _>>())?;
-
-            for (i, (&output, ty)) in outputs.iter().zip(output_tys).enumerate() {
-                write!(f, "{output:?} : {ty:?}")?;
-                if i != outputs.len() - 1 {
-                    write!(f, ", ")?;
-                }
-            }
-
-            if outputs.len() > 1 {
-                write!(f, "]")?;
-            }
-
-            write!(f, " = {}(", op.op().opname())?;
-
-            for (i, &input) in inputs.iter().enumerate() {
-                write!(f, "{input:?}")?;
-                if i != inputs.len() - 1 {
-                    write!(f, ", ")?;
-                }
-            }
-
-            writeln!(f, ")")?;
-        }
-
-        write!(f, "return(")?;
-        for (i, &output) in self.outputs.iter().enumerate() {
-            write!(f, "{output:?}")?;
-            if i != self.outputs.len() - 1 {
-                write!(f, ", ")?;
-            }
-        }
-        write!(f, ")")?;
-
-        Ok(())
     }
 }

@@ -1,20 +1,20 @@
 pub mod manager;
 pub mod node;
 
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
 
 use manager::IrManager;
 pub use node::ProgramNode;
 
 use crate::{
-    common::{DType, Size},
+    common::{DType, DTypeTensor, Size},
     elementwise::ElementwiseNode,
     ir::{IrGraph, node::IrNodeId, operation::IrOperationType},
 };
 
 #[derive(Default)]
 pub struct ProgramBuilder {
-    ir: Rc<RefCell<IrManager>>,
+    ir: RefCell<IrManager>,
 }
 
 impl ProgramBuilder {
@@ -22,7 +22,11 @@ impl ProgramBuilder {
         ProgramNode::new(self, node)
     }
 
-    fn add_op<'a>(&'a self, inputs: impl AsRef<[ProgramNode<'a>]>, op: impl IrOperationType) -> Vec<ProgramNode<'a>> {
+    pub fn add_op<'a>(
+        &'a self,
+        inputs: impl AsRef<[ProgramNode<'a>]>,
+        op: impl IrOperationType,
+    ) -> Vec<ProgramNode<'a>> {
         let ids = inputs.as_ref().iter().map(ProgramNode::node).collect::<Vec<_>>();
         let outs = self.ir.borrow_mut().add_op(ids, op).unwrap();
         outs.into_iter().map(|out| self.new_node(out)).collect()
@@ -30,6 +34,11 @@ impl ProgramBuilder {
 
     pub fn add_leaf<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> ProgramNode<'a> {
         let node = self.ir.borrow_mut().add_leaf(size, dtype).unwrap();
+        self.new_node(node)
+    }
+
+    pub fn constant<'a>(&'a self, value: DTypeTensor) -> ProgramNode<'a> {
+        let node = self.ir.borrow_mut().add_const(value).unwrap();
         self.new_node(node)
     }
 
@@ -53,15 +62,17 @@ impl ProgramBuilder {
     }
 
     pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> IrGraph {
-        let mut ir = self.ir.borrow_mut();
+        let mut ir = self.ir.borrow().current().clone();
 
         for ret in returns.as_ref() {
-            ir.register_output(ret.node()).unwrap();
+            ir.register_output(ret.node());
         }
 
         ir.eliminate_dead_ops().unwrap();
 
-        ir.current().clone()
+        ir.propagate_constants().unwrap();
+
+        ir
     }
 }
 

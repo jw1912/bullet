@@ -1,5 +1,9 @@
 use super::*;
-use crate::{Size, common::DType, elementwise::Binary};
+
+use crate::{
+    common::{Binary, DType, Size},
+    ir::operation::{Constant, IrElementwise},
+};
 
 #[test]
 fn construct_deconstruct() -> Result<(), IrError> {
@@ -161,6 +165,75 @@ fn evaluate() -> Result<(), IrError> {
     let outputs = ir.evaluate([(x, ix), (y, iy), (z, iz)])?;
 
     assert_eq!(outputs, [(u, DTypeTensor::F32(vec![3.0, 8.0, 15.0, 24.0]))].into());
+
+    ir.check_valid()
+}
+
+#[test]
+fn evaluate_missing_input() -> Result<(), IrError> {
+    let mut ir = IrGraph::default();
+    let size = Size::variable() * 2;
+
+    let x = ir.add_leaf(IrType::new(size, DType::F32));
+    let y = ir.add_leaf(IrType::new(size, DType::F32));
+    let z = ir.add_binary(x, y, Binary::Add)?;
+    ir.register_output(z);
+
+    let ix = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
+    assert_eq!(ir.evaluate([(x, ix)]), Err("Leaf node not seeded!".to_string().into()));
+
+    ir.check_valid()
+}
+
+#[test]
+fn evaluate_seed_non_leaf() -> Result<(), IrError> {
+    let mut ir = IrGraph::default();
+    let size = Size::variable() * 2;
+
+    let x = ir.add_leaf(IrType::new(size, DType::F32));
+    let y = ir.add_leaf(IrType::new(size, DType::F32));
+    let z = ir.add_binary(x, y, Binary::Add)?;
+    ir.register_output(z);
+
+    let ix = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
+    let inputs = [(x, ix.clone()), (y, ix.clone()), (z, ix)];
+    assert_eq!(ir.evaluate(inputs), Err("Seeded non-leaf node!".to_string().into()));
+
+    ir.check_valid()
+}
+
+#[test]
+fn propagate_constants() -> Result<(), IrError> {
+    let mut ir = IrGraph::default();
+
+    let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+    let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+    let z = ir.add_binary(x, y, Binary::Add)?;
+    let w = ir.add_binary(z, y, Binary::Add)?;
+    let t = ir.add_binary(w, y, Binary::Sub)?;
+
+    ir.register_output(t);
+
+    ir.propagate_constants()?;
+
+    println!("{ir}");
+    ir.eliminate_dead_ops()?;
+
+    println!("{ir}");
+
+    assert_eq!(ir.num_ops(), 1);
+    assert_eq!(ir.num_nodes(), 1);
+
+    for node in [x, y, z, w] {
+        assert_eq!(ir.get_node(node), Err(IrError::NodeDoesNotExist));
+    }
+
+    assert!(ir.get_node(t).is_ok());
+
+    let t_op = ir.get_op(ir.get_parent_op(t)?)?;
+    assert_eq!(t_op.inputs(), &[]);
+    assert_eq!(t_op.outputs(), &[t]);
+    assert_eq!(IrOperation::downcast(t_op.op()), Some(&Constant(DTypeTensor::F32(vec![2.0; 8]))));
 
     ir.check_valid()
 }

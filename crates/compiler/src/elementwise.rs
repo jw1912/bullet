@@ -1,109 +1,304 @@
-pub(crate) mod builder;
-pub(crate) mod description;
-pub(crate) mod kernel;
+mod builder;
+mod kernel;
 
-use crate::common::{DType, DTypeValue};
+#[cfg(test)]
+mod tests;
+
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 pub use builder::{ElementwiseBuilder, ElementwiseNode};
-pub use description::{ElementwiseDescription, ElementwiseId, Operation};
 pub use kernel::{ElementwiseKernel, ElementwiseKernelBuilder, ElementwiseMut, ElementwiseRef};
 
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Unary {
-    Sin,
-    Cos,
-    Tan,
-    Sinh,
-    Cosh,
-    Tanh,
-    Exp,
-    Log1pAbs,
-    Sgn,
-    Abs,
-    Cast(DType),
-}
+use crate::common::{Binary, DType, DTypeValue, Unary, topo_order};
 
-impl Unary {
-    pub fn dtype(self, input: DType) -> DType {
-        if let Self::Cast(ty) = self { ty } else { input }
-    }
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct ElementwiseId(usize);
 
-    pub fn evaluate(self, input: DTypeValue) -> Option<DTypeValue> {
-        let fp = |f: fn(f32) -> f32| input.f32().map(|x| DTypeValue::F32(f(x)));
-
-        Some(match self {
-            Self::Sin => fp(f32::sin)?,
-            Self::Cos => fp(f32::cos)?,
-            Self::Tan => fp(f32::tan)?,
-            Self::Sinh => fp(f32::sinh)?,
-            Self::Cosh => fp(f32::cosh)?,
-            Self::Tanh => fp(f32::tanh)?,
-            Self::Exp => fp(f32::exp)?,
-            Self::Log1pAbs => fp(|x| x.abs().ln_1p())?,
-            Self::Sgn => match input {
-                DTypeValue::F32(x) => DTypeValue::F32(x.signum()),
-                DTypeValue::I32(x) => DTypeValue::I32(x.signum()),
-            },
-            Self::Abs => match input {
-                DTypeValue::F32(x) => DTypeValue::F32(x.abs()),
-                DTypeValue::I32(x) => DTypeValue::I32(x.abs()),
-            },
-            Self::Cast(ty) => match (input, ty) {
-                (DTypeValue::F32(x), DType::I32) => DTypeValue::I32(x as i32),
-                (DTypeValue::I32(x), DType::F32) => DTypeValue::F32(x as f32),
-                _ => input,
-            },
-        })
+impl Default for ElementwiseId {
+    fn default() -> Self {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }
 
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Binary {
-    Add,
-    Mul,
-    Sub,
-    Div,
-    Min,
-    Max,
-    AbsPow,
+impl fmt::Debug for ElementwiseId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, ".{:?}", self.0)
+    }
 }
 
-impl Binary {
-    pub fn dtype(&self, lhs: DType, rhs: DType) -> Option<DType> {
-        (lhs == rhs).then_some(lhs)
-    }
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Input {
+    Index(ElementwiseId),
+    Constant(DTypeValue),
+}
 
-    pub fn evaluate(self, lhs: DTypeValue, rhs: DTypeValue) -> Option<DTypeValue> {
-        match (lhs, rhs) {
-            (DTypeValue::F32(x), DTypeValue::F32(y)) => Some(DTypeValue::F32(self.evaluate_f32(x, y))),
-            (DTypeValue::I32(x), DTypeValue::I32(y)) => self.evaluate_i32(x, y).map(DTypeValue::I32),
-            _ => None,
+impl Input {
+    pub fn replace(&mut self, curr: ElementwiseId, new: ElementwiseId) {
+        if let Input::Index(x) = *self
+            && x == curr
+        {
+            *self = Input::Index(new);
         }
     }
+}
 
-    pub fn evaluate_f32(self, lhs: f32, rhs: f32) -> f32 {
+impl From<ElementwiseId> for Input {
+    fn from(value: ElementwiseId) -> Self {
+        Input::Index(value)
+    }
+}
+
+impl From<DTypeValue> for Input {
+    fn from(value: DTypeValue) -> Self {
+        Input::Constant(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Operation {
+    Leaf(DType),
+    Unary { input: Input, op: Unary },
+    Binary { lhs: Input, rhs: Input, op: Binary },
+}
+
+impl Operation {
+    fn inputs(&self) -> Vec<ElementwiseId> {
+        let mut res = Vec::new();
+
         match self {
-            Self::Add => lhs + rhs,
-            Self::Mul => lhs * rhs,
-            Self::AbsPow => lhs.abs().powf(rhs),
-            Self::Div => lhs / rhs,
-            Self::Sub => lhs - rhs,
-            Self::Min => lhs.min(rhs),
-            Self::Max => lhs.max(rhs),
+            Self::Leaf(_) => {}
+            Self::Unary { input, .. } => {
+                if let Input::Index(x) = *input {
+                    res.push(x)
+                }
+            }
+            Self::Binary { lhs, rhs, .. } => {
+                if let Input::Index(x) = *lhs {
+                    res.push(x);
+                }
+
+                if let Input::Index(x) = *rhs {
+                    res.push(x);
+                }
+            }
+        }
+
+        res
+    }
+
+    pub fn replace(&mut self, curr: ElementwiseId, new: ElementwiseId) {
+        match self {
+            Self::Leaf(_) => {}
+            Self::Unary { input, .. } => input.replace(curr, new),
+            Self::Binary { lhs, rhs, .. } => {
+                lhs.replace(curr, new);
+                rhs.replace(curr, new);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Node {
+    op: Operation,
+    ty: DType,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ElementwiseDescription {
+    nodes: HashMap<ElementwiseId, Node>,
+}
+
+impl fmt::Display for ElementwiseDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let topo = self.topo_order();
+
+        for x in topo {
+            let op = self.nodes.get(&x).unwrap().op;
+            writeln!(f, "{x:?} = {op:?}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl ElementwiseDescription {
+    pub fn evaluate(
+        &self,
+        mut values: HashMap<ElementwiseId, DTypeValue>,
+        outputs: impl AsRef<[ElementwiseId]>,
+    ) -> Option<Vec<DTypeValue>> {
+        for id in self.topo_order() {
+            let alr = values.contains_key(&id);
+            let node = self.nodes.get(&id)?;
+
+            let get_input = |input| match input {
+                Input::Constant(val) => Some(val),
+                Input::Index(id) => values.get(&id).cloned(),
+            };
+
+            let value = match (node.op, alr) {
+                (Operation::Leaf(ty), true) => {
+                    if ty == values.get(&id).unwrap().dtype() {
+                        continue;
+                    } else {
+                        None
+                    }
+                }
+                (Operation::Unary { input, op }, false) => op.evaluate(get_input(input)?),
+                (Operation::Binary { lhs, rhs, op }, false) => op.evaluate(get_input(lhs)?, get_input(rhs)?),
+                _ => None,
+            }?;
+
+            assert!(values.insert(id, value).is_none(), "Have 'continue'd already!");
+        }
+
+        outputs.as_ref().iter().map(|id| values.get(id).cloned()).collect()
+    }
+
+    pub fn traverse(&self, mut f: impl FnMut(ElementwiseId, Operation)) {
+        let topo = self.topo_order();
+
+        for x in topo {
+            f(x, self.nodes.get(&x).unwrap().op);
         }
     }
 
-    pub fn evaluate_i32(self, lhs: i32, rhs: i32) -> Option<i32> {
-        Some(match self {
-            Self::Add => lhs + rhs,
-            Self::Mul => lhs * rhs,
-            Self::AbsPow => rhs.try_into().ok().map(|r| lhs.abs().pow(r))?,
-            Self::Div => lhs / rhs,
-            Self::Sub => lhs - rhs,
-            Self::Min => lhs.min(rhs),
-            Self::Max => lhs.max(rhs),
-        })
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn num_children(&self, id: ElementwiseId) -> usize {
+        let mut cnt = 0;
+
+        for node in self.nodes.values() {
+            if node.op.inputs().contains(&id) {
+                cnt += 1;
+            }
+        }
+
+        cnt
+    }
+
+    pub fn is_root(&self, id: ElementwiseId) -> bool {
+        self.num_children(id) == 0
+    }
+
+    pub fn num_parents(&self, id: ElementwiseId) -> usize {
+        self.nodes.get(&id).unwrap().op.inputs().len()
+    }
+
+    pub fn is_leaf(&self, id: ElementwiseId) -> bool {
+        self.num_parents(id) == 0
+    }
+
+    pub fn roots(&self) -> usize {
+        self.nodes.keys().filter(|&&x| self.is_root(x)).count()
+    }
+
+    pub fn leaves(&self) -> usize {
+        self.nodes.keys().filter(|&&x| self.is_leaf(x)).count()
+    }
+
+    pub fn topo_order(&self) -> Vec<ElementwiseId> {
+        let edges_rev =
+            self.nodes.iter().map(|(&idx, data)| (idx.0, data.op.inputs().iter().map(|x| x.0).collect())).collect();
+
+        topo_order(edges_rev).unwrap().iter().map(|&x| ElementwiseId(x)).collect()
+    }
+
+    pub fn get_dtype(&self, input: impl Into<Input>) -> DType {
+        match input.into() {
+            Input::Constant(val) => val.dtype(),
+            Input::Index(idx) => self.nodes.get(&idx).unwrap().ty,
+        }
+    }
+
+    pub fn add_op(&mut self, op: Operation) -> Option<ElementwiseId> {
+        let output = ElementwiseId::default();
+
+        let ty = match &op {
+            Operation::Leaf(ty) => *ty,
+            Operation::Unary { input, op } => op.dtype(self.get_dtype(*input)),
+            Operation::Binary { lhs, rhs, op } => op.dtype(self.get_dtype(*lhs), self.get_dtype(*rhs))?,
+        };
+
+        let node = Node { op, ty };
+        self.nodes.insert(output, node);
+
+        Some(output)
+    }
+
+    pub fn add_input(&mut self, dtype: DType) -> ElementwiseId {
+        self.add_op(Operation::Leaf(dtype)).unwrap()
+    }
+
+    pub fn unary(&mut self, input: ElementwiseId, op: Unary) -> Option<ElementwiseId> {
+        self.add_op(Operation::Unary { input: Input::Index(input), op })
+    }
+
+    pub fn binary(&mut self, lhs: impl Into<Input>, rhs: impl Into<Input>, op: Binary) -> Option<ElementwiseId> {
+        let lhs = lhs.into();
+        let rhs = rhs.into();
+
+        self.add_op(Operation::Binary { lhs, rhs, op })
+    }
+
+    pub fn merge_with(&self, rhs: &Self, equivalencies: &[(ElementwiseId, ElementwiseId)]) -> Option<Self> {
+        let mut res = self.clone();
+
+        for (&id, &node) in rhs.nodes.iter() {
+            res.nodes.insert(id, node);
+        }
+
+        for &(a, b) in equivalencies {
+            let &Node { op: op_a, ty } = res.nodes.get(&a).unwrap();
+            let &Node { op: op_b, ty: ty_b } = res.nodes.get(&b).unwrap();
+
+            assert_eq!(ty, ty_b);
+
+            if let Operation::Leaf(_) = op_a {
+                res.nodes.get_mut(&a).unwrap().op = op_b;
+            } else if let Operation::Leaf(_) = op_b {
+            } else {
+                return None;
+            }
+
+            res.nodes.remove(&b);
+            for node in res.nodes.values_mut() {
+                node.op.replace(b, a);
+            }
+        }
+
+        Some(res)
+    }
+
+    pub fn relabel(&mut self, relabels: &[(ElementwiseId, ElementwiseId)]) -> Option<()> {
+        let removals = relabels.iter().map(|x| x.0).collect::<HashSet<_>>();
+        let insertions = relabels.iter().map(|x| x.1).collect::<HashSet<_>>();
+
+        if !removals.is_disjoint(&insertions) {
+            return None;
+        }
+
+        for &(a, b) in relabels {
+            let node = self.nodes.remove(&a)?;
+            self.nodes.insert(b, node);
+
+            for node in self.nodes.values_mut() {
+                node.op.replace(a, b);
+            }
+        }
+
+        Some(())
     }
 }

@@ -54,6 +54,20 @@ pub enum DTypeTensor {
 }
 
 impl DTypeTensor {
+    pub fn new(dtype: DType, size: usize) -> Self {
+        match dtype {
+            DType::F32 => Self::F32(vec![0.0; size]),
+            DType::I32 => Self::I32(vec![0; size]),
+        }
+    }
+
+    pub fn dtype(&self) -> DType {
+        match self {
+            Self::F32(_) => DType::F32,
+            Self::I32(_) => DType::I32,
+        }
+    }
+
     pub fn size(&self) -> usize {
         match self {
             Self::F32(x) => x.len(),
