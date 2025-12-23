@@ -1,7 +1,7 @@
 use std::{collections::HashSet, rc::Rc};
 
 use crate::{
-    common::{Binary, DTypeTensor, Size, Unary},
+    common::{DTypeTensor, Size},
     elementwise::{ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode},
     ir::{
         IrError,
@@ -40,14 +40,6 @@ impl IrElementwise {
         let outputs = outs.map(|x| x.node).into();
 
         Ok(Self { size, inputs, op: builder.build(), outputs })
-    }
-
-    pub fn unary(input: IrType, op: Unary) -> Result<Self, IrError> {
-        Self::new([input], |[input]| input.unary(op).map(|x| [x]))
-    }
-
-    pub fn binary(lhs: IrType, rhs: IrType, op: Binary) -> Result<Self, IrError> {
-        Self::new([lhs, rhs], |[lhs, rhs]| lhs.binary(rhs, op).map(|x| [x]))
     }
 }
 

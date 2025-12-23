@@ -5,7 +5,7 @@ use std::{
 
 use crate::common::{DType, Size};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IrType {
     size: Size,
     dtype: DType,
@@ -31,7 +31,7 @@ impl IrType {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IrNodeId(usize);
 
 impl Default for IrNodeId {

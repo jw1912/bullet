@@ -1,16 +1,21 @@
+mod binary;
 mod broadcast;
 mod elementwise;
 mod reduce;
+mod unary;
 
 use std::{
+    collections::HashSet,
     fmt::Debug,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+pub use binary::IrBinary;
 pub use broadcast::BroadcastAcrossDimension;
 pub use elementwise::IrElementwise;
 pub use reduce::{ReduceAcrossDimension, Reduction};
+pub use unary::IrUnary;
 
 use crate::{
     common::DTypeTensor,
@@ -27,6 +32,10 @@ pub trait IrOperationType: std::any::Any + Debug + 'static {
     fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]);
 
     fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool;
+
+    fn commutating_groups(&self) -> Vec<HashSet<usize>> {
+        Vec::new()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -62,18 +71,28 @@ impl IrOperation {
         let id = IrOperationId::default();
         let op = Rc::new(op);
 
-        if op.inputs() != inputs.iter().map(|&i| i.ty()).collect::<Vec<_>>() {
-            return Err("IrOperation::new: inputs don't match expected!".into());
-        }
-
-        if op.outputs() != outputs.iter().map(|&i| i.ty()).collect::<Vec<_>>() {
-            return Err("IrOperation::new: outputs don't match expected!".into());
-        }
+        Self::check(&inputs, &outputs, op.as_ref())?;
 
         let inputs = inputs.iter().map(|&i| i.id()).collect();
         let outputs = outputs.iter().map(|&i| i.id()).collect();
 
         Ok(Self { id, op, inputs, outputs })
+    }
+
+    pub fn check<'a>(
+        inputs: impl AsRef<[&'a IrNode]>,
+        outputs: impl AsRef<[&'a IrNode]>,
+        op: &'a dyn IrOperationType,
+    ) -> Result<(), IrError> {
+        if op.inputs() != inputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>() {
+            return Err("IrOperation::new: inputs don't match expected!".into());
+        }
+
+        if op.outputs() != outputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>() {
+            return Err("IrOperation::new: outputs don't match expected!".into());
+        }
+
+        Ok(())
     }
 
     pub fn id(&self) -> IrOperationId {
@@ -82,6 +101,10 @@ impl IrOperation {
 
     pub fn inputs(&self) -> &[IrNodeId] {
         &self.inputs
+    }
+
+    pub fn set_input(&mut self, idx: usize, node: IrNodeId) {
+        self.inputs[idx] = node;
     }
 
     pub fn outputs(&self) -> &[IrNodeId] {

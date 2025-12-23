@@ -7,27 +7,12 @@ use crate::{
 };
 
 impl IrGraph {
-    pub fn eliminate_dead_ops(&mut self) -> Result<(), IrError> {
-        for op_id in self.topo_order_ops()?.into_iter().rev() {
-            let dead_op = self.get_op(op_id)?.outputs().iter().all(|output| {
-                let node = self.get_node(*output).unwrap();
-                node.children() == 0 && !self.outputs.contains(output)
-            });
-
-            if dead_op {
-                self.remove_op(op_id)?;
-            }
-        }
-
+    pub fn fold_constants(&mut self) -> Result<(), IrError> {
+        while self.fold_single_constant()? {}
         Ok(())
     }
 
-    pub fn propagate_constants(&mut self) -> Result<(), IrError> {
-        while self.propagate_single_constant()? {}
-        Ok(())
-    }
-
-    fn propagate_single_constant(&mut self) -> Result<bool, IrError> {
+    fn fold_single_constant(&mut self) -> Result<bool, IrError> {
         'op_loop: for &op_id in self.ops.keys() {
             let op = self.get_op(op_id)?;
             let inputs = op.inputs();
@@ -67,12 +52,55 @@ impl IrGraph {
                     self.swap_outputs(new_out, old_out)?;
                 }
 
-                self.eliminate_dead_ops()?;
+                self.eliminate_unused_ops()?;
 
                 return Ok(true);
             }
         }
 
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::common::Binary;
+
+    use super::*;
+
+    #[test]
+    fn fold_constants() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+        let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+        let z = ir.add_binary(x, y, Binary::Add)?;
+        let w = ir.add_binary(z, y, Binary::Add)?;
+        let t = ir.add_binary(w, y, Binary::Sub)?;
+
+        ir.register_output(t);
+
+        ir.fold_constants()?;
+
+        println!("{ir}");
+        ir.eliminate_unused_ops()?;
+
+        println!("{ir}");
+
+        assert_eq!(ir.num_ops(), 1);
+        assert_eq!(ir.num_nodes(), 1);
+
+        for node in [x, y, z, w] {
+            assert!(ir.get_node(node).is_err());
+        }
+
+        assert!(ir.get_node(t).is_ok());
+
+        let t_op = ir.get_op(ir.get_parent_op(t)?)?;
+        assert_eq!(t_op.inputs(), &[]);
+        assert_eq!(t_op.outputs(), &[t]);
+        assert_eq!(IrOperation::downcast(t_op.op()), Some(&Constant(DTypeTensor::F32(vec![2.0; 8]))));
+
+        ir.check_valid()
     }
 }

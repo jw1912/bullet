@@ -1,10 +1,14 @@
+mod canonicalise;
+mod eliminate_unused;
+mod fold_constants;
+
 use crate::{
     common::{Binary, DTypeTensor, Unary},
     elementwise::ElementwiseNode,
     ir::{
         IrError, IrGraph,
         node::{IrNode, IrNodeId, IrType},
-        operation::{Constant, IrElementwise, IrOperation, IrOperationId, IrOperationType, Leaf},
+        operation::{Constant, IrBinary, IrElementwise, IrOperation, IrOperationId, IrOperationType, IrUnary, Leaf},
     },
 };
 
@@ -123,12 +127,11 @@ impl IrGraph {
     }
 
     pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IrError> {
-        self.add_op([node], IrElementwise::unary(self.get_node_type(node)?, op)?).map(|x| x[0])
+        self.add_op([node], IrUnary::new(self.get_node_type(node)?, op)).map(|x| x[0])
     }
 
     pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IrError> {
-        self.add_op([lhs, rhs], IrElementwise::binary(self.get_node_type(lhs)?, self.get_node_type(rhs)?, op)?)
-            .map(|x| x[0])
+        self.add_op([lhs, rhs], IrBinary::new(self.get_node_type(lhs)?, self.get_node_type(rhs)?, op)?).map(|x| x[0])
     }
 
     pub fn add_elementwise<const M: usize, const N: usize, F>(
@@ -151,5 +154,143 @@ impl IrGraph {
         }
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::common::DType;
+
+    use super::*;
+
+    #[test]
+    fn construct_deconstruct() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::F32));
+        let z = ir.add_leaf(IrType::new(8, DType::F32));
+
+        let w = ir.add_binary(x, y, Binary::Add)?;
+        let t = ir.add_binary(z, w, Binary::Mul)?;
+        let u = ir.add_binary(t, x, Binary::Add)?;
+
+        assert_eq!(ir.get_node(u)?.ty(), IrType::new(8, DType::F32));
+
+        ir.remove_op(ir.get_parent_op(u)?)?;
+        ir.remove_op(ir.get_parent_op(t)?)?;
+        ir.remove_op(ir.get_parent_op(w)?)?;
+        ir.remove_op(ir.get_parent_op(z)?)?;
+        ir.remove_op(ir.get_parent_op(y)?)?;
+        ir.remove_op(ir.get_parent_op(x)?)?;
+
+        assert!(ir.ops.is_empty());
+        assert!(ir.nodes.is_empty());
+        assert!(ir.links.is_empty());
+
+        ir.check_valid()
+    }
+
+    #[test]
+    fn swap_outputs() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::F32));
+        let z = ir.add_binary(x, y, Binary::Add)?;
+        let w = ir.add_binary(z, y, Binary::Add)?;
+        let t = ir.add_binary(w, y, Binary::Sub)?;
+
+        ir.register_output(t);
+
+        let new_t = ir.add_binary(x, y, Binary::Add)?;
+        ir.swap_outputs(new_t, t)?;
+        ir.eliminate_unused_ops()?;
+
+        assert_eq!(ir.num_ops(), 3);
+        assert_eq!(ir.num_nodes(), 3);
+        assert!(ir.get_node(x).is_ok());
+        assert!(ir.get_node(y).is_ok());
+        assert!(ir.get_node(t).is_ok());
+
+        ir.check_valid()
+    }
+
+    #[test]
+    fn replace_op() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::F32));
+        let z = ir.add_binary(x, y, Binary::Add)?;
+        let w = ir.add_binary(z, y, Binary::Add)?;
+        let t = ir.add_binary(w, y, Binary::Sub)?;
+
+        ir.register_output(t);
+
+        let new_op = IrBinary::new(ir.get_node_type(x)?, ir.get_node_type(y)?, Binary::Add)?;
+        ir.replace_op(ir.get_parent_op(t)?, [x, y], new_op)?;
+        ir.eliminate_unused_ops()?;
+
+        assert_eq!(ir.num_ops(), 3);
+        assert_eq!(ir.num_nodes(), 3);
+        assert!(ir.get_node(x).is_ok());
+        assert!(ir.get_node(y).is_ok());
+        assert!(ir.get_node(t).is_ok());
+
+        ir.check_valid()
+    }
+
+    #[test]
+    fn invalid_addition_size() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(16, DType::F32));
+
+        assert!(ir.add_binary(x, y, Binary::Add).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_addition_dtype() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::I32));
+
+        assert!(ir.add_binary(x, y, Binary::Add).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_removal() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::F32));
+        let z = ir.add_binary(x, y, Binary::Add)?;
+
+        assert_eq!(ir.get_node(z)?.ty(), IrType::new(8, DType::F32));
+        assert!(ir.remove_op(ir.get_parent_op(y)?).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_swap_outputs() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::F32));
+        let z = ir.add_binary(x, y, Binary::Add)?;
+        let w = ir.add_binary(z, y, Binary::Add)?;
+        let t = ir.add_binary(w, y, Binary::Sub)?;
+
+        assert_eq!(ir.swap_outputs(z, t), Err("IrGraph::topo_order_ops: cycle found!".into()));
+
+        Ok(())
     }
 }
