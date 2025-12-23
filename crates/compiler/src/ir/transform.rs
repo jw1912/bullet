@@ -39,27 +39,25 @@ impl IrGraph {
         }
 
         if error {
-            return Err(IrError::InvalidOperationOutputs);
+            return Err("IrGraph::add_op: invalid operation outputs!".into());
         }
 
         Ok(output_ids)
     }
 
     pub fn remove_op(&mut self, id: IrOperationId) -> Result<(), IrError> {
+        fn check(cond: bool, msg: impl Into<String>) -> Result<(), IrError> {
+            cond.then_some(()).ok_or(format!("IrGraph::remove_op: {}!", msg.into()).into())
+        }
+
         for output in self.get_op(id)?.outputs().to_vec() {
             let node = self.nodes.remove(&output).expect("Node must be present `nodes`!");
-            if node.children() > 0 {
-                return Err(IrError::OpIsNotRoot);
-            }
 
-            if self.outputs.contains(&output) {
-                return Err(IrError::NodeIsRequired);
-            }
+            check(node.children() == 0, "node has children")?;
+            check(!self.outputs.contains(&output), "node is required")?;
 
             let op_id = self.links.remove(&output).expect("Node must be present `links`!");
-            if op_id != id {
-                return Err(IrError::InvalidOperationOutputs);
-            }
+            check(op_id == id, "operation id mismatch")?;
         }
 
         for input in self.get_op(id)?.inputs().to_vec() {
@@ -76,14 +74,14 @@ impl IrGraph {
         let node2 = self.get_node(id2)?;
 
         if node1.ty() != node2.ty() {
-            return Err(IrError::FailedTypeCheck);
+            return Err(format!("IrGraph::swap_outputs: type mismatch {:?} != {:?}!", node1.ty(), node2.ty()).into());
         }
 
         let op1 = self.get_parent_op(id1)?;
         let op2 = self.get_parent_op(id2)?;
 
-        *self.links.get_mut(&id1).ok_or(IrError::NodeDoesNotExist)? = op2;
-        *self.links.get_mut(&id2).ok_or(IrError::NodeDoesNotExist)? = op1;
+        *self.links.get_mut(&id1).ok_or("IrGraph::swap_outputs: node does not exist!")? = op2;
+        *self.links.get_mut(&id2).ok_or("IrGraph::swap_outputs: node does not exist!")? = op1;
 
         self.get_op_mut(op1)?.swap_output_with(id2, id1)?;
         self.get_op_mut(op2)?.swap_output_with(id1, id2)?;
@@ -104,7 +102,7 @@ impl IrGraph {
         let old_outs = self.get_op(target)?.outputs().to_vec();
 
         if new_outs.len() != old_outs.len() {
-            return Err(IrError::InvalidOperationOutputs);
+            return Err("IrGraph::replace_op: new output length doesn't match old".into());
         }
 
         for (new_out, old_out) in new_outs.into_iter().zip(old_outs) {

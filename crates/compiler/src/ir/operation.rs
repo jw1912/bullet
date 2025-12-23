@@ -63,11 +63,11 @@ impl IrOperation {
         let op = Rc::new(op);
 
         if op.inputs() != inputs.iter().map(|&i| i.ty()).collect::<Vec<_>>() {
-            return Err(IrError::InvalidOperationInputs);
+            return Err("IrOperation::new: inputs don't match expected!".into());
         }
 
         if op.outputs() != outputs.iter().map(|&i| i.ty()).collect::<Vec<_>>() {
-            return Err(IrError::InvalidOperationOutputs);
+            return Err("IrOperation::new: outputs don't match expected!".into());
         }
 
         let inputs = inputs.iter().map(|&i| i.id()).collect();
@@ -98,7 +98,7 @@ impl IrOperation {
             }
         }
 
-        found.then_some(()).ok_or(IrError::NodeDoesNotExist)
+        found.then_some(()).ok_or(format!("IrOperation::swap_input_with: {old:?} not found!").into())
     }
 
     pub fn swap_output_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
@@ -107,7 +107,7 @@ impl IrOperation {
         for id in &mut self.outputs {
             if *id == old {
                 if found {
-                    return Err(IrError::InvalidOperationOutputs);
+                    panic!("This cannot happen!");
                 }
 
                 *id = new;
@@ -115,7 +115,7 @@ impl IrOperation {
             }
         }
 
-        found.then_some(()).ok_or(IrError::NodeDoesNotExist)
+        found.then_some(()).ok_or(format!("IrOperation::swap_output_with: {old:?} not found!").into())
     }
 
     pub fn op(&self) -> &Rc<dyn IrOperationType> {

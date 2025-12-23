@@ -19,21 +19,11 @@ use operation::{IrOperation, IrOperationId, Leaf};
 use crate::common::{DType, DTypeTensor, topo_order};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum IrError {
-    OpDoesNotExist,
-    OpIsNotRoot,
-    NodeDoesNotExist,
-    NodeIsRequired,
-    FailedTypeCheck,
-    InvalidOperationInputs,
-    InvalidOperationOutputs,
-    Cyclic,
-    Message(String),
-}
+pub struct IrError(pub String);
 
-impl From<String> for IrError {
-    fn from(value: String) -> Self {
-        Self::Message(value)
+impl<T: Into<String>> From<T> for IrError {
+    fn from(value: T) -> Self {
+        Self(value.into())
     }
 }
 
@@ -55,23 +45,23 @@ impl IrGraph {
     }
 
     pub fn get_parent_op(&self, node: IrNodeId) -> Result<IrOperationId, IrError> {
-        self.links.get(&node).cloned().ok_or(IrError::NodeDoesNotExist)
+        self.links.get(&node).cloned().ok_or(format!("IrGraph::get_parent_op: node {node:?} does not exist!").into())
     }
 
     pub fn get_op(&self, op: IrOperationId) -> Result<&IrOperation, IrError> {
-        self.ops.get(&op).ok_or(IrError::OpDoesNotExist)
+        self.ops.get(&op).ok_or(format!("IrGraph::get_op: operation {op:?} does not exist!").into())
     }
 
     pub fn get_op_mut(&mut self, op: IrOperationId) -> Result<&mut IrOperation, IrError> {
-        self.ops.get_mut(&op).ok_or(IrError::NodeDoesNotExist)
+        self.ops.get_mut(&op).ok_or(format!("IrGraph::get_op_mut: operation {op:?} does not exist!").into())
     }
 
     pub fn get_node(&self, node: IrNodeId) -> Result<&IrNode, IrError> {
-        self.nodes.get(&node).ok_or(IrError::NodeDoesNotExist)
+        self.nodes.get(&node).ok_or(format!("IrGraph::get_node: node {node:?} does not exist!").into())
     }
 
     pub fn get_node_mut(&mut self, node: IrNodeId) -> Result<&mut IrNode, IrError> {
-        self.nodes.get_mut(&node).ok_or(IrError::NodeDoesNotExist)
+        self.nodes.get_mut(&node).ok_or(format!("IrGraph::get_node_mut: node {node:?} does not exist!").into())
     }
 
     pub fn get_node_type(&self, node: IrNodeId) -> Result<IrType, IrError> {
@@ -91,7 +81,9 @@ impl IrGraph {
             })
             .collect::<Result<_, _>>()?;
 
-        topo_order(edges_rev).ok_or(IrError::Cyclic).map(|x| x.into_iter().map(IrOperationId::from_inner).collect())
+        topo_order(edges_rev)
+            .ok_or("IrGraph::topo_order_ops: cycle found!".into())
+            .map(|x| x.into_iter().map(IrOperationId::from_inner).collect())
     }
 
     pub fn is_output(&self, node: IrNodeId) -> bool {
@@ -111,39 +103,47 @@ impl IrGraph {
         let mut expected_child_count = HashMap::new();
         let mut actual_child_count: HashMap<_, _> = self.nodes.keys().map(|x| (x, 0)).collect();
 
+        fn check<T: Into<String>>(cond: bool, msg: T) -> Result<(), IrError> {
+            cond.then_some(()).ok_or(format!("IrGraph::check_valid: {}!", msg.into()).into())
+        }
+
         for op_id in self.topo_order_ops()? {
             let op = self.get_op(op_id)?;
 
             for input in op.inputs() {
-                *actual_child_count.get_mut(input).ok_or(IrError::NodeDoesNotExist)? += 1;
+                *actual_child_count.get_mut(input).ok_or("IrGraph::check_valid: unexpected input node!")? += 1;
             }
 
             let output_types = op.op().outputs();
 
-            if op.outputs().len() != output_types.len() {
-                return Err(IrError::InvalidOperationOutputs);
-            }
+            check(
+                op.outputs().len() == output_types.len(),
+                format!(
+                    "length of operation outputs ({}) does not match expected ({})",
+                    op.outputs().len(),
+                    output_types.len()
+                ),
+            )?;
 
             for (&output, ty) in op.outputs().iter().zip(output_types) {
-                if !registered_outputs.insert(output) {
-                    return Err(IrError::InvalidOperationOutputs);
-                }
+                check(registered_outputs.insert(output), "output already registered")?;
 
                 let node = self.get_node(output)?;
-                if node.ty() != ty || node.id() != output {
-                    return Err(IrError::InvalidOperationOutputs);
-                }
-
-                if expected_child_count.insert(output, node.children()).is_some() {
-                    return Err(IrError::InvalidOperationOutputs);
-                }
+                check(node.ty() == ty, format!("output type ({:?}) does not match expected ({ty:?})", node.ty()))?;
+                check(
+                    node.id() == output,
+                    format!("output id ({:?}) does not match expected ({output:?})", node.id()),
+                )?;
+                check(
+                    expected_child_count.insert(output, node.children()).is_none(),
+                    "expected child count already present",
+                )?;
             }
         }
 
         for (id, count) in expected_child_count {
-            if count != *actual_child_count.get(&id).ok_or(IrError::NodeDoesNotExist)? {
-                return Err(IrError::InvalidOperationOutputs);
-            }
+            let actual = *actual_child_count.get(&id).ok_or("IrGraph::check_valid: node does not exist!")?;
+            check(count == actual, format!("actual child count ({actual}) does not match expected ({count})"))?;
         }
 
         Ok(())
@@ -161,7 +161,7 @@ impl IrGraph {
         for (id, tensor) in &values {
             let op = self.get_op(self.get_parent_op(*id)?)?;
             if IrOperation::downcast::<Leaf>(op.op()).is_none() {
-                return Err("Seeded non-leaf node!".to_string().into());
+                return Err("Seeded non-leaf node!".into());
             }
 
             let concrete_size = tensor.borrow().size();
@@ -196,7 +196,7 @@ impl IrGraph {
                 if !is_leaf {
                     assert!(values.insert(output, RefCell::new(tensor)).is_none(), "Cannot happen!");
                 } else if !is_prev {
-                    return Err("Leaf node not seeded!".to_string().into());
+                    return Err("Leaf node not seeded!".into());
                 }
             }
 
@@ -205,14 +205,14 @@ impl IrGraph {
                 .iter()
                 .map(|i| values.get(i).map(|i| i.borrow()))
                 .collect::<Option<Vec<_>>>()
-                .ok_or(IrError::InvalidOperationInputs)?;
+                .ok_or("IrGraph::evaluate: input missing!")?;
 
             let mut op_outputs = op
                 .outputs()
                 .iter()
                 .map(|i| values.get(i).map(|i| i.borrow_mut()))
                 .collect::<Option<Vec<_>>>()
-                .ok_or(IrError::InvalidOperationOutputs)?;
+                .ok_or("IrGraph::evaluate: output missing!")?;
 
             op.op().evaluate(
                 &op_inputs.iter().map(|x| &**x).collect::<Vec<_>>(),

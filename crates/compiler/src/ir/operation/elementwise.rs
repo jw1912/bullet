@@ -26,13 +26,13 @@ impl IrElementwise {
         let builder = ElementwiseBuilder::default();
 
         let inps = inputs.map(|x| builder.add_input(x.dtype()));
-        let outs = f(inps).ok_or(IrError::FailedTypeCheck)?;
+        let outs = f(inps).ok_or("IrElementwise::new: failed dtype check!")?;
 
         let sizes = inputs.map(|x| x.size());
         let size = sizes[0];
         for other in sizes.into_iter().skip(1) {
             if size != other {
-                return Err(IrError::InvalidOperationInputs);
+                return Err("IrElementwise::new: failed size check!".into());
             }
         }
 
