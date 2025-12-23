@@ -9,7 +9,7 @@ pub use node::ProgramNode;
 use crate::{
     common::{DType, Size},
     elementwise::ElementwiseNode,
-    ir::{IrGraph, node::IrNodeId, ops::IrOperation},
+    ir::{IrGraph, node::IrNodeId, operation::IrOperationType},
 };
 
 #[derive(Default)]
@@ -22,8 +22,9 @@ impl ProgramBuilder {
         ProgramNode::new(self, node)
     }
 
-    fn add_op<'a>(&'a self, op: impl IrOperation) -> Vec<ProgramNode<'a>> {
-        let outs = self.ir.borrow_mut().add_op(op).unwrap();
+    fn add_op<'a>(&'a self, inputs: impl AsRef<[ProgramNode<'a>]>, op: impl IrOperationType) -> Vec<ProgramNode<'a>> {
+        let ids = inputs.as_ref().iter().map(ProgramNode::node).collect::<Vec<_>>();
+        let outs = self.ir.borrow_mut().add_op(ids, op).unwrap();
         outs.into_iter().map(|out| self.new_node(out)).collect()
     }
 

@@ -120,6 +120,39 @@ impl fmt::Display for ElementwiseDescription {
 }
 
 impl ElementwiseDescription {
+    pub fn evaluate(
+        &self,
+        mut values: HashMap<ElementwiseId, DTypeValue>,
+        outputs: impl AsRef<[ElementwiseId]>,
+    ) -> Option<Vec<DTypeValue>> {
+        for id in self.topo_order() {
+            let alr = values.contains_key(&id);
+            let node = self.nodes.get(&id)?;
+
+            let get_input = |input| match input {
+                Input::Constant(val) => Some(val),
+                Input::Index(id) => values.get(&id).cloned(),
+            };
+
+            let value = match (node.op, alr) {
+                (Operation::Leaf(ty), true) => {
+                    if ty == values.get(&id).unwrap().dtype() {
+                        continue;
+                    } else {
+                        None
+                    }
+                }
+                (Operation::Unary { input, op }, false) => op.evaluate(get_input(input)?),
+                (Operation::Binary { lhs, rhs, op }, false) => op.evaluate(get_input(lhs)?, get_input(rhs)?),
+                _ => None,
+            }?;
+
+            assert!(values.insert(id, value).is_none(), "Have 'continue'd already!");
+        }
+
+        outputs.as_ref().iter().map(|id| values.get(id).cloned()).collect()
+    }
+
     pub fn traverse(&self, mut f: impl FnMut(ElementwiseId, Operation)) {
         let topo = self.topo_order();
 
@@ -328,5 +361,47 @@ mod tests {
         let e = elmt2.binary(c2, d, Binary::Add).unwrap();
 
         assert!(elmt1.merge_with(&elmt2, &[(c, e)]).is_none());
+    }
+
+    #[test]
+    fn evaluate() {
+        let mut elmt = ElementwiseDescription::default();
+        let fp_a = elmt.add_input(DType::F32);
+        let fp_b = elmt.add_input(DType::F32);
+
+        let fp_c = elmt.binary(fp_a, fp_b, Binary::Add).unwrap();
+
+        let int_a = elmt.add_input(DType::I32);
+        let int_b = elmt.add_input(DType::I32);
+
+        let int_c = elmt.binary(int_a, int_b, Binary::Add).unwrap();
+
+        let fp_int_c = elmt.unary(int_c, Unary::Cast(DType::F32)).unwrap();
+
+        let out = elmt.binary(fp_c, fp_int_c, Binary::Div).unwrap();
+
+        let inputs = [
+            (fp_a, DTypeValue::F32(1.0)),
+            (fp_b, DTypeValue::F32(2.0)),
+            (int_a, DTypeValue::I32(1)),
+            (int_b, DTypeValue::I32(1)),
+        ]
+        .into();
+        let values = elmt.evaluate(inputs, [out]).unwrap();
+
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0], DTypeValue::F32(1.5));
+    }
+
+    #[test]
+    fn evaluate_invalid_input() {
+        let mut elmt = ElementwiseDescription::default();
+        let a = elmt.add_input(DType::F32);
+        let b = elmt.add_input(DType::F32);
+
+        let c = elmt.binary(a, b, Binary::Add).unwrap();
+
+        let inputs = [(a, DTypeValue::F32(1.0)), (b, DTypeValue::I32(1))].into();
+        assert!(elmt.evaluate(inputs, [c]).is_none());
     }
 }

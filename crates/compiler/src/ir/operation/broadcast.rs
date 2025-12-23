@@ -1,6 +1,6 @@
 use crate::{
     common::Shape,
-    ir::{IrError, IrGraph, IrNodeId, IrType, ops::IrOperation},
+    ir::{IrError, IrGraph, IrNodeId, IrType, operation::IrOperation},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -3,8 +3,8 @@ use crate::{
     elementwise::{Binary, Unary},
     frontend::ProgramBuilder,
     ir::{
-        node::IrNodeId,
-        ops::{Broadcast, Reduce, ReduceOp},
+        node::{IrNodeId, IrType},
+        operation::{/*Broadcast,*/ ReduceAcrossDimension, Reduction},
     },
 };
 
@@ -23,24 +23,29 @@ impl<'a> ProgramNode<'a> {
         self.node
     }
 
-    pub fn broadcast(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
-        self.builder.add_op(Broadcast::new(self.node, start, end))[0]
+    pub fn ty(&self) -> IrType {
+        self.builder.ir.borrow().get(self.node).unwrap().ty()
     }
 
-    fn reduce(self, start: impl Into<Shape>, end: impl Into<Shape>, op: ReduceOp) -> Self {
-        self.builder.add_op(Reduce::new(self.node, start, end, op))[0]
+    //pub fn broadcast(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
+    //    self.builder.add_op(Broadcast::new(self.node, start, end))[0]
+    //}
+
+    fn reduce(self, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Self {
+        let op = ReduceAcrossDimension::new(self.ty().dtype(), shape, dim, reduction).unwrap();
+        self.builder.add_op([self], op)[0]
     }
 
-    pub fn reduce_sum(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
-        self.reduce(start, end, ReduceOp::Sum)
+    pub fn reduce_sum(self, shape: impl Into<Shape>, dim: usize) -> Self {
+        self.reduce(shape, dim, Reduction::Sum)
     }
 
-    pub fn reduce_min(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
-        self.reduce(start, end, ReduceOp::Min)
+    pub fn reduce_min(self, shape: impl Into<Shape>, dim: usize) -> Self {
+        self.reduce(shape, dim, Reduction::Min)
     }
 
-    pub fn reduce_max(self, start: impl Into<Shape>, end: impl Into<Shape>) -> Self {
-        self.reduce(start, end, ReduceOp::Max)
+    pub fn reduce_max(self, shape: impl Into<Shape>, dim: usize) -> Self {
+        self.reduce(shape, dim, Reduction::Max)
     }
 
     fn unary(self, op: Unary) -> Self {

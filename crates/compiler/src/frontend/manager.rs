@@ -5,7 +5,7 @@ use crate::{
     ir::{
         IrError, IrGraph,
         node::{IrNode, IrNodeId, IrType},
-        ops::IrOperation,
+        operation::IrOperationType,
     },
 };
 
@@ -53,8 +53,12 @@ impl IrManager {
         self.modify(|graph| Ok(graph.add_leaf(IrType::new(size, dtype))))
     }
 
-    pub fn add_op(&mut self, op: impl IrOperation) -> Result<Vec<IrNodeId>, IrManagerError> {
-        self.modify(|graph| graph.add_op(op))
+    pub fn add_op(
+        &mut self,
+        inputs: impl AsRef<[IrNodeId]>,
+        op: impl IrOperationType,
+    ) -> Result<Vec<IrNodeId>, IrManagerError> {
+        self.modify(|graph| graph.add_op(inputs, op))
     }
 
     pub fn register_output(&mut self, node: IrNodeId) -> Result<(), IrManagerError> {

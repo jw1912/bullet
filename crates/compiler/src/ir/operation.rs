@@ -1,4 +1,4 @@
-mod broadcast;
+//mod broadcast;
 mod elementwise;
 mod reduce;
 
@@ -8,31 +8,36 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-pub use broadcast::Broadcast;
+//pub use broadcast::Broadcast;
 pub use elementwise::IrElementwise;
-pub use reduce::{Reduce, ReduceOp};
+pub use reduce::{ReduceAcrossDimension, Reduction};
 
-use crate::ir::{IrError, IrGraph, IrNodeId, IrType};
+use crate::{
+    common::DTypeTensor,
+    ir::{IrError, IrNodeId, IrType, node::IrNode},
+};
 
-pub trait IrOperation: Debug + 'static {
+pub trait IrOperationType: Debug + 'static {
     fn opname(&self) -> String;
 
-    fn inputs(&self) -> Vec<IrNodeId>;
+    fn inputs(&self) -> Vec<IrType>;
 
-    fn output_types(&self, ir: &IrGraph) -> Result<Vec<IrType>, IrError>;
+    fn outputs(&self) -> Vec<IrType>;
+
+    fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]);
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct IrOpId(usize);
+pub struct IrOperationId(usize);
 
-impl Default for IrOpId {
+impl Default for IrOperationId {
     fn default() -> Self {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         Self(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }
 
-impl IrOpId {
+impl IrOperationId {
     pub(super) fn from_inner(id: usize) -> Self {
         Self(id)
     }
@@ -43,25 +48,33 @@ impl IrOpId {
 }
 
 #[derive(Clone, Debug)]
-pub struct IrOp {
-    id: IrOpId,
+pub struct IrOperation {
+    id: IrOperationId,
     inputs: Vec<IrNodeId>,
     outputs: Vec<IrNodeId>,
-    op: Rc<dyn IrOperation>,
+    op: Rc<dyn IrOperationType>,
 }
 
-impl IrOp {
-    pub fn new(op: impl IrOperation, ir: &IrGraph) -> Result<Self, IrError> {
-        let id = IrOpId::default();
+impl IrOperation {
+    pub fn new(inputs: Vec<&IrNode>, outputs: Vec<&IrNode>, op: impl IrOperationType) -> Result<Self, IrError> {
+        let id = IrOperationId::default();
         let op = Rc::new(op);
-        let inputs = op.inputs();
-        let output_tys = op.output_types(ir)?;
-        let outputs = (0..output_tys.len()).map(|_| IrNodeId::default()).collect();
 
-        Ok(Self { id, op, outputs, inputs })
+        if op.inputs() != inputs.iter().map(|&i| i.ty()).collect::<Vec<_>>() {
+            return Err(IrError::InvalidOperationInputs);
+        }
+
+        if op.outputs() != outputs.iter().map(|&i| i.ty()).collect::<Vec<_>>() {
+            return Err(IrError::InvalidOperationOutputs);
+        }
+
+        let inputs = inputs.iter().map(|&i| i.id()).collect();
+        let outputs = outputs.iter().map(|&i| i.id()).collect();
+
+        Ok(Self { id, op, inputs, outputs })
     }
 
-    pub fn id(&self) -> IrOpId {
+    pub fn id(&self) -> IrOperationId {
         self.id
     }
 
@@ -103,7 +116,7 @@ impl IrOp {
         found.then_some(()).ok_or(IrError::NodeDoesNotExist)
     }
 
-    pub fn op(&self) -> &Rc<dyn IrOperation> {
+    pub fn op(&self) -> &Rc<dyn IrOperationType> {
         &self.op
     }
 }
@@ -111,16 +124,18 @@ impl IrOp {
 #[derive(Debug)]
 pub struct Leaf(pub IrType);
 
-impl IrOperation for Leaf {
+impl IrOperationType for Leaf {
     fn opname(&self) -> String {
         format!("leaf<{:?}>", self.0)
     }
 
-    fn inputs(&self) -> Vec<IrNodeId> {
+    fn inputs(&self) -> Vec<IrType> {
         Vec::new()
     }
 
-    fn output_types(&self, _ir: &IrGraph) -> Result<Vec<IrType>, IrError> {
-        Ok(vec![self.0])
+    fn outputs(&self) -> Vec<IrType> {
+        vec![self.0]
     }
+
+    fn evaluate(&self, _: &[&DTypeTensor], _: &mut [&mut DTypeTensor]) {}
 }

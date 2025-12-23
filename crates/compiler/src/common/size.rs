@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Size {
-    var_power: usize,
+    var_power: u32,
     factor: NonZeroUsize,
 }
 
@@ -43,6 +43,19 @@ impl Size {
 
     pub fn is_le(&self, rhs: Self) -> bool {
         self.var_power <= rhs.var_power && self.factor <= rhs.factor
+    }
+
+    pub fn evaluate(&self, var_size: usize) -> usize {
+        self.factor.get() * var_size.pow(self.var_power)
+    }
+
+    pub fn get_var_size(&self, size: usize) -> Option<usize> {
+        if self.var_power == 0 {
+            return None;
+        }
+
+        let expected = ((size / self.factor.get()) as f64).powf(1.0 / f64::from(self.var_power)) as usize;
+        (self.evaluate(expected) == size).then_some(expected)
     }
 }
 
@@ -170,5 +183,9 @@ impl Shape {
 
     pub fn inner(&self) -> &[Size] {
         &self.0
+    }
+
+    pub fn dim(&self) -> usize {
+        self.0.len()
     }
 }
