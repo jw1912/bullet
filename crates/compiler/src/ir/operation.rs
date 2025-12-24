@@ -111,6 +111,19 @@ impl IrOperation {
         &self.outputs
     }
 
+    pub fn swap_input_with(&mut self, new: IrNodeId, old: IrNodeId) -> usize {
+        let mut count = 0;
+
+        for id in &mut self.inputs {
+            if *id == old {
+                *id = new;
+                count += 1;
+            }
+        }
+
+        count
+    }
+
     pub fn swap_output_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
         let mut found = false;
 

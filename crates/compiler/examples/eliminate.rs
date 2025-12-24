@@ -16,6 +16,8 @@ fn main() {
         [prediction, (prediction - target) * (prediction - target)]
     });
 
+    builder.display_ir();
+
     let program = builder.build([loss]);
 
     println!("{program}");

@@ -78,13 +78,8 @@ mod tests {
         let t = ir.add_binary(w, y, Binary::Sub)?;
 
         ir.register_output(t);
-
         ir.fold_constants()?;
-
-        println!("{ir}");
         ir.eliminate_unused_ops()?;
-
-        println!("{ir}");
 
         assert_eq!(ir.num_ops(), 1);
         assert_eq!(ir.num_nodes(), 1);

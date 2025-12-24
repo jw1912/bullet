@@ -13,6 +13,8 @@ fn main() {
     let diff = prediction - target;
     let loss = diff * diff;
 
+    builder.display_ir();
+
     let program = builder.build([prediction, loss]);
 
     println!("{program}");

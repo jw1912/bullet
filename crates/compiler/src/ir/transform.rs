@@ -1,6 +1,6 @@
 mod canonicalise;
 mod decompose;
-mod eliminate_unused;
+mod eliminate;
 mod fold_constants;
 
 use crate::{
@@ -92,6 +92,22 @@ impl IrGraph {
         self.get_op_mut(op2)?.swap_output_with(id1, id2)?;
 
         // swapping is an opportunity to introduce cycles...
+        let _ = self.topo_order_ops()?;
+
+        Ok(())
+    }
+
+    pub fn replace_input(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
+        if self.get_node_type(new)? != self.get_node_type(old)? {
+            return Err("IrGraph::replace_input: mismatched types!".into());
+        }
+
+        for op_id in self.ops.keys().cloned().collect::<Vec<_>>() {
+            let count = self.get_op_mut(op_id)?.swap_input_with(new, old);
+            self.get_node_mut(new)?.children += count;
+            self.get_node_mut(old)?.children = 0;
+        }
+
         let _ = self.topo_order_ops()?;
 
         Ok(())
@@ -206,6 +222,31 @@ mod tests {
 
         let new_t = ir.add_binary(x, y, Binary::Add)?;
         ir.swap_outputs(new_t, t)?;
+        ir.eliminate_unused_ops()?;
+
+        assert_eq!(ir.num_ops(), 3);
+        assert_eq!(ir.num_nodes(), 3);
+        assert!(ir.get_node(x).is_ok());
+        assert!(ir.get_node(y).is_ok());
+        assert!(ir.get_node(t).is_ok());
+
+        ir.check_valid()
+    }
+
+    #[test]
+    fn replace_input() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(8, DType::F32));
+        let y = ir.add_leaf(IrType::new(8, DType::F32));
+        let z = ir.add_binary(x, y, Binary::Add)?;
+        let w = ir.add_binary(z, y, Binary::Add)?;
+        let t = ir.add_binary(w, y, Binary::Sub)?;
+
+        ir.register_output(t);
+
+        ir.replace_input(x, w)?;
+
         ir.eliminate_unused_ops()?;
 
         assert_eq!(ir.num_ops(), 3);

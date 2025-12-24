@@ -51,7 +51,7 @@ impl fmt::Debug for IrNodeId {
 pub struct IrNode {
     id: IrNodeId,
     ty: IrType,
-    children: usize,
+    pub(super) children: usize,
 }
 
 impl IrNode {
