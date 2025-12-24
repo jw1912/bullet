@@ -13,8 +13,7 @@ impl IrGraph {
     }
 
     fn fold_single_constant(&mut self) -> Result<bool, IrError> {
-        'op_loop: for &op_id in self.ops.keys() {
-            let op = self.get_op(op_id)?;
+        'op_loop: for op in self.ops.values() {
             let inputs = op.inputs();
 
             if !inputs.is_empty() {

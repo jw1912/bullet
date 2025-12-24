@@ -66,8 +66,8 @@ impl ProgramBuilder {
             ir.register_output(ret.node());
         }
 
+        ir.decompose_elementwise().unwrap();
         ir.eliminate_unused_ops().unwrap();
-
         ir.fold_constants().unwrap();
 
         ir

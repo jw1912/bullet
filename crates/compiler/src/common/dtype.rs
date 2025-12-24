@@ -53,6 +53,15 @@ pub enum DTypeTensor {
     I32(Vec<i32>),
 }
 
+impl From<DTypeValue> for DTypeTensor {
+    fn from(value: DTypeValue) -> Self {
+        match value {
+            DTypeValue::F32(x) => DTypeTensor::F32(vec![x]),
+            DTypeValue::I32(x) => DTypeTensor::I32(vec![x]),
+        }
+    }
+}
+
 impl DTypeTensor {
     pub fn new(dtype: DType, size: usize) -> Self {
         match dtype {

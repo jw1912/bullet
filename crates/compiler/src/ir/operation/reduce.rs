@@ -96,7 +96,7 @@ impl ReduceAcrossDimension {
 
 impl IrOperationType for ReduceAcrossDimension {
     fn opname(&self) -> String {
-        format!("reduce.{:?}<{:?}, {:?}, {:?}>", self.reduction, self.outer, self.dimen, self.inner)
+        format!("reduce.{:?}<{:?}, {:?}, {:?}>", self.reduction, self.outer, self.dimen, self.inner).to_lowercase()
     }
 
     fn inputs(&self) -> Vec<IrType> {

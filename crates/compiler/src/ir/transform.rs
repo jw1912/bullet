@@ -1,4 +1,5 @@
 mod canonicalise;
+mod decompose;
 mod eliminate_unused;
 mod fold_constants;
 
@@ -61,7 +62,7 @@ impl IrGraph {
             check(!self.outputs.contains(&output), "node is required")?;
 
             let op_id = self.links.remove(&output).expect("Node must be present `links`!");
-            check(op_id == id, "operation id mismatch")?;
+            check(op_id == id, format!("operation id mismatch ({op_id:?} != {id:?})"))?;
         }
 
         for input in self.get_op(id)?.inputs().to_vec() {

@@ -22,7 +22,7 @@ impl IrUnary {
 
 impl IrOperationType for IrUnary {
     fn opname(&self) -> String {
-        format!("unary.{:?}<{:?}>", self.op, self.ty).to_lowercase()
+        format!("unary.{:?}", self.op).to_lowercase()
     }
 
     fn inputs(&self) -> Vec<IrType> {

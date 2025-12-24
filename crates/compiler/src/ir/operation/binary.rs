@@ -38,7 +38,7 @@ impl IrBinary {
 
 impl IrOperationType for IrBinary {
     fn opname(&self) -> String {
-        format!("binary.{:?}<{:?}, {:?}, {:?}>", self.op, self.size, self.lhs, self.rhs).to_lowercase()
+        format!("binary.{:?}", self.op).to_lowercase()
     }
 
     fn inputs(&self) -> Vec<IrType> {

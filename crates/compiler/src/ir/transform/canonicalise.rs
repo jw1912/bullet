@@ -9,8 +9,8 @@ impl IrGraph {
             let groups = op.op().commutating_groups();
             let inputs = op.inputs().to_vec();
 
-            for group_i in &groups {
-                for group_j in &groups {
+            for (i, group_i) in groups.iter().enumerate() {
+                for group_j in groups.iter().skip(i + 1) {
                     if group_i.intersection(group_j).next().is_some() {
                         return Err("IrGraph::canonicalise: distinct commutating groups intersect!".into());
                     }
@@ -35,5 +35,38 @@ impl IrGraph {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        common::{Binary, DTypeTensor},
+        ir::{IrError, IrGraph},
+    };
+
+    #[test]
+    fn canonicalise() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+        let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+        let z = ir.add_binary(y, x, Binary::Add)?;
+
+        ir.register_output(z);
+
+        let op = ir.get_op(ir.get_parent_op(z)?)?;
+        assert_eq!(op.inputs(), &[y, x]);
+
+        ir.canonicalise()?;
+
+        assert!(ir.get_node(x).is_ok());
+        assert!(ir.get_node(y).is_ok());
+        assert!(ir.get_node(z).is_ok());
+
+        let op = ir.get_op(ir.get_parent_op(z)?)?;
+        assert_eq!(op.inputs(), &[x, y]);
+
+        ir.check_valid()
     }
 }

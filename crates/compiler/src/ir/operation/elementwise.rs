@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IrElementwise {
     size: Size,
     inputs: Vec<ElementwiseId>,
@@ -19,6 +19,22 @@ pub struct IrElementwise {
 }
 
 impl IrElementwise {
+    pub(in crate::ir) fn size(&self) -> Size {
+        self.size
+    }
+
+    pub(in crate::ir) fn input_ids(&self) -> &[ElementwiseId] {
+        &self.inputs
+    }
+
+    pub(in crate::ir) fn output_ids(&self) -> &[ElementwiseId] {
+        &self.outputs
+    }
+
+    pub(in crate::ir) fn desc(&self) -> &ElementwiseDescription {
+        &self.op
+    }
+
     pub fn new<const M: usize, const N: usize, F>(inputs: [IrType; M], f: F) -> Result<Self, IrError>
     where
         for<'a> F: Fn([ElementwiseNode<'a>; M]) -> Option<[ElementwiseNode<'a>; N]>,

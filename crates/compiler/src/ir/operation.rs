@@ -111,19 +111,6 @@ impl IrOperation {
         &self.outputs
     }
 
-    pub fn swap_input_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
-        let mut found = false;
-
-        for id in &mut self.inputs {
-            if *id == old {
-                *id = new;
-                found = true;
-            }
-        }
-
-        found.then_some(()).ok_or(format!("IrOperation::swap_input_with: {old:?} not found!").into())
-    }
-
     pub fn swap_output_with(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
         let mut found = false;
 
