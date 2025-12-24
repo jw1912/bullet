@@ -74,4 +74,11 @@ impl IrGraph {
     pub fn unregister_output(&mut self, node: IrNodeId) {
         self.outputs.remove(&node);
     }
+
+    pub fn optimise(&mut self) -> Result<(), IrError> {
+        self.decompose_elementwise()?;
+        self.eliminate_unused_ops()?;
+        self.fold_constants()?;
+        self.eliminate_common_subexprs()
+    }
 }
