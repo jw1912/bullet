@@ -3,7 +3,27 @@ use std::collections::HashSet;
 use crate::ir::{IrError, IrGraph};
 
 impl IrGraph {
-    pub fn canonicalise(&mut self) -> Result<(), IrError> {
+    /// Put commuting inputs to operations into canoncial order:
+    /// ```text
+    /// irgraph(%0: f32[1], %1: f32[1]) {
+    ///     %2 = %0 + %1
+    ///     %3 = %1 + %0
+    ///     %4 = %3 * %2
+    ///     return %4
+    /// }
+    /// ```
+    /// Is rewritten to
+    /// ```text
+    /// irgraph(%0: f32[1], %1: f32[1]) {
+    ///     %2 = %0 + %1
+    ///     %3 = %0 + %1
+    ///     %4 = %2 * %3
+    ///     return %4
+    /// }
+    /// ```
+    /// This makes techniques such as common subexpression
+    /// elimination easier to perform
+    pub fn canonicalise_inputs(&mut self) -> Result<(), IrError> {
         for op_id in self.topo_order_ops()? {
             let op = self.get_op(op_id)?;
             let groups = op.op().commutating_groups();
@@ -41,31 +61,32 @@ impl IrGraph {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::{Binary, DTypeTensor},
-        ir::{IrError, IrGraph},
+        common::{Binary, DType},
+        ir::{IrError, IrGraph, node::IrType},
     };
 
     #[test]
-    fn canonicalise() -> Result<(), IrError> {
+    fn inputs() -> Result<(), IrError> {
         let mut ir = IrGraph::default();
 
-        let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
-        let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
-        let z = ir.add_binary(y, x, Binary::Add)?;
+        let ty = IrType::new(1, DType::F32);
+        let x = ir.add_leaf(ty);
+        let y = ir.add_leaf(ty);
+        let z = ir.add_binary(x, y, Binary::Add)?;
+        let w = ir.add_binary(y, x, Binary::Add)?;
+        let t = ir.add_binary(w, z, Binary::Mul)?;
 
-        ir.register_output(z);
+        ir.register_output(t);
 
-        let op = ir.get_op(ir.get_parent_op(z)?)?;
-        assert_eq!(op.inputs(), &[y, x]);
+        assert_eq!(ir.get_op(ir.get_parent_op(z)?)?.inputs(), &[x, y]);
+        assert_eq!(ir.get_op(ir.get_parent_op(w)?)?.inputs(), &[y, x]);
+        assert_eq!(ir.get_op(ir.get_parent_op(t)?)?.inputs(), &[w, z]);
 
-        ir.canonicalise()?;
+        ir.canonicalise_inputs()?;
 
-        assert!(ir.get_node(x).is_ok());
-        assert!(ir.get_node(y).is_ok());
-        assert!(ir.get_node(z).is_ok());
-
-        let op = ir.get_op(ir.get_parent_op(z)?)?;
-        assert_eq!(op.inputs(), &[x, y]);
+        assert_eq!(ir.get_op(ir.get_parent_op(z)?)?.inputs(), &[x, y]);
+        assert_eq!(ir.get_op(ir.get_parent_op(w)?)?.inputs(), &[x, y]);
+        assert_eq!(ir.get_op(ir.get_parent_op(t)?)?.inputs(), &[z, w]);
 
         ir.check_valid()
     }

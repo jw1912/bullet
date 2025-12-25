@@ -1,7 +1,8 @@
+mod broadcast;
 mod canonicalise;
+mod constants;
 mod decompose;
 mod eliminate;
-mod fold_constants;
 
 use crate::{
     common::{Binary, DTypeTensor, Unary},

@@ -85,7 +85,7 @@ impl IrGraph {
         self.decompose_elementwise()?;
         self.eliminate_unused_ops()?;
         self.fold_constants()?;
-        self.canonicalise()?;
+        self.canonicalise_inputs()?;
         self.eliminate_common_subexprs()
     }
 }

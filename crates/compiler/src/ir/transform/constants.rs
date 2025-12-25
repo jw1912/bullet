@@ -7,6 +7,22 @@ use crate::{
 };
 
 impl IrGraph {
+    /// Constant evaluate all operations that have constant inputs:
+    /// ```text
+    /// irgraph() {
+    ///     %0 = constant<f32[1]>(1.0)
+    ///     %1 = constant<f32[1]>(2.0)
+    ///     %2 = %0 + %1
+    ///     %3 = %2 * %2
+    ///     return %3
+    /// }
+    /// ```text
+    /// Will be rewritten to
+    /// irgraph() {
+    ///     %3 = constant<f32[1]>(9.0)
+    ///     return %3
+    /// }
+    /// ```
     pub fn fold_constants(&mut self) -> Result<(), IrError> {
         while self.fold_single_constant()? {}
         Ok(())

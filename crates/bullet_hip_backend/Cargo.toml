@@ -15,5 +15,6 @@ acyclib = { workspace = true }
 cc = "1.2.5"
 
 [features]
+default = ["build"]
 hip = []
-gh-actions = []
+build = []

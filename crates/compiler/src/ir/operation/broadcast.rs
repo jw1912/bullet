@@ -33,6 +33,12 @@ impl BroadcastAcrossDimension {
             .ok_or(format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into())
     }
 
+    pub fn with_new_dtype(&self, dtype: DType) -> Self {
+        let mut res = self.clone();
+        res.dtype = dtype;
+        res
+    }
+
     pub fn input_size(&self) -> Size {
         self.outer * self.inner
     }

@@ -18,6 +18,10 @@ impl IrUnary {
     pub fn new(ty: IrType, op: Unary) -> Self {
         Self { ty, op }
     }
+
+    pub fn op(&self) -> Unary {
+        self.op
+    }
 }
 
 impl IrOperationType for IrUnary {
