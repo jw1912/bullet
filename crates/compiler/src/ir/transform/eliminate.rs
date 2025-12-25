@@ -1,93 +1,106 @@
 use crate::ir::{
-    IrError, IrGraph,
-    operation::{IrCopy, IrOperation},
+    IR, IRTrace,
+    graph::operation::{IrCopy, IrOperation},
+    transform::IrTransform,
 };
 
-impl IrGraph {
-    pub fn eliminate_unused_ops(&mut self) -> Result<(), IrError> {
-        for op_id in self.topo_order_ops()?.into_iter().rev() {
-            let unused_op = self.get_op(op_id)?.outputs().iter().all(|output| {
-                let node = self.get_node(*output).unwrap();
-                node.children() == 0 && !self.outputs.contains(output)
-            });
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EliminateUnusedOperations;
 
-            if unused_op {
-                self.remove_op(op_id)?;
+impl IrTransform for EliminateUnusedOperations {
+    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        for op in ir.ordered_operations()?.into_iter().rev() {
+            if op.outputs().iter().all(|&output| {
+                let node = ir.get_node(output).unwrap();
+                node.children() == 0 && !ir.is_output(output)
+            }) {
+                ir.remove_op(op.id())?;
             }
         }
 
         Ok(())
     }
+}
 
-    pub fn eliminate_copies(&mut self) -> Result<(), IrError> {
-        for op_id in self.topo_order_ops()?.into_iter().rev() {
-            let op = self.get_op(op_id)?;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EliminateCopies;
 
+impl IrTransform for EliminateCopies {
+    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        for op in ir.ordered_operations()?.into_iter().rev() {
             if IrOperation::downcast::<IrCopy>(op.op()).is_some()
                 && let [input] = op.inputs()[..]
                 && let [output] = op.outputs()[..]
             {
-                if !self.is_output(output) {
-                    self.replace_input(input, output)?;
-                    self.remove_op(op_id)?;
+                if !ir.is_output(output) {
+                    ir.replace_input(input, output)?;
+                    ir.remove_op(op.id())?;
                     continue;
                 }
 
-                if !self.is_output(input) {
-                    self.replace_input_no_topo_check(output, input)?;
-                    self.swap_outputs(input, output)?;
-                    self.remove_op(op_id)?;
+                if !ir.is_output(input) {
+                    // no topo check as performs y = copy(x) -> y = copy(y)
+                    ir.graph.replace_input_unchecked(output, input)?;
+                    ir.swap_outputs(input, output)?;
+                    ir.remove_op(op.id())?;
                 }
             }
         }
 
         Ok(())
     }
+}
 
-    pub fn eliminate_common_subexprs(&mut self) -> Result<(), IrError> {
-        while self.eliminate_single_common_subexpr()? {}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EliminateCommonSubExpressions;
+
+impl IrTransform for EliminateCommonSubExpressions {
+    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        while eliminate_single_common_subexpr(ir)? {}
         Ok(())
     }
+}
 
-    fn eliminate_single_common_subexpr(&mut self) -> Result<bool, IrError> {
-        let ops = self.topo_order_ops()?;
+fn eliminate_single_common_subexpr(ir: &mut IR) -> Result<bool, IRTrace> {
+    let ops = ir.ordered_operations()?.iter().map(IrOperation::id).collect::<Vec<_>>();
 
-        for (i, &op_id_i) in ops.iter().enumerate() {
-            for &op_id_j in ops.iter().skip(i + 1) {
-                let op_i = self.get_op(op_id_i)?.clone();
-                let op_j = self.get_op(op_id_j)?.clone();
+    for (i, &op_id_i) in ops.iter().enumerate() {
+        for &op_id_j in ops.iter().skip(i + 1) {
+            let op_i = ir.get_op(op_id_i)?.clone();
+            let op_j = ir.get_op(op_id_j)?.clone();
 
-                if op_i.inputs() == op_j.inputs() && op_i.op().equals(op_j.op()) {
-                    for (&out_i, &out_j) in op_i.outputs().iter().zip(op_j.outputs()) {
-                        self.replace_input(out_i, out_j)?;
+            if op_i.inputs() == op_j.inputs() && op_i.op().equals(op_j.op()) {
+                for (&out_i, &out_j) in op_i.outputs().iter().zip(op_j.outputs()) {
+                    ir.replace_input(out_i, out_j)?;
 
-                        if self.is_output(out_j) {
-                            let new_out = self.copy(out_i)?;
-                            self.swap_outputs(new_out, out_j)?;
-                        }
+                    if ir.is_output(out_j) {
+                        let new_out = ir.copy(out_i)?;
+                        ir.swap_outputs(new_out, out_j)?;
                     }
-
-                    self.eliminate_unused_ops()?;
-
-                    return Ok(true);
                 }
+
+                ir.transform(EliminateUnusedOperations)?;
+
+                return Ok(true);
             }
         }
-
-        Ok(false)
     }
+
+    Ok(false)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
         common::{Binary, DType, DTypeTensor},
-        ir::{IrError, IrGraph, node::IrType},
+        ir::graph::IrType,
     };
 
+    use super::*;
+
     #[test]
-    fn eliminate_unused_ops() -> Result<(), IrError> {
-        let mut ir = IrGraph::default();
+    fn eliminate_unused_ops() -> Result<(), IRTrace> {
+        let mut ir = IR::default();
 
         let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
         let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
@@ -97,7 +110,7 @@ mod tests {
 
         ir.register_output(z);
 
-        ir.eliminate_unused_ops()?;
+        ir.transform(EliminateUnusedOperations)?;
 
         assert!(ir.get_node(x).is_ok());
         assert!(ir.get_node(y).is_ok());
@@ -109,8 +122,8 @@ mod tests {
     }
 
     #[test]
-    fn eliminate_copies() -> Result<(), IrError> {
-        let mut ir = IrGraph::default();
+    fn eliminate_copies() -> Result<(), IRTrace> {
+        let mut ir = IR::default();
 
         let x = ir.add_leaf(IrType::new(1, DType::F32));
         let y = ir.copy(x)?;
@@ -124,7 +137,7 @@ mod tests {
         ir.register_output(a);
         ir.register_output(b);
         ir.register_output(c);
-        ir.eliminate_copies()?;
+        ir.transform(EliminateCopies)?;
 
         assert_eq!(ir.num_ops(), 4);
 
@@ -132,8 +145,8 @@ mod tests {
     }
 
     #[test]
-    fn eliminate_common_subexprs() -> Result<(), IrError> {
-        let mut ir = IrGraph::default();
+    fn eliminate_common_subexprs() -> Result<(), IRTrace> {
+        let mut ir = IR::default();
 
         let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
         let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
@@ -148,7 +161,7 @@ mod tests {
 
         ir.register_output(t1);
         ir.register_output(t2);
-        ir.eliminate_common_subexprs()?;
+        ir.transform(EliminateCommonSubExpressions)?;
 
         assert!(ir.get_node(x).is_ok());
         assert!(ir.get_node(y).is_ok());

@@ -2,10 +2,8 @@ use std::{cmp::Ordering, ops::Add, rc::Rc};
 
 use crate::{
     common::{DType, DTypeTensor, Shape, Size},
-    ir::{IrError, IrType, operation::IrOperation},
+    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
-
-use super::IrOperationType;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reduction {

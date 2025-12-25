@@ -21,7 +21,7 @@ pub use unary::IrUnary;
 
 use crate::{
     common::DTypeTensor,
-    ir::{IrError, IrNodeId, IrType, node::IrNode},
+    ir::graph::{IrError, IrNode, IrNodeId, IrType},
 };
 
 pub trait IrOperationType: std::any::Any + Debug + 'static {
@@ -69,12 +69,9 @@ pub struct IrOperation {
 }
 
 impl IrOperation {
-    pub fn new(inputs: Vec<&IrNode>, outputs: Vec<&IrNode>, op: impl IrOperationType) -> Result<Self, IrError> {
-        let id = IrOperationId::default();
-        let op = Rc::new(op);
-
+    pub fn new(inputs: Vec<&IrNode>, outputs: Vec<&IrNode>, op: Rc<dyn IrOperationType>) -> Result<Self, IrError> {
         Self::check(&inputs, &outputs, op.as_ref())?;
-
+        let id = IrOperationId::default();
         let inputs = inputs.iter().map(|&i| i.id()).collect();
         let outputs = outputs.iter().map(|&i| i.id()).collect();
 

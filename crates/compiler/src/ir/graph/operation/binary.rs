@@ -2,11 +2,7 @@ use std::{collections::HashSet, rc::Rc};
 
 use crate::{
     common::{Binary, DType, DTypeTensor, Size},
-    ir::{
-        IrError,
-        node::IrType,
-        operation::{IrOperation, IrOperationType},
-    },
+    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 
 #[derive(Debug, PartialEq)]

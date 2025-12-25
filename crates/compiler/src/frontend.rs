@@ -4,15 +4,17 @@ use crate::{
     common::{Binary, DType, DTypeTensor, Shape, Size, Unary},
     elementwise::ElementwiseNode,
     ir::{
-        IrGraph,
-        node::{IrNodeId, IrType},
-        operation::{BroadcastAcrossDimension, IrOperationType, ReduceAcrossDimension, Reduction},
+        IR,
+        graph::{
+            IrError, IrNodeId, IrOperationType, IrType,
+            operation::{BroadcastAcrossDimension, ReduceAcrossDimension, Reduction},
+        },
     },
 };
 
 #[derive(Default)]
 pub struct ProgramBuilder {
-    ir: RefCell<IrGraph>,
+    ir: RefCell<IR>,
 }
 
 impl ProgramBuilder {
@@ -26,7 +28,7 @@ impl ProgramBuilder {
         op: impl IrOperationType,
     ) -> Vec<ProgramNode<'a>> {
         let ids = inputs.as_ref().iter().map(ProgramNode::node).collect::<Vec<_>>();
-        let outs = self.ir.borrow_mut().add_op(ids, op).unwrap();
+        let outs = self.ir.borrow_mut().add_op(ids, Ok::<_, IrError>(op)).unwrap();
         outs.into_iter().map(|out| self.new_node(out)).collect()
     }
 
@@ -56,10 +58,10 @@ impl ProgramBuilder {
     }
 
     pub fn display_ir(&self) {
-        println!("{}", self.ir.borrow().as_highlighted())
+        println!("{}", self.ir.borrow().graph().as_highlighted())
     }
 
-    pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> IrGraph {
+    pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> IR {
         let mut ir = self.ir.borrow().clone();
 
         for ret in returns.as_ref() {

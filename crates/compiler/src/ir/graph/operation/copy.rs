@@ -2,10 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     common::DTypeTensor,
-    ir::{
-        node::IrType,
-        operation::{IrOperation, IrOperationType},
-    },
+    ir::graph::{IrOperation, IrOperationType, IrType},
 };
 
 /// Internal copy operation used for a few special cases. For example:

@@ -2,10 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     common::{DTypeTensor, Unary},
-    ir::{
-        node::IrType,
-        operation::{IrOperation, IrOperationType},
-    },
+    ir::graph::{IrOperation, IrOperationType, IrType},
 };
 
 #[derive(Debug, PartialEq)]

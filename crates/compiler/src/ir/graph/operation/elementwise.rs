@@ -3,11 +3,7 @@ use std::{collections::HashSet, rc::Rc};
 use crate::{
     common::{DTypeTensor, Size},
     elementwise::{ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode},
-    ir::{
-        IrError,
-        node::IrType,
-        operation::{IrOperation, IrOperationType},
-    },
+    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 
 #[derive(Clone, Debug, PartialEq)]

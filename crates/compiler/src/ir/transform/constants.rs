@@ -1,12 +1,16 @@
 use crate::{
     common::DTypeTensor,
     ir::{
-        IrError, IrGraph,
-        operation::{Constant, IrOperation},
+        IR, IRTrace,
+        graph::operation::{Constant, IrOperation},
+        transform::{EliminateUnusedOperations, IrTransform},
     },
 };
 
-impl IrGraph {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FoldConstants;
+
+impl IrTransform for FoldConstants {
     /// Constant evaluate all operations that have constant inputs:
     /// ```text
     /// irgraph() {
@@ -23,58 +27,58 @@ impl IrGraph {
     ///     return %3
     /// }
     /// ```
-    pub fn fold_constants(&mut self) -> Result<(), IrError> {
-        while self.fold_single_constant()? {}
+    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        while fold_single_constant(ir)? {}
         Ok(())
     }
+}
 
-    fn fold_single_constant(&mut self) -> Result<bool, IrError> {
-        'op_loop: for op in self.ops.values() {
-            let inputs = op.inputs();
+fn fold_single_constant(ir: &mut IR) -> Result<bool, IRTrace> {
+    'op_loop: for op in ir.operations() {
+        let inputs = op.inputs();
 
-            if !inputs.is_empty() {
-                let mut consts = Vec::new();
+        if !inputs.is_empty() {
+            let mut consts = Vec::new();
 
-                for &input in inputs {
-                    let parent = self.get_op(self.get_parent_op(input)?)?;
+            for &input in inputs {
+                let parent = ir.get_op(ir.get_parent_op(input)?)?;
 
-                    if let Some(Constant(value)) = IrOperation::downcast(parent.op()) {
-                        consts.push(value);
-                    } else {
-                        continue 'op_loop;
-                    }
+                if let Some(Constant(value)) = IrOperation::downcast(parent.op()) {
+                    consts.push(value);
+                } else {
+                    continue 'op_loop;
                 }
-
-                let output_ids = op.outputs().to_vec();
-
-                let mut tensors = Vec::new();
-                for &output in &output_ids {
-                    let ty = self.get_node_type(output)?;
-
-                    if let Some(size) = ty.size().evaluate_constant() {
-                        tensors.push(DTypeTensor::new(ty.dtype(), size));
-                    } else {
-                        continue 'op_loop;
-                    }
-                }
-
-                let mut outputs = tensors.iter_mut().collect::<Vec<_>>();
-
-                op.op().evaluate(&consts, &mut outputs);
-
-                for (old_out, value) in output_ids.into_iter().zip(tensors) {
-                    let new_out = self.add_const(value);
-                    self.swap_outputs(new_out, old_out)?;
-                }
-
-                self.eliminate_unused_ops()?;
-
-                return Ok(true);
             }
-        }
 
-        Ok(false)
+            let output_ids = op.outputs().to_vec();
+
+            let mut tensors = Vec::new();
+            for &output in &output_ids {
+                let ty = ir.get_node_type(output)?;
+
+                if let Some(size) = ty.size().evaluate_constant() {
+                    tensors.push(DTypeTensor::new(ty.dtype(), size));
+                } else {
+                    continue 'op_loop;
+                }
+            }
+
+            let mut outputs = tensors.iter_mut().collect::<Vec<_>>();
+
+            op.op().evaluate(&consts, &mut outputs);
+
+            for (old_out, value) in output_ids.into_iter().zip(tensors) {
+                let new_out = ir.add_const(value);
+                ir.swap_outputs(new_out, old_out)?;
+            }
+
+            ir.transform(EliminateUnusedOperations)?;
+
+            return Ok(true);
+        }
     }
+
+    Ok(false)
 }
 
 #[cfg(test)]
@@ -84,8 +88,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fold_constants() -> Result<(), IrError> {
-        let mut ir = IrGraph::default();
+    fn fold_constants() -> Result<(), IRTrace> {
+        let mut ir = IR::default();
 
         let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
         let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
@@ -94,8 +98,8 @@ mod tests {
         let t = ir.add_binary(w, y, Binary::Sub)?;
 
         ir.register_output(t);
-        ir.fold_constants()?;
-        ir.eliminate_unused_ops()?;
+        ir.transform(FoldConstants)?;
+        ir.transform(EliminateUnusedOperations)?;
 
         assert_eq!(ir.num_ops(), 1);
         assert_eq!(ir.num_nodes(), 1);
