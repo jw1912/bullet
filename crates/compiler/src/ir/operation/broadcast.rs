@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BroadcastAcrossDimension {
     dtype: DType,
     outer: Size,
@@ -34,9 +34,7 @@ impl BroadcastAcrossDimension {
     }
 
     pub fn with_new_dtype(&self, dtype: DType) -> Self {
-        let mut res = self.clone();
-        res.dtype = dtype;
-        res
+        Self { dtype, ..*self }
     }
 
     pub fn input_size(&self) -> Size {

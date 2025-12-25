@@ -1,5 +1,6 @@
 mod binary;
 mod broadcast;
+mod copy;
 mod elementwise;
 mod reduce;
 mod unary;
@@ -13,6 +14,7 @@ use std::{
 
 pub use binary::IrBinary;
 pub use broadcast::BroadcastAcrossDimension;
+pub use copy::IrCopy;
 pub use elementwise::IrElementwise;
 pub use reduce::{ReduceAcrossDimension, Reduction};
 pub use unary::IrUnary;

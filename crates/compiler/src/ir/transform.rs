@@ -10,7 +10,9 @@ use crate::{
     ir::{
         IrError, IrGraph,
         node::{IrNode, IrNodeId, IrType},
-        operation::{Constant, IrBinary, IrElementwise, IrOperation, IrOperationId, IrOperationType, IrUnary, Leaf},
+        operation::{
+            Constant, IrBinary, IrCopy, IrElementwise, IrOperation, IrOperationId, IrOperationType, IrUnary, Leaf,
+        },
     },
 };
 
@@ -98,7 +100,7 @@ impl IrGraph {
         Ok(())
     }
 
-    pub fn replace_input(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
+    pub fn replace_input_no_topo_check(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
         if self.get_node_type(new)? != self.get_node_type(old)? {
             return Err("IrGraph::replace_input: mismatched types!".into());
         }
@@ -109,9 +111,12 @@ impl IrGraph {
             self.get_node_mut(old)?.children = 0;
         }
 
-        let _ = self.topo_order_ops()?;
-
         Ok(())
+    }
+
+    pub fn replace_input(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
+        self.replace_input_no_topo_check(new, old)?;
+        self.topo_order_ops().map(|_| ())
     }
 
     pub fn replace_op(
@@ -150,6 +155,10 @@ impl IrGraph {
 
     pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IrError> {
         self.add_op([lhs, rhs], IrBinary::new(self.get_node_type(lhs)?, self.get_node_type(rhs)?, op)?).map(|x| x[0])
+    }
+
+    pub fn copy(&mut self, node: IrNodeId) -> Result<IrNodeId, IrError> {
+        self.add_op([node], IrCopy(self.get_node_type(node)?)).map(|x| x[0])
     }
 
     pub fn add_elementwise<const M: usize, const N: usize, F>(

@@ -4,7 +4,8 @@ use crate::{
     common::topo_order,
     ir::{
         IrError, IrGraph,
-        operation::{IrOperation, IrOperationId},
+        node::IrNodeId,
+        operation::{IrCopy, IrOperation, IrOperationId},
     },
 };
 
@@ -25,6 +26,11 @@ impl IrGraph {
         topo_order(edges_rev)
             .ok_or("IrGraph::topo_order_ops: cycle found!".into())
             .map(|x| x.into_iter().map(IrOperationId::from_inner).collect())
+    }
+
+    pub fn is_copy(&self, node: IrNodeId) -> Result<Option<IrNodeId>, IrError> {
+        let op = self.get_op(self.get_parent_op(node)?)?;
+        Ok(IrOperation::downcast::<IrCopy>(op.op()).is_some().then(|| op.inputs()[0]))
     }
 
     pub fn check_valid(&self) -> Result<(), IrError> {

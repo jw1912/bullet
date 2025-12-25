@@ -84,8 +84,10 @@ impl IrGraph {
     pub fn optimise(&mut self) -> Result<(), IrError> {
         self.decompose_elementwise()?;
         self.eliminate_unused_ops()?;
+        self.fold_broadcasts()?;
         self.fold_constants()?;
         self.canonicalise_inputs()?;
-        self.eliminate_common_subexprs()
+        self.eliminate_common_subexprs()?;
+        self.eliminate_copies()
     }
 }

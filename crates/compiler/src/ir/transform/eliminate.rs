@@ -1,4 +1,7 @@
-use crate::ir::{IrError, IrGraph};
+use crate::ir::{
+    IrError, IrGraph,
+    operation::{IrCopy, IrOperation},
+};
 
 impl IrGraph {
     pub fn eliminate_unused_ops(&mut self) -> Result<(), IrError> {
@@ -10,6 +13,31 @@ impl IrGraph {
 
             if unused_op {
                 self.remove_op(op_id)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn eliminate_copies(&mut self) -> Result<(), IrError> {
+        for op_id in self.topo_order_ops()?.into_iter().rev() {
+            let op = self.get_op(op_id)?;
+
+            if IrOperation::downcast::<IrCopy>(op.op()).is_some()
+                && let [input] = op.inputs()[..]
+                && let [output] = op.outputs()[..]
+            {
+                if !self.is_output(output) {
+                    self.replace_input(input, output)?;
+                    self.remove_op(op_id)?;
+                    continue;
+                }
+
+                if !self.is_output(input) {
+                    self.replace_input_no_topo_check(output, input)?;
+                    self.swap_outputs(input, output)?;
+                    self.remove_op(op_id)?;
+                }
             }
         }
 
@@ -34,8 +62,8 @@ impl IrGraph {
                         self.replace_input(out_i, out_j)?;
 
                         if self.is_output(out_j) {
-                            self.unregister_output(out_j);
-                            self.register_output(out_i);
+                            let new_out = self.copy(out_i)?;
+                            self.swap_outputs(new_out, out_j)?;
                         }
                     }
 
@@ -53,8 +81,8 @@ impl IrGraph {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::{Binary, DTypeTensor},
-        ir::{IrError, IrGraph},
+        common::{Binary, DType, DTypeTensor},
+        ir::{IrError, IrGraph, node::IrType},
     };
 
     #[test]
@@ -76,6 +104,29 @@ mod tests {
         assert!(ir.get_node(z).is_ok());
         assert!(ir.get_node(w).is_err());
         assert!(ir.get_node(t).is_err());
+
+        ir.check_valid()
+    }
+
+    #[test]
+    fn eliminate_copies() -> Result<(), IrError> {
+        let mut ir = IrGraph::default();
+
+        let x = ir.add_leaf(IrType::new(1, DType::F32));
+        let y = ir.copy(x)?;
+        let z = ir.copy(y)?;
+        let w = ir.copy(z)?;
+
+        let a = ir.add_binary(x, y, Binary::Add)?;
+        let b = ir.add_binary(z, w, Binary::Mul)?;
+        let c = ir.add_binary(a, b, Binary::Add)?;
+
+        ir.register_output(a);
+        ir.register_output(b);
+        ir.register_output(c);
+        ir.eliminate_copies()?;
+
+        assert_eq!(ir.num_ops(), 4);
 
         ir.check_valid()
     }

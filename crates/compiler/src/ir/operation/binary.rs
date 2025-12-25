@@ -34,6 +34,10 @@ impl IrBinary {
 
         Ok(Self { size, lhs, rhs, op })
     }
+
+    pub fn op(&self) -> Binary {
+        self.op
+    }
 }
 
 impl IrOperationType for IrBinary {

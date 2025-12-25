@@ -11,9 +11,11 @@ fn main() {
 
     let dot = (weights * inputs).reduce_sum([8], 0);
 
+    let p1 = dot + bias;
+    let p2 = bias + dot;
     let loss = (dot + bias - target) * (bias - target + dot);
 
-    let mut program = builder.build([loss]);
+    let mut program = builder.build([loss, p1, p2]);
     println!("Unoptimised:");
     println!("{}", program.as_highlighted());
     program.optimise().unwrap();
