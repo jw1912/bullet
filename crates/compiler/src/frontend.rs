@@ -166,6 +166,36 @@ unary_impl!(log1pabs, Log1pAbs);
 unary_impl!(sgn, Sgn);
 unary_impl!(abs, Abs);
 
+macro_rules! binary_const_impl {
+    ($stdop:ident, $fnname:ident, $mapop:ident, $t:ty) => {
+        impl<'a> std::ops::$stdop<$t> for ProgramNode<'a> {
+            type Output = ProgramNode<'a>;
+
+            fn $fnname(self, rhs: $t) -> Self::Output {
+                self.unary(Unary::BinaryWithConst { op: Binary::$mapop, val: rhs.into(), lhs: true })
+            }
+        }
+
+        impl<'a> std::ops::$stdop<ProgramNode<'a>> for $t {
+            type Output = ProgramNode<'a>;
+
+            fn $fnname(self, rhs: ProgramNode<'a>) -> Self::Output {
+                rhs.unary(Unary::BinaryWithConst { op: Binary::$mapop, val: self.into(), lhs: false })
+            }
+        }
+    };
+}
+
+binary_const_impl!(Mul, mul, Mul, f32);
+binary_const_impl!(Add, add, Add, f32);
+binary_const_impl!(Sub, sub, Sub, f32);
+binary_const_impl!(Div, div, Div, f32);
+
+binary_const_impl!(Mul, mul, Mul, i32);
+binary_const_impl!(Add, add, Add, i32);
+binary_const_impl!(Sub, sub, Sub, i32);
+binary_const_impl!(Div, div, Div, i32);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -67,10 +67,7 @@ impl IrOperationType for IrBinary {
     }
 
     fn commutating_groups(&self) -> Vec<HashSet<usize>> {
-        match self.op {
-            Binary::AbsPow | Binary::Div | Binary::Sub => Vec::new(),
-            Binary::Add | Binary::Max | Binary::Min | Binary::Mul => vec![[0, 1].into()],
-        }
+        if self.op.is_commutative() { vec![[0, 1].into()] } else { Vec::new() }
     }
 }
 

@@ -62,13 +62,10 @@ impl IrTransform for EliminateCommonSubExpressions {
 }
 
 fn eliminate_single_common_subexpr(ir: &mut IR) -> Result<bool, IRTrace> {
-    let ops = ir.ordered_operations()?.iter().map(IrOperation::id).collect::<Vec<_>>();
+    let ops = ir.operations();
 
-    for (i, &op_id_i) in ops.iter().enumerate() {
-        for &op_id_j in ops.iter().skip(i + 1) {
-            let op_i = ir.get_op(op_id_i)?.clone();
-            let op_j = ir.get_op(op_id_j)?.clone();
-
+    for (i, op_i) in ops.iter().enumerate() {
+        for op_j in ops.iter().skip(i + 1) {
             if op_i.inputs() == op_j.inputs() && op_i.op().equals(op_j.op()) {
                 for (&out_i, &out_j) in op_i.outputs().iter().zip(op_j.outputs()) {
                     ir.replace_input(out_i, out_j)?;

@@ -48,4 +48,11 @@ impl Binary {
             Self::Max => lhs.max(rhs),
         })
     }
+
+    pub fn is_commutative(self) -> bool {
+        match self {
+            Binary::AbsPow | Binary::Div | Binary::Sub => false,
+            Binary::Add | Binary::Max | Binary::Min | Binary::Mul => true,
+        }
+    }
 }

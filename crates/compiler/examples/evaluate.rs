@@ -22,8 +22,8 @@ fn main() {
     println!("Optimised:");
     println!("{}", program.as_highlighted());
 
-    let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 8]));
-    let target = (target.node(), DTypeTensor::F32(vec![1.0; 1]));
+    let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 32]));
+    let target = (target.node(), DTypeTensor::F32(vec![1.0; 4]));
     let outputs = program.evaluate([inputs, target]).unwrap();
 
     println!("prediction: {:?}", outputs.get(&prediction.node()).unwrap());

@@ -32,11 +32,11 @@ pub struct ElementwiseNode<'a> {
 
 impl ElementwiseNode<'_> {
     pub fn unary(self, op: Unary) -> Option<Self> {
-        self.builder.add_op(Operation::Unary { input: self.node.into(), op })
+        self.builder.add_op(Operation::Unary { input: self.node, op })
     }
 
     pub fn binary(self, rhs: Self, op: Binary) -> Option<Self> {
-        self.builder.add_op(Operation::Binary { lhs: self.node.into(), rhs: rhs.node.into(), op })
+        self.builder.add_op(Operation::Binary { lhs: self.node, rhs: rhs.node, op })
     }
 }
 
@@ -64,10 +64,9 @@ macro_rules! impl_binary_const_lhs_op {
 
             fn $fn(self, rhs: ElementwiseNode<'a>) -> Self::Output {
                 rhs.builder
-                    .add_op(Operation::Binary {
-                        lhs: DTypeValue::F32(self).into(),
-                        rhs: rhs.node.into(),
-                        op: Binary::$tr,
+                    .add_op(Operation::Unary {
+                        input: rhs.node,
+                        op: Unary::BinaryWithConst { op: Binary::$tr, val: DTypeValue::F32(self), lhs: false },
                     })
                     .unwrap()
             }
@@ -87,10 +86,9 @@ macro_rules! impl_binary_const_rhs_op {
 
             fn $fn(self, rhs: f32) -> Self::Output {
                 self.builder
-                    .add_op(Operation::Binary {
-                        lhs: self.node.into(),
-                        rhs: DTypeValue::F32(rhs).into(),
-                        op: Binary::$tr,
+                    .add_op(Operation::Unary {
+                        input: self.node,
+                        op: Unary::BinaryWithConst { op: Binary::$tr, val: DTypeValue::F32(rhs), lhs: true },
                     })
                     .unwrap()
             }
@@ -108,10 +106,9 @@ macro_rules! impl_binary_const_rhs {
         impl ElementwiseNode<'_> {
             pub fn $fn(self, rhs: f32) -> Self {
                 self.builder
-                    .add_op(Operation::Binary {
-                        lhs: self.node.into(),
-                        rhs: DTypeValue::F32(rhs).into(),
-                        op: Binary::$tr,
+                    .add_op(Operation::Unary {
+                        input: self.node,
+                        op: Unary::BinaryWithConst { op: Binary::$tr, val: DTypeValue::F32(rhs), lhs: true },
                     })
                     .unwrap()
             }

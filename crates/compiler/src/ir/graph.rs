@@ -11,10 +11,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::common::{Ansi, Binary, DTypeTensor, Unary, topo_order};
+use crate::common::{Ansi, Binary, DTypeTensor, topo_order};
 
 pub use node::{IrNode, IrNodeId, IrType};
-use operation::{Constant, IrBinary, IrCopy, IrUnary, Leaf};
+use operation::{IrBinary, Leaf};
 pub use operation::{IrOperation, IrOperationId, IrOperationType};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,10 +63,6 @@ impl IrGraph {
         self.nodes.get_mut(&node).ok_or(format!("Node {node:?} does not exist!").into())
     }
 
-    pub fn get_node_type(&self, node: IrNodeId) -> Result<IrType, IrError> {
-        self.get_node(node).map(IrNode::ty)
-    }
-
     pub fn is_output(&self, node: IrNodeId) -> bool {
         self.outputs.contains(&node)
     }
@@ -94,21 +90,8 @@ impl IrGraph {
         self.add_op([], Leaf(ty)).expect("Constructing leaf is infallible!")[0]
     }
 
-    #[must_use]
-    pub fn add_const(&mut self, value: DTypeTensor) -> IrNodeId {
-        self.add_op([], Constant(value)).expect("Constructing leaf is infallible!")[0]
-    }
-
-    pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IrError> {
-        self.add_op([node], IrUnary::new(self.get_node_type(node)?, op)).map(|x| x[0])
-    }
-
     pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IrError> {
-        self.add_op([lhs, rhs], IrBinary::new(self.get_node_type(lhs)?, self.get_node_type(rhs)?, op)?).map(|x| x[0])
-    }
-
-    pub fn copy(&mut self, node: IrNodeId) -> Result<IrNodeId, IrError> {
-        self.add_op([node], IrCopy(self.get_node_type(node)?)).map(|x| x[0])
+        self.add_op([lhs, rhs], IrBinary::new(self.get_node(lhs)?.ty(), self.get_node(rhs)?.ty(), op)?).map(|x| x[0])
     }
 
     pub fn topo_order_ops(&self) -> Result<Vec<IrOperationId>, IrError> {
@@ -129,11 +112,8 @@ impl IrGraph {
             .map(|x| x.into_iter().map(IrOperationId::from_inner).collect())
     }
 
-    pub fn is_copy(&self, node: IrNodeId) -> Result<Option<IrNodeId>, IrError> {
-        let op = self.get_op(self.get_parent_op(node)?)?;
-        Ok(IrOperation::downcast::<IrCopy>(op.op()).is_some().then(|| op.inputs()[0]))
-    }
-
+    /// Returns an error if any graph invariants are broken, e.g.
+    /// if the graph contains a cycle. Otherwise returns `Ok(())`
     pub fn check_valid(&self) -> Result<(), IrError> {
         let mut registered_outputs = HashSet::new();
         let mut expected_child_count = HashMap::new();
@@ -191,6 +171,8 @@ impl IrGraph {
         Ok(())
     }
 
+    /// Adds a new operation to the graph. Fails if the provided inputs
+    /// do not match the input types given by `op`.
     pub fn add_op(
         &mut self,
         inputs: impl AsRef<[IrNodeId]>,
@@ -235,6 +217,8 @@ impl IrGraph {
         Ok(output_ids)
     }
 
+    /// Remove operation. Fails if any of the outputs of this operation
+    /// have children or are output nodes.
     pub fn remove_op(&mut self, id: IrOperationId) -> Result<(), IrError> {
         fn check(cond: bool, msg: impl Into<String>) -> Result<(), IrError> {
             cond.then_some(()).ok_or(format!("{}!", msg.into()).into())
@@ -244,7 +228,7 @@ impl IrGraph {
             let node = self.nodes.remove(&output).expect("Node must be present `nodes`!");
 
             check(node.children() == 0, "node has children")?;
-            check(!self.outputs.contains(&output), "node is required")?;
+            check(!self.is_output(output), "node is required")?;
 
             let op_id = self.links.remove(&output).expect("Node must be present `links`!");
             check(op_id == id, format!("operation id mismatch ({op_id:?} != {id:?})"))?;
@@ -289,7 +273,7 @@ impl IrGraph {
     /// Replaces all instances of `old` in operation inputs by `new`.
     /// Potentially leaves graph in a cyclic state.
     pub fn replace_input_unchecked(&mut self, new: IrNodeId, old: IrNodeId) -> Result<(), IrError> {
-        if self.get_node_type(new)? != self.get_node_type(old)? {
+        if self.get_node(new)?.ty() != self.get_node(old)?.ty() {
             return Err("Mismatched types!".into());
         }
 
@@ -318,7 +302,7 @@ impl IrGraph {
             }
 
             let concrete_size = tensor.borrow().size();
-            let size = self.get_node_type(*id)?.size();
+            let size = self.get_node(*id)?.ty().size();
 
             if let Some(var) = size.get_var_size(concrete_size) {
                 vars.insert(var);
@@ -335,7 +319,7 @@ impl IrGraph {
             let op = self.get_op(id)?;
 
             for &output in op.outputs() {
-                let ty = self.get_node_type(output)?;
+                let ty = self.get_node(output)?.ty();
                 let size = ty.size().evaluate(var);
                 let tensor = DTypeTensor::new(ty.dtype(), size);
                 let is_prev = values.contains_key(&output);
@@ -515,7 +499,7 @@ impl fmt::Display for IrGraph {
             }
 
             let node = leaf.outputs()[0];
-            let ty = map(self.get_node_type(node))?;
+            let ty = map(self.get_node(node))?.ty();
 
             write!(f, "{node:?}: {ty:?}")?;
         }

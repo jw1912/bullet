@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     common::{DTypeTensor, Unary},
-    ir::graph::{IrOperation, IrOperationType, IrType},
+    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 
 #[derive(Debug, PartialEq)]
@@ -12,8 +12,18 @@ pub struct IrUnary {
 }
 
 impl IrUnary {
-    pub fn new(ty: IrType, op: Unary) -> Self {
-        Self { ty, op }
+    pub fn new(ty: IrType, mut op: Unary) -> Result<Self, IrError> {
+        if op.dtype(ty.dtype()).is_none() {
+            return Err("Failed type check!".into());
+        }
+
+        if let Unary::BinaryWithConst { op, lhs, .. } = &mut op {
+            if op.is_commutative() {
+                *lhs = true;
+            }
+        }
+
+        Ok(Self { ty, op })
     }
 
     pub fn op(&self) -> Unary {
@@ -23,7 +33,11 @@ impl IrUnary {
 
 impl IrOperationType for IrUnary {
     fn opname(&self) -> String {
-        format!("unary.{:?}", self.op).to_lowercase()
+        if let Unary::BinaryWithConst { op, val, lhs } = self.op {
+            format!("binary.{op:?}.withconst<{val:?}, {lhs}>").to_lowercase()
+        } else {
+            format!("unary.{:?}", self.op).to_lowercase()
+        }
     }
 
     fn inputs(&self) -> Vec<IrType> {
@@ -31,7 +45,7 @@ impl IrOperationType for IrUnary {
     }
 
     fn outputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.ty.size(), self.op.dtype(self.ty.dtype()))]
+        vec![IrType::new(self.ty.size(), self.op.dtype(self.ty.dtype()).unwrap())]
     }
 
     fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
@@ -61,7 +75,7 @@ mod tests {
     fn evaluate() {
         let ty = IrType::new(Size::variable(), DType::F32);
 
-        let binary = IrUnary::new(ty, Unary::Cos);
+        let binary = IrUnary::new(ty, Unary::Cos).unwrap();
 
         let a = DTypeTensor::F32(vec![0.0; 4]);
         let mut b = DTypeTensor::F32(vec![0.0; 4]);

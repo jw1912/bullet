@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    elementwise::{Input, Operation},
+    elementwise::Operation,
     ir::{
         IR, IRTrace,
-        graph::operation::{BroadcastAcrossDimension, IrElementwise, IrOperation},
+        graph::operation::{IrElementwise, IrOperation},
         transform::{EliminateUnusedOperations, IrTransform},
     },
 };
@@ -30,30 +30,19 @@ fn decompose_single_elementwise(ir: &mut IR) -> Result<bool, IRTrace> {
                     return;
                 }
 
-                let mut map_it = |x| match x {
-                    Input::Constant(val) => {
-                        let constant = ir.add_const(val.into());
-                        let op = BroadcastAcrossDimension::new(val.dtype(), [1], 0, elmt.size());
-                        ir.add_op([constant], op).unwrap()[0]
-                    }
-                    Input::Index(x) => *values.get(&x).unwrap(),
-                };
+                let get = |x| *values.get(&x).unwrap();
 
                 match op {
                     Operation::Leaf(_) => assert!(values.contains_key(&id)),
                     Operation::Unary { input, op } => {
-                        let input = map_it(input);
-                        if let Ok(out) = ir.add_unary(input, op) {
+                        if let Ok(out) = ir.add_unary(get(input), op) {
                             errored |= values.insert(id, out).is_some();
                         } else {
                             errored = true;
                         }
                     }
                     Operation::Binary { lhs, rhs, op } => {
-                        let lhs = map_it(lhs);
-                        let rhs = map_it(rhs);
-
-                        if let Ok(out) = ir.add_binary(lhs, rhs, op) {
+                        if let Ok(out) = ir.add_binary(get(lhs), get(rhs), op) {
                             errored |= values.insert(id, out).is_some();
                         } else {
                             errored = true;
@@ -96,11 +85,16 @@ mod tests {
         let ty = IrType::new(Size::variable(), DType::F32);
         let x = ir.add_leaf(ty);
         let y = ir.add_leaf(ty);
-        let [z, w] = ir.add_elementwise([x, y], |[x, y]| Some([x + y + 1.0, x * y + 1.0]))?;
+        let [z, w] = ir.add_elementwise([x, y], |[x, y]| Some([1.0 + x + y, x * y + 1.0]))?;
 
         ir.register_output(z);
         ir.register_output(w);
         ir.transform(DecomposeElementwise)?;
+
+        for op in ir.operations() {
+            assert!(IrOperation::downcast::<IrElementwise>(op.op()).is_none());
+        }
+
         ir.check_valid()
     }
 }

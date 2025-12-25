@@ -32,72 +32,37 @@ impl fmt::Debug for ElementwiseId {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Input {
-    Index(ElementwiseId),
-    Constant(DTypeValue),
-}
-
-impl Input {
-    pub fn replace(&mut self, curr: ElementwiseId, new: ElementwiseId) {
-        if let Input::Index(x) = *self
-            && x == curr
-        {
-            *self = Input::Index(new);
-        }
-    }
-}
-
-impl From<ElementwiseId> for Input {
-    fn from(value: ElementwiseId) -> Self {
-        Input::Index(value)
-    }
-}
-
-impl From<DTypeValue> for Input {
-    fn from(value: DTypeValue) -> Self {
-        Input::Constant(value)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Operation {
     Leaf(DType),
-    Unary { input: Input, op: Unary },
-    Binary { lhs: Input, rhs: Input, op: Binary },
+    Unary { input: ElementwiseId, op: Unary },
+    Binary { lhs: ElementwiseId, rhs: ElementwiseId, op: Binary },
 }
 
 impl Operation {
     fn inputs(&self) -> Vec<ElementwiseId> {
-        let mut res = Vec::new();
-
         match self {
-            Self::Leaf(_) => {}
-            Self::Unary { input, .. } => {
-                if let Input::Index(x) = *input {
-                    res.push(x)
-                }
-            }
-            Self::Binary { lhs, rhs, .. } => {
-                if let Input::Index(x) = *lhs {
-                    res.push(x);
-                }
-
-                if let Input::Index(x) = *rhs {
-                    res.push(x);
-                }
-            }
+            Self::Leaf(_) => Vec::new(),
+            Self::Unary { input, .. } => vec![*input],
+            Self::Binary { lhs, rhs, .. } => vec![*lhs, *rhs],
         }
-
-        res
     }
 
     pub fn replace(&mut self, curr: ElementwiseId, new: ElementwiseId) {
         match self {
             Self::Leaf(_) => {}
-            Self::Unary { input, .. } => input.replace(curr, new),
+            Self::Unary { input, .. } => {
+                if *input == curr {
+                    *input = new;
+                }
+            }
             Self::Binary { lhs, rhs, .. } => {
-                lhs.replace(curr, new);
-                rhs.replace(curr, new);
+                if *lhs == curr {
+                    *lhs = new;
+                }
+
+                if *rhs == curr {
+                    *rhs = new;
+                }
             }
         }
     }
@@ -137,10 +102,7 @@ impl ElementwiseDescription {
             let alr = values.contains_key(&id);
             let node = self.nodes.get(&id)?;
 
-            let get_input = |input| match input {
-                Input::Constant(val) => Some(val),
-                Input::Index(id) => values.get(&id).cloned(),
-            };
+            let get_input = |input| values.get(&input).cloned();
 
             let value = match (node.op, alr) {
                 (Operation::Leaf(ty), true) => {
@@ -216,11 +178,8 @@ impl ElementwiseDescription {
         topo_order(edges_rev).unwrap().iter().map(|&x| ElementwiseId(x)).collect()
     }
 
-    pub fn get_dtype(&self, input: impl Into<Input>) -> DType {
-        match input.into() {
-            Input::Constant(val) => val.dtype(),
-            Input::Index(idx) => self.nodes.get(&idx).unwrap().ty,
-        }
+    pub fn get_dtype(&self, input: ElementwiseId) -> DType {
+        self.nodes.get(&input).unwrap().ty
     }
 
     pub fn add_op(&mut self, op: Operation) -> Option<ElementwiseId> {
@@ -228,7 +187,7 @@ impl ElementwiseDescription {
 
         let ty = match &op {
             Operation::Leaf(ty) => *ty,
-            Operation::Unary { input, op } => op.dtype(self.get_dtype(*input)),
+            Operation::Unary { input, op } => op.dtype(self.get_dtype(*input))?,
             Operation::Binary { lhs, rhs, op } => op.dtype(self.get_dtype(*lhs), self.get_dtype(*rhs))?,
         };
 
@@ -243,14 +202,21 @@ impl ElementwiseDescription {
     }
 
     pub fn unary(&mut self, input: ElementwiseId, op: Unary) -> Option<ElementwiseId> {
-        self.add_op(Operation::Unary { input: Input::Index(input), op })
+        self.add_op(Operation::Unary { input, op })
     }
 
-    pub fn binary(&mut self, lhs: impl Into<Input>, rhs: impl Into<Input>, op: Binary) -> Option<ElementwiseId> {
-        let lhs = lhs.into();
-        let rhs = rhs.into();
-
+    pub fn binary(&mut self, lhs: ElementwiseId, rhs: ElementwiseId, op: Binary) -> Option<ElementwiseId> {
         self.add_op(Operation::Binary { lhs, rhs, op })
+    }
+
+    pub fn binary_const(
+        &mut self,
+        input: ElementwiseId,
+        val: DTypeValue,
+        op: Binary,
+        lhs: bool,
+    ) -> Option<ElementwiseId> {
+        self.add_op(Operation::Unary { input, op: Unary::BinaryWithConst { op, val, lhs } })
     }
 
     pub fn merge_with(&self, rhs: &Self, equivalencies: &[(ElementwiseId, ElementwiseId)]) -> Option<Self> {

@@ -28,7 +28,7 @@ pub enum IRTrace {
 }
 
 impl IRTrace {
-    pub fn frame(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    pub fn frame(&self, f: &mut impl fmt::Write) -> fmt::Result {
         match self {
             Self::Root(err) => write!(f, "{err:?}"),
             Self::Frame(graph, transform, _) => {
@@ -43,7 +43,7 @@ impl IRTrace {
         }
     }
 
-    pub fn full_string(&self, f: &mut fmt::Formatter<'_>, frame: usize) -> fmt::Result {
+    pub fn full_string(&self, f: &mut impl fmt::Write, frame: usize) -> fmt::Result {
         writeln!(f, "{}Depth {frame}:{}", Ansi::rgb(255, 0, 0), Ansi::Clear)?;
 
         self.frame(f)?;
@@ -97,7 +97,7 @@ impl IR {
     }
 
     pub fn ordered_operations(&self) -> Result<Vec<IrOperation>, IRTrace> {
-        let ids = self.graph.topo_order_ops().map_err(IRTrace::Root)?;
+        let ids = self.graph.topo_order_ops()?;
         ids.into_iter().map(|id| self.graph.get_op(id).map_err(IRTrace::Root).cloned()).collect()
     }
 
@@ -133,22 +133,27 @@ impl IR {
         self.graph.get_node_mut(node).map_err(IRTrace::Root)
     }
 
-    pub fn get_node_type(&self, node: IrNodeId) -> Result<IrType, IRTrace> {
-        self.graph.get_node_type(node).map_err(IRTrace::Root)
-    }
-
     pub fn is_output(&self, node: IrNodeId) -> bool {
         self.graph.is_output(node)
     }
 
     pub fn is_copy(&self, node: IrNodeId) -> Result<Option<IrNodeId>, IRTrace> {
-        self.graph.is_copy(node).map_err(IRTrace::Root)
+        let op = self.get_op(self.get_parent_op(node)?)?;
+        Ok(IrOperation::downcast::<IrCopy>(op.op()).is_some().then(|| op.inputs()[0]))
     }
 
-    pub fn is_input(&self, node: IrNodeId) -> bool {
-        let Ok(id) = self.get_parent_op(node) else { return false };
-        let Ok(op) = self.get_op(id) else { return false };
-        IrOperation::downcast::<Leaf>(op.op()).is_some()
+    pub fn is_child_of<T: IrOperationType>(&self, node: IrNodeId) -> Result<bool, IRTrace> {
+        let id = self.get_parent_op(node)?;
+        let op = self.get_op(id)?;
+        Ok(IrOperation::downcast::<T>(op.op()).is_some())
+    }
+
+    pub fn is_input(&self, node: IrNodeId) -> Result<bool, IRTrace> {
+        self.is_child_of::<Leaf>(node)
+    }
+
+    pub fn is_constant(&self, node: IrNodeId) -> Result<bool, IRTrace> {
+        self.is_child_of::<Constant>(node)
     }
 
     pub fn check_valid(&self) -> Result<(), IRTrace> {
@@ -189,16 +194,17 @@ impl IR {
     }
 
     pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IRTrace> {
-        self.add_op([node], self.get_node_type(node).map(|node| IrUnary::new(node, op))).map(|x| x[0])
+        let op = self.get_node(node).and_then(|node| IrUnary::new(node.ty(), op).map_err(IRTrace::Root));
+        self.add_op([node], op).map(|x| x[0])
     }
 
     pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IRTrace> {
-        let op = IrBinary::new(self.get_node_type(lhs)?, self.get_node_type(rhs)?, op);
+        let op = IrBinary::new(self.get_node(lhs)?.ty(), self.get_node(rhs)?.ty(), op);
         self.add_op([lhs, rhs], op).map(|x| x[0])
     }
 
     pub fn copy(&mut self, node: IrNodeId) -> Result<IrNodeId, IRTrace> {
-        self.add_op([node], self.get_node_type(node).map(IrCopy)).map(|x| x[0])
+        self.add_op([node], self.get_node(node).map(|n| IrCopy(n.ty()))).map(|x| x[0])
     }
 
     pub fn add_elementwise<const M: usize, const N: usize, F>(
@@ -209,7 +215,7 @@ impl IR {
     where
         F: for<'a> Fn([ElementwiseNode<'a>; M]) -> Option<[ElementwiseNode<'a>; N]>,
     {
-        let nodes = inputs.map(|x| self.get_node_type(x).unwrap());
+        let nodes = inputs.map(|x| self.get_node(x).unwrap().ty());
         let op = IrElementwise::new(nodes, f);
 
         let outs = self.add_op(inputs, op)?;

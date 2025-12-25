@@ -15,10 +15,6 @@ pub struct IrElementwise {
 }
 
 impl IrElementwise {
-    pub(in crate::ir) fn size(&self) -> Size {
-        self.size
-    }
-
     pub(in crate::ir) fn input_ids(&self) -> &[ElementwiseId] {
         &self.inputs
     }

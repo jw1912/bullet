@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::ir::{IR, IRTrace, transform::IrTransform};
+use crate::ir::{IR, IRTrace, graph::IrNode, transform::IrTransform};
 
 /// Put commuting inputs to operations into canoncial order:
 /// ```text
@@ -43,7 +43,8 @@ impl IrTransform for CanonicaliseInputs {
                 let mut group = group.into_iter().collect::<Vec<_>>();
                 let mut nodes = group.iter().map(|&i| inputs[i]).collect::<Vec<_>>();
 
-                if nodes.iter().map(|&id| ir.get_node_type(id)).collect::<Result<HashSet<_>, _>>()?.len() > 1 {
+                if nodes.iter().map(|&id| ir.get_node(id).map(IrNode::ty)).collect::<Result<HashSet<_>, _>>()?.len() > 1
+                {
                     return Err("Inputs within commutating group have differing types!".into());
                 }
 

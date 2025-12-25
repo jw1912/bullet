@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use crate::ir::{
     IR, IRTrace,
@@ -6,8 +6,19 @@ use crate::ir::{
     transform::IrTransform,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AddOperation(pub Vec<IrNodeId>, pub Result<Rc<dyn IrOperationType>, IRTrace>);
+
+impl fmt::Debug for AddOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let frame = self.1.as_ref().map(|frame| format!("{frame:?}")).unwrap_or_else(|err| {
+            let mut s = String::new();
+            err.frame(&mut s).unwrap();
+            s
+        });
+        write!(f, "AddOperation({:?}, {frame})", self.0)
+    }
+}
 
 impl IrTransform for AddOperation {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {

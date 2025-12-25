@@ -54,7 +54,7 @@ fn fold_single_constant(ir: &mut IR) -> Result<bool, IRTrace> {
 
             let mut tensors = Vec::new();
             for &output in &output_ids {
-                let ty = ir.get_node_type(output)?;
+                let ty = ir.get_node(output)?.ty();
 
                 if let Some(size) = ty.size().evaluate_constant() {
                     tensors.push(DTypeTensor::new(ty.dtype(), size));

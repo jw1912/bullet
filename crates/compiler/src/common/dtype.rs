@@ -21,6 +21,18 @@ pub enum DTypeValue {
     I32(i32),
 }
 
+impl From<f32> for DTypeValue {
+    fn from(value: f32) -> Self {
+        Self::F32(value)
+    }
+}
+
+impl From<i32> for DTypeValue {
+    fn from(value: i32) -> Self {
+        Self::I32(value)
+    }
+}
+
 impl DTypeValue {
     pub fn dtype(&self) -> DType {
         match *self {

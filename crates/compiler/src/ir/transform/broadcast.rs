@@ -26,7 +26,7 @@ fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
             if let Some(broadcast) = IrOperation::downcast::<BroadcastAcrossDimension>(parent_op.op()).cloned() {
                 assert_eq!(parent_op.outputs()[..], [parent]);
 
-                let out_dtype = ir.get_node_type(output)?.dtype();
+                let out_dtype = ir.get_node(output)?.ty().dtype();
                 let new_broadcast = broadcast.with_new_dtype(out_dtype);
                 let [grandparent] = parent_op.inputs()[..] else { panic!() };
                 let new_input = ir.add_unary(grandparent, unary.op())?;
@@ -53,7 +53,7 @@ fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
                 let [lgrandparent] = lparent_op.inputs()[..] else { panic!() };
                 let [rgrandparent] = rparent_op.inputs()[..] else { panic!() };
 
-                let out_dtype = ir.get_node_type(output)?.dtype();
+                let out_dtype = ir.get_node(output)?.ty().dtype();
                 let new_broadcast = lbroadcast.with_new_dtype(out_dtype);
                 if new_broadcast == rbroadcast.with_new_dtype(out_dtype) {
                     let new_input = ir.add_binary(lgrandparent, rgrandparent, binary.op())?;
@@ -72,7 +72,7 @@ fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::{DType, Size, Unary},
+        common::{Binary, DType, Size, Unary},
         ir::{
             graph::IrType,
             transform::{EliminateCommonSubExpressions, EliminateCopies},
@@ -103,31 +103,31 @@ mod tests {
         assert_eq!(ir.num_ops(), 4);
         assert!(ir.is_copy(c1)? == Some(c2) || ir.is_copy(c2)? == Some(c1));
 
-        Ok(())
+        ir.check_valid()
     }
 
     #[test]
-    fn fold_broadcast_complex() -> Result<(), IRTrace> {
+    fn fold_broadcast_binary() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let a = ir.add_leaf(IrType::new(1, DType::F32));
+        let a1 = ir.add_leaf(IrType::new(1, DType::F32));
         let broadcast = BroadcastAcrossDimension::new(DType::F32, [1], 0, Size::variable());
-        let b1 = ir.add_op([a], broadcast.clone())?[0];
+        let b1 = ir.add_op([a1], broadcast.clone())?[0];
         let c1 = ir.add_unary(b1, Unary::Sin)?;
 
-        let b2 = ir.add_unary(a, Unary::Sin)?;
-        let c2 = ir.add_op([b2], broadcast)?[0];
+        let a2 = ir.add_leaf(IrType::new(1, DType::I32));
+        let b2 = ir.add_op([a2], broadcast.clone().map(|x| x.with_new_dtype(DType::I32)))?[0];
+        let c2 = ir.add_unary(b2, Unary::Cast(DType::F32))?;
 
-        ir.register_output(c1);
-        ir.register_output(c2);
+        let d = ir.add_binary(c1, c2, Binary::Add)?;
+        let e = ir.add_binary(d, d, Binary::Mul)?;
 
+        ir.register_output(e);
         ir.transform(FoldBroadcasts)?;
-        ir.transform(EliminateCommonSubExpressions)?;
-        ir.transform(EliminateCopies)?;
 
-        assert_eq!(ir.num_ops(), 4);
-        assert!(ir.is_copy(c1)? == Some(c2) || ir.is_copy(c2)? == Some(c1));
+        let op = ir.get_op(ir.get_parent_op(e)?)?;
+        assert_eq!(IrOperation::downcast::<BroadcastAcrossDimension>(op.op()).cloned(), Some(broadcast?));
 
-        Ok(())
+        ir.check_valid()
     }
 }
