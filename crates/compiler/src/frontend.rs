@@ -56,7 +56,7 @@ impl ProgramBuilder {
     }
 
     pub fn display_ir(&self) {
-        println!("{}", self.ir.borrow())
+        println!("{}", self.ir.borrow().as_highlighted())
     }
 
     pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> IrGraph {
@@ -65,8 +65,6 @@ impl ProgramBuilder {
         for ret in returns.as_ref() {
             ir.register_output(ret.node());
         }
-
-        ir.optimise().unwrap();
 
         ir
     }

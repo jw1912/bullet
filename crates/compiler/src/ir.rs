@@ -67,6 +67,12 @@ impl IrGraph {
         self.outputs.contains(&node)
     }
 
+    pub fn is_input(&self, node: IrNodeId) -> bool {
+        let Ok(id) = self.get_parent_op(node) else { return false };
+        let Ok(op) = self.get_op(id) else { return false };
+        IrOperation::downcast::<operation::Leaf>(op.op()).is_some()
+    }
+
     pub fn register_output(&mut self, node: IrNodeId) {
         self.outputs.insert(node);
     }

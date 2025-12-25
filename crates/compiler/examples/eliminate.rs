@@ -11,16 +11,14 @@ fn main() {
 
     let dot = (weights * inputs).reduce_sum([8], 0);
 
-    let [_prediction, loss] = builder.elementwise([dot, bias, target], |[dot, bias, target]| {
-        let prediction = dot + bias;
-        [prediction, (prediction - target) * (prediction - target)]
-    });
+    let loss = (dot + bias - target) * (bias - target + dot);
 
-    builder.display_ir();
-
-    let program = builder.build([loss]);
-
-    println!("{program}");
+    let mut program = builder.build([loss]);
+    println!("Unoptimised:");
+    println!("{}", program.as_highlighted());
+    program.optimise().unwrap();
+    println!("Optimised:");
+    println!("{}", program.as_highlighted());
 
     let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 8]));
     let target = (target.node(), DTypeTensor::F32(vec![1.0; 1]));

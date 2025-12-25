@@ -13,11 +13,12 @@ fn main() {
     let diff = prediction - target;
     let loss = diff * diff;
 
-    builder.display_ir();
-
-    let program = builder.build([prediction, loss]);
-
-    println!("{program}");
+    let mut program = builder.build([prediction, loss]);
+    println!("Unoptimised:");
+    println!("{}", program.as_highlighted());
+    program.optimise().unwrap();
+    println!("Optimised:");
+    println!("{}", program.as_highlighted());
 
     let outputs = program.evaluate([]).unwrap();
 

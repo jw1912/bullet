@@ -34,6 +34,12 @@ impl IrType {
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IrNodeId(usize);
 
+impl IrNodeId {
+    pub(super) fn new(id: usize) -> Self {
+        Self(id)
+    }
+}
+
 impl Default for IrNodeId {
     fn default() -> Self {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
