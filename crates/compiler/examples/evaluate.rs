@@ -11,7 +11,7 @@ fn main() {
     let weights = builder.constant(DTypeTensor::F32(vec![1.0; 8])).broadcast([8], 0, batch);
     let bias = builder.constant(DTypeTensor::F32(vec![1.0])).broadcast([1], 0, batch);
 
-    let prediction = (weights * inputs).reduce_sum([8], 0) + bias;
+    let prediction = (weights * inputs).reduce_sum(batch + [8], 1) + bias;
     let diff = prediction - target;
     let loss = diff * diff;
 
