@@ -57,30 +57,22 @@ impl_binary_op!(Sub, sub);
 impl_binary_op!(Mul, mul);
 impl_binary_op!(Div, div);
 
-macro_rules! impl_binary_const_lhs_op {
+macro_rules! impl_binary_const_op {
     ($tr:ident, $fn:ident) => {
         impl<'a> std::ops::$tr<ElementwiseNode<'a>> for f32 {
             type Output = ElementwiseNode<'a>;
 
             fn $fn(self, rhs: ElementwiseNode<'a>) -> Self::Output {
+                let op = Binary::$tr;
                 rhs.builder
                     .add_op(Operation::Unary {
                         input: rhs.node,
-                        op: Unary::BinaryWithConst { op: Binary::$tr, val: DTypeValue::F32(self), lhs: false },
+                        op: Unary::BinaryWithConst { op, val: DTypeValue::F32(self), lhs: op.is_commutative() },
                     })
                     .unwrap()
             }
         }
-    };
-}
 
-impl_binary_const_lhs_op!(Add, add);
-impl_binary_const_lhs_op!(Sub, sub);
-impl_binary_const_lhs_op!(Mul, mul);
-impl_binary_const_lhs_op!(Div, div);
-
-macro_rules! impl_binary_const_rhs_op {
-    ($tr:ident, $fn:ident) => {
         impl std::ops::$tr<f32> for ElementwiseNode<'_> {
             type Output = Self;
 
@@ -96,10 +88,10 @@ macro_rules! impl_binary_const_rhs_op {
     };
 }
 
-impl_binary_const_rhs_op!(Add, add);
-impl_binary_const_rhs_op!(Sub, sub);
-impl_binary_const_rhs_op!(Mul, mul);
-impl_binary_const_rhs_op!(Div, div);
+impl_binary_const_op!(Add, add);
+impl_binary_const_op!(Sub, sub);
+impl_binary_const_op!(Mul, mul);
+impl_binary_const_op!(Div, div);
 
 macro_rules! impl_binary_const_rhs {
     ($tr:ident, $fn:ident) => {
