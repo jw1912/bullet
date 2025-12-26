@@ -89,7 +89,7 @@ fn eliminate_single_common_subexpr(ir: &mut IR) -> Result<bool, IRTrace> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::{Binary, DType, DTypeTensor},
+        core::{Binary, DType, DTypeTensor},
         ir::graph::IrType,
     };
 

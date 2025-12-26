@@ -5,14 +5,13 @@ use std::{collections::HashMap, fmt, rc::Rc};
 
 use graph::{
     IrError, IrGraph, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType,
-    operation::{Constant, IrBinary, IrCopy, IrUnary, Leaf},
+    operation::{Constant, IrBinary, IrCopy, IrElementwise, IrUnary, Leaf},
 };
 use transform::*;
 
 use crate::{
-    common::{Ansi, Binary, DTypeTensor, Unary},
-    elementwise::ElementwiseNode,
-    ir::graph::operation::IrElementwise,
+    core::{Binary, DTypeTensor, Formula, FormulaId, Unary},
+    utils::Ansi,
 };
 
 #[derive(Clone, Default)]
@@ -103,6 +102,19 @@ impl IR {
 
     pub fn operations(&self) -> Vec<IrOperation> {
         self.graph.operations().cloned().collect()
+    }
+
+    pub fn num_nontrivial_operations(&self) -> Result<usize, IRTrace> {
+        let mut count = 0;
+
+        for op in self.ordered_operations()? {
+            if IrOperation::downcast::<Leaf>(op.op()).is_none() && IrOperation::downcast::<Constant>(op.op()).is_none()
+            {
+                count += 1;
+            }
+        }
+
+        Ok(count)
     }
 
     pub fn num_ops(&self) -> usize {
@@ -213,7 +225,7 @@ impl IR {
         f: F,
     ) -> Result<[IrNodeId; N], IRTrace>
     where
-        F: for<'a> Fn([ElementwiseNode<'a>; M]) -> Option<[ElementwiseNode<'a>; N]>,
+        F: for<'a> Fn(&mut Formula, [FormulaId; M]) -> Option<[FormulaId; N]>,
     {
         let nodes = inputs.map(|x| self.get_node(x).unwrap().ty());
         let op = IrElementwise::new(nodes, f);

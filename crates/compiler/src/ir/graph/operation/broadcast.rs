@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    common::{DType, DTypeTensor, Shape, Size},
+    core::{DType, DTypeTensor, Shape, Size},
     ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 

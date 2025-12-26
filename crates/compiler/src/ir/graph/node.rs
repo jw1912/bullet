@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::common::{DType, Size};
+use crate::core::{DType, Size};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IrType {

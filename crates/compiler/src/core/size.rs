@@ -114,9 +114,15 @@ impl From<Size> for Shape {
     }
 }
 
-impl<T: AsRef<[usize]>> From<T> for Shape {
-    fn from(value: T) -> Self {
-        Self(value.as_ref().iter().map(|&x| x.into()).collect())
+impl<T: Copy + Into<Size>> From<Vec<T>> for Shape {
+    fn from(value: Vec<T>) -> Self {
+        Self(value.iter().map(|&x| x.into()).collect())
+    }
+}
+
+impl<T: Copy + Into<Size>, const N: usize> From<[T; N]> for Shape {
+    fn from(value: [T; N]) -> Self {
+        Self(value.map(|x| x.into()).into())
     }
 }
 

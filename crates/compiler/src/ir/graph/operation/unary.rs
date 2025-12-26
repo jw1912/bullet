@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    common::{DTypeTensor, Unary},
+    core::{DTypeTensor, Unary},
     ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 
@@ -67,7 +67,7 @@ impl IrOperationType for IrUnary {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::{DType, Size};
+    use crate::core::{DType, Size};
 
     use super::*;
 

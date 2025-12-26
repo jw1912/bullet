@@ -20,7 +20,7 @@ pub use reduce::{ReduceAcrossDimension, Reduction};
 pub use unary::IrUnary;
 
 use crate::{
-    common::DTypeTensor,
+    core::DTypeTensor,
     ir::graph::{IrError, IrNode, IrNodeId, IrType},
 };
 

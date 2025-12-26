@@ -1,4 +1,4 @@
-use crate::common::{DType, Size};
+use crate::core::{DType, Size};
 
 use super::*;
 

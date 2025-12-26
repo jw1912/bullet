@@ -72,7 +72,7 @@ fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::{Binary, DType, Size, Unary},
+        core::{Binary, DType, Size, Unary},
         ir::{
             graph::IrType,
             transform::{EliminateCommonSubExpressions, EliminateCopies},

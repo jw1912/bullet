@@ -1,8 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{
-    common::{Binary, DType, DTypeTensor, Shape, Size, Unary},
-    elementwise::ElementwiseNode,
+    core::{Binary, DType, DTypeTensor, Shape, Size, Unary},
     ir::{
         IR,
         graph::{
@@ -40,21 +39,6 @@ impl ProgramBuilder {
     pub fn constant<'a>(&'a self, value: DTypeTensor) -> ProgramNode<'a> {
         let node = self.ir.borrow_mut().add_const(value);
         self.new_node(node)
-    }
-
-    pub fn elementwise<'a, F, const M: usize, const N: usize>(
-        &'a self,
-        inputs: [ProgramNode<'a>; M],
-        f: F,
-    ) -> [ProgramNode<'a>; N]
-    where
-        for<'b> F: Fn([ElementwiseNode<'b>; M]) -> [ElementwiseNode<'b>; N],
-    {
-        self.ir
-            .borrow_mut()
-            .add_elementwise(inputs.map(|y| y.node()), |x| Some(f(x)))
-            .unwrap()
-            .map(|id| ProgramNode::new(self, id))
     }
 
     pub fn display_ir(&self) {

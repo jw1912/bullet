@@ -11,7 +11,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::common::{Ansi, Binary, DTypeTensor, topo_order};
+use crate::{
+    core::{Binary, DTypeTensor},
+    utils::{Ansi, topo_order},
+};
 
 pub use node::{IrNode, IrNodeId, IrType};
 use operation::{IrBinary, Leaf};

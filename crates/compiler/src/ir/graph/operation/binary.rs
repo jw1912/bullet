@@ -1,7 +1,7 @@
 use std::{collections::HashSet, rc::Rc};
 
 use crate::{
-    common::{Binary, DType, DTypeTensor, Size},
+    core::{Binary, DType, DTypeTensor, Size},
     ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 
@@ -73,7 +73,7 @@ impl IrOperationType for IrBinary {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::DType;
+    use crate::core::DType;
 
     use super::*;
 

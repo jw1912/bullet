@@ -1,40 +1,40 @@
 use std::{collections::HashSet, rc::Rc};
 
 use crate::{
-    common::{DTypeTensor, Size},
-    elementwise::{ElementwiseBuilder, ElementwiseDescription, ElementwiseId, ElementwiseNode},
+    core::{DTypeTensor, Formula, FormulaId, Size},
     ir::graph::{IrError, IrOperation, IrOperationType, IrType},
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IrElementwise {
     size: Size,
-    inputs: Vec<ElementwiseId>,
-    op: ElementwiseDescription,
-    outputs: Vec<ElementwiseId>,
+    inputs: Vec<FormulaId>,
+    op: Formula,
+    outputs: Vec<FormulaId>,
 }
 
 impl IrElementwise {
-    pub(in crate::ir) fn input_ids(&self) -> &[ElementwiseId] {
+    pub(in crate::ir) fn input_ids(&self) -> &[FormulaId] {
         &self.inputs
     }
 
-    pub(in crate::ir) fn output_ids(&self) -> &[ElementwiseId] {
+    pub(in crate::ir) fn output_ids(&self) -> &[FormulaId] {
         &self.outputs
     }
 
-    pub(in crate::ir) fn desc(&self) -> &ElementwiseDescription {
+    pub(in crate::ir) fn desc(&self) -> &Formula {
         &self.op
     }
 
     pub fn new<const M: usize, const N: usize, F>(inputs: [IrType; M], f: F) -> Result<Self, IrError>
     where
-        for<'a> F: Fn([ElementwiseNode<'a>; M]) -> Option<[ElementwiseNode<'a>; N]>,
+        for<'a> F: Fn(&mut Formula, [FormulaId; M]) -> Option<[FormulaId; N]>,
     {
-        let builder = ElementwiseBuilder::default();
+        let mut builder = Formula::default();
 
-        let inps = inputs.map(|x| builder.add_input(x.dtype()));
-        let outs = f(inps).ok_or("IrElementwise::new: failed dtype check!")?;
+        let inps = inputs.map(|x| builder.input(x.dtype()).unwrap());
+        builder.lock_inputs();
+        let outs = f(&mut builder, inps).ok_or("IrElementwise::new: failed dtype check!")?;
 
         let sizes = inputs.map(|x| x.size());
         let size = sizes[0];
@@ -44,10 +44,7 @@ impl IrElementwise {
             }
         }
 
-        let inputs = inps.map(|x| x.node).into();
-        let outputs = outs.map(|x| x.node).into();
-
-        Ok(Self { size, inputs, op: builder.build(), outputs })
+        Ok(Self { size, inputs: inps.into(), op: builder, outputs: outs.into() })
     }
 }
 
@@ -90,7 +87,7 @@ impl IrOperationType for IrElementwise {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::DType;
+    use crate::core::{Binary, DType};
 
     use super::*;
 
@@ -98,7 +95,11 @@ mod tests {
     fn basic() {
         let ty = IrType::new(Size::variable(), DType::F32);
 
-        let elmt = IrElementwise::new([ty, ty, ty], |[a, b, c]| Some([a * b + c])).unwrap();
+        let elmt = IrElementwise::new([ty, ty, ty], |builder, [a, b, c]| {
+            let d = builder.binary(a, b, Binary::Mul)?;
+            builder.binary(c, d, Binary::Add).map(|x| [x])
+        })
+        .unwrap();
 
         let a = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
         let b = DTypeTensor::F32(vec![2.0, 0.5, 4.0, 1.0]);

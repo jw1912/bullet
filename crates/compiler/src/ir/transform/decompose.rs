@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    elementwise::Operation,
+    core::FormulaOp,
     ir::{
         IR, IRTrace,
         graph::operation::{IrElementwise, IrOperation},
@@ -33,15 +33,15 @@ fn decompose_single_elementwise(ir: &mut IR) -> Result<bool, IRTrace> {
                 let get = |x| *values.get(&x).unwrap();
 
                 match op {
-                    Operation::Leaf(_) => assert!(values.contains_key(&id)),
-                    Operation::Unary { input, op } => {
+                    FormulaOp::Leaf(_) => assert!(values.contains_key(&id)),
+                    FormulaOp::Unary { input, op } => {
                         if let Ok(out) = ir.add_unary(get(input), op) {
                             errored |= values.insert(id, out).is_some();
                         } else {
                             errored = true;
                         }
                     }
-                    Operation::Binary { lhs, rhs, op } => {
+                    FormulaOp::Binary { lhs, rhs, op } => {
                         if let Ok(out) = ir.add_binary(get(lhs), get(rhs), op) {
                             errored |= values.insert(id, out).is_some();
                         } else {
@@ -74,7 +74,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        common::{DType, Size},
+        core::{Binary, DType, Size},
         ir::IrType,
     };
 
@@ -85,7 +85,15 @@ mod tests {
         let ty = IrType::new(Size::variable(), DType::F32);
         let x = ir.add_leaf(ty);
         let y = ir.add_leaf(ty);
-        let [z, w] = ir.add_elementwise([x, y], |[x, y]| Some([1.0 + x + y, x * y + 1.0]))?;
+        let [z, w] = ir.add_elementwise([x, y], |builder, [x, y]| {
+            let a = builder.binary(x, y, Binary::Add)?;
+            let b = builder.binary_const(a, 1.0, Binary::Add, false)?;
+
+            let c = builder.binary(x, y, Binary::Mul)?;
+            let d = builder.binary_const(c, 1.0, Binary::Add, true)?;
+
+            Some([b, d])
+        })?;
 
         ir.register_output(z);
         ir.register_output(w);

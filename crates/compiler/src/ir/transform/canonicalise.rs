@@ -66,7 +66,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        common::{Binary, DType},
+        core::{Binary, DType},
         ir::graph::IrType,
     };
 

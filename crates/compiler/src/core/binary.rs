@@ -1,4 +1,4 @@
-use crate::common::{DType, DTypeValue};
+use crate::core::{DType, DTypeValue};
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

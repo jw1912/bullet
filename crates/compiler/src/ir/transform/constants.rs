@@ -1,5 +1,5 @@
 use crate::{
-    common::DTypeTensor,
+    core::DTypeTensor,
     ir::{
         IR, IRTrace,
         graph::operation::{Constant, IrOperation},
@@ -83,7 +83,7 @@ fn fold_single_constant(ir: &mut IR) -> Result<bool, IRTrace> {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::Binary;
+    use crate::core::Binary;
 
     use super::*;
 
