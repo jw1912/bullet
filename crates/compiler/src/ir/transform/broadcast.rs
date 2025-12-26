@@ -73,10 +73,7 @@ fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
 mod tests {
     use crate::{
         core::{Binary, DType, Size, Unary},
-        ir::{
-            graph::IrType,
-            transform::{EliminateCommonSubExpressions, EliminateCopies},
-        },
+        ir::graph::IrType,
     };
 
     use super::*;
@@ -87,21 +84,14 @@ mod tests {
 
         let a = ir.add_leaf(IrType::new(1, DType::F32));
         let broadcast = BroadcastAcrossDimension::new(DType::F32, [1], 0, Size::variable());
-        let b1 = ir.add_op([a], broadcast.clone())?[0];
-        let c1 = ir.add_unary(b1, Unary::Sin)?;
+        let b = ir.add_op([a], broadcast.clone())?[0];
+        let c = ir.add_unary(b, Unary::Sin)?;
+        let d = ir.add_unary(c, Unary::Exp)?;
 
-        let b2 = ir.add_unary(a, Unary::Sin)?;
-        let c2 = ir.add_op([b2], broadcast)?[0];
-
-        ir.register_output(c1);
-        ir.register_output(c2);
-
+        ir.register_output(d);
         ir.transform(FoldBroadcasts)?;
-        ir.transform(EliminateCommonSubExpressions)?;
-        ir.transform(EliminateCopies)?;
 
-        assert_eq!(ir.num_ops(), 4);
-        assert!(ir.is_copy(c1)? == Some(c2) || ir.is_copy(c2)? == Some(c1));
+        assert_eq!(ir.is_child_of(d)?, Some(&broadcast?));
 
         ir.check_valid()
     }
@@ -125,8 +115,7 @@ mod tests {
         ir.register_output(e);
         ir.transform(FoldBroadcasts)?;
 
-        let op = ir.get_op(ir.get_parent_op(e)?)?;
-        assert_eq!(IrOperation::downcast::<BroadcastAcrossDimension>(op.op()).cloned(), Some(broadcast?));
+        assert_eq!(ir.is_child_of(e)?, Some(&broadcast?));
 
         ir.check_valid()
     }

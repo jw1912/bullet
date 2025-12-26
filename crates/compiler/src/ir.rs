@@ -154,18 +154,18 @@ impl IR {
         Ok(IrOperation::downcast::<IrCopy>(op.op()).is_some().then(|| op.inputs()[0]))
     }
 
-    pub fn is_child_of<T: IrOperationType>(&self, node: IrNodeId) -> Result<bool, IRTrace> {
+    pub fn is_child_of<T: IrOperationType>(&self, node: IrNodeId) -> Result<Option<&T>, IRTrace> {
         let id = self.get_parent_op(node)?;
         let op = self.get_op(id)?;
-        Ok(IrOperation::downcast::<T>(op.op()).is_some())
+        Ok(IrOperation::downcast::<T>(op.op()))
     }
 
     pub fn is_input(&self, node: IrNodeId) -> Result<bool, IRTrace> {
-        self.is_child_of::<Leaf>(node)
+        self.is_child_of::<Leaf>(node).map(|x| x.is_some())
     }
 
     pub fn is_constant(&self, node: IrNodeId) -> Result<bool, IRTrace> {
-        self.is_child_of::<Constant>(node)
+        self.is_child_of::<Constant>(node).map(|x| x.is_some())
     }
 
     pub fn check_valid(&self) -> Result<(), IRTrace> {

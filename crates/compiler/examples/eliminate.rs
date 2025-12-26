@@ -21,13 +21,13 @@ fn main() {
     let mut program = builder.build([loss, zero]);
 
     let ops = program.num_nontrivial_operations().unwrap();
-    println!("Unoptimised: {ops} operations, {} nodes", program.num_nodes());
+    println!("Unoptimised: {ops} operations");
     println!("{}", program.as_highlighted());
 
     program.optimise().unwrap();
 
     let ops = program.num_nontrivial_operations().unwrap();
-    println!("Optimised: {ops} operations, {} nodes", program.num_nodes());
+    println!("Optimised: {ops} operations");
     println!("{}", program.as_highlighted());
 
     let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 32]));

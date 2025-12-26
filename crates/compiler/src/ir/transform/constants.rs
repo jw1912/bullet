@@ -99,21 +99,10 @@ mod tests {
 
         ir.register_output(t);
         ir.transform(FoldConstants)?;
-        ir.transform(EliminateUnusedOperations)?;
 
         assert_eq!(ir.num_ops(), 1);
         assert_eq!(ir.num_nodes(), 1);
-
-        for node in [x, y, z, w] {
-            assert!(ir.get_node(node).is_err());
-        }
-
-        assert!(ir.get_node(t).is_ok());
-
-        let t_op = ir.get_op(ir.get_parent_op(t)?)?;
-        assert_eq!(t_op.inputs(), &[]);
-        assert_eq!(t_op.outputs(), &[t]);
-        assert_eq!(IrOperation::downcast(t_op.op()), Some(&Constant(DTypeTensor::F32(vec![2.0; 8]))));
+        assert_eq!(ir.is_child_of(t)?, Some(&Constant(DTypeTensor::F32(vec![2.0; 8]))));
 
         ir.check_valid()
     }
