@@ -6,7 +6,7 @@ mod eliminate;
 mod modify;
 
 pub use broadcast::FoldBroadcasts;
-pub use canonicalise::CanonicaliseInputs;
+pub use canonicalise::CanonicaliseCommutativeInputs;
 pub use constants::FoldConstants;
 pub use decompose::DecomposeElementwise;
 pub use eliminate::{EliminateCommonSubExpressions, EliminateCopies, EliminateUnusedOperations};

@@ -23,9 +23,9 @@ use crate::ir::{IR, IRTrace, graph::IrNode, transform::IrTransform};
 /// This makes techniques such as common subexpression
 /// elimination easier to perform
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CanonicaliseInputs;
+pub struct CanonicaliseCommutativeInputs;
 
-impl IrTransform for CanonicaliseInputs {
+impl IrTransform for CanonicaliseCommutativeInputs {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.ordered_operations()? {
             let groups = op.op().commutating_groups();
@@ -71,7 +71,7 @@ mod tests {
     };
 
     #[test]
-    fn inputs() -> Result<(), IRTrace> {
+    fn commutative_inputs() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
         let ty = IrType::new(1, DType::F32);
@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(ir.get_op(ir.get_parent_op(w)?)?.inputs(), &[y, x]);
         assert_eq!(ir.get_op(ir.get_parent_op(t)?)?.inputs(), &[w, z]);
 
-        ir.transform(CanonicaliseInputs)?;
+        ir.transform(CanonicaliseCommutativeInputs)?;
 
         assert_eq!(ir.get_op(ir.get_parent_op(z)?)?.inputs(), &[x, y]);
         assert_eq!(ir.get_op(ir.get_parent_op(w)?)?.inputs(), &[x, y]);

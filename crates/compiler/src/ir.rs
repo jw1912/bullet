@@ -258,7 +258,7 @@ impl IR {
         self.transform(EliminateUnusedOperations)?;
         self.transform(FoldBroadcasts)?;
         self.transform(FoldConstants)?;
-        self.transform(CanonicaliseInputs)?;
+        self.transform(CanonicaliseCommutativeInputs)?;
         self.transform(EliminateCommonSubExpressions)?;
         self.transform(EliminateCopies)
     }
