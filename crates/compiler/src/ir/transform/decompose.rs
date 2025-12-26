@@ -4,7 +4,7 @@ use crate::{
     core::FormulaOp,
     ir::{
         IR, IRTrace,
-        graph::operation::{IrElementwise, IrOperation},
+        graph::operation::{FusedElementwise, IrOperation},
         transform::{EliminateUnusedOperations, IrTransform},
     },
 };
@@ -21,7 +21,7 @@ impl IrTransform for DecomposeElementwise {
 
 fn decompose_single_elementwise(ir: &mut IR) -> Result<bool, IRTrace> {
     for op in ir.operations() {
-        if let Some(elmt) = IrOperation::downcast::<IrElementwise>(op.op()).cloned() {
+        if let Some(elmt) = IrOperation::downcast::<FusedElementwise>(op.op()).cloned() {
             let mut values = elmt.input_ids().iter().zip(op.inputs()).map(|(&x, &y)| (x, y)).collect::<HashMap<_, _>>();
 
             let mut errored = false;
@@ -100,7 +100,7 @@ mod tests {
         ir.transform(DecomposeElementwise)?;
 
         for op in ir.operations() {
-            assert!(IrOperation::downcast::<IrElementwise>(op.op()).is_none());
+            assert!(IrOperation::downcast::<FusedElementwise>(op.op()).is_none());
         }
 
         ir.check_valid()

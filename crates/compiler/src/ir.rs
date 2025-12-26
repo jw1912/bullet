@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt, rc::Rc};
 
 use graph::{
     IrError, IrGraph, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType,
-    operation::{Constant, IrBinary, IrCopy, IrElementwise, IrUnary, Leaf},
+    operation::{Constant, FusedElementwise, IrBinary, IrCopy, IrUnary, Leaf},
 };
 use transform::*;
 
@@ -228,7 +228,7 @@ impl IR {
         F: for<'a> Fn(&mut Formula, [FormulaId; M]) -> Option<[FormulaId; N]>,
     {
         let nodes = inputs.map(|x| self.get_node(x).unwrap().ty());
-        let op = IrElementwise::new(nodes, f);
+        let op = FusedElementwise::new(nodes, f);
 
         let outs = self.add_op(inputs, op)?;
 

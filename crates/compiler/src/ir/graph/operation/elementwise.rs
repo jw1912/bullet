@@ -6,14 +6,14 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct IrElementwise {
+pub struct FusedElementwise {
     size: Size,
     inputs: Vec<FormulaId>,
     op: Formula,
     outputs: Vec<FormulaId>,
 }
 
-impl IrElementwise {
+impl FusedElementwise {
     pub(in crate::ir) fn input_ids(&self) -> &[FormulaId] {
         &self.inputs
     }
@@ -34,13 +34,13 @@ impl IrElementwise {
 
         let inps = inputs.map(|x| builder.input(x.dtype()).unwrap());
         builder.lock_inputs();
-        let outs = f(&mut builder, inps).ok_or("IrElementwise::new: failed dtype check!")?;
+        let outs = f(&mut builder, inps).ok_or("FusedElementwise::new: failed dtype check!")?;
 
         let sizes = inputs.map(|x| x.size());
         let size = sizes[0];
         for other in sizes.into_iter().skip(1) {
             if size != other {
-                return Err("IrElementwise::new: failed size check!".into());
+                return Err("FusedElementwise::new: failed size check!".into());
             }
         }
 
@@ -48,7 +48,7 @@ impl IrElementwise {
     }
 }
 
-impl IrOperationType for IrElementwise {
+impl IrOperationType for FusedElementwise {
     fn opname(&self) -> String {
         "elementwise".into()
     }
@@ -95,7 +95,7 @@ mod tests {
     fn basic() {
         let ty = IrType::new(Size::variable(), DType::F32);
 
-        let elmt = IrElementwise::new([ty, ty, ty], |builder, [a, b, c]| {
+        let elmt = FusedElementwise::new([ty, ty, ty], |builder, [a, b, c]| {
             let d = builder.binary(a, b, Binary::Mul)?;
             builder.binary(c, d, Binary::Add).map(|x| [x])
         })
