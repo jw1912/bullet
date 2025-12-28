@@ -10,8 +10,8 @@ use graph::{
 use transform::{eliminate::*, modify::*, *};
 
 use crate::{
-    core::{Binary, DTypeTensor, Formula, FormulaId, Unary},
-    ir::graph::operation::ScalarConstant,
+    core::{Binary, DTypeTensor, DTypeValue, Formula, FormulaId, Shape, Size, Unary},
+    ir::graph::operation::{BroadcastAcrossDimension, ScalarConstant},
     utils::Ansi,
 };
 
@@ -157,18 +157,18 @@ impl IR {
         Ok(IrOperation::downcast::<IrCopy>(op.op()).is_some().then(|| op.inputs()[0]))
     }
 
-    pub fn is_child_of<T: IrOperationType>(&self, node: IrNodeId) -> Result<Option<&T>, IRTrace> {
+    pub fn parent_op<T: IrOperationType>(&self, node: IrNodeId) -> Result<Option<&T>, IRTrace> {
         let id = self.get_parent_op(node)?;
         let op = self.get_op(id)?;
         Ok(IrOperation::downcast::<T>(op.op()))
     }
 
     pub fn is_input(&self, node: IrNodeId) -> Result<bool, IRTrace> {
-        self.is_child_of::<IrInput>(node).map(|x| x.is_some())
+        self.parent_op::<IrInput>(node).map(|x| x.is_some())
     }
 
     pub fn is_constant(&self, node: IrNodeId) -> Result<bool, IRTrace> {
-        Ok(self.is_child_of::<Constant>(node)?.is_some() || self.is_child_of::<ScalarConstant>(node)?.is_some())
+        Ok(self.parent_op::<Constant>(node)?.is_some() || self.parent_op::<ScalarConstant>(node)?.is_some())
     }
 
     pub fn check_valid(&self) -> Result<(), IRTrace> {
@@ -206,6 +206,23 @@ impl IR {
     #[must_use]
     pub fn add_const(&mut self, value: DTypeTensor) -> IrNodeId {
         self.add_op([], Ok::<_, IrError>(Constant(value))).expect("Constructing leaf is infallible!")[0]
+    }
+
+    pub fn add_scalar(&mut self, value: impl Into<DTypeValue>, size: impl Into<Size>) -> IrNodeId {
+        self.add_op([], Ok::<_, IrError>(ScalarConstant(value.into(), size.into())))
+            .expect("Constructing leaf is infallible!")[0]
+    }
+
+    pub fn add_broadcast(
+        &mut self,
+        input: IrNodeId,
+        shape: impl Into<Shape>,
+        dim: usize,
+        repeats: impl Into<Size>,
+    ) -> Result<IrNodeId, IRTrace> {
+        let dtype = self.get_node(input)?.ty().dtype();
+        let broadcast = BroadcastAcrossDimension::new(dtype, shape.into(), dim, repeats.into());
+        self.add_op([input], broadcast).map(|x| x[0])
     }
 
     pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IRTrace> {

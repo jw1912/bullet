@@ -91,7 +91,7 @@ mod tests {
         ir.register_output(d);
         ir.transform(FoldBroadcasts)?;
 
-        assert_eq!(ir.is_child_of(d)?, Some(&broadcast?));
+        assert_eq!(ir.parent_op(d)?, Some(&broadcast?));
 
         ir.check_valid()
     }
@@ -115,7 +115,7 @@ mod tests {
         ir.register_output(e);
         ir.transform(FoldBroadcasts)?;
 
-        assert_eq!(ir.is_child_of(e)?, Some(&broadcast?));
+        assert_eq!(ir.parent_op(e)?, Some(&broadcast?));
 
         ir.check_valid()
     }
