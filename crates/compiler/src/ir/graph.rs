@@ -1,5 +1,6 @@
 mod node;
 pub mod operation;
+mod pattern;
 
 #[cfg(test)]
 mod tests;

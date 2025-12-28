@@ -225,6 +225,10 @@ impl IR {
         self.add_op([input], broadcast).map(|x| x[0])
     }
 
+    pub fn downcast<T: IrOperationType>(op: &Rc<dyn IrOperationType>) -> Option<&T> {
+        IrOperation::downcast(op)
+    }
+
     pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IRTrace> {
         let op = self.get_node(node).and_then(|node| IrUnary::new(node.ty(), op).map_err(IRTrace::Root));
         self.add_op([node], op).map(|x| x[0])
