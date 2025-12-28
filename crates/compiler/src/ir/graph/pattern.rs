@@ -11,7 +11,7 @@ macro_rules! if_find_and_bind_pattern {
     };
     {
         @input ($count:expr) $op:ident ($irname:ident, {$($then:tt)*})
-        ($innertype:ty; $innername:ident $($inner:tt)*) $($tail:tt)*
+        ($innername:ident = [$innertype:ty] $($inner:tt)*) $($tail:tt)*
     } => {
         let __op_id = $irname.get_parent_op($op.inputs()[$count])?;
         let $innername = $irname.get_op(__op_id)?;
@@ -19,8 +19,8 @@ macro_rules! if_find_and_bind_pattern {
         if_find_and_bind_pattern! {
             @input ($count + 1usize) $op ($irname, {
                 if_find_and_bind_pattern! {
-                    @operation $innername ($irname, {$($then)*})
-                    $innertype; $innername $($inner)*
+                    @operation ($irname, {$($then)*})
+                    $innername = [$innertype] $($inner)*
                 }
             })
             $($tail)*
@@ -38,29 +38,32 @@ macro_rules! if_find_and_bind_pattern {
         }
     };
     {
-        @operation $op:ident ($irname:ident, {$($then:tt)*})
-        $optype:ty; $opname:ident $($tail:tt)*
+        @operation ($irname:ident, {$($then:tt)*})
+        $op:ident = [$optype:ty] $($tail:tt)*
     } => {
-        if /*let Some::<&$optype>(__inner) =*/ IR::downcast::<$optype>($op.op()).is_some()
+        if IR::downcast::<$optype>($op.op()).is_some()
             && $op.inputs().len() == if_find_and_bind_pattern!(@len $($tail)*)
         {
-            let $opname = $op.clone()/*__inner*/;
             if_find_and_bind_pattern! {
-                @input (0usize) $op ($irname, {$($then)*})
+                @input (0usize) $op ($irname, {
+                    let $op = IR::downcast::<$optype>($op.op()).unwrap();
+                    $($then)*
+                })
                 $($tail)*
             }
         }
     };
     {
-        target: $irname:ident, $op:ident
-        pattern: ($($tail:tt)*)
+        target: $irname:ident, $op:expr,
+        pattern: ($opname:ident $($tail:tt)*)
         then: {
             $($then:tt)*
         }
     } => {
+        let $opname = $op;
         if_find_and_bind_pattern! {
-            @operation $op ($irname, {$($then)*})
-            $($tail)*
+            @operation ($irname, {$($then)*})
+            $opname $($tail)*
         }
     };
 }
@@ -91,10 +94,10 @@ mod tests {
 
         for op in ir.operations() {
             if_find_and_bind_pattern! {
-                target: ir, op
-                pattern: (IrBinary; binary (a) (b))
+                target: ir, op,
+                pattern: (binary = [IrBinary] (a) (b))
                 then: {
-                    if IR::downcast::<IrBinary>(binary.op()).unwrap().op() == Binary::Add
+                    if binary.op() == Binary::Add
                         && ir.is_input(a.id())?
                         && ir.is_input(b.id())?
                     {
@@ -125,12 +128,14 @@ mod tests {
 
         for op in ir.operations() {
             if_find_and_bind_pattern! {
-                target: ir, op
-                pattern: (IrBinary; binary1 (IrBinary; binary2 (_a) (b)) (c))
+                target: ir, op,
+                pattern: (
+                    binary1 = [IrBinary]
+                        (binary2 = [IrBinary] (_a) (b))
+                        (c)
+                )
                 then: {
-                    if IR::downcast::<IrBinary>(binary1.op()).unwrap().op() == Binary::Sub
-                        && IR::downcast::<IrBinary>(binary2.op()).unwrap().op() == Binary::Add
-                        && b.id() == c.id()
+                    if binary1.op() == Binary::Sub && binary2.op() == Binary::Add && b.id() == c.id()
                     {
                         found += 1
                     }
@@ -159,12 +164,14 @@ mod tests {
 
         for op in ir.operations() {
             if_find_and_bind_pattern! {
-                target: ir, op
-                pattern: (IrBinary; binary1 (a) (IrBinary; binary2 (_b) (c)))
+                target: ir, op,
+                pattern: (
+                    binary1 = [IrBinary]
+                        (a)
+                        (binary2 = [IrBinary] (_b) (c))
+                )
                 then: {
-                    if IR::downcast::<IrBinary>(binary1.op()).unwrap().op() == Binary::Sub
-                        && IR::downcast::<IrBinary>(binary2.op()).unwrap().op() == Binary::Add
-                        && a.id() == c.id()
+                    if binary1.op() == Binary::Sub && binary2.op() == Binary::Add && a.id() == c.id()
                     {
                         found += 1
                     }
