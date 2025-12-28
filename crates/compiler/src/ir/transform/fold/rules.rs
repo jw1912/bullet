@@ -7,14 +7,14 @@ macro_rules! foldrule {
         iff {
             $($cond:tt)*
         }
-        $(testcase $testname:ident |$ir:ident| $testcase:expr)?
+        $(testcase $testname:ident |$ir:ident| $testcase:expr),*
     } => {
         foldrule! {
             $visible $name, $irname,
             ($($input),*), Some($old_op),
             ($($output),*), $new_op,
             {$($cond)*}
-            $($testname, $ir, $testcase)?
+            $($testname, $ir, $testcase),*
         }
     };
     {
@@ -24,14 +24,14 @@ macro_rules! foldrule {
         iff {
             $($cond:tt)*
         }
-        $(testcase $testname:ident |$ir:ident| $testcase:expr)?
+        $(testcase $testname:ident |$ir:ident| $testcase:expr),*
     } => {
         foldrule! {
             $visible $name, $irname,
             ($($input),*), Some::<&$old_ty>($old_opname),
             ($($output),*), $new_op,
             {$($cond)*}
-            $($testname, $ir, $testcase)?
+            $($testname, $ir, $testcase),*
         }
     };
     {
@@ -39,7 +39,7 @@ macro_rules! foldrule {
         ($($input:ident),*), $old_op:pat,
         ($($output:ident),*), $new_op:expr,
         {$($cond:tt)*}
-        $($testname:ident, $ir:ident, $testcase:expr)?
+        $($testname:ident, $ir:ident, $testcase:expr),*
     } => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         $visible struct $name;
@@ -86,7 +86,7 @@ macro_rules! foldrule {
 
             $ir.check_valid()
         }
-        )?
+        )*
     };
     (matching $matching:pat = $cond:expr ;;; $inner:expr) => {
         if let $matching = $cond {
