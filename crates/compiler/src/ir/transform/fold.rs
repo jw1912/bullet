@@ -41,15 +41,12 @@ impl FoldPass {
             .add_fold(FoldScalarConstIntoUnary)
             .add_fold(FoldScalarConstLhsIntoBinary)
             .add_fold(FoldScalarConstRhsIntoBinary)
-            .add_fold(FoldNegLhsIntoAdd)
-            .add_fold(FoldNegRhsIntoAdd)
+            //.add_fold(FoldNegLhsIntoAdd)
+            //.add_fold(FoldNegRhsIntoAdd)
             .add_fold(FoldFixedSizeScalarConst)
             .add_fold(FoldVarSizeScalarConst)
             .add_fold(FoldXMinusXIntoZero)
-            .add_fold(FoldMulByOne)
-            .add_fold(FoldDivByOne)
-            .add_fold(FoldAddZero)
-            .add_fold(FoldSubZero)
+            .add_fold(FoldConstIdentities)
     }
 
     pub fn add_fold(mut self, fold: impl Fold) -> Self {
@@ -109,13 +106,13 @@ impl IrTransform for FoldPass {
 use crate::core::{DType, DTypeTensor, Size};
 
 foldrule! {
-    rulename FoldFixedSizeScalarConst on _ir
+    rulename FoldFixedSizeScalarConst on ir
     rewrites () -> Constant(value),
     into () -> ScalarConstant(scalar, value.size().into()),
     iff {
         Some(scalar) = value.scalar()
     }
-    testcase fixed_size_scalar_const |ir| {
+    testcase fixed_size_scalar_const {
         ir.add_const(DTypeTensor::I32(vec![1; 16]))
     }
 }
@@ -127,7 +124,7 @@ foldrule! {
     iff {
         Some(ScalarConstant(val, _)) = ir.parent_op(input.id())?
     }
-    testcase var_size_scalar_const |ir| {
+    testcase var_size_scalar_const {
         let a = ir.add_scalar(1, 1);
         ir.add_broadcast(a, [1], 0, Size::variable())?
     }
@@ -144,7 +141,7 @@ foldrule! {
     iff {
         Some(ScalarConstant(val, size)) = ir.parent_op(a.id())?.cloned()
     }
-    testcase scalar_const_lhs_into_binary |ir| {
+    testcase scalar_const_lhs_into_binary {
         let size = Size::variable();
         let a = ir.add_input(IrType::new(size, DType::F32));
         let b = ir.add_scalar(1.0, size);
@@ -163,7 +160,7 @@ foldrule! {
     iff {
         Some(ScalarConstant(val, size)) = ir.parent_op(b.id())?.cloned()
     }
-    testcase scalar_const_rhs_into_binary |ir| {
+    testcase scalar_const_rhs_into_binary {
         let size = Size::variable();
         let a = ir.add_input(IrType::new(size, DType::F32));
         let b = ir.add_scalar(1.0, size);
@@ -180,6 +177,7 @@ foldrule! {
     }
 }
 
+/*
 foldrule! {
     rulename FoldNegLhsIntoAdd on ir
     rewrites (a, b) -> binary = IrBinary,
@@ -213,6 +211,7 @@ foldrule! {
         }
     }}
 }
+*/
 
 foldrule! {
     rulename FoldXMinusXIntoZero on ir
@@ -226,27 +225,32 @@ foldrule! {
     }
 }
 
-macro_rules! elision_foldrule {
-    ($name:ident, $op:ident, $float:expr, $int:expr) => {
-        foldrule! {
-            rulename $name on ir
-            rewrites (a) -> unary = IrUnary,
-            into (a) -> IrCopy(a.ty()),
-            iff {{
-                if let Unary::BinaryWithConst { op: Binary::$op, val, lhs: true } = unary.op() {
-                    val == $float.into() || val == $int.into()
-                } else {
-                    false
-                }
-            }}
+foldrule! {
+    rulename FoldConstIdentities on ir
+    rewrites (a) -> unary = IrUnary,
+    into (a) -> IrCopy(a.ty()),
+    iff {{
+        if let Unary::BinaryWithConst { op, val, lhs } = unary.op() {
+            match op {
+                Binary::Mul => val == 1.0.into() || val == 1.into(),
+                Binary::Add => val == 0.0.into() || val == 0.into(),
+                Binary::Div => lhs && (val == 1.0.into() || val == 1.into()),
+                Binary::Sub => lhs && (val == 0.0.into() || val == 0.into()),
+                _ => false,
+            }
+        } else {
+            false
         }
-    };
+    }}
+    testcase fold_add_zero {
+        let a = ir.add_input(IrType::new(Size::variable(), DType::F32, ));
+        ir.add_unary(a, Unary::BinaryWithConst { op: Binary::Add, val: 0.0.into(), lhs: false })?
+    },
+    testcase fold_sub_zero {
+        let a = ir.add_input(IrType::new(Size::variable(), DType::F32));
+        ir.add_unary(a, Unary::BinaryWithConst { op: Binary::Sub, val: 0.0.into(), lhs: true })?
+    }
 }
-
-elision_foldrule!(FoldMulByOne, Mul, 1.0, 1);
-elision_foldrule!(FoldDivByOne, Div, 1.0, 1);
-elision_foldrule!(FoldAddZero, Add, 0.0, 0);
-elision_foldrule!(FoldSubZero, Sub, 0.0, 0);
 
 #[cfg(test)]
 mod tests {

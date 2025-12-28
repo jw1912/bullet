@@ -7,14 +7,14 @@ macro_rules! foldrule {
         iff {
             $($cond:tt)*
         }
-        $(testcase $testname:ident |$ir:ident| $testcase:expr),*
+        $(testcase $testname:ident $testcase:expr),*
     } => {
         foldrule! {
             $visible $name, $irname,
             ($($input),*), Some($old_op),
             ($($output),*), $new_op,
             {$($cond)*}
-            $($testname, $ir, $testcase),*
+            $($testname, $testcase),*
         }
     };
     {
@@ -24,14 +24,14 @@ macro_rules! foldrule {
         iff {
             $($cond:tt)*
         }
-        $(testcase $testname:ident |$ir:ident| $testcase:expr),*
+        $(testcase $testname:ident $testcase:expr),*
     } => {
         foldrule! {
             $visible $name, $irname,
             ($($input),*), Some::<&$old_ty>($old_opname),
             ($($output),*), $new_op,
             {$($cond)*}
-            $($testname, $ir, $testcase),*
+            $($testname, $testcase),*
         }
     };
     {
@@ -39,7 +39,7 @@ macro_rules! foldrule {
         ($($input:ident),*), $old_op:pat,
         ($($output:ident),*), $new_op:expr,
         {$($cond:tt)*}
-        $($testname:ident, $ir:ident, $testcase:expr),*
+        $($testname:ident, $testcase:expr),*
     } => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         $visible struct $name;
@@ -47,6 +47,7 @@ macro_rules! foldrule {
         impl Fold for $name {
             fn fold(
                 &self,
+                #[allow(unused)]
                 $irname: &IR,
                 inputs: &[IrNodeId],
                 operation: &Rc<dyn IrOperationType>,
@@ -71,20 +72,20 @@ macro_rules! foldrule {
         #[cfg(test)]
         #[test]
         fn $testname() -> Result<(), IRTrace> {
-            let mut $ir = IR::default();
+            let mut $irname = IR::default();
 
             let output = {
                 $testcase
             };
 
-            $ir.register_output(output);
+            $irname.register_output(output);
 
             let pass = FoldPass::from($name);
-            let op = $ir.get_parent_op(output)?;
+            let op = $irname.get_parent_op(output)?;
 
-            assert!(pass.apply_single_fold(&mut $ir, op)?);
+            assert!(pass.apply_single_fold(&mut $irname, op)?);
 
-            $ir.check_valid()
+            $irname.check_valid()
         }
         )*
     };
