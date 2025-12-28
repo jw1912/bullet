@@ -5,12 +5,13 @@ use std::{collections::HashMap, fmt, rc::Rc};
 
 use graph::{
     IrError, IrGraph, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType,
-    operation::{Constant, FusedElementwise, IrBinary, IrCopy, IrUnary, Leaf},
+    operation::{Constant, FusedElementwise, IrBinary, IrCopy, IrInput, IrUnary},
 };
-use transform::*;
+use transform::{eliminate::*, modify::*, *};
 
 use crate::{
     core::{Binary, DTypeTensor, Formula, FormulaId, Unary},
+    ir::graph::operation::ScalarConstant,
     utils::Ansi,
 };
 
@@ -108,7 +109,9 @@ impl IR {
         let mut count = 0;
 
         for op in self.ordered_operations()? {
-            if IrOperation::downcast::<Leaf>(op.op()).is_none() && IrOperation::downcast::<Constant>(op.op()).is_none()
+            if IrOperation::downcast::<IrInput>(op.op()).is_none()
+                && IrOperation::downcast::<Constant>(op.op()).is_none()
+                && IrOperation::downcast::<ScalarConstant>(op.op()).is_none()
             {
                 count += 1;
             }
@@ -161,11 +164,11 @@ impl IR {
     }
 
     pub fn is_input(&self, node: IrNodeId) -> Result<bool, IRTrace> {
-        self.is_child_of::<Leaf>(node).map(|x| x.is_some())
+        self.is_child_of::<IrInput>(node).map(|x| x.is_some())
     }
 
     pub fn is_constant(&self, node: IrNodeId) -> Result<bool, IRTrace> {
-        self.is_child_of::<Constant>(node).map(|x| x.is_some())
+        Ok(self.is_child_of::<Constant>(node)?.is_some() || self.is_child_of::<ScalarConstant>(node)?.is_some())
     }
 
     pub fn check_valid(&self) -> Result<(), IRTrace> {
@@ -196,8 +199,8 @@ impl IR {
     }
 
     #[must_use]
-    pub fn add_leaf(&mut self, ty: IrType) -> IrNodeId {
-        self.add_op([], Ok::<_, IrError>(Leaf(ty))).expect("Constructing leaf is infallible!")[0]
+    pub fn add_input(&mut self, ty: IrType) -> IrNodeId {
+        self.add_op([], Ok::<_, IrError>(IrInput(ty))).expect("Constructing leaf is infallible!")[0]
     }
 
     #[must_use]
@@ -241,6 +244,11 @@ impl IR {
         Ok(output)
     }
 
+    pub fn eliminate_dead_ops(&mut self) -> Result<(), IRTrace> {
+        self.transform(EliminateCopies)?;
+        self.transform(EliminateUnusedOperations)
+    }
+
     pub fn swap_outputs(&mut self, id1: IrNodeId, id2: IrNodeId) -> Result<(), IRTrace> {
         self.transform(SwapOutputs(id1, id2))
     }
@@ -253,13 +261,21 @@ impl IR {
         self.transform(ReplaceInput { new, old })
     }
 
+    pub fn replace_op(&mut self, op: IrOperationId, new: AddOperation) -> Result<IrOperationId, IRTrace> {
+        let first_output = self.get_op(op)?.outputs()[0];
+        self.transform(ReplaceOperation(op, new))?;
+        self.get_parent_op(first_output)
+    }
+
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
         self.transform(DecomposeElementwise)?;
-        self.transform(EliminateUnusedOperations)?;
+        self.eliminate_dead_ops()?;
+        self.transform(CanonicaliseCommutativeInputs)?;
         self.transform(FoldBroadcasts)?;
-        self.transform(FoldConstants)?;
+        self.transform(FoldPass::all())?;
+        self.eliminate_dead_ops()?;
         self.transform(CanonicaliseCommutativeInputs)?;
         self.transform(EliminateCommonSubExpressions)?;
-        self.transform(EliminateCopies)
+        self.eliminate_dead_ops()
     }
 }

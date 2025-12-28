@@ -76,7 +76,7 @@ fn eliminate_single_common_subexpr(ir: &mut IR) -> Result<bool, IRTrace> {
                     }
                 }
 
-                ir.transform(EliminateUnusedOperations)?;
+                ir.remove_op(op_j.id())?;
 
                 return Ok(true);
             }
@@ -122,7 +122,7 @@ mod tests {
     fn eliminate_copies() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let x = ir.add_leaf(IrType::new(1, DType::F32));
+        let x = ir.add_input(IrType::new(1, DType::F32));
         let y = ir.copy(x)?;
         let z = ir.copy(y)?;
         let w = ir.copy(z)?;

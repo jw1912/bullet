@@ -27,7 +27,7 @@ impl fmt::Debug for FormulaId {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FormulaOp {
-    Leaf(DType),
+    IrInput(DType),
     Unary { input: FormulaId, op: Unary },
     Binary { lhs: FormulaId, rhs: FormulaId, op: Binary },
 }
@@ -35,7 +35,7 @@ pub enum FormulaOp {
 impl FormulaOp {
     fn inputs(&self) -> Vec<FormulaId> {
         match self {
-            Self::Leaf(_) => Vec::new(),
+            Self::IrInput(_) => Vec::new(),
             Self::Unary { input, .. } => vec![*input],
             Self::Binary { lhs, rhs, .. } => vec![*lhs, *rhs],
         }
@@ -43,7 +43,7 @@ impl FormulaOp {
 
     pub fn replace(&mut self, curr: FormulaId, new: FormulaId) {
         match self {
-            Self::Leaf(_) => {}
+            Self::IrInput(_) => {}
             Self::Unary { input, .. } => {
                 if *input == curr {
                     *input = new;
@@ -99,7 +99,7 @@ impl Formula {
             let get = |input| values.get(&input).cloned();
 
             let value = match (node.op, alr) {
-                (FormulaOp::Leaf(ty), true) => {
+                (FormulaOp::IrInput(ty), true) => {
                     if ty == get(id)?.dtype() {
                         continue;
                     } else {
@@ -182,7 +182,7 @@ impl Formula {
         let output = FormulaId::default();
 
         let ty = match &op {
-            FormulaOp::Leaf(ty) => *ty,
+            FormulaOp::IrInput(ty) => *ty,
             FormulaOp::Unary { input, op } => op.dtype(self.get_dtype(*input))?,
             FormulaOp::Binary { lhs, rhs, op } => op.dtype(self.get_dtype(*lhs), self.get_dtype(*rhs))?,
         };
@@ -202,7 +202,7 @@ impl Formula {
             return None;
         }
 
-        self.add_op(FormulaOp::Leaf(dtype))
+        self.add_op(FormulaOp::IrInput(dtype))
     }
 
     pub fn unary(&mut self, input: FormulaId, op: Unary) -> Option<FormulaId> {
@@ -236,9 +236,9 @@ impl Formula {
 
             assert_eq!(ty, ty_b);
 
-            if let FormulaOp::Leaf(_) = op_a {
+            if let FormulaOp::IrInput(_) = op_a {
                 res.nodes.get_mut(&a).unwrap().op = op_b;
-            } else if let FormulaOp::Leaf(_) = op_b {
+            } else if let FormulaOp::IrInput(_) = op_b {
             } else {
                 return None;
             }

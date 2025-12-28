@@ -5,8 +5,8 @@ fn main() {
 
     let batch = Size::variable();
 
-    let inputs = builder.add_leaf(batch * 8, DType::F32);
-    let target = builder.add_leaf(batch, DType::F32);
+    let inputs = builder.add_input(batch * 8, DType::F32);
+    let target = builder.add_input(batch, DType::F32);
 
     let weights = builder.constant(DTypeTensor::F32(vec![1.0; 8])).broadcast([8], 0, batch);
     let bias = builder.constant(DTypeTensor::F32(vec![1.0])).broadcast([1], 0, batch);

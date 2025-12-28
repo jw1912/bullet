@@ -2,6 +2,7 @@ mod binary;
 mod broadcast;
 mod copy;
 mod elementwise;
+mod leaf;
 mod reduce;
 mod unary;
 
@@ -16,6 +17,7 @@ pub use binary::IrBinary;
 pub use broadcast::BroadcastAcrossDimension;
 pub use copy::IrCopy;
 pub use elementwise::FusedElementwise;
+pub use leaf::{Constant, IrInput, ScalarConstant};
 pub use reduce::{ReduceAcrossDimension, Reduction};
 pub use unary::IrUnary;
 
@@ -148,63 +150,35 @@ impl IrOperation {
         let op: &dyn std::any::Any = input.as_ref();
         op.downcast_ref::<T>()
     }
-}
 
-#[derive(Debug)]
-pub struct Leaf(pub IrType);
+    /// Canonicalise ordering of commutative inputs.
+    pub fn canonicalise_commutative_inputs(&mut self) -> Result<(), IrError> {
+        let groups = self.op.commutating_groups();
 
-impl IrOperationType for Leaf {
-    fn opname(&self) -> String {
-        format!("leaf<{:?}>", self.0)
-    }
+        for (i, group_i) in groups.iter().enumerate() {
+            for group_j in groups.iter().skip(i + 1) {
+                if group_i.intersection(group_j).next().is_some() {
+                    return Err("Distinct commutating groups intersect!".into());
+                }
+            }
+        }
 
-    fn inputs(&self) -> Vec<IrType> {
-        Vec::new()
-    }
+        for group in groups {
+            let mut group = group.into_iter().collect::<Vec<_>>();
+            let mut nodes = group.iter().map(|&i| self.inputs[i]).collect::<Vec<_>>();
 
-    fn outputs(&self) -> Vec<IrType> {
-        vec![self.0]
-    }
+            if self.op.inputs().iter().collect::<HashSet<_>>().len() > 1 {
+                return Err("Inputs within commutating group have differing types!".into());
+            }
 
-    fn evaluate(&self, _: &[&DTypeTensor], _: &mut [&mut DTypeTensor]) {}
+            group.sort();
+            nodes.sort();
 
-    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
-        false
-    }
-}
+            for (idx, id) in group.into_iter().zip(nodes) {
+                self.set_input(idx, id);
+            }
+        }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Constant(pub DTypeTensor);
-
-impl Constant {
-    pub fn ty(&self) -> IrType {
-        IrType::new(self.0.size(), self.0.dtype())
-    }
-}
-
-impl IrOperationType for Constant {
-    fn opname(&self) -> String {
-        format!("constant<{:?}>", self.ty())
-    }
-
-    fn inputs(&self) -> Vec<IrType> {
-        Vec::new()
-    }
-
-    fn outputs(&self) -> Vec<IrType> {
-        vec![self.ty()]
-    }
-
-    fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
-        assert_eq!(inputs.len(), 0);
-        assert_eq!(outputs.len(), 1);
-        assert_eq!(outputs[0].size(), self.0.size());
-        assert_eq!(outputs[0].dtype(), self.0.dtype());
-
-        *outputs[0] = self.0.clone();
-    }
-
-    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
-        false
+        Ok(())
     }
 }

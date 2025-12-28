@@ -34,6 +34,13 @@ impl From<i32> for DTypeValue {
 }
 
 impl DTypeValue {
+    pub fn zero(dtype: DType) -> Self {
+        match dtype {
+            DType::F32 => 0.0.into(),
+            DType::I32 => 0.into(),
+        }
+    }
+
     pub fn dtype(&self) -> DType {
         match *self {
             Self::F32(_) => DType::F32,
@@ -109,5 +116,17 @@ impl DTypeTensor {
             (Self::I32(x), DTypeValue::I32(y)) => x[idx] = y,
             _ => panic!(),
         }
+    }
+
+    pub fn scalar(&self) -> Option<DTypeValue> {
+        let val = self.read(0);
+
+        for idx in 0..self.size() {
+            if self.read(idx) != val {
+                return None;
+            }
+        }
+
+        Some(val)
     }
 }

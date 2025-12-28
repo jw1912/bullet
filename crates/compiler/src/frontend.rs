@@ -31,8 +31,8 @@ impl ProgramBuilder {
         outs.into_iter().map(|out| self.new_node(out)).collect()
     }
 
-    pub fn add_leaf<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> ProgramNode<'a> {
-        let node = self.ir.borrow_mut().add_leaf(IrType::new(size, dtype));
+    pub fn add_input<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> ProgramNode<'a> {
+        let node = self.ir.borrow_mut().add_input(IrType::new(size, dtype));
         self.new_node(node)
     }
 
@@ -188,9 +188,9 @@ mod tests {
     fn basic_usage() {
         let builder = ProgramBuilder::default();
 
-        let x = builder.add_leaf(8, DType::F32);
-        let a = builder.add_leaf(8, DType::F32);
-        let b = builder.add_leaf(8, DType::F32);
+        let x = builder.add_input(8, DType::F32);
+        let a = builder.add_input(8, DType::F32);
+        let b = builder.add_input(8, DType::F32);
 
         let y = a * x + b;
 

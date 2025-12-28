@@ -6,9 +6,9 @@ use super::*;
 fn construct_deconstruct() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(8, DType::F32));
-    let z = ir.add_leaf(IrType::new(8, DType::F32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(8, DType::F32));
+    let z = ir.add_input(IrType::new(8, DType::F32));
 
     let w = ir.add_binary(x, y, Binary::Add)?;
     let t = ir.add_binary(z, w, Binary::Mul)?;
@@ -34,8 +34,8 @@ fn construct_deconstruct() -> Result<(), IrError> {
 fn swap_outputs() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(8, DType::F32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     let w = ir.add_binary(z, y, Binary::Add)?;
     let t = ir.add_binary(w, y, Binary::Sub)?;
@@ -57,8 +57,8 @@ fn swap_outputs() -> Result<(), IrError> {
 fn replace_input() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(8, DType::F32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     let w = ir.add_binary(z, y, Binary::Add)?;
     let t = ir.add_binary(w, y, Binary::Sub)?;
@@ -76,8 +76,8 @@ fn replace_input() -> Result<(), IrError> {
 fn invalid_addition_size() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(16, DType::F32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(16, DType::F32));
 
     assert!(ir.add_binary(x, y, Binary::Add).is_err());
 
@@ -88,8 +88,8 @@ fn invalid_addition_size() -> Result<(), IrError> {
 fn invalid_addition_dtype() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(8, DType::I32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(8, DType::I32));
 
     assert!(ir.add_binary(x, y, Binary::Add).is_err());
 
@@ -100,8 +100,8 @@ fn invalid_addition_dtype() -> Result<(), IrError> {
 fn invalid_removal() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(8, DType::F32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
 
     assert_eq!(ir.get_node(z)?.ty(), IrType::new(8, DType::F32));
@@ -114,8 +114,8 @@ fn invalid_removal() -> Result<(), IrError> {
 fn invalid_swap_outputs() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
-    let x = ir.add_leaf(IrType::new(8, DType::F32));
-    let y = ir.add_leaf(IrType::new(8, DType::F32));
+    let x = ir.add_input(IrType::new(8, DType::F32));
+    let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     let w = ir.add_binary(z, y, Binary::Add)?;
     let t = ir.add_binary(w, y, Binary::Sub)?;
@@ -132,9 +132,9 @@ fn evaluate() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
     let size = Size::variable() * 2;
 
-    let x = ir.add_leaf(IrType::new(size, DType::F32));
-    let y = ir.add_leaf(IrType::new(size, DType::F32));
-    let z = ir.add_leaf(IrType::new(size, DType::F32));
+    let x = ir.add_input(IrType::new(size, DType::F32));
+    let y = ir.add_input(IrType::new(size, DType::F32));
+    let z = ir.add_input(IrType::new(size, DType::F32));
 
     let w = ir.add_binary(x, y, Binary::Add)?;
     let t = ir.add_binary(z, w, Binary::Mul)?;
@@ -158,13 +158,13 @@ fn evaluate_missing_input() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
     let size = Size::variable() * 2;
 
-    let x = ir.add_leaf(IrType::new(size, DType::F32));
-    let y = ir.add_leaf(IrType::new(size, DType::F32));
+    let x = ir.add_input(IrType::new(size, DType::F32));
+    let y = ir.add_input(IrType::new(size, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     ir.register_output(z);
 
     let ix = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
-    assert_eq!(ir.evaluate([(x, ix)]), Err("Leaf node not seeded!".into()));
+    assert_eq!(ir.evaluate([(x, ix)]), Err("IrInput node not seeded!".into()));
 
     ir.check_valid()
 }
@@ -174,8 +174,8 @@ fn evaluate_seed_non_leaf() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
     let size = Size::variable() * 2;
 
-    let x = ir.add_leaf(IrType::new(size, DType::F32));
-    let y = ir.add_leaf(IrType::new(size, DType::F32));
+    let x = ir.add_input(IrType::new(size, DType::F32));
+    let y = ir.add_input(IrType::new(size, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     ir.register_output(z);
 

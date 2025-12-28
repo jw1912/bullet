@@ -59,3 +59,20 @@ impl IrTransform for ReplaceInput {
         ir.check_valid()
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct ReplaceOperation(pub IrOperationId, pub AddOperation);
+
+impl IrTransform for ReplaceOperation {
+    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        ir.transform(self.1.clone())?;
+        let new_outputs = ir.most_recent.clone();
+        let old = ir.get_op_mut(self.0)?;
+
+        for (new, old) in new_outputs.into_iter().zip(old.outputs().to_vec()) {
+            ir.swap_outputs(new, old)?;
+        }
+
+        ir.remove_op(self.0)
+    }
+}

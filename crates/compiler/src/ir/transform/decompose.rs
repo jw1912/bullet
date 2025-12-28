@@ -5,7 +5,7 @@ use crate::{
     ir::{
         IR, IRTrace,
         graph::operation::{FusedElementwise, IrOperation},
-        transform::{EliminateUnusedOperations, IrTransform},
+        transform::IrTransform,
     },
 };
 
@@ -33,7 +33,7 @@ fn decompose_single_elementwise(ir: &mut IR) -> Result<bool, IRTrace> {
                 let get = |x| *values.get(&x).unwrap();
 
                 match op {
-                    FormulaOp::Leaf(_) => assert!(values.contains_key(&id)),
+                    FormulaOp::IrInput(_) => assert!(values.contains_key(&id)),
                     FormulaOp::Unary { input, op } => {
                         if let Ok(out) = ir.add_unary(get(input), op) {
                             errored |= values.insert(id, out).is_some();
@@ -60,7 +60,7 @@ fn decompose_single_elementwise(ir: &mut IR) -> Result<bool, IRTrace> {
                 ir.swap_outputs(new, old)?;
             }
 
-            ir.transform(EliminateUnusedOperations)?;
+            ir.remove_op(op.id())?;
 
             return Ok(true);
         }
@@ -83,8 +83,8 @@ mod tests {
         let mut ir = IR::default();
 
         let ty = IrType::new(Size::variable(), DType::F32);
-        let x = ir.add_leaf(ty);
-        let y = ir.add_leaf(ty);
+        let x = ir.add_input(ty);
+        let y = ir.add_input(ty);
         let [z, w] = ir.add_elementwise([x, y], |builder, [x, y]| {
             let a = builder.binary(x, y, Binary::Add)?;
             let b = builder.binary_const(a, 1.0, Binary::Add, false)?;

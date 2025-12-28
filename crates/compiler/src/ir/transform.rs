@@ -1,16 +1,14 @@
 mod broadcast;
 mod canonicalise;
-mod constants;
 mod decompose;
-mod eliminate;
-mod modify;
+pub mod eliminate;
+pub mod fold;
+pub(crate) mod modify;
 
 pub use broadcast::FoldBroadcasts;
 pub use canonicalise::CanonicaliseCommutativeInputs;
-pub use constants::FoldConstants;
 pub use decompose::DecomposeElementwise;
-pub use eliminate::{EliminateCommonSubExpressions, EliminateCopies, EliminateUnusedOperations};
-pub use modify::{AddOperation, RemoveOperation, ReplaceInput, SwapOutputs};
+pub use fold::FoldPass;
 
 use crate::ir::{IR, IRTrace};
 
