@@ -1,45 +1,26 @@
 #[macro_export]
 macro_rules! foldrule {
-    {
-        rulename $visible:vis $name:ident on $irname:ident
-        rewrites ($($input:ident),*) -> $old_op:pat,
-        into ($($output:ident),*) -> $new_op:expr,
-        iff {
-            $($cond:tt)*
+    (@maybe_matching ($inner:expr) ($($matching:pat = $cond:expr;)+)) => {
+        if $(let $matching = $cond)&&+ {
+            $inner
         }
-        $(testcase $testname:ident $testcase:expr),*
-    } => {
-        foldrule! {
-            $visible $name, $irname,
-            ($($input),*), Some($old_op),
-            ($($output),*), $new_op,
-            {$($cond)*}
-            $($testname, $testcase),*
+    };
+    (@maybe_matching ($inner:expr) ($cond:expr) ) => {
+        if $cond {
+            $inner
         }
+    };
+    (@maybe_matching ($inner:expr) ()) => {
+        $inner
     };
     {
         rulename $visible:vis $name:ident on $irname:ident
-        rewrites ($($input:ident),*) -> $old_opname:ident = $old_ty:ty,
-        into ($($output:ident),*) -> $new_op:expr,
-        iff {
+        rewrites ($($pattern:tt)*)
+        into [$new_op:expr] $(($output:ident))*
+        $(given {
             $($cond:tt)*
-        }
+        })?
         $(testcase $testname:ident $testcase:expr),*
-    } => {
-        foldrule! {
-            $visible $name, $irname,
-            ($($input),*), Some::<&$old_ty>($old_opname),
-            ($($output),*), $new_op,
-            {$($cond)*}
-            $($testname, $testcase),*
-        }
-    };
-    {
-        $visible:vis $name:ident, $irname:ident,
-        ($($input:ident),*), $old_op:pat,
-        ($($output:ident),*), $new_op:expr,
-        {$($cond:tt)*}
-        $($testname:ident, $testcase:expr),*
     } => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         $visible struct $name;
@@ -49,18 +30,21 @@ macro_rules! foldrule {
                 &self,
                 #[allow(unused)]
                 $irname: &IR,
-                inputs: &[IrNodeId],
-                operation: &Rc<dyn IrOperationType>,
+                operation: &IrOperation,
             ) -> Result<Option<AddOperation>, IRTrace> {
-                if let [$($input),*] = inputs[..] {
-                    if let $old_op = IrOperation::downcast(operation) {
-                        $(let $input = $irname.get_node($input)?;)*
-
-                        foldrule!(matching $($cond)* ;;; {
-                            let new_op = $new_op;
-                            let new_inputs = vec![$($output.id()),*];
-                            return Ok(Some(AddOperation(new_inputs, Ok(Rc::new(new_op)))));
-                        });
+                $crate::if_find_and_bind_pattern! {
+                    target: $irname, operation,
+                    pattern: ($($pattern)*)
+                    then: {
+                        foldrule! {
+                            @maybe_matching
+                            ({
+                                let new_op = $new_op;
+                                let new_inputs = vec![$($output.id()),*];
+                                return Ok(Some(AddOperation(new_inputs, Ok(Rc::new(new_op)))));
+                            })
+                            ($($($cond)*)?)
+                        }
                     }
                 }
 
@@ -89,16 +73,4 @@ macro_rules! foldrule {
         }
         )*
     };
-    (matching $matching:pat = $cond:expr ;;; $inner:expr) => {
-        if let $matching = $cond {
-            $inner
-        }
-    };
-    (matching $cond:expr ;;; $inner:expr) => {
-        if $cond {
-            $inner
-        }
-    };
 }
-
-pub(crate) use foldrule;

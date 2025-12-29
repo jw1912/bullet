@@ -3,14 +3,13 @@ mod rules;
 
 use std::{fmt, rc::Rc};
 
-pub(crate) use rules::foldrule;
-
 use crate::{
     core::{Binary, DTypeValue, Unary},
+    foldrule,
     ir::{
         IR, IRTrace,
         graph::{
-            IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType,
+            IrOperation, IrOperationId, IrOperationType, IrType,
             operation::{BroadcastAcrossDimension, Constant, IrBinary, IrCopy, IrUnary, ScalarConstant},
         },
         transform::{IrTransform, modify::AddOperation},
@@ -18,12 +17,7 @@ use crate::{
 };
 
 pub trait Fold: fmt::Debug + 'static {
-    fn fold(
-        &self,
-        ir: &IR,
-        inputs: &[IrNodeId],
-        operation: &Rc<dyn IrOperationType>,
-    ) -> Result<Option<AddOperation>, IRTrace>;
+    fn fold(&self, ir: &IR, operation: &IrOperation) -> Result<Option<AddOperation>, IRTrace>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -41,8 +35,8 @@ impl FoldPass {
             .add_fold(FoldScalarConstIntoUnary)
             .add_fold(FoldScalarConstLhsIntoBinary)
             .add_fold(FoldScalarConstRhsIntoBinary)
-            //.add_fold(FoldNegLhsIntoAdd)
-            //.add_fold(FoldNegRhsIntoAdd)
+            .add_fold(FoldNegLhsIntoAdd)
+            .add_fold(FoldNegRhsIntoAdd)
             .add_fold(FoldFixedSizeScalarConst)
             .add_fold(FoldVarSizeScalarConst)
             .add_fold(FoldXMinusXIntoZero)
@@ -72,7 +66,7 @@ impl FoldPass {
             }
 
             for fold in &self.0 {
-                if let Some(new) = fold.fold(ir, op.inputs(), op.op())? {
+                if let Some(new) = fold.fold(ir, op)? {
                     id = ir.replace_op(op.id(), new)?;
                     success = true;
                     continue 'fold;
@@ -107,10 +101,10 @@ use crate::core::{DType, DTypeTensor, Size};
 
 foldrule! {
     rulename FoldFixedSizeScalarConst on ir
-    rewrites () -> Constant(value),
-    into () -> ScalarConstant(scalar, value.size().into()),
-    iff {
-        Some(scalar) = value.scalar()
+    rewrites (constant = [Constant])
+    into [ScalarConstant(constant.0.scalar().unwrap(), constant.0.size().into())]
+    given {
+        constant.0.scalar().is_some()
     }
     testcase fixed_size_scalar_const {
         ir.add_const(DTypeTensor::I32(vec![1; 16]))
@@ -119,11 +113,8 @@ foldrule! {
 
 foldrule! {
     rulename FoldVarSizeScalarConst on ir
-    rewrites (input) -> broadcast = BroadcastAcrossDimension,
-    into () -> ScalarConstant(*val, broadcast.outputs()[0].size()),
-    iff {
-        Some(ScalarConstant(val, _)) = ir.parent_op(input.id())?
-    }
+    rewrites (broadcast = [BroadcastAcrossDimension] (input = [ScalarConstant]))
+    into [ScalarConstant(input.0, broadcast.outputs()[0].size())]
     testcase var_size_scalar_const {
         let a = ir.add_scalar(1, 1);
         ir.add_broadcast(a, [1], 0, Size::variable())?
@@ -132,15 +123,13 @@ foldrule! {
 
 foldrule! {
     rulename FoldScalarConstLhsIntoBinary on ir
-    rewrites (a, b) -> binary = IrBinary,
-    into (b) -> {
+    rewrites (binary = [IrBinary] (a = [ScalarConstant]) (b))
+    into [{
+        let ScalarConstant(val, size) = *a;
         let ty = IrType::new(size, val.dtype());
         let op = Unary::BinaryWithConst { op: binary.op(), val, lhs: false };
         IrUnary::new(ty, op)?
-    },
-    iff {
-        Some(ScalarConstant(val, size)) = ir.parent_op(a.id())?.cloned()
-    }
+    }] (b)
     testcase scalar_const_lhs_into_binary {
         let size = Size::variable();
         let a = ir.add_input(IrType::new(size, DType::F32));
@@ -151,15 +140,13 @@ foldrule! {
 
 foldrule! {
     rulename FoldScalarConstRhsIntoBinary on ir
-    rewrites (a, b) -> binary = IrBinary,
-    into (a) -> {
+    rewrites (binary = [IrBinary] (a) (b = [ScalarConstant]))
+    into [{
+        let ScalarConstant(val, size) = *b;
         let ty = IrType::new(size, val.dtype());
         let op = Unary::BinaryWithConst { op: binary.op(), val, lhs: true };
         IrUnary::new(ty, op).unwrap()
-    },
-    iff {
-        Some(ScalarConstant(val, size)) = ir.parent_op(b.id())?.cloned()
-    }
+    }] (a)
     testcase scalar_const_rhs_into_binary {
         let size = Size::variable();
         let a = ir.add_input(IrType::new(size, DType::F32));
@@ -170,21 +157,16 @@ foldrule! {
 
 foldrule! {
     rulename FoldScalarConstIntoUnary on ir
-    rewrites (a) -> unary = IrUnary,
-    into () -> ScalarConstant(unary.op().evaluate(val).unwrap(), size),
-    iff {
-        Some(ScalarConstant(val, size)) = ir.parent_op(a.id())?.cloned()
-    }
+    rewrites (unary = [IrUnary] (scalar = [ScalarConstant]))
+    into [ScalarConstant(unary.op().evaluate(scalar.0).unwrap(), scalar.1)]
 }
 
-/*
 foldrule! {
-    rulename FoldNegLhsIntoAdd on ir
-    rewrites (a, b) -> binary = IrBinary,
-    into (b, a) -> IrBinary::new(b.ty(), a.ty(), Binary::Sub)?,
-    iff {{
+    rulename FoldNegLhsIntoAdd on _ir
+    rewrites (binary = [IrBinary] (unary = [IrUnary] (a)) (b))
+    into [IrBinary::new(b.ty(), a.ty(), Binary::Sub)?] (b) (a)
+    given {{
         if binary.op() == Binary::Add
-            && let Some(unary) = ir.parent_op::<IrUnary>(a.id())?
             && let Unary::BinaryWithConst { val, op: Binary::Mul, .. } = unary.op()
             && (val == DTypeValue::F32(-1.0) || val == DTypeValue::I32(-1))
         {
@@ -197,11 +179,10 @@ foldrule! {
 
 foldrule! {
     rulename FoldNegRhsIntoAdd on ir
-    rewrites (a, b) -> binary = IrBinary,
-    into (a, b) -> IrBinary::new(a.ty(), b.ty(), Binary::Sub)?,
-    iff {{
+    rewrites (binary = [IrBinary] (a) (unary = [IrUnary] (b)))
+    into [IrBinary::new(a.ty(), b.ty(), Binary::Sub)?] (a) (b)
+    given {{
         if binary.op() == Binary::Add
-            && let Some(unary) = ir.parent_op::<IrUnary>(b.id())?
             && let Unary::BinaryWithConst { val, op: Binary::Mul, .. } = unary.op()
             && (val == DTypeValue::F32(-1.0) || val == DTypeValue::I32(-1))
         {
@@ -211,25 +192,22 @@ foldrule! {
         }
     }}
 }
-*/
 
 foldrule! {
     rulename FoldXMinusXIntoZero on ir
-    rewrites (a, b) -> binary = IrBinary,
-    into () -> {
+    rewrites (binary = [IrBinary] (a) (b))
+    into [{
         let ty = a.ty();
         ScalarConstant(DTypeValue::zero(ty.dtype()), ty.size())
-    },
-    iff {
-        binary.op() == Binary::Sub && a.id() == b.id()
-    }
+    }]
+    given { binary.op() == Binary::Sub && a.id() == b.id() }
 }
 
 foldrule! {
     rulename FoldConstIdentities on ir
-    rewrites (a) -> unary = IrUnary,
-    into (a) -> IrCopy(a.ty()),
-    iff {{
+    rewrites (unary = [IrUnary] (a))
+    into [IrCopy(a.ty())] (a)
+    given {{
         if let Unary::BinaryWithConst { op, val, lhs } = unary.op() {
             match op {
                 Binary::Mul => val == 1.0.into() || val == 1.into(),
@@ -242,11 +220,11 @@ foldrule! {
             false
         }
     }}
-    testcase fold_add_zero {
+    testcase add_zero {
         let a = ir.add_input(IrType::new(Size::variable(), DType::F32, ));
         ir.add_unary(a, Unary::BinaryWithConst { op: Binary::Add, val: 0.0.into(), lhs: false })?
     },
-    testcase fold_sub_zero {
+    testcase sub_zero {
         let a = ir.add_input(IrType::new(Size::variable(), DType::F32));
         ir.add_unary(a, Unary::BinaryWithConst { op: Binary::Sub, val: 0.0.into(), lhs: true })?
     }

@@ -1,8 +1,9 @@
 #[macro_export]
 macro_rules! if_find_and_bind_pattern {
     (@sub $($inner:tt)*) => { 1usize };
+    (@len) => { 0usize };
     (@len $(($($inner:tt)*))*) => {
-        [$(if_find_and_bind_pattern!(@sub $($inner:tt)*)),*].len()
+        [$($crate::if_find_and_bind_pattern!(@sub $($inner:tt)*)),*].len()
     };
     {
         @input ($count:expr) $op:ident ($irname:ident, {$($then:tt)*})
@@ -16,9 +17,9 @@ macro_rules! if_find_and_bind_pattern {
         let __op_id = $irname.get_parent_op($op.inputs()[$count])?;
         let $innername = $irname.get_op(__op_id)?;
 
-        if_find_and_bind_pattern! {
+        $crate::if_find_and_bind_pattern! {
             @input ($count + 1usize) $op ($irname, {
-                if_find_and_bind_pattern! {
+                $crate::if_find_and_bind_pattern! {
                     @operation ($irname, {$($then)*})
                     $innername = [$innertype] $($inner)*
                 }
@@ -32,7 +33,7 @@ macro_rules! if_find_and_bind_pattern {
     } => {
         let $name = $irname.get_node($op.inputs()[$count])?;
 
-        if_find_and_bind_pattern! {
+        $crate::if_find_and_bind_pattern! {
             @input ($count + 1usize) $op ($irname, {$($then)*})
             $($tail)*
         }
@@ -42,9 +43,9 @@ macro_rules! if_find_and_bind_pattern {
         $op:ident = [$optype:ty] $($tail:tt)*
     } => {
         if IR::downcast::<$optype>($op.op()).is_some()
-            && $op.inputs().len() == if_find_and_bind_pattern!(@len $($tail)*)
+            && $op.inputs().len() == $crate::if_find_and_bind_pattern!(@len $($tail)*)
         {
-            if_find_and_bind_pattern! {
+            $crate::if_find_and_bind_pattern! {
                 @input (0usize) $op ($irname, {
                     let $op = IR::downcast::<$optype>($op.op()).unwrap();
                     $($then)*
@@ -61,7 +62,7 @@ macro_rules! if_find_and_bind_pattern {
         }
     } => {
         let $opname = $op;
-        if_find_and_bind_pattern! {
+        $crate::if_find_and_bind_pattern! {
             @operation ($irname, {$($then)*})
             $opname $($tail)*
         }
