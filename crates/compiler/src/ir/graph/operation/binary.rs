@@ -63,7 +63,7 @@ impl IrOperationType for IrBinary {
     }
 
     fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool {
-        if let Some(other) = IrOperation::downcast::<Self>(other) { self == other } else { false }
+        if let Some(other) = IrOperation::downcast_rc::<Self>(other) { self == other } else { false }
     }
 
     fn commutating_groups(&self) -> Vec<HashSet<usize>> {

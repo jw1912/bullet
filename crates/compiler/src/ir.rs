@@ -15,12 +15,6 @@ use crate::{
     utils::Ansi,
 };
 
-#[derive(Clone, Default)]
-pub struct IR {
-    graph: IrGraph,
-    most_recent: Vec<IrNodeId>,
-}
-
 #[derive(Clone)]
 pub enum IRTrace {
     Root(IrError),
@@ -38,7 +32,7 @@ impl IRTrace {
                 writeln!(f, "{orange}Error applying{clear}")?;
                 writeln!(f, "{transform:?}")?;
                 writeln!(f, "{orange}on graph{clear}")?;
-                write!(f, "{}", graph.as_highlighted())
+                write!(f, "{graph}")
             }
         }
     }
@@ -75,13 +69,21 @@ impl fmt::Debug for IRTrace {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct IR {
+    graph: IrGraph,
+    most_recent: Vec<IrNodeId>,
+}
+
+impl fmt::Display for IR {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.graph.as_highlighted())
+    }
+}
+
 impl IR {
     pub fn graph(&self) -> IrGraph {
         self.graph.clone()
-    }
-
-    pub fn as_highlighted(&self) -> String {
-        self.graph.as_highlighted()
     }
 
     pub fn evaluate(
@@ -109,9 +111,9 @@ impl IR {
         let mut count = 0;
 
         for op in self.ordered_operations()? {
-            if IrOperation::downcast::<IrInput>(op.op()).is_none()
-                && IrOperation::downcast::<Constant>(op.op()).is_none()
-                && IrOperation::downcast::<ScalarConstant>(op.op()).is_none()
+            if op.downcast::<IrInput>().is_none()
+                && op.downcast::<Constant>().is_none()
+                && op.downcast::<ScalarConstant>().is_none()
             {
                 count += 1;
             }
@@ -154,13 +156,13 @@ impl IR {
 
     pub fn is_copy(&self, node: IrNodeId) -> Result<Option<IrNodeId>, IRTrace> {
         let op = self.get_op(self.get_parent_op(node)?)?;
-        Ok(IrOperation::downcast::<IrCopy>(op.op()).is_some().then(|| op.inputs()[0]))
+        Ok(op.downcast::<IrCopy>().map(|_| op.inputs()[0]))
     }
 
     pub fn parent_op<T: IrOperationType>(&self, node: IrNodeId) -> Result<Option<&T>, IRTrace> {
         let id = self.get_parent_op(node)?;
         let op = self.get_op(id)?;
-        Ok(IrOperation::downcast::<T>(op.op()))
+        Ok(op.downcast::<T>())
     }
 
     pub fn is_input(&self, node: IrNodeId) -> Result<bool, IRTrace> {
@@ -223,10 +225,6 @@ impl IR {
         let dtype = self.get_node(input)?.ty().dtype();
         let broadcast = BroadcastAcrossDimension::new(dtype, shape.into(), dim, repeats.into());
         self.add_op([input], broadcast).map(|x| x[0])
-    }
-
-    pub fn downcast<T: IrOperationType>(op: &Rc<dyn IrOperationType>) -> Option<&T> {
-        IrOperation::downcast(op)
     }
 
     pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IRTrace> {

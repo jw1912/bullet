@@ -146,9 +146,13 @@ impl IrOperation {
         &self.op
     }
 
-    pub fn downcast<T: IrOperationType + 'static>(input: &Rc<dyn IrOperationType>) -> Option<&T> {
+    pub fn downcast_rc<T: IrOperationType + 'static>(input: &Rc<dyn IrOperationType>) -> Option<&T> {
         let op: &dyn std::any::Any = input.as_ref();
         op.downcast_ref::<T>()
+    }
+
+    pub fn downcast<T: IrOperationType>(&self) -> Option<&T> {
+        Self::downcast_rc::<T>(&self.op)
     }
 
     /// Canonicalise ordering of commutative inputs.

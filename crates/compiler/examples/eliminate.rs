@@ -22,7 +22,7 @@ fn main() {
 
     let ops = program.num_nontrivial_operations().unwrap();
     println!("Unoptimised: {ops} operations");
-    println!("{}", program.as_highlighted());
+    println!("{program}");
 
     let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 32]));
     let target = (target.node(), DTypeTensor::F32(vec![1.0; 4]));
@@ -32,7 +32,7 @@ fn main() {
 
     let ops = program.num_nontrivial_operations().unwrap();
     println!("Optimised: {ops} operations");
-    println!("{}", program.as_highlighted());
+    println!("{program}");
 
     let outputs = program.evaluate([inputs, target]).unwrap();
 

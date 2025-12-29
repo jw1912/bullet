@@ -42,7 +42,7 @@ impl ProgramBuilder {
     }
 
     pub fn display_ir(&self) {
-        println!("{}", self.ir.borrow().graph().as_highlighted())
+        println!("{}", self.ir.borrow().graph())
     }
 
     pub fn build<'a>(&'a self, returns: impl AsRef<[ProgramNode<'a>]>) -> IR {

@@ -1,6 +1,6 @@
 use crate::ir::{
     IR, IRTrace,
-    graph::operation::{BroadcastAcrossDimension, IrBinary, IrOperation, IrUnary},
+    graph::operation::{BroadcastAcrossDimension, IrBinary, IrUnary},
     transform::{IrTransform, eliminate::EliminateUnusedOperations},
 };
 
@@ -18,12 +18,12 @@ impl IrTransform for FoldBroadcasts {
 
 fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
     for op in ir.operations() {
-        if let Some(unary) = IrOperation::downcast::<IrUnary>(op.op()) {
+        if let Some(unary) = op.downcast::<IrUnary>() {
             let [output] = op.outputs()[..] else { panic!() };
             let [parent] = op.inputs()[..] else { panic!() };
 
             let parent_op = ir.get_op(ir.get_parent_op(parent)?)?;
-            if let Some(broadcast) = IrOperation::downcast::<BroadcastAcrossDimension>(parent_op.op()).cloned() {
+            if let Some(broadcast) = parent_op.downcast::<BroadcastAcrossDimension>().cloned() {
                 assert_eq!(parent_op.outputs()[..], [parent]);
 
                 let out_dtype = ir.get_node(output)?.ty().dtype();
@@ -37,15 +37,15 @@ fn fold_single_broadcast(ir: &mut IR) -> Result<bool, IRTrace> {
             }
         }
 
-        if let Some(binary) = IrOperation::downcast::<IrBinary>(op.op()) {
+        if let Some(binary) = op.downcast::<IrBinary>() {
             let [output] = op.outputs()[..] else { panic!() };
             let [lparent, rparent] = op.inputs()[..] else { panic!() };
 
             let lparent_op = ir.get_op(ir.get_parent_op(lparent)?)?;
             let rparent_op = ir.get_op(ir.get_parent_op(rparent)?)?;
             if let (Some(lbroadcast), Some(rbroadcast)) = (
-                IrOperation::downcast::<BroadcastAcrossDimension>(lparent_op.op()).cloned(),
-                IrOperation::downcast::<BroadcastAcrossDimension>(rparent_op.op()).cloned(),
+                lparent_op.downcast::<BroadcastAcrossDimension>().cloned(),
+                rparent_op.downcast::<BroadcastAcrossDimension>().cloned(),
             ) {
                 assert_eq!(lparent_op.outputs()[..], [lparent]);
                 assert_eq!(rparent_op.outputs()[..], [rparent]);

@@ -1,8 +1,4 @@
-use crate::ir::{
-    IR, IRTrace,
-    graph::operation::{IrCopy, IrOperation},
-    transform::IrTransform,
-};
+use crate::ir::{IR, IRTrace, graph::operation::IrCopy, transform::IrTransform};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateUnusedOperations;
@@ -28,7 +24,7 @@ pub struct EliminateCopies;
 impl IrTransform for EliminateCopies {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.ordered_operations()?.into_iter().rev() {
-            if IrOperation::downcast::<IrCopy>(op.op()).is_some()
+            if op.downcast::<IrCopy>().is_some()
                 && let [input] = op.inputs()[..]
                 && let [output] = op.outputs()[..]
             {

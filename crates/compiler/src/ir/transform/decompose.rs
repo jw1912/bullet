@@ -2,11 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     core::FormulaOp,
-    ir::{
-        IR, IRTrace,
-        graph::operation::{FusedElementwise, IrOperation},
-        transform::IrTransform,
-    },
+    ir::{IR, IRTrace, graph::operation::FusedElementwise, transform::IrTransform},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,7 +17,7 @@ impl IrTransform for DecomposeElementwise {
 
 fn decompose_single_elementwise(ir: &mut IR) -> Result<bool, IRTrace> {
     for op in ir.operations() {
-        if let Some(elmt) = IrOperation::downcast::<FusedElementwise>(op.op()).cloned() {
+        if let Some(elmt) = op.downcast::<FusedElementwise>().cloned() {
             let mut values = elmt.input_ids().iter().zip(op.inputs()).map(|(&x, &y)| (x, y)).collect::<HashMap<_, _>>();
 
             let mut errored = false;
@@ -100,7 +96,7 @@ mod tests {
         ir.transform(DecomposeElementwise)?;
 
         for op in ir.operations() {
-            assert!(IrOperation::downcast::<FusedElementwise>(op.op()).is_none());
+            assert!(op.downcast::<FusedElementwise>().is_none());
         }
 
         ir.check_valid()

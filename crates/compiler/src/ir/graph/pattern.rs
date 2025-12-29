@@ -1,4 +1,8 @@
-/// Usage: `if_find_and_bind_pattern!(ir: IR, operation: IrOperation, pattern, success_block)`
+/// Macro for finding operation patterns rooted at one operation in IR.
+///
+/// Usage:
+///
+/// `if_find_and_bind_pattern!(ir: IR | IrGraph, operation: IrOperation, pattern, success_block)`
 ///
 /// If the `pattern` is found in `ir` starting rooted at `operation`, then `success_block`
 /// is ran. Any identifiers appearing in `pattern` are appropriately bound.
@@ -8,17 +12,17 @@
 /// # use bullet_compiler::{
 /// #     core::{DType, Size, Binary},
 /// #     if_find_and_bind_pattern,
-/// #     ir::{IR, IRTrace, graph::{IrType, operation::IrBinary}},
+/// #     ir::graph::{IrGraph, IrError, IrType, operation::IrBinary},
 /// # };
 /// #
-/// # let mut ir = IR::default();
+/// # let mut ir = IrGraph::default();
 /// # let ty = IrType::new(Size::variable(), DType::F32);
 /// # let node_a = ir.add_input(ty);
 /// # let node_b = ir.add_input(ty);
 /// let node_c = ir.add_binary(node_a, node_b, Binary::Add)?;
 /// let target_op = ir.get_op(ir.get_parent_op(node_c)?)?;
-/// let mut found = false;
 ///
+/// let mut found = false;
 /// if_find_and_bind_pattern!(
 ///     ir,
 ///     target_op,
@@ -28,18 +32,18 @@
 ///
 /// assert!(found);
 /// # ir.check_valid()?;
-/// # Ok::<(), IRTrace>(())
+/// # Ok::<(), IrError>(())
 /// ```
+///
 /// This can be extended to more complex nested patterns:
 /// ```
 /// # use bullet_compiler::{
 /// #     core::{Binary, DType, Size},
 /// #     if_find_and_bind_pattern,
-/// #     ir::{IR, IRTrace, graph::{IrType, operation::{IrBinary, IrInput}}},
+/// #     ir::graph::{IrGraph, IrError, IrType, operation::{IrBinary, IrInput}},
 /// # };
 /// #
-/// # let mut ir = IR::default();
-/// #
+/// # let mut ir = IrGraph::default();
 /// # let ty = IrType::new(Size::variable(), DType::F32);
 /// let node_a = ir.add_input(ty);
 /// let node_b = ir.add_input(ty);
@@ -64,7 +68,7 @@
 ///
 /// assert!(found);
 /// # ir.check_valid()?;
-/// # Ok::<(), IRTrace>(())
+/// # Ok::<(), IrError>(())
 /// ```
 #[macro_export]
 macro_rules! if_find_and_bind_pattern {
@@ -110,7 +114,7 @@ macro_rules! if_find_and_bind_pattern {
         $op:ident = [$optype:ty] $(($childname:ident $($tail:tt)*))*
     } => {
         if let [$($childname),*] = $op.inputs()[..]
-            && let Some($op) = $crate::ir::IR::downcast::<$optype>($op.op())
+            && let Some($op) = $op.downcast::<$optype>()
         {
             $crate::if_find_and_bind_pattern! {
                 @input (0usize) ($irname, {$($then)*})

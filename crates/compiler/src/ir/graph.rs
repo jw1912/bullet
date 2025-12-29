@@ -74,7 +74,7 @@ impl IrGraph {
     pub fn is_input(&self, node: IrNodeId) -> bool {
         let Ok(id) = self.get_parent_op(node) else { return false };
         let Ok(op) = self.get_op(id) else { return false };
-        IrOperation::downcast::<IrInput>(op.op()).is_some()
+        op.downcast::<IrInput>().is_some()
     }
 
     pub fn register_output(&mut self, node: IrNodeId) {
@@ -301,7 +301,7 @@ impl IrGraph {
 
         for (id, tensor) in &values {
             let op = self.get_op(self.get_parent_op(*id)?)?;
-            if IrOperation::downcast::<IrInput>(op.op()).is_none() {
+            if op.downcast::<IrInput>().is_none() {
                 return Err("Seeded non-leaf node!".into());
             }
 
@@ -328,7 +328,7 @@ impl IrGraph {
                 let tensor = DTypeTensor::new(ty.dtype(), size);
                 let is_prev = values.contains_key(&output);
 
-                if IrOperation::downcast::<IrInput>(op.op()).is_none() {
+                if op.downcast::<IrInput>().is_none() {
                     assert!(values.insert(output, RefCell::new(tensor)).is_none(), "Cannot happen!");
                 } else if !is_prev {
                     return Err("IrInput node not seeded!".into());
@@ -491,8 +491,7 @@ impl fmt::Display for IrGraph {
         }
 
         write!(f, "irgraph(")?;
-        let leaves =
-            self.ops.values().filter(|x| IrOperation::downcast::<IrInput>(x.op()).is_some()).collect::<Vec<_>>();
+        let leaves = self.ops.values().filter(|x| x.downcast::<IrInput>().is_some()).collect::<Vec<_>>();
         let mline = leaves.len() >= 5;
 
         for (i, leaf) in leaves.iter().enumerate() {
@@ -518,7 +517,7 @@ impl fmt::Display for IrGraph {
         for id in map(self.topo_order_ops())? {
             let op = map(self.get_op(id))?;
 
-            if IrOperation::downcast::<IrInput>(op.op()).is_some() {
+            if op.downcast::<IrInput>().is_some() {
                 continue;
             }
 

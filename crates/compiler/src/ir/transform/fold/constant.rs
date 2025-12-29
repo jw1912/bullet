@@ -5,7 +5,7 @@ use crate::{
     ir::{
         IR, IRTrace,
         graph::{
-            IrNodeId, IrOperation, IrOperationType,
+            IrNodeId, IrOperationType,
             operation::{Constant, ScalarConstant},
         },
     },
@@ -22,9 +22,9 @@ pub fn fold_constant_expression(
         for &input in inputs {
             let parent = ir.get_op(ir.get_parent_op(input)?)?;
 
-            if let Some(Constant(value)) = IrOperation::downcast(parent.op()).cloned() {
+            if let Some(Constant(value)) = parent.downcast().cloned() {
                 consts.push(value);
-            } else if let Some(Some(scalar)) = IrOperation::downcast(parent.op()).map(ScalarConstant::to_tensor) {
+            } else if let Some(Some(scalar)) = parent.downcast().map(ScalarConstant::to_tensor) {
                 consts.push(scalar);
             } else {
                 return Ok(None);
