@@ -4,12 +4,12 @@ mod rules;
 use std::{fmt, rc::Rc};
 
 use crate::{
-    core::{Binary, DTypeValue, Unary},
+    core::{Binary, DType, DTypeValue, Unary},
     foldrule,
     ir::{
         IR, IRTrace,
         graph::{
-            IrOperation, IrOperationId, IrOperationType, IrType,
+            IrOperation, IrOperationId, IrType,
             operation::{BroadcastAcrossDimension, Constant, IrBinary, IrCopy, IrUnary, ScalarConstant},
         },
         transform::{IrTransform, modify::AddOperation},
@@ -41,6 +41,7 @@ impl FoldPass {
             .add_fold(FoldVarSizeScalarConst)
             .add_fold(FoldXMinusXIntoZero)
             .add_fold(FoldConstIdentities)
+            .add_fold(FoldSubFromZero)
     }
 
     pub fn add_fold(mut self, fold: impl Fold) -> Self {
@@ -97,14 +98,14 @@ impl IrTransform for FoldPass {
 }
 
 #[cfg(test)]
-use crate::core::{DType, DTypeTensor, Size};
+use crate::core::{DTypeTensor, Size};
 
 foldrule! {
     rulename FoldFixedSizeScalarConst on ir
     rewrites (constant = [Constant])
-    into [ScalarConstant(constant.0.scalar().unwrap(), constant.0.size().into())]
+    into [ScalarConstant(scalar, constant.0.size().into())]
     given {
-        constant.0.scalar().is_some()
+        Some(scalar) = constant.0.scalar();
     }
     testcase fixed_size_scalar_const {
         ir.add_const(DTypeTensor::I32(vec![1; 16]))
@@ -114,7 +115,7 @@ foldrule! {
 foldrule! {
     rulename FoldVarSizeScalarConst on ir
     rewrites (broadcast = [BroadcastAcrossDimension] (input = [ScalarConstant]))
-    into [ScalarConstant(input.0, broadcast.outputs()[0].size())]
+    into [ScalarConstant(input.0, broadcast.output_size())]
     testcase var_size_scalar_const {
         let a = ir.add_scalar(1, 1);
         ir.add_broadcast(a, [1], 0, Size::variable())?
@@ -228,6 +229,26 @@ foldrule! {
         let a = ir.add_input(IrType::new(Size::variable(), DType::F32));
         ir.add_unary(a, Unary::BinaryWithConst { op: Binary::Sub, val: 0.0.into(), lhs: true })?
     }
+}
+
+foldrule! {
+    rulename FoldSubFromZero on ir
+    rewrites (unary = [IrUnary] (a))
+    into [{
+        let val = match a.ty().dtype() {
+            DType::F32 => (-1.0).into(),
+            DType::I32 => (-1).into()
+        };
+        let op = Unary::BinaryWithConst { op: Binary::Mul, val, lhs: true };
+        IrUnary::new(a.ty(), op)?
+    }] (a)
+    given {{
+        if let Unary::BinaryWithConst { op: Binary::Sub, val, lhs: false } = unary.op() {
+            val == 0.0.into() || val == 0.into()
+        } else {
+            false
+        }
+    }}
 }
 
 #[cfg(test)]

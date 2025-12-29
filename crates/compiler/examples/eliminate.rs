@@ -9,7 +9,7 @@ fn main() {
     let target = builder.add_input(batch, DType::F32);
 
     let weights = builder.constant(DTypeTensor::F32(vec![1.0; 8])).broadcast([8], 0, batch);
-    let bias = builder.constant(DTypeTensor::F32(vec![1.0])).broadcast([1], 0, batch);
+    let bias = builder.constant(DTypeTensor::F32(vec![0.0])).broadcast([1], 0, batch);
 
     let dot = (weights * inputs).reduce_sum([batch, Size::from(8)], 1);
 
@@ -24,16 +24,20 @@ fn main() {
     println!("Unoptimised: {ops} operations");
     println!("{}", program.as_highlighted());
 
+    let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 32]));
+    let target = (target.node(), DTypeTensor::F32(vec![1.0; 4]));
+    let old_outputs = program.evaluate([inputs.clone(), target.clone()]).unwrap();
+
     program.optimise().unwrap();
 
     let ops = program.num_nontrivial_operations().unwrap();
     println!("Optimised: {ops} operations");
     println!("{}", program.as_highlighted());
 
-    let inputs = (inputs.node(), DTypeTensor::F32(vec![1.0; 32]));
-    let target = (target.node(), DTypeTensor::F32(vec![1.0; 4]));
     let outputs = program.evaluate([inputs, target]).unwrap();
 
-    println!("loss: {:?} (expect 256.0)", outputs.get(&loss.node()).unwrap());
-    println!("zero: {:?} (expect [0.0; 4])", outputs.get(&zero.node()).unwrap());
+    assert_eq!(old_outputs, outputs);
+
+    println!("loss: {:?}", outputs.get(&loss.node()).unwrap());
+    println!("zero: {:?}", outputs.get(&zero.node()).unwrap());
 }

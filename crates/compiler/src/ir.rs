@@ -297,6 +297,7 @@ impl IR {
         self.eliminate_dead_ops()?;
         self.transform(CanonicaliseCommutativeInputs)?;
         self.transform(EliminateCommonSubExpressions)?;
+        self.transform(FoldPass::all())?;
         self.eliminate_dead_ops()
     }
 }
