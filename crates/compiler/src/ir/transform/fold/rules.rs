@@ -32,21 +32,20 @@ macro_rules! foldrule {
                 $irname: &IR,
                 operation: &IrOperation,
             ) -> Result<Option<AddOperation>, IRTrace> {
-                $crate::if_find_and_bind_pattern! {
-                    target: $irname, operation,
-                    pattern: ($($pattern)*)
-                    then: {
-                        foldrule! {
-                            @maybe_matching
-                            ({
-                                let new_op = $new_op;
-                                let new_inputs = vec![$($output.id()),*];
-                                return Ok(Some(AddOperation(new_inputs, Ok(Rc::new(new_op)))));
-                            })
-                            ($($($cond)*)?)
-                        }
+                $crate::if_find_and_bind_pattern!(
+                    $irname,
+                    operation,
+                    ($($pattern)*),
+                    foldrule! {
+                        @maybe_matching
+                        ({
+                            let new_op = $new_op;
+                            let new_inputs = vec![$($output.id()),*];
+                            return Ok(Some(AddOperation(new_inputs, Ok(Rc::new(new_op)))));
+                        })
+                        ($($($cond)*)?)
                     }
-                }
+                );
 
                 Ok(None)
             }
