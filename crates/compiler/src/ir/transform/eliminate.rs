@@ -99,7 +99,7 @@ mod tests {
         let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
         let z = ir.add_binary(x, y, Binary::Add)?;
         let w = ir.add_binary(z, y, Binary::Add)?;
-        let t = ir.add_binary(w, y, Binary::Sub)?;
+        let t = ir.add_binary(w, y, Binary::Add)?;
 
         ir.register_output(z);
 
@@ -146,11 +146,11 @@ mod tests {
 
         let z1 = ir.add_binary(x, y, Binary::Add)?;
         let w1 = ir.add_binary(z1, y, Binary::Add)?;
-        let t1 = ir.add_binary(w1, y, Binary::Sub)?;
+        let t1 = ir.add_binary(w1, y, Binary::Mul)?;
 
         let z2 = ir.add_binary(x, y, Binary::Add)?;
         let w2 = ir.add_binary(z2, y, Binary::Add)?;
-        let t2 = ir.add_binary(w2, y, Binary::Sub)?;
+        let t2 = ir.add_binary(w2, y, Binary::Mul)?;
 
         ir.register_output(t1);
         ir.register_output(t2);

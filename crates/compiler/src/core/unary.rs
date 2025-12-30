@@ -13,6 +13,7 @@ pub enum Unary {
     Log1pAbs,
     Sgn,
     Abs,
+    Reciprocal,
     Cast(DType),
     BinaryWithConst { op: Binary, val: DTypeValue, lhs: bool },
 }
@@ -42,6 +43,7 @@ impl Unary {
             Self::Cosh => fp(f32::cosh)?,
             Self::Tanh => fp(f32::tanh)?,
             Self::Exp => fp(f32::exp)?,
+            Self::Reciprocal => fp(|x| 1.0 / x)?,
             Self::Log1pAbs => fp(|x| x.abs().ln_1p())?,
             Self::Sgn => match input {
                 DTypeValue::F32(x) => DTypeValue::F32(x.signum()),

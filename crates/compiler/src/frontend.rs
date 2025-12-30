@@ -107,8 +107,8 @@ impl<'a> ProgramNode<'a> {
         Self { builder: self.builder, node }
     }
 
-    pub fn abs_pow(self, rhs: Self) -> Self {
-        self.binary(rhs, Binary::AbsPow)
+    pub fn pow(self, rhs: Self) -> Self {
+        self.binary(rhs, Binary::Pow)
     }
 }
 
@@ -126,8 +126,6 @@ macro_rules! binary_impl {
 
 binary_impl!(Mul, mul, Mul);
 binary_impl!(Add, add, Add);
-binary_impl!(Sub, sub, Sub);
-binary_impl!(Div, div, Div);
 
 macro_rules! unary_impl {
     ($fnname:ident, $mapop:ident) => {
@@ -172,13 +170,27 @@ macro_rules! binary_const_impl {
 
 binary_const_impl!(Mul, mul, Mul, f32);
 binary_const_impl!(Add, add, Add, f32);
-binary_const_impl!(Sub, sub, Sub, f32);
-binary_const_impl!(Div, div, Div, f32);
-
 binary_const_impl!(Mul, mul, Mul, i32);
 binary_const_impl!(Add, add, Add, i32);
-binary_const_impl!(Sub, sub, Sub, i32);
-binary_const_impl!(Div, div, Div, i32);
+
+impl std::ops::Neg for ProgramNode<'_> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self.ty().dtype() {
+            DType::F32 => -1.0 * self,
+            DType::I32 => -1 * self,
+        }
+    }
+}
+
+impl std::ops::Sub<Self> for ProgramNode<'_> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        self + (-rhs)
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -5,11 +5,10 @@ use crate::core::{DType, DTypeValue};
 pub enum Binary {
     Add,
     Mul,
-    Sub,
-    Div,
     Min,
     Max,
-    AbsPow,
+    Pow,
+    DivByI32,
 }
 
 impl Binary {
@@ -29,11 +28,10 @@ impl Binary {
         match self {
             Self::Add => lhs + rhs,
             Self::Mul => lhs * rhs,
-            Self::AbsPow => lhs.abs().powf(rhs),
-            Self::Div => lhs / rhs,
-            Self::Sub => lhs - rhs,
             Self::Min => lhs.min(rhs),
             Self::Max => lhs.max(rhs),
+            Self::Pow => lhs.powf(rhs),
+            Self::DivByI32 => panic!(),
         }
     }
 
@@ -41,17 +39,16 @@ impl Binary {
         Some(match self {
             Self::Add => lhs + rhs,
             Self::Mul => lhs * rhs,
-            Self::AbsPow => rhs.try_into().ok().map(|r| lhs.abs().pow(r))?,
-            Self::Div => lhs / rhs,
-            Self::Sub => lhs - rhs,
             Self::Min => lhs.min(rhs),
             Self::Max => lhs.max(rhs),
+            Self::Pow => rhs.try_into().ok().map(|r| lhs.pow(r))?,
+            Self::DivByI32 => lhs / rhs,
         })
     }
 
     pub fn is_commutative(self) -> bool {
         match self {
-            Binary::AbsPow | Binary::Div | Binary::Sub => false,
+            Binary::Pow | Binary::DivByI32 => false,
             Binary::Add | Binary::Max | Binary::Min | Binary::Mul => true,
         }
     }

@@ -1,14 +1,12 @@
-mod broadcast;
-mod canonicalise;
-mod decompose;
+pub mod canonicalise;
+pub mod decompose;
+pub mod destructive;
 pub mod eliminate;
-pub mod fold;
-pub(crate) mod modify;
+pub mod foldrules;
+pub mod modify;
+pub mod simplify;
 
-pub use broadcast::FoldBroadcasts;
-pub use canonicalise::CanonicaliseCommutativeInputs;
-pub use decompose::DecomposeElementwise;
-pub use fold::FoldPass;
+pub use simplify::SimplifyPass;
 
 use crate::ir::{IR, IRTrace};
 

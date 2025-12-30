@@ -7,11 +7,17 @@ use graph::{
     IrError, IrGraph, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType,
     operation::{Constant, FusedElementwise, IrBinary, IrCopy, IrInput, IrUnary},
 };
-use transform::{eliminate::*, modify::*, *};
+use transform::{modify::*, *};
 
 use crate::{
     core::{Binary, DTypeTensor, DTypeValue, Formula, FormulaId, Shape, Size, Unary},
-    ir::graph::operation::{BroadcastAcrossDimension, ScalarConstant},
+    ir::{
+        graph::operation::{BroadcastAcrossDimension, ScalarConstant},
+        transform::{
+            decompose::DecomposeElementwise,
+            eliminate::{EliminateCopies, EliminateUnusedOperations},
+        },
+    },
     utils::Ansi,
 };
 
@@ -288,14 +294,6 @@ impl IR {
 
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
         self.transform(DecomposeElementwise)?;
-        self.eliminate_dead_ops()?;
-        self.transform(CanonicaliseCommutativeInputs)?;
-        self.transform(FoldBroadcasts)?;
-        self.transform(FoldPass::all())?;
-        self.eliminate_dead_ops()?;
-        self.transform(CanonicaliseCommutativeInputs)?;
-        self.transform(EliminateCommonSubExpressions)?;
-        self.transform(FoldPass::all())?;
-        self.eliminate_dead_ops()
+        self.transform(SimplifyPass::all())
     }
 }

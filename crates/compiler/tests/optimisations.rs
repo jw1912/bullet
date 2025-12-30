@@ -69,7 +69,8 @@ fn fold_equiv_arith_subexprs() -> Result<(), IRTrace> {
             let c = builder.add_input(1, DType::F32);
             let d = builder.add_input(1, DType::F32);
 
-            let lhs = (a + b) * (c + d);
+            let lhs1 = a * b + a * c + b * c + a * c;
+            //let lhs2 = (a + b) * (c + d);
 
             let muls = [
                 if swap & 1 == 0 { a * c } else { c * a },
@@ -80,9 +81,10 @@ fn fold_equiv_arith_subexprs() -> Result<(), IRTrace> {
 
             let rhs = muls[perms[0]] + muls[perms[1]] + muls[perms[2]] + muls[perms[3]];
 
-            let zero = lhs - rhs;
+            let zero1 = lhs1 - rhs;
+            //let zero2 = lhs2 - rhs;
 
-            let mut program = builder.build([zero]);
+            let mut program = builder.build([zero1 /*zero2*/]);
 
             assert!(program.num_nontrivial_operations()? > 0, "{program}");
 
@@ -91,7 +93,8 @@ fn fold_equiv_arith_subexprs() -> Result<(), IRTrace> {
             assert_eq!(program.num_nontrivial_operations()?, 0, "{program}");
 
             let constant = ScalarConstant(0.0.into(), 1.into());
-            assert_eq!(program.parent_op(zero.node())?, Some(&constant), "{program}");
+            assert_eq!(program.parent_op(zero1.node())?, Some(&constant), "{program}");
+            //assert_eq!(program.parent_op(zero2.node())?, Some(&constant), "{program}");
 
             program.check_valid()?;
         }

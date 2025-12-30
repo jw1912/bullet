@@ -26,6 +26,14 @@ impl IrUnary {
         Ok(Self { ty, op })
     }
 
+    pub fn input_type(&self) -> IrType {
+        self.ty
+    }
+
+    pub fn output_type(&self) -> IrType {
+        IrType::new(self.ty.size(), self.op.dtype(self.ty.dtype()).unwrap())
+    }
+
     pub fn op(&self) -> Unary {
         self.op
     }
@@ -41,11 +49,11 @@ impl IrOperationType for IrUnary {
     }
 
     fn inputs(&self) -> Vec<IrType> {
-        vec![self.ty]
+        vec![self.input_type()]
     }
 
     fn outputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.ty.size(), self.op.dtype(self.ty.dtype()).unwrap())]
+        vec![self.output_type()]
     }
 
     fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {

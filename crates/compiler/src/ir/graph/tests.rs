@@ -38,7 +38,7 @@ fn swap_outputs() -> Result<(), IrError> {
     let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     let w = ir.add_binary(z, y, Binary::Add)?;
-    let t = ir.add_binary(w, y, Binary::Sub)?;
+    let t = ir.add_binary(w, y, Binary::Add)?;
     let new_t = ir.add_binary(x, y, Binary::Add)?;
 
     let op = ir.get_parent_op(t)?;
@@ -61,7 +61,7 @@ fn replace_input() -> Result<(), IrError> {
     let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     let w = ir.add_binary(z, y, Binary::Add)?;
-    let t = ir.add_binary(w, y, Binary::Sub)?;
+    let t = ir.add_binary(w, y, Binary::Add)?;
 
     ir.register_output(t);
     ir.replace_input_unchecked(x, w)?;
@@ -118,7 +118,7 @@ fn invalid_swap_outputs() -> Result<(), IrError> {
     let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_binary(x, y, Binary::Add)?;
     let w = ir.add_binary(z, y, Binary::Add)?;
-    let t = ir.add_binary(w, y, Binary::Sub)?;
+    let t = ir.add_binary(w, y, Binary::Add)?;
 
     ir.swap_outputs_unchecked(z, t)?;
 

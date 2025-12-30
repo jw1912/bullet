@@ -356,7 +356,8 @@ mod tests {
 
         let fp_int_c = elmt.unary(int_c, Unary::Cast(DType::F32)).unwrap();
 
-        let out = elmt.binary(fp_c, fp_int_c, Binary::Div).unwrap();
+        let recip = elmt.unary(fp_int_c, Unary::Reciprocal).unwrap();
+        let out = elmt.binary(fp_c, recip, Binary::Mul).unwrap();
 
         let inputs = [
             (fp_a, DTypeValue::F32(1.0)),

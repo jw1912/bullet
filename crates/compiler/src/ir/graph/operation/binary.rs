@@ -31,6 +31,10 @@ impl IrBinary {
         Ok(Self { size, lhs, rhs, op })
     }
 
+    pub fn output_type(&self) -> IrType {
+        IrType::new(self.size, self.op.dtype(self.lhs, self.rhs).unwrap())
+    }
+
     pub fn op(&self) -> Binary {
         self.op
     }
@@ -46,7 +50,7 @@ impl IrOperationType for IrBinary {
     }
 
     fn outputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.size, self.op.dtype(self.lhs, self.rhs).unwrap())]
+        vec![self.output_type()]
     }
 
     fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
