@@ -5,29 +5,6 @@ use crate::{
     ir::graph::{IrOperationType, IrType},
 };
 
-#[derive(Debug)]
-pub struct IrInput(pub IrType);
-
-impl IrOperationType for IrInput {
-    fn opname(&self) -> String {
-        format!("leaf<{:?}>", self.0)
-    }
-
-    fn inputs(&self) -> Vec<IrType> {
-        Vec::new()
-    }
-
-    fn outputs(&self) -> Vec<IrType> {
-        vec![self.0]
-    }
-
-    fn evaluate(&self, _: &[&DTypeTensor], _: &mut [&mut DTypeTensor]) {}
-
-    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
-        false
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Constant(pub DTypeTensor);
 

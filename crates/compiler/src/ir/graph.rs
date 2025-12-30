@@ -1,5 +1,5 @@
 mod node;
-pub mod operation;
+mod operation;
 mod pattern;
 
 #[cfg(test)]
@@ -13,13 +13,12 @@ use std::{
 };
 
 use crate::{
-    core::{Binary, DTypeTensor},
+    core::DTypeTensor,
     utils::{Ansi, topo_order},
 };
 
 pub use node::{IrNode, IrNodeId, IrType};
-use operation::{IrBinary, IrInput};
-pub use operation::{IrOperation, IrOperationId, IrOperationType};
+pub use operation::{IrInput, IrOperation, IrOperationId, IrOperationType};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IrError(String);
@@ -71,12 +70,6 @@ impl IrGraph {
         self.outputs.contains(&node)
     }
 
-    pub fn is_input(&self, node: IrNodeId) -> bool {
-        let Ok(id) = self.get_parent_op(node) else { return false };
-        let Ok(op) = self.get_op(id) else { return false };
-        op.downcast::<IrInput>().is_some()
-    }
-
     pub fn register_output(&mut self, node: IrNodeId) {
         self.outputs.insert(node);
     }
@@ -89,13 +82,15 @@ impl IrGraph {
         self.ops.values()
     }
 
+    pub fn is_input(&self, node: IrNodeId) -> bool {
+        let Ok(id) = self.get_parent_op(node) else { return false };
+        let Ok(op) = self.get_op(id) else { return false };
+        op.downcast::<IrInput>().is_some()
+    }
+
     #[must_use]
     pub fn add_input(&mut self, ty: IrType) -> IrNodeId {
         self.add_op([], IrInput(ty)).expect("Constructing leaf is infallible!")[0]
-    }
-
-    pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IrError> {
-        self.add_op([lhs, rhs], IrBinary::new(self.get_node(lhs)?.ty(), self.get_node(rhs)?.ty(), op)?).map(|x| x[0])
     }
 
     pub fn topo_order_ops(&self) -> Result<Vec<IrOperationId>, IrError> {

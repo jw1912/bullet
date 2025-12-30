@@ -4,10 +4,8 @@ use crate::{
     core::{Binary, DTypeValue, Unary},
     ir::{
         IR, IRTrace,
-        graph::{
-            IrError, IrOperation, IrType,
-            operation::{BroadcastAcrossDimension, Constant, IrBinary, IrCopy, IrUnary, ScalarConstant},
-        },
+        graph::{IrError, IrOperation, IrType},
+        operation::{BroadcastAcrossDimension, Constant, IrBinary, IrCopy, IrUnary, ScalarConstant},
         transform::modify::AddOperation,
     },
 };

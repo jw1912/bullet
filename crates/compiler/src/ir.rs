@@ -1,89 +1,34 @@
 pub mod graph;
+pub mod operation;
+mod trace;
 pub mod transform;
 
 use std::{collections::HashMap, fmt, rc::Rc};
 
-use graph::{
-    IrError, IrGraph, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType,
-    operation::{Constant, FusedElementwise, IrBinary, IrCopy, IrInput, IrUnary},
+use crate::core::{Binary, DTypeTensor, DTypeValue, Formula, FormulaId, Shape, Size, Unary};
+
+use graph::{IrError, IrGraph, IrInput, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType};
+use operation::{BroadcastAcrossDimension, Constant, FusedElementwise, IrBinary, IrCopy, IrUnary, ScalarConstant};
+pub use trace::{IRHistory, IRTrace};
+use transform::{
+    IrTransform, SimplifyPass,
+    decompose::DecomposeElementwise,
+    eliminate::{EliminateCopies, EliminateUnusedOperations},
+    modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
 };
-use transform::{modify::*, *};
-
-use crate::{
-    core::{Binary, DTypeTensor, DTypeValue, Formula, FormulaId, Shape, Size, Unary},
-    ir::{
-        graph::operation::{BroadcastAcrossDimension, ScalarConstant},
-        transform::{
-            decompose::DecomposeElementwise,
-            eliminate::{EliminateCopies, EliminateUnusedOperations},
-        },
-    },
-    utils::Ansi,
-};
-
-#[derive(Clone)]
-pub enum IRTrace {
-    Root(IrError),
-    Frame(Box<IrGraph>, Rc<dyn IrTransform>, Rc<Self>),
-}
-
-impl IRTrace {
-    pub fn frame(&self, f: &mut impl fmt::Write) -> fmt::Result {
-        match self {
-            Self::Root(err) => write!(f, "{err:?}"),
-            Self::Frame(graph, transform, _) => {
-                let orange = Ansi::rgb(212, 114, 34);
-                let clear = Ansi::Clear;
-
-                writeln!(f, "{orange}Error applying{clear}")?;
-                writeln!(f, "{transform:?}")?;
-                writeln!(f, "{orange}on graph{clear}")?;
-                write!(f, "{graph}")
-            }
-        }
-    }
-
-    pub fn full_string(&self, f: &mut impl fmt::Write, frame: usize) -> fmt::Result {
-        writeln!(f, "{}Depth {frame}:{}", Ansi::rgb(255, 0, 0), Ansi::Clear)?;
-
-        self.frame(f)?;
-
-        if let Self::Frame(_, _, inner) = self {
-            writeln!(f)?;
-            inner.full_string(f, frame + 1)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl From<IrError> for IRTrace {
-    fn from(value: IrError) -> Self {
-        Self::Root(value)
-    }
-}
-
-impl<T: Into<String>> From<T> for IRTrace {
-    fn from(value: T) -> Self {
-        Self::Root(value.into().into())
-    }
-}
-
-impl fmt::Debug for IRTrace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.full_string(f, 0)
-    }
-}
 
 #[derive(Clone, Default)]
 pub struct IR {
     graph: IrGraph,
     most_recent: Vec<IrNodeId>,
+    history: IRHistory,
 }
 
 impl fmt::Display for IR {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.graph.as_highlighted())
+        writeln!(f, "Current IR Graph:")?;
+        writeln!(f, "{}", self.graph.as_highlighted())?;
+        write!(f, "{}", self.history)
     }
 }
 
@@ -101,7 +46,13 @@ impl IR {
 
     pub fn transform(&mut self, transform: impl IrTransform) -> Result<(), IRTrace> {
         let graph = Box::new(self.graph());
-        transform.apply(self).map_err(|err| IRTrace::Frame(graph, Rc::new(transform), Rc::new(err)))
+        let transform = Rc::new(transform);
+        self.history.push(transform.clone());
+        self.history.start_scope();
+        transform.apply(self).map_err(|err| IRTrace::Frame(graph, transform, Rc::new(err)))?;
+        self.history.end_scope();
+
+        Ok(())
     }
 
     pub fn ordered_operations(&self) -> Result<Vec<IrOperation>, IRTrace> {

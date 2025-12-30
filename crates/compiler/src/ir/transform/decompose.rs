@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     core::FormulaOp,
-    ir::{IR, IRTrace, graph::operation::FusedElementwise, transform::IrTransform},
+    ir::{IR, IRTrace, operation::FusedElementwise, transform::IrTransform},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

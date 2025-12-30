@@ -2,10 +2,8 @@ use std::{fmt, rc::Rc};
 
 use crate::ir::{
     IR, IRTrace,
-    graph::{
-        IrOperation,
-        operation::{BroadcastAcrossDimension, IrBinary, IrUnary},
-    },
+    graph::IrOperation,
+    operation::{BroadcastAcrossDimension, IrBinary, IrUnary},
     transform::{IrTransform, modify::AddOperation},
 };
 

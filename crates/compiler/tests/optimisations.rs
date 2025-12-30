@@ -1,5 +1,9 @@
 use bullet_compiler::{
-    ir::{IRTrace, graph::operation::ScalarConstant},
+    ir::{
+        IRTrace,
+        graph::IrType,
+        operation::{IrCopy, ScalarConstant},
+    },
     prelude::*,
 };
 
@@ -34,21 +38,17 @@ fn constant_fold_scalars() -> Result<(), IRTrace> {
 
     let size = Size::variable();
 
-    let a = builder.constant(DTypeValue::F32(1.0).into()).broadcast([1], 0, size);
-    let b = builder.add_input(size, DType::F32);
+    let a = builder.add_input(size, DType::F32);
+    let b = 1.0 * 1.0 * (a + 0.0) + 0.0;
 
-    let c = a * b * a;
-    let d = b * a * a;
-    let e = c - d;
-
-    let mut program = builder.build([e]);
+    let mut program = builder.build([b]);
 
     assert!(program.num_nontrivial_operations()? > 0);
 
     program.optimise()?;
 
-    assert_eq!(program.num_nontrivial_operations()?, 0);
-    assert_eq!(program.parent_op(e.node())?, Some(&ScalarConstant(0.0.into(), size)));
+    assert_eq!(program.num_nontrivial_operations()?, 1);
+    assert_eq!(program.parent_op(b.node())?, Some(&IrCopy(IrType::new(size, DType::F32))));
 
     program.check_valid()
 }

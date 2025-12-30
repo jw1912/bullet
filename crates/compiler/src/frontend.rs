@@ -4,10 +4,8 @@ use crate::{
     core::{Binary, DType, DTypeTensor, Shape, Size, Unary},
     ir::{
         IR,
-        graph::{
-            IrError, IrNodeId, IrOperationType, IrType,
-            operation::{BroadcastAcrossDimension, ReduceAcrossDimension, Reduction},
-        },
+        graph::{IrError, IrNodeId, IrOperationType, IrType},
+        operation::{BroadcastAcrossDimension, ReduceAcrossDimension, Reduction},
     },
 };
 

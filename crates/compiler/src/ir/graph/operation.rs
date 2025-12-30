@@ -1,25 +1,9 @@
-mod binary;
-mod broadcast;
-mod copy;
-mod elementwise;
-mod leaf;
-mod reduce;
-mod unary;
-
 use std::{
     collections::HashSet,
     fmt::Debug,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
-
-pub use binary::IrBinary;
-pub use broadcast::BroadcastAcrossDimension;
-pub use copy::IrCopy;
-pub use elementwise::FusedElementwise;
-pub use leaf::{Constant, IrInput, ScalarConstant};
-pub use reduce::{ReduceAcrossDimension, Reduction};
-pub use unary::IrUnary;
 
 use crate::{
     core::DTypeTensor,
@@ -184,5 +168,28 @@ impl IrOperation {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct IrInput(pub IrType);
+
+impl IrOperationType for IrInput {
+    fn opname(&self) -> String {
+        format!("leaf<{:?}>", self.0)
+    }
+
+    fn inputs(&self) -> Vec<IrType> {
+        Vec::new()
+    }
+
+    fn outputs(&self) -> Vec<IrType> {
+        vec![self.0]
+    }
+
+    fn evaluate(&self, _: &[&DTypeTensor], _: &mut [&mut DTypeTensor]) {}
+
+    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
+        false
     }
 }

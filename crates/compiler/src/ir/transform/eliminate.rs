@@ -1,4 +1,4 @@
-use crate::ir::{IR, IRTrace, graph::operation::IrCopy, transform::IrTransform};
+use crate::ir::{IR, IRTrace, operation::IrCopy, transform::IrTransform};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateUnusedOperations;
@@ -23,7 +23,8 @@ pub struct EliminateCopies;
 
 impl IrTransform for EliminateCopies {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
-        for op in ir.ordered_operations()?.into_iter().rev() {
+        for op in ir.ordered_operations()? {
+            let op = ir.get_op(op.id())?.clone();
             if op.downcast::<IrCopy>().is_some()
                 && let [input] = op.inputs()[..]
                 && let [output] = op.outputs()[..]
@@ -34,7 +35,7 @@ impl IrTransform for EliminateCopies {
                     continue;
                 }
 
-                if !ir.is_output(input) {
+                if !ir.is_output(input) && !ir.is_input(input)? {
                     // no topo check as performs y = copy(x) -> y = copy(y)
                     ir.graph.replace_input_unchecked(output, input)?;
                     ir.swap_outputs(input, output)?;
@@ -110,6 +111,30 @@ mod tests {
         assert!(ir.get_node(z).is_ok());
         assert!(ir.get_node(w).is_err());
         assert!(ir.get_node(t).is_err());
+
+        ir.check_valid()
+    }
+
+    #[test]
+    fn eliminate_input_copy() -> Result<(), IRTrace> {
+        let mut ir = IR::default();
+
+        let ty = IrType::new(1, DType::F32);
+        let x = ir.add_input(ty);
+        let y = ir.copy(x)?;
+        let z = ir.copy(y)?;
+
+        ir.register_output(z);
+        ir.transform(EliminateCopies)?;
+
+        assert_eq!(ir.num_ops(), 2);
+        assert!(ir.get_node(x).is_ok());
+        assert!(ir.get_node(z).is_ok());
+
+        let op = ir.get_op(ir.get_parent_op(z)?)?;
+        assert_eq!(op.inputs(), [x]);
+        assert_eq!(op.outputs(), [z]);
+        assert_eq!(op.downcast(), Some(&IrCopy(ty)));
 
         ir.check_valid()
     }

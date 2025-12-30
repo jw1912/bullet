@@ -4,10 +4,8 @@ use crate::{
     core::DTypeTensor,
     ir::{
         IR, IRTrace,
-        graph::{
-            IrNodeId, IrOperationId, IrOperationType,
-            operation::{Constant, ScalarConstant},
-        },
+        graph::{IrNodeId, IrOperationId, IrOperationType},
+        operation::{Constant, ScalarConstant},
         transform::{IrTransform, canonicalise::*, destructive::*, eliminate::*, foldrules::*},
     },
 };
@@ -51,7 +49,7 @@ impl SimplifyPass {
         'fold: loop {
             let op = ir.get_op(id)?;
 
-            if let Some(consts) = Self::fold_constant_expression(ir, op.inputs(), op.op())? {
+            if let Some(consts) = Self::try_evaluate(ir, op.inputs(), op.op())? {
                 let outputs = op.outputs().to_vec();
                 for (old, new_const) in outputs.into_iter().zip(consts) {
                     let new = ir.add_op([], Ok::<_, IRTrace>(new_const))?[0];
@@ -81,7 +79,7 @@ impl SimplifyPass {
         }
     }
 
-    pub fn fold_constant_expression(
+    fn try_evaluate(
         ir: &IR,
         inputs: &[IrNodeId],
         op: &Rc<dyn IrOperationType>,
@@ -149,8 +147,8 @@ mod tests {
 
     use crate::{
         core::{Binary, DType, DTypeValue, Size, Unary},
-        ir::graph::{
-            IrType,
+        ir::{
+            graph::IrType,
             operation::{BroadcastAcrossDimension, ScalarConstant},
         },
     };

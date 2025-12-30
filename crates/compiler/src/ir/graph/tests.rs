@@ -2,6 +2,40 @@ use crate::core::{DType, Size};
 
 use super::*;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mock(IrType, IrType);
+
+impl IrOperationType for Mock {
+    fn opname(&self) -> String {
+        "binary.mock".to_string()
+    }
+
+    fn inputs(&self) -> Vec<IrType> {
+        vec![self.0, self.1]
+    }
+
+    fn outputs(&self) -> Vec<IrType> {
+        vec![self.0]
+    }
+
+    fn equals(&self, _: &Rc<dyn IrOperationType>) -> bool {
+        false
+    }
+
+    fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
+        *outputs[0] = inputs[0].clone();
+    }
+}
+
+fn mock(ir: &mut IrGraph, lhs: IrNodeId, rhs: IrNodeId) -> Result<IrNodeId, IrError> {
+    let op = Mock(ir.get_node(lhs)?.ty(), ir.get_node(rhs)?.ty());
+    if let [output] = ir.add_op([lhs, rhs], op)?[..] {
+        Ok(output)
+    } else {
+        Err("Binary operation had unexpected number of outputs!".into())
+    }
+}
+
 #[test]
 fn construct_deconstruct() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
@@ -10,9 +44,9 @@ fn construct_deconstruct() -> Result<(), IrError> {
     let y = ir.add_input(IrType::new(8, DType::F32));
     let z = ir.add_input(IrType::new(8, DType::F32));
 
-    let w = ir.add_binary(x, y, Binary::Add)?;
-    let t = ir.add_binary(z, w, Binary::Mul)?;
-    let u = ir.add_binary(t, x, Binary::Add)?;
+    let w = mock(&mut ir, x, y)?;
+    let t = mock(&mut ir, z, w)?;
+    let u = mock(&mut ir, t, x)?;
 
     assert_eq!(ir.get_node(u)?.ty(), IrType::new(8, DType::F32));
 
@@ -36,10 +70,10 @@ fn swap_outputs() -> Result<(), IrError> {
 
     let x = ir.add_input(IrType::new(8, DType::F32));
     let y = ir.add_input(IrType::new(8, DType::F32));
-    let z = ir.add_binary(x, y, Binary::Add)?;
-    let w = ir.add_binary(z, y, Binary::Add)?;
-    let t = ir.add_binary(w, y, Binary::Add)?;
-    let new_t = ir.add_binary(x, y, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
+    let w = mock(&mut ir, z, y)?;
+    let t = mock(&mut ir, w, y)?;
+    let new_t = mock(&mut ir, x, y)?;
 
     let op = ir.get_parent_op(t)?;
     let new_op = ir.get_parent_op(new_t)?;
@@ -59,9 +93,9 @@ fn replace_input() -> Result<(), IrError> {
 
     let x = ir.add_input(IrType::new(8, DType::F32));
     let y = ir.add_input(IrType::new(8, DType::F32));
-    let z = ir.add_binary(x, y, Binary::Add)?;
-    let w = ir.add_binary(z, y, Binary::Add)?;
-    let t = ir.add_binary(w, y, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
+    let w = mock(&mut ir, z, y)?;
+    let t = mock(&mut ir, w, y)?;
 
     ir.register_output(t);
     ir.replace_input_unchecked(x, w)?;
@@ -73,36 +107,12 @@ fn replace_input() -> Result<(), IrError> {
 }
 
 #[test]
-fn invalid_addition_size() -> Result<(), IrError> {
-    let mut ir = IrGraph::default();
-
-    let x = ir.add_input(IrType::new(8, DType::F32));
-    let y = ir.add_input(IrType::new(16, DType::F32));
-
-    assert!(ir.add_binary(x, y, Binary::Add).is_err());
-
-    Ok(())
-}
-
-#[test]
-fn invalid_addition_dtype() -> Result<(), IrError> {
-    let mut ir = IrGraph::default();
-
-    let x = ir.add_input(IrType::new(8, DType::F32));
-    let y = ir.add_input(IrType::new(8, DType::I32));
-
-    assert!(ir.add_binary(x, y, Binary::Add).is_err());
-
-    Ok(())
-}
-
-#[test]
 fn invalid_removal() -> Result<(), IrError> {
     let mut ir = IrGraph::default();
 
     let x = ir.add_input(IrType::new(8, DType::F32));
     let y = ir.add_input(IrType::new(8, DType::F32));
-    let z = ir.add_binary(x, y, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
 
     assert_eq!(ir.get_node(z)?.ty(), IrType::new(8, DType::F32));
     assert!(ir.remove_op(ir.get_parent_op(y)?).is_err());
@@ -116,9 +126,9 @@ fn invalid_swap_outputs() -> Result<(), IrError> {
 
     let x = ir.add_input(IrType::new(8, DType::F32));
     let y = ir.add_input(IrType::new(8, DType::F32));
-    let z = ir.add_binary(x, y, Binary::Add)?;
-    let w = ir.add_binary(z, y, Binary::Add)?;
-    let t = ir.add_binary(w, y, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
+    let w = mock(&mut ir, z, y)?;
+    let t = mock(&mut ir, w, y)?;
 
     ir.swap_outputs_unchecked(z, t)?;
 
@@ -134,21 +144,17 @@ fn evaluate() -> Result<(), IrError> {
 
     let x = ir.add_input(IrType::new(size, DType::F32));
     let y = ir.add_input(IrType::new(size, DType::F32));
-    let z = ir.add_input(IrType::new(size, DType::F32));
-
-    let w = ir.add_binary(x, y, Binary::Add)?;
-    let t = ir.add_binary(z, w, Binary::Mul)?;
-    let u = ir.add_binary(t, x, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
 
     let ix = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
     let iy = DTypeTensor::F32(vec![1.0, 1.0, 1.0, 1.0]);
-    let iz = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
+    let ez = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
 
-    ir.register_output(u);
+    ir.register_output(z);
 
-    let outputs = ir.evaluate([(x, ix), (y, iy), (z, iz)])?;
+    let outputs = ir.evaluate([(x, ix), (y, iy)])?;
 
-    assert_eq!(outputs, [(u, DTypeTensor::F32(vec![3.0, 8.0, 15.0, 24.0]))].into());
+    assert_eq!(outputs, [(z, ez)].into());
 
     ir.check_valid()
 }
@@ -160,7 +166,7 @@ fn evaluate_missing_input() -> Result<(), IrError> {
 
     let x = ir.add_input(IrType::new(size, DType::F32));
     let y = ir.add_input(IrType::new(size, DType::F32));
-    let z = ir.add_binary(x, y, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
     ir.register_output(z);
 
     let ix = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
@@ -176,7 +182,7 @@ fn evaluate_seed_non_leaf() -> Result<(), IrError> {
 
     let x = ir.add_input(IrType::new(size, DType::F32));
     let y = ir.add_input(IrType::new(size, DType::F32));
-    let z = ir.add_binary(x, y, Binary::Add)?;
+    let z = mock(&mut ir, x, y)?;
     ir.register_output(z);
 
     let ix = DTypeTensor::F32(vec![1.0, 2.0, 3.0, 4.0]);
