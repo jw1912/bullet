@@ -142,7 +142,7 @@ unary_impl!(sinh, Sinh);
 unary_impl!(cosh, Cosh);
 unary_impl!(tanh, Tanh);
 unary_impl!(exp, Exp);
-unary_impl!(log1pabs, Log1pAbs);
+unary_impl!(log, Log);
 unary_impl!(sgn, Sgn);
 unary_impl!(abs, Abs);
 

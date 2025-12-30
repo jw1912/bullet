@@ -10,7 +10,7 @@ pub enum Unary {
     Cosh,
     Tanh,
     Exp,
-    Log1pAbs,
+    Log,
     Sgn,
     Abs,
     Reciprocal,
@@ -44,7 +44,7 @@ impl Unary {
             Self::Tanh => fp(f32::tanh)?,
             Self::Exp => fp(f32::exp)?,
             Self::Reciprocal => fp(|x| 1.0 / x)?,
-            Self::Log1pAbs => fp(|x| x.abs().ln_1p())?,
+            Self::Log => fp(|x| x.ln())?,
             Self::Sgn => match input {
                 DTypeValue::F32(x) => DTypeValue::F32(x.signum()),
                 DTypeValue::I32(x) => DTypeValue::I32(x.signum()),
