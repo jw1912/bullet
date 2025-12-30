@@ -1,29 +1,32 @@
-use std::{fmt, rc::Rc};
+use std::fmt;
 
-use crate::ir::{
-    IR, IRTrace,
-    graph::IrOperation,
-    operation::{BroadcastAcrossDimension, IrBinary, IrUnary},
-    transform::{IrTransform, modify::AddOperation},
+use crate::{
+    core::Binary,
+    ir::{
+        IR, IRTrace,
+        graph::IrOperation,
+        operation::{BroadcastAcrossDimension, IrBinary, IrUnary},
+        transform::IrTransform,
+    },
 };
 
-pub trait DestructiveRule: fmt::Debug + 'static {
+pub trait RewriteRule: fmt::Debug + 'static {
     fn apply(&self, ir: &mut IR, operation: IrOperation) -> Result<bool, IRTrace>;
 }
 
 #[derive(Debug)]
-pub struct DestructiveNest<A, B>(A, B);
+pub struct RewriteNest<A, B>(A, B);
 
-impl<A: DestructiveRule, B: DestructiveRule> DestructiveRule for DestructiveNest<A, B> {
+impl<A: RewriteRule, B: RewriteRule> RewriteRule for RewriteNest<A, B> {
     fn apply(&self, ir: &mut IR, operation: IrOperation) -> Result<bool, IRTrace> {
         Ok(self.0.apply(ir, operation.clone())? || self.1.apply(ir, operation)?)
     }
 }
 
 #[derive(Debug)]
-pub struct DestructivePass<T>(T);
+pub struct RewritePass<T>(T);
 
-impl<T: DestructiveRule> IrTransform for DestructivePass<T> {
+impl<T: RewriteRule> IrTransform for RewritePass<T> {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         'outer: loop {
             for op in ir.operations() {
@@ -37,27 +40,40 @@ impl<T: DestructiveRule> IrTransform for DestructivePass<T> {
     }
 }
 
-macro_rules! destructiverule {
+macro_rules! rewriterule {
     {
         rulename $name:ident on $irname:ident
         rewrites $op:ident ($($pattern:tt)*)
-        $($tail:tt)*
+        $tail:stmt
+    } => {
+        rewriterule! {
+            rulename $name on $irname
+            rewrites $op [($($pattern)*)]
+            $tail
+        }
+    };
+    {
+        rulename $name:ident on $irname:ident
+        rewrites $op:ident [
+            $(($($pattern:tt)*))+
+        ]
+        $tail:stmt
     } => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub struct $name;
 
-        impl DestructiveRule for $name {
+        impl RewriteRule for $name {
             fn apply(
                 &self,
                 $irname: &mut IR,
                 $op: IrOperation,
             ) -> Result<bool, IRTrace> {
-                $crate::if_find_and_bind_pattern!(
+                $($crate::if_find_and_bind_pattern!(
                     $irname,
                     &$op,
                     ($($pattern)*),
-                    $($tail)*
-                );
+                    $tail
+                );)+
 
                 Ok(false)
             }
@@ -65,19 +81,18 @@ macro_rules! destructiverule {
     };
 }
 
-destructiverule! {
+rewriterule! {
     rulename BroadcastUnaryIntoUnaryBroadcast on ir
     rewrites op (unary = [IrUnary] (broadcast = [BroadcastAcrossDimension] (grandparent)))
     {
         let new_broadcast = broadcast.with_new_dtype(unary.output_type().dtype());
         let new_parent = ir.add_unary(grandparent.id(), unary.op())?;
-        let new_op = AddOperation(vec![new_parent], Ok::<_, IRTrace>(Rc::new(new_broadcast)));
-        ir.replace_op(op.id(), new_op)?;
+        ir.replace_operation(op.id(), [new_parent], new_broadcast)?;
         return Ok(true);
     }
 }
 
-destructiverule! {
+rewriterule! {
     rulename BroadcastBinaryIntoBinaryBroadcast on ir
     rewrites op (binary = [IrBinary]
         (lb = [BroadcastAcrossDimension] (lgp))
@@ -87,10 +102,53 @@ destructiverule! {
         let new_broadcast = lb.with_new_dtype(out_dtype);
         if new_broadcast == rb.with_new_dtype(out_dtype) {
             let new_parent = ir.add_binary(lgp.id(), rgp.id(), binary.op())?;
-            let new_op = Rc::new(new_broadcast);
-            let new_op = AddOperation(vec![new_parent], Ok::<_, IRTrace>(new_op));
-            ir.replace_op(op.id(), new_op)?;
+            ir.replace_operation(op.id(), [new_parent], new_broadcast)?;
             return Ok(true);
+        }
+    }
+}
+
+rewriterule! {
+    rulename ExpandDistributive on ir
+    rewrites op [
+        (z = [IrBinary] (x = [IrBinary] (a) (b)) (y))
+        (z = [IrBinary] (y) (x = [IrBinary] (a) (b)))
+    ] {
+        if z.op() == Binary::Mul && x.op() == Binary::Add {
+            let new_op = IrBinary::new(a.ty(), b.ty(), Binary::Add)?;
+            let (y, a, b) = (y.id(), a.id(), b.id());
+            let new_lhs = ir.add_binary(a, y, Binary::Mul)?;
+            let new_rhs = ir.add_binary(b, y, Binary::Mul)?;
+            ir.replace_operation(op.id(), [new_lhs, new_rhs], new_op)?;
+            return Ok(true);
+        }
+    }
+}
+
+rewriterule! {
+    rulename FactoriseDistributive on ir
+    rewrites op (z = [IrBinary] (x = [IrBinary] (a) (b)) (y = [IrBinary] (c) (d)))
+    {
+        if z.op() == Binary::Add && x.op() == Binary::Mul && y.op() == Binary::Mul {
+            let [xn, yn] = op.inputs()[..] else { unreachable!() };
+            if ir.get_node(xn)?.children() == 1 && ir.get_node(yn)?.children() == 1 {
+                let ty = a.ty();
+                let (a, b, c, d) = (a.id(), b.id(), c.id(), d.id());
+                for ((lhs, mat), (x, y)) in [
+                    ((a, c), (b, d)),
+                    ((a, d), (b, c)),
+                    ((b, c), (a, d)),
+                    ((b, d), (a, c)),
+                ] {
+                    if lhs == mat {
+                        let op_id = op.id();
+                        let mul = IrBinary::new(ty, ty, Binary::Mul)?;
+                        let add = ir.add_binary(x, y, Binary::Add)?;
+                        ir.replace_operation(op_id, [lhs, add], mul)?;
+                        return Ok(true);
+                    }
+                }
+            }
         }
     }
 }
@@ -115,7 +173,7 @@ mod tests {
         let d = ir.add_unary(c, Unary::Exp)?;
 
         ir.register_output(d);
-        ir.transform(DestructivePass(BroadcastUnaryIntoUnaryBroadcast))?;
+        ir.transform(RewritePass(BroadcastUnaryIntoUnaryBroadcast))?;
 
         assert_eq!(ir.parent_op(d)?, Some(&broadcast?));
 
@@ -139,8 +197,8 @@ mod tests {
         let e = ir.add_binary(d, d, Binary::Mul)?;
 
         ir.register_output(e);
-        let nest = DestructiveNest(BroadcastUnaryIntoUnaryBroadcast, BroadcastBinaryIntoBinaryBroadcast);
-        ir.transform(DestructivePass(nest))?;
+        let nest = RewriteNest(BroadcastUnaryIntoUnaryBroadcast, BroadcastBinaryIntoBinaryBroadcast);
+        ir.transform(RewritePass(nest))?;
 
         assert_eq!(ir.parent_op(e)?, Some(&broadcast?));
 

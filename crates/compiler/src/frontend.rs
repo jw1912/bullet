@@ -182,11 +182,60 @@ impl std::ops::Neg for ProgramNode<'_> {
     }
 }
 
-impl std::ops::Sub<Self> for ProgramNode<'_> {
+impl<T> std::ops::Sub<T> for ProgramNode<'_>
+where
+    Self: std::ops::Add<T, Output = Self>,
+    T: std::ops::Neg<Output = T>,
+{
     type Output = Self;
 
-    fn sub(self, rhs: Self) -> Self {
+    fn sub(self, rhs: T) -> Self {
         self + (-rhs)
+    }
+}
+
+impl<'a> std::ops::Sub<ProgramNode<'a>> for i32 {
+    type Output = ProgramNode<'a>;
+
+    fn sub(self, rhs: ProgramNode<'a>) -> Self::Output {
+        self + (-rhs)
+    }
+}
+
+impl<'a> std::ops::Sub<ProgramNode<'a>> for f32 {
+    type Output = ProgramNode<'a>;
+
+    fn sub(self, rhs: ProgramNode<'a>) -> Self::Output {
+        self + (-rhs)
+    }
+}
+
+#[allow(clippy::suspicious_arithmetic_impl)]
+impl std::ops::Div<Self> for ProgramNode<'_> {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self {
+        match rhs.ty().dtype() {
+            DType::F32 => self * rhs.unary(Unary::Reciprocal),
+            DType::I32 => self.binary(rhs, Binary::DivByI32),
+        }
+    }
+}
+
+#[allow(clippy::suspicious_arithmetic_impl)]
+impl<'a> std::ops::Div<ProgramNode<'a>> for f32 {
+    type Output = ProgramNode<'a>;
+
+    fn div(self, rhs: ProgramNode<'a>) -> Self::Output {
+        self * rhs.unary(Unary::Reciprocal)
+    }
+}
+
+impl std::ops::Div<f32> for ProgramNode<'_> {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        self * (1.0 / rhs)
     }
 }
 

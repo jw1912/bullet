@@ -13,6 +13,14 @@ use crate::{
 #[cfg(test)]
 use crate::core::{DType, DTypeTensor, Size};
 
+/// A fold rule is a special case for the simplest form of rewrite, that being an
+/// entirely local transform on an operation, changing only the operation itself
+/// by replacing it with a new operation that has equivalent outputs.
+///
+/// An example is if `Y = a * (b * X)`, we can replace this with `Y = (a * b) * X`.
+/// If the child `b * X` is now unused then it can be eliminated as dead code later
+/// on and we have saved a full tensor operation, but otherwise we have lost nothing
+/// by performing this transformation.
 pub trait FoldRule: fmt::Debug + 'static {
     fn fold(&self, ir: &IR, operation: &IrOperation) -> Result<Option<AddOperation>, IRTrace>;
 }
@@ -170,7 +178,7 @@ foldrule! {
                     (Binary::Add, Binary::Add) => Some((
                         Binary::Add,
                         Binary::Add.evaluate(val1, val2)
-                            .ok_or::<IrError>(format!("Unable to eval {val1} * {val2}").into())?
+                            .ok_or::<IrError>(format!("Unable to eval {val1} + {val2}").into())?
                     )),
                     _ => None,
                 }

@@ -1,9 +1,5 @@
 use bullet_compiler::{
-    ir::{
-        IRTrace,
-        graph::IrType,
-        operation::{IrCopy, ScalarConstant},
-    },
+    ir::{IRTrace, transform::CanonicalisePass},
     prelude::*,
 };
 
@@ -39,7 +35,7 @@ fn constant_fold_scalars() -> Result<(), IRTrace> {
     let size = Size::variable();
 
     let a = builder.add_input(size, DType::F32);
-    let b = 1.0 * 1.0 * (a + 0.0) + 0.0;
+    let b = -1.0 * (-1.0 * (1.0 * a + 0.0) + 0.0);
 
     let mut program = builder.build([b]);
 
@@ -48,13 +44,13 @@ fn constant_fold_scalars() -> Result<(), IRTrace> {
     program.optimise()?;
 
     assert_eq!(program.num_nontrivial_operations()?, 1);
-    assert_eq!(program.parent_op(b.node())?, Some(&IrCopy(IrType::new(size, DType::F32))));
+    assert_eq!(program.is_copy(b.node())?, Some(a.node()));
 
     program.check_valid()
 }
 
 #[test]
-fn fold_equiv_arith_subexprs() -> Result<(), IRTrace> {
+fn rearrange_exprs() -> Result<(), IRTrace> {
     for perm in 0..24 {
         let mut perms = [0, 1, 2, 3];
         perms.swap(perm / 6, 3);
@@ -69,8 +65,7 @@ fn fold_equiv_arith_subexprs() -> Result<(), IRTrace> {
             let c = builder.add_input(1, DType::F32);
             let d = builder.add_input(1, DType::F32);
 
-            let lhs1 = a * b + a * c + b * c + a * c;
-            //let lhs2 = (a + b) * (c + d);
+            let lhs = a * c + a * d + b * c + b * d;
 
             let muls = [
                 if swap & 1 == 0 { a * c } else { c * a },
@@ -81,24 +76,52 @@ fn fold_equiv_arith_subexprs() -> Result<(), IRTrace> {
 
             let rhs = muls[perms[0]] + muls[perms[1]] + muls[perms[2]] + muls[perms[3]];
 
-            let zero1 = lhs1 - rhs;
-            //let zero2 = lhs2 - rhs;
-
-            let mut program = builder.build([zero1 /*zero2*/]);
-
-            assert!(program.num_nontrivial_operations()? > 0, "{program}");
-
-            program.optimise()?;
-
-            assert_eq!(program.num_nontrivial_operations()?, 0, "{program}");
-
-            let constant = ScalarConstant(0.0.into(), 1.into());
-            assert_eq!(program.parent_op(zero1.node())?, Some(&constant), "{program}");
-            //assert_eq!(program.parent_op(zero2.node())?, Some(&constant), "{program}");
-
+            let mut program = builder.build([lhs, rhs]);
+            program.transform(CanonicalisePass::expand())?;
+            assert!(program.are_copies(lhs.node(), rhs.node())?, "{program}");
             program.check_valid()?;
         }
     }
 
     Ok(())
+}
+
+#[test]
+fn expand_exprs() -> Result<(), IRTrace> {
+    let builder = ProgramBuilder::default();
+
+    let a = builder.add_input(1, DType::F32);
+    let b = builder.add_input(1, DType::F32);
+    let c = builder.add_input(1, DType::F32);
+    let d = builder.add_input(1, DType::F32);
+
+    let lhs = (a + b) * (c + d);
+    let rhs = (a * c + a * d) + (b * c + b * d);
+
+    let mut program = builder.build([lhs, rhs]);
+    program.transform(CanonicalisePass::expand())?;
+    assert!(program.are_copies(lhs.node(), rhs.node())?, "{program}");
+    program.check_valid()
+}
+
+#[test]
+fn factorise_exprs() -> Result<(), IRTrace> {
+    let builder = ProgramBuilder::default();
+
+    let a = builder.add_input(1, DType::F32);
+    let b = builder.add_input(1, DType::F32);
+    let c = builder.add_input(1, DType::F32);
+    let d = builder.add_input(1, DType::F32);
+
+    let out = (a * c + a * d) + (b * c + b * d);
+
+    let mut program = builder.build([out]);
+
+    assert_eq!(program.num_nontrivial_operations()?, 7, "{program}");
+
+    program.transform(CanonicalisePass::factorise())?;
+
+    assert_eq!(program.num_nontrivial_operations()?, 3, "{program}");
+
+    program.check_valid()
 }

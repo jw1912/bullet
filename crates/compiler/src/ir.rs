@@ -11,8 +11,7 @@ use graph::{IrError, IrGraph, IrInput, IrNode, IrNodeId, IrOperation, IrOperatio
 use operation::{BroadcastAcrossDimension, Constant, FusedElementwise, IrBinary, IrCopy, IrUnary, ScalarConstant};
 pub use trace::{IRHistory, IRTrace};
 use transform::{
-    IrTransform, SimplifyPass,
-    decompose::DecomposeElementwise,
+    CanonicalisePass, IrTransform,
     eliminate::{EliminateCopies, EliminateUnusedOperations},
     modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
 };
@@ -114,6 +113,10 @@ impl IR {
     pub fn is_copy(&self, node: IrNodeId) -> Result<Option<IrNodeId>, IRTrace> {
         let op = self.get_op(self.get_parent_op(node)?)?;
         Ok(op.downcast::<IrCopy>().map(|_| op.inputs()[0]))
+    }
+
+    pub fn are_copies(&self, a: IrNodeId, b: IrNodeId) -> Result<bool, IRTrace> {
+        Ok(self.is_copy(a)? == Some(b) || self.is_copy(b)? == Some(a))
     }
 
     pub fn parent_op<T: IrOperationType>(&self, node: IrNodeId) -> Result<Option<&T>, IRTrace> {
@@ -243,8 +246,18 @@ impl IR {
         self.get_parent_op(first_output)
     }
 
+    pub fn replace_operation(
+        &mut self,
+        op: IrOperationId,
+        new_inputs: impl Into<Vec<IrNodeId>>,
+        new_op: impl IrOperationType,
+    ) -> Result<IrOperationId, IRTrace> {
+        let add = AddOperation(new_inputs.into(), Ok(Rc::new(new_op)));
+        self.replace_op(op, add)
+    }
+
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
-        self.transform(DecomposeElementwise)?;
-        self.transform(SimplifyPass::all())
+        self.transform(CanonicalisePass::expand())?;
+        self.transform(CanonicalisePass::factorise())
     }
 }

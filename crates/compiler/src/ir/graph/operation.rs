@@ -140,7 +140,7 @@ impl IrOperation {
     }
 
     /// Canonicalise ordering of commutative inputs.
-    pub fn canonicalise_commutative_inputs(&mut self) -> Result<(), IrError> {
+    pub fn order_commutative_inputs(&mut self) -> Result<(), IrError> {
         let groups = self.op.commutating_groups();
 
         for (i, group_i) in groups.iter().enumerate() {

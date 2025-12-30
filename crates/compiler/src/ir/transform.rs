@@ -1,12 +1,12 @@
 pub mod canonicalise;
 pub mod decompose;
-pub mod destructive;
 pub mod eliminate;
 pub mod foldrules;
 pub mod modify;
-pub mod simplify;
+pub mod ordering;
+pub mod rewriterules;
 
-pub use simplify::SimplifyPass;
+pub use canonicalise::CanonicalisePass;
 
 use crate::ir::{IR, IRTrace};
 
