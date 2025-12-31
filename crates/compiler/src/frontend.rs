@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{
-    core::{Binary, DType, DTypeTensor, Shape, Size, Unary},
+    core::{CABinary, DType, DTypeTensor, DTypeValue, Shape, Size, Unary},
     ir::{
         IR,
         graph::{IrError, IrNodeId, IrOperationType, IrType},
@@ -36,6 +36,11 @@ impl ProgramBuilder {
 
     pub fn constant<'a>(&'a self, value: DTypeTensor) -> ProgramNode<'a> {
         let node = self.ir.borrow_mut().add_const(value);
+        self.new_node(node)
+    }
+
+    pub fn scalar<'a>(&'a self, value: impl Into<DTypeValue>, size: impl Into<Size>) -> ProgramNode<'a> {
+        let node = self.ir.borrow_mut().add_scalar(value, size);
         self.new_node(node)
     }
 
@@ -100,13 +105,9 @@ impl<'a> ProgramNode<'a> {
         Self { builder: self.builder, node }
     }
 
-    fn binary(self, rhs: Self, op: Binary) -> Self {
+    fn binary(self, rhs: Self, op: CABinary) -> Self {
         let node = self.builder.ir.borrow_mut().add_binary(self.node, rhs.node, op).unwrap();
         Self { builder: self.builder, node }
-    }
-
-    pub fn pow(self, rhs: Self) -> Self {
-        self.binary(rhs, Binary::Pow)
     }
 }
 
@@ -116,7 +117,7 @@ macro_rules! binary_impl {
             type Output = ProgramNode<'a>;
 
             fn $fnname(self, rhs: ProgramNode<'a>) -> Self::Output {
-                self.binary(rhs, Binary::$mapop)
+                self.binary(rhs, CABinary::$mapop)
             }
         }
     };
@@ -152,7 +153,8 @@ macro_rules! binary_const_impl {
             type Output = ProgramNode<'a>;
 
             fn $fnname(self, rhs: $t) -> Self::Output {
-                self.unary(Unary::BinaryWithConst { op: Binary::$mapop, val: rhs.into(), lhs: true })
+                let scalar = self.builder.scalar(rhs, self.ty().size());
+                self.binary(scalar, CABinary::$mapop)
             }
         }
 
@@ -160,7 +162,8 @@ macro_rules! binary_const_impl {
             type Output = ProgramNode<'a>;
 
             fn $fnname(self, rhs: ProgramNode<'a>) -> Self::Output {
-                rhs.unary(Unary::BinaryWithConst { op: Binary::$mapop, val: self.into(), lhs: false })
+                let lhs = rhs.builder.scalar(self, rhs.ty().size());
+                lhs.binary(rhs, CABinary::$mapop)
             }
         }
     };
@@ -217,7 +220,7 @@ impl std::ops::Div<Self> for ProgramNode<'_> {
     fn div(self, rhs: Self) -> Self {
         match rhs.ty().dtype() {
             DType::F32 => self * rhs.unary(Unary::Reciprocal),
-            DType::I32 => self.binary(rhs, Binary::DivByI32),
+            DType::I32 => unimplemented!(),
         }
     }
 }

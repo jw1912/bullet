@@ -1,4 +1,4 @@
-use crate::ir::{IR, IRTrace, operation::IrCopy, transform::IrTransform};
+use crate::ir::{IR, IRTrace, operation::CopyOp, transform::IrTransform};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateUnusedOperations;
@@ -25,7 +25,7 @@ impl IrTransform for EliminateCopies {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.ordered_operations()? {
             let op = ir.get_op(op.id())?.clone();
-            if op.downcast::<IrCopy>().is_some()
+            if op.downcast::<CopyOp>().is_some()
                 && let [input] = op.inputs()[..]
                 && let [output] = op.outputs()[..]
             {
@@ -86,7 +86,7 @@ fn eliminate_single_common_subexpr(ir: &mut IR) -> Result<bool, IRTrace> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::{Binary, DType, DTypeTensor},
+        core::{CABinary, DType, DTypeTensor},
         ir::graph::IrType,
     };
 
@@ -98,9 +98,9 @@ mod tests {
 
         let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
         let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
-        let z = ir.add_binary(x, y, Binary::Add)?;
-        let w = ir.add_binary(z, y, Binary::Add)?;
-        let t = ir.add_binary(w, y, Binary::Add)?;
+        let z = ir.add_binary(x, y, CABinary::Add)?;
+        let w = ir.add_binary(z, y, CABinary::Add)?;
+        let t = ir.add_binary(w, y, CABinary::Add)?;
 
         ir.register_output(z);
 
@@ -134,7 +134,7 @@ mod tests {
         let op = ir.get_op(ir.get_parent_op(z)?)?;
         assert_eq!(op.inputs(), [x]);
         assert_eq!(op.outputs(), [z]);
-        assert_eq!(op.downcast(), Some(&IrCopy(ty)));
+        assert_eq!(op.downcast(), Some(&CopyOp(ty)));
 
         ir.check_valid()
     }
@@ -148,9 +148,9 @@ mod tests {
         let z = ir.copy(y)?;
         let w = ir.copy(z)?;
 
-        let a = ir.add_binary(x, y, Binary::Add)?;
-        let b = ir.add_binary(z, w, Binary::Mul)?;
-        let c = ir.add_binary(a, b, Binary::Add)?;
+        let a = ir.add_binary(x, y, CABinary::Add)?;
+        let b = ir.add_binary(z, w, CABinary::Mul)?;
+        let c = ir.add_binary(a, b, CABinary::Add)?;
 
         ir.register_output(a);
         ir.register_output(b);
@@ -169,13 +169,13 @@ mod tests {
         let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
         let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
 
-        let z1 = ir.add_binary(x, y, Binary::Add)?;
-        let w1 = ir.add_binary(z1, y, Binary::Add)?;
-        let t1 = ir.add_binary(w1, y, Binary::Mul)?;
+        let z1 = ir.add_binary(x, y, CABinary::Add)?;
+        let w1 = ir.add_binary(z1, y, CABinary::Add)?;
+        let t1 = ir.add_binary(w1, y, CABinary::Mul)?;
 
-        let z2 = ir.add_binary(x, y, Binary::Add)?;
-        let w2 = ir.add_binary(z2, y, Binary::Add)?;
-        let t2 = ir.add_binary(w2, y, Binary::Mul)?;
+        let z2 = ir.add_binary(x, y, CABinary::Add)?;
+        let w2 = ir.add_binary(z2, y, CABinary::Add)?;
+        let t2 = ir.add_binary(w2, y, CABinary::Mul)?;
 
         ir.register_output(t1);
         ir.register_output(t2);

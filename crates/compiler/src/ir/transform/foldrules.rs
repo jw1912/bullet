@@ -1,17 +1,17 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
-    core::{Binary, DTypeValue, Unary},
+    core::{CABinary, DTypeValue},
     ir::{
         IR, IRTrace,
-        graph::{IrError, IrOperation, IrType},
-        operation::{BroadcastAcrossDimension, Constant, IrBinary, IrCopy, IrUnary, ScalarConstant},
+        graph::IrOperation,
+        operation::{BroadcastAcrossDimension, CABinaryOp, Constant, CopyOp, ScalarConstant, UnaryOp},
         transform::modify::AddOperation,
     },
 };
 
 #[cfg(test)]
-use crate::core::{DType, DTypeTensor, Size};
+use crate::core::{DTypeTensor, Size};
 
 /// A fold rule is a special case for the simplest form of rewrite, that being an
 /// entirely local transform on an operation, changing only the operation itself
@@ -98,6 +98,18 @@ macro_rules! foldrule {
 }
 
 foldrule! {
+    rulename EvalScalarConstUnary on ir
+    rewrites (unary = [UnaryOp] (scalar = [ScalarConstant]))
+    into [ScalarConstant(unary.op().evaluate(scalar.0).unwrap(), scalar.1)]
+}
+
+foldrule! {
+    rulename EvalScalarConstBinary on ir
+    rewrites (binary = [CABinaryOp] (lhs = [ScalarConstant]) (rhs = [ScalarConstant]))
+    into [ScalarConstant(binary.op().evaluate(lhs.0, rhs.0).unwrap(), lhs.1)]
+}
+
+foldrule! {
     rulename FoldFixedSizeScalarConst on ir
     rewrites (constant = [Constant])
     into [ScalarConstant(scalar, constant.0.size().into())]
@@ -120,141 +132,25 @@ foldrule! {
 }
 
 foldrule! {
-    rulename FoldScalarConstLhsIntoBinary on ir
-    rewrites (binary = [IrBinary] (a = [ScalarConstant]) (b))
-    into [{
-        let ScalarConstant(val, size) = *a;
-        let ty = IrType::new(size, val.dtype());
-        let op = Unary::BinaryWithConst { op: binary.op(), val, lhs: false };
-        IrUnary::new(ty, op)?
-    }] (b)
-    testcase scalar_const_lhs_into_binary {
-        let size = Size::variable();
-        let a = ir.add_input(IrType::new(size, DType::F32));
-        let b = ir.add_scalar(1.0, size);
-        ir.add_binary(b, a, Binary::Add)?
-    }
-}
-
-foldrule! {
-    rulename FoldScalarConstRhsIntoBinary on ir
-    rewrites (binary = [IrBinary] (a) (b = [ScalarConstant]))
-    into [{
-        let ScalarConstant(val, size) = *b;
-        let ty = IrType::new(size, val.dtype());
-        let op = Unary::BinaryWithConst { op: binary.op(), val, lhs: true };
-        IrUnary::new(ty, op).unwrap()
-    }] (a)
-    testcase scalar_const_rhs_into_binary {
-        let size = Size::variable();
-        let a = ir.add_input(IrType::new(size, DType::F32));
-        let b = ir.add_scalar(1.0, size);
-        ir.add_binary(a, b, Binary::Add)?
-    }
-}
-
-foldrule! {
-    rulename FoldScalarConstIntoUnary on ir
-    rewrites (unary = [IrUnary] (scalar = [ScalarConstant]))
-    into [ScalarConstant(unary.op().evaluate(scalar.0).unwrap(), scalar.1)]
-}
-
-foldrule! {
-    rulename FoldUnaryUnaryIntoUnary on ir
-    rewrites (u1 = [IrUnary] (u2 = [IrUnary] (input)))
-    into [IrUnary::new(input.ty(), Unary::BinaryWithConst { op, val, lhs: true })?] (input)
-    given {
-        Some((op, val)) = {
-            if let (
-                Unary::BinaryWithConst { op: op1, val: val1, .. },
-                Unary::BinaryWithConst { op: op2, val: val2, .. },
-            ) = (u1.op(), u2.op()) {
-                match (op1, op2) {
-                    (Binary::Mul, Binary::Mul) => Some((
-                        Binary::Mul,
-                        Binary::Mul.evaluate(val1, val2)
-                            .ok_or::<IrError>(format!("Unable to eval {val1} * {val2}").into())?
-                    )),
-                    (Binary::Add, Binary::Add) => Some((
-                        Binary::Add,
-                        Binary::Add.evaluate(val1, val2)
-                            .ok_or::<IrError>(format!("Unable to eval {val1} + {val2}").into())?
-                    )),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        };
-    }
-}
-
-foldrule! {
     rulename FoldConstIdentities on ir
-    rewrites (unary = [IrUnary] (a))
-    into [IrCopy(a.ty())] (a)
+    rewrites (binary = [CABinaryOp] (scalar = [ScalarConstant]) (a))
+    into [CopyOp(a.ty())] (a)
     given {{
-        if let Unary::BinaryWithConst { op, val, lhs } = unary.op() {
-            match op {
-                Binary::Mul => val == 1.0.into() || val == 1.into(),
-                Binary::Add => val == 0.0.into() || val == 0.into(),
-                Binary::DivByI32 => lhs && val == 1.into(),
-                _ => false,
-            }
-        } else {
-            false
+        let ScalarConstant(val, _) = *scalar;
+        match binary.op() {
+            CABinary::Mul => val == 1.0.into() || val == 1.into(),
+            CABinary::Add => val == 0.0.into() || val == 0.into(),
+            CABinary::Max => val == f32::MIN.into() || val == i32::MIN.into(),
+            CABinary::Min => val == f32::MAX.into() || val == i32::MAX.into(),
         }
     }}
-    testcase add_zero {
-        let a = ir.add_input(IrType::new(Size::variable(), DType::F32, ));
-        ir.add_unary(a, Unary::BinaryWithConst { op: Binary::Add, val: 0.0.into(), lhs: false })?
-    }
 }
 
 foldrule! {
     rulename FoldMulByZero on ir
-    rewrites (unary = [IrUnary] (a))
+    rewrites (binary = [CABinaryOp] (scalar = [ScalarConstant]) (a))
     into [ScalarConstant(DTypeValue::zero(a.ty().dtype()), a.ty().size())]
-    given {{
-        if let Unary::BinaryWithConst { op: Binary::Mul, val, .. } = unary.op() {
-            val == 0.0.into() || val == 0.into()
-        } else {
-            false
-        }
-    }}
-}
-
-foldrule! {
-    rulename FoldXAddMulX on ir
-    rewrites (binary = [IrBinary] (a) (unary = [IrUnary] (b)))
-    into [IrUnary::new(a.ty(), Unary::BinaryWithConst { op: Binary::Mul, val, lhs: true })?] (a)
     given {
-        Some(val) = {
-            if a.id() == b.id() && binary.op() == Binary::Add
-                && let Unary::BinaryWithConst { op: Binary::Mul, val, .. } = unary.op()
-            {
-                Binary::Add.evaluate(val, DTypeValue::one(val.dtype()))
-            } else {
-                None
-            }
-        };
-    }
-}
-
-foldrule! {
-    rulename FoldMulXAddMulX on ir
-    rewrites (binary = [IrBinary] (u1 = [IrUnary] (a)) (u2 = [IrUnary] (b)))
-    into [IrUnary::new(a.ty(), Unary::BinaryWithConst { op: Binary::Mul, val, lhs: true })?] (a)
-    given {
-        Some(val) = {
-            if a.id() == b.id() && binary.op() == Binary::Add
-                && let Unary::BinaryWithConst { op: Binary::Mul, val: val1, .. } = u1.op()
-                && let Unary::BinaryWithConst { op: Binary::Mul, val: val2, .. } = u2.op()
-            {
-                Binary::Mul.evaluate(val1, val2)
-            } else {
-                None
-            }
-        };
+        binary.op() == CABinary::Mul && (scalar.0 == 0.0.into() || scalar.0 == 0.into())
     }
 }

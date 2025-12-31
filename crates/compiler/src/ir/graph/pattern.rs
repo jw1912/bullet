@@ -12,7 +12,7 @@
 /// # use bullet_compiler::{
 /// #     core::{DType, Size, Binary},
 /// #     if_find_and_bind_pattern,
-/// #     ir::graph::{IrGraph, IrError, IrType, operation::IrBinary},
+/// #     ir::graph::{IrGraph, IrError, IrType, operation::BinaryOp},
 /// # };
 /// #
 /// # let mut ir = IrGraph::default();
@@ -26,7 +26,7 @@
 /// if_find_and_bind_pattern!(
 ///     ir,
 ///     target_op,
-///     (binary = [IrBinary] (a) (b)),
+///     (binary = [BinaryOp] (a) (b)),
 ///     found = binary.op() == Binary::Add && a.id() == node_a && b.id() == node_b
 /// );
 ///
@@ -40,7 +40,7 @@
 /// # use bullet_compiler::{
 /// #     core::{Binary, DType, Size},
 /// #     if_find_and_bind_pattern,
-/// #     ir::graph::{IrGraph, IrError, IrType, operation::{IrBinary, IrInput}},
+/// #     ir::graph::{IrGraph, IrError, IrType, operation::{BinaryOp, IrInput}},
 /// # };
 /// #
 /// # let mut ir = IrGraph::default();
@@ -56,10 +56,10 @@
 /// if_find_and_bind_pattern!(
 ///     ir,
 ///     target_op,
-///     (b_e = [IrBinary]
-///         (b_c = [IrBinary] (a1 = [IrInput]) (b1 = [IrInput]))
-///         (b_d = [IrBinary]
-///             (b_c2 = [IrBinary] (a2 = [IrInput]) (b2 = [IrInput]))
+///     (b_e = [BinaryOp]
+///         (b_c = [BinaryOp] (a1 = [IrInput]) (b1 = [IrInput]))
+///         (b_d = [BinaryOp]
+///             (b_c2 = [BinaryOp] (a2 = [IrInput]) (b2 = [IrInput]))
 ///             (b3 = [IrInput])
 ///         )
 ///     ),

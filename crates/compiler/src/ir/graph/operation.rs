@@ -138,37 +138,6 @@ impl IrOperation {
     pub fn downcast<T: IrOperationType>(&self) -> Option<&T> {
         Self::downcast_rc::<T>(&self.op)
     }
-
-    /// Canonicalise ordering of commutative inputs.
-    pub fn order_commutative_inputs(&mut self) -> Result<(), IrError> {
-        let groups = self.op.commutating_groups();
-
-        for (i, group_i) in groups.iter().enumerate() {
-            for group_j in groups.iter().skip(i + 1) {
-                if group_i.intersection(group_j).next().is_some() {
-                    return Err("Distinct commutating groups intersect!".into());
-                }
-            }
-        }
-
-        for group in groups {
-            let mut group = group.into_iter().collect::<Vec<_>>();
-            let mut nodes = group.iter().map(|&i| self.inputs[i]).collect::<Vec<_>>();
-
-            if self.op.inputs().iter().collect::<HashSet<_>>().len() > 1 {
-                return Err("Inputs within commutating group have differing types!".into());
-            }
-
-            group.sort();
-            nodes.sort();
-
-            for (idx, id) in group.into_iter().zip(nodes) {
-                self.set_input(idx, id);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Debug)]

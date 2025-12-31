@@ -1,21 +1,16 @@
-use crate::core::{DType, DTypeValue};
+use crate::core::DTypeValue;
 
+/// Commutative & associative binary operations.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Binary {
+pub enum CABinary {
     Add,
     Mul,
     Min,
     Max,
-    Pow,
-    DivByI32,
 }
 
-impl Binary {
-    pub fn dtype(&self, lhs: DType, rhs: DType) -> Option<DType> {
-        (lhs == rhs).then_some(lhs)
-    }
-
+impl CABinary {
     pub fn evaluate(self, lhs: DTypeValue, rhs: DTypeValue) -> Option<DTypeValue> {
         match (lhs, rhs) {
             (DTypeValue::F32(x), DTypeValue::F32(y)) => Some(DTypeValue::F32(self.evaluate_f32(x, y))),
@@ -30,8 +25,6 @@ impl Binary {
             Self::Mul => lhs * rhs,
             Self::Min => lhs.min(rhs),
             Self::Max => lhs.max(rhs),
-            Self::Pow => lhs.powf(rhs),
-            Self::DivByI32 => panic!(),
         }
     }
 
@@ -41,15 +34,6 @@ impl Binary {
             Self::Mul => lhs * rhs,
             Self::Min => lhs.min(rhs),
             Self::Max => lhs.max(rhs),
-            Self::Pow => rhs.try_into().ok().map(|r| lhs.pow(r))?,
-            Self::DivByI32 => lhs / rhs,
         })
-    }
-
-    pub fn is_commutative(self) -> bool {
-        match self {
-            Binary::Pow | Binary::DivByI32 => false,
-            Binary::Add | Binary::Max | Binary::Min | Binary::Mul => true,
-        }
     }
 }

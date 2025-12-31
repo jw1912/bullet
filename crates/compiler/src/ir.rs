@@ -5,10 +5,10 @@ pub mod transform;
 
 use std::{collections::HashMap, fmt, rc::Rc};
 
-use crate::core::{Binary, DTypeTensor, DTypeValue, Formula, FormulaId, Shape, Size, Unary};
+use crate::core::{CABinary, DTypeTensor, DTypeValue, Shape, Size, Unary};
 
 use graph::{IrError, IrGraph, IrInput, IrNode, IrNodeId, IrOperation, IrOperationId, IrOperationType, IrType};
-use operation::{BroadcastAcrossDimension, Constant, FusedElementwise, IrBinary, IrCopy, IrUnary, ScalarConstant};
+use operation::{BroadcastAcrossDimension, CABinaryOp, Constant, CopyOp, ScalarConstant, UnaryOp};
 pub use trace::{IRHistory, IRTrace};
 use transform::{
     CanonicalisePass, IrTransform,
@@ -112,7 +112,7 @@ impl IR {
 
     pub fn is_copy(&self, node: IrNodeId) -> Result<Option<IrNodeId>, IRTrace> {
         let op = self.get_op(self.get_parent_op(node)?)?;
-        Ok(op.downcast::<IrCopy>().map(|_| op.inputs()[0]))
+        Ok(op.downcast::<CopyOp>().map(|_| op.inputs()[0]))
     }
 
     pub fn are_copies(&self, a: IrNodeId, b: IrNodeId) -> Result<bool, IRTrace> {
@@ -188,39 +188,22 @@ impl IR {
     }
 
     pub fn add_unary(&mut self, node: IrNodeId, op: Unary) -> Result<IrNodeId, IRTrace> {
-        let op = self.get_node(node).and_then(|node| IrUnary::new(node.ty(), op).map_err(IRTrace::Root));
+        let op = self.get_node(node).and_then(|node| UnaryOp::new(node.ty(), op).map_err(IRTrace::Root));
         self.add_op([node], op).map(|x| x[0])
     }
 
-    pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: Binary) -> Result<IrNodeId, IRTrace> {
-        let op = IrBinary::new(self.get_node(lhs)?.ty(), self.get_node(rhs)?.ty(), op);
+    pub fn add_binary(&mut self, lhs: IrNodeId, rhs: IrNodeId, op: CABinary) -> Result<IrNodeId, IRTrace> {
+        let ty = self.get_node(lhs)?.ty();
+        if ty != self.get_node(rhs)?.ty() {
+            return Err(format!("Mismatched input types to CABinary::{op:?}").into());
+        }
+
+        let op = CABinaryOp::new(ty, op);
         self.add_op([lhs, rhs], op).map(|x| x[0])
     }
 
     pub fn copy(&mut self, node: IrNodeId) -> Result<IrNodeId, IRTrace> {
-        self.add_op([node], self.get_node(node).map(|n| IrCopy(n.ty()))).map(|x| x[0])
-    }
-
-    pub fn add_elementwise<const M: usize, const N: usize, F>(
-        &mut self,
-        inputs: [IrNodeId; M],
-        f: F,
-    ) -> Result<[IrNodeId; N], IRTrace>
-    where
-        F: for<'a> Fn(&mut Formula, [FormulaId; M]) -> Option<[FormulaId; N]>,
-    {
-        let nodes = inputs.map(|x| self.get_node(x).unwrap().ty());
-        let op = FusedElementwise::new(nodes, f);
-
-        let outs = self.add_op(inputs, op)?;
-
-        let mut output = [outs[0]; N];
-
-        for (i, j) in output.iter_mut().zip(outs) {
-            *i = j;
-        }
-
-        Ok(output)
+        self.add_op([node], self.get_node(node).map(|n| CopyOp(n.ty()))).map(|x| x[0])
     }
 
     pub fn eliminate_dead_ops(&mut self) -> Result<(), IRTrace> {

@@ -43,7 +43,7 @@ fn constant_fold_scalars() -> Result<(), IRTrace> {
 
     program.optimise()?;
 
-    assert_eq!(program.num_nontrivial_operations()?, 1);
+    assert_eq!(program.num_nontrivial_operations()?, 1, "{program}");
     assert_eq!(program.is_copy(b.node())?, Some(a.node()));
 
     program.check_valid()

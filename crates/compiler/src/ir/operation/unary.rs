@@ -6,21 +6,15 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct IrUnary {
+pub struct UnaryOp {
     ty: IrType,
     op: Unary,
 }
 
-impl IrUnary {
-    pub fn new(ty: IrType, mut op: Unary) -> Result<Self, IrError> {
+impl UnaryOp {
+    pub fn new(ty: IrType, op: Unary) -> Result<Self, IrError> {
         if op.dtype(ty.dtype()).is_none() {
-            return Err("Failed type check!".into());
-        }
-
-        if let Unary::BinaryWithConst { op, lhs, .. } = &mut op {
-            if op.is_commutative() {
-                *lhs = true;
-            }
+            return Err("UnaryOp failed type check!".into());
         }
 
         Ok(Self { ty, op })
@@ -39,13 +33,9 @@ impl IrUnary {
     }
 }
 
-impl IrOperationType for IrUnary {
+impl IrOperationType for UnaryOp {
     fn opname(&self) -> String {
-        if let Unary::BinaryWithConst { op, val, lhs } = self.op {
-            format!("binary.{op:?}.withconst<{val:?}, {lhs}>").to_lowercase()
-        } else {
-            format!("unary.{:?}", self.op).to_lowercase()
-        }
+        format!("unary.{:?}", self.op).to_lowercase()
     }
 
     fn inputs(&self) -> Vec<IrType> {
@@ -83,7 +73,7 @@ mod tests {
     fn evaluate() {
         let ty = IrType::new(Size::variable(), DType::F32);
 
-        let binary = IrUnary::new(ty, Unary::Cos).unwrap();
+        let binary = UnaryOp::new(ty, Unary::Cos).unwrap();
 
         let a = DTypeTensor::F32(vec![0.0; 4]);
         let mut b = DTypeTensor::F32(vec![0.0; 4]);

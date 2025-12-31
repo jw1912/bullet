@@ -22,18 +22,17 @@ impl CanonicalisePass {
     /// passes can build on top of it.
     pub fn base() -> Self {
         Self::default()
-            .add_fold(FoldScalarConstIntoUnary)
-            .add_fold(FoldScalarConstLhsIntoBinary)
-            .add_fold(FoldScalarConstRhsIntoBinary)
+            .add_fold(EvalScalarConstUnary)
+            .add_fold(EvalScalarConstBinary)
             .add_fold(FoldFixedSizeScalarConst)
             .add_fold(FoldVarSizeScalarConst)
             .add_fold(FoldConstIdentities)
             .add_fold(FoldMulByZero)
-            .add_fold(FoldUnaryUnaryIntoUnary)
-            .add_fold(FoldMulXAddMulX)
-            .add_fold(FoldXAddMulX)
             .add_rewrite(BroadcastUnaryIntoUnaryBroadcast)
             .add_rewrite(BroadcastBinaryIntoBinaryBroadcast)
+            .add_rewrite(ScalarBroadcastBinaryIntoBinaryBroadcast)
+            .add_rewrite(CombineXAddMulX)
+            .add_rewrite(CombineMulXAddMulX)
     }
 
     /// Canonicalisation pass that expands all distributive rules.
@@ -164,7 +163,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        core::{Binary, DType, DTypeValue, Size, Unary},
+        core::{CABinary, DType, Size, Unary},
         ir::{
             graph::IrType,
             operation::{BroadcastAcrossDimension, ScalarConstant},
@@ -177,7 +176,7 @@ mod tests {
 
         let size = Size::variable();
 
-        let a = ir.add_const(DTypeValue::I32(1).into());
+        let a = ir.add_scalar(1, 1);
         let ba = BroadcastAcrossDimension::new(DType::I32, [1], 0, size);
         let a = ir.add_op([a], ba)?[0];
 
@@ -186,11 +185,11 @@ mod tests {
         let b = ir.add_op([b], bb.clone())?[0];
 
         let c = ir.add_unary(a, Unary::Cast(DType::F32))?;
-        let d = ir.add_binary(c, b, Binary::Add)?;
+        let d = ir.add_binary(c, b, CABinary::Add)?;
 
-        let neg = Unary::BinaryWithConst { op: Binary::Mul, val: (-1.0).into(), lhs: true };
-        let neg_d = ir.add_unary(d, neg)?;
-        let e = ir.add_binary(neg_d, d, Binary::Add)?;
+        let minus_one = ir.add_scalar(-1.0, size);
+        let neg_d = ir.add_binary(minus_one, d, CABinary::Mul)?;
+        let e = ir.add_binary(neg_d, d, CABinary::Add)?;
 
         ir.register_output(d);
         ir.register_output(e);

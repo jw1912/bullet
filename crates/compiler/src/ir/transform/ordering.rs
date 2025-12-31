@@ -1,4 +1,21 @@
-use crate::ir::{IR, IRTrace, transform::IrTransform};
+use std::{cmp::Ordering, collections::HashSet};
+
+use crate::ir::{
+    IR, IRTrace,
+    graph::IrNodeId,
+    operation::{Constant, ScalarConstant},
+    transform::IrTransform,
+};
+
+pub fn rank_node(ir: &IR, node: IrNodeId) -> Result<usize, IRTrace> {
+    Ok(if ir.parent_op::<ScalarConstant>(node)?.is_some() {
+        0
+    } else if ir.parent_op::<Constant>(node)?.is_some() {
+        1
+    } else {
+        2
+    })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OrderCommutativeInputs;
@@ -6,7 +23,42 @@ pub struct OrderCommutativeInputs;
 impl IrTransform for OrderCommutativeInputs {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.operations() {
-            ir.get_op_mut(op.id())?.order_commutative_inputs()?;
+            let groups = op.op().commutating_groups();
+
+            for (i, group_i) in groups.iter().enumerate() {
+                for group_j in groups.iter().skip(i + 1) {
+                    if group_i.intersection(group_j).next().is_some() {
+                        return Err("Distinct commutating groups intersect!".into());
+                    }
+                }
+            }
+
+            for group in groups {
+                let mut group = group.into_iter().collect::<Vec<_>>();
+
+                let mut nodes = Vec::with_capacity(group.len());
+                for &i in &group {
+                    let id = op.inputs()[i];
+                    let score = rank_node(ir, id)?;
+                    nodes.push((id, score));
+                }
+
+                if op.op().inputs().iter().collect::<HashSet<_>>().len() > 1 {
+                    return Err("Inputs within commutating group have differing types!".into());
+                }
+
+                group.sort();
+                nodes.sort_by(|a, b| match a.1.cmp(&b.1) {
+                    Ordering::Equal => a.0.cmp(&b.0),
+                    Ordering::Greater => Ordering::Greater,
+                    Ordering::Less => Ordering::Less,
+                });
+
+                let op = ir.get_op_mut(op.id())?;
+                for (idx, (id, _)) in group.into_iter().zip(nodes) {
+                    op.set_input(idx, id);
+                }
+            }
         }
 
         Ok(())
@@ -18,7 +70,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        core::{Binary, DType},
+        core::{CABinary, DType},
         ir::graph::IrType,
     };
 
@@ -28,10 +80,10 @@ mod tests {
 
         let ty = IrType::new(1, DType::F32);
         let x = ir.add_input(ty);
-        let y = ir.add_input(ty);
-        let z = ir.add_binary(x, y, Binary::Add)?;
-        let w = ir.add_binary(y, x, Binary::Add)?;
-        let t = ir.add_binary(w, z, Binary::Mul)?;
+        let y = ir.add_scalar(1.0, 1);
+        let z = ir.add_binary(x, y, CABinary::Add)?;
+        let w = ir.add_binary(y, x, CABinary::Add)?;
+        let t = ir.add_binary(w, z, CABinary::Mul)?;
 
         ir.register_output(t);
 
@@ -41,8 +93,8 @@ mod tests {
 
         ir.transform(OrderCommutativeInputs)?;
 
-        assert_eq!(ir.get_op(ir.get_parent_op(z)?)?.inputs(), &[x, y]);
-        assert_eq!(ir.get_op(ir.get_parent_op(w)?)?.inputs(), &[x, y]);
+        assert_eq!(ir.get_op(ir.get_parent_op(z)?)?.inputs(), &[y, x]);
+        assert_eq!(ir.get_op(ir.get_parent_op(w)?)?.inputs(), &[y, x]);
         assert_eq!(ir.get_op(ir.get_parent_op(t)?)?.inputs(), &[z, w]);
 
         ir.check_valid()

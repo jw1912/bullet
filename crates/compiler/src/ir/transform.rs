@@ -1,5 +1,4 @@
 pub mod canonicalise;
-pub mod decompose;
 pub mod eliminate;
 pub mod foldrules;
 pub mod modify;

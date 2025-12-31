@@ -11,9 +11,9 @@ use crate::{
 /// can't eliminate either of them as they must be observable
 /// so perform a copy instead of the parent operation twice.
 #[derive(Debug, PartialEq)]
-pub struct IrCopy(pub IrType);
+pub struct CopyOp(pub IrType);
 
-impl IrOperationType for IrCopy {
+impl IrOperationType for CopyOp {
     fn opname(&self) -> String {
         "copy".to_string()
     }
@@ -54,7 +54,7 @@ mod tests {
         let a = DTypeTensor::F32(vec![1.0; 4]);
         let mut b = DTypeTensor::F32(vec![0.0; 4]);
 
-        IrCopy(IrType::new(Size::variable(), DType::F32)).evaluate(&[&a], &mut [&mut b]);
+        CopyOp(IrType::new(Size::variable(), DType::F32)).evaluate(&[&a], &mut [&mut b]);
 
         assert_eq!(b, DTypeTensor::F32(vec![1.0; 4]));
     }
