@@ -7,7 +7,7 @@ use crate::ir::{
     transform::IrTransform,
 };
 
-pub fn rank_node(ir: &IR, node: IrNodeId) -> Result<usize, IRTrace> {
+fn rank_node(ir: &IR, node: IrNodeId) -> Result<usize, IRTrace> {
     Ok(if ir.parent_op::<ScalarConstant>(node)?.is_some() {
         0
     } else if ir.parent_op::<Constant>(node)?.is_some() {
@@ -15,6 +15,35 @@ pub fn rank_node(ir: &IR, node: IrNodeId) -> Result<usize, IRTrace> {
     } else {
         2
     })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct NodeScore(IrNodeId, usize);
+
+impl NodeScore {
+    pub fn id(&self) -> IrNodeId {
+        self.0
+    }
+
+    pub fn new(ir: &IR, node: IrNodeId) -> Result<Self, IRTrace> {
+        rank_node(ir, node).map(|rank| Self(node, rank))
+    }
+}
+
+impl PartialOrd for NodeScore {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NodeScore {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.1.cmp(&other.1) {
+            Ordering::Equal => self.0.cmp(&other.0),
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Less => Ordering::Less,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,8 +68,7 @@ impl IrTransform for OrderCommutativeInputs {
                 let mut nodes = Vec::with_capacity(group.len());
                 for &i in &group {
                     let id = op.inputs()[i];
-                    let score = rank_node(ir, id)?;
-                    nodes.push((id, score));
+                    nodes.push(NodeScore::new(ir, id)?);
                 }
 
                 if op.op().inputs().iter().collect::<HashSet<_>>().len() > 1 {
@@ -48,14 +76,10 @@ impl IrTransform for OrderCommutativeInputs {
                 }
 
                 group.sort();
-                nodes.sort_by(|a, b| match a.1.cmp(&b.1) {
-                    Ordering::Equal => a.0.cmp(&b.0),
-                    Ordering::Greater => Ordering::Greater,
-                    Ordering::Less => Ordering::Less,
-                });
+                nodes.sort();
 
                 let op = ir.get_op_mut(op.id())?;
-                for (idx, (id, _)) in group.into_iter().zip(nodes) {
+                for (idx, NodeScore(id, _)) in group.into_iter().zip(nodes) {
                     op.set_input(idx, id);
                 }
             }

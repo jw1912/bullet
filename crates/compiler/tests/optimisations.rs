@@ -78,6 +78,7 @@ fn rearrange_exprs() -> Result<(), IRTrace> {
 
             let mut program = builder.build([lhs, rhs]);
             program.transform(CanonicalisePass::expand())?;
+            program.check_valid()?;
             assert!(program.are_copies(lhs.node(), rhs.node())?, "{program}");
             program.check_valid()?;
         }
@@ -119,6 +120,7 @@ fn factorise_exprs() -> Result<(), IRTrace> {
 
     assert_eq!(program.num_nontrivial_operations()?, 7, "{program}");
 
+    program.transform(CanonicalisePass::expand())?;
     program.transform(CanonicalisePass::factorise())?;
 
     assert_eq!(program.num_nontrivial_operations()?, 3, "{program}");

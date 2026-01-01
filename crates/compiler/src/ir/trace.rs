@@ -25,7 +25,7 @@ impl IRTrace {
                 writeln!(f, "{orange}Error applying{clear}")?;
                 writeln!(f, "{transform:?}")?;
                 writeln!(f, "{orange}on graph{clear}")?;
-                write!(f, "{graph}")
+                write!(f, "{}", graph.as_highlighted())
             }
         }
     }

@@ -20,14 +20,18 @@ use transform::{
 pub struct IR {
     graph: IrGraph,
     most_recent: Vec<IrNodeId>,
-    history: IRHistory,
+    history: Option<IRHistory>,
 }
 
 impl fmt::Display for IR {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Current IR Graph:")?;
         writeln!(f, "{}", self.graph.as_highlighted())?;
-        write!(f, "{}", self.history)
+        if let Some(history) = &self.history {
+            write!(f, "{history}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -44,12 +48,22 @@ impl IR {
     }
 
     pub fn transform(&mut self, transform: impl IrTransform) -> Result<(), IRTrace> {
+        self.transform_dyn(Rc::new(transform))
+    }
+
+    pub fn transform_dyn(&mut self, transform: Rc<dyn IrTransform>) -> Result<(), IRTrace> {
         let graph = Box::new(self.graph());
-        let transform = Rc::new(transform);
-        self.history.push(transform.clone());
-        self.history.start_scope();
+
+        if let Some(history) = &mut self.history {
+            history.push(transform.clone());
+            history.start_scope();
+        }
+
         transform.apply(self).map_err(|err| IRTrace::Frame(graph, transform, Rc::new(err)))?;
-        self.history.end_scope();
+
+        if let Some(history) = &mut self.history {
+            history.end_scope();
+        }
 
         Ok(())
     }
@@ -242,5 +256,13 @@ impl IR {
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
         self.transform(CanonicalisePass::expand())?;
         self.transform(CanonicalisePass::factorise())
+    }
+
+    pub fn track_history(&mut self) {
+        self.history = Some(IRHistory::default());
+    }
+
+    pub fn untrack_history(&mut self) {
+        self.history = None;
     }
 }

@@ -12,6 +12,7 @@ use crate::{
 
 #[derive(Clone, Debug, Default)]
 pub struct CanonicalisePass {
+    cleanups: Vec<Rc<dyn IrTransform>>,
     folds: Vec<Rc<dyn FoldRule>>,
     rewrites: Vec<Rc<dyn RewriteRule>>,
 }
@@ -22,6 +23,10 @@ impl CanonicalisePass {
     /// passes can build on top of it.
     pub fn base() -> Self {
         Self::default()
+            .add_cleanup(OrderCommutativeInputs)
+            .add_cleanup(EliminateCopies)
+            .add_cleanup(EliminateUnusedOperations)
+            .add_cleanup(EliminateCommonSubExpressions)
             .add_fold(EvalScalarConstUnary)
             .add_fold(EvalScalarConstBinary)
             .add_fold(FoldFixedSizeScalarConst)
@@ -48,6 +53,11 @@ impl CanonicalisePass {
     /// Canonicalisation pass that factorises all distributive rules.
     pub fn factorise() -> Self {
         Self::base().add_rewrite(FactoriseDistributive)
+    }
+
+    pub fn add_cleanup(mut self, cleanup: impl IrTransform) -> Self {
+        self.cleanups.push(Rc::new(cleanup));
+        self
     }
 
     pub fn add_fold(mut self, fold: impl FoldRule) -> Self {
@@ -142,10 +152,9 @@ impl IrTransform for CanonicalisePass {
         let mut success = true;
 
         while success {
-            ir.transform(OrderCommutativeInputs)?;
-            ir.transform(EliminateCopies)?;
-            ir.transform(EliminateUnusedOperations)?;
-            ir.transform(EliminateCommonSubExpressions)?;
+            for cleanup in &self.cleanups {
+                ir.transform_dyn(cleanup.clone())?;
+            }
 
             success = false;
 
