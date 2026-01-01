@@ -7,8 +7,8 @@ pub mod rewriterules;
 
 pub use canonicalise::CanonicalisePass;
 
-use crate::ir::{IR, IRTrace};
+use crate::{IR, IRTrace};
 
-pub trait IrTransform: std::fmt::Debug + 'static {
+pub trait IRTransform: std::fmt::Debug + 'static {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace>;
 }

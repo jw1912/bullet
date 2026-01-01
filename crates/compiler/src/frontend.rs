@@ -1,12 +1,9 @@
 use std::cell::RefCell;
 
 use crate::{
-    core::{CABinary, DType, DTypeTensor, DTypeValue, Shape, Size, Unary},
-    ir::{
-        IR,
-        graph::{IrError, IrNodeId, IrOperationType, IrType},
-        operation::{BroadcastAcrossDimension, ReduceAcrossDimension, Reduction},
-    },
+    IR,
+    graph::{DType, DValue, GraphError, NodeId, OpType, Shape, Size, TType, TValue},
+    operation::{BroadcastAcrossDimension, CABinary, ReduceAcrossDimension, Reduction, Unary},
 };
 
 #[derive(Default)]
@@ -15,31 +12,27 @@ pub struct ProgramBuilder {
 }
 
 impl ProgramBuilder {
-    fn new_node<'a>(&'a self, node: IrNodeId) -> ProgramNode<'a> {
+    fn new_node<'a>(&'a self, node: NodeId) -> ProgramNode<'a> {
         ProgramNode::new(self, node)
     }
 
-    pub fn add_op<'a>(
-        &'a self,
-        inputs: impl AsRef<[ProgramNode<'a>]>,
-        op: impl IrOperationType,
-    ) -> Vec<ProgramNode<'a>> {
+    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ProgramNode<'a>]>, op: impl OpType) -> Vec<ProgramNode<'a>> {
         let ids = inputs.as_ref().iter().map(ProgramNode::node).collect::<Vec<_>>();
-        let outs = self.ir.borrow_mut().add_op(ids, Ok::<_, IrError>(op)).unwrap();
+        let outs = self.ir.borrow_mut().add_op(ids, Ok::<_, GraphError>(op)).unwrap();
         outs.into_iter().map(|out| self.new_node(out)).collect()
     }
 
     pub fn add_input<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> ProgramNode<'a> {
-        let node = self.ir.borrow_mut().add_input(IrType::new(size, dtype));
+        let node = self.ir.borrow_mut().add_input(TType::new(size, dtype));
         self.new_node(node)
     }
 
-    pub fn constant<'a>(&'a self, value: DTypeTensor) -> ProgramNode<'a> {
+    pub fn constant<'a>(&'a self, value: TValue) -> ProgramNode<'a> {
         let node = self.ir.borrow_mut().add_const(value);
         self.new_node(node)
     }
 
-    pub fn scalar<'a>(&'a self, value: impl Into<DTypeValue>, size: impl Into<Size>) -> ProgramNode<'a> {
+    pub fn scalar<'a>(&'a self, value: impl Into<DValue>, size: impl Into<Size>) -> ProgramNode<'a> {
         let node = self.ir.borrow_mut().add_scalar(value, size);
         self.new_node(node)
     }
@@ -62,19 +55,19 @@ impl ProgramBuilder {
 #[derive(Clone, Copy)]
 pub struct ProgramNode<'a> {
     builder: &'a ProgramBuilder,
-    node: IrNodeId,
+    node: NodeId,
 }
 
 impl<'a> ProgramNode<'a> {
-    pub fn new(builder: &'a ProgramBuilder, node: IrNodeId) -> Self {
+    pub fn new(builder: &'a ProgramBuilder, node: NodeId) -> Self {
         Self { builder, node }
     }
 
-    pub fn node(&self) -> IrNodeId {
+    pub fn node(&self) -> NodeId {
         self.node
     }
 
-    pub fn ty(&self) -> IrType {
+    pub fn ty(&self) -> TType {
         self.builder.ir.borrow().get_node(self.node).unwrap().ty()
     }
 

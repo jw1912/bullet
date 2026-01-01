@@ -1,18 +1,15 @@
 use std::rc::Rc;
 
 use crate::{
-    core::DTypeTensor,
-    ir::{
-        IR, IRTrace,
-        graph::{IrNodeId, IrOperationId, IrOperationType},
-        operation::{Constant, ScalarConstant},
-        transform::{IrTransform, eliminate::*, foldrules::*, ordering::*, rewriterules::*},
-    },
+    IR, IRTrace,
+    graph::{NodeId, OpId, OpType, TValue},
+    operation::{Constant, ScalarConstant},
+    transform::{IRTransform, eliminate::*, foldrules::*, ordering::*, rewriterules::*},
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct CanonicalisePass {
-    cleanups: Vec<Rc<dyn IrTransform>>,
+    cleanups: Vec<Rc<dyn IRTransform>>,
     folds: Vec<Rc<dyn FoldRule>>,
     rewrites: Vec<Rc<dyn RewriteRule>>,
 }
@@ -55,7 +52,7 @@ impl CanonicalisePass {
         Self::base().add_rewrite(FactoriseDistributive)
     }
 
-    pub fn add_cleanup(mut self, cleanup: impl IrTransform) -> Self {
+    pub fn add_cleanup(mut self, cleanup: impl IRTransform) -> Self {
         self.cleanups.push(Rc::new(cleanup));
         self
     }
@@ -70,7 +67,7 @@ impl CanonicalisePass {
         self
     }
 
-    pub fn apply_single_fold(&self, ir: &mut IR, mut id: IrOperationId) -> Result<bool, IRTrace> {
+    pub fn apply_single_fold(&self, ir: &mut IR, mut id: OpId) -> Result<bool, IRTrace> {
         let mut success = false;
 
         'fold: loop {
@@ -106,11 +103,7 @@ impl CanonicalisePass {
         }
     }
 
-    fn try_evaluate(
-        ir: &IR,
-        inputs: &[IrNodeId],
-        op: &Rc<dyn IrOperationType>,
-    ) -> Result<Option<Vec<Constant>>, IRTrace> {
+    fn try_evaluate(ir: &IR, inputs: &[NodeId], op: &Rc<dyn OpType>) -> Result<Option<Vec<Constant>>, IRTrace> {
         if !inputs.is_empty() {
             let mut consts = Vec::new();
 
@@ -129,7 +122,7 @@ impl CanonicalisePass {
             let mut tensors = Vec::new();
             for &ty in &op.outputs() {
                 if let Some(size) = ty.size().evaluate_constant() {
-                    tensors.push(DTypeTensor::new(ty.dtype(), size));
+                    tensors.push(TValue::new(ty.dtype(), size));
                 } else {
                     return Ok(None);
                 }
@@ -147,7 +140,7 @@ impl CanonicalisePass {
     }
 }
 
-impl IrTransform for CanonicalisePass {
+impl IRTransform for CanonicalisePass {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         let mut success = true;
 
@@ -172,11 +165,8 @@ mod tests {
     use super::*;
 
     use crate::{
-        core::{CABinary, DType, Size, Unary},
-        ir::{
-            graph::IrType,
-            operation::{BroadcastAcrossDimension, ScalarConstant},
-        },
+        graph::{DType, Size, TType},
+        operation::{BroadcastAcrossDimension, CABinary, ScalarConstant, Unary},
     };
 
     #[test]
@@ -189,7 +179,7 @@ mod tests {
         let ba = BroadcastAcrossDimension::new(DType::I32, [1], 0, size);
         let a = ir.add_op([a], ba)?[0];
 
-        let b = ir.add_input(IrType::new(1, DType::F32));
+        let b = ir.add_input(TType::new(1, DType::F32));
         let bb = BroadcastAcrossDimension::new(DType::F32, [1], 0, size);
         let b = ir.add_op([b], bb.clone())?[0];
 

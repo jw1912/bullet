@@ -1,9 +1,6 @@
 use std::rc::Rc;
 
-use crate::{
-    core::{DType, DTypeTensor, Shape, Size},
-    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
-};
+use crate::graph::{DType, GraphError, Op, OpType, Shape, Size, TType, TValue};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BroadcastAcrossDimension {
@@ -14,7 +11,12 @@ pub struct BroadcastAcrossDimension {
 }
 
 impl BroadcastAcrossDimension {
-    pub fn new(dtype: DType, shape: impl Into<Shape>, dim: usize, repeats: impl Into<Size>) -> Result<Self, IrError> {
+    pub fn new(
+        dtype: DType,
+        shape: impl Into<Shape>,
+        dim: usize,
+        repeats: impl Into<Size>,
+    ) -> Result<Self, GraphError> {
         let shape = shape.into();
         let shape_dim = shape.dim();
         let repeats = repeats.into();
@@ -75,40 +77,40 @@ impl BroadcastAcrossDimension {
     }
 }
 
-impl IrOperationType for BroadcastAcrossDimension {
+impl OpType for BroadcastAcrossDimension {
     fn opname(&self) -> String {
         let Self { outer, inner, repeats, .. } = *self;
         format!("broadcast<{outer:?}, {inner:?}, {repeats:?}>")
     }
 
-    fn inputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.input_size(), self.dtype)]
+    fn inputs(&self) -> Vec<TType> {
+        vec![TType::new(self.input_size(), self.dtype)]
     }
 
-    fn outputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.output_size(), self.dtype)]
+    fn outputs(&self) -> Vec<TType> {
+        vec![TType::new(self.output_size(), self.dtype)]
     }
 
-    fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
+    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
         match self.dtype {
             DType::F32 => {
-                let DTypeTensor::F32(input) = inputs[0] else { panic!() };
-                let DTypeTensor::F32(output) = outputs[0] else { panic!() };
+                let TValue::F32(input) = inputs[0] else { panic!() };
+                let TValue::F32(output) = outputs[0] else { panic!() };
                 self.apply(input, output);
             }
             DType::I32 => {
-                let DTypeTensor::I32(input) = inputs[0] else { panic!() };
-                let DTypeTensor::I32(output) = outputs[0] else { panic!() };
+                let TValue::I32(input) = inputs[0] else { panic!() };
+                let TValue::I32(output) = outputs[0] else { panic!() };
                 self.apply(input, output);
             }
         }
     }
 
-    fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool {
-        if let Some(other) = IrOperation::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
+        if let Some(other) = Op::downcast_rc::<Self>(other) { self == other } else { false }
     }
 }
 
@@ -124,12 +126,12 @@ mod tests {
 
         let broadcast = BroadcastAcrossDimension::new(DType::I32, shape, dim, 2).unwrap();
 
-        let input = DTypeTensor::I32(INPUT.to_vec());
-        let mut output = DTypeTensor::I32(vec![0; 16]);
+        let input = TValue::I32(INPUT.to_vec());
+        let mut output = TValue::I32(vec![0; 16]);
 
         broadcast.evaluate(&[&input], &mut [&mut output]);
 
-        let DTypeTensor::I32(output) = output else { panic!() };
+        let TValue::I32(output) = output else { panic!() };
 
         assert_eq!(&output, &expected);
     }
@@ -149,12 +151,12 @@ mod tests {
 
         let broadcast = BroadcastAcrossDimension::new(DType::I32, shape, dim, 2).unwrap();
 
-        let input = DTypeTensor::I32(INPUT.to_vec());
-        let mut output = DTypeTensor::I32(vec![0; 16]);
+        let input = TValue::I32(INPUT.to_vec());
+        let mut output = TValue::I32(vec![0; 16]);
 
         broadcast.evaluate(&[&input], &mut [&mut output]);
 
-        let DTypeTensor::I32(output) = output else { panic!() };
+        let TValue::I32(output) = output else { panic!() };
 
         assert_eq!(&output, &expected);
     }

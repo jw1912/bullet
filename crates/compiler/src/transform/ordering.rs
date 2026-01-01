@@ -1,13 +1,13 @@
 use std::{cmp::Ordering, collections::HashSet};
 
-use crate::ir::{
+use crate::{
     IR, IRTrace,
-    graph::IrNodeId,
+    graph::NodeId,
     operation::{Constant, ScalarConstant},
-    transform::IrTransform,
+    transform::IRTransform,
 };
 
-fn rank_node(ir: &IR, node: IrNodeId) -> Result<usize, IRTrace> {
+fn rank_node(ir: &IR, node: NodeId) -> Result<usize, IRTrace> {
     Ok(if ir.parent_op::<ScalarConstant>(node)?.is_some() {
         0
     } else if ir.parent_op::<Constant>(node)?.is_some() {
@@ -18,14 +18,14 @@ fn rank_node(ir: &IR, node: IrNodeId) -> Result<usize, IRTrace> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct NodeScore(IrNodeId, usize);
+pub struct NodeScore(NodeId, usize);
 
 impl NodeScore {
-    pub fn id(&self) -> IrNodeId {
+    pub fn id(&self) -> NodeId {
         self.0
     }
 
-    pub fn new(ir: &IR, node: IrNodeId) -> Result<Self, IRTrace> {
+    pub fn new(ir: &IR, node: NodeId) -> Result<Self, IRTrace> {
         rank_node(ir, node).map(|rank| Self(node, rank))
     }
 }
@@ -49,7 +49,7 @@ impl Ord for NodeScore {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OrderCommutativeInputs;
 
-impl IrTransform for OrderCommutativeInputs {
+impl IRTransform for OrderCommutativeInputs {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.operations() {
             let groups = op.op().commutating_groups();
@@ -94,15 +94,15 @@ mod tests {
     use super::*;
 
     use crate::{
-        core::{CABinary, DType},
-        ir::graph::IrType,
+        graph::{DType, TType},
+        operation::CABinary,
     };
 
     #[test]
     fn commutative_inputs() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let ty = IrType::new(1, DType::F32);
+        let ty = TType::new(1, DType::F32);
         let x = ir.add_input(ty);
         let y = ir.add_scalar(1.0, 1);
         let z = ir.add_binary(x, y, CABinary::Add)?;

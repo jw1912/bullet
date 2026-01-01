@@ -4,6 +4,33 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
+/// Type of a tensor
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TType {
+    size: Size,
+    dtype: DType,
+}
+
+impl fmt::Debug for TType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}[{:?}]", self.dtype, self.size)
+    }
+}
+
+impl TType {
+    pub fn new(size: impl Into<Size>, dtype: DType) -> Self {
+        Self { size: size.into(), dtype }
+    }
+
+    pub fn size(&self) -> Size {
+        self.size
+    }
+
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Size {
     var_power: u32,
@@ -197,5 +224,145 @@ impl Shape {
 
     pub fn dim(&self) -> usize {
         self.0.len()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DType {
+    F32,
+    I32,
+}
+
+impl fmt::Debug for DType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::F32 => write!(f, "f32"),
+            Self::I32 => write!(f, "i32"),
+        }
+    }
+}
+
+/// Conrete value of some DType
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DValue {
+    F32(f32),
+    I32(i32),
+}
+
+impl From<f32> for DValue {
+    fn from(value: f32) -> Self {
+        Self::F32(value)
+    }
+}
+
+impl From<i32> for DValue {
+    fn from(value: i32) -> Self {
+        Self::I32(value)
+    }
+}
+
+impl DValue {
+    pub fn zero(dtype: DType) -> Self {
+        match dtype {
+            DType::F32 => 0.0.into(),
+            DType::I32 => 0.into(),
+        }
+    }
+
+    pub fn one(dtype: DType) -> Self {
+        match dtype {
+            DType::F32 => 1.0.into(),
+            DType::I32 => 1.into(),
+        }
+    }
+
+    pub fn dtype(&self) -> DType {
+        match *self {
+            Self::F32(_) => DType::F32,
+            Self::I32(_) => DType::I32,
+        }
+    }
+
+    pub fn f32(self) -> Option<f32> {
+        if let Self::F32(x) = self { Some(x) } else { None }
+    }
+
+    pub fn i32(self) -> Option<i32> {
+        if let Self::I32(x) = self { Some(x) } else { None }
+    }
+}
+
+impl fmt::Display for DValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::F32(x) => write!(f, "{x}"),
+            Self::I32(x) => write!(f, "{x}"),
+        }
+    }
+}
+
+/// Concrete "Tensor" value
+#[derive(Clone, Debug, PartialEq)]
+pub enum TValue {
+    F32(Vec<f32>),
+    I32(Vec<i32>),
+}
+
+impl From<DValue> for TValue {
+    fn from(value: DValue) -> Self {
+        match value {
+            DValue::F32(x) => TValue::F32(vec![x]),
+            DValue::I32(x) => TValue::I32(vec![x]),
+        }
+    }
+}
+
+impl TValue {
+    pub fn new(dtype: DType, size: usize) -> Self {
+        match dtype {
+            DType::F32 => Self::F32(vec![0.0; size]),
+            DType::I32 => Self::I32(vec![0; size]),
+        }
+    }
+
+    pub fn dtype(&self) -> DType {
+        match self {
+            Self::F32(_) => DType::F32,
+            Self::I32(_) => DType::I32,
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            Self::F32(x) => x.len(),
+            Self::I32(x) => x.len(),
+        }
+    }
+
+    pub fn read(&self, idx: usize) -> DValue {
+        match self {
+            Self::F32(x) => DValue::F32(x[idx]),
+            Self::I32(x) => DValue::I32(x[idx]),
+        }
+    }
+
+    pub fn write(&mut self, idx: usize, value: DValue) {
+        match (self, value) {
+            (Self::F32(x), DValue::F32(y)) => x[idx] = y,
+            (Self::I32(x), DValue::I32(y)) => x[idx] = y,
+            _ => panic!(),
+        }
+    }
+
+    pub fn scalar(&self) -> Option<DValue> {
+        let val = self.read(0);
+
+        for idx in 0..self.size() {
+            if self.read(idx) != val {
+                return None;
+            }
+        }
+
+        Some(val)
     }
 }

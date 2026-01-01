@@ -2,7 +2,7 @@
 ///
 /// Usage:
 ///
-/// `if_find_and_bind_pattern!(ir: IR | IrGraph, operation: IrOperation, pattern, success_block)`
+/// `if_find_and_bind_pattern!(ir: IR | Graph, operation: Op, pattern, success_block)`
 ///
 /// If the `pattern` is found in `ir` starting rooted at `operation`, then `success_block`
 /// is ran. Any identifiers appearing in `pattern` are appropriately bound.
@@ -10,16 +10,13 @@
 /// Simple example:
 /// ```
 /// # use bullet_compiler::{
-/// #     core::{CABinary, DType, Size},
 /// #     if_find_and_bind_pattern,
-/// #     ir::{
-/// #         graph::{IrGraph, IrError, IrType},
-/// #         operation::CABinaryOp,
-/// #   },
+/// #     graph::{DType, Graph, GraphError, Size, TType},
+/// #     operation::{CABinary, CABinaryOp},
 /// # };
 /// #
-/// # let mut ir = IrGraph::default();
-/// # let ty = IrType::new(Size::variable(), DType::F32);
+/// # let mut ir = Graph::default();
+/// # let ty = TType::new(Size::variable(), DType::F32);
 /// # let node_a = ir.add_input(ty);
 /// # let node_b = ir.add_input(ty);
 /// let node_c = ir.add_op([node_a, node_b], CABinaryOp::new(ty, CABinary::Add))?[0];
@@ -35,22 +32,19 @@
 ///
 /// assert!(found);
 /// # ir.check_valid()?;
-/// # Ok::<(), IrError>(())
+/// # Ok::<(), GraphError>(())
 /// ```
 ///
 /// This can be extended to more complex nested patterns:
 /// ```
 /// # use bullet_compiler::{
-/// #     core::{CABinary, DType, Size},
 /// #     if_find_and_bind_pattern,
-/// #     ir::{
-/// #         graph::{IrGraph, IrError, IrType, IrInput},
-/// #         operation::CABinaryOp,
-/// #     },
+/// #     graph::{DType, Graph, GraphError, Size, TType, Input},
+/// #     operation::{CABinary, CABinaryOp},
 /// # };
 /// #
-/// # let mut ir = IrGraph::default();
-/// # let ty = IrType::new(Size::variable(), DType::F32);
+/// # let mut ir = Graph::default();
+/// # let ty = TType::new(Size::variable(), DType::F32);
 /// let node_a = ir.add_input(ty);
 /// let node_b = ir.add_input(ty);
 /// let node_c = ir.add_op([node_a, node_b], CABinaryOp::new(ty, CABinary::Add))?[0];
@@ -63,10 +57,10 @@
 ///     ir,
 ///     target_op,
 ///     (b_e = [CABinaryOp]
-///         (b_c = [CABinaryOp] (a1 = [IrInput]) (b1 = [IrInput]))
+///         (b_c = [CABinaryOp] (a1 = [Input]) (b1 = [Input]))
 ///         (b_d = [CABinaryOp]
-///             (b_c2 = [CABinaryOp] (a2 = [IrInput]) (b2 = [IrInput]))
-///             (b3 = [IrInput])
+///             (b_c2 = [CABinaryOp] (a2 = [Input]) (b2 = [Input]))
+///             (b3 = [Input])
 ///         )
 ///     ),
 ///     found = b_c == b_c2
@@ -77,7 +71,7 @@
 ///
 /// assert!(found);
 /// # ir.check_valid()?;
-/// # Ok::<(), IrError>(())
+/// # Ok::<(), GraphError>(())
 /// ```
 #[macro_export]
 macro_rules! if_find_and_bind_pattern {

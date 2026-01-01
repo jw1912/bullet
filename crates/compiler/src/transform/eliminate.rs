@@ -1,9 +1,9 @@
-use crate::ir::{IR, IRTrace, operation::CopyOp, transform::IrTransform};
+use crate::{IR, IRTrace, operation::CopyOp, transform::IRTransform};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateUnusedOperations;
 
-impl IrTransform for EliminateUnusedOperations {
+impl IRTransform for EliminateUnusedOperations {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.ordered_operations()?.into_iter().rev() {
             if op.outputs().iter().all(|&output| {
@@ -21,7 +21,7 @@ impl IrTransform for EliminateUnusedOperations {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateCopies;
 
-impl IrTransform for EliminateCopies {
+impl IRTransform for EliminateCopies {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.ordered_operations()? {
             let op = ir.get_op(op.id())?.clone();
@@ -51,7 +51,7 @@ impl IrTransform for EliminateCopies {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateCommonSubExpressions;
 
-impl IrTransform for EliminateCommonSubExpressions {
+impl IRTransform for EliminateCommonSubExpressions {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         while eliminate_single_common_subexpr(ir)? {}
         Ok(())
@@ -86,8 +86,8 @@ fn eliminate_single_common_subexpr(ir: &mut IR) -> Result<bool, IRTrace> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::{CABinary, DType, DTypeTensor},
-        ir::graph::IrType,
+        graph::{DType, TType, TValue},
+        operation::CABinary,
     };
 
     use super::*;
@@ -96,8 +96,8 @@ mod tests {
     fn eliminate_unused_ops() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
-        let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+        let x = ir.add_const(TValue::F32(vec![1.0; 8]));
+        let y = ir.add_const(TValue::F32(vec![1.0; 8]));
         let z = ir.add_binary(x, y, CABinary::Add)?;
         let w = ir.add_binary(z, y, CABinary::Add)?;
         let t = ir.add_binary(w, y, CABinary::Add)?;
@@ -119,7 +119,7 @@ mod tests {
     fn eliminate_input_copy() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let ty = IrType::new(1, DType::F32);
+        let ty = TType::new(1, DType::F32);
         let x = ir.add_input(ty);
         let y = ir.copy(x)?;
         let z = ir.copy(y)?;
@@ -143,7 +143,7 @@ mod tests {
     fn eliminate_copies() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let x = ir.add_input(IrType::new(1, DType::F32));
+        let x = ir.add_input(TType::new(1, DType::F32));
         let y = ir.copy(x)?;
         let z = ir.copy(y)?;
         let w = ir.copy(z)?;
@@ -166,8 +166,8 @@ mod tests {
     fn eliminate_common_subexprs() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let x = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
-        let y = ir.add_const(DTypeTensor::F32(vec![1.0; 8]));
+        let x = ir.add_const(TValue::F32(vec![1.0; 8]));
+        let y = ir.add_const(TValue::F32(vec![1.0; 8]));
 
         let z1 = ir.add_binary(x, y, CABinary::Add)?;
         let w1 = ir.add_binary(z1, y, CABinary::Add)?;

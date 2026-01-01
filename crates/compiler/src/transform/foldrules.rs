@@ -1,17 +1,14 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
-    core::{CABinary, DTypeValue},
-    ir::{
-        IR, IRTrace,
-        graph::IrOperation,
-        operation::{BroadcastAcrossDimension, CABinaryOp, Constant, CopyOp, ScalarConstant, UnaryOp},
-        transform::modify::AddOperation,
-    },
+    IR, IRTrace,
+    graph::{DValue, Op},
+    operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, UnaryOp},
+    transform::modify::AddOperation,
 };
 
 #[cfg(test)]
-use crate::core::{DTypeTensor, Size};
+use crate::graph::{Size, TValue};
 
 /// A fold rule is a special case for the simplest form of rewrite, that being an
 /// entirely local transform on an operation, changing only the operation itself
@@ -22,7 +19,7 @@ use crate::core::{DTypeTensor, Size};
 /// on and we have saved a full tensor operation, but otherwise we have lost nothing
 /// by performing this transformation.
 pub trait FoldRule: fmt::Debug + 'static {
-    fn fold(&self, ir: &IR, operation: &IrOperation) -> Result<Option<AddOperation>, IRTrace>;
+    fn fold(&self, ir: &IR, operation: &Op) -> Result<Option<AddOperation>, IRTrace>;
 }
 
 macro_rules! foldrule {
@@ -56,7 +53,7 @@ macro_rules! foldrule {
                 &self,
                 #[allow(unused)]
                 $irname: &IR,
-                operation: &IrOperation,
+                operation: &Op,
             ) -> Result<Option<AddOperation>, IRTrace> {
                 $crate::if_find_and_bind_pattern!(
                     $irname,
@@ -117,7 +114,7 @@ foldrule! {
         Some(scalar) = constant.0.scalar();
     }
     testcase fixed_size_scalar_const {
-        ir.add_const(DTypeTensor::I32(vec![1; 16]))
+        ir.add_const(TValue::I32(vec![1; 16]))
     }
 }
 
@@ -149,7 +146,7 @@ foldrule! {
 foldrule! {
     rulename FoldMulByZero on ir
     rewrites (binary = [CABinaryOp] (scalar = [ScalarConstant]) (a))
-    into [ScalarConstant(DTypeValue::zero(a.ty().dtype()), a.ty().size())]
+    into [ScalarConstant(DValue::zero(a.ty().dtype()), a.ty().size())]
     given {
         binary.op() == CABinary::Mul && (scalar.0 == 0.0.into() || scalar.0 == 0.into())
     }

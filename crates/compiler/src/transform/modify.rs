@@ -1,13 +1,13 @@
 use std::{fmt, rc::Rc};
 
-use crate::ir::{
+use crate::{
     IR, IRTrace,
-    graph::{IrNodeId, IrOperationId, IrOperationType},
-    transform::IrTransform,
+    graph::{NodeId, OpId, OpType},
+    transform::IRTransform,
 };
 
 #[derive(Clone)]
-pub struct AddOperation(pub Vec<IrNodeId>, pub Result<Rc<dyn IrOperationType>, IRTrace>);
+pub struct AddOperation(pub Vec<NodeId>, pub Result<Rc<dyn OpType>, IRTrace>);
 
 impl fmt::Debug for AddOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -20,7 +20,7 @@ impl fmt::Debug for AddOperation {
     }
 }
 
-impl IrTransform for AddOperation {
+impl IRTransform for AddOperation {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         let output = ir.graph.add_op_dyn(&self.0, self.1.clone()?)?;
         ir.most_recent = output;
@@ -29,18 +29,18 @@ impl IrTransform for AddOperation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RemoveOperation(pub IrOperationId);
+pub struct RemoveOperation(pub OpId);
 
-impl IrTransform for RemoveOperation {
+impl IRTransform for RemoveOperation {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         ir.graph.remove_op(self.0).map_err(IRTrace::Root)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SwapOutputs(pub IrNodeId, pub IrNodeId);
+pub struct SwapOutputs(pub NodeId, pub NodeId);
 
-impl IrTransform for SwapOutputs {
+impl IRTransform for SwapOutputs {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         ir.graph.swap_outputs_unchecked(self.0, self.1)?;
         ir.check_valid()
@@ -49,11 +49,11 @@ impl IrTransform for SwapOutputs {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReplaceInput {
-    pub old: IrNodeId,
-    pub new: IrNodeId,
+    pub old: NodeId,
+    pub new: NodeId,
 }
 
-impl IrTransform for ReplaceInput {
+impl IRTransform for ReplaceInput {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         ir.graph.replace_input_unchecked(self.new, self.old)?;
         ir.check_valid()
@@ -61,9 +61,9 @@ impl IrTransform for ReplaceInput {
 }
 
 #[derive(Clone, Debug)]
-pub struct ReplaceOperation(pub IrOperationId, pub AddOperation);
+pub struct ReplaceOperation(pub OpId, pub AddOperation);
 
-impl IrTransform for ReplaceOperation {
+impl IRTransform for ReplaceOperation {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         ir.transform(self.1.clone())?;
         let new_outputs = ir.most_recent.clone();

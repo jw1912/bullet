@@ -1,24 +1,21 @@
 use std::fmt;
 
 use crate::{
-    core::{CABinary, DTypeValue},
-    ir::{
-        IR, IRTrace,
-        graph::IrOperation,
-        operation::{BroadcastAcrossDimension, CABinaryOp, ScalarConstant, UnaryOp},
-        transform::IrTransform,
-    },
+    IR, IRTrace,
+    graph::{DValue, Op},
+    operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, ScalarConstant, UnaryOp},
+    transform::IRTransform,
 };
 
 pub trait RewriteRule: fmt::Debug + 'static {
-    fn apply(&self, ir: &mut IR, operation: IrOperation) -> Result<bool, IRTrace>;
+    fn apply(&self, ir: &mut IR, operation: Op) -> Result<bool, IRTrace>;
 }
 
 #[derive(Debug)]
 pub struct RewriteNest<A, B>(A, B);
 
 impl<A: RewriteRule, B: RewriteRule> RewriteRule for RewriteNest<A, B> {
-    fn apply(&self, ir: &mut IR, operation: IrOperation) -> Result<bool, IRTrace> {
+    fn apply(&self, ir: &mut IR, operation: Op) -> Result<bool, IRTrace> {
         Ok(self.0.apply(ir, operation.clone())? || self.1.apply(ir, operation)?)
     }
 }
@@ -26,7 +23,7 @@ impl<A: RewriteRule, B: RewriteRule> RewriteRule for RewriteNest<A, B> {
 #[derive(Debug)]
 pub struct RewritePass<T>(T);
 
-impl<T: RewriteRule> IrTransform for RewritePass<T> {
+impl<T: RewriteRule> IRTransform for RewritePass<T> {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         'outer: loop {
             for op in ir.operations() {
@@ -66,7 +63,7 @@ macro_rules! rewriterule {
             fn apply(
                 &self,
                 $irname: &mut IR,
-                $op: IrOperation,
+                $op: Op,
             ) -> Result<bool, IRTrace> {
                 $($crate::if_find_and_bind_pattern!(
                     $irname,
@@ -173,9 +170,8 @@ rewriterule! {
         (bin1 = [CABinaryOp] (bin2 = [CABinaryOp] (scalar = [ScalarConstant]) (x)) (y))
         (bin1 = [CABinaryOp] (y) (bin2 = [CABinaryOp] (scalar = [ScalarConstant]) (x)))
     ] {
-        println!("found pattern!");
         if bin1.op() == CABinary::Add && bin2.op() == CABinary::Mul && x.id() == y.id() {
-            let new_value = CABinary::Add.evaluate(scalar.0, DTypeValue::one(scalar.0.dtype())).unwrap();
+            let new_value = CABinary::Add.evaluate(scalar.0, DValue::one(scalar.0.dtype())).unwrap();
             let new_op = CABinaryOp::new(x.ty(), CABinary::Mul);
             let x = x.id();
             let new_scalar = ir.add_scalar(new_value, scalar.1);
@@ -211,15 +207,15 @@ mod tests {
     use super::*;
 
     use crate::{
-        core::{CABinary, DType, Size, Unary},
-        ir::graph::IrType,
+        graph::{DType, Size, TType},
+        operation::{CABinary, Unary},
     };
 
     #[test]
     fn fold_broadcast_unary() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let a = ir.add_input(IrType::new(1, DType::F32));
+        let a = ir.add_input(TType::new(1, DType::F32));
         let broadcast = BroadcastAcrossDimension::new(DType::F32, [1], 0, Size::variable());
         let b = ir.add_op([a], broadcast.clone())?[0];
         let c = ir.add_unary(b, Unary::Sin)?;
@@ -237,12 +233,12 @@ mod tests {
     fn fold_broadcast_binary() -> Result<(), IRTrace> {
         let mut ir = IR::default();
 
-        let a1 = ir.add_input(IrType::new(1, DType::F32));
+        let a1 = ir.add_input(TType::new(1, DType::F32));
         let broadcast = BroadcastAcrossDimension::new(DType::F32, [1], 0, Size::variable());
         let b1 = ir.add_op([a1], broadcast.clone())?[0];
         let c1 = ir.add_unary(b1, Unary::Sin)?;
 
-        let a2 = ir.add_input(IrType::new(1, DType::I32));
+        let a2 = ir.add_input(TType::new(1, DType::I32));
         let b2 = ir.add_op([a2], broadcast.clone().map(|x| x.with_new_dtype(DType::I32)))?[0];
         let c2 = ir.add_unary(b2, Unary::Cast(DType::F32))?;
 
@@ -265,7 +261,7 @@ mod tests {
         let size = Size::variable();
         let broadcast = BroadcastAcrossDimension::new(DType::F32, [1], 0, size);
 
-        let a = ir.add_input(IrType::new(1, DType::F32));
+        let a = ir.add_input(TType::new(1, DType::F32));
         let b = ir.add_scalar(1.0, size);
         let c = ir.add_op([a], broadcast.clone())?[0];
 

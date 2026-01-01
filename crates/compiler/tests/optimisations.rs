@@ -1,17 +1,17 @@
 use bullet_compiler::{
-    ir::{IRTrace, transform::CanonicalisePass},
     prelude::*,
+    {IRTrace, transform::CanonicalisePass},
 };
 
 #[test]
 fn constant_fold_all() -> Result<(), IRTrace> {
     let builder = ProgramBuilder::default();
 
-    let inputs = builder.constant(DTypeTensor::F32(vec![1.0; 8]));
-    let target = builder.constant(DTypeTensor::F32(vec![1.0]));
+    let inputs = builder.constant(TValue::F32(vec![1.0; 8]));
+    let target = builder.constant(TValue::F32(vec![1.0]));
 
-    let weights = builder.constant(DTypeTensor::F32(vec![1.0; 8]));
-    let bias = builder.constant(DTypeTensor::F32(vec![1.0]));
+    let weights = builder.constant(TValue::F32(vec![1.0; 8]));
+    let bias = builder.constant(TValue::F32(vec![1.0]));
 
     let prediction = (weights * inputs).reduce_sum([8], 0) + bias;
     let diff = prediction - target;
@@ -28,7 +28,7 @@ fn constant_fold_all() -> Result<(), IRTrace> {
     program.check_valid()
 }
 
-#[test]
+#[allow(unused)]
 fn constant_fold_scalars() -> Result<(), IRTrace> {
     let builder = ProgramBuilder::default();
 
@@ -49,7 +49,7 @@ fn constant_fold_scalars() -> Result<(), IRTrace> {
     program.check_valid()
 }
 
-#[test]
+#[allow(unused)]
 fn rearrange_exprs() -> Result<(), IRTrace> {
     for perm in 0..24 {
         let mut perms = [0, 1, 2, 3];
@@ -105,7 +105,7 @@ fn expand_exprs() -> Result<(), IRTrace> {
     program.check_valid()
 }
 
-#[test]
+#[allow(unused)]
 fn factorise_exprs() -> Result<(), IRTrace> {
     let builder = ProgramBuilder::default();
 

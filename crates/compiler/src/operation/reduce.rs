@@ -1,9 +1,6 @@
 use std::{cmp::Ordering, ops::Add, rc::Rc};
 
-use crate::{
-    core::{DType, DTypeTensor, Shape, Size},
-    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
-};
+use crate::graph::{DType, GraphError, Op, OpType, Shape, Size, TType, TValue};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reduction {
@@ -43,7 +40,7 @@ pub struct ReduceAcrossDimension {
 }
 
 impl ReduceAcrossDimension {
-    pub fn new(dtype: DType, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Result<Self, IrError> {
+    pub fn new(dtype: DType, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Result<Self, GraphError> {
         let shape = shape.into();
         let shape_dim = shape.dim();
 
@@ -92,39 +89,39 @@ impl ReduceAcrossDimension {
     }
 }
 
-impl IrOperationType for ReduceAcrossDimension {
+impl OpType for ReduceAcrossDimension {
     fn opname(&self) -> String {
         format!("reduce.{:?}<{:?}, {:?}, {:?}>", self.reduction, self.outer, self.dimen, self.inner).to_lowercase()
     }
 
-    fn inputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.input_size(), self.dtype)]
+    fn inputs(&self) -> Vec<TType> {
+        vec![TType::new(self.input_size(), self.dtype)]
     }
 
-    fn outputs(&self) -> Vec<IrType> {
-        vec![IrType::new(self.input_size() / self.dimen, self.dtype)]
+    fn outputs(&self) -> Vec<TType> {
+        vec![TType::new(self.input_size() / self.dimen, self.dtype)]
     }
 
-    fn evaluate(&self, inputs: &[&DTypeTensor], outputs: &mut [&mut DTypeTensor]) {
+    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
         match self.dtype {
             DType::F32 => {
-                let DTypeTensor::F32(input) = inputs[0] else { panic!() };
-                let DTypeTensor::F32(output) = outputs[0] else { panic!() };
+                let TValue::F32(input) = inputs[0] else { panic!() };
+                let TValue::F32(output) = outputs[0] else { panic!() };
                 self.apply(input, output);
             }
             DType::I32 => {
-                let DTypeTensor::I32(input) = inputs[0] else { panic!() };
-                let DTypeTensor::I32(output) = outputs[0] else { panic!() };
+                let TValue::I32(input) = inputs[0] else { panic!() };
+                let TValue::I32(output) = outputs[0] else { panic!() };
                 self.apply(input, output);
             }
         }
     }
 
-    fn equals(&self, other: &Rc<dyn IrOperationType>) -> bool {
-        if let Some(other) = IrOperation::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
+        if let Some(other) = Op::downcast_rc::<Self>(other) { self == other } else { false }
     }
 }
 
@@ -149,12 +146,12 @@ mod tests {
 
         let reduction = ReduceAcrossDimension::new(DType::I32, shape, dim, reduction).unwrap();
 
-        let input = DTypeTensor::I32(INPUT.to_vec());
-        let mut output = DTypeTensor::I32(vec![0; 64 / shape[dim]]);
+        let input = TValue::I32(INPUT.to_vec());
+        let mut output = TValue::I32(vec![0; 64 / shape[dim]]);
 
         reduction.evaluate(&[&input], &mut [&mut output]);
 
-        let DTypeTensor::I32(output) = output else { panic!() };
+        let TValue::I32(output) = output else { panic!() };
 
         let expected = std::array::from_fn::<_, M, _>(|i| expected(i) as i32);
 
