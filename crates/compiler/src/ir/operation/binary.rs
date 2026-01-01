@@ -2,7 +2,7 @@ use std::{collections::HashSet, rc::Rc};
 
 use crate::{
     core::{CABinary, DTypeTensor},
-    ir::graph::{IrError, IrOperation, IrOperationType, IrType},
+    ir::graph::{IrOperation, IrOperationType, IrType},
 };
 
 #[derive(Debug, PartialEq)]
@@ -12,8 +12,8 @@ pub struct CABinaryOp {
 }
 
 impl CABinaryOp {
-    pub fn new(ty: IrType, op: CABinary) -> Result<Self, IrError> {
-        Ok(Self { ty, op })
+    pub fn new(ty: IrType, op: CABinary) -> Self {
+        Self { ty, op }
     }
 
     pub fn ty(&self) -> IrType {
@@ -70,7 +70,7 @@ mod tests {
     fn evaluate() {
         let ty = IrType::new(Size::variable(), DType::F32);
 
-        let binary = CABinaryOp::new(ty, CABinary::Add).unwrap();
+        let binary = CABinaryOp::new(ty, CABinary::Add);
 
         let a = DTypeTensor::F32(vec![2.0; 4]);
         let b = DTypeTensor::F32(vec![1.0; 4]);

@@ -10,24 +10,27 @@
 /// Simple example:
 /// ```
 /// # use bullet_compiler::{
-/// #     core::{DType, Size, Binary},
+/// #     core::{CABinary, DType, Size},
 /// #     if_find_and_bind_pattern,
-/// #     ir::graph::{IrGraph, IrError, IrType, operation::BinaryOp},
+/// #     ir::{
+/// #         graph::{IrGraph, IrError, IrType},
+/// #         operation::CABinaryOp,
+/// #   },
 /// # };
 /// #
 /// # let mut ir = IrGraph::default();
 /// # let ty = IrType::new(Size::variable(), DType::F32);
 /// # let node_a = ir.add_input(ty);
 /// # let node_b = ir.add_input(ty);
-/// let node_c = ir.add_binary(node_a, node_b, Binary::Add)?;
+/// let node_c = ir.add_op([node_a, node_b], CABinaryOp::new(ty, CABinary::Add))?[0];
 /// let target_op = ir.get_op(ir.get_parent_op(node_c)?)?;
 ///
 /// let mut found = false;
 /// if_find_and_bind_pattern!(
 ///     ir,
 ///     target_op,
-///     (binary = [BinaryOp] (a) (b)),
-///     found = binary.op() == Binary::Add && a.id() == node_a && b.id() == node_b
+///     (binary = [CABinaryOp] (a) (b)),
+///     found = binary.op() == CABinary::Add && a.id() == node_a && b.id() == node_b
 /// );
 ///
 /// assert!(found);
@@ -38,32 +41,38 @@
 /// This can be extended to more complex nested patterns:
 /// ```
 /// # use bullet_compiler::{
-/// #     core::{Binary, DType, Size},
+/// #     core::{CABinary, DType, Size},
 /// #     if_find_and_bind_pattern,
-/// #     ir::graph::{IrGraph, IrError, IrType, operation::{BinaryOp, IrInput}},
+/// #     ir::{
+/// #         graph::{IrGraph, IrError, IrType, IrInput},
+/// #         operation::CABinaryOp,
+/// #     },
 /// # };
 /// #
 /// # let mut ir = IrGraph::default();
 /// # let ty = IrType::new(Size::variable(), DType::F32);
 /// let node_a = ir.add_input(ty);
 /// let node_b = ir.add_input(ty);
-/// let node_c = ir.add_binary(node_a, node_b, Binary::Add)?;
-/// let node_d = ir.add_binary(node_c, node_b, Binary::Sub)?;
-/// let node_e = ir.add_binary(node_c, node_d, Binary::Mul)?;
+/// let node_c = ir.add_op([node_a, node_b], CABinaryOp::new(ty, CABinary::Add))?[0];
+/// let node_d = ir.add_op([node_c, node_b], CABinaryOp::new(ty, CABinary::Min))?[0];
+/// let node_e = ir.add_op([node_c, node_d], CABinaryOp::new(ty, CABinary::Mul))?[0];
 /// let target_op = ir.get_op(ir.get_parent_op(node_e)?)?;
 ///
 /// let mut found = false;
 /// if_find_and_bind_pattern!(
 ///     ir,
 ///     target_op,
-///     (b_e = [BinaryOp]
-///         (b_c = [BinaryOp] (a1 = [IrInput]) (b1 = [IrInput]))
-///         (b_d = [BinaryOp]
-///             (b_c2 = [BinaryOp] (a2 = [IrInput]) (b2 = [IrInput]))
+///     (b_e = [CABinaryOp]
+///         (b_c = [CABinaryOp] (a1 = [IrInput]) (b1 = [IrInput]))
+///         (b_d = [CABinaryOp]
+///             (b_c2 = [CABinaryOp] (a2 = [IrInput]) (b2 = [IrInput]))
 ///             (b3 = [IrInput])
 ///         )
 ///     ),
-///     found = b_c == b_c2 && b_c.op() == Binary::Add && b_d.op() == Binary::Sub && b_e.op() == Binary::Mul
+///     found = b_c == b_c2
+///         && b_c.op() == CABinary::Add
+///         && b_d.op() == CABinary::Min
+///         && b_e.op() == CABinary::Mul
 /// );
 ///
 /// assert!(found);

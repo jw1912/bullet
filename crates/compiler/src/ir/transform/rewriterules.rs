@@ -129,7 +129,7 @@ rewriterule! {
         (z = [CABinaryOp] (y) (x = [CABinaryOp] (a) (b)))
     ] {
         if z.op() == CABinary::Mul && x.op() == CABinary::Add {
-            let new_op = CABinaryOp::new(a.ty(), CABinary::Add)?;
+            let new_op = CABinaryOp::new(a.ty(), CABinary::Add);
             let (y, a, b) = (y.id(), a.id(), b.id());
             let new_lhs = ir.add_binary(a, y, CABinary::Mul)?;
             let new_rhs = ir.add_binary(b, y, CABinary::Mul)?;
@@ -156,7 +156,7 @@ rewriterule! {
                 ] {
                     if lhs == mat {
                         let op_id = op.id();
-                        let mul = CABinaryOp::new(ty, CABinary::Mul)?;
+                        let mul = CABinaryOp::new(ty, CABinary::Mul);
                         let add = ir.add_binary(x, y, CABinary::Add)?;
                         ir.replace_operation(op_id, [lhs, add], mul)?;
                         return Ok(true);
@@ -176,7 +176,7 @@ rewriterule! {
         println!("found pattern!");
         if bin1.op() == CABinary::Add && bin2.op() == CABinary::Mul && x.id() == y.id() {
             let new_value = CABinary::Add.evaluate(scalar.0, DTypeValue::one(scalar.0.dtype())).unwrap();
-            let new_op = CABinaryOp::new(x.ty(), CABinary::Mul)?;
+            let new_op = CABinaryOp::new(x.ty(), CABinary::Mul);
             let x = x.id();
             let new_scalar = ir.add_scalar(new_value, scalar.1);
             ir.replace_operation(op.id(), [new_scalar, x], new_op)?;
@@ -197,7 +197,7 @@ rewriterule! {
             && x.id() == y.id()
         {
             let new_value = CABinary::Add.evaluate(scalar1.0, scalar2.0).unwrap();
-            let new_op = CABinaryOp::new(x.ty(), CABinary::Mul)?;
+            let new_op = CABinaryOp::new(x.ty(), CABinary::Mul);
             let x = x.id();
             let new_scalar = ir.add_scalar(new_value, scalar1.1);
             ir.replace_operation(op.id(), [new_scalar, x], new_op)?;

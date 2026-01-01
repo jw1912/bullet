@@ -213,7 +213,7 @@ impl IR {
         }
 
         let op = CABinaryOp::new(ty, op);
-        self.add_op([lhs, rhs], op).map(|x| x[0])
+        self.add_op([lhs, rhs], Ok::<_, IRTrace>(op)).map(|x| x[0])
     }
 
     pub fn copy(&mut self, node: IrNodeId) -> Result<IrNodeId, IRTrace> {
