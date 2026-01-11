@@ -5,9 +5,7 @@
 //!
 //! YaneuraOu-latest 互換（駒箱対応）。
 
-use super::bona_piece::BonaPiece;
-use super::halfka::{halfka_index, is_hm_mirror, king_bonapiece, king_bucket, pack_bonapiece};
-use super::types::{BOARD_PIECE_TYPES, Color, HAND_PIECE_TYPES, Hand, Piece, PieceType, Square};
+use super::types::{Color, Hand, Piece, PieceType, Square};
 
 // =============================================================================
 // Huffman 符号テーブル
@@ -327,116 +325,6 @@ impl ShogiBoard {
             .filter(move |(_, p)| p.color == color && p.piece_type == pt)
             .map(|(i, _)| Square(i as u8))
     }
-
-    /// 特徴量インデックスを列挙
-    ///
-    /// HalfKA_hm 用の map_features 実装。
-    /// stm (side-to-move) 視点と nstm (not-side-to-move) 視点の両方を返す。
-    ///
-    /// 片玉・詰将棋データ（玉位置が SQ_NB=81）の場合は何もしない。
-    pub fn map_features<F: FnMut(usize, usize)>(&self, mut f: F) {
-        // STM と NSTM の視点
-        let stm = self.side_to_move;
-        let nstm = stm.opponent();
-
-        // 玉位置の妥当性チェック（SQ_NB=81 は「玉なし」を意味する）
-        let stm_king_sq = self.king_square(stm);
-        let nstm_king_sq = self.king_square(nstm);
-        if !stm_king_sq.is_valid() || !nstm_king_sq.is_valid() {
-            // 片玉/詰将棋データはスキップ
-            return;
-        }
-
-        // STM 視点でのキングバケット計算
-        let stm_kb = king_bucket(stm_king_sq, stm);
-        let stm_hm = is_hm_mirror(stm_king_sq, stm);
-
-        // NSTM 視点でのキングバケット計算
-        let nstm_kb = king_bucket(nstm_king_sq, nstm);
-        let nstm_hm = is_hm_mirror(nstm_king_sq, nstm);
-
-        // 盤上の駒（王以外）
-        for &pt in &BOARD_PIECE_TYPES {
-            for color in [Color::Black, Color::White] {
-                for sq in self.pieces(color, pt) {
-                    // STM 視点での BonaPiece
-                    let piece = Piece::new(color, pt);
-                    let stm_bp = BonaPiece::from_piece_square(piece, sq, stm);
-                    let stm_packed = pack_bonapiece(stm_bp, stm_hm);
-                    let stm_idx = halfka_index(stm_kb, stm_packed);
-
-                    // NSTM 視点での BonaPiece
-                    let nstm_bp = BonaPiece::from_piece_square(piece, sq, nstm);
-                    let nstm_packed = pack_bonapiece(nstm_bp, nstm_hm);
-                    let nstm_idx = halfka_index(nstm_kb, nstm_packed);
-
-                    f(stm_idx, nstm_idx);
-                }
-            }
-        }
-
-        // 両方の玉の特徴量
-        // STM 視点での自玉と敵玉
-        {
-            // 自玉 (STM視点)
-            let stm_king_sq_idx = if stm == Color::Black { stm_king_sq.index() } else { stm_king_sq.inverse().index() };
-            let stm_friend_king_bp = king_bonapiece(stm_king_sq_idx, true);
-            let stm_friend_packed = pack_bonapiece(stm_friend_king_bp, stm_hm);
-            let stm_friend_idx = halfka_index(stm_kb, stm_friend_packed);
-
-            // 敵玉 (STM視点)
-            let nstm_king_sq_for_stm =
-                if stm == Color::Black { nstm_king_sq.index() } else { nstm_king_sq.inverse().index() };
-            let stm_enemy_king_bp = king_bonapiece(nstm_king_sq_for_stm, false);
-            let stm_enemy_packed = pack_bonapiece(stm_enemy_king_bp, stm_hm);
-            let stm_enemy_idx = halfka_index(stm_kb, stm_enemy_packed);
-
-            // NSTM 視点での自玉と敵玉
-            let nstm_king_sq_idx =
-                if nstm == Color::Black { nstm_king_sq.index() } else { nstm_king_sq.inverse().index() };
-            let nstm_friend_king_bp = king_bonapiece(nstm_king_sq_idx, true);
-            let nstm_friend_packed = pack_bonapiece(nstm_friend_king_bp, nstm_hm);
-            let nstm_friend_idx = halfka_index(nstm_kb, nstm_friend_packed);
-
-            let stm_king_sq_for_nstm =
-                if nstm == Color::Black { stm_king_sq.index() } else { stm_king_sq.inverse().index() };
-            let nstm_enemy_king_bp = king_bonapiece(stm_king_sq_for_nstm, false);
-            let nstm_enemy_packed = pack_bonapiece(nstm_enemy_king_bp, nstm_hm);
-            let nstm_enemy_idx = halfka_index(nstm_kb, nstm_enemy_packed);
-
-            // 自玉の特徴量
-            f(stm_friend_idx, nstm_friend_idx);
-            // 敵玉の特徴量
-            f(stm_enemy_idx, nstm_enemy_idx);
-        }
-
-        // 手駒の特徴量
-        for owner in [Color::Black, Color::White] {
-            for &pt in &HAND_PIECE_TYPES {
-                let count = self.hand(owner).count(pt);
-                if count == 0 {
-                    continue;
-                }
-
-                // 各枚数分の特徴量を追加
-                for i in 1..=count {
-                    // STM 視点
-                    let stm_bp = BonaPiece::from_hand_piece(stm, owner, pt, i);
-                    if stm_bp != BonaPiece::ZERO {
-                        let stm_packed = pack_bonapiece(stm_bp, stm_hm);
-                        let stm_idx = halfka_index(stm_kb, stm_packed);
-
-                        // NSTM 視点
-                        let nstm_bp = BonaPiece::from_hand_piece(nstm, owner, pt, i);
-                        let nstm_packed = pack_bonapiece(nstm_bp, nstm_hm);
-                        let nstm_idx = halfka_index(nstm_kb, nstm_packed);
-
-                        f(stm_idx, nstm_idx);
-                    }
-                }
-            }
-        }
-    }
 }
 
 // =============================================================================
@@ -687,31 +575,6 @@ mod tests {
     }
 
     #[test]
-    fn test_map_features_count() {
-        // ダミーの局面を作成（手動で設定）
-        let mut board = ShogiBoard::default();
-        board.side_to_move = Color::Black;
-
-        // 玉を配置
-        board.black_king_sq = Square::new(4, 8); // 5九
-        board.white_king_sq = Square::new(4, 0); // 5一
-        board.board[board.black_king_sq.index()] = Piece::new(Color::Black, PieceType::King);
-        board.board[board.white_king_sq.index()] = Piece::new(Color::White, PieceType::King);
-
-        // 歩を9枚ずつ配置
-        for file in 0..9 {
-            board.board[Square::new(file, 6).index()] = Piece::new(Color::Black, PieceType::Pawn);
-            board.board[Square::new(file, 2).index()] = Piece::new(Color::White, PieceType::Pawn);
-        }
-
-        let mut count = 0;
-        board.map_features(|_, _| count += 1);
-
-        // 歩18枚 + 両玉2 = 20（これは簡易テスト）
-        assert!(count >= 20);
-    }
-
-    #[test]
     fn test_bitstream_oob_protection() {
         // 2バイト = 16ビットのデータ
         let data = [0xFF, 0xFF];
@@ -811,38 +674,5 @@ mod tests {
 
         // OOB アクセスしても panic しない
         assert!(!stream.read_bit());
-    }
-
-    #[test]
-    fn test_map_features_sq_nb_guard() {
-        // 片玉データ（玉位置が SQ_NB=81）のテスト
-        let mut board = ShogiBoard::default();
-        board.side_to_move = Color::Black;
-
-        // 先手玉を正常位置、後手玉を SQ_NB(81) に設定
-        board.black_king_sq = Square::new(4, 8); // 5九
-        board.white_king_sq = Square::NONE; // SQ_NB (81)
-        board.board[board.black_king_sq.index()] = Piece::new(Color::Black, PieceType::King);
-
-        let mut count = 0;
-        board.map_features(|_, _| count += 1);
-
-        // 片玉データはスキップされるため、カウントは 0
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn test_map_features_both_kings_invalid() {
-        // 両玉とも無効なデータのテスト
-        let mut board = ShogiBoard::default();
-        board.side_to_move = Color::Black;
-        board.black_king_sq = Square::NONE;
-        board.white_king_sq = Square::NONE;
-
-        let mut count = 0;
-        board.map_features(|_, _| count += 1);
-
-        // スキップされるため、カウントは 0
-        assert_eq!(count, 0);
     }
 }
