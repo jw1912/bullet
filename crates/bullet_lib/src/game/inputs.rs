@@ -4,6 +4,7 @@ mod chess768;
 mod chess_buckets;
 mod chess_buckets_mk;
 mod factorised;
+mod shogi_halfka;
 
 #[allow(deprecated)]
 mod legacy;
@@ -13,6 +14,7 @@ pub use ataxx147::{Ataxx98, Ataxx147};
 pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};
 pub use chess768::Chess768;
 pub use factorised::{Factorised, Factorises};
+pub use shogi_halfka::ShogiHalfKA_hm;
 
 #[allow(deprecated)]
 pub use chess_buckets_mk::*;

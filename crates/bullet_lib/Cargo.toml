@@ -26,6 +26,9 @@ montyformat = { workspace = true }
 sfbinpack = "0.6.0"
 viriformat = { workspace = true }
 
+[dev-dependencies]
+clap = { workspace = true }
+
 [[example]]
 name = "simple"
 path = "../../examples/simple.rs"
@@ -65,3 +68,11 @@ path = "../../examples/progression/4_multi_layer.rs"
 [[example]]
 name = "relabel"
 path = "../../examples/extra/relabel.rs"
+
+[[example]]
+name = "shogi_simple"
+path = "../../examples/shogi_simple.rs"
+
+[[example]]
+name = "export_shogi_nnue"
+path = "../../examples/export_shogi_nnue.rs"

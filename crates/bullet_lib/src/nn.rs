@@ -61,6 +61,12 @@ pub mod optimiser {
         pub max_weight: f32,
     }
 
+    impl Default for RAdamParams {
+        fn default() -> Self {
+            Self { decay: 0.0, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 }
+        }
+    }
+
     impl From<RAdamParams> for radam::RAdamParams {
         fn from(value: RAdamParams) -> Self {
             radam::RAdamParams {
