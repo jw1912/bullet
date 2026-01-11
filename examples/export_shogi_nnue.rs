@@ -1,10 +1,12 @@
 /*
-bullet quantised.bin -> やねうら王形式 (.nnue) 変換ツール
+Shogi NNUE Export Tool
 
-使用方法:
+Converts bullet quantised.bin to a custom NNUE binary format.
+
+Usage:
     cargo run --release --example export_shogi_nnue -- <input> <output>
 
-例:
+Example:
     cargo run --release --example export_shogi_nnue -- \
         checkpoints/shogi-halfka-hm-10/quantised.bin \
         eval/shogi.nnue
@@ -118,22 +120,21 @@ struct BulletParams {
 }
 
 // =============================================================================
-// やねうら王形式 (.nnue) の書き出し
+// NNUE binary output
 // =============================================================================
 
-/// やねうら王形式で書き出し
+/// Write NNUE binary format
 fn write_nnue(path: &str, params: &BulletParams) -> std::io::Result<()> {
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
 
-    // ヘッダー（簡易版）
-    // 実際のやねうら王形式はより複雑なヘッダーを持つ
-    // ここでは raw 形式で出力
+    // Simplified format (no header)
+    // Adjust as needed for your engine's expected format
 
     println!("Writing L0 weights (LEB128 compressed)...");
-    // L0 weights: LEB128 圧縮
-    // bullet は column-major、やねうら王は row-major の場合があるので注意
-    // ここでは column-major のまま出力
+    // L0 weights: LEB128 compressed
+    // Note: bullet uses column-major order
+    // Transpose if your engine expects row-major
     for &w in &params.l0_weights {
         write_leb128(&mut writer, i32::from(w))?;
     }
@@ -259,6 +260,6 @@ fn main() {
     println!();
     println!("Done!");
     println!();
-    println!("Note: This is a simplified export. For full YaneuraOu compatibility,");
-    println!("you may need to adjust the header format and weight layout.");
+    println!("Note: This is a simplified export. You may need to adjust the");
+    println!("header format and weight layout for your specific engine.");
 }
