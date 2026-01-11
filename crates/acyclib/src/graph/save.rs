@@ -140,6 +140,22 @@ impl SavedFormat {
         }
     }
 
+    /// Read quantized bytes back to f32 values.
+    ///
+    /// This is the inverse of `write_to_byte_buffer` for the quantization step only.
+    /// Note that transforms (e.g., transpose) are NOT reversed; if you need to undo
+    /// transformations, you must apply them manually after reading.
+    ///
+    /// For custom byte buffers, this returns an error since there is no defined
+    /// dequantization for arbitrary custom data.
+    pub fn read_from_byte_buffer(&self, bytes: &[u8]) -> io::Result<Vec<f32>> {
+        if self.custom.is_some() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Cannot dequantize custom byte buffers"));
+        }
+
+        self.quant.dequantise(bytes)
+    }
+
     pub(crate) fn transpose_impl(shape: Shape, weights: &[f32]) -> Vec<f32> {
         assert_eq!(shape.size(), weights.len());
 
@@ -172,6 +188,68 @@ fn round_or_trunc(x: f64, round: bool) -> f64 {
 }
 
 impl QuantTarget {
+    /// Returns the size in bytes of a single element for this quantization target.
+    pub fn element_size(self) -> usize {
+        match self {
+            Self::Float => 4,
+            Self::I8(_) => 1,
+            Self::I16(_) => 2,
+            Self::I32(_) => 4,
+        }
+    }
+
+    /// Dequantize bytes back to f32 values.
+    ///
+    /// This is the inverse of `quantise`: it reads the quantized byte buffer
+    /// and converts it back to f32 values by dividing by the quantization factor.
+    pub fn dequantise(self, bytes: &[u8]) -> io::Result<Vec<f32>> {
+        let elem_size = self.element_size();
+
+        if bytes.len() % elem_size != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Byte buffer length {} is not a multiple of element size {}", bytes.len(), elem_size),
+            ));
+        }
+
+        let num_elements = bytes.len() / elem_size;
+        let mut result = Vec::with_capacity(num_elements);
+
+        match self {
+            Self::Float => {
+                for chunk in bytes.chunks_exact(4) {
+                    let arr: [u8; 4] = chunk.try_into().unwrap();
+                    result.push(f32::from_le_bytes(arr));
+                }
+            }
+            Self::I8(q) => {
+                let q_f32 = f32::from(q);
+                for &byte in bytes {
+                    let val = byte as i8;
+                    result.push(f32::from(val) / q_f32);
+                }
+            }
+            Self::I16(q) => {
+                let q_f32 = f32::from(q);
+                for chunk in bytes.chunks_exact(2) {
+                    let arr: [u8; 2] = chunk.try_into().unwrap();
+                    let val = i16::from_le_bytes(arr);
+                    result.push(f32::from(val) / q_f32);
+                }
+            }
+            Self::I32(q) => {
+                let q_f32 = q as f32;
+                for chunk in bytes.chunks_exact(4) {
+                    let arr: [u8; 4] = chunk.try_into().unwrap();
+                    let val = i32::from_le_bytes(arr);
+                    result.push(val as f32 / q_f32);
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
     pub fn quantise(self, round: bool, buf: &[f32]) -> io::Result<Vec<u8>> {
         let mut quantised = Vec::<u8>::new();
 
@@ -244,5 +322,113 @@ impl Quant for i32 {
 
     fn to_target(q: Self::Multiplier) -> QuantTarget {
         QuantTarget::I32(q)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx_eq(a: f32, b: f32, tolerance: f32) -> bool {
+        (a - b).abs() <= tolerance
+    }
+
+    #[test]
+    fn test_dequantise_float() {
+        let values = vec![1.5f32, -2.25, 0.0, 3.125];
+        let quant = QuantTarget::Float;
+
+        let bytes = quant.quantise(false, &values).unwrap();
+        let recovered = quant.dequantise(&bytes).unwrap();
+
+        assert_eq!(values.len(), recovered.len());
+        for (orig, rec) in values.iter().zip(recovered.iter()) {
+            assert_eq!(*orig, *rec);
+        }
+    }
+
+    #[test]
+    fn test_dequantise_i8() {
+        let values = vec![0.5f32, -0.25, 0.0, 0.75];
+        let quant = QuantTarget::I8(128);
+
+        let bytes = quant.quantise(true, &values).unwrap();
+        let recovered = quant.dequantise(&bytes).unwrap();
+
+        assert_eq!(values.len(), recovered.len());
+        for (orig, rec) in values.iter().zip(recovered.iter()) {
+            // i8 quantization has limited precision
+            assert!(approx_eq(*orig, *rec, 1.0 / 128.0));
+        }
+    }
+
+    #[test]
+    fn test_dequantise_i16() {
+        let values = vec![0.5f32, -0.25, 0.0, 0.999];
+        let quant = QuantTarget::I16(1024);
+
+        let bytes = quant.quantise(true, &values).unwrap();
+        let recovered = quant.dequantise(&bytes).unwrap();
+
+        assert_eq!(values.len(), recovered.len());
+        for (orig, rec) in values.iter().zip(recovered.iter()) {
+            // i16 quantization has better precision
+            assert!(approx_eq(*orig, *rec, 1.0 / 1024.0));
+        }
+    }
+
+    #[test]
+    fn test_dequantise_i32() {
+        let values = vec![100.5f32, -50.25, 0.0, 1000.125];
+        let quant = QuantTarget::I32(256);
+
+        let bytes = quant.quantise(true, &values).unwrap();
+        let recovered = quant.dequantise(&bytes).unwrap();
+
+        assert_eq!(values.len(), recovered.len());
+        for (orig, rec) in values.iter().zip(recovered.iter()) {
+            assert!(approx_eq(*orig, *rec, 1.0 / 256.0));
+        }
+    }
+
+    #[test]
+    fn test_dequantise_invalid_length() {
+        let quant = QuantTarget::I16(128);
+        // 3 bytes is not a multiple of 2 (i16 size)
+        let invalid_bytes = vec![0u8, 1, 2];
+
+        let result = quant.dequantise(&invalid_bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_element_size() {
+        assert_eq!(QuantTarget::Float.element_size(), 4);
+        assert_eq!(QuantTarget::I8(128).element_size(), 1);
+        assert_eq!(QuantTarget::I16(256).element_size(), 2);
+        assert_eq!(QuantTarget::I32(512).element_size(), 4);
+    }
+
+    #[test]
+    fn test_saved_format_read_from_byte_buffer() {
+        let format = SavedFormat::empty().quantise::<i16>(512);
+        let values = vec![0.5f32, -0.25, 0.125];
+
+        // Manually quantize to simulate reading from a file
+        let bytes = QuantTarget::I16(512).quantise(false, &values).unwrap();
+        let recovered = format.read_from_byte_buffer(&bytes).unwrap();
+
+        assert_eq!(values.len(), recovered.len());
+        for (orig, rec) in values.iter().zip(recovered.iter()) {
+            assert!(approx_eq(*orig, *rec, 1.0 / 512.0));
+        }
+    }
+
+    #[test]
+    fn test_saved_format_read_custom_error() {
+        let format = SavedFormat::custom(vec![1, 2, 3]);
+
+        let result = format.read_from_byte_buffer(&[1, 2, 3]);
+        assert!(result.is_err());
     }
 }
