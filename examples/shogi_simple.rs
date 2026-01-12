@@ -1,35 +1,35 @@
 /*
-将棋 NNUE 学習スクリプト
+Shogi NNUE Training Script
 
-使用方法:
+Usage:
     cargo run --release --example shogi_simple -- [OPTIONS]
 
-オプション:
-    --arch <ARCH>       アーキテクチャプリセット (デフォルト: 256x2-32-32)
-                        プリセット: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
-    --l1 <SIZE>         L1 (アキュムレータ) サイズ (プリセットを上書き)
-    --l2 <SIZE>         L2 (中間層1) サイズ
-    --l3 <SIZE>         L3 (中間層2) サイズ
-    --data <PATH>       訓練データパス (複数指定可、カンマ区切り)
-    --batch-size <N>    バッチサイズ (デフォルト: 16384)
-    --superbatches <N>  Superbatch 数 (デフォルト: 100)
-    --lr <RATE>         初期学習率 (デフォルト: 0.001)
-    --wdl <LAMBDA>      WDL lambda (デフォルト: 0.75)
-    --scale <N>         評価値スケール (デフォルト: 600)
-    --save-rate <N>     保存間隔 (デフォルト: 10)
-    --threads <N>       スレッド数 (デフォルト: 4)
-    --output <DIR>      出力ディレクトリ (デフォルト: checkpoints)
-    --net-id <NAME>     ネットワークID (デフォルト: shogi-halfka-hm)
-    --weight-decay <F>  Weight decay (デフォルト: 0.01)
+Options:
+    --arch <ARCH>       Architecture preset (default: 256x2-32-32)
+                        Presets: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
+    --l1 <SIZE>         L1 (accumulator) size (overrides preset)
+    --l2 <SIZE>         L2 (hidden layer 1) size
+    --l3 <SIZE>         L3 (hidden layer 2) size
+    --data <PATH>       Training data path (comma-separated for multiple files)
+    --batch-size <N>    Batch size (default: 16384)
+    --superbatches <N>  Number of superbatches (default: 100)
+    --lr <RATE>         Initial learning rate (default: 0.001)
+    --wdl <LAMBDA>      WDL lambda (default: 0.75)
+    --scale <N>         Eval scale (default: 600)
+    --save-rate <N>     Save interval in superbatches (default: 10)
+    --threads <N>       Number of threads (default: 4)
+    --output <DIR>      Output directory (default: checkpoints)
+    --net-id <NAME>     Network ID (default: shogi-halfka-hm)
+    --weight-decay <F>  Weight decay (default: 0.01)
 
-例:
-    # デフォルト設定で学習
+Examples:
+    # Train with default settings
     cargo run --release --example shogi_simple -- --data data/train.bin
 
-    # 512x2-8-96 アーキテクチャで学習
+    # Train with 512x2-8-96 architecture
     cargo run --release --example shogi_simple -- --arch 512x2-8-96 --data data/train.bin
 
-    # カスタムサイズで学習
+    # Train with custom sizes
     cargo run --release --example shogi_simple -- --l1 1024 --l2 16 --l3 64 --data data/train.bin
 */
 
@@ -48,113 +48,113 @@ use bullet_lib::{
 use clap::{Parser, ValueEnum};
 
 // =============================================================================
-// CLI 引数定義
+// CLI Arguments
 // =============================================================================
 
-/// オプティマイザ選択
+/// Optimizer selection
 #[derive(Debug, Clone, Copy, ValueEnum, Default)]
 enum OptimizerType {
-    /// AdamW - 高速収束だがスパース入力に不安定な可能性
+    /// AdamW - fast convergence but may be unstable with sparse inputs
     AdamW,
-    /// RAdam - Rectified Adam、より安定
+    /// RAdam - Rectified Adam, more stable
     RAdam,
-    /// Ranger - RAdam + Lookahead（nnue-pytorch推奨）
+    /// Ranger - RAdam + Lookahead (recommended by nnue-pytorch)
     #[default]
     Ranger,
 }
 
 #[derive(Parser, Debug)]
 #[command(name = "shogi_simple")]
-#[command(about = "将棋 NNUE 学習スクリプト")]
+#[command(about = "Shogi NNUE training script")]
 struct Args {
-    /// アーキテクチャプリセット
-    /// プリセット: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
+    /// Architecture preset
+    /// Presets: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
     #[arg(long, default_value = "256x2-32-32")]
     arch: String,
 
-    /// オプティマイザ (adamw, radam, ranger)
-    /// ranger = RAdam + Lookahead（nnue-pytorch推奨と同じ）
+    /// Optimizer (adamw, radam, ranger)
+    /// ranger = RAdam + Lookahead (same as nnue-pytorch recommendation)
     #[arg(long, value_enum, default_value = "ranger")]
     optimizer: OptimizerType,
 
-    /// L1 (アキュムレータ) サイズ (プリセットを上書き)
+    /// L1 (accumulator) size (overrides preset)
     #[arg(long)]
     l1: Option<usize>,
 
-    /// L2 (中間層1) サイズ
+    /// L2 (hidden layer 1) size
     #[arg(long)]
     l2: Option<usize>,
 
-    /// L3 (中間層2) サイズ
+    /// L3 (hidden layer 2) size
     #[arg(long)]
     l3: Option<usize>,
 
-    /// 訓練データパス (複数指定可、カンマ区切り)
+    /// Training data path (comma-separated for multiple files)
     #[arg(long, default_value = "data/train.bin")]
     data: String,
 
-    /// バッチサイズ
+    /// Batch size
     #[arg(long, default_value = "16384")]
     batch_size: usize,
 
-    /// Superbatch 数
+    /// Number of superbatches
     #[arg(long, default_value = "100")]
     superbatches: usize,
 
-    /// 初期学習率
+    /// Initial learning rate
     #[arg(long, default_value = "0.001")]
     lr: f32,
 
-    /// WDL lambda (0.0=勝敗のみ, 1.0=評価値のみ)
+    /// WDL lambda (0.0=game result only, 1.0=eval only)
     #[arg(long, default_value = "0.75")]
     wdl: f32,
 
-    /// 評価値スケール
+    /// Eval scale
     #[arg(long, default_value = "600")]
     scale: i32,
 
-    /// 保存間隔 (superbatch)
+    /// Save interval (superbatches)
     #[arg(long, default_value = "10")]
     save_rate: usize,
 
-    /// スレッド数
+    /// Number of threads
     #[arg(long, default_value = "4")]
     threads: usize,
 
-    /// 出力ディレクトリ
+    /// Output directory
     #[arg(long, default_value = "checkpoints")]
     output: PathBuf,
 
-    /// ネットワークID
+    /// Network ID
     #[arg(long, default_value = "shogi-halfka-hm")]
     net_id: String,
 
-    /// 量子化係数 QA (L0用)
+    /// Quantization factor QA (for L0)
     #[arg(long, default_value = "127")]
     qa: i16,
 
-    /// 量子化係数 QB (後段層用)
+    /// Quantization factor QB (for later layers)
     #[arg(long, default_value = "64")]
     qb: i16,
 
-    /// Weight decay (L2正則化)
+    /// Weight decay (L2 regularization)
     #[arg(long, default_value = "0.01")]
     weight_decay: f32,
 }
 
 // =============================================================================
-// アーキテクチャ定義
+// Architecture Definition
 // =============================================================================
 
 #[derive(Debug, Clone, Copy)]
 struct Architecture {
-    l1: usize, // アキュムレータサイズ
-    l2: usize, // 中間層1サイズ
-    l3: usize, // 中間層2サイズ
+    l1: usize, // Accumulator size
+    l2: usize, // Hidden layer 1 size
+    l3: usize, // Hidden layer 2 size
 }
 
 impl Architecture {
-    /// プリセット名からアーキテクチャを取得
+    /// Get architecture from preset name
     fn from_preset(name: &str) -> Option<Self> {
         match name {
             "256x2-32-32" => Some(Self { l1: 256, l2: 32, l3: 32 }),
@@ -166,32 +166,32 @@ impl Architecture {
         }
     }
 
-    /// 利用可能なプリセット一覧
+    /// List of available presets
     fn available_presets() -> &'static [&'static str] {
         &["256x2-32-32", "512x2-8-96", "512x2-32-32", "1024x2-8-32", "1024x2-16-64"]
     }
 
-    /// 表示用文字列
+    /// Display string
     fn display(&self) -> String {
         format!("{}x2-{}-{}", self.l1, self.l2, self.l3)
     }
 }
 
 // =============================================================================
-// メイン処理
+// Main
 // =============================================================================
 
 fn main() {
     let args = Args::parse();
 
-    // アーキテクチャ決定
+    // Determine architecture
     let mut arch = Architecture::from_preset(&args.arch).unwrap_or_else(|| {
         eprintln!("Unknown architecture preset: {}", args.arch);
         eprintln!("Available presets: {:?}", Architecture::available_presets());
         std::process::exit(1);
     });
 
-    // 個別指定で上書き
+    // Override with individual settings
     if let Some(l1) = args.l1 {
         arch.l1 = l1;
     }
@@ -206,22 +206,22 @@ fn main() {
     let l2_size = arch.l2;
     let l3_size = arch.l3;
 
-    // 量子化係数
+    // Quantization factors
     let qa = args.qa;
     let qb = args.qb;
 
-    // 入力特徴量
+    // Input features
     let input = ShogiHalfKA_hm;
     let input_size = input.num_inputs();
 
-    // オプティマイザ名
+    // Optimizer name
     let optimizer_name = match args.optimizer {
         OptimizerType::AdamW => "AdamW",
         OptimizerType::RAdam => "RAdam",
         OptimizerType::Ranger => "Ranger (RAdam + Lookahead)",
     };
 
-    // 設定表示
+    // Print configuration
     println!("=== Shogi NNUE Training ===");
     println!("Architecture: {} (L1={}, L2={}, L3={})", arch.display(), l1_size, l2_size, l3_size);
     println!("Network: {} -> {}x2 -> {} -> {} -> 1", input_size, l1_size, l2_size, l3_size);
@@ -240,13 +240,13 @@ fn main() {
     println!("Data: {}", args.data);
     println!("===========================");
 
-    // 学習スケジュール
+    // Training schedule
     let schedule = TrainingSchedule {
         net_id: args.net_id,
         eval_scale: args.scale as f32,
         steps: TrainingSteps {
             batch_size: args.batch_size,
-            batches_per_superbatch: 6104, // 約1億局面/superbatch
+            batches_per_superbatch: 6104, // ~100M positions/superbatch
             start_superbatch: 1,
             end_superbatch: args.superbatches,
         },
@@ -255,16 +255,21 @@ fn main() {
         save_rate: args.save_rate,
     };
 
-    // ローカル設定
+    // Local settings
     let output_dir = args.output.to_str().unwrap_or("checkpoints");
     let settings =
         LocalSettings { threads: args.threads, test_set: None, output_directory: output_dir, batch_queue_size: 64 };
 
-    // データローダー
+    // Data loader
     let data_files: Vec<&str> = args.data.split(',').collect();
     let data_loader = DirectSequentialDataLoader::new(&data_files);
 
-    // SaveFormat 定義
+    // SavedFormat configuration
+    // This directly outputs the final format for your engine.
+    // Customize as needed:
+    //   - .transpose() to change matrix layout
+    //   - SavedFormat::custom(bytes) to add headers
+    //   - .transform(|store, vals| ...) for custom transformations
     let save_format = [
         SavedFormat::id("l0w").round().quantise::<i16>(qa),
         SavedFormat::id("l0b").round().quantise::<i16>(qa),
@@ -276,7 +281,7 @@ fn main() {
         SavedFormat::id("outb").round().quantise::<i16>(qa * qb),
     ];
 
-    // ネットワーク構築マクロ（重複を減らすため）
+    // Network builder macro (to reduce duplication)
     macro_rules! build_trainer {
         ($opt:expr) => {
             ValueTrainerBuilder::default()
@@ -303,7 +308,7 @@ fn main() {
         };
     }
 
-    // オプティマイザに応じてトレーナーを構築・実行
+    // Build and run trainer based on optimizer
     let weight_decay = args.weight_decay;
     match args.optimizer {
         OptimizerType::AdamW => {
@@ -326,10 +331,10 @@ fn main() {
 }
 
 // =============================================================================
-// 推論用ネットワーク構造体（エンジン組み込み用参考）
+// Inference Network Structure (reference for engine integration)
 // =============================================================================
 
-/// Square Clipped ReLU - 活性化関数
+/// Square Clipped ReLU - activation function
 #[inline]
 fn _screlu(x: i16, qa: i16) -> i32 {
     let y = i32::from(x).clamp(0, i32::from(qa));
