@@ -278,6 +278,8 @@ fn halfka_index(kb: usize, packed_bp: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::shogi::PieceType;
+
     use super::*;
 
     #[test]
