@@ -390,15 +390,19 @@ fn main() {
                 SavedFormat::id("l0w").round().quantise::<i16>(qa),
                 // Network layer hash
                 SavedFormat::custom(network_hash),
-                // L1: biases i32, weights i8
+                // L1-Output層の重みは .transpose() で row-major に変換
+                // 理由: Stockfish/nnue-pytorch は row-major で推論する
+                // bullet 内部は column-major だが、これは GPU (cuBLAS) 最適化のため
+                // 変換コストは出力時の1回のみで、学習効率には影響しない
+                // L1: biases i32, weights i8 (row-major)
                 SavedFormat::id("l1b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("l1w").round().quantise::<i8>(qb),
-                // L2: biases i32, weights i8
+                SavedFormat::id("l1w").transpose().round().quantise::<i8>(qb),
+                // L2: biases i32, weights i8 (row-major)
                 SavedFormat::id("l2b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("l2w").round().quantise::<i8>(qb),
-                // Output: biases i32, weights i8
+                SavedFormat::id("l2w").transpose().round().quantise::<i8>(qb),
+                // Output: biases i32, weights i8 (row-major)
                 SavedFormat::id("outb").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("outw").round().quantise::<i8>(qb),
+                SavedFormat::id("outw").transpose().round().quantise::<i8>(qb),
             ]
         }
     };
