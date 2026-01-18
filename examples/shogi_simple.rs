@@ -36,7 +36,7 @@ Examples:
 use std::path::PathBuf;
 
 use bullet_lib::{
-    game::inputs::{ShogiHalfKA_hm, SparseInputType},
+    game::inputs::{ShogiHalfKA_hm, ShogiHalfKP, SparseInputType},
     nn::optimiser::{self, AdamWParams, RAdamParams, RangerParams},
     trainer::{
         save::SavedFormat,
@@ -46,6 +46,38 @@ use bullet_lib::{
     value::{ValueTrainerBuilder, loader::DirectSequentialDataLoader},
 };
 use clap::{Parser, ValueEnum};
+
+/// Feature set selection
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+enum FeatureSet {
+    /// HalfKA_hm - Half-Mirrored King-All (73,305 dimensions)
+    #[default]
+    HalfkaHm,
+    /// HalfKP - King-Piece (125,388 dimensions, no mirror)
+    HalfKP,
+}
+
+/// Output format selection
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+enum OutputFormat {
+    /// bullet format: all i16 (l0w, l0b, l1w, l1b, l2w, l2b, outw, outb)
+    #[default]
+    Bullet,
+    /// rust-core format: L0 i16, L1-Out biases i32 + weights i8, with NNUE header
+    RustCore,
+}
+
+/// Activation function selection
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+enum ActivationType {
+    /// SCReLU - Squared Clipped ReLU: y = clamp(x, 0, qa)²
+    /// Higher expressiveness, used in modern Stockfish
+    #[default]
+    Screlu,
+    /// CReLU - Clipped ReLU: y = clamp(x, 0, qa)
+    /// Traditional activation, used in YaneuraOu/Suisho
+    Crelu,
+}
 
 // =============================================================================
 // CLI Arguments
@@ -67,6 +99,24 @@ enum OptimizerType {
 #[command(name = "shogi_simple")]
 #[command(about = "Shogi NNUE training script")]
 struct Args {
+    /// Feature set (halfka-hm or halfkp)
+    /// halfka-hm: HalfKA_hm (73,305 dims, Half-Mirror) - nnue-pytorch compatible
+    /// halfkp: HalfKP (125,388 dims, no mirror) - classic NNUE
+    #[arg(long, value_enum, default_value = "halfka-hm")]
+    features: FeatureSet,
+
+    /// Output format (bullet or rust-core)
+    /// bullet: all i16, no header (default)
+    /// rust-core: NNUE header + L0 i16 + L1-Out biases i32 + weights i8
+    #[arg(long, value_enum, default_value = "bullet")]
+    output_format: OutputFormat,
+
+    /// Activation function (screlu or crelu)
+    /// screlu: Squared Clipped ReLU - higher expressiveness (default)
+    /// crelu: Clipped ReLU - traditional, used in YaneuraOu/Suisho
+    #[arg(long, value_enum, default_value = "screlu")]
+    activation: ActivationType,
+
     /// Architecture preset
     /// Presets: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
     #[arg(long, default_value = "256x2-32-32")]
@@ -210,9 +260,11 @@ fn main() {
     let qa = args.qa;
     let qb = args.qb;
 
-    // Input features
-    let input = ShogiHalfKA_hm;
-    let input_size = input.num_inputs();
+    // Feature set info
+    let (feature_name, input_size) = match args.features {
+        FeatureSet::HalfkaHm => ("HalfKA_hm", ShogiHalfKA_hm.num_inputs()),
+        FeatureSet::HalfKP => ("HalfKP", ShogiHalfKP.num_inputs()),
+    };
 
     // Optimizer name
     let optimizer_name = match args.optimizer {
@@ -221,10 +273,18 @@ fn main() {
         OptimizerType::Ranger => "Ranger (RAdam + Lookahead)",
     };
 
+    // Activation function name
+    let activation_name = match args.activation {
+        ActivationType::Screlu => "SCReLU",
+        ActivationType::Crelu => "CReLU",
+    };
+
     // Print configuration
     println!("=== Shogi NNUE Training ===");
+    println!("Features: {} ({} dimensions)", feature_name, input_size);
     println!("Architecture: {} (L1={}, L2={}, L3={})", arch.display(), l1_size, l2_size, l3_size);
     println!("Network: {} -> {}x2 -> {} -> {} -> 1", input_size, l1_size, l2_size, l3_size);
+    println!("Activation: {}", activation_name);
     println!("Optimizer: {}", optimizer_name);
     println!("Weight decay: {}", args.weight_decay);
     println!("Scale: {}", args.scale);
@@ -270,24 +330,86 @@ fn main() {
     //   - .transpose() to change matrix layout
     //   - SavedFormat::custom(bytes) to add headers
     //   - .transform(|store, vals| ...) for custom transformations
-    let save_format = [
-        SavedFormat::id("l0w").round().quantise::<i16>(qa),
-        SavedFormat::id("l0b").round().quantise::<i16>(qa),
-        SavedFormat::id("l1w").round().quantise::<i16>(qb),
-        SavedFormat::id("l1b").round().quantise::<i16>(qa * qb),
-        SavedFormat::id("l2w").round().quantise::<i16>(qb),
-        SavedFormat::id("l2b").round().quantise::<i16>(qa * qb),
-        SavedFormat::id("outw").round().quantise::<i16>(qb),
-        SavedFormat::id("outb").round().quantise::<i16>(qa * qb),
-    ];
+    let save_format: Vec<SavedFormat> = match args.output_format {
+        OutputFormat::Bullet => {
+            // bullet format: all i16 (default)
+            vec![
+                SavedFormat::id("l0w").round().quantise::<i16>(qa),
+                SavedFormat::id("l0b").round().quantise::<i16>(qa),
+                SavedFormat::id("l1w").round().quantise::<i16>(qb),
+                SavedFormat::id("l1b").round().quantise::<i16>(qa * qb),
+                SavedFormat::id("l2w").round().quantise::<i16>(qb),
+                SavedFormat::id("l2b").round().quantise::<i16>(qa * qb),
+                SavedFormat::id("outw").round().quantise::<i16>(qb),
+                SavedFormat::id("outb").round().quantise::<i16>(qa * qb),
+            ]
+        }
+        OutputFormat::RustCore => {
+            // rust-core format: NNUE header + L0 i16 + L1-Out biases i32 + weights i8
+            //
+            // File layout:
+            // - Header: version (u32), hash (u32), arch_len (u32), arch_string
+            // - FeatureTransformer layer hash (u32)
+            // - L0: biases i16[L1], weights i16[INPUT×L1]
+            // - Network layer hash (u32)
+            // - L1: biases i32[L2], weights i8[L2×(L1*2)]
+            // - L2: biases i32[L3], weights i8[L3×L2]
+            // - Output: biases i32[1], weights i8[1×L3]
 
-    // Network builder macro (to reduce duplication)
-    macro_rules! build_trainer {
-        ($opt:expr) => {
+            // NNUE version (YaneuraOu/Stockfish compatible)
+            const NNUE_VERSION: u32 = 0x7AF32F16;
+
+            // Build architecture string with features and activation info
+            let arch_str = format!(
+                "Features={}[{}->{}x2]{}",
+                feature_name,
+                input_size,
+                l1_size,
+                if matches!(args.activation, ActivationType::Screlu) { "-SCReLU" } else { "" }
+            );
+            let arch_bytes = arch_str.as_bytes();
+
+            // Build header
+            let mut header = Vec::new();
+            header.extend_from_slice(&NNUE_VERSION.to_le_bytes());
+            header.extend_from_slice(&0u32.to_le_bytes()); // hash (dummy)
+            header.extend_from_slice(&(arch_bytes.len() as u32).to_le_bytes());
+            header.extend_from_slice(arch_bytes);
+
+            // Layer hashes (dummy values, rust-core skips validation)
+            let ft_hash = 0u32.to_le_bytes().to_vec();
+            let network_hash = 0u32.to_le_bytes().to_vec();
+
+            vec![
+                // Header
+                SavedFormat::custom(header),
+                // FeatureTransformer layer hash
+                SavedFormat::custom(ft_hash),
+                // L0: biases first, then weights (rust-core order)
+                SavedFormat::id("l0b").round().quantise::<i16>(qa),
+                SavedFormat::id("l0w").round().quantise::<i16>(qa),
+                // Network layer hash
+                SavedFormat::custom(network_hash),
+                // L1: biases i32, weights i8
+                SavedFormat::id("l1b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
+                SavedFormat::id("l1w").round().quantise::<i8>(qb),
+                // L2: biases i32, weights i8
+                SavedFormat::id("l2b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
+                SavedFormat::id("l2w").round().quantise::<i8>(qb),
+                // Output: biases i32, weights i8
+                SavedFormat::id("outb").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
+                SavedFormat::id("outw").round().quantise::<i8>(qb),
+            ]
+        }
+    };
+
+    // Network builder macro with SCReLU activation
+    macro_rules! build_trainer_screlu {
+        ($opt:expr, $input:expr) => {
             ValueTrainerBuilder::default()
                 .dual_perspective()
                 .optimiser($opt)
-                .inputs(input)
+                .inputs($input)
                 .save_format(&save_format)
                 .loss_fn(|output, target| output.sigmoid().squared_error(target))
                 .build(|builder, stm_inputs, ntm_inputs| {
@@ -308,25 +430,85 @@ fn main() {
         };
     }
 
-    // Build and run trainer based on optimizer
-    let weight_decay = args.weight_decay;
-    match args.optimizer {
-        OptimizerType::AdamW => {
-            let mut trainer = build_trainer!(optimiser::AdamW);
-            trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-            trainer.run(&schedule, &settings, &data_loader);
-        }
-        OptimizerType::RAdam => {
-            let mut trainer = build_trainer!(optimiser::RAdam);
-            let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
-            trainer.optimiser.set_params(params.into());
-            trainer.run(&schedule, &settings, &data_loader);
-        }
-        OptimizerType::Ranger => {
-            let mut trainer = build_trainer!(optimiser::Ranger);
-            trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-            trainer.run(&schedule, &settings, &data_loader);
-        }
+    // Network builder macro with CReLU (Clipped ReLU) activation
+    macro_rules! build_trainer_crelu {
+        ($opt:expr, $input:expr) => {
+            ValueTrainerBuilder::default()
+                .dual_perspective()
+                .optimiser($opt)
+                .inputs($input)
+                .save_format(&save_format)
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let l0 = builder.new_affine("l0", input_size, l1_size);
+                    let l1 = builder.new_affine("l1", 2 * l1_size, l2_size);
+                    let l2 = builder.new_affine("l2", l2_size, l3_size);
+                    let out = builder.new_affine("out", l3_size, 1);
+
+                    let stm_hidden = l0.forward(stm_inputs).crelu();
+                    let ntm_hidden = l0.forward(ntm_inputs).crelu();
+                    let combined = stm_hidden.concat(ntm_hidden);
+
+                    let hidden1 = l1.forward(combined).crelu();
+                    let hidden2 = l2.forward(hidden1).crelu();
+
+                    out.forward(hidden2)
+                })
+        };
+    }
+
+    // Run training macro (to reduce duplication across feature sets and activations)
+    macro_rules! run_training {
+        ($input:expr, screlu) => {{
+            let weight_decay = args.weight_decay;
+            match args.optimizer {
+                OptimizerType::AdamW => {
+                    let mut trainer = build_trainer_screlu!(optimiser::AdamW, $input);
+                    trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::RAdam => {
+                    let mut trainer = build_trainer_screlu!(optimiser::RAdam, $input);
+                    let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
+                    trainer.optimiser.set_params(params.into());
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::Ranger => {
+                    let mut trainer = build_trainer_screlu!(optimiser::Ranger, $input);
+                    trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+            }
+        }};
+        ($input:expr, crelu) => {{
+            let weight_decay = args.weight_decay;
+            match args.optimizer {
+                OptimizerType::AdamW => {
+                    let mut trainer = build_trainer_crelu!(optimiser::AdamW, $input);
+                    trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::RAdam => {
+                    let mut trainer = build_trainer_crelu!(optimiser::RAdam, $input);
+                    let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
+                    trainer.optimiser.set_params(params.into());
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::Ranger => {
+                    let mut trainer = build_trainer_crelu!(optimiser::Ranger, $input);
+                    trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+            }
+        }};
+    }
+
+    // Run training based on feature set and activation
+    match (args.features, args.activation) {
+        (FeatureSet::HalfkaHm, ActivationType::Screlu) => run_training!(ShogiHalfKA_hm, screlu),
+        (FeatureSet::HalfkaHm, ActivationType::Crelu) => run_training!(ShogiHalfKA_hm, crelu),
+        (FeatureSet::HalfKP, ActivationType::Screlu) => run_training!(ShogiHalfKP, screlu),
+        (FeatureSet::HalfKP, ActivationType::Crelu) => run_training!(ShogiHalfKP, crelu),
     }
 }
 
