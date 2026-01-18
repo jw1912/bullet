@@ -155,7 +155,7 @@ struct Args {
     #[arg(long, default_value = "0.001")]
     lr: f32,
 
-    /// WDL lambda (0.0=game result only, 1.0=eval only)
+    /// WDL lambda (0.0=eval only, 1.0=game result only)
     #[arg(long, default_value = "0.75")]
     wdl: f32,
 
