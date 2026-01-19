@@ -15,7 +15,9 @@ Options:
     --superbatches <N>  Number of superbatches (default: 100)
     --lr <RATE>         Initial learning rate (default: 0.001)
     --wdl <LAMBDA>      WDL lambda (default: 0.75)
-    --scale <N>         Eval scale (default: 600)
+    --scale <N>         Eval scale (default: 508)
+                        FV_SCALE = QA*QB/scale = 8128/scale (rounded)
+                        Recommended divisors of 8128: 508->16, 254->32, 1016->8
     --save-rate <N>     Save interval in superbatches (default: 10)
     --threads <N>       Number of threads (default: 4)
     --output <DIR>      Output directory (default: checkpoints)
@@ -159,8 +161,12 @@ struct Args {
     #[arg(long, default_value = "0.75")]
     wdl: f32,
 
-    /// Eval scale
-    #[arg(long, default_value = "600")]
+    /// Eval scale for training target sigmoid(score / scale).
+    /// Recommended: Use values that divide QA*QB=8128 evenly for exact FV_SCALE.
+    ///   508 -> FV_SCALE=16, 254 -> FV_SCALE=32, 1016 -> FV_SCALE=8
+    /// Other common values (with rounding):
+    ///   400 -> FV_SCALE=20, 600 -> FV_SCALE=14
+    #[arg(long, default_value = "508")]
     scale: i32,
 
     /// Save interval (superbatches)
@@ -360,12 +366,20 @@ fn main() {
             const NNUE_VERSION: u32 = 0x7AF32F16;
 
             // Build architecture string with features and activation info
+            // Include fv_scale metadata for rust-core inference
+            // FV_SCALE = (QA × QB) / scale = 8128 / scale (四捨五入)
+            let qa_qb = i32::from(qa) * i32::from(qb);
+            let fv_scale = (qa_qb + args.scale / 2) / args.scale;
             let arch_str = format!(
-                "Features={}[{}->{}x2]{}",
+                "Features={}[{}->{}x2]{},fv_scale={},qa={},qb={},scale={}",
                 feature_name,
                 input_size,
                 l1_size,
-                if matches!(args.activation, ActivationType::Screlu) { "-SCReLU" } else { "" }
+                if matches!(args.activation, ActivationType::Screlu) { "-SCReLU" } else { "" },
+                fv_scale,
+                qa,
+                qb,
+                args.scale
             );
             let arch_bytes = arch_str.as_bytes();
 
