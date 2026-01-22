@@ -84,6 +84,18 @@ enum ActivationType {
     Crelu,
 }
 
+/// Pairwise multiplication mode
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+enum PairwiseMode {
+    /// No pairwise multiplication (standard architecture)
+    #[default]
+    Off,
+    /// Pairwise multiplication after L0 activation
+    /// Output: a[0]*a[1], a[2]*a[3], ... (halves dimension)
+    /// Best combined with CReLU activation
+    On,
+}
+
 // =============================================================================
 // CLI Arguments
 // =============================================================================
@@ -121,6 +133,13 @@ struct Args {
     /// crelu: Clipped ReLU - traditional, used in YaneuraOu/Suisho
     #[arg(long, value_enum, default_value = "screlu")]
     activation: ActivationType,
+
+    /// Pairwise multiplication mode (off or on)
+    /// off: Standard architecture (L1 input = 2*L1_SIZE)
+    /// on: Apply pairwise_mul after L0 (L1 input = L1_SIZE, halved)
+    /// Best combined with --activation crelu
+    #[arg(long, value_enum, default_value = "off")]
+    pairwise: PairwiseMode,
 
     /// Architecture preset
     /// Presets: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
@@ -329,6 +348,13 @@ fn main() {
         ActivationType::Crelu => "CReLU",
     };
 
+    // Pairwise mode
+    let pairwise_enabled = matches!(args.pairwise, PairwiseMode::On);
+    let pairwise_name = if pairwise_enabled { "On" } else { "Off" };
+
+    // L1 input dimension (halved when pairwise is enabled)
+    let l1_input_dim = if pairwise_enabled { l1_size } else { 2 * l1_size };
+
     // Validate QA and activation combination
     let recommended_qa = match args.activation {
         ActivationType::Screlu => 255,
@@ -358,12 +384,26 @@ fn main() {
         eprintln!();
     }
 
+    // Warn about pairwise + SCReLU combination
+    if pairwise_enabled && matches!(args.activation, ActivationType::Screlu) {
+        eprintln!("WARNING: --pairwise on with SCReLU is unusual.");
+        eprintln!("         Pairwise multiplication is typically combined with CReLU.");
+        eprintln!("         Consider: --pairwise on --activation crelu --qa 127");
+        eprintln!();
+    }
+
     // Print configuration
     println!("=== Shogi NNUE Training ===");
     println!("Features: {} ({} dimensions)", feature_name, input_size);
     println!("Architecture: {} (L1={}, L2={}, L3={})", arch.display(), l1_size, l2_size, l3_size);
-    println!("Network: {} -> {}x2 -> {} -> {} -> 1", input_size, l1_size, l2_size, l3_size);
+    if pairwise_enabled {
+        println!("Network: {} -> {}x2 -> pairwise_mul -> {} -> {} -> {} -> 1",
+            input_size, l1_size, l1_input_dim, l2_size, l3_size);
+    } else {
+        println!("Network: {} -> {}x2 -> {} -> {} -> 1", input_size, l1_size, l2_size, l3_size);
+    }
     println!("Activation: {}", activation_name);
+    println!("Pairwise: {} (L1 input = {})", pairwise_name, l1_input_dim);
     println!("Optimizer: {}", optimizer_name);
     println!("Weight decay: {}", args.weight_decay);
     println!("Scale: {}", args.scale);
@@ -446,18 +486,37 @@ fn main() {
             // rust-core は AffineTransform[...] パターンがない場合、l2/l3 フィールドを使用
             let qa_qb = i32::from(qa) * i32::from(qb);
             let fv_scale = (qa_qb + args.scale / 2) / args.scale;
+
+            // Build activation suffix (e.g., "-SCReLU", "-CReLU-Pairwise")
+            let activation_suffix = match (args.activation, pairwise_enabled) {
+                (ActivationType::Screlu, false) => "-SCReLU",
+                (ActivationType::Screlu, true) => "-SCReLU-Pairwise",
+                (ActivationType::Crelu, false) => "",
+                (ActivationType::Crelu, true) => "-Pairwise",
+            };
+
+            // l1_input: L1層への入力次元 (pairwise時は半分)
+            // pairwise あり: 512 -> pairwise -> 256 -> concat -> 512 (表記: 512/2x2)
+            // pairwise なし: 512 -> concat -> 1024 (表記: 512x2)
+            let l0_suffix = if pairwise_enabled {
+                format!("{}/2x2", l1_size)  // 512/2x2 = 512
+            } else {
+                format!("{}x2", l1_size)    // 512x2 = 1024
+            };
             let arch_str = format!(
-                "Features={}[{}->{}x2]{},fv_scale={},l2={},l3={},qa={},qb={},scale={}",
+                "Features={}[{}->{}]{},fv_scale={},l1_input={},l2={},l3={},qa={},qb={},scale={},pairwise={}",
                 feature_name,
                 input_size,
-                l1_size,
-                if matches!(args.activation, ActivationType::Screlu) { "-SCReLU" } else { "" },
+                l0_suffix,
+                activation_suffix,
                 fv_scale,
+                l1_input_dim,  // 実際のL1入力次元 (pairwise時はl1_size, 通常時は2*l1_size)
                 l2_size,
                 l3_size,
                 qa,
                 qb,
-                args.scale
+                args.scale,
+                pairwise_enabled
             );
             let arch_bytes = arch_str.as_bytes();
 
@@ -518,7 +577,7 @@ fn main() {
         }
     };
 
-    // Network builder macro with SCReLU activation
+    // Network builder macro with SCReLU activation (no pairwise)
     macro_rules! build_trainer_screlu {
         ($opt:expr, $input:expr) => {
             ValueTrainerBuilder::default()
@@ -529,7 +588,7 @@ fn main() {
                 .loss_fn(|output, target| output.sigmoid().squared_error(target))
                 .build(|builder, stm_inputs, ntm_inputs| {
                     let l0 = builder.new_affine("l0", input_size, l1_size);
-                    let l1 = builder.new_affine("l1", 2 * l1_size, l2_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
                     let l2 = builder.new_affine("l2", l2_size, l3_size);
                     let out = builder.new_affine("out", l3_size, 1);
 
@@ -545,7 +604,35 @@ fn main() {
         };
     }
 
-    // Network builder macro with CReLU (Clipped ReLU) activation
+    // Network builder macro with SCReLU activation + pairwise multiplication
+    macro_rules! build_trainer_screlu_pairwise {
+        ($opt:expr, $input:expr) => {
+            ValueTrainerBuilder::default()
+                .dual_perspective()
+                .optimiser($opt)
+                .inputs($input)
+                .save_format(&save_format)
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let l0 = builder.new_affine("l0", input_size, l1_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
+                    let l2 = builder.new_affine("l2", l2_size, l3_size);
+                    let out = builder.new_affine("out", l3_size, 1);
+
+                    // SCReLU + pairwise_mul (unusual but supported)
+                    let stm_hidden = l0.forward(stm_inputs).screlu().pairwise_mul();
+                    let ntm_hidden = l0.forward(ntm_inputs).screlu().pairwise_mul();
+                    let combined = stm_hidden.concat(ntm_hidden);
+
+                    let hidden1 = l1.forward(combined).screlu();
+                    let hidden2 = l2.forward(hidden1).screlu();
+
+                    out.forward(hidden2)
+                })
+        };
+    }
+
+    // Network builder macro with CReLU (Clipped ReLU) activation (no pairwise)
     macro_rules! build_trainer_crelu {
         ($opt:expr, $input:expr) => {
             ValueTrainerBuilder::default()
@@ -556,7 +643,7 @@ fn main() {
                 .loss_fn(|output, target| output.sigmoid().squared_error(target))
                 .build(|builder, stm_inputs, ntm_inputs| {
                     let l0 = builder.new_affine("l0", input_size, l1_size);
-                    let l1 = builder.new_affine("l1", 2 * l1_size, l2_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
                     let l2 = builder.new_affine("l2", l2_size, l3_size);
                     let out = builder.new_affine("out", l3_size, 1);
 
@@ -572,9 +659,38 @@ fn main() {
         };
     }
 
-    // Run training macro (to reduce duplication across feature sets and activations)
+    // Network builder macro with CReLU activation + pairwise multiplication
+    // This is the recommended combination for pairwise multiplication
+    macro_rules! build_trainer_crelu_pairwise {
+        ($opt:expr, $input:expr) => {
+            ValueTrainerBuilder::default()
+                .dual_perspective()
+                .optimiser($opt)
+                .inputs($input)
+                .save_format(&save_format)
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let l0 = builder.new_affine("l0", input_size, l1_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
+                    let l2 = builder.new_affine("l2", l2_size, l3_size);
+                    let out = builder.new_affine("out", l3_size, 1);
+
+                    // CReLU + pairwise_mul (recommended combination)
+                    let stm_hidden = l0.forward(stm_inputs).crelu().pairwise_mul();
+                    let ntm_hidden = l0.forward(ntm_inputs).crelu().pairwise_mul();
+                    let combined = stm_hidden.concat(ntm_hidden);
+
+                    let hidden1 = l1.forward(combined).crelu();
+                    let hidden2 = l2.forward(hidden1).crelu();
+
+                    out.forward(hidden2)
+                })
+        };
+    }
+
+    // Run training macro (to reduce duplication across feature sets, activations, and pairwise)
     macro_rules! run_training {
-        ($input:expr, screlu) => {{
+        ($input:expr, screlu, false) => {{
             let weight_decay = args.weight_decay;
             match args.optimizer {
                 OptimizerType::AdamW => {
@@ -595,7 +711,28 @@ fn main() {
                 }
             }
         }};
-        ($input:expr, crelu) => {{
+        ($input:expr, screlu, true) => {{
+            let weight_decay = args.weight_decay;
+            match args.optimizer {
+                OptimizerType::AdamW => {
+                    let mut trainer = build_trainer_screlu_pairwise!(optimiser::AdamW, $input);
+                    trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::RAdam => {
+                    let mut trainer = build_trainer_screlu_pairwise!(optimiser::RAdam, $input);
+                    let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
+                    trainer.optimiser.set_params(params.into());
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::Ranger => {
+                    let mut trainer = build_trainer_screlu_pairwise!(optimiser::Ranger, $input);
+                    trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+            }
+        }};
+        ($input:expr, crelu, false) => {{
             let weight_decay = args.weight_decay;
             match args.optimizer {
                 OptimizerType::AdamW => {
@@ -616,14 +753,39 @@ fn main() {
                 }
             }
         }};
+        ($input:expr, crelu, true) => {{
+            let weight_decay = args.weight_decay;
+            match args.optimizer {
+                OptimizerType::AdamW => {
+                    let mut trainer = build_trainer_crelu_pairwise!(optimiser::AdamW, $input);
+                    trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::RAdam => {
+                    let mut trainer = build_trainer_crelu_pairwise!(optimiser::RAdam, $input);
+                    let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
+                    trainer.optimiser.set_params(params.into());
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+                OptimizerType::Ranger => {
+                    let mut trainer = build_trainer_crelu_pairwise!(optimiser::Ranger, $input);
+                    trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
+                    trainer.run(&schedule, &settings, &data_loader);
+                }
+            }
+        }};
     }
 
-    // Run training based on feature set and activation
-    match (args.features, args.activation) {
-        (FeatureSet::HalfkaHm, ActivationType::Screlu) => run_training!(ShogiHalfKA_hm, screlu),
-        (FeatureSet::HalfkaHm, ActivationType::Crelu) => run_training!(ShogiHalfKA_hm, crelu),
-        (FeatureSet::HalfKP, ActivationType::Screlu) => run_training!(ShogiHalfKP, screlu),
-        (FeatureSet::HalfKP, ActivationType::Crelu) => run_training!(ShogiHalfKP, crelu),
+    // Run training based on feature set, activation, and pairwise mode
+    match (args.features, args.activation, pairwise_enabled) {
+        (FeatureSet::HalfkaHm, ActivationType::Screlu, false) => run_training!(ShogiHalfKA_hm, screlu, false),
+        (FeatureSet::HalfkaHm, ActivationType::Screlu, true) => run_training!(ShogiHalfKA_hm, screlu, true),
+        (FeatureSet::HalfkaHm, ActivationType::Crelu, false) => run_training!(ShogiHalfKA_hm, crelu, false),
+        (FeatureSet::HalfkaHm, ActivationType::Crelu, true) => run_training!(ShogiHalfKA_hm, crelu, true),
+        (FeatureSet::HalfKP, ActivationType::Screlu, false) => run_training!(ShogiHalfKP, screlu, false),
+        (FeatureSet::HalfKP, ActivationType::Screlu, true) => run_training!(ShogiHalfKP, screlu, true),
+        (FeatureSet::HalfKP, ActivationType::Crelu, false) => run_training!(ShogiHalfKP, crelu, false),
+        (FeatureSet::HalfKP, ActivationType::Crelu, true) => run_training!(ShogiHalfKP, crelu, true),
     }
 }
 
