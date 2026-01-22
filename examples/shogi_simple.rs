@@ -15,9 +15,12 @@ Options:
     --superbatches <N>  Number of superbatches (default: 100)
     --lr <RATE>         Initial learning rate (default: 0.001)
     --wdl <LAMBDA>      WDL lambda (default: 0.75)
-    --scale <N>         Eval scale (default: 508)
-                        FV_SCALE = QA*QB/scale = 8128/scale (rounded)
-                        Recommended divisors of 8128: 508->16, 254->32, 1016->8
+    --scale <N>         Eval scale (default: 1020)
+                        FV_SCALE = QA*QB/scale (rounded)
+                        QA=255 (SCReLU): 16320/scale -> 510->32, 1020->16
+                        QA=127 (CReLU):  8128/scale  -> 508->16, 254->32
+                        Note: Default (QA=255, scale=1020) -> FV_SCALE=16
+                        For FV_SCALE=32: --qa 255 --scale 510 or --qa 127 --scale 254
     --save-rate <N>     Save interval in superbatches (default: 10)
     --threads <N>       Number of threads (default: 4)
     --output <DIR>      Output directory (default: checkpoints)
@@ -162,11 +165,14 @@ struct Args {
     wdl: f32,
 
     /// Eval scale for training target sigmoid(score / scale).
-    /// Recommended: Use values that divide QA*QB=8128 evenly for exact FV_SCALE.
-    ///   508 -> FV_SCALE=16, 254 -> FV_SCALE=32, 1016 -> FV_SCALE=8
-    /// Other common values (with rounding):
-    ///   400 -> FV_SCALE=20, 600 -> FV_SCALE=14
-    #[arg(long, default_value = "508")]
+    /// FV_SCALE = QA*QB/scale (rounded).
+    /// Recommended divisors for exact FV_SCALE:
+    ///   QA=255 (SCReLU): 510->32, 1020->16, 340->48
+    ///   QA=127 (CReLU):  508->16, 254->32, 1016->8
+    /// Note: Default (QA=255, scale=1020) gives FV_SCALE=16.
+    /// For FV_SCALE=32: use --qa 255 --scale 510  (SCReLU)
+    ///                  or  --qa 127 --scale 254  (CReLU)
+    #[arg(long, default_value = "1020")]
     scale: i32,
 
     /// Save interval (superbatches)
@@ -186,7 +192,7 @@ struct Args {
     net_id: String,
 
     /// Quantization factor QA (for L0)
-    #[arg(long, default_value = "127")]
+    #[arg(long, default_value = "255")]
     qa: i16,
 
     /// Quantization factor QB (for later layers)
@@ -231,6 +237,44 @@ impl Architecture {
     fn display(&self) -> String {
         format!("{}x2-{}-{}", self.l1, self.l2, self.l3)
     }
+}
+
+// =============================================================================
+// SIMD Padding Utilities
+// =============================================================================
+
+/// 32バイトアライメントにパディング
+fn pad32(size: usize) -> usize {
+    size.div_ceil(32) * 32
+}
+
+/// rust-core 用に重みをパディング
+///
+/// rust-core は SIMD 最適化のため、各層の入力次元を32の倍数にパディングする。
+/// 例: 入力次元8 → パディング後32 (24個の0を追加)
+///
+/// # Arguments
+/// * `weights` - row-major の重み [out_dim * in_dim]
+/// * `out_dim` - 出力次元
+/// * `in_dim` - 入力次元 (パディング前)
+fn pad_weights_for_simd(weights: &[f32], out_dim: usize, in_dim: usize) -> Vec<f32> {
+    let padded_in_dim = pad32(in_dim);
+
+    // パディング不要な場合はそのまま返す
+    if padded_in_dim == in_dim {
+        return weights.to_vec();
+    }
+
+    let mut result = vec![0.0f32; out_dim * padded_in_dim];
+
+    for o in 0..out_dim {
+        for i in 0..in_dim {
+            result[o * padded_in_dim + i] = weights[o * in_dim + i];
+        }
+        // 残りは0で埋める (既にvec![0.0; ...]で初期化済み)
+    }
+
+    result
 }
 
 // =============================================================================
@@ -284,6 +328,35 @@ fn main() {
         ActivationType::Screlu => "SCReLU",
         ActivationType::Crelu => "CReLU",
     };
+
+    // Validate QA and activation combination
+    let recommended_qa = match args.activation {
+        ActivationType::Screlu => 255,
+        ActivationType::Crelu => 127,
+    };
+    if qa != recommended_qa {
+        eprintln!("WARNING: QA={} is not recommended for {} activation.", qa, activation_name);
+        eprintln!("         Recommended: --qa {} --activation {}",
+            recommended_qa,
+            match args.activation {
+                ActivationType::Screlu => "screlu",
+                ActivationType::Crelu => "crelu",
+            }
+        );
+        eprintln!("         Using non-standard QA may cause evaluation scale mismatch.");
+        eprintln!();
+        eprint!("Continue anyway? [y/N]: ");
+        use std::io::{self, Write};
+        io::stderr().flush().unwrap();
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim().to_lowercase();
+        if input != "y" && input != "yes" {
+            eprintln!("Aborted.");
+            std::process::exit(1);
+        }
+        eprintln!();
+    }
 
     // Print configuration
     println!("=== Shogi NNUE Training ===");
@@ -367,16 +440,21 @@ fn main() {
 
             // Build architecture string with features and activation info
             // Include fv_scale metadata for rust-core inference
-            // FV_SCALE = (QA × QB) / scale = 8128 / scale (四捨五入)
+            // FV_SCALE = (QA × QB) / scale (四捨五入)
+            //
+            // 重要: l2/l3 を明示的に含める（rust-core がパースできるようにするため）
+            // rust-core は AffineTransform[...] パターンがない場合、l2/l3 フィールドを使用
             let qa_qb = i32::from(qa) * i32::from(qb);
             let fv_scale = (qa_qb + args.scale / 2) / args.scale;
             let arch_str = format!(
-                "Features={}[{}->{}x2]{},fv_scale={},qa={},qb={},scale={}",
+                "Features={}[{}->{}x2]{},fv_scale={},l2={},l3={},qa={},qb={},scale={}",
                 feature_name,
                 input_size,
                 l1_size,
                 if matches!(args.activation, ActivationType::Screlu) { "-SCReLU" } else { "" },
                 fv_scale,
+                l2_size,
+                l3_size,
                 qa,
                 qb,
                 args.scale
@@ -408,15 +486,34 @@ fn main() {
                 // 理由: Stockfish/nnue-pytorch は row-major で推論する
                 // bullet 内部は column-major だが、これは GPU (cuBLAS) 最適化のため
                 // 変換コストは出力時の1回のみで、学習効率には影響しない
-                // L1: biases i32, weights i8 (row-major)
+                //
+                // 重要: rust-core は SIMD 最適化のため 32バイトアライメントを要求
+                // 各層の入力次元を pad32() でパディングする必要がある
+                //
+                // L1: biases i32, weights i8 (row-major, padded)
+                // 入力次元: l1*2 → pad32(l1*2)
                 SavedFormat::id("l1b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("l1w").transpose().round().quantise::<i8>(qb),
-                // L2: biases i32, weights i8 (row-major)
+                SavedFormat::id("l1w").transpose().transform({
+                    let out_dim = l2_size;
+                    let in_dim = l1_size * 2;
+                    move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
+                }).round().quantise::<i8>(qb),
+                // L2: biases i32, weights i8 (row-major, padded)
+                // 入力次元: l2 → pad32(l2)
                 SavedFormat::id("l2b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("l2w").transpose().round().quantise::<i8>(qb),
-                // Output: biases i32, weights i8 (row-major)
+                SavedFormat::id("l2w").transpose().transform({
+                    let out_dim = l3_size;
+                    let in_dim = l2_size;
+                    move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
+                }).round().quantise::<i8>(qb),
+                // Output: biases i32, weights i8 (row-major, padded)
+                // 入力次元: l3 → pad32(l3)
                 SavedFormat::id("outb").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("outw").transpose().round().quantise::<i8>(qb),
+                SavedFormat::id("outw").transpose().transform({
+                    let out_dim = 1;
+                    let in_dim = l3_size;
+                    move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
+                }).round().quantise::<i8>(qb),
             ]
         }
     };
