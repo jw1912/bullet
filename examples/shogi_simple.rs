@@ -15,9 +15,12 @@ Options:
     --superbatches <N>  Number of superbatches (default: 100)
     --lr <RATE>         Initial learning rate (default: 0.001)
     --wdl <LAMBDA>      WDL lambda (default: 0.75)
-    --scale <N>         Eval scale (default: 508)
-                        FV_SCALE = QA*QB/scale = 8128/scale (rounded)
-                        Recommended divisors of 8128: 508->16, 254->32, 1016->8
+    --scale <N>         Eval scale (default: 1020)
+                        FV_SCALE = QA*QB/scale (rounded)
+                        QA=255 (SCReLU): 16320/scale -> 510->32, 1020->16
+                        QA=127 (CReLU):  8128/scale  -> 508->16, 254->32
+                        Note: Default (QA=255, scale=1020) -> FV_SCALE=16
+                        For FV_SCALE=32: --qa 255 --scale 510 or --qa 127 --scale 254
     --save-rate <N>     Save interval in superbatches (default: 10)
     --threads <N>       Number of threads (default: 4)
     --output <DIR>      Output directory (default: checkpoints)
@@ -81,6 +84,18 @@ enum ActivationType {
     Crelu,
 }
 
+/// Pairwise multiplication mode
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+enum PairwiseMode {
+    /// No pairwise multiplication (standard architecture)
+    #[default]
+    Off,
+    /// Pairwise multiplication after L0 activation
+    /// Output: a[0]*a[1], a[2]*a[3], ... (halves dimension)
+    /// Best combined with CReLU activation
+    On,
+}
+
 // =============================================================================
 // CLI Arguments
 // =============================================================================
@@ -118,6 +133,13 @@ struct Args {
     /// crelu: Clipped ReLU - traditional, used in YaneuraOu/Suisho
     #[arg(long, value_enum, default_value = "screlu")]
     activation: ActivationType,
+
+    /// Pairwise multiplication mode (off or on)
+    /// off: Standard architecture (L1 input = 2*L1_SIZE)
+    /// on: Apply pairwise_mul after L0 (L1 input = L1_SIZE, halved)
+    /// Best combined with --activation crelu
+    #[arg(long, value_enum, default_value = "off")]
+    pairwise: PairwiseMode,
 
     /// Architecture preset
     /// Presets: 256x2-32-32, 512x2-8-96, 512x2-32-32, 1024x2-8-32
@@ -162,11 +184,14 @@ struct Args {
     wdl: f32,
 
     /// Eval scale for training target sigmoid(score / scale).
-    /// Recommended: Use values that divide QA*QB=8128 evenly for exact FV_SCALE.
-    ///   508 -> FV_SCALE=16, 254 -> FV_SCALE=32, 1016 -> FV_SCALE=8
-    /// Other common values (with rounding):
-    ///   400 -> FV_SCALE=20, 600 -> FV_SCALE=14
-    #[arg(long, default_value = "508")]
+    /// FV_SCALE = QA*QB/scale (rounded).
+    /// Recommended divisors for exact FV_SCALE:
+    ///   QA=255 (SCReLU): 510->32, 1020->16, 340->48
+    ///   QA=127 (CReLU):  508->16, 254->32, 1016->8
+    /// Note: Default (QA=255, scale=1020) gives FV_SCALE=16.
+    /// For FV_SCALE=32: use --qa 255 --scale 510  (SCReLU)
+    ///                  or  --qa 127 --scale 254  (CReLU)
+    #[arg(long, default_value = "1020")]
     scale: i32,
 
     /// Save interval (superbatches)
@@ -186,7 +211,7 @@ struct Args {
     net_id: String,
 
     /// Quantization factor QA (for L0)
-    #[arg(long, default_value = "127")]
+    #[arg(long, default_value = "255")]
     qa: i16,
 
     /// Quantization factor QB (for later layers)
@@ -196,6 +221,14 @@ struct Args {
     /// Weight decay (L2 regularization)
     #[arg(long, default_value = "0.01")]
     weight_decay: f32,
+
+    /// Resume from checkpoint path (e.g., checkpoints/v47/v47b-69)
+    #[arg(long)]
+    resume: Option<PathBuf>,
+
+    /// Only re-quantise checkpoint (no training, requires --resume)
+    #[arg(long)]
+    quantise_only: bool,
 }
 
 // =============================================================================
@@ -231,6 +264,44 @@ impl Architecture {
     fn display(&self) -> String {
         format!("{}x2-{}-{}", self.l1, self.l2, self.l3)
     }
+}
+
+// =============================================================================
+// SIMD Padding Utilities
+// =============================================================================
+
+/// 32バイトアライメントにパディング
+fn pad32(size: usize) -> usize {
+    size.div_ceil(32) * 32
+}
+
+/// rust-core 用に重みをパディング
+///
+/// rust-core は SIMD 最適化のため、各層の入力次元を32の倍数にパディングする。
+/// 例: 入力次元8 → パディング後32 (24個の0を追加)
+///
+/// # Arguments
+/// * `weights` - row-major の重み [out_dim * in_dim]
+/// * `out_dim` - 出力次元
+/// * `in_dim` - 入力次元 (パディング前)
+fn pad_weights_for_simd(weights: &[f32], out_dim: usize, in_dim: usize) -> Vec<f32> {
+    let padded_in_dim = pad32(in_dim);
+
+    // パディング不要な場合はそのまま返す
+    if padded_in_dim == in_dim {
+        return weights.to_vec();
+    }
+
+    let mut result = vec![0.0f32; out_dim * padded_in_dim];
+
+    for o in 0..out_dim {
+        for i in 0..in_dim {
+            result[o * padded_in_dim + i] = weights[o * in_dim + i];
+        }
+        // 残りは0で埋める (既にvec![0.0; ...]で初期化済み)
+    }
+
+    result
 }
 
 // =============================================================================
@@ -285,12 +356,50 @@ fn main() {
         ActivationType::Crelu => "CReLU",
     };
 
-    // Print configuration
-    println!("=== Shogi NNUE Training ===");
-    println!("Features: {} ({} dimensions)", feature_name, input_size);
-    println!("Architecture: {} (L1={}, L2={}, L3={})", arch.display(), l1_size, l2_size, l3_size);
-    println!("Network: {} -> {}x2 -> {} -> {} -> 1", input_size, l1_size, l2_size, l3_size);
-    println!("Activation: {}", activation_name);
+    // Pairwise mode
+    let pairwise_enabled = matches!(args.pairwise, PairwiseMode::On);
+    let pairwise_name = if pairwise_enabled { "On" } else { "Off" };
+
+    // L1 input dimension (halved when pairwise is enabled)
+    let l1_input_dim = if pairwise_enabled { l1_size } else { 2 * l1_size };
+
+    // Validate QA and activation combination (skip confirmation for --quantise-only)
+    // Reckless/Stockfish: Pairwise uses QA=255 with CReLU
+    // Traditional: CReLU uses QA=127, SCReLU uses QA=255
+    let recommended_qa = match (args.activation, pairwise_enabled) {
+        (ActivationType::Screlu, _) => 255,      // SCReLU always uses QA=255
+        (ActivationType::Crelu, true) => 255,    // Pairwise + CReLU uses QA=255 (Reckless compatible)
+        (ActivationType::Crelu, false) => 127,   // Traditional CReLU uses QA=127
+    };
+    if qa != recommended_qa && !args.quantise_only {
+        eprintln!("WARNING: QA={} is not recommended for {} activation{}.",
+            qa, activation_name,
+            if pairwise_enabled { " with pairwise" } else { "" }
+        );
+        eprintln!("         Recommended: --qa {}", recommended_qa);
+        eprintln!("         Using non-standard QA may cause evaluation scale mismatch.");
+        eprintln!();
+        eprint!("Continue anyway? [y/N]: ");
+        use std::io::{self, Write};
+        io::stderr().flush().unwrap();
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim().to_lowercase();
+        if input != "y" && input != "yes" {
+            eprintln!("Aborted.");
+            std::process::exit(1);
+        }
+        eprintln!();
+    }
+
+    // Warn about pairwise + SCReLU combination
+    if pairwise_enabled && matches!(args.activation, ActivationType::Screlu) {
+        eprintln!("WARNING: --pairwise on with SCReLU is unusual.");
+        eprintln!("         Pairwise multiplication is typically combined with CReLU.");
+        eprintln!("         Consider: --pairwise on --activation crelu --qa 255");
+        eprintln!();
+    }
+
     println!("Optimizer: {}", optimizer_name);
     println!("Weight decay: {}", args.weight_decay);
     println!("Scale: {}", args.scale);
@@ -326,9 +435,22 @@ fn main() {
     let settings =
         LocalSettings { threads: args.threads, test_set: None, output_directory: output_dir, batch_queue_size: 64 };
 
-    // Data loader
-    let data_files: Vec<&str> = args.data.split(',').collect();
-    let data_loader = DirectSequentialDataLoader::new(&data_files);
+    // Data loader (use existing file for --quantise-only to avoid file check)
+    let data_files_owned: Vec<String> = if args.quantise_only {
+        // Use any existing file - we won't actually load data
+        let resume_path = args.resume.as_ref().expect("--quantise-only requires --resume");
+        let quantised = resume_path.join("quantised.bin");
+        if quantised.exists() {
+            vec![quantised.to_str().unwrap().to_string()]
+        } else {
+            // Fallback: use raw.bin
+            vec![resume_path.join("raw.bin").to_str().unwrap().to_string()]
+        }
+    } else {
+        args.data.split(',').map(|s| s.to_string()).collect()
+    };
+    let data_files_ref: Vec<&str> = data_files_owned.iter().map(|s| s.as_str()).collect();
+    let data_loader = DirectSequentialDataLoader::new(&data_files_ref);
 
     // SavedFormat configuration
     // This directly outputs the final format for your engine.
@@ -367,19 +489,43 @@ fn main() {
 
             // Build architecture string with features and activation info
             // Include fv_scale metadata for rust-core inference
-            // FV_SCALE = (QA × QB) / scale = 8128 / scale (四捨五入)
+            // FV_SCALE = (QA × QB) / scale (四捨五入)
+            //
+            // 重要: l2/l3 を明示的に含める（rust-core がパースできるようにするため）
+            // rust-core は AffineTransform[...] パターンがない場合、l2/l3 フィールドを使用
             let qa_qb = i32::from(qa) * i32::from(qb);
             let fv_scale = (qa_qb + args.scale / 2) / args.scale;
+
+            // Build activation suffix (e.g., "-SCReLU", "-CReLU-Pairwise")
+            let activation_suffix = match (args.activation, pairwise_enabled) {
+                (ActivationType::Screlu, false) => "-SCReLU",
+                (ActivationType::Screlu, true) => "-SCReLU-Pairwise",
+                (ActivationType::Crelu, false) => "",
+                (ActivationType::Crelu, true) => "-Pairwise",
+            };
+
+            // l1_input: L1層への入力次元 (pairwise時は半分)
+            // pairwise あり: 512 -> pairwise -> 256 -> concat -> 512 (表記: 512/2x2)
+            // pairwise なし: 512 -> concat -> 1024 (表記: 512x2)
+            let l0_suffix = if pairwise_enabled {
+                format!("{}/2x2", l1_size)  // 512/2x2 = 512
+            } else {
+                format!("{}x2", l1_size)    // 512x2 = 1024
+            };
             let arch_str = format!(
-                "Features={}[{}->{}x2]{},fv_scale={},qa={},qb={},scale={}",
+                "Features={}[{}->{}]{},fv_scale={},l1_input={},l2={},l3={},qa={},qb={},scale={},pairwise={}",
                 feature_name,
                 input_size,
-                l1_size,
-                if matches!(args.activation, ActivationType::Screlu) { "-SCReLU" } else { "" },
+                l0_suffix,
+                activation_suffix,
                 fv_scale,
+                l1_input_dim,  // 実際のL1入力次元 (pairwise時はl1_size, 通常時は2*l1_size)
+                l2_size,
+                l3_size,
                 qa,
                 qb,
-                args.scale
+                args.scale,
+                pairwise_enabled
             );
             let arch_bytes = arch_str.as_bytes();
 
@@ -394,34 +540,37 @@ fn main() {
             let ft_hash = 0u32.to_le_bytes().to_vec();
             let network_hash = 0u32.to_le_bytes().to_vec();
 
-            vec![
-                // Header
-                SavedFormat::custom(header),
-                // FeatureTransformer layer hash
-                SavedFormat::custom(ft_hash),
-                // L0: biases first, then weights (rust-core order)
-                SavedFormat::id("l0b").round().quantise::<i16>(qa),
-                SavedFormat::id("l0w").round().quantise::<i16>(qa),
-                // Network layer hash
-                SavedFormat::custom(network_hash),
-                // L1-Output層の重みは .transpose() で row-major に変換
-                // 理由: Stockfish/nnue-pytorch は row-major で推論する
-                // bullet 内部は column-major だが、これは GPU (cuBLAS) 最適化のため
-                // 変換コストは出力時の1回のみで、学習効率には影響しない
-                // L1: biases i32, weights i8 (row-major)
-                SavedFormat::id("l1b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("l1w").transpose().round().quantise::<i8>(qb),
-                // L2: biases i32, weights i8 (row-major)
-                SavedFormat::id("l2b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("l2w").transpose().round().quantise::<i8>(qb),
-                // Output: biases i32, weights i8 (row-major)
-                SavedFormat::id("outb").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
-                SavedFormat::id("outw").transpose().round().quantise::<i8>(qb),
+            // L1バイアスのスケール:
+            // L1層入力スケールは活性化関数の出力スケールに依存:
+            //
+            // | 活性化関数 | QA  | 出力スケール | L1 bias scale |
+            // |------------|-----|--------------|---------------|
+            // | CReLU      | 127 | 127          | 127 × qb      |
+            // | CReLU      | 255 | 255          | 255 × qb      |
+            // | SCReLU     | 255 | 127 (x²>>9)  | 127 × qb      |
+            // | Pairwise   | 255 | 127 (ab>>9)  | 127 × qb      |
+            //
+            // 注: SCReLU/Pairwise は QA=255 でも出力が 127 にスケールダウンされる
+            let l1_bias_scale = match (args.activation, pairwise_enabled, qa) {
+                // Pairwise: (qa * qa) >> shift で 127 スケール
+                (_, true, _) => {
+                    let qa_i32 = i32::from(qa);
+                    let shift = if qa >= 255 { 9 } else { 7 };
+                    ((qa_i32 * qa_i32) >> shift) * i32::from(qb)
+                }
+                // SCReLU QA=255: x² >> 9 で 127 スケール
+                (ActivationType::Screlu, false, qa) if qa >= 255 => {
+                    127 * i32::from(qb)
+                }
+                // CReLU / その他: qa スケール
+                _ => i32::from(qa) * i32::from(qb),
+            };
+
             ]
         }
     };
 
-    // Network builder macro with SCReLU activation
+    // Network builder macro with SCReLU activation (no pairwise)
     macro_rules! build_trainer_screlu {
         ($opt:expr, $input:expr) => {
             ValueTrainerBuilder::default()
@@ -432,7 +581,7 @@ fn main() {
                 .loss_fn(|output, target| output.sigmoid().squared_error(target))
                 .build(|builder, stm_inputs, ntm_inputs| {
                     let l0 = builder.new_affine("l0", input_size, l1_size);
-                    let l1 = builder.new_affine("l1", 2 * l1_size, l2_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
                     let l2 = builder.new_affine("l2", l2_size, l3_size);
                     let out = builder.new_affine("out", l3_size, 1);
 
@@ -448,7 +597,35 @@ fn main() {
         };
     }
 
-    // Network builder macro with CReLU (Clipped ReLU) activation
+    // Network builder macro with SCReLU activation + pairwise multiplication
+    macro_rules! build_trainer_screlu_pairwise {
+        ($opt:expr, $input:expr) => {
+            ValueTrainerBuilder::default()
+                .dual_perspective()
+                .optimiser($opt)
+                .inputs($input)
+                .save_format(&save_format)
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let l0 = builder.new_affine("l0", input_size, l1_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
+                    let l2 = builder.new_affine("l2", l2_size, l3_size);
+                    let out = builder.new_affine("out", l3_size, 1);
+
+                    // SCReLU + pairwise_mul (unusual but supported)
+                    let stm_hidden = l0.forward(stm_inputs).screlu().pairwise_mul();
+                    let ntm_hidden = l0.forward(ntm_inputs).screlu().pairwise_mul();
+                    let combined = stm_hidden.concat(ntm_hidden);
+
+                    let hidden1 = l1.forward(combined).screlu();
+                    let hidden2 = l2.forward(hidden1).screlu();
+
+                    out.forward(hidden2)
+                })
+        };
+    }
+
+    // Network builder macro with CReLU (Clipped ReLU) activation (no pairwise)
     macro_rules! build_trainer_crelu {
         ($opt:expr, $input:expr) => {
             ValueTrainerBuilder::default()
@@ -459,7 +636,7 @@ fn main() {
                 .loss_fn(|output, target| output.sigmoid().squared_error(target))
                 .build(|builder, stm_inputs, ntm_inputs| {
                     let l0 = builder.new_affine("l0", input_size, l1_size);
-                    let l1 = builder.new_affine("l1", 2 * l1_size, l2_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
                     let l2 = builder.new_affine("l2", l2_size, l3_size);
                     let out = builder.new_affine("out", l3_size, 1);
 
@@ -475,58 +652,161 @@ fn main() {
         };
     }
 
-    // Run training macro (to reduce duplication across feature sets and activations)
+    // Network builder macro with CReLU activation + pairwise multiplication
+    // This is the recommended combination for pairwise multiplication
+    macro_rules! build_trainer_crelu_pairwise {
+        ($opt:expr, $input:expr) => {
+            ValueTrainerBuilder::default()
+                .dual_perspective()
+                .optimiser($opt)
+                .inputs($input)
+                .save_format(&save_format)
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let l0 = builder.new_affine("l0", input_size, l1_size);
+                    let l1 = builder.new_affine("l1", l1_input_dim, l2_size);
+                    let l2 = builder.new_affine("l2", l2_size, l3_size);
+                    let out = builder.new_affine("out", l3_size, 1);
+
+                    // CReLU + pairwise_mul (recommended combination)
+                    let stm_hidden = l0.forward(stm_inputs).crelu().pairwise_mul();
+                    let ntm_hidden = l0.forward(ntm_inputs).crelu().pairwise_mul();
+                    let combined = stm_hidden.concat(ntm_hidden);
+
+                    let hidden1 = l1.forward(combined).crelu();
+                    let hidden2 = l2.forward(hidden1).crelu();
+
+                    out.forward(hidden2)
+                })
+        };
+    }
+
+    // Helper macro to either run training or just re-quantise
+    macro_rules! maybe_run_or_quantise {
+        ($trainer:expr) => {{
+            if args.quantise_only {
+                let resume_path = args.resume.as_ref().expect("--quantise-only requires --resume");
+                let resume_str = resume_path.to_str().unwrap();
+                println!("Loading checkpoint from {}...", resume_str);
+                $trainer.load_from_checkpoint(resume_str);
+
+                // Create output directory if needed
+                let output_dir = args.output.to_str().unwrap_or("checkpoints");
+                let output_path = format!("{}/requantised.bin", output_dir);
+                std::fs::create_dir_all(output_dir).unwrap_or(());
+
+                println!("Saving re-quantised weights to {}...", output_path);
+                $trainer.save_quantised(&output_path).expect("Failed to save quantised weights");
+                println!("Done!");
+            } else {
+                if let Some(ref resume_path) = args.resume {
+                    let resume_str = resume_path.to_str().unwrap();
+                    println!("Resuming from checkpoint: {}", resume_str);
+                    $trainer.load_from_checkpoint(resume_str);
+                }
+                $trainer.run(&schedule, &settings, &data_loader);
+            }
+        }};
+    }
+
+    // Run training macro (to reduce duplication across feature sets, activations, and pairwise)
     macro_rules! run_training {
-        ($input:expr, screlu) => {{
+        ($input:expr, screlu, false) => {{
             let weight_decay = args.weight_decay;
             match args.optimizer {
                 OptimizerType::AdamW => {
                     let mut trainer = build_trainer_screlu!(optimiser::AdamW, $input);
                     trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::RAdam => {
                     let mut trainer = build_trainer_screlu!(optimiser::RAdam, $input);
                     let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
                     trainer.optimiser.set_params(params.into());
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::Ranger => {
                     let mut trainer = build_trainer_screlu!(optimiser::Ranger, $input);
                     trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
             }
         }};
-        ($input:expr, crelu) => {{
+        ($input:expr, screlu, true) => {{
+            let weight_decay = args.weight_decay;
+            match args.optimizer {
+                OptimizerType::AdamW => {
+                    let mut trainer = build_trainer_screlu_pairwise!(optimiser::AdamW, $input);
+                    trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
+                    maybe_run_or_quantise!(trainer);
+                }
+                OptimizerType::RAdam => {
+                    let mut trainer = build_trainer_screlu_pairwise!(optimiser::RAdam, $input);
+                    let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
+                    trainer.optimiser.set_params(params.into());
+                    maybe_run_or_quantise!(trainer);
+                }
+                OptimizerType::Ranger => {
+                    let mut trainer = build_trainer_screlu_pairwise!(optimiser::Ranger, $input);
+                    trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
+                    maybe_run_or_quantise!(trainer);
+                }
+            }
+        }};
+        ($input:expr, crelu, false) => {{
             let weight_decay = args.weight_decay;
             match args.optimizer {
                 OptimizerType::AdamW => {
                     let mut trainer = build_trainer_crelu!(optimiser::AdamW, $input);
                     trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::RAdam => {
                     let mut trainer = build_trainer_crelu!(optimiser::RAdam, $input);
                     let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
                     trainer.optimiser.set_params(params.into());
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::Ranger => {
                     let mut trainer = build_trainer_crelu!(optimiser::Ranger, $input);
                     trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
+                }
+            }
+        }};
+        ($input:expr, crelu, true) => {{
+            let weight_decay = args.weight_decay;
+            match args.optimizer {
+                OptimizerType::AdamW => {
+                    let mut trainer = build_trainer_crelu_pairwise!(optimiser::AdamW, $input);
+                    trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
+                    maybe_run_or_quantise!(trainer);
+                }
+                OptimizerType::RAdam => {
+                    let mut trainer = build_trainer_crelu_pairwise!(optimiser::RAdam, $input);
+                    let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
+                    trainer.optimiser.set_params(params.into());
+                    maybe_run_or_quantise!(trainer);
+                }
+                OptimizerType::Ranger => {
+                    let mut trainer = build_trainer_crelu_pairwise!(optimiser::Ranger, $input);
+                    trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
+                    maybe_run_or_quantise!(trainer);
                 }
             }
         }};
     }
 
-    // Run training based on feature set and activation
-    match (args.features, args.activation) {
-        (FeatureSet::HalfkaHm, ActivationType::Screlu) => run_training!(ShogiHalfKA_hm, screlu),
-        (FeatureSet::HalfkaHm, ActivationType::Crelu) => run_training!(ShogiHalfKA_hm, crelu),
-        (FeatureSet::HalfKP, ActivationType::Screlu) => run_training!(ShogiHalfKP, screlu),
-        (FeatureSet::HalfKP, ActivationType::Crelu) => run_training!(ShogiHalfKP, crelu),
+    // Run training based on feature set, activation, and pairwise mode
+    match (args.features, args.activation, pairwise_enabled) {
+        (FeatureSet::HalfkaHm, ActivationType::Screlu, false) => run_training!(ShogiHalfKA_hm, screlu, false),
+        (FeatureSet::HalfkaHm, ActivationType::Screlu, true) => run_training!(ShogiHalfKA_hm, screlu, true),
+        (FeatureSet::HalfkaHm, ActivationType::Crelu, false) => run_training!(ShogiHalfKA_hm, crelu, false),
+        (FeatureSet::HalfkaHm, ActivationType::Crelu, true) => run_training!(ShogiHalfKA_hm, crelu, true),
+        (FeatureSet::HalfKP, ActivationType::Screlu, false) => run_training!(ShogiHalfKP, screlu, false),
+        (FeatureSet::HalfKP, ActivationType::Screlu, true) => run_training!(ShogiHalfKP, screlu, true),
+        (FeatureSet::HalfKP, ActivationType::Crelu, false) => run_training!(ShogiHalfKP, crelu, false),
+        (FeatureSet::HalfKP, ActivationType::Crelu, true) => run_training!(ShogiHalfKP, crelu, true),
     }
 }
 
