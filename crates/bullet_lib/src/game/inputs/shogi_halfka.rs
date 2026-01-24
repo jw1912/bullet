@@ -195,20 +195,41 @@ fn map_halfka_features<F: FnMut(usize, usize)>(board: &ShogiBoard, mut f: F) {
 
 /// キングバケットを計算 (Half-Mirror)
 ///
-/// 玉位置を 45 バケット (9段 × 5筋) に圧縮。
-/// ファイル 5-8 (0-indexed) は 0-3 にミラーリング。
+/// 玉位置を 45 バケット (5筋 × 9段) に圧縮。
+/// 6筋以降 (file >= 5) は左右反転して 1-5筋にマッピング。
+///
+/// # 計算式
+///
+/// 2次元座標 (file_m, rank) を1次元インデックスに変換:
+/// ```text
+/// bucket = file_m * 9 + rank
+/// ```
+///
+/// これは 5×9 の2次元配列を筋優先順序（file-major）で
+/// フラット化する標準的な方法。
+///
+/// # バケット配置
+///
+/// ```text
+///        1筋  2筋  3筋  4筋  5筋
+/// 1段:    0    9   18   27   36
+/// 2段:    1   10   19   28   37
+/// ...
+/// 9段:    8   17   26   35   44
+/// ```
 #[inline]
 fn king_bucket(ksq: Square, perspective: Color) -> usize {
-    // 視点に応じてマスを変換
+    // 視点に応じてマスを変換（後手視点では盤面を180度回転）
     let sq = if perspective == Color::Black { ksq } else { ksq.inverse() };
 
-    let file = sq.file() as usize; // 0..8
-    let rank = sq.rank() as usize; // 0..8
+    let file = sq.file() as usize; // 0..8 (1筋=0, 9筋=8)
+    let rank = sq.rank() as usize; // 0..8 (1段=0, 9段=8)
 
-    // Half-mirror: file >= 5 なら反転 (5,6,7,8 → 3,2,1,0)
+    // Half-mirror: 6筋以降は反転 (5,6,7,8 → 3,2,1,0)
     let file_m = if file >= 5 { 8 - file } else { file }; // 0..4
 
-    rank * 5 + file_m // 0..44
+    // 筋優先順序で1次元化: bucket = file_m * NUM_RANKS + rank
+    file_m * 9 + rank // 0..44
 }
 
 /// Half-Mirror が必要かどうかを判定
@@ -297,27 +318,29 @@ mod tests {
 
     #[test]
     fn test_king_bucket_black_perspective() {
-        // 5九 (file=4, rank=8): bucket = 8*5 + 4 = 44
+        // 計算式: bucket = file_m * 9 + rank（筋優先順序）
+
+        // 5九 (file=4, rank=8): bucket = 4*9 + 8 = 44
         let sq_59 = Square::new(4, 8);
         assert_eq!(king_bucket(sq_59, Color::Black), 44);
 
-        // 1九 (file=0, rank=8): bucket = 8*5 + 0 = 40
+        // 1九 (file=0, rank=8): bucket = 0*9 + 8 = 8
         let sq_19 = Square::new(0, 8);
-        assert_eq!(king_bucket(sq_19, Color::Black), 40);
+        assert_eq!(king_bucket(sq_19, Color::Black), 8);
 
-        // 9九 (file=8, mirror to 0, rank=8): bucket = 8*5 + 0 = 40
+        // 9九 (file=8, mirror to 0, rank=8): bucket = 0*9 + 8 = 8
         let sq_99 = Square::new(8, 8);
-        assert_eq!(king_bucket(sq_99, Color::Black), 40);
+        assert_eq!(king_bucket(sq_99, Color::Black), 8);
 
-        // 6九 (file=5, mirror to 3, rank=8): bucket = 8*5 + 3 = 43
+        // 6九 (file=5, mirror to 3, rank=8): bucket = 3*9 + 8 = 35
         let sq_69 = Square::new(5, 8);
-        assert_eq!(king_bucket(sq_69, Color::Black), 43);
+        assert_eq!(king_bucket(sq_69, Color::Black), 35);
 
-        // 5一 (file=4, rank=0): bucket = 0*5 + 4 = 4
+        // 5一 (file=4, rank=0): bucket = 4*9 + 0 = 36
         let sq_51 = Square::new(4, 0);
-        assert_eq!(king_bucket(sq_51, Color::Black), 4);
+        assert_eq!(king_bucket(sq_51, Color::Black), 36);
 
-        // 1一 (file=0, rank=0): bucket = 0*5 + 0 = 0
+        // 1一 (file=0, rank=0): bucket = 0*9 + 0 = 0
         let sq_11 = Square::new(0, 0);
         assert_eq!(king_bucket(sq_11, Color::Black), 0);
     }
