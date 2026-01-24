@@ -221,6 +221,14 @@ struct Args {
     /// Weight decay (L2 regularization)
     #[arg(long, default_value = "0.01")]
     weight_decay: f32,
+
+    /// Resume from checkpoint path (e.g., checkpoints/v47/v47b-69)
+    #[arg(long)]
+    resume: Option<PathBuf>,
+
+    /// Only re-quantise checkpoint (no training, requires --resume)
+    #[arg(long)]
+    quantise_only: bool,
 }
 
 // =============================================================================
@@ -355,20 +363,20 @@ fn main() {
     // L1 input dimension (halved when pairwise is enabled)
     let l1_input_dim = if pairwise_enabled { l1_size } else { 2 * l1_size };
 
-    // Validate QA and activation combination
-    let recommended_qa = match args.activation {
-        ActivationType::Screlu => 255,
-        ActivationType::Crelu => 127,
+    // Validate QA and activation combination (skip confirmation for --quantise-only)
+    // Reckless/Stockfish: Pairwise uses QA=255 with CReLU
+    // Traditional: CReLU uses QA=127, SCReLU uses QA=255
+    let recommended_qa = match (args.activation, pairwise_enabled) {
+        (ActivationType::Screlu, _) => 255,      // SCReLU always uses QA=255
+        (ActivationType::Crelu, true) => 255,    // Pairwise + CReLU uses QA=255 (Reckless compatible)
+        (ActivationType::Crelu, false) => 127,   // Traditional CReLU uses QA=127
     };
-    if qa != recommended_qa {
-        eprintln!("WARNING: QA={} is not recommended for {} activation.", qa, activation_name);
-        eprintln!("         Recommended: --qa {} --activation {}",
-            recommended_qa,
-            match args.activation {
-                ActivationType::Screlu => "screlu",
-                ActivationType::Crelu => "crelu",
-            }
+    if qa != recommended_qa && !args.quantise_only {
+        eprintln!("WARNING: QA={} is not recommended for {} activation{}.",
+            qa, activation_name,
+            if pairwise_enabled { " with pairwise" } else { "" }
         );
+        eprintln!("         Recommended: --qa {}", recommended_qa);
         eprintln!("         Using non-standard QA may cause evaluation scale mismatch.");
         eprintln!();
         eprint!("Continue anyway? [y/N]: ");
@@ -388,7 +396,7 @@ fn main() {
     if pairwise_enabled && matches!(args.activation, ActivationType::Screlu) {
         eprintln!("WARNING: --pairwise on with SCReLU is unusual.");
         eprintln!("         Pairwise multiplication is typically combined with CReLU.");
-        eprintln!("         Consider: --pairwise on --activation crelu --qa 127");
+        eprintln!("         Consider: --pairwise on --activation crelu --qa 255");
         eprintln!();
     }
 
@@ -439,9 +447,22 @@ fn main() {
     let settings =
         LocalSettings { threads: args.threads, test_set: None, output_directory: output_dir, batch_queue_size: 64 };
 
-    // Data loader
-    let data_files: Vec<&str> = args.data.split(',').collect();
-    let data_loader = DirectSequentialDataLoader::new(&data_files);
+    // Data loader (use existing file for --quantise-only to avoid file check)
+    let data_files_owned: Vec<String> = if args.quantise_only {
+        // Use any existing file - we won't actually load data
+        let resume_path = args.resume.as_ref().expect("--quantise-only requires --resume");
+        let quantised = resume_path.join("quantised.bin");
+        if quantised.exists() {
+            vec![quantised.to_str().unwrap().to_string()]
+        } else {
+            // Fallback: use raw.bin
+            vec![resume_path.join("raw.bin").to_str().unwrap().to_string()]
+        }
+    } else {
+        args.data.split(',').map(|s| s.to_string()).collect()
+    };
+    let data_files_ref: Vec<&str> = data_files_owned.iter().map(|s| s.as_str()).collect();
+    let data_loader = DirectSequentialDataLoader::new(&data_files_ref);
 
     // SavedFormat configuration
     // This directly outputs the final format for your engine.
@@ -531,6 +552,32 @@ fn main() {
             let ft_hash = 0u32.to_le_bytes().to_vec();
             let network_hash = 0u32.to_le_bytes().to_vec();
 
+            // L1バイアスのスケール:
+            // L1層入力スケールは活性化関数の出力スケールに依存:
+            //
+            // | 活性化関数 | QA  | 出力スケール | L1 bias scale |
+            // |------------|-----|--------------|---------------|
+            // | CReLU      | 127 | 127          | 127 × qb      |
+            // | CReLU      | 255 | 255          | 255 × qb      |
+            // | SCReLU     | 255 | 127 (x²>>9)  | 127 × qb      |
+            // | Pairwise   | 255 | 127 (ab>>9)  | 127 × qb      |
+            //
+            // 注: SCReLU/Pairwise は QA=255 でも出力が 127 にスケールダウンされる
+            let l1_bias_scale = match (args.activation, pairwise_enabled, qa) {
+                // Pairwise: (qa * qa) >> shift で 127 スケール
+                (_, true, _) => {
+                    let qa_i32 = i32::from(qa);
+                    let shift = if qa >= 255 { 9 } else { 7 };
+                    ((qa_i32 * qa_i32) >> shift) * i32::from(qb)
+                }
+                // SCReLU QA=255: x² >> 9 で 127 スケール
+                (ActivationType::Screlu, false, qa) if qa >= 255 => {
+                    127 * i32::from(qb)
+                }
+                // CReLU / その他: qa スケール
+                _ => i32::from(qa) * i32::from(qb),
+            };
+
             vec![
                 // Header
                 SavedFormat::custom(header),
@@ -550,16 +597,18 @@ fn main() {
                 // 各層の入力次元を pad32() でパディングする必要がある
                 //
                 // L1: biases i32, weights i8 (row-major, padded)
-                // 入力次元: l1*2 → pad32(l1*2)
-                SavedFormat::id("l1b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
+                // 入力次元: l1_input_dim → pad32(l1_input_dim)
+                // Pairwise時はl1_size、通常時は2*l1_size
+                SavedFormat::id("l1b").round().quantise::<i32>(l1_bias_scale),
                 SavedFormat::id("l1w").transpose().transform({
                     let out_dim = l2_size;
-                    let in_dim = l1_size * 2;
+                    let in_dim = l1_input_dim;
                     move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
                 }).round().quantise::<i8>(qb),
                 // L2: biases i32, weights i8 (row-major, padded)
                 // 入力次元: l2 → pad32(l2)
-                SavedFormat::id("l2b").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
+                // L2入力スケール: crelu_i32_to_u8 後は常に 127 スケール
+                SavedFormat::id("l2b").round().quantise::<i32>(127 * i32::from(qb)),
                 SavedFormat::id("l2w").transpose().transform({
                     let out_dim = l3_size;
                     let in_dim = l2_size;
@@ -567,7 +616,8 @@ fn main() {
                 }).round().quantise::<i8>(qb),
                 // Output: biases i32, weights i8 (row-major, padded)
                 // 入力次元: l3 → pad32(l3)
-                SavedFormat::id("outb").round().quantise::<i32>(i32::from(qa) * i32::from(qb)),
+                // Output入力スケール: crelu_i32_to_u8 後は常に 127 スケール
+                SavedFormat::id("outb").round().quantise::<i32>(127 * i32::from(qb)),
                 SavedFormat::id("outw").transpose().transform({
                     let out_dim = 1;
                     let in_dim = l3_size;
@@ -688,6 +738,34 @@ fn main() {
         };
     }
 
+    // Helper macro to either run training or just re-quantise
+    macro_rules! maybe_run_or_quantise {
+        ($trainer:expr) => {{
+            if args.quantise_only {
+                let resume_path = args.resume.as_ref().expect("--quantise-only requires --resume");
+                let resume_str = resume_path.to_str().unwrap();
+                println!("Loading checkpoint from {}...", resume_str);
+                $trainer.load_from_checkpoint(resume_str);
+
+                // Create output directory if needed
+                let output_dir = args.output.to_str().unwrap_or("checkpoints");
+                let output_path = format!("{}/requantised.bin", output_dir);
+                std::fs::create_dir_all(output_dir).unwrap_or(());
+
+                println!("Saving re-quantised weights to {}...", output_path);
+                $trainer.save_quantised(&output_path).expect("Failed to save quantised weights");
+                println!("Done!");
+            } else {
+                if let Some(ref resume_path) = args.resume {
+                    let resume_str = resume_path.to_str().unwrap();
+                    println!("Resuming from checkpoint: {}", resume_str);
+                    $trainer.load_from_checkpoint(resume_str);
+                }
+                $trainer.run(&schedule, &settings, &data_loader);
+            }
+        }};
+    }
+
     // Run training macro (to reduce duplication across feature sets, activations, and pairwise)
     macro_rules! run_training {
         ($input:expr, screlu, false) => {{
@@ -696,18 +774,18 @@ fn main() {
                 OptimizerType::AdamW => {
                     let mut trainer = build_trainer_screlu!(optimiser::AdamW, $input);
                     trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::RAdam => {
                     let mut trainer = build_trainer_screlu!(optimiser::RAdam, $input);
                     let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
                     trainer.optimiser.set_params(params.into());
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::Ranger => {
                     let mut trainer = build_trainer_screlu!(optimiser::Ranger, $input);
                     trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
             }
         }};
@@ -717,18 +795,18 @@ fn main() {
                 OptimizerType::AdamW => {
                     let mut trainer = build_trainer_screlu_pairwise!(optimiser::AdamW, $input);
                     trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::RAdam => {
                     let mut trainer = build_trainer_screlu_pairwise!(optimiser::RAdam, $input);
                     let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
                     trainer.optimiser.set_params(params.into());
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::Ranger => {
                     let mut trainer = build_trainer_screlu_pairwise!(optimiser::Ranger, $input);
                     trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
             }
         }};
@@ -738,18 +816,18 @@ fn main() {
                 OptimizerType::AdamW => {
                     let mut trainer = build_trainer_crelu!(optimiser::AdamW, $input);
                     trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::RAdam => {
                     let mut trainer = build_trainer_crelu!(optimiser::RAdam, $input);
                     let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
                     trainer.optimiser.set_params(params.into());
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::Ranger => {
                     let mut trainer = build_trainer_crelu!(optimiser::Ranger, $input);
                     trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
             }
         }};
@@ -759,18 +837,18 @@ fn main() {
                 OptimizerType::AdamW => {
                     let mut trainer = build_trainer_crelu_pairwise!(optimiser::AdamW, $input);
                     trainer.optimiser.set_params(AdamWParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::RAdam => {
                     let mut trainer = build_trainer_crelu_pairwise!(optimiser::RAdam, $input);
                     let params: RAdamParams = RAdamParams { decay: weight_decay, ..Default::default() };
                     trainer.optimiser.set_params(params.into());
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
                 OptimizerType::Ranger => {
                     let mut trainer = build_trainer_crelu_pairwise!(optimiser::Ranger, $input);
                     trainer.optimiser.set_params(RangerParams { decay: weight_decay, ..Default::default() });
-                    trainer.run(&schedule, &settings, &data_loader);
+                    maybe_run_or_quantise!(trainer);
                 }
             }
         }};
