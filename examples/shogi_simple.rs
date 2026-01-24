@@ -400,18 +400,6 @@ fn main() {
         eprintln!();
     }
 
-    // Print configuration
-    println!("=== Shogi NNUE Training ===");
-    println!("Features: {} ({} dimensions)", feature_name, input_size);
-    println!("Architecture: {} (L1={}, L2={}, L3={})", arch.display(), l1_size, l2_size, l3_size);
-    if pairwise_enabled {
-        println!("Network: {} -> {}x2 -> pairwise_mul -> {} -> {} -> {} -> 1",
-            input_size, l1_size, l1_input_dim, l2_size, l3_size);
-    } else {
-        println!("Network: {} -> {}x2 -> {} -> {} -> 1", input_size, l1_size, l2_size, l3_size);
-    }
-    println!("Activation: {}", activation_name);
-    println!("Pairwise: {} (L1 input = {})", pairwise_name, l1_input_dim);
     println!("Optimizer: {}", optimizer_name);
     println!("Weight decay: {}", args.weight_decay);
     println!("Scale: {}", args.scale);
@@ -578,51 +566,6 @@ fn main() {
                 _ => i32::from(qa) * i32::from(qb),
             };
 
-            vec![
-                // Header
-                SavedFormat::custom(header),
-                // FeatureTransformer layer hash
-                SavedFormat::custom(ft_hash),
-                // L0: biases first, then weights (rust-core order)
-                SavedFormat::id("l0b").round().quantise::<i16>(qa),
-                SavedFormat::id("l0w").round().quantise::<i16>(qa),
-                // Network layer hash
-                SavedFormat::custom(network_hash),
-                // L1-Output層の重みは .transpose() で row-major に変換
-                // 理由: Stockfish/nnue-pytorch は row-major で推論する
-                // bullet 内部は column-major だが、これは GPU (cuBLAS) 最適化のため
-                // 変換コストは出力時の1回のみで、学習効率には影響しない
-                //
-                // 重要: rust-core は SIMD 最適化のため 32バイトアライメントを要求
-                // 各層の入力次元を pad32() でパディングする必要がある
-                //
-                // L1: biases i32, weights i8 (row-major, padded)
-                // 入力次元: l1_input_dim → pad32(l1_input_dim)
-                // Pairwise時はl1_size、通常時は2*l1_size
-                SavedFormat::id("l1b").round().quantise::<i32>(l1_bias_scale),
-                SavedFormat::id("l1w").transpose().transform({
-                    let out_dim = l2_size;
-                    let in_dim = l1_input_dim;
-                    move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
-                }).round().quantise::<i8>(qb),
-                // L2: biases i32, weights i8 (row-major, padded)
-                // 入力次元: l2 → pad32(l2)
-                // L2入力スケール: crelu_i32_to_u8 後は常に 127 スケール
-                SavedFormat::id("l2b").round().quantise::<i32>(127 * i32::from(qb)),
-                SavedFormat::id("l2w").transpose().transform({
-                    let out_dim = l3_size;
-                    let in_dim = l2_size;
-                    move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
-                }).round().quantise::<i8>(qb),
-                // Output: biases i32, weights i8 (row-major, padded)
-                // 入力次元: l3 → pad32(l3)
-                // Output入力スケール: crelu_i32_to_u8 後は常に 127 スケール
-                SavedFormat::id("outb").round().quantise::<i32>(127 * i32::from(qb)),
-                SavedFormat::id("outw").transpose().transform({
-                    let out_dim = 1;
-                    let in_dim = l3_size;
-                    move |_, vals| pad_weights_for_simd(&vals, out_dim, in_dim)
-                }).round().quantise::<i8>(qb),
             ]
         }
     };
