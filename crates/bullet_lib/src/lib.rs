@@ -5,6 +5,9 @@ pub use acyclib;
 /// and value network traiing (e.g. sparse input types).
 pub mod game;
 
+/// 将棋固有のモジュール
+pub mod shogi;
+
 /// Contains the Graph API, by which neural networks are created with
 /// `NetworkBuilder`, and then compiled into an executable `Graph`
 pub mod nn;
