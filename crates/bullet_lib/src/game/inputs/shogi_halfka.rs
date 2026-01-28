@@ -1,9 +1,15 @@
-//! ShogiHalfKA_hm - 将棋用 HalfKA_hm 特徴量
+//! ShogiHalfKA 特徴量モジュール
 //!
-//! Half-Mirror King + All pieces (coalesced) 特徴量。
+//! 2種類の HalfKA 特徴量を提供:
 //!
+//! ## ShogiHalfKA_hm (Half-Mirror)
 //! - キングバケット: 45バケット (Half-Mirror: 9段 × 5筋)
 //! - 入力次元: 73,305 (45 × 1629)
+//! - 最大アクティブ特徴: 40
+//!
+//! ## ShogiHalfKA (Non-Mirror)
+//! - キングバケット: 81マス（ミラーなし）
+//! - 入力次元: 138,510 (81 × 1710)
 //! - 最大アクティブ特徴: 40
 
 use super::SparseInputType;
@@ -294,6 +300,171 @@ fn halfka_index(kb: usize, packed_bp: usize) -> usize {
 }
 
 // =============================================================================
+// ShogiHalfKA (Non-Mirror) 特徴量型
+// =============================================================================
+
+/// キングバケット数 (Non-Mirror: 81マス)
+pub const NUM_KING_BUCKETS_NONMIRROR: usize = 81;
+
+/// 駒入力数 (1548 + 81*2 = 1710、王を含む)
+pub const PIECE_INPUTS_NONMIRROR: usize = 1548 + 81 * 2;
+
+/// HalfKA (Non-Mirror) の総入力次元
+pub const HALFKA_DIMENSIONS: usize = NUM_KING_BUCKETS_NONMIRROR * PIECE_INPUTS_NONMIRROR; // 138,510
+
+/// ShogiHalfKA 特徴量 (Non-Mirror)
+///
+/// rshogi 互換の HalfKA 特徴量。
+/// ミラーなしの81バケット版。
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ShogiHalfKA;
+
+impl SparseInputType for ShogiHalfKA {
+    /// 学習データの型: PackedSfenValue (40バイト)
+    type RequiredDataType = PackedSfenValue;
+
+    /// 特徴量の総次元数: 81 × 1710 = 138,510
+    fn num_inputs(&self) -> usize {
+        HALFKA_DIMENSIONS
+    }
+
+    /// 同時にアクティブになる最大特徴数: 40
+    fn max_active(&self) -> usize {
+        MAX_ACTIVE_FEATURES
+    }
+
+    /// 特徴量インデックスを列挙
+    fn map_features<F: FnMut(usize, usize)>(&self, pos: &Self::RequiredDataType, f: F) {
+        let board = ShogiBoard::from_packed_sfen(pos);
+        map_halfka_nonmirror_features(&board, f);
+    }
+
+    /// 短縮名
+    fn shorthand(&self) -> String {
+        "shogi-138510x81".to_string()
+    }
+
+    /// 説明
+    fn description(&self) -> String {
+        "Shogi HalfKA: 81 king buckets (non-mirrored), 1710 piece inputs".to_string()
+    }
+}
+
+// =============================================================================
+// HalfKA (Non-Mirror) 特徴量計算
+// =============================================================================
+
+/// HalfKA (Non-Mirror) 特徴量インデックスを列挙
+fn map_halfka_nonmirror_features<F: FnMut(usize, usize)>(board: &ShogiBoard, mut f: F) {
+    let stm = board.side_to_move;
+    let nstm = stm.opponent();
+
+    // 玉位置の妥当性チェック
+    let stm_king_sq = board.king_square(stm);
+    let nstm_king_sq = board.king_square(nstm);
+    if !stm_king_sq.is_valid() || !nstm_king_sq.is_valid() {
+        return;
+    }
+
+    // キングインデックス（81マス直指定）
+    let stm_kb = king_index_nonmirror(stm_king_sq, stm);
+    let nstm_kb = king_index_nonmirror(nstm_king_sq, nstm);
+
+    // 盤上の駒（王以外）
+    for &pt in &BOARD_PIECE_TYPES {
+        for color in [Color::Black, Color::White] {
+            for sq in board.pieces(color, pt) {
+                let piece = Piece::new(color, pt);
+
+                // STM 視点
+                let stm_bp = BonaPiece::from_piece_square(piece, sq, stm);
+                let stm_idx = halfka_nonmirror_index(stm_kb, stm_bp.value() as usize);
+
+                // NSTM 視点
+                let nstm_bp = BonaPiece::from_piece_square(piece, sq, nstm);
+                let nstm_idx = halfka_nonmirror_index(nstm_kb, nstm_bp.value() as usize);
+
+                f(stm_idx, nstm_idx);
+            }
+        }
+    }
+
+    // 両方の玉の特徴量
+    {
+        // 自玉 (STM視点)
+        let stm_king_sq_idx = if stm == Color::Black { stm_king_sq.index() } else { stm_king_sq.inverse().index() };
+        let stm_friend_king_bp = king_bonapiece_nonmirror(stm_king_sq_idx, true);
+        let stm_friend_idx = halfka_nonmirror_index(stm_kb, stm_friend_king_bp);
+
+        // 敵玉 (STM視点)
+        let nstm_king_sq_for_stm =
+            if stm == Color::Black { nstm_king_sq.index() } else { nstm_king_sq.inverse().index() };
+        let stm_enemy_king_bp = king_bonapiece_nonmirror(nstm_king_sq_for_stm, false);
+        let stm_enemy_idx = halfka_nonmirror_index(stm_kb, stm_enemy_king_bp);
+
+        // NSTM 視点
+        let nstm_king_sq_idx = if nstm == Color::Black { nstm_king_sq.index() } else { nstm_king_sq.inverse().index() };
+        let nstm_friend_king_bp = king_bonapiece_nonmirror(nstm_king_sq_idx, true);
+        let nstm_friend_idx = halfka_nonmirror_index(nstm_kb, nstm_friend_king_bp);
+
+        let stm_king_sq_for_nstm =
+            if nstm == Color::Black { stm_king_sq.index() } else { stm_king_sq.inverse().index() };
+        let nstm_enemy_king_bp = king_bonapiece_nonmirror(stm_king_sq_for_nstm, false);
+        let nstm_enemy_idx = halfka_nonmirror_index(nstm_kb, nstm_enemy_king_bp);
+
+        f(stm_friend_idx, nstm_friend_idx);
+        f(stm_enemy_idx, nstm_enemy_idx);
+    }
+
+    // 手駒の特徴量
+    for owner in [Color::Black, Color::White] {
+        for &pt in &HAND_PIECE_TYPES {
+            let count = board.hand(owner).count(pt);
+            if count == 0 {
+                continue;
+            }
+
+            for i in 1..=count {
+                let stm_bp = BonaPiece::from_hand_piece(stm, owner, pt, i);
+                if stm_bp != BonaPiece::ZERO {
+                    let stm_idx = halfka_nonmirror_index(stm_kb, stm_bp.value() as usize);
+
+                    let nstm_bp = BonaPiece::from_hand_piece(nstm, owner, pt, i);
+                    let nstm_idx = halfka_nonmirror_index(nstm_kb, nstm_bp.value() as usize);
+
+                    f(stm_idx, nstm_idx);
+                }
+            }
+        }
+    }
+}
+
+/// キングインデックス（Non-Mirror, 81マス直指定）
+#[inline]
+fn king_index_nonmirror(ksq: Square, perspective: Color) -> usize {
+    if perspective == Color::Black {
+        ksq.index()
+    } else {
+        ksq.inverse().index()
+    }
+}
+
+/// 王の BonaPiece インデックス（Non-Mirror）
+///
+/// HalfKA (Non-Mirror) では F_KING=1548, E_KING=1629 を使用。
+#[inline]
+fn king_bonapiece_nonmirror(sq_index: usize, is_friend: bool) -> usize {
+    let base = if is_friend { F_KING as usize } else { E_KING as usize };
+    base + sq_index
+}
+
+/// HalfKA (Non-Mirror) の特徴インデックスを計算
+#[inline]
+fn halfka_nonmirror_index(kb: usize, bp: usize) -> usize {
+    kb * PIECE_INPUTS_NONMIRROR + bp
+}
+
+// =============================================================================
 // テスト
 // =============================================================================
 
@@ -455,5 +626,88 @@ mod tests {
 
         // 片玉データはスキップされるため、カウントは 0
         assert_eq!(count, 0);
+    }
+
+    // =============================================================================
+    // ShogiHalfKA (Non-Mirror) テスト
+    // =============================================================================
+
+    #[test]
+    fn test_halfka_nonmirror_dimensions() {
+        let input = ShogiHalfKA;
+        assert_eq!(input.num_inputs(), 138_510);
+        assert_eq!(input.max_active(), 40);
+    }
+
+    #[test]
+    fn test_halfka_nonmirror_shorthand() {
+        let input = ShogiHalfKA;
+        assert_eq!(input.shorthand(), "shogi-138510x81");
+    }
+
+    #[test]
+    fn test_king_index_nonmirror_black() {
+        // 先手視点: そのまま
+        let sq_59 = Square::new(4, 8); // 5九
+        assert_eq!(king_index_nonmirror(sq_59, Color::Black), sq_59.index());
+
+        let sq_11 = Square::new(0, 0); // 1一
+        assert_eq!(king_index_nonmirror(sq_11, Color::Black), sq_11.index());
+    }
+
+    #[test]
+    fn test_king_index_nonmirror_white() {
+        // 後手視点: 180度回転
+        let sq_59 = Square::new(4, 8); // 5九
+        let sq_51 = sq_59.inverse();   // 5一
+        assert_eq!(king_index_nonmirror(sq_59, Color::White), sq_51.index());
+    }
+
+    #[test]
+    fn test_halfka_nonmirror_index() {
+        // kb=0, bp=0 → index=0
+        assert_eq!(halfka_nonmirror_index(0, 0), 0);
+
+        // kb=1, bp=0 → index=1710
+        assert_eq!(halfka_nonmirror_index(1, 0), PIECE_INPUTS_NONMIRROR);
+
+        // kb=80, bp=0 → index=80*1710=136800
+        assert_eq!(halfka_nonmirror_index(80, 0), 80 * PIECE_INPUTS_NONMIRROR);
+    }
+
+    #[test]
+    fn test_king_bonapiece_nonmirror() {
+        // 自玉 (sq_index=0)
+        assert_eq!(king_bonapiece_nonmirror(0, true), F_KING as usize);
+
+        // 敵玉 (sq_index=0)
+        assert_eq!(king_bonapiece_nonmirror(0, false), E_KING as usize);
+
+        // 自玉 (sq_index=80)
+        assert_eq!(king_bonapiece_nonmirror(80, true), F_KING as usize + 80);
+    }
+
+    #[test]
+    fn test_map_halfka_nonmirror_features_count() {
+        let mut board = ShogiBoard::default();
+        board.side_to_move = Color::Black;
+
+        // 玉を配置
+        board.black_king_sq = Square::new(4, 8); // 5九
+        board.white_king_sq = Square::new(4, 0); // 5一
+        board.board[board.black_king_sq.index()] = Piece::new(Color::Black, PieceType::King);
+        board.board[board.white_king_sq.index()] = Piece::new(Color::White, PieceType::King);
+
+        // 歩を9枚ずつ配置
+        for file in 0..9 {
+            board.board[Square::new(file, 6).index()] = Piece::new(Color::Black, PieceType::Pawn);
+            board.board[Square::new(file, 2).index()] = Piece::new(Color::White, PieceType::Pawn);
+        }
+
+        let mut count = 0;
+        map_halfka_nonmirror_features(&board, |_, _| count += 1);
+
+        // 歩18枚 + 両玉2 = 20
+        assert!(count >= 20);
     }
 }

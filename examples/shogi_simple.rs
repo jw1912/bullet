@@ -41,7 +41,7 @@ Examples:
 use std::path::PathBuf;
 
 use bullet_lib::{
-    game::inputs::{ShogiHalfKA_hm, ShogiHalfKP, SparseInputType},
+    game::inputs::{ShogiHalfKA, ShogiHalfKA_hm, ShogiHalfKP, SparseInputType},
     nn::optimiser::{self, AdamWParams, RAdamParams, RangerParams},
     trainer::{
         save::SavedFormat,
@@ -58,6 +58,8 @@ enum FeatureSet {
     /// HalfKA_hm - Half-Mirrored King-All (73,305 dimensions)
     #[default]
     HalfkaHm,
+    /// HalfKA - King-All non-mirrored (138,510 dimensions)
+    Halfka,
     /// HalfKP - King-Piece (125,388 dimensions, no mirror)
     HalfKP,
 }
@@ -116,8 +118,9 @@ enum OptimizerType {
 #[command(name = "shogi_simple")]
 #[command(about = "Shogi NNUE training script")]
 struct Args {
-    /// Feature set (halfka-hm or halfkp)
+    /// Feature set (halfka-hm, halfka, halfkp)
     /// halfka-hm: HalfKA_hm (73,305 dims, Half-Mirror) - nnue-pytorch compatible
+    /// halfka: HalfKA (138,510 dims, no mirror) - rshogi compatible
     /// halfkp: HalfKP (125,388 dims, no mirror) - classic NNUE
     #[arg(long, value_enum, default_value = "halfka-hm")]
     features: FeatureSet,
@@ -340,6 +343,7 @@ fn main() {
     // Feature set info
     let (feature_name, input_size) = match args.features {
         FeatureSet::HalfkaHm => ("HalfKA_hm", ShogiHalfKA_hm.num_inputs()),
+        FeatureSet::Halfka => ("HalfKA", ShogiHalfKA.num_inputs()),
         FeatureSet::HalfKP => ("HalfKP", ShogiHalfKP.num_inputs()),
     };
 
@@ -860,6 +864,10 @@ fn main() {
         (FeatureSet::HalfkaHm, ActivationType::Screlu, true) => run_training!(ShogiHalfKA_hm, screlu, true),
         (FeatureSet::HalfkaHm, ActivationType::Crelu, false) => run_training!(ShogiHalfKA_hm, crelu, false),
         (FeatureSet::HalfkaHm, ActivationType::Crelu, true) => run_training!(ShogiHalfKA_hm, crelu, true),
+        (FeatureSet::Halfka, ActivationType::Screlu, false) => run_training!(ShogiHalfKA, screlu, false),
+        (FeatureSet::Halfka, ActivationType::Screlu, true) => run_training!(ShogiHalfKA, screlu, true),
+        (FeatureSet::Halfka, ActivationType::Crelu, false) => run_training!(ShogiHalfKA, crelu, false),
+        (FeatureSet::Halfka, ActivationType::Crelu, true) => run_training!(ShogiHalfKA, crelu, true),
         (FeatureSet::HalfKP, ActivationType::Screlu, false) => run_training!(ShogiHalfKP, screlu, false),
         (FeatureSet::HalfKP, ActivationType::Screlu, true) => run_training!(ShogiHalfKP, screlu, true),
         (FeatureSet::HalfKP, ActivationType::Crelu, false) => run_training!(ShogiHalfKP, crelu, false),
