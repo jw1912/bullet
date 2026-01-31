@@ -62,7 +62,7 @@ fn main() {
             SavedFormat::id("l3w").transpose(),
             SavedFormat::id("l3b"),
         ])
-        .loss_fn(|output, target| output.sigmoid().squared_error(target))
+        .loss_fn(|output, target| output.bce_logit_loss(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
             // input layer factoriser
             let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);

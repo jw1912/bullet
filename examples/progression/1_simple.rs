@@ -28,7 +28,7 @@ fn main() {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i16>(255 * 64),
         ])
-        .loss_fn(|output, target| output.sigmoid().squared_error(target))
+        .loss_fn(|output, target| output.bce_logit_loss(target))
         .build(|builder, stm_inputs, ntm_inputs| {
             // weights
             let l0 = builder.new_affine("l0", 768, hl_size);

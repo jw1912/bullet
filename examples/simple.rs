@@ -43,11 +43,11 @@ fn main() {
             SavedFormat::id("l1w").round().quantise::<i16>(QB),
             SavedFormat::id("l1b").round().quantise::<i16>(QA * QB),
         ])
-        // map output into ranges [0, 1] to fit against our labels which
+        // implicitely map output into ranges [0, 1] to fit against our labels which
         // are in the same range
         // `target` == wdl * game_result + (1 - wdl) * sigmoid(search score in centipawns / SCALE)
         // where `wdl` is determined by `wdl_scheduler`
-        .loss_fn(|output, target| output.sigmoid().squared_error(target))
+        .loss_fn(|output, target| output.bce_logit_loss(target))
         // the basic `(768 -> N)x2 -> 1` inference
         .build(|builder, stm_inputs, ntm_inputs| {
             // weights
