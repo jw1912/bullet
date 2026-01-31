@@ -99,7 +99,7 @@ impl OpType for UnaryOp {
         vec![self.output_type()]
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
@@ -131,7 +131,7 @@ mod tests {
         let a = TValue::F32(vec![0.0; 4]);
         let mut b = TValue::F32(vec![0.0; 4]);
 
-        binary.evaluate(&[&a], &mut [&mut b]);
+        binary.evaluate(vec![&a], vec![&mut b]);
 
         assert_eq!(b, TValue::F32(vec![1.0; 4]));
     }

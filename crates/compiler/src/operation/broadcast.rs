@@ -91,19 +91,19 @@ impl OpType for BroadcastAcrossDimension {
         vec![TType::new(self.output_size(), self.dtype)]
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
         match self.dtype {
             DType::F32 => {
                 let TValue::F32(input) = inputs[0] else { panic!() };
-                let TValue::F32(output) = outputs[0] else { panic!() };
+                let TValue::F32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, output);
             }
             DType::I32 => {
                 let TValue::I32(input) = inputs[0] else { panic!() };
-                let TValue::I32(output) = outputs[0] else { panic!() };
+                let TValue::I32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, output);
             }
         }
@@ -129,7 +129,7 @@ mod tests {
         let input = TValue::I32(INPUT.to_vec());
         let mut output = TValue::I32(vec![0; 16]);
 
-        broadcast.evaluate(&[&input], &mut [&mut output]);
+        broadcast.evaluate(vec![&input], vec![&mut output]);
 
         let TValue::I32(output) = output else { panic!() };
 
@@ -154,7 +154,7 @@ mod tests {
         let input = TValue::I32(INPUT.to_vec());
         let mut output = TValue::I32(vec![0; 16]);
 
-        broadcast.evaluate(&[&input], &mut [&mut output]);
+        broadcast.evaluate(vec![&input], vec![&mut output]);
 
         let TValue::I32(output) = output else { panic!() };
 

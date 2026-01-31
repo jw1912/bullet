@@ -1,6 +1,7 @@
 pub mod canonicalise;
 pub mod eliminate;
 pub mod foldrules;
+pub mod inline;
 pub mod modify;
 pub mod ordering;
 pub mod rewriterules;

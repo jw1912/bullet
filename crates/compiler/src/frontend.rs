@@ -63,6 +63,10 @@ impl<'a> ProgramNode<'a> {
         Self { builder, node }
     }
 
+    pub fn make_scalar(&self, value: impl Into<DValue>, size: impl Into<Size>) -> Self {
+        self.builder.scalar(value, size)
+    }
+
     pub fn node(&self) -> NodeId {
         self.node
     }
@@ -93,12 +97,12 @@ impl<'a> ProgramNode<'a> {
         self.reduce(shape, dim, Reduction::Max)
     }
 
-    fn unary(self, op: Unary) -> Self {
+    pub fn unary(self, op: Unary) -> Self {
         let node = self.builder.ir.borrow_mut().add_unary(self.node, op).unwrap();
         Self { builder: self.builder, node }
     }
 
-    fn binary(self, rhs: Self, op: CABinary) -> Self {
+    pub fn binary(self, rhs: Self, op: CABinary) -> Self {
         let node = self.builder.ir.borrow_mut().add_binary(self.node, rhs.node, op).unwrap();
         Self { builder: self.builder, node }
     }

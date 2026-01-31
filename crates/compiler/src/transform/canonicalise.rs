@@ -18,7 +18,7 @@ impl CanonicalisePass {
     /// Canonicalisation pass that contains only rewrites that
     /// are always objectively good, so other canonicalisation
     /// passes can build on top of it.
-    pub fn base() -> Self {
+    pub fn all() -> Self {
         Self::default()
             .add_cleanup(OrderCommutativeInputs)
             .add_cleanup(EliminateCopies)
@@ -35,21 +35,7 @@ impl CanonicalisePass {
             .add_rewrite(ScalarBroadcastBinaryIntoBinaryBroadcast)
             .add_rewrite(CombineXAddMulX)
             .add_rewrite(CombineMulXAddMulX)
-    }
-
-    /// Canonicalisation pass that expands all distributive rules.
-    /// This ensures that all common subexpressions are eliminated.
-    ///
-    /// Otherwise expressions like `x*x - y*y` and `(x - y)(x + y)`
-    /// would be difficult to identify as equivalent (without hardcoding
-    /// such a rule)
-    pub fn expand() -> Self {
-        Self::base().add_rewrite(ExpandDistributive)
-    }
-
-    /// Canonicalisation pass that factorises all distributive rules.
-    pub fn factorise() -> Self {
-        Self::base().add_rewrite(FactoriseDistributive)
+            .add_rewrite(FactoriseDistributive)
     }
 
     pub fn add_cleanup(mut self, cleanup: impl IRTransform) -> Self {
@@ -128,10 +114,7 @@ impl CanonicalisePass {
                 }
             }
 
-            let inputs = consts.iter().collect::<Vec<_>>();
-            let mut outputs = tensors.iter_mut().collect::<Vec<_>>();
-
-            op.evaluate(&inputs, &mut outputs);
+            op.evaluate(consts.iter().collect(), tensors.iter_mut().collect());
 
             return Ok(Some(tensors.into_iter().map(Constant).collect()));
         }
@@ -193,7 +176,7 @@ mod tests {
         ir.register_output(d);
         ir.register_output(e);
 
-        ir.transform(CanonicalisePass::base())?;
+        ir.transform(CanonicalisePass::all())?;
 
         assert_eq!(ir.parent_op(d)?, Some(&bb?), "{ir}");
         assert_eq!(ir.parent_op(e)?, Some(&ScalarConstant(0.0.into(), size)), "{ir}");

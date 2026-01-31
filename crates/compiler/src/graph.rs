@@ -263,7 +263,7 @@ impl Graph {
     }
 
     /// Replaces all instances of `old` in operation inputs by `new`.
-    /// Potentially leaves graph in a cyclic state.
+    /// Potentially leaves graph in a cyclic state (not unsafe).
     pub fn replace_input_unchecked(&mut self, new: NodeId, old: NodeId) -> Result<(), GraphError> {
         if self.get_node(new)?.ty() != self.get_node(old)?.ty() {
             return Err("Mismatched types!".into());
@@ -276,6 +276,20 @@ impl Graph {
         }
 
         Ok(())
+    }
+
+    pub fn get_dependent_ops_set(&self, id: OpId) -> Result<HashSet<OpId>, GraphError> {
+        let mut set: HashSet<_> = [id].into();
+
+        for parent in self.get_op(id)?.inputs() {
+            let parent_op = self.get_parent_op(*parent)?;
+
+            for op in self.get_dependent_ops_set(parent_op)? {
+                set.insert(op);
+            }
+        }
+
+        Ok(set)
     }
 
     pub fn evaluate(&self, inputs: impl Into<HashMap<NodeId, TValue>>) -> Result<HashMap<NodeId, TValue>, GraphError> {
@@ -334,10 +348,8 @@ impl Graph {
                 .collect::<Option<Vec<_>>>()
                 .ok_or("Output missing!")?;
 
-            op.op().evaluate(
-                &op_inputs.iter().map(|x| &**x).collect::<Vec<_>>(),
-                &mut op_outputs.iter_mut().map(|x| &mut **x).collect::<Vec<_>>(),
-            );
+            op.op()
+                .evaluate(op_inputs.iter().map(|x| &**x).collect(), op_outputs.iter_mut().map(|x| &mut **x).collect());
         }
 
         Ok(values.into_iter().filter_map(|x| self.is_output(x.0).then(|| (x.0, x.1.into_inner()))).collect())

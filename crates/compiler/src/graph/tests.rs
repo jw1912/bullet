@@ -22,7 +22,7 @@ impl OpType for Mock {
         false
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         *outputs[0] = inputs[0].clone();
     }
 }

@@ -11,7 +11,11 @@ pub mod prelude {
     };
 }
 
-use std::{collections::HashMap, fmt, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    rc::Rc,
+};
 
 use graph::{DValue, Graph, GraphError, Input, Node, NodeId, Op, OpId, OpType, Shape, Size, TType, TValue};
 use operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, Unary, UnaryOp};
@@ -256,9 +260,12 @@ impl IR {
         self.replace_op(op, add)
     }
 
+    pub fn get_dependent_ops_set(&self, op: OpId) -> Result<HashSet<OpId>, IRTrace> {
+        self.graph.get_dependent_ops_set(op).map_err(|e| e.into())
+    }
+
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
-        self.transform(CanonicalisePass::expand())?;
-        self.transform(CanonicalisePass::factorise())
+        self.transform(CanonicalisePass::all())
     }
 
     pub fn track_history(&mut self) {

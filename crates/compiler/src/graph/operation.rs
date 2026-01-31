@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::HashSet,
     fmt::Debug,
     rc::Rc,
@@ -7,14 +8,14 @@ use std::{
 
 use crate::graph::{GraphError, Node, NodeId, TType, TValue};
 
-pub trait OpType: std::any::Any + Debug + 'static {
+pub trait OpType: Any + Debug + 'static {
     fn opname(&self) -> String;
 
     fn inputs(&self) -> Vec<TType>;
 
     fn outputs(&self) -> Vec<TType>;
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]);
+    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>);
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool;
 
@@ -127,8 +128,8 @@ impl Op {
         &self.op
     }
 
-    pub fn downcast_rc<T: OpType + 'static>(input: &Rc<dyn OpType>) -> Option<&T> {
-        let op: &dyn std::any::Any = input.as_ref();
+    pub fn downcast_rc<T: OpType>(input: &Rc<dyn OpType>) -> Option<&T> {
+        let op: &dyn Any = input.as_ref();
         op.downcast_ref::<T>()
     }
 
@@ -153,7 +154,7 @@ impl OpType for Input {
         vec![self.0]
     }
 
-    fn evaluate(&self, _: &[&TValue], _: &mut [&mut TValue]) {}
+    fn evaluate(&self, _: Vec<&TValue>, _: Vec<&mut TValue>) {}
 
     fn equals(&self, _: &Rc<dyn OpType>) -> bool {
         false

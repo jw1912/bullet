@@ -73,7 +73,7 @@ impl OpType for CABinaryOp {
         vec![self.ty]
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         assert_eq!(inputs.len(), 2);
         assert_eq!(outputs.len(), 1);
 
@@ -111,7 +111,7 @@ mod tests {
         let b = TValue::F32(vec![1.0; 4]);
         let mut c = TValue::F32(vec![0.0; 4]);
 
-        binary.evaluate(&[&a, &b], &mut [&mut c]);
+        binary.evaluate(vec![&a, &b], vec![&mut c]);
 
         assert_eq!(c, TValue::F32(vec![3.0; 4]));
     }

@@ -24,7 +24,7 @@ impl OpType for Constant {
         vec![self.ty()]
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         assert_eq!(inputs.len(), 0);
         assert_eq!(outputs.len(), 1);
         assert_eq!(outputs[0].size(), self.0.size());
@@ -67,7 +67,7 @@ impl OpType for ScalarConstant {
         vec![self.ty()]
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         assert_eq!(inputs.len(), 0);
         assert_eq!(outputs.len(), 1);
         assert_eq!(outputs[0].dtype(), self.0.dtype());

@@ -4,9 +4,9 @@ use crate::graph::{Op, OpType, TType, TValue};
 
 /// Internal copy operation used for a few special cases. For example:
 ///
-/// If two outputs of an Graph are proven equivalent,
+/// If two outputs of an Graph are proven equivalent, but
 /// can't eliminate either of them as they must be observable
-/// so perform a copy instead of the parent operation twice.
+/// then perform a copy instead of the parent operation twice.
 #[derive(Debug, PartialEq)]
 pub struct CopyOp(pub TType);
 
@@ -23,7 +23,7 @@ impl OpType for CopyOp {
         vec![self.0]
     }
 
-    fn evaluate(&self, inputs: &[&TValue], outputs: &mut [&mut TValue]) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
@@ -51,7 +51,7 @@ mod tests {
         let a = TValue::F32(vec![1.0; 4]);
         let mut b = TValue::F32(vec![0.0; 4]);
 
-        CopyOp(TType::new(Size::variable(), DType::F32)).evaluate(&[&a], &mut [&mut b]);
+        CopyOp(TType::new(Size::variable(), DType::F32)).evaluate(vec![&a], vec![&mut b]);
 
         assert_eq!(b, TValue::F32(vec![1.0; 4]));
     }
