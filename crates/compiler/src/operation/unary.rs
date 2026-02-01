@@ -58,7 +58,7 @@ impl Unary {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnaryOp {
     ty: TType,
     op: Unary,

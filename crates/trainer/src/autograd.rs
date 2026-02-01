@@ -1,7 +1,4 @@
-mod binary;
-mod broadcast;
-mod reduce;
-mod unary;
+mod core;
 
 use std::{
     cell::RefCell,
@@ -28,6 +25,32 @@ pub trait Autograd: std::any::Any + fmt::Debug + 'static {
     fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>>;
 
     fn equals(&self, other: &Rc<dyn Autograd>) -> bool;
+}
+
+pub trait AutogradOnCoreOp: Clone + OpType + PartialEq {
+    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>>;
+}
+
+impl<T: AutogradOnCoreOp> Autograd for T {
+    fn opname(&self) -> String {
+        <T as OpType>::opname(self)
+    }
+
+    fn inputs(&self) -> Vec<TType> {
+        <T as OpType>::inputs(self)
+    }
+
+    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Vec<IRNode<'a>> {
+        inputs[0].builder().add_op(inputs, self.clone())
+    }
+
+    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>> {
+        <T as AutogradOnCoreOp>::backward(self, inputs, output_grads)
+    }
+
+    fn equals(&self, other: &Rc<dyn Autograd>) -> bool {
+        if let Some(other) = AutogradOp::downcast_rc(other) { self == other } else { false }
+    }
 }
 
 #[derive(Clone, Debug)]

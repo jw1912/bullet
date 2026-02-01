@@ -40,7 +40,7 @@ impl CABinary {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CABinaryOp {
     ty: TType,
     op: CABinary,
