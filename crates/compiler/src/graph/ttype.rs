@@ -318,7 +318,7 @@ impl From<DValue> for TValue {
 }
 
 impl TValue {
-    pub fn new(dtype: DType, size: usize) -> Self {
+    pub fn zeros(dtype: DType, size: usize) -> Self {
         match dtype {
             DType::F32 => Self::F32(vec![0.0; size]),
             DType::I32 => Self::I32(vec![0; size]),

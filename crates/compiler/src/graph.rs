@@ -324,7 +324,7 @@ impl Graph {
             for &output in op.outputs() {
                 let ty = self.get_node(output)?.ty();
                 let size = ty.size().evaluate(var);
-                let tensor = TValue::new(ty.dtype(), size);
+                let tensor = TValue::zeros(ty.dtype(), size);
                 let is_prev = values.contains_key(&output);
 
                 if !op.is_input() {

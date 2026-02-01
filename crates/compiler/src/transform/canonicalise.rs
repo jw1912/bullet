@@ -108,7 +108,7 @@ impl CanonicalisePass {
             let mut tensors = Vec::new();
             for &ty in &op.outputs() {
                 if let Some(size) = ty.size().evaluate_constant() {
-                    tensors.push(TValue::new(ty.dtype(), size));
+                    tensors.push(TValue::zeros(ty.dtype(), size));
                 } else {
                     return Ok(None);
                 }
