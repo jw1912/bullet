@@ -79,7 +79,7 @@ mod tests {
         let sub_a = builder.add_input(ttype.size(), ttype.dtype());
         let sub_b = builder.add_input(ttype.size(), ttype.dtype());
         let sub_x = builder.add_input(ttype.size(), ttype.dtype());
-        let sub_y = sub_a * sub_x + sub_b;
+        let sub_y = ((sub_a * sub_x)? + sub_b)?;
         let graph = builder.build([sub_x, sub_y]).graph();
         let subgraph =
             SubGraph::new(graph, vec![sub_a.node(), sub_b.node(), sub_x.node()], vec![sub_x.node(), sub_y.node()]);

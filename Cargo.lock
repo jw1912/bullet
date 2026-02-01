@@ -68,6 +68,9 @@ version = "0.1.0"
 [[package]]
 name = "bullet-runtime"
 version = "0.1.0"
+dependencies = [
+ "bullet-compiler",
+]
 
 [[package]]
 name = "bullet-trainer"

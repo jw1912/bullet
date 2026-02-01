@@ -31,9 +31,9 @@ mod tests {
         let weights = builder.constant(TValue::F32(vec![1.0; 8]));
         let bias = builder.constant(TValue::F32(vec![1.0]));
 
-        let prediction = (weights * inputs).reduce_sum([8], 0) + bias;
-        let diff = prediction - target;
-        let loss = diff * diff;
+        let prediction = ((weights * inputs)?.reduce_sum([8], 0)? + bias)?;
+        let diff = (prediction - target)?;
+        let loss = (diff * diff)?;
 
         let mut program = builder.build([prediction, loss]);
 
@@ -55,7 +55,7 @@ mod tests {
         let c = builder.add_input(1, DType::F32);
         let d = builder.add_input(1, DType::F32);
 
-        let out = (a * c + a * d) + (b * c + b * d);
+        let out = (((a * c)? + (a * d)?)? + ((b * c)? + (b * d)?)?)?;
 
         let mut program = builder.build([out]);
 

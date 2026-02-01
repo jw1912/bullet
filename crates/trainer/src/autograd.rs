@@ -1,4 +1,4 @@
-mod core;
+mod core_ops;
 
 use std::{
     cell::RefCell,
@@ -9,7 +9,7 @@ use std::{
 
 use bullet_compiler::{
     IR, IRTrace,
-    graph::{GraphError, NodeId, Op, OpId, OpType, TType, TValue},
+    graph::{NodeId, Op, OpId, OpType, TType, TValue},
     operation::{CABinary, SubGraph},
     prelude::{IRBuilder, IRNode},
     transform::{IRTransform, modify::AddOperation},
@@ -20,15 +20,23 @@ pub trait Autograd: std::any::Any + fmt::Debug + 'static {
 
     fn inputs(&self) -> Vec<TType>;
 
-    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Vec<IRNode<'a>>;
+    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Result<Vec<IRNode<'a>>, IRTrace>;
 
-    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>>;
+    fn backward<'a>(
+        &self,
+        inputs: Vec<IRNode<'a>>,
+        output_grads: Vec<IRNode<'a>>,
+    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace>;
 
     fn equals(&self, other: &Rc<dyn Autograd>) -> bool;
 }
 
 pub trait AutogradOnCoreOp: Clone + OpType + PartialEq {
-    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>>;
+    fn backward<'a>(
+        &self,
+        inputs: Vec<IRNode<'a>>,
+        output_grads: Vec<IRNode<'a>>,
+    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace>;
 }
 
 impl<T: AutogradOnCoreOp> Autograd for T {
@@ -40,11 +48,15 @@ impl<T: AutogradOnCoreOp> Autograd for T {
         <T as OpType>::inputs(self)
     }
 
-    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Vec<IRNode<'a>> {
+    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Result<Vec<IRNode<'a>>, IRTrace> {
         inputs[0].builder().add_op(inputs, self.clone())
     }
 
-    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>> {
+    fn backward<'a>(
+        &self,
+        inputs: Vec<IRNode<'a>>,
+        output_grads: Vec<IRNode<'a>>,
+    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
         <T as AutogradOnCoreOp>::backward(self, inputs, output_grads)
     }
 
@@ -69,12 +81,12 @@ impl AutogradOp {
         Self::downcast_rc::<T>(&self.op)
     }
 
-    pub fn new(op: impl Autograd + 'static) -> Result<Self, GraphError> {
+    pub fn new(op: impl Autograd + 'static) -> Result<Self, IRTrace> {
         let op_inputs = op.inputs();
 
         let builder = IRBuilder::default();
         let inputs = op_inputs.iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
-        let outputs = op.forward(inputs.clone());
+        let outputs = op.forward(inputs.clone())?;
         let forward = builder.build(&outputs).graph();
         let inputs = inputs.iter().map(IRNode::node).collect();
         let outputs = outputs.iter().map(IRNode::node).collect();
@@ -155,6 +167,7 @@ impl IRTransform for TakeGradient {
             if let Some(AutogradOp { op, .. }) = operation.downcast() {
                 let op_ograds = operation.outputs().iter().map(|i| grads.get(i).unwrap().unwrap()).collect::<Vec<_>>();
 
+                // create backwards subgraph
                 let builder = IRBuilder::default();
                 let inputs = op.inputs().iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
                 let ograds = op_ograds
@@ -165,8 +178,10 @@ impl IRTransform for TakeGradient {
                     })
                     .collect::<Vec<_>>();
 
-                let igrads = op.backward(inputs.clone(), ograds.clone());
+                let igrads = op.backward(inputs.clone(), ograds.clone())?;
 
+                // handle not all inputs having gradient and multiple
+                // multiple inputs having the same gradient
                 let mut igrad_map = HashMap::new();
                 let mut unique_igrads = Vec::new();
                 let mut present_igrads = HashSet::new();
@@ -181,15 +196,14 @@ impl IRTransform for TakeGradient {
 
                 let backward = builder.build(&unique_igrads).graph();
 
+                // add backwards subgraph to IR
                 let subgraph_inputs = [inputs, ograds].concat().iter().map(IRNode::node).collect();
                 let subgraph_outputs: Vec<_> = unique_igrads.iter().map(IRNode::node).collect();
                 let subgraph = SubGraph::new(backward, subgraph_inputs, subgraph_outputs.clone())?;
-
                 let new_grads = ir.add_op([operation.inputs(), &op_ograds].concat(), Ok::<_, IRTrace>(subgraph))?;
 
-                let subgraph_map: HashMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
-
                 // accumulate gradients in actual graph
+                let subgraph_map: HashMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
                 for (input, new_grad_subgraph) in igrad_map {
                     if let Some(subgraph_index) = new_grad_subgraph {
                         let old_grad = grads.get_mut(&input).unwrap();

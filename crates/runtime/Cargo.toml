@@ -8,7 +8,5 @@ readme = { workspace = true }
 rust-version = { workspace = true }
 edition = { workspace = true }
 
-[features]
-default = ["cuda", "hip"]
-cuda = []
-hip = []
+[dependencies]
+bullet-compiler = { workspace = true }

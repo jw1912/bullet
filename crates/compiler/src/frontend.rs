@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{
-    IR,
+    IR, IRTrace,
     graph::{DType, DValue, GraphError, NodeId, OpType, Shape, Size, TType, TValue},
     operation::{BroadcastAcrossDimension, CABinary, ReduceAcrossDimension, Reduction, Unary},
 };
@@ -16,10 +16,10 @@ impl IRBuilder {
         IRNode::new(self, node)
     }
 
-    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[IRNode<'a>]>, op: impl OpType) -> Vec<IRNode<'a>> {
+    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[IRNode<'a>]>, op: impl OpType) -> Result<Vec<IRNode<'a>>, IRTrace> {
         let ids = inputs.as_ref().iter().map(IRNode::node).collect::<Vec<_>>();
         let outs = self.ir.borrow_mut().add_op(ids, Ok::<_, GraphError>(op)).unwrap();
-        outs.into_iter().map(|out| self.new_node(out)).collect()
+        Ok(outs.into_iter().map(|out| self.new_node(out)).collect())
     }
 
     pub fn add_input<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> IRNode<'a> {
@@ -75,43 +75,43 @@ impl<'a> IRNode<'a> {
         self.builder.ir.borrow().get_node(self.node).unwrap().ty()
     }
 
-    pub fn broadcast(self, shape: impl Into<Shape>, dim: usize, repeats: impl Into<Size>) -> Self {
-        let op = BroadcastAcrossDimension::new(self.ty().dtype(), shape, dim, repeats).unwrap();
-        self.builder.add_op([self], op)[0]
+    pub fn broadcast(self, shape: impl Into<Shape>, dim: usize, repeats: impl Into<Size>) -> Result<Self, IRTrace> {
+        let op = BroadcastAcrossDimension::new(self.ty().dtype(), shape, dim, repeats)?;
+        self.builder.add_op([self], op).map(|x| x[0])
     }
 
-    fn reduce(self, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Self {
-        let op = ReduceAcrossDimension::new(self.ty().dtype(), shape, dim, reduction).unwrap();
-        self.builder.add_op([self], op)[0]
+    fn reduce(self, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Result<Self, IRTrace> {
+        let op = ReduceAcrossDimension::new(self.ty().dtype(), shape, dim, reduction)?;
+        self.builder.add_op([self], op).map(|x| x[0])
     }
 
-    pub fn reduce_sum(self, shape: impl Into<Shape>, dim: usize) -> Self {
+    pub fn reduce_sum(self, shape: impl Into<Shape>, dim: usize) -> Result<Self, IRTrace> {
         self.reduce(shape, dim, Reduction::Sum)
     }
 
-    pub fn reduce_min(self, shape: impl Into<Shape>, dim: usize) -> Self {
+    pub fn reduce_min(self, shape: impl Into<Shape>, dim: usize) -> Result<Self, IRTrace> {
         self.reduce(shape, dim, Reduction::Min)
     }
 
-    pub fn reduce_max(self, shape: impl Into<Shape>, dim: usize) -> Self {
+    pub fn reduce_max(self, shape: impl Into<Shape>, dim: usize) -> Result<Self, IRTrace> {
         self.reduce(shape, dim, Reduction::Max)
     }
 
-    pub fn unary(self, op: Unary) -> Self {
-        let node = self.builder.ir.borrow_mut().add_unary(self.node, op).unwrap();
-        Self { builder: self.builder, node }
+    pub fn unary(self, op: Unary) -> Result<Self, IRTrace> {
+        let node = self.builder.ir.borrow_mut().add_unary(self.node, op)?;
+        Ok(Self { builder: self.builder, node })
     }
 
-    pub fn binary(self, rhs: Self, op: CABinary) -> Self {
-        let node = self.builder.ir.borrow_mut().add_binary(self.node, rhs.node, op).unwrap();
-        Self { builder: self.builder, node }
+    pub fn binary(self, rhs: Self, op: CABinary) -> Result<Self, IRTrace> {
+        let node = self.builder.ir.borrow_mut().add_binary(self.node, rhs.node, op)?;
+        Ok(Self { builder: self.builder, node })
     }
 }
 
 macro_rules! binary_impl {
     ($stdop:ident, $fnname:ident, $mapop:ident) => {
         impl<'a> std::ops::$stdop<IRNode<'a>> for IRNode<'a> {
-            type Output = IRNode<'a>;
+            type Output = Result<IRNode<'a>, IRTrace>;
 
             fn $fnname(self, rhs: IRNode<'a>) -> Self::Output {
                 self.binary(rhs, CABinary::$mapop)
@@ -126,7 +126,7 @@ binary_impl!(Add, add, Add);
 macro_rules! unary_impl {
     ($fnname:ident, $mapop:ident) => {
         impl<'a> IRNode<'a> {
-            pub fn $fnname(self) -> Self {
+            pub fn $fnname(self) -> Result<Self, IRTrace> {
                 self.unary(Unary::$mapop)
             }
         }
@@ -147,7 +147,7 @@ unary_impl!(abs, Abs);
 macro_rules! binary_const_impl {
     ($stdop:ident, $fnname:ident, $mapop:ident, $t:ty) => {
         impl<'a> std::ops::$stdop<$t> for IRNode<'a> {
-            type Output = IRNode<'a>;
+            type Output = Result<IRNode<'a>, IRTrace>;
 
             fn $fnname(self, rhs: $t) -> Self::Output {
                 let scalar = self.builder.scalar(rhs, self.ty().size());
@@ -156,7 +156,7 @@ macro_rules! binary_const_impl {
         }
 
         impl<'a> std::ops::$stdop<IRNode<'a>> for $t {
-            type Output = IRNode<'a>;
+            type Output = Result<IRNode<'a>, IRTrace>;
 
             fn $fnname(self, rhs: IRNode<'a>) -> Self::Output {
                 let lhs = rhs.builder.scalar(self, rhs.ty().size());
@@ -172,7 +172,7 @@ binary_const_impl!(Mul, mul, Mul, i32);
 binary_const_impl!(Add, add, Add, i32);
 
 impl std::ops::Neg for IRNode<'_> {
-    type Output = Self;
+    type Output = Result<Self, IRTrace>;
 
     fn neg(self) -> Self::Output {
         match self.ty().dtype() {
@@ -184,39 +184,47 @@ impl std::ops::Neg for IRNode<'_> {
 
 impl<T> std::ops::Sub<T> for IRNode<'_>
 where
-    Self: std::ops::Add<T, Output = Self>,
+    Self: std::ops::Add<T, Output = Result<Self, IRTrace>>,
     T: std::ops::Neg<Output = T>,
 {
-    type Output = Self;
+    type Output = Result<Self, IRTrace>;
 
-    fn sub(self, rhs: T) -> Self {
+    fn sub(self, rhs: T) -> Self::Output {
         self + (-rhs)
+    }
+}
+
+impl std::ops::Sub<Self> for IRNode<'_> {
+    type Output = Result<Self, IRTrace>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self + (-rhs)?
     }
 }
 
 impl<'a> std::ops::Sub<IRNode<'a>> for i32 {
-    type Output = IRNode<'a>;
+    type Output = Result<IRNode<'a>, IRTrace>;
 
     fn sub(self, rhs: IRNode<'a>) -> Self::Output {
-        self + (-rhs)
+        self + (-rhs)?
     }
 }
 
 impl<'a> std::ops::Sub<IRNode<'a>> for f32 {
-    type Output = IRNode<'a>;
+    type Output = Result<IRNode<'a>, IRTrace>;
 
     fn sub(self, rhs: IRNode<'a>) -> Self::Output {
-        self + (-rhs)
+        self + (-rhs)?
     }
 }
 
 #[allow(clippy::suspicious_arithmetic_impl)]
 impl std::ops::Div<Self> for IRNode<'_> {
-    type Output = Self;
+    type Output = Result<Self, IRTrace>;
 
-    fn div(self, rhs: Self) -> Self {
+    fn div(self, rhs: Self) -> Self::Output {
         match rhs.ty().dtype() {
-            DType::F32 => self * rhs.unary(Unary::Reciprocal),
+            DType::F32 => self * rhs.unary(Unary::Reciprocal)?,
             DType::I32 => unimplemented!(),
         }
     }
@@ -224,17 +232,17 @@ impl std::ops::Div<Self> for IRNode<'_> {
 
 #[allow(clippy::suspicious_arithmetic_impl)]
 impl<'a> std::ops::Div<IRNode<'a>> for f32 {
-    type Output = IRNode<'a>;
+    type Output = Result<IRNode<'a>, IRTrace>;
 
     fn div(self, rhs: IRNode<'a>) -> Self::Output {
-        self * rhs.unary(Unary::Reciprocal)
+        self * rhs.unary(Unary::Reciprocal)?
     }
 }
 
 impl std::ops::Div<f32> for IRNode<'_> {
-    type Output = Self;
+    type Output = Result<Self, IRTrace>;
 
-    fn div(self, rhs: f32) -> Self {
+    fn div(self, rhs: f32) -> Self::Output {
         self * (1.0 / rhs)
     }
 }
@@ -244,15 +252,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basic_usage() {
+    fn basic_usage() -> Result<(), IRTrace> {
         let builder = IRBuilder::default();
 
         let x = builder.add_input(8, DType::F32);
         let a = builder.add_input(8, DType::F32);
         let b = builder.add_input(8, DType::F32);
 
-        let y = a * x + b;
+        let y = ((a * x)? + b)?;
 
         let _program = builder.build([y]);
+
+        Ok(())
     }
 }
