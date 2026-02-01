@@ -1,7 +1,7 @@
 use bullet_compiler::prelude::*;
 
 fn main() {
-    let builder = ProgramBuilder::default();
+    let builder = IRBuilder::default();
 
     let batch = Size::variable();
 

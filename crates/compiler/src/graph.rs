@@ -84,7 +84,7 @@ impl Graph {
     pub fn is_input(&self, node: NodeId) -> bool {
         let Ok(id) = self.get_parent_op(node) else { return false };
         let Ok(op) = self.get_op(id) else { return false };
-        op.downcast::<Input>().is_some()
+        op.is_input()
     }
 
     #[must_use]
@@ -219,7 +219,7 @@ impl Graph {
         for output in self.get_op(id)?.outputs().to_vec() {
             let node = self.nodes.remove(&output).expect("Node must be present `nodes`!");
 
-            check(node.children() == 0, "node has children")?;
+            check(node.children() == 0, format!("node {node:?} has children"))?;
             check(!self.is_output(output), "node is required")?;
 
             let op_id = self.links.remove(&output).expect("Node must be present `links`!");
@@ -300,7 +300,7 @@ impl Graph {
 
         for (id, tensor) in &values {
             let op = self.get_op(self.get_parent_op(*id)?)?;
-            if op.downcast::<Input>().is_none() {
+            if !op.is_input() {
                 return Err("Seeded non-leaf node!".into());
             }
 
@@ -327,7 +327,7 @@ impl Graph {
                 let tensor = TValue::new(ty.dtype(), size);
                 let is_prev = values.contains_key(&output);
 
-                if op.downcast::<Input>().is_none() {
+                if !op.is_input() {
                     assert!(values.insert(output, RefCell::new(tensor)).is_none(), "Cannot happen!");
                 } else if !is_prev {
                     return Err("Input node not seeded!".into());
@@ -488,7 +488,7 @@ impl fmt::Display for Graph {
         }
 
         write!(f, "irgraph(")?;
-        let leaves = self.ops.values().filter(|x| x.downcast::<Input>().is_some()).collect::<Vec<_>>();
+        let leaves = self.ops.values().filter(|x| x.is_input()).collect::<Vec<_>>();
         let mline = leaves.len() >= 5;
 
         for (i, leaf) in leaves.iter().enumerate() {
@@ -514,7 +514,7 @@ impl fmt::Display for Graph {
         for id in map(self.topo_order_ops())? {
             let op = map(self.get_op(id))?;
 
-            if op.downcast::<Input>().is_some() {
+            if op.is_input() {
                 continue;
             }
 

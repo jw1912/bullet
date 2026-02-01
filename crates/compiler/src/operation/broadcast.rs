@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::graph::{DType, GraphError, Op, OpType, Shape, Size, TType, TValue};
+use crate::{
+    graph::{DType, GraphError, Op, OpType, Shape, Size, TType, TValue},
+    operation::{ReduceAcrossDimension, Reduction},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BroadcastAcrossDimension {
@@ -11,6 +14,10 @@ pub struct BroadcastAcrossDimension {
 }
 
 impl BroadcastAcrossDimension {
+    pub fn invert(&self) -> Result<ReduceAcrossDimension, GraphError> {
+        ReduceAcrossDimension::new(self.dtype, [self.outer, self.repeats, self.inner], 1, Reduction::Sum)
+    }
+
     pub fn new(
         dtype: DType,
         shape: impl Into<Shape>,
@@ -134,6 +141,17 @@ mod tests {
         let TValue::I32(output) = output else { panic!() };
 
         assert_eq!(&output, &expected);
+
+        let inverse = broadcast.invert().unwrap();
+        assert_eq!(broadcast, inverse.invert().unwrap().unwrap());
+
+        let mut inverse_output = TValue::I32(vec![0; INPUT.len()]);
+        inverse.evaluate(vec![&TValue::I32(output)], vec![&mut inverse_output]);
+        let TValue::I32(inverse_output) = inverse_output else { panic!() };
+
+        for (i, j) in INPUT.into_iter().zip(inverse_output) {
+            assert_eq!(i * 2, j);
+        }
     }
 
     #[test]
@@ -159,6 +177,17 @@ mod tests {
         let TValue::I32(output) = output else { panic!() };
 
         assert_eq!(&output, &expected);
+
+        let inverse = broadcast.invert().unwrap();
+        assert_eq!(broadcast, inverse.invert().unwrap().unwrap());
+
+        let mut inverse_output = TValue::I32(vec![0; INPUT.len()]);
+        inverse.evaluate(vec![&TValue::I32(output)], vec![&mut inverse_output]);
+        let TValue::I32(inverse_output) = inverse_output else { panic!() };
+
+        for (i, j) in INPUT.into_iter().zip(inverse_output) {
+            assert_eq!(i * 2, j);
+        }
     }
 
     #[test]

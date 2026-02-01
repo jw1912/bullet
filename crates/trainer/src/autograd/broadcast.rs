@@ -2,13 +2,13 @@ use std::rc::Rc;
 
 use bullet_compiler::{
     graph::{OpType, TType},
-    operation::{CABinary, CABinaryOp},
+    operation::BroadcastAcrossDimension,
     prelude::IRNode,
 };
 
 use crate::autograd::{Autograd, AutogradOp};
 
-impl Autograd for CABinaryOp {
+impl Autograd for BroadcastAcrossDimension {
     fn opname(&self) -> String {
         <Self as OpType>::opname(self)
     }
@@ -22,18 +22,11 @@ impl Autograd for CABinaryOp {
     }
 
     fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Vec<IRNode<'a>> {
-        vec![inputs[0].binary(inputs[1], self.op())]
+        vec![inputs[0].builder().add_op([inputs[0]], *self)[0]]
     }
 
-    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>> {
-        let [grad] = output_grads[..] else { panic!() };
-
-        let (glhs, grhs) = match self.op() {
-            CABinary::Add => (grad, grad),
-            CABinary::Mul => (grad * inputs[1], grad * inputs[0]),
-            _ => unimplemented!(),
-        };
-
-        vec![Some(glhs), Some(grhs)]
+    fn backward<'a>(&self, _inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>> {
+        let op = self.invert().unwrap();
+        vec![Some(output_grads[0].builder().add_op([output_grads[0]], op)[0])]
     }
 }

@@ -1,13 +1,20 @@
 mod binary;
+mod broadcast;
+mod reduce;
 mod unary;
 
-use std::{collections::HashMap, fmt, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt,
+    rc::Rc,
+};
 
 use bullet_compiler::{
     IR, IRTrace,
     graph::{GraphError, NodeId, Op, OpId, OpType, TType, TValue},
     operation::{CABinary, SubGraph},
-    prelude::{ProgramBuilder, ProgramNode},
+    prelude::{IRBuilder, IRNode},
     transform::{IRTransform, modify::AddOperation},
 };
 
@@ -16,13 +23,9 @@ pub trait Autograd: std::any::Any + fmt::Debug + 'static {
 
     fn inputs(&self) -> Vec<TType>;
 
-    fn forward<'a>(&self, inputs: &[ProgramNode<'a>]) -> Vec<ProgramNode<'a>>;
+    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Vec<IRNode<'a>>;
 
-    fn backward<'a>(
-        &self,
-        inputs: &[ProgramNode<'a>],
-        output_grads: &[ProgramNode<'a>],
-    ) -> Vec<Option<ProgramNode<'a>>>;
+    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>>;
 
     fn equals(&self, other: &Rc<dyn Autograd>) -> bool;
 }
@@ -46,12 +49,12 @@ impl AutogradOp {
     pub fn new(op: impl Autograd + 'static) -> Result<Self, GraphError> {
         let op_inputs = op.inputs();
 
-        let builder = ProgramBuilder::default();
+        let builder = IRBuilder::default();
         let inputs = op_inputs.iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
-        let outputs = op.forward(&inputs);
+        let outputs = op.forward(inputs.clone());
         let forward = builder.build(&outputs).graph();
-        let inputs = inputs.iter().map(ProgramNode::node).collect();
-        let outputs = outputs.iter().map(ProgramNode::node).collect();
+        let inputs = inputs.iter().map(IRNode::node).collect();
+        let outputs = outputs.iter().map(IRNode::node).collect();
         let forward = SubGraph::new(forward, inputs, outputs)?;
 
         Ok(Self { op: Rc::new(op), forward })
@@ -95,10 +98,20 @@ impl IRTransform for LowerForward {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+type GradientMap = HashMap<NodeId, Option<NodeId>>;
+
+#[derive(Debug, Default)]
 pub struct TakeGradient {
     root: OpId,
     output_grads: Vec<NodeId>,
+    grads: Rc<RefCell<GradientMap>>,
+}
+
+impl TakeGradient {
+    pub fn new(root: OpId, output_grads: impl Into<Vec<NodeId>>) -> (Self, Rc<RefCell<GradientMap>>) {
+        let grads = Rc::<RefCell<GradientMap>>::default();
+        (Self { root, output_grads: output_grads.into(), grads: grads.clone() }, grads)
+    }
 }
 
 impl IRTransform for TakeGradient {
@@ -119,7 +132,7 @@ impl IRTransform for TakeGradient {
             if let Some(AutogradOp { op, .. }) = operation.downcast() {
                 let op_ograds = operation.outputs().iter().map(|i| grads.get(i).unwrap().unwrap()).collect::<Vec<_>>();
 
-                let builder = ProgramBuilder::default();
+                let builder = IRBuilder::default();
                 let inputs = op.inputs().iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
                 let ograds = op_ograds
                     .iter()
@@ -129,22 +142,35 @@ impl IRTransform for TakeGradient {
                     })
                     .collect::<Vec<_>>();
 
-                let igrads = op.backward(&inputs, &ograds);
-                let some_igrads = igrads.iter().cloned().flatten().collect::<Vec<_>>();
-                let backward = builder.build(&some_igrads).graph();
+                let igrads = op.backward(inputs.clone(), ograds.clone());
 
-                let inputs = [inputs, ograds].concat().iter().map(ProgramNode::node).collect();
-                let outputs = some_igrads.iter().map(ProgramNode::node).collect();
-                let subgraph = SubGraph::new(backward, inputs, outputs)?;
+                let mut igrad_map = HashMap::new();
+                let mut unique_igrads = Vec::new();
+                let mut present_igrads = HashSet::new();
+                for (&inp, igrad) in operation.inputs().iter().zip(igrads.iter()) {
+                    igrad_map.insert(inp, igrad.map(|ig| ig.node()));
+                    if let Some(ig) = igrad
+                        && present_igrads.insert(ig.node())
+                    {
+                        unique_igrads.push(*ig);
+                    }
+                }
+
+                let backward = builder.build(&unique_igrads).graph();
+
+                let subgraph_inputs = [inputs, ograds].concat().iter().map(IRNode::node).collect();
+                let subgraph_outputs: Vec<_> = unique_igrads.iter().map(IRNode::node).collect();
+                let subgraph = SubGraph::new(backward, subgraph_inputs, subgraph_outputs.clone())?;
 
                 let new_grads = ir.add_op([operation.inputs(), &op_ograds].concat(), Ok::<_, IRTrace>(subgraph))?;
 
-                let mut i = 0;
-                for (input, new_grad) in operation.inputs().iter().zip(igrads) {
-                    if new_grad.is_some() {
-                        let new_grad = new_grads[i];
-                        i += 1;
-                        let old_grad = grads.get_mut(input).unwrap();
+                let subgraph_map: HashMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
+
+                // accumulate gradients in actual graph
+                for (input, new_grad_subgraph) in igrad_map {
+                    if let Some(subgraph_index) = new_grad_subgraph {
+                        let old_grad = grads.get_mut(&input).unwrap();
+                        let new_grad = *subgraph_map.get(&subgraph_index).unwrap();
 
                         match old_grad {
                             Some(old_grad) => *old_grad = ir.add_binary(*old_grad, new_grad, CABinary::Add)?,
@@ -155,13 +181,19 @@ impl IRTransform for TakeGradient {
             }
         }
 
+        *self.grads.borrow_mut() = grads;
+
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use bullet_compiler::{graph::DType, operation::CABinaryOp, transform::inline::InlineSubgraphs};
+    use bullet_compiler::{
+        graph::{DType, Input},
+        operation::{CABinaryOp, CopyOp},
+        transform::inline::InlineSubgraphs,
+    };
 
     use super::*;
 
@@ -180,11 +212,20 @@ mod tests {
 
         let grad = ir.add_const(TValue::F32(vec![1.0]));
 
-        ir.transform(TakeGradient { root: ir.get_parent_op(y)?, output_grads: vec![grad] })?;
+        let (transform, grads) = TakeGradient::new(ir.get_parent_op(y)?, [grad]);
+        ir.transform(transform)?;
         ir.transform(LowerForward)?;
         ir.transform(InlineSubgraphs)?;
 
-        println!("{ir}");
+        let dydx = grads.borrow().get(&x).unwrap().unwrap();
+        ir.register_output(dydx);
+
+        ir.optimise()?;
+
+        let ops = ir.ordered_operations()?;
+        let mut optys = ops.iter().map(Op::op);
+        assert!(Op::downcast_rc::<Input>(optys.next().unwrap()).is_some());
+        assert!(Op::downcast_rc::<CopyOp>(optys.next().unwrap()).is_some());
 
         Ok(())
     }

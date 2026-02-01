@@ -6,7 +6,7 @@ pub mod utils;
 
 pub mod prelude {
     pub use crate::{
-        frontend::{ProgramBuilder, ProgramNode},
+        frontend::{IRBuilder, IRNode},
         graph::{DType, DValue, Shape, Size, TType, TValue},
     };
 }
@@ -88,10 +88,7 @@ impl IR {
         let mut count = 0;
 
         for op in self.ordered_operations()? {
-            if op.downcast::<Input>().is_none()
-                && op.downcast::<Constant>().is_none()
-                && op.downcast::<ScalarConstant>().is_none()
-            {
+            if !op.is_input() && op.downcast::<Constant>().is_none() && op.downcast::<ScalarConstant>().is_none() {
                 count += 1;
             }
         }
@@ -166,6 +163,15 @@ impl IR {
         self.graph.register_output(node);
     }
 
+    pub fn add_dyn_op(
+        &mut self,
+        inputs: impl AsRef<[NodeId]>,
+        op: Result<Rc<dyn OpType>, IRTrace>,
+    ) -> Result<Vec<NodeId>, IRTrace> {
+        let inputs = inputs.as_ref().to_vec();
+        self.transform(AddOperation(inputs, op)).map(|_| self.most_recent.clone())
+    }
+
     pub fn add_op(
         &mut self,
         inputs: impl AsRef<[NodeId]>,
@@ -175,10 +181,9 @@ impl IR {
             Rc::new(x)
         }
 
-        let inputs = inputs.as_ref().to_vec();
         let op = op.map(convert).map_err(|e| e.into());
 
-        self.transform(AddOperation(inputs, op)).map(|_| self.most_recent.clone())
+        self.add_dyn_op(inputs, op)
     }
 
     #[must_use]

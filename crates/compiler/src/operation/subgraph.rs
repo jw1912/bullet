@@ -40,6 +40,18 @@ impl SubGraph {
 
         Ok(Self { graph, inputs, outputs })
     }
+
+    pub fn internal_graph(&self) -> &Graph {
+        &self.graph
+    }
+
+    pub fn internal_inputs(&self) -> &[NodeId] {
+        &self.inputs
+    }
+
+    pub fn internal_outputs(&self) -> &[NodeId] {
+        &self.outputs
+    }
 }
 
 impl OpType for SubGraph {

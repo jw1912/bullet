@@ -136,6 +136,10 @@ impl Op {
     pub fn downcast<T: OpType>(&self) -> Option<&T> {
         Self::downcast_rc::<T>(&self.op)
     }
+
+    pub fn is_input(&self) -> bool {
+        self.downcast::<Input>().is_some()
+    }
 }
 
 #[derive(Debug)]

@@ -1,6 +1,9 @@
 use std::{cmp::Ordering, ops::Add, rc::Rc};
 
-use crate::graph::{DType, GraphError, Op, OpType, Shape, Size, TType, TValue};
+use crate::{
+    graph::{DType, GraphError, Op, OpType, Shape, Size, TType, TValue},
+    operation::BroadcastAcrossDimension,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reduction {
@@ -40,6 +43,14 @@ pub struct ReduceAcrossDimension {
 }
 
 impl ReduceAcrossDimension {
+    pub fn invert(&self) -> Result<Option<BroadcastAcrossDimension>, GraphError> {
+        if let Reduction::Sum = self.reduction {
+            Ok(Some(BroadcastAcrossDimension::new(self.dtype, [self.outer, self.inner], 1, self.dimen)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn new(dtype: DType, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Result<Self, GraphError> {
         let shape = shape.into();
         let shape_dim = shape.dim();
@@ -151,11 +162,13 @@ mod tests {
 
         reduction.evaluate(vec![&input], vec![&mut output]);
 
-        let TValue::I32(output) = output else { panic!() };
-
         let expected = std::array::from_fn::<_, M, _>(|i| expected(i) as i32);
 
-        assert_eq!(&output, &expected);
+        assert_eq!(&output, &TValue::I32(expected.to_vec()));
+
+        if let Reduction::Sum = reduction.reduction {
+            assert_eq!(reduction, reduction.invert().unwrap().unwrap().invert().unwrap());
+        }
     }
 
     #[test]

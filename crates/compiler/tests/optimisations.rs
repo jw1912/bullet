@@ -5,7 +5,7 @@ use bullet_compiler::{
 
 #[test]
 fn constant_fold_all() -> Result<(), IRTrace> {
-    let builder = ProgramBuilder::default();
+    let builder = IRBuilder::default();
 
     let inputs = builder.constant(TValue::F32(vec![1.0; 8]));
     let target = builder.constant(TValue::F32(vec![1.0]));
@@ -30,7 +30,7 @@ fn constant_fold_all() -> Result<(), IRTrace> {
 
 #[test]
 fn factorise_exprs() -> Result<(), IRTrace> {
-    let builder = ProgramBuilder::default();
+    let builder = IRBuilder::default();
 
     let a = builder.add_input(1, DType::F32);
     let b = builder.add_input(1, DType::F32);

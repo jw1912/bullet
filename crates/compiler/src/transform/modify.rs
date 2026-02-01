@@ -42,6 +42,10 @@ pub struct SwapOutputs(pub NodeId, pub NodeId);
 
 impl IRTransform for SwapOutputs {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        if self.0 == self.1 {
+            return Ok(());
+        }
+
         ir.graph.swap_outputs_unchecked(self.0, self.1)?;
         ir.check_valid()
     }
@@ -55,6 +59,10 @@ pub struct ReplaceInput {
 
 impl IRTransform for ReplaceInput {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+        if self.new == self.old {
+            return Ok(());
+        }
+
         ir.graph.replace_input_unchecked(self.new, self.old)?;
         ir.check_valid()
     }

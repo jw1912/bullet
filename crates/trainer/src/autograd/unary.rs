@@ -3,7 +3,7 @@ use std::rc::Rc;
 use bullet_compiler::{
     graph::{DValue, OpType, TType},
     operation::{Unary, UnaryOp},
-    prelude::ProgramNode,
+    prelude::IRNode,
 };
 
 use crate::autograd::{Autograd, AutogradOp};
@@ -21,15 +21,11 @@ impl Autograd for UnaryOp {
         if let Some(other) = AutogradOp::downcast_rc(other) { self == other } else { false }
     }
 
-    fn forward<'a>(&self, inputs: &[ProgramNode<'a>]) -> Vec<ProgramNode<'a>> {
+    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Vec<IRNode<'a>> {
         vec![inputs[0].unary(self.op())]
     }
 
-    fn backward<'a>(
-        &self,
-        inputs: &[ProgramNode<'a>],
-        output_grads: &[ProgramNode<'a>],
-    ) -> Vec<Option<ProgramNode<'a>>> {
+    fn backward<'a>(&self, inputs: Vec<IRNode<'a>>, output_grads: Vec<IRNode<'a>>) -> Vec<Option<IRNode<'a>>> {
         let grad = output_grads[0];
         let input = inputs[0];
 
@@ -45,7 +41,7 @@ impl Autograd for UnaryOp {
             Unary::Log => input.unary(Unary::Reciprocal),
             Unary::Sgn => {
                 let zero = DValue::zero(input.ty().dtype());
-                input.make_scalar(zero, input.ty().size())
+                input.builder().scalar(zero, input.ty().size())
             }
             Unary::Cast(_) => grad,
             _ => unimplemented!(),
