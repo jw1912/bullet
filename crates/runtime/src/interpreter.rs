@@ -36,25 +36,25 @@ impl Stream for Interpreter {
     ) -> Result<SyncOnDrop<Self, Vec<TensorRef<Self>>>, Self::Error> {
         let mut inputs = HashMap::new();
 
+        let get = |x| graph.tensors().get(x).ok_or::<GraphError>("Name not present!".into());
+
         for (name, tensor) in &tensors {
-            let input = graph.inputs().get(name).ok_or::<GraphError>("Name not present!".into())?;
+            let input = get(name)?;
             let value = tensor.buf().lock().map_err(|e| format!("{e:?}"))?.clone();
 
-            let err = match input {
+            if match input {
                 TensorInput::In(input) => inputs.insert(*input, value).is_some(),
                 TensorInput::InOut(input, _) => inputs.insert(*input, value).is_some(),
                 TensorInput::Out(_) => false,
-            };
-
-            if err {
+            } {
                 return Err("Input already present!".into());
             }
         }
 
-        let outputs = graph.graph().evaluate(inputs)?;
+        let outputs = graph.ir().evaluate(inputs)?;
 
         for (name, tensor) in &tensors {
-            let input = graph.inputs().get(name).ok_or::<GraphError>("Name not present!".into())?;
+            let input = get(name)?;
 
             if let Some(out) = match input {
                 TensorInput::InOut(_, output) => Some(output),

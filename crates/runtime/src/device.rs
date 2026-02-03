@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use bullet_compiler::graph::{DType, Graph, GraphError, NodeId, TValue};
+use bullet_compiler::{
+    IR, IRTrace,
+    graph::{DType, NodeId, TValue},
+};
 
 /// Ensures required objects for async operations are not
 /// dropped before the operation is completed (by syncing)
@@ -88,22 +91,22 @@ pub trait Device {
 }
 
 pub struct ReadyToCompileGraph {
-    graph: Graph,
-    inputs: HashMap<String, TensorInput>,
+    ir: IR,
+    tensors: HashMap<String, TensorInput>,
 }
 
 impl ReadyToCompileGraph {
-    pub fn new(graph: Graph, inputs: HashMap<String, TensorInput>) -> Result<ReadyToCompileGraph, GraphError> {
+    pub fn new(ir: IR, tensors: HashMap<String, TensorInput>) -> Result<ReadyToCompileGraph, IRTrace> {
         let mut present = HashSet::new();
 
-        for value in inputs.values() {
+        for value in tensors.values() {
             match value {
                 TensorInput::In(input) => {
                     if !present.insert(input) {
                         return Err("Node already accounted for!".into());
                     }
 
-                    if !graph.is_input(*input) {
+                    if !ir.is_input(*input)? {
                         return Err("Node is not input!".into());
                     }
                 }
@@ -112,7 +115,7 @@ impl ReadyToCompileGraph {
                         return Err("Node already accounted for!".into());
                     }
 
-                    if !graph.is_output(*output) {
+                    if !ir.is_output(*output) {
                         return Err("Node is not output!".into());
                     }
                 }
@@ -121,29 +124,29 @@ impl ReadyToCompileGraph {
                         return Err("Node already accounted for!".into());
                     }
 
-                    if !graph.is_input(*input) {
+                    if !ir.is_input(*input)? {
                         return Err("Node is not input!".into());
                     }
 
-                    if !graph.is_output(*output) {
+                    if !ir.is_output(*output) {
                         return Err("Node is not output!".into());
                     }
 
-                    if graph.get_node(*input)?.ty() != graph.get_node(*output)?.ty() {
+                    if ir.get_node(*input)?.ty() != ir.get_node(*output)?.ty() {
                         return Err("Mismatched node types!".into());
                     }
                 }
             }
         }
 
-        Ok(Self { graph, inputs })
+        Ok(Self { ir, tensors })
     }
 
-    pub fn graph(&self) -> &Graph {
-        &self.graph
+    pub fn ir(&self) -> &IR {
+        &self.ir
     }
 
-    pub fn inputs(&self) -> &HashMap<String, TensorInput> {
-        &self.inputs
+    pub fn tensors(&self) -> &HashMap<String, TensorInput> {
+        &self.tensors
     }
 }
