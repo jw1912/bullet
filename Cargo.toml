@@ -3,7 +3,7 @@ authors = ["Jamie Whiting"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/jw1912/bullet"
-rust-version = "1.86"
+rust-version = "1.87"
 edition = "2024"
 
 [workspace]
@@ -14,9 +14,15 @@ members = [
     "crates/bullet_hip_backend",
     "crates/bullet_lib",
     "crates/bullet_utils",
+    "crates/compiler",
+    "crates/runtime",
+    "crates/trainer",
 ]
 
 [workspace.dependencies]
+bullet-compiler = { path = "crates/compiler", version = "0.1.0" }
+bullet-runtime = { path = "crates/runtime", version = "0.1.0" }
+bullet-trainer = { path = "crates/trainer", version = "0.1.0" }
 acyclib = { path = "crates/acyclib", version = "0.3.0" }
 bullet_hip_backend = { path = "crates/bullet_hip_backend", version = "0.1.0" }
 bullet_cuda_backend = { path = "crates/bullet_cuda_backend", version = "0.1.0" }

@@ -4,7 +4,7 @@ use std::{
 };
 
 fn main() {
-    if !cfg!(feature = "gh-actions") {
+    if cfg!(feature = "build") {
         let out_path = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
 
         println!("cargo:rerun-if-changed=./kernels");
