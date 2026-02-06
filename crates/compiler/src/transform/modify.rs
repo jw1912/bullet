@@ -1,4 +1,4 @@
-use std::{fmt, rc::Rc};
+use std::{cell::RefCell, fmt, rc::Rc};
 
 use crate::{
     IR, IRTrace,
@@ -7,23 +7,36 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct AddOperation(pub Vec<NodeId>, pub Result<Rc<dyn OpType>, IRTrace>);
+pub struct AddOperation {
+    inputs: Vec<NodeId>,
+    operation: Result<Rc<dyn OpType>, IRTrace>,
+    outputs: Rc<RefCell<Vec<NodeId>>>,
+}
+
+impl AddOperation {
+    pub fn new(inputs: impl Into<Vec<NodeId>>, operation: Result<Rc<dyn OpType>, IRTrace>) -> Self {
+        Self { inputs: inputs.into(), operation, outputs: Rc::default() }
+    }
+
+    pub fn outputs(&self) -> Vec<NodeId> {
+        self.outputs.borrow().clone()
+    }
+}
 
 impl fmt::Debug for AddOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let frame = self.1.as_ref().map(|frame| format!("{frame:?}")).unwrap_or_else(|err| {
+        let frame = self.operation.as_ref().map(|frame| format!("{frame:?}")).unwrap_or_else(|err| {
             let mut s = String::new();
             err.frame(&mut s).unwrap();
             s
         });
-        write!(f, "AddOperation({:?}, {frame})", self.0)
+        write!(f, "AddOperation({:?}, {frame})", self.inputs)
     }
 }
 
 impl IRTransform for AddOperation {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
-        let output = ir.graph.add_op_dyn(&self.0, self.1.clone()?)?;
-        ir.most_recent = output;
+        *self.outputs.borrow_mut() = ir.graph.add_op_dyn(&self.inputs, self.operation.clone()?)?;
         Ok(())
     }
 }
@@ -74,7 +87,7 @@ pub struct ReplaceOperation(pub OpId, pub AddOperation);
 impl IRTransform for ReplaceOperation {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         ir.transform(self.1.clone())?;
-        let new_outputs = ir.most_recent.clone();
+        let new_outputs = self.1.outputs();
         let old = ir.get_op_mut(self.0)?;
 
         for (new, old) in new_outputs.into_iter().zip(old.outputs().to_vec()) {

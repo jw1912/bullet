@@ -64,7 +64,7 @@ macro_rules! foldrule {
                         ({
                             let new_op = $new_op;
                             let new_inputs = vec![$($output.id()),*];
-                            return Ok(Some(AddOperation(new_inputs, Ok(Rc::new(new_op)))));
+                            return Ok(Some(AddOperation::new(new_inputs, Ok(Rc::new(new_op)))));
                         })
                         ($($($cond)*)?)
                     }

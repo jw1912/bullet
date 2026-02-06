@@ -1,4 +1,5 @@
-mod core_ops;
+mod elementwise;
+mod linear;
 
 use std::{
     cell::RefCell,
@@ -125,7 +126,7 @@ impl IRTransform for LowerForward {
     fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
         for op in ir.operations() {
             if let Some(AutogradOp { forward, .. }) = op.downcast().cloned() {
-                ir.replace_op(op.id(), AddOperation(op.inputs().to_vec(), Ok(Rc::new(forward))))?;
+                ir.replace_op(op.id(), AddOperation::new(op.inputs().to_vec(), Ok(Rc::new(forward))))?;
             }
         }
 

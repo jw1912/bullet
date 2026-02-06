@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 use bullet_compiler::graph::{DType, GraphError, TValue};
 
-use crate::device::{Device, ReadyToCompileGraph, Stream, SyncOnDrop, TensorInput, TensorRef};
+use crate::device::{BlockOnDrop, Device, ReadyToCompileGraph, Stream, TensorInput, TensorRef};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Interpreter;
@@ -20,12 +20,16 @@ impl Stream for Interpreter {
         Ok(Mutex::new(TValue::zeros(dtype, size)))
     }
 
-    fn async_copy_h2d(&self, src: TValue, dst: TensorRef<Self>) -> Result<SyncOnDrop<Self, TValue>, Self::Error> {
-        *dst.buf().lock().map_err(|e| format!("{e:?}"))? = src;
-        Ok(SyncOnDrop::new(*self, TValue::F32(vec![0.0])))
+    fn copy_h2d_nonblocking<'a>(
+        &self,
+        src: &'a TValue,
+        dst: TensorRef<Self>,
+    ) -> Result<BlockOnDrop<Self, &'a TValue>, Self::Error> {
+        *dst.buf().lock().map_err(|e| format!("{e:?}"))? = src.clone();
+        Ok(BlockOnDrop::new(*self, src))
     }
 
-    fn copy_d2h(&self, src: TensorRef<Self>) -> Result<TValue, Self::Error> {
+    fn copy_d2h_blocking(&self, src: TensorRef<Self>) -> Result<TValue, Self::Error> {
         Ok(src.buf().lock().map_err(|e| format!("{e:?}"))?.clone())
     }
 
@@ -33,7 +37,7 @@ impl Stream for Interpreter {
         &self,
         graph: &Self::CompiledGraph,
         tensors: HashMap<String, TensorRef<Self>>,
-    ) -> Result<SyncOnDrop<Self, Vec<TensorRef<Self>>>, Self::Error> {
+    ) -> Result<BlockOnDrop<Self, Vec<TensorRef<Self>>>, Self::Error> {
         let mut inputs = HashMap::new();
 
         let get = |x| graph.tensors().get(x).ok_or::<GraphError>("Name not present!".into());
@@ -66,14 +70,18 @@ impl Stream for Interpreter {
             }
         }
 
-        Ok(SyncOnDrop::new(*self, tensors.into_values().collect()))
+        Ok(BlockOnDrop::new(*self, tensors.into_values().collect()))
     }
 }
 
 impl Device for Interpreter {
     type S = Interpreter;
 
-    fn new_stream(&mut self) -> Result<Self::S, <Self::S as Stream>::Error> {
+    fn default_stream(&self) -> Self::S {
+        *self
+    }
+
+    fn new_stream(&self) -> Result<Self::S, <Self::S as Stream>::Error> {
         Ok(*self)
     }
 

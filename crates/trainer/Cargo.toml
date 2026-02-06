@@ -10,3 +10,4 @@ edition = { workspace = true }
 
 [dependencies]
 bullet-compiler = { workspace = true }
+bullet-runtime = { workspace = true }

@@ -1,7 +1,7 @@
 use bullet_compiler::{
     IRTrace,
     graph::DValue,
-    operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, ReduceAcrossDimension, Unary, UnaryOp},
+    operation::{CABinary, CABinaryOp, Unary, UnaryOp},
     prelude::IRNode,
 };
 
@@ -25,28 +25,6 @@ impl AutogradOnCoreOp for CABinaryOp {
     }
 }
 
-impl AutogradOnCoreOp for BroadcastAcrossDimension {
-    fn backward<'a>(
-        &self,
-        _inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
-        let op = self.invert().unwrap();
-        output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![Some(x[0])])
-    }
-}
-
-impl AutogradOnCoreOp for ReduceAcrossDimension {
-    fn backward<'a>(
-        &self,
-        _inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
-        let op = self.invert().unwrap().expect("Reduction backprop only implemented for Sum!");
-        output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![Some(x[0])])
-    }
-}
-
 impl AutogradOnCoreOp for UnaryOp {
     fn backward<'a>(
         &self,
@@ -66,7 +44,7 @@ impl AutogradOnCoreOp for UnaryOp {
                 -(x * x)?
             }
             Unary::Log => input.unary(Unary::Reciprocal),
-            Unary::Sgn => {
+            Unary::Sgn | Unary::Step => {
                 let zero = DValue::zero(input.ty().dtype());
                 Ok(input.builder().scalar(zero, input.ty().size()))
             }

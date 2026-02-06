@@ -9,17 +9,17 @@ use bullet_compiler::{
     graph::{DType, NodeId, TValue},
 };
 
-/// Ensures required objects for async operations are not
+/// Ensures required objects for nonblocking operations are not
 /// dropped before the operation is completed (by syncing)
-pub struct SyncOnDrop<S: Stream, T>(S, T);
+pub struct BlockOnDrop<S: Stream, T>(S, T);
 
-impl<S: Stream, T> SyncOnDrop<S, T> {
+impl<S: Stream, T> BlockOnDrop<S, T> {
     pub fn new(stream: S, owned: T) -> Self {
         Self(stream, owned)
     }
 }
 
-impl<S: Stream, T> Drop for SyncOnDrop<S, T> {
+impl<S: Stream, T> Drop for BlockOnDrop<S, T> {
     fn drop(&mut self) {
         self.0.block_until_done().unwrap();
     }
@@ -57,20 +57,24 @@ pub trait Stream: Clone + Sized {
 
     fn zeros(&self, size: usize, dtype: DType) -> Result<Self::Buffer, Self::Error>;
 
-    fn async_copy_h2d(&self, src: TValue, dst: TensorRef<Self>) -> Result<SyncOnDrop<Self, TValue>, Self::Error>;
+    fn copy_h2d_nonblocking<'a>(
+        &self,
+        src: &'a TValue,
+        dst: TensorRef<Self>,
+    ) -> Result<BlockOnDrop<Self, &'a TValue>, Self::Error>;
 
-    fn copy_d2h(&self, src: TensorRef<Self>) -> Result<TValue, Self::Error>;
-
-    fn copy_h2d(&self, src: TValue, dst: TensorRef<Self>) -> Result<(), Self::Error> {
-        drop(self.async_copy_h2d(src, dst)?);
+    fn copy_h2d_blocking(&self, src: &TValue, dst: TensorRef<Self>) -> Result<(), Self::Error> {
+        drop(self.copy_h2d_nonblocking(src, dst)?);
         Ok(())
     }
+
+    fn copy_d2h_blocking(&self, src: TensorRef<Self>) -> Result<TValue, Self::Error>;
 
     fn execute(
         &self,
         graph: &Self::CompiledGraph,
         tensors: HashMap<String, TensorRef<Self>>,
-    ) -> Result<SyncOnDrop<Self, Vec<TensorRef<Self>>>, Self::Error>;
+    ) -> Result<BlockOnDrop<Self, Vec<TensorRef<Self>>>, Self::Error>;
 }
 
 pub enum TensorInput {
@@ -82,7 +86,9 @@ pub enum TensorInput {
 pub trait Device {
     type S: Stream;
 
-    fn new_stream(&mut self) -> Result<Self::S, <Self::S as Stream>::Error>;
+    fn default_stream(&self) -> Self::S;
+
+    fn new_stream(&self) -> Result<Self::S, <Self::S as Stream>::Error>;
 
     fn compile(
         &self,

@@ -29,7 +29,6 @@ use utils::Ansi;
 #[derive(Clone, Default)]
 pub struct IR {
     graph: Graph,
-    most_recent: Vec<NodeId>,
     history: Option<IRHistory>,
 }
 
@@ -169,7 +168,8 @@ impl IR {
         op: Result<Rc<dyn OpType>, IRTrace>,
     ) -> Result<Vec<NodeId>, IRTrace> {
         let inputs = inputs.as_ref().to_vec();
-        self.transform(AddOperation(inputs, op)).map(|_| self.most_recent.clone())
+        let transform = AddOperation::new(inputs, op);
+        self.transform(transform.clone()).map(|_| transform.outputs())
     }
 
     pub fn add_op(
@@ -261,7 +261,7 @@ impl IR {
         new_inputs: impl Into<Vec<NodeId>>,
         new_op: impl OpType,
     ) -> Result<OpId, IRTrace> {
-        let add = AddOperation(new_inputs.into(), Ok(Rc::new(new_op)));
+        let add = AddOperation::new(new_inputs.into(), Ok(Rc::new(new_op)));
         self.replace_op(op, add)
     }
 

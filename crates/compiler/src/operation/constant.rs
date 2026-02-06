@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::graph::{DValue, OpType, Size, TType, TValue};
+use crate::graph::{DValue, Op, OpType, Size, TType, TValue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Constant(pub TValue);
@@ -33,8 +33,8 @@ impl OpType for Constant {
         *outputs[0] = self.0.clone();
     }
 
-    fn equals(&self, _: &Rc<dyn OpType>) -> bool {
-        false
+    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
+        if let Some(other) = Op::downcast_rc::<Self>(other) { self == other } else { false }
     }
 }
 
@@ -77,7 +77,7 @@ impl OpType for ScalarConstant {
         }
     }
 
-    fn equals(&self, _: &Rc<dyn OpType>) -> bool {
-        false
+    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
+        if let Some(other) = Op::downcast_rc::<Self>(other) { self == other } else { false }
     }
 }
