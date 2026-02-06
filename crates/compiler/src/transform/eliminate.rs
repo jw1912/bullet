@@ -179,10 +179,12 @@ mod tests {
 
         ir.register_output(t1);
         ir.register_output(t2);
+        ir.register_output(x);
+        ir.register_output(y);
         ir.transform(EliminateCommonSubExpressions)?;
 
-        assert!(ir.get_node(x).is_ok());
-        assert!(ir.get_node(y).is_ok());
+        assert!(ir.are_copies(x, y)?);
+        assert!(ir.are_copies(t1, t2)?);
 
         ir.check_valid()
     }
