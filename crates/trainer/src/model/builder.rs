@@ -13,7 +13,7 @@ pub struct ModelBuilder {
 
 impl ModelBuilder {
     pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ModelNode<'a>]>, op: impl Autograd) -> Vec<ModelNode<'a>> {
-        let inputs = inputs.as_ref().iter().map(ModelNode::to_ir_node).collect::<Vec<_>>();
+        let inputs = inputs.as_ref().iter().map(ModelNode::detach).collect::<Vec<_>>();
         let op = self.ir.add_op(inputs, AutogradOp::new(op).unwrap()).unwrap();
         op.iter().map(|&node| ModelNode { builder: self, node: node.node() }).collect()
     }
@@ -26,12 +26,12 @@ pub struct ModelNode<'a> {
 }
 
 impl<'a> ModelNode<'a> {
-    pub fn to_ir_node(&self) -> IRNode<'a> {
+    pub fn detach(&self) -> IRNode<'a> {
         IRNode::new(&self.builder.ir, self.node)
     }
 
     pub fn ty(&self) -> TType {
-        self.to_ir_node().ty()
+        self.detach().ty()
     }
 
     pub fn abs(&self) -> Self {
