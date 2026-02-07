@@ -1,14 +1,10 @@
 use std::marker::PhantomData;
 
-use acyclib::{
-    device::{Device, tensor::Shape},
-    graph::save::SavedFormat,
-    trainer::{Trainer, optimiser::Optimiser},
-};
+use bullet_trainer::{Trainer, optimiser::Optimiser};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{BackendMarker, ExecutionContext, NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
+    nn::{NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
     value::ValueTrainerState,
 };
 
@@ -111,28 +107,6 @@ where
     pub fn datapoint_weight_function(mut self, f: Wgt<I>) -> Self {
         assert!(self.weight_getter.is_none(), "Position weight function alrady set!");
         self.weight_getter = Some(f);
-        self
-    }
-
-    pub fn use_threads(self, _count: usize) -> Self {
-        #[cfg(feature = "cpu")]
-        {
-            self.use_devices(vec![(); _count])
-        }
-
-        #[cfg(not(feature = "cpu"))]
-        {
-            println!("Setting `ValueTrainerBuilder::use_threads` does nothing on non-CPU backends!");
-            self
-        }
-    }
-
-    pub fn use_devices(mut self, ids: impl Into<Vec<<ExecutionContext as Device>::IdType>>) -> Self {
-        if cfg!(not(any(feature = "multigpu", feature = "cpu"))) {
-            println!("Specifying device list does nothing without `multigpu` feature enabled!");
-        }
-
-        self.device_ids = ids.into();
         self
     }
 

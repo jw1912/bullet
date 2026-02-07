@@ -6,7 +6,7 @@ use wdl::WdlScheduler;
 pub mod lr;
 pub mod wdl;
 
-pub use acyclib::trainer::{logger::ansi, schedule::TrainingSteps};
+pub use bullet_trainer::run::{logger::ansi, schedule::TrainingSteps};
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {

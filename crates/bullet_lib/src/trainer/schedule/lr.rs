@@ -1,6 +1,6 @@
 use std::{f32::consts::PI, fmt::Debug};
 
-use acyclib::trainer::logger::ansi;
+use bullet_trainer::run::logger::ansi;
 
 /// Learning rate scheduling. Types implementing this trait output a learning rate
 /// at each point in training, indexed by batch and superbatch.

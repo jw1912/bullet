@@ -9,18 +9,9 @@ readme = { workspace = true }
 rust-version = { workspace = true }
 edition = { workspace = true }
 
-[features]
-default = ["cuda"]
-cpu = []
-cuda = ["bullet_cuda_backend"]
-hip = ["bullet_hip_backend", "bullet_hip_backend/hip", "bullet_cuda_backend?/error"]
-hip-cuda = ["bullet_hip_backend"]
-multigpu = ["bullet_cuda_backend/nccl"]
-
 [dependencies]
-acyclib = { workspace = true }
-bullet_cuda_backend = { workspace = true, optional = true }
-bullet_hip_backend = { workspace = true, optional = true }
+bullet-compiler = { workspace = true }
+bullet-trainer = { workspace = true }
 bulletformat = { workspace = true }
 montyformat = { workspace = true }
 sfbinpack = "0.6.0"

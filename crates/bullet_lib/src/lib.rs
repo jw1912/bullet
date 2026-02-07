@@ -1,6 +1,3 @@
-/// Re-export of `acyclib`
-pub use acyclib;
-
 /// Contains common game related code used in both policy
 /// and value network traiing (e.g. sparse input types).
 pub mod game;

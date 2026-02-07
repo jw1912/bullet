@@ -1,10 +1,10 @@
-use bullet_compiler::{
+use bullet_compiler::ir::{
+    frontend::{IRBuilder, IRNode},
     graph::{NodeId, TType},
     operation::{Unary, UnaryOp},
-    prelude::{IRBuilder, IRNode},
 };
 
-use crate::autograd::{Autograd, AutogradOp};
+use super::autograd::{Autograd, AutogradOp};
 
 #[derive(Default)]
 pub struct ModelBuilder {

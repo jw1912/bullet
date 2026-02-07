@@ -7,19 +7,8 @@ use std::cell::RefCell;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 
-use acyclib::{
-    graph::Node,
-    trainer::{self, Trainer, logger, optimiser::OptimiserState},
-};
-
-use acyclib::{
-    graph::{GraphNodeId, GraphNodeIdTy, like::GraphLike, save::SavedFormat},
-    trainer::dataloader::{PreparedBatchDevice, PreparedBatchHost},
-};
-
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{ExecutionContext, Graph},
     trainer::{
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
@@ -188,18 +177,6 @@ where
             },
         )
         .unwrap();
-    }
-
-    pub fn get_output_values(&self) -> Vec<f32> {
-        let id = GraphNodeId::new(self.state.output_node.idx(), GraphNodeIdTy::Values);
-
-        #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
-        {
-            self.optimiser.graph.get(id).unwrap().get_dense_vals().unwrap()
-        }
-
-        #[cfg(any(feature = "multigpu", feature = "cpu"))]
-        self.optimiser.graph.get_all(id).unwrap().iter().flat_map(|x| x.get_dense_vals().unwrap()).collect()
     }
 
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
