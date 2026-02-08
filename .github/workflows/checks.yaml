@@ -22,8 +22,6 @@ jobs:
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: test
         - run: cargo test --workspace
 
   format:
