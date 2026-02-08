@@ -1,11 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bullet_compiler::{
-    ir::frontend::{DType, IRBuilder, IRTrace, TValue},
-    runtime::{BlockOnDrop, Buffer, Device, ReadyToCompileGraph, Stream, TensorInput},
+    ir::{
+        frontend::{DType, IRBuilder, IRTrace, TValue},
+        graph::DValue,
+    },
+    runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput},
 };
 
-use super::{OptimiserState, utils};
+use super::{OptimiserState, OptimiserUpdateValue, utils};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -22,68 +25,53 @@ impl Default for AdamWParams {
     }
 }
 
+impl AdamWParams {
+    pub fn build(&self, size: usize, epsilon: f32) -> Result<ReadyToCompileGraph, IRTrace> {
+        let builder = IRBuilder::default();
+
+        // args
+        let lrate = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
+        let adjus = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
+
+        // inputs
+        let w = builder.add_input(size, DType::F32);
+        let g = builder.add_input(size, DType::F32);
+        let m = builder.add_input(size, DType::F32);
+        let v = builder.add_input(size, DType::F32);
+
+        let agrd = (adjus * g)?;
+        let new_m = ((self.beta1 * m)? + ((1.0 - self.beta1) * agrd)?)?;
+        let new_v = ((self.beta2 * v)? + (((1.0 - self.beta2) * agrd)? * agrd)?)?;
+
+        let val = (new_m / (new_v + epsilon)?)?;
+
+        let minw = builder.scalar(DValue::F32(self.min_weight), size);
+        let maxw = builder.scalar(DValue::F32(self.max_weight), size);
+        let new_w = ((w * (1.0 - (lrate * self.decay)?)?)? - (lrate * val)?)?.min(maxw)?.max(minw)?;
+
+        let ir = builder.build([new_w, new_m, new_v]);
+
+        ReadyToCompileGraph::new(
+            ir,
+            [
+                ("lrate".into(), TensorInput::In(lrate.node())),
+                ("adjus".into(), TensorInput::In(adjus.node())),
+                ("minw".into(), TensorInput::In(minw.node())),
+                ("maxw".into(), TensorInput::In(maxw.node())),
+                ("g".into(), TensorInput::In(g.node())),
+                ("w".into(), TensorInput::InOut(w.node(), new_w.node())),
+                ("m".into(), TensorInput::InOut(m.node(), new_m.node())),
+                ("v".into(), TensorInput::InOut(v.node(), new_v.node())),
+            ]
+            .into(),
+        )
+    }
+}
+
 pub struct AdamW<D: Device> {
     momentum: Arc<D::Buffer>,
     velocity: Arc<D::Buffer>,
     op: D::CompiledGraph,
-
-    // params
-    decay: Arc<D::Buffer>,
-    beta1: Arc<D::Buffer>,
-    beta2: Arc<D::Buffer>,
-    min_weight: Arc<D::Buffer>,
-    max_weight: Arc<D::Buffer>,
-}
-
-fn build_adam_op(size: usize, epsilon: f32) -> Result<ReadyToCompileGraph, IRTrace> {
-    let builder = IRBuilder::default();
-
-    // args
-    let lrate = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-    let adjus = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-
-    // params
-    let decay = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-    let beta1 = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-    let beta2 = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-    let minw = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-    let maxw = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-
-    // inputs
-    let w = builder.add_input(size, DType::F32);
-    let g = builder.add_input(size, DType::F32);
-    let m = builder.add_input(size, DType::F32);
-    let v = builder.add_input(size, DType::F32);
-
-    let agrd = (adjus * g)?;
-    let new_m = ((beta1 * m)? + ((1.0 - beta1)? * agrd)?)?;
-    let new_v = ((beta2 * v)? + (((1.0 - beta2)? * agrd)? * agrd)?)?;
-
-    let val = (new_m / (new_v + epsilon)?)?;
-
-    let new_w = ((w * decay)? - (lrate * val)?)?.min(maxw)?.max(minw)?;
-
-    let ir = builder.build([new_w, new_m, new_v]);
-
-    let mut tensors: HashMap<String, TensorInput> = [
-        ("lrate", lrate),
-        ("adjus", adjus),
-        ("decay", decay),
-        ("beta1", beta1),
-        ("beta2", beta2),
-        ("minw", minw),
-        ("maxw", maxw),
-        ("g", g),
-    ]
-    .iter()
-    .map(|(id, node)| (id.to_string(), TensorInput::In(node.node())))
-    .collect();
-
-    tensors.insert("w".into(), TensorInput::InOut(w.node(), new_w.node()));
-    tensors.insert("m".into(), TensorInput::InOut(m.node(), new_m.node()));
-    tensors.insert("v".into(), TensorInput::InOut(v.node(), new_v.node()));
-
-    ReadyToCompileGraph::new(ir, tensors)
 }
 
 impl<D: Device> OptimiserState<D> for AdamW<D> {
@@ -96,24 +84,13 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
             );
         }
 
-        let op = device.compile(build_adam_op(size, 0.00001).unwrap())?;
-
+        let op = device.compile(default_params.build(size, 0.00001).unwrap())?;
         let stream = device.default_stream();
-        let decay = stream.make_blocking(&TValue::F32(vec![default_params.decay]))?;
-        let beta1 = stream.make_blocking(&TValue::F32(vec![default_params.beta1]))?;
-        let beta2 = stream.make_blocking(&TValue::F32(vec![default_params.beta2]))?;
-        let min_weight = stream.make_blocking(&TValue::F32(vec![default_params.min_weight]))?;
-        let max_weight = stream.make_blocking(&TValue::F32(vec![default_params.max_weight]))?;
 
         Ok(Self {
-            momentum: device.default_stream().make_blocking(&TValue::zeros(DType::F32, size))?,
-            velocity: device.default_stream().make_blocking(&TValue::zeros(DType::F32, size))?,
+            momentum: stream.make_blocking(&TValue::zeros(DType::F32, size))?,
+            velocity: stream.make_blocking(&TValue::zeros(DType::F32, size))?,
             op,
-            decay,
-            beta1,
-            beta2,
-            min_weight,
-            max_weight,
         })
     }
 
@@ -124,7 +101,7 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
         grads: Arc<D::Buffer>,
         gradient_factor: Arc<D::Buffer>,
         learning_rate: Arc<D::Buffer>,
-    ) -> Result<BlockOnDrop<D::Stream, Vec<Arc<D::Buffer>>>, D::Error> {
+    ) -> Result<OptimiserUpdateValue<D>, D::Error> {
         assert_eq!(weights.size(), self.momentum.size());
         assert_eq!(weights.size(), self.velocity.size());
 
@@ -135,17 +112,12 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
             ("g", grads),
             ("adjus", gradient_factor),
             ("lrate", learning_rate),
-            ("decay", self.decay.clone()),
-            ("beta1", self.beta1.clone()),
-            ("beta2", self.beta2.clone()),
-            ("minw", self.min_weight.clone()),
-            ("maxw", self.max_weight.clone()),
         ]
         .into_iter()
         .map(|(x, y)| (x.to_string(), y))
         .collect();
 
-        stream.execute_graph(&self.op, &args)
+        stream.execute_graph(&self.op, &args).map(|x| vec![x])
     }
 
     fn reset(&mut self) -> Result<(), D::Error> {
@@ -172,7 +144,7 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
         momentum.sort_by_key(|(id, _)| id.clone());
         velocity.sort_by_key(|(id, _)| id.clone());
 
-        for ((id1, mom), (id2, vel)) in momentum.into_iter().zip(velocity.into_iter()) {
+        for ((id1, mom), (id2, vel)) in momentum.into_iter().zip(velocity) {
             assert_eq!(id1, id2);
 
             let single = map.get_mut(&id1).unwrap();
@@ -184,7 +156,10 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
         Ok(())
     }
 
-    fn set_params(&mut self, params: Self::Params) {
-        unimplemented!();
+    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
+        let size = self.momentum.size();
+        let device = self.momentum.device();
+        self.op = device.compile(params.build(size, 0.00001).unwrap())?;
+        Ok(())
     }
 }

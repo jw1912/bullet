@@ -1,10 +1,14 @@
 use std::marker::PhantomData;
 
-use bullet_trainer::{Trainer, optimiser::Optimiser};
+use bullet_trainer::{
+    Trainer,
+    model::{Shape, save::SavedFormat},
+    optimiser::Optimiser,
+};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{NetworkBuilder, NetworkBuilderNode, optimiser::OptimiserType},
+    nn::{ModelBuilder, ModelNode, optimiser::OptimiserType},
     value::ValueTrainerState,
 };
 
@@ -26,7 +30,6 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     wdl_output: bool,
     use_win_rate_model: bool,
     print_ir: bool,
-    device_ids: Vec<<ExecutionContext as Device>::IdType>,
 }
 
 impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
@@ -47,7 +50,6 @@ where
             use_win_rate_model: false,
             factorised: Vec::new(),
             print_ir: false,
-            device_ids: Vec::new(),
         }
     }
 }
@@ -128,7 +130,7 @@ where
         let inputs = input_getter.num_inputs();
         let nnz = input_getter.max_active();
 
-        let mut builder = NetworkBuilder::default();
+        let mut builder = ModelBuilder::default();
 
         let output_size = if self.wdl_output { 3 } else { 1 };
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
@@ -141,21 +143,11 @@ where
 
         let output_node = out.node();
 
-        #[cfg(feature = "cuda")]
-        builder.add_custom_pass(bullet_cuda_backend::ops::FuseSparseAffineActivateWithMatmul);
-
         if self.print_ir {
             builder.dump_ir_on_build();
         }
 
-        #[cfg(any(feature = "multigpu", feature = "cpu"))]
-        let graph = {
-            let devices = self.device_ids.into_iter().map(ExecutionContext::new);
-            builder.build_multi(devices.collect::<Result<Vec<_>, _>>().unwrap())
-        };
-
-        #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
-        let graph = builder.build(ExecutionContext::default());
+        let graph = builder.build();
 
         ValueTrainer(Trainer {
             optimiser: Optimiser::new(graph, Default::default()).unwrap(),
@@ -252,7 +244,6 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
-            device_ids: self.device_ids,
         }
     }
 }
@@ -281,13 +272,12 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
-            device_ids: self.device_ids,
         }
     }
 }
 
-type Nb<'a> = &'a NetworkBuilder<BackendMarker>;
-type Nbn<'a> = NetworkBuilderNode<'a, BackendMarker>;
+type Nb<'a> = &'a ModelBuilder;
+type Nbn<'a> = ModelNode<'a>;
 
 impl<O, I> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
 where

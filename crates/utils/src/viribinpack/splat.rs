@@ -52,7 +52,7 @@ impl SplatOptions {
                 &filter,
             )?;
 
-            if games % 16384 == 0 {
+            if games.is_multiple_of(16384) {
                 print!("Splatted {games} games\r");
             }
 

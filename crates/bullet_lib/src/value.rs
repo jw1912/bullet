@@ -6,9 +6,20 @@ mod save;
 use std::cell::RefCell;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
+use bullet_compiler::{
+    ir::graph::TValue,
+    runtime::{Device, Stream},
+};
+use bullet_trainer::{
+    Trainer,
+    model::save::SavedFormat,
+    optimiser::OptimiserState,
+    run::{self, dataloader::PreparedBatchHost, logger},
+};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
+    nn::ExecutionContext,
     trainer::{
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
@@ -26,7 +37,7 @@ pub struct ValueTrainer<
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
->(Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>);
+>(Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>);
 
 impl<Opt, Inp, Out> std::ops::Deref for ValueTrainer<Opt, Inp, Out>
 where
@@ -34,7 +45,7 @@ where
     Inp: SparseInputType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    type Target = Trainer<ExecutionContext, Graph, Opt, ValueTrainerState<Inp, Out>>;
+    type Target = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -61,7 +72,6 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
     output_getter: Out,
     blend_getter: B<Inp>,
     weight_getter: Option<Wgt<Inp>>,
-    output_node: Node,
     saved_format: Vec<SavedFormat>,
     use_win_rate_model: bool,
     wdl: bool,
@@ -143,7 +153,7 @@ where
         let mut ticks_since_last = 0.0;
 
         self.train_custom(
-            trainer::schedule::TrainingSchedule {
+            run::schedule::TrainingSchedule {
                 steps,
                 log_rate: 128,
                 lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)),
@@ -187,20 +197,16 @@ where
 
         let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);
 
-        #[cfg(not(any(feature = "multigpu", feature = "cpu")))]
-        let graph = &mut self.optimiser.graph;
+        let model = &self.optimiser.model;
 
-        #[cfg(any(feature = "multigpu", feature = "cpu"))]
-        let graph = self.optimiser.graph.primary_mut();
+        let stream = model.device().default_stream();
+        let inputs = host_data.to_device_blocking(&stream).unwrap();
+        let outputs = model.make_forward_output_tensors(&stream, 1).unwrap();
+        drop(model.forward(&stream, &inputs, &outputs).unwrap());
 
-        let mut device_data = PreparedBatchDevice::new(graph.devices(), &host_data).unwrap();
-
-        device_data.load_into_graph(graph).unwrap();
-
-        graph.synchronise().unwrap();
-        graph.forward().unwrap();
-
-        self.get_output_values()
+        let output = outputs.get("output").unwrap().clone();
+        let Ok(TValue::F32(output)) = stream.copy_d2h_blocking(output) else { panic!() };
+        output
     }
 
     pub fn eval(&mut self, fen: &str) -> f32

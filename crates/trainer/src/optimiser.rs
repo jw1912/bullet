@@ -1,15 +1,17 @@
 pub mod adam;
-//pub mod clip;
-//pub mod decay;
-//pub mod radam;
-//pub mod ranger;
+pub mod clip;
+pub mod decay;
+pub mod radam;
+pub mod ranger;
 pub mod utils;
 
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
-use bullet_compiler::runtime::{BlockOnDrop, BlockResult, Buffer, Device};
+use bullet_compiler::runtime::{BlockOnDrop, Buffer, Device};
 
 use crate::model::{Model, TensorMap};
+
+pub type OptimiserUpdateValue<D> = Vec<BlockOnDrop<<D as Device>::Stream, Vec<Arc<<D as Device>::Buffer>>>>;
 
 pub trait OptimiserState<D: Device>: Sized {
     type Params: Clone + Debug + Default;
@@ -23,7 +25,7 @@ pub trait OptimiserState<D: Device>: Sized {
         grads: Arc<D::Buffer>,
         gradient_factor: Arc<D::Buffer>,
         learning_rate: Arc<D::Buffer>,
-    ) -> BlockResult<D::Stream, Vec<Arc<D::Buffer>>>;
+    ) -> Result<OptimiserUpdateValue<D>, D::Error>;
 
     fn reset(&mut self) -> Result<(), D::Error>;
 
@@ -31,35 +33,33 @@ pub trait OptimiserState<D: Device>: Sized {
 
     fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::Error>;
 
-    fn set_params(&mut self, params: Self::Params);
+    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error>;
 }
 
 pub struct Optimiser<D: Device, S: OptimiserState<D>> {
     phantom: PhantomData<D>,
-    pub graph: Model<D>,
+    pub model: Model<D>,
     pub state: HashMap<String, S>,
     pre_update: Vec<Box<dyn AdditionalUpdate<D>>>,
     post_update: Vec<Box<dyn AdditionalUpdate<D>>>,
 }
 
-type BlockValue<D> = BlockOnDrop<<D as Device>::Stream, Vec<Arc<<D as Device>::Buffer>>>;
-
 pub trait AdditionalUpdate<D: Device> {
-    fn apply_update(&mut self, graph: &Model<D>) -> Result<BlockValue<D>, D::Error>;
+    fn apply_update(&mut self, model: &Model<D>) -> Result<OptimiserUpdateValue<D>, D::Error>;
 }
 
 impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
-    pub fn new(graph: Model<D>, params: S::Params) -> Result<Self, D::Error> {
+    pub fn new(model: Model<D>, params: S::Params) -> Result<Self, D::Error> {
         let mut state = HashMap::new();
 
-        for (id, value) in graph.weights() {
+        for (id, value) in model.weights() {
             let size = value.size();
-            let single = S::new(graph.device(), size, params.clone())?;
+            let single = S::new(model.device(), size, params.clone())?;
             let old = state.insert(id.clone(), single);
             assert!(old.is_none());
         }
 
-        Ok(Self { phantom: PhantomData, graph, state, pre_update: Vec::new(), post_update: Vec::new() })
+        Ok(Self { phantom: PhantomData, model, state, pre_update: Vec::new(), post_update: Vec::new() })
     }
 
     pub fn add_pre_update(&mut self, additional: impl AdditionalUpdate<D> + 'static) {
@@ -76,14 +76,14 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
         gradient_factor: Arc<D::Buffer>,
         learning_rate: Arc<D::Buffer>,
         gradients: &TensorMap<D>,
-    ) -> Result<Vec<BlockValue<D>>, D::Error> {
+    ) -> Result<Vec<OptimiserUpdateValue<D>>, D::Error> {
         let mut blocks = Vec::new();
 
         for additional in &mut self.pre_update {
-            blocks.push(additional.apply_update(&self.graph)?);
+            blocks.push(additional.apply_update(&self.model)?);
         }
 
-        for (id, weight) in self.graph.weights() {
+        for (id, weight) in self.model.weights() {
             let single = self.state.get_mut(id).unwrap();
 
             if let Some(grads) = gradients.get(id) {
@@ -98,7 +98,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
         }
 
         for additional in &mut self.post_update {
-            blocks.push(additional.apply_update(&self.graph)?);
+            blocks.push(additional.apply_update(&self.model)?);
         }
 
         Ok(blocks)
@@ -113,24 +113,24 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     }
 
     pub fn set_params_for_weight(&mut self, id: &str, params: S::Params) {
-        self.state.get_mut(id).unwrap().set_params(params);
+        self.state.get_mut(id).unwrap().set_params(params).unwrap();
     }
 
     pub fn set_params(&mut self, params: S::Params) {
-        for id in self.graph.weights().clone().keys() {
+        for id in self.model.weights().clone().keys() {
             self.set_params_for_weight(id, params.clone());
         }
     }
 
     pub fn write_to_checkpoint(&self, path: &str) -> Result<(), D::Error> {
         let mut file = std::fs::File::create(format!("{path}/weights.bin")).unwrap();
-        self.graph.write_to(&mut file)?;
+        self.model.write_to(&mut file)?;
         let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
         S::write_to_checkpoint(&map, path)
     }
 
     pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), D::Error> {
-        self.graph.load_from(std::fs::File::open(path).unwrap())
+        self.model.load_from(std::fs::File::open(path).unwrap())
     }
 
     pub fn load_from_checkpoint(&mut self, path: &str) -> Result<(), D::Error> {
@@ -164,7 +164,7 @@ where
         grads: Arc<D::Buffer>,
         gradient_factor: Arc<D::Buffer>,
         learning_rate: Arc<D::Buffer>,
-    ) -> BlockResult<D::Stream, Vec<Arc<D::Buffer>>> {
+    ) -> Result<OptimiserUpdateValue<D>, D::Error> {
         self.optimiser.update(stream, weights, grads, gradient_factor, learning_rate)
     }
 
@@ -172,8 +172,8 @@ where
         self.optimiser.reset()
     }
 
-    fn set_params(&mut self, params: Self::Params) {
-        self.optimiser.set_params(params.into());
+    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
+        self.optimiser.set_params(params.into())
     }
 
     fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), D::Error> {

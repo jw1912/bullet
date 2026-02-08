@@ -11,7 +11,7 @@ pub use sfbinpack::SfBinpackLoader;
 pub use text::InMemoryTextLoader;
 pub use viribinpack::ViriBinpackLoader;
 
-use acyclib::device::tensor::Shape;
+use bullet_trainer::model::Shape;
 use bulletformat::BulletFormat;
 
 use crate::game::{inputs::SparseInputType, outputs::OutputBuckets};

@@ -10,7 +10,7 @@ edition = "2024"
 resolver = "2"
 members = [
     "crates/bullet_lib",
-    "crates/bullet_utils",
+    "crates/utils",
     "crates/compiler",
     "crates/trainer",
 ]

@@ -8,7 +8,7 @@ use std::{
 
 use crate::ir::{
     IR, IRTrace,
-    graph::{DType, NodeId, TValue},
+    graph::{DType, DValue, NodeId, TValue},
 };
 
 /// Ensures required objects for nonblocking operations are not
@@ -19,25 +19,19 @@ impl<S: Stream, T> BlockOnDrop<S, T> {
     pub fn new(stream: Arc<S>, owned: T) -> Self {
         Self(stream, owned)
     }
+
+    pub fn stream(&self) -> Arc<S> {
+        self.0.clone()
+    }
+
+    pub fn value(&self) -> &T {
+        &self.1
+    }
 }
 
 impl<S: Stream, T> Drop for BlockOnDrop<S, T> {
     fn drop(&mut self) {
         self.0.block_until_done().unwrap();
-    }
-}
-
-/// Ensures required objects for nonblocking operations are not
-/// dropped before the operation is completed (by syncing)
-pub struct BlockOnDropWithValue<S: Stream, T, V>(BlockOnDrop<S, T>, V);
-
-impl<S: Stream, T, V> BlockOnDropWithValue<S, T, V> {
-    pub fn value(self) -> V {
-        self.1
-    }
-
-    pub fn new(stream: Arc<S>, owned: T, value: V) -> Self {
-        Self(BlockOnDrop(stream, owned), value)
     }
 }
 
@@ -60,12 +54,14 @@ pub trait Stream: Sized {
 
     fn block_until_done(&self) -> Result<(), Err<Self>>;
 
+    fn copy_scalars_nonblocking(
+        self: Arc<Self>,
+        copies: impl AsRef<[(DValue, Buf<Self>)]>,
+    ) -> BlockResult<Self, Vec<Buf<Self>>>;
+
     fn copy_h2d_nonblocking(self: Arc<Self>, src: &TValue, dst: Buf<Self>) -> BlockResult<Self, (&TValue, Buf<Self>)>;
 
-    fn make_nonblocking(
-        self: Arc<Self>,
-        src: &TValue,
-    ) -> Result<BlockOnDropWithValue<Self, &TValue, Buf<Self>>, Err<Self>>;
+    fn make_nonblocking(self: Arc<Self>, src: &TValue) -> BlockResult<Self, (&TValue, Buf<Self>)>;
 
     fn copy_h2d_blocking(self: &Arc<Self>, src: &TValue, dst: Buf<Self>) -> Result<(), Err<Self>> {
         drop(self.clone().copy_h2d_nonblocking(src, dst)?);
@@ -73,7 +69,7 @@ pub trait Stream: Sized {
     }
 
     fn make_blocking(self: &Arc<Self>, src: &TValue) -> Result<Buf<Self>, Err<Self>> {
-        self.clone().make_nonblocking(src).map(|block| block.value())
+        self.clone().make_nonblocking(src).map(|block| block.value().1.clone())
     }
 
     fn copy_d2h_blocking(self: &Arc<Self>, src: Buf<Self>) -> Result<TValue, Err<Self>>;

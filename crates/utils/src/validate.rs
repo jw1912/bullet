@@ -61,7 +61,7 @@ impl ValidateOptions {
             results[usize::from(pos.result)] += 1;
 
             done += 1;
-            if done % 10_000_000 == 0 {
+            if done.is_multiple_of(10_000_000) {
                 println!("Checked {done} Positions")
             }
         });

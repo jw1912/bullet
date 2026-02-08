@@ -4,76 +4,35 @@ on:
       branches:
         - main
 
-name: check-clippy-test
+name: cargo
 jobs:
-  acyclib:
-    name: acyclib
+  clippy:
+    name: clippy
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
             components: clippy
-        - run: cargo check --package acyclib
-        - run: cargo clippy --package acyclib
-        - run: cargo test --package acyclib
+        - run: cargo clippy --workspace
 
-  bullet_lib:
-    name: bullet_lib
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
-            components: clippy
-        - run: cargo check --package bullet_lib --features cpu --no-default-features
-        - run: cargo clippy --package bullet_lib --features cpu --no-default-features
-        - run: cargo test --package bullet_lib --features cpu --no-default-features
+            components: test
+        - run: cargo test --workspace
 
-  compiler:
-      name: compiler
-      runs-on: ubuntu-latest
-      steps:
-          - uses: actions/checkout@v4
-          - uses: dtolnay/rust-toolchain@stable
-            with:
-              components: clippy
-          - run: cargo check --package bullet-compiler
-          - run: cargo clippy --package bullet-compiler
-          - run: cargo test --package bullet-compiler
-
-  examples:
-    name: examples
+  format:
+    name: format
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
-            components: clippy
-        - run: cargo check --examples --features cpu --no-default-features
-        - run: cargo clippy --examples --features cpu --no-default-features
-        - run: cargo test --examples --features cpu --no-default-features
+            components: rustfmt
+        - run: cargo fmt -- --check
 
-  runtime:
-      name: runtime
-      runs-on: ubuntu-latest
-      steps:
-          - uses: actions/checkout@v4
-          - uses: dtolnay/rust-toolchain@stable
-            with:
-              components: clippy
-          - run: cargo check --package bullet-runtime
-          - run: cargo clippy --package bullet-runtime
-          - run: cargo test --package bullet-runtime
-
-  utils:
-    name: utils
-    runs-on: ubuntu-latest
-    steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: clippy
-        - run: cargo check --package bullet-utils
-        - run: cargo clippy --package bullet-utils
-        - run: cargo test --package bullet-utils

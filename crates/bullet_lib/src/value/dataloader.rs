@@ -1,13 +1,13 @@
-use bullet_trainer::{
-    DataLoadingError,
-    dataloader::{DataLoader, PreparedBatchHost},
+use bullet_compiler::ir::graph::TValue;
+use bullet_trainer::run::{
+    dataloader::{DataLoader, DataLoadingError, PreparedBatchHost},
     schedule::TrainingSteps,
 };
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     trainer::schedule::wdl::WdlScheduler,
-    value::loader::{self, DenseInput, PreparedData, SparseInput},
+    value::loader::{self, PreparedData},
 };
 
 pub struct ValueDataLoader<I, O, D, W>
@@ -31,8 +31,6 @@ where
     W: WdlScheduler,
     D: loader::DataLoader<I::RequiredDataType>,
 {
-    type Error = DataLoadingError;
-
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
         self,
         batch_size: usize,
@@ -66,32 +64,16 @@ where
 
 impl<I: SparseInputType, O> From<PreparedData<I, O>> for PreparedBatchHost {
     fn from(prepared_data: PreparedData<I, O>) -> Self {
-        let batch_size = prepared_data.batch_size;
-
-        let mut host_data = PreparedBatchHost { batch_size, inputs: Default::default() };
-
-        unsafe {
-            let SparseInput { value, max_active, shape } = prepared_data.stm;
-            let stm = HostSparseMatrix::new(value, Some(batch_size), shape, max_active);
-            let _ = host_data.inputs.insert("stm".to_string(), HostMatrix::Sparse(stm));
-
-            let SparseInput { value, max_active, shape } = prepared_data.nstm;
-            let ntm = HostSparseMatrix::new(value, Some(batch_size), shape, max_active);
-            let _ = host_data.inputs.insert("nstm".to_string(), HostMatrix::Sparse(ntm));
-
-            let SparseInput { value, max_active, shape } = prepared_data.buckets;
-            let buckets = HostSparseMatrix::new(value, Some(batch_size), shape, max_active);
-            let _ = host_data.inputs.insert("buckets".to_string(), HostMatrix::Sparse(buckets));
+        PreparedBatchHost {
+            batch_size: prepared_data.batch_size,
+            inputs: [
+                ("stm".to_string(), TValue::I32(prepared_data.stm.value)),
+                ("nstm".to_string(), TValue::I32(prepared_data.nstm.value)),
+                ("buckets".to_string(), TValue::I32(prepared_data.buckets.value)),
+                ("targets".to_string(), TValue::F32(prepared_data.targets.value)),
+                ("entry_weights".to_string(), TValue::F32(prepared_data.weights.value)),
+            ]
+            .into(),
         }
-
-        let DenseInput { value, shape } = prepared_data.targets;
-        let targets = HostDenseMatrix::new(value, Some(batch_size), shape);
-        let _ = host_data.inputs.insert("targets".to_string(), HostMatrix::Dense(targets));
-
-        let DenseInput { value, shape } = prepared_data.weights;
-        let weights = HostDenseMatrix::new(value, Some(batch_size), shape);
-        let _ = host_data.inputs.insert("entry_weights".to_string(), HostMatrix::Dense(weights));
-
-        host_data
     }
 }

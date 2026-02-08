@@ -1,8 +1,35 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::device::{Device, OperationError, tensor::DenseMatrix};
+use bullet_compiler::{
+    ir::{
+        IRTrace,
+        builder::IRBuilder,
+        graph::{DType, DValue},
+    },
+    runtime::{Device, ReadyToCompileGraph, Stream, TensorInput},
+};
 
-use super::{OptimiserState, utils::Placement};
+use super::{OptimiserState, OptimiserUpdateValue, utils::Placement};
+
+fn build_decay_op(size: usize, decay: f32) -> Result<ReadyToCompileGraph, IRTrace> {
+    let builder = IRBuilder::default();
+
+    let lrate = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
+    let decay = builder.scalar(DValue::F32(decay), size);
+    let w = builder.add_input(size, DType::F32);
+    let new_w = (w * (1.0 - (lrate * decay)?)?)?;
+
+    let ir = builder.build([new_w]);
+
+    ReadyToCompileGraph::new(
+        ir,
+        [
+            ("w".to_string(), TensorInput::InOut(w.node(), new_w.node())),
+            ("lrate".to_string(), TensorInput::In(lrate.node())),
+        ]
+        .into(),
+    )
+}
 
 #[derive(Clone, Debug)]
 pub struct WeightDecayParams<T> {
@@ -17,64 +44,70 @@ impl<T: Default> Default for WeightDecayParams<T> {
     }
 }
 
-pub struct WeightDecay<S> {
+pub struct WeightDecay<D: Device, S: OptimiserState<D>> {
     inner: S,
     placement: Placement,
-    decay: f32,
+    op: D::CompiledGraph,
+    device: Arc<D>,
+    size: usize,
 }
 
-impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for WeightDecay<S> {
+impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for WeightDecay<D, S> {
     type Params = WeightDecayParams<S::Params>;
 
-    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Result<Self, D::DeviceError> {
+    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Result<Self, D::Error> {
         Ok(Self {
-            inner: S::new(device, size, params.inner.clone())?,
+            op: device.compile(build_decay_op(size, params.decay).unwrap())?,
+            inner: S::new(device.clone(), size, params.inner.clone())?,
             placement: params.placement,
-            decay: params.decay,
+            device,
+            size,
         })
     }
 
     fn update(
         &mut self,
-        weights: &mut DenseMatrix<D>,
-        grads: &mut DenseMatrix<D>,
-        gradient_factor: f32,
-        learning_rate: f32,
-    ) -> Result<(), OperationError<D::DeviceError>> {
-        let factor = 1.0 - self.decay * learning_rate;
+        stream: &Arc<D::Stream>,
+        weights: Arc<D::Buffer>,
+        grads: Arc<D::Buffer>,
+        gradient_factor: Arc<D::Buffer>,
+        learning_rate: Arc<D::Buffer>,
+    ) -> Result<OptimiserUpdateValue<D>, D::Error> {
+        let mut blocks = Vec::new();
+
+        let args = [("w".to_string(), weights.clone()), ("lrate".to_string(), learning_rate.clone())].into();
 
         if self.placement == Placement::Before {
-            weights.scale(factor)?;
+            blocks.push(stream.execute_graph(&self.op, &args)?);
         }
 
-        self.inner.update(weights, grads, gradient_factor, learning_rate)?;
+        blocks.extend(self.inner.update(stream, weights, grads, gradient_factor, learning_rate)?);
 
         if self.placement == Placement::After {
-            weights.scale(factor)?;
+            blocks.push(stream.execute_graph(&self.op, &args)?);
         }
 
-        Ok(())
+        Ok(blocks)
     }
 
-    fn reset(&mut self) -> Result<(), D::DeviceError> {
+    fn reset(&mut self) -> Result<(), D::Error> {
         self.inner.reset()
     }
 
-    fn set_params(&mut self, params: Self::Params) {
-        self.inner.set_params(params.inner);
-        self.decay = params.decay;
+    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
+        self.inner.set_params(params.inner)?;
+        self.placement = params.placement;
+
+        self.op = self.device.compile(build_decay_op(self.size, params.decay).unwrap())?;
+        Ok(())
     }
 
-    fn load_from_checkpoint(
-        map: &mut HashMap<String, &mut Self>,
-        path: &str,
-        old_format: bool,
-    ) -> Result<(), OperationError<D::DeviceError>> {
+    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), D::Error> {
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.inner)).collect();
-        S::load_from_checkpoint(&mut map, path, old_format)
+        S::load_from_checkpoint(&mut map, path)
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::DeviceError> {
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::Error> {
         let map = map.iter().map(|(id, single)| (id.clone(), &single.inner)).collect();
         S::write_to_checkpoint(&map, path)
     }

@@ -5,17 +5,11 @@ pub mod run;
 use bullet_compiler::runtime::Device;
 use optimiser::{Optimiser, OptimiserState};
 use run::{
-    dataloader::DataLoader,
+    dataloader::{DataLoader, DataLoadingError},
     schedule::{TrainingSchedule, TrainingSteps},
 };
 
 use std::time::Instant;
-
-#[derive(Debug)]
-pub enum DataLoadingError {
-    TooManyBatchesReceived,
-    NoBatchesReceived,
-}
 
 #[derive(Debug)]
 pub enum TrainerError<D: Device> {
@@ -40,7 +34,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
     pub fn train_custom(
         &mut self,
         schedule: TrainingSchedule,
-        dataloader: impl DataLoader<Error = DataLoadingError>,
+        dataloader: impl DataLoader,
         batch_callback: impl FnMut(&mut Self, usize, usize, f32),
         superbatch_callback: impl FnMut(&mut Self, usize),
     ) -> Result<(), TrainerError<D>> {
@@ -49,7 +43,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
 
     pub fn measure_max_cpu_throughput(
         &self,
-        dataloader: impl DataLoader<Error = DataLoadingError>,
+        dataloader: impl DataLoader,
         steps: TrainingSteps,
     ) -> Result<(), TrainerError<D>> {
         let mut batch_no = 0;

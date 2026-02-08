@@ -26,7 +26,7 @@ impl CountOptions {
             games += 1;
             positions += game.moves.len();
 
-            if games % 16384 == 0 {
+            if games.is_multiple_of(16384) {
                 print!("Counted {games} games\r");
             }
 

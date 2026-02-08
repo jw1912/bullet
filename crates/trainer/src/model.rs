@@ -1,5 +1,6 @@
 pub mod autograd;
 pub mod builder;
+pub mod save;
 pub mod utils;
 
 pub use builder::{ModelBuilder, ModelNode};
@@ -14,12 +15,38 @@ use bullet_compiler::{
 pub type TensorMap<D> = HashMap<String, Arc<<D as Device>::Buffer>>;
 type ModelAsyncReturn<D> = BlockOnDrop<<D as Device>::Stream, Vec<Arc<<D as Device>::Buffer>>>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shape {
+    rows: usize,
+    cols: usize,
+}
+
+impl Shape {
+    pub fn new(rows: usize, cols: usize) -> Shape {
+        Self { rows, cols }
+    }
+
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
+
+    pub fn size(&self) -> usize {
+        self.rows * self.cols
+    }
+}
+
 pub struct Model<D: Device> {
     device: Arc<D>,
     weights: TensorMap<D>,
+    shapes: HashMap<String, Shape>,
     forward: D::CompiledGraph,
     backward: D::CompiledGraph,
-    output_types: HashMap<String, TType>,
+    fwd_output_types: HashMap<String, TType>,
+    bwd_output_types: HashMap<String, TType>,
 }
 
 impl<D: Device> Model<D> {
@@ -29,10 +56,6 @@ impl<D: Device> Model<D> {
 
     pub fn weights(&self) -> &TensorMap<D> {
         &self.weights
-    }
-
-    pub fn output_types(&self) -> &HashMap<String, TType> {
-        &self.output_types
     }
 
     pub fn get_weights(&self, id: impl Into<String>) -> Option<TValue> {
@@ -87,11 +110,25 @@ impl<D: Device> Model<D> {
             .collect()
     }
 
-    pub fn make_output_tensors(&self, stream: &Arc<D::Stream>) -> Result<TensorMap<D>, D::Error> {
-        self.output_types()
+    pub fn make_backward_output_tensors(&self, stream: &Arc<D::Stream>) -> Result<TensorMap<D>, D::Error> {
+        self.bwd_output_types
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate_constant().expect("`Model` only supports constant-size outputs!");
+                stream.clone().make_blocking(&TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf))
+            })
+            .collect()
+    }
+
+    pub fn make_forward_output_tensors(
+        &self,
+        stream: &Arc<D::Stream>,
+        batch_size: usize,
+    ) -> Result<TensorMap<D>, D::Error> {
+        self.fwd_output_types
+            .iter()
+            .map(|(id, ty)| {
+                let size = ty.size().evaluate(batch_size);
                 stream.clone().make_blocking(&TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf))
             })
             .collect()

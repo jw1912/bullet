@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::ir::{
     IR, IRTrace,
     graph::{DType, DValue, GraphError, NodeId, OpType, Shape, Size, TType, TValue},
-    operation::{BroadcastAcrossDimension, CABinary, ReduceAcrossDimension, Reduction, Unary},
+    operation::{BroadcastAcrossDimension, CABinary, CopyOp, ReduceAcrossDimension, Reduction, Unary},
 };
 
 #[derive(Default)]
@@ -61,6 +61,10 @@ pub struct IRNode<'a> {
 impl<'a> IRNode<'a> {
     pub fn new(builder: &'a IRBuilder, node: NodeId) -> Self {
         Self { builder, node }
+    }
+
+    pub fn copy(self) -> Result<Self, IRTrace> {
+        self.builder.add_op([self], CopyOp(self.ty())).map(|x| x[0])
     }
 
     pub fn builder(self) -> &'a IRBuilder {

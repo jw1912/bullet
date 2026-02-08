@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    ir::graph::{DType, GraphError, TValue},
-    runtime::{BlockOnDrop, BlockOnDropWithValue, Buffer, Device, ReadyToCompileGraph, Stream, TensorInput},
+    ir::graph::{DType, DValue, GraphError, TValue},
+    runtime::{BlockOnDrop, BlockResult, Buffer, Device, ReadyToCompileGraph, Stream, TensorInput},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -20,8 +20,20 @@ impl Stream for Interpreter {
         Ok(())
     }
 
-    fn make_nonblocking(self: Arc<Self>, src: &TValue) -> Result<BlockOnDropWithValue<Self, &TValue, Buf>, GraphError> {
-        Ok(BlockOnDropWithValue::new(self, src, Arc::new(Mutex::new(src.clone()))))
+    fn copy_scalars_nonblocking(self: Arc<Self>, copies: impl AsRef<[(DValue, Buf)]>) -> BlockResult<Self, Vec<Buf>> {
+        let mut bufs = Vec::new();
+
+        for (val, buf) in copies.as_ref() {
+            *buf.lock().map_err(|e| format!("{e:?}"))? = TValue::from(*val);
+            bufs.push(buf.clone());
+        }
+
+        Ok(BlockOnDrop::new(self, bufs))
+    }
+
+    fn make_nonblocking(self: Arc<Self>, src: &TValue) -> Result<BlockOnDrop<Self, (&TValue, Buf)>, GraphError> {
+        let buf = Arc::new(Mutex::new(src.clone()));
+        Ok(BlockOnDrop::new(self, (src, buf)))
     }
 
     fn copy_h2d_nonblocking(
@@ -41,7 +53,7 @@ impl Stream for Interpreter {
         self: &Arc<Self>,
         graph: &ReadyToCompileGraph,
         tensors: &HashMap<String, Buf>,
-    ) -> Result<BlockOnDrop<Self, Vec<Buf>>, GraphError> {
+    ) -> BlockResult<Self, Vec<Buf>> {
         let mut inputs = HashMap::new();
 
         let get = |x| graph.tensors().get(x).ok_or::<GraphError>("Name not present!".into());

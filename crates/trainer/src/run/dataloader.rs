@@ -7,10 +7,15 @@ use bullet_compiler::{
 
 use crate::model::TensorMap;
 
-pub trait DataLoader: Send + Sync + 'static {
-    type Error: Send + Sync;
+#[derive(Debug)]
+pub enum DataLoadingError {
+    TooManyBatchesReceived,
+    NoBatchesReceived,
+    Message(String),
+}
 
-    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(self, batch_size: usize, f: F) -> Result<(), Self::Error>;
+pub trait DataLoader: Send + Sync + 'static {
+    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(self, batch_size: usize, f: F) -> Result<(), DataLoadingError>;
 }
 
 pub struct PreparedBatchHost {
@@ -19,14 +24,17 @@ pub struct PreparedBatchHost {
 }
 
 impl PreparedBatchHost {
-    pub fn to_device_blocking<D: Device>(&self, stream: &Arc<D::Stream>) -> Result<TensorMap<D>, D::Error> {
+    pub fn to_device_blocking<S: Stream>(
+        self,
+        stream: &Arc<S>,
+    ) -> Result<TensorMap<S::Device>, <S::Device as Device>::Error> {
         let on_device = self
             .inputs
             .iter()
             .map(|(id, value)| stream.clone().make_nonblocking(value).map(|tensor| (id, tensor)))
             .collect::<Result<HashMap<_, _>, _>>()?;
 
-        let res = on_device.into_iter().map(|(id, value)| (id.clone(), value.value())).collect();
+        let res = on_device.into_iter().map(|(id, value)| (id.clone(), value.value().1.clone())).collect();
 
         stream.block_until_done()?;
 
