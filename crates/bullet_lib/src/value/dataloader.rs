@@ -67,11 +67,11 @@ impl<I: SparseInputType, O> From<PreparedData<I, O>> for PreparedBatchHost {
         PreparedBatchHost {
             batch_size: prepared_data.batch_size,
             inputs: [
-                ("stm".to_string(), TValue::I32(prepared_data.stm.value)),
-                ("nstm".to_string(), TValue::I32(prepared_data.nstm.value)),
-                ("buckets".to_string(), TValue::I32(prepared_data.buckets.value)),
-                ("targets".to_string(), TValue::F32(prepared_data.targets.value)),
-                ("entry_weights".to_string(), TValue::F32(prepared_data.weights.value)),
+                ("stm".to_string(), TValue::I32(prepared_data.stm)),
+                ("nstm".to_string(), TValue::I32(prepared_data.nstm)),
+                ("buckets".to_string(), TValue::I32(prepared_data.buckets)),
+                ("targets".to_string(), TValue::F32(prepared_data.targets)),
+                ("entry_weights".to_string(), TValue::F32(prepared_data.weights)),
             ]
             .into(),
         }

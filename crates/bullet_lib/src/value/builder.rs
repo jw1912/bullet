@@ -130,7 +130,7 @@ where
         let inputs = input_getter.num_inputs();
         let nnz = input_getter.max_active();
 
-        let mut builder = ModelBuilder::default();
+        let builder = ModelBuilder::default();
 
         let output_size = if self.wdl_output { 3 } else { 1 };
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
@@ -141,22 +141,15 @@ where
             let _ = entry_weights * loss;
         }
 
-        let output_node = out.node();
-
-        if self.print_ir {
-            builder.dump_ir_on_build();
-        }
-
-        let graph = builder.build();
+        let model = builder.build(Default::default(), loss, [("output".into(), out)]);
 
         ValueTrainer(Trainer {
-            optimiser: Optimiser::new(graph, Default::default()).unwrap(),
+            optimiser: Optimiser::new(model, Default::default()).unwrap(),
             state: ValueTrainerState {
                 input_getter: input_getter.clone(),
                 output_getter: buckets,
                 blend_getter: self.blend_getter,
                 weight_getter: self.weight_getter,
-                output_node,
                 use_win_rate_model: self.use_win_rate_model,
                 wdl: self.wdl_output,
                 saved_format,
@@ -177,7 +170,7 @@ where
 
             let raw_loss = loss(out, targets);
 
-            assert_eq!(raw_loss.node().shape, Shape::new(1, 1));
+            assert_eq!(raw_loss.shape(), Shape::new(1, 1));
 
             (out, raw_loss)
         })

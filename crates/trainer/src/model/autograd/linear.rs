@@ -1,6 +1,6 @@
 use bullet_compiler::ir::{
     frontend::{IRNode, IRTrace},
-    operation::{BroadcastAcrossDimension, Matmul, MatrixLayout, ReduceAcrossDimension},
+    operation::{BroadcastAcrossDimension, Matmul, MatrixLayout, ReduceAcrossDimension, SparseMatmul},
 };
 
 use super::AutogradOnCoreOp;
@@ -59,5 +59,15 @@ impl AutogradOnCoreOp for Matmul {
         };
 
         Ok(vec![Some(lhs_grad), Some(rhs_grad)])
+    }
+}
+
+impl AutogradOnCoreOp for SparseMatmul {
+    fn backward<'a>(
+        &self,
+        _inputs: Vec<IRNode<'a>>,
+        _output_grads: Vec<IRNode<'a>>,
+    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        unimplemented!()
     }
 }
