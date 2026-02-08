@@ -1,7 +1,10 @@
 use bullet_compiler::runtime::interpreter::Interpreter;
 use bullet_trainer::model::Model as TrainerModel;
 
-pub use bullet_trainer::model::{ModelBuilder, ModelNode};
+pub use bullet_trainer::model::{
+    Shape,
+    builder::{Affine, InitSettings, ModelBuilder, ModelNode},
+};
 
 pub type ExecutionContext = Interpreter;
 pub type Model = TrainerModel<ExecutionContext>;

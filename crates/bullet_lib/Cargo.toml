@@ -22,10 +22,6 @@ name = "simple"
 path = "../../examples/simple.rs"
 
 [[example]]
-name = "mnist"
-path = "../../examples/extra/mnist.rs"
-
-[[example]]
 name = "test1"
 path = "../../examples/tests/test1.rs"
 
@@ -52,7 +48,3 @@ path = "../../examples/progression/3_input_buckets.rs"
 [[example]]
 name = "4_multi_layer"
 path = "../../examples/progression/4_multi_layer.rs"
-
-[[example]]
-name = "relabel"
-path = "../../examples/extra/relabel.rs"

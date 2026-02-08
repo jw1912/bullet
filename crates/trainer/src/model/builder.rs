@@ -1,6 +1,18 @@
-use std::{collections::HashMap, ops::{Add, Div, Mul, Neg, Sub}, sync::{Arc, Mutex, MutexGuard}};
+use std::{
+    collections::HashMap,
+    ops::{Add, Div, Mul, Neg, Sub},
+    sync::{Arc, Mutex, MutexGuard},
+};
 
-use bullet_compiler::{ir::{builder::IRNode, frontend::IRBuilder, graph::{DType, DValue, NodeId, Size, TType, TValue}, operation::{CABinary, CABinaryOp, Matmul, MatrixLayout, SparseMatmul, Unary, UnaryOp}}, runtime::Device};
+use bullet_compiler::{
+    ir::{
+        builder::IRNode,
+        frontend::IRBuilder,
+        graph::{DType, DValue, NodeId, Size, TType, TValue},
+        operation::{CABinary, CABinaryOp, Matmul, MatrixLayout, SparseMatmul, Unary, UnaryOp},
+    },
+    runtime::Device,
+};
 
 use crate::model::{Model, Shape};
 
@@ -70,13 +82,7 @@ impl ModelBuilder {
         self.new_affine_custom(id, input_size, output_size, 1)
     }
 
-    pub fn new_affine_custom(
-        &self,
-        id: &str,
-        input_size: usize,
-        output_size: usize,
-        bias_cols: usize,
-    ) -> Affine<'_> {
+    pub fn new_affine_custom(&self, id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine<'_> {
         let wid = format!("{id}w");
         let init = InitSettings::Normal { mean: 0.0, stdev: (2.0 / (input_size as f32 * bias_cols as f32)).sqrt() };
         let weights = self.new_weights(&wid, Shape::new(output_size, input_size), init);
@@ -85,7 +91,12 @@ impl ModelBuilder {
         Affine { weights, bias }
     }
 
-    pub fn build<'a, D: Device>(&'a self, _device: Arc<D>, loss: ModelNode<'a>, _outputs: impl AsRef<[(String, ModelNode<'a>)]>) -> Model<D> {
+    pub fn build<'a, D: Device>(
+        &'a self,
+        _device: Arc<D>,
+        loss: ModelNode<'a>,
+        _outputs: impl AsRef<[(String, ModelNode<'a>)]>,
+    ) -> Model<D> {
         assert_eq!(loss.shape, Shape::new(1, 1));
 
         unimplemented!()
@@ -192,15 +203,9 @@ impl<'a> ModelNode<'a> {
         }
 
         let (batch, m, n, k) = match (self.batched, other.batched) {
-            (false, false) => {
-                (1.into(), self.shape.rows, self.shape.cols, other.shape.cols.into())
-            }
-            (true, true) => {
-                (Size::variable(), self.shape.rows, self.shape.cols, other.shape.cols.into())
-            }
-            (false, true) => {
-                (1.into(), self.shape.rows, self.shape.cols, Size::variable())
-            }
+            (false, false) => (1.into(), self.shape.rows, self.shape.cols, other.shape.cols.into()),
+            (true, true) => (Size::variable(), self.shape.rows, self.shape.cols, other.shape.cols.into()),
+            (false, true) => (1.into(), self.shape.rows, self.shape.cols, Size::variable()),
             (true, false) => unimplemented!(),
         };
 
@@ -247,6 +252,26 @@ impl<'a> ModelNode<'a> {
     pub fn squared_error(self, other: Self) -> Self {
         let diff = self - other;
         diff * diff
+    }
+
+    pub fn concat(self, _other: Self) -> Self {
+        unimplemented!()
+    }
+
+    pub fn pairwise_mul(self) -> Self {
+        unimplemented!()
+    }
+
+    pub fn select(self, _indices: Self) -> Self {
+        unimplemented!()
+    }
+
+    pub fn slice_rows(self, _start: usize, _end: usize) -> Self {
+        unimplemented!()
+    }
+
+    pub fn repeat(self, _reps: usize) -> Self {
+        unimplemented!()
     }
 }
 

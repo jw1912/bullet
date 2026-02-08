@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::ir::{graph::{DType, DValue, Op, OpType, Size, TType, TValue}, operation::CABinary};
+use crate::ir::{
+    graph::{DType, DValue, Op, OpType, Size, TType, TValue},
+    operation::CABinary,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SparseMatmul {
