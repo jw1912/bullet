@@ -1,31 +1,9 @@
 use bullet_compiler::ir::{
     frontend::{IRNode, IRTrace},
-    operation::{BroadcastAcrossDimension, Matmul, MatrixLayout, ReduceAcrossDimension, SparseMatmul},
+    operation::{Matmul, MatrixLayout, SparseMatmul},
 };
 
 use super::AutogradOnCoreOp;
-
-impl AutogradOnCoreOp for BroadcastAcrossDimension {
-    fn backward<'a>(
-        &self,
-        _inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
-        let op = self.invert().unwrap();
-        output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![Some(x[0])])
-    }
-}
-
-impl AutogradOnCoreOp for ReduceAcrossDimension {
-    fn backward<'a>(
-        &self,
-        _inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
-        let op = self.invert().unwrap().expect("Reduction backprop only implemented for Sum!");
-        output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![Some(x[0])])
-    }
-}
 
 impl AutogradOnCoreOp for Matmul {
     fn backward<'a>(
@@ -65,9 +43,11 @@ impl AutogradOnCoreOp for Matmul {
 impl AutogradOnCoreOp for SparseMatmul {
     fn backward<'a>(
         &self,
-        _inputs: Vec<IRNode<'a>>,
-        _output_grads: Vec<IRNode<'a>>,
+        inputs: Vec<IRNode<'a>>,
+        output_grads: Vec<IRNode<'a>>,
     ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
-        unimplemented!()
+        let grad = output_grads[0];
+        let op = self.invert();
+        grad.builder().add_op([grad, inputs[1]], op).map(|x| vec![Some(x[0])])
     }
 }

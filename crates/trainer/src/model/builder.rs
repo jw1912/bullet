@@ -9,7 +9,10 @@ use bullet_compiler::{
         builder::IRNode,
         frontend::IRBuilder,
         graph::{DType, DValue, NodeId, Size, TType, TValue},
-        operation::{CABinary, CABinaryOp, Matmul, MatrixLayout, SparseMatmul, Unary, UnaryOp},
+        operation::{
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+            ReduceAcrossDimension, Reduction, SparseMatmul, Unary, UnaryOp,
+        },
     },
     runtime::Device,
 };
@@ -91,17 +94,18 @@ impl ModelBuilder {
         Affine { weights, bias }
     }
 
-    pub fn build<'a, D: Device>(
-        &'a self,
-        _device: Arc<D>,
-        loss: ModelNode<'a>,
-        _outputs: impl AsRef<[(String, ModelNode<'a>)]>,
-    ) -> Model<D> {
+    pub fn build<'a, D: Device>(&'a self, _device: Arc<D>, mut loss: ModelNode<'a>, output: ModelNode<'a>) -> Model<D> {
         assert_eq!(loss.shape, Shape::new(1, 1));
 
-        unimplemented!()
+        if loss.batched {
+            loss = loss.reduce_sum_across_batch();
+        }
+
+        let _fwd = self.ir.build([output.detach()]);
+        let _bwd = self.ir.build([loss.detach()]);
 
         //Model { device, weights: (), shapes: (), forward: (), backward: (), fwd_output_types: (), bwd_output_types: () }
+        unimplemented!()
     }
 }
 
@@ -164,13 +168,57 @@ impl<'a> ModelNode<'a> {
         Self { shape, ..*self }
     }
 
+    pub fn broadcast_across_batch(self) -> Self {
+        assert!(!self.batched);
+        let dtype = self.ty().dtype();
+        let size = self.shape.size();
+        let op = BroadcastAcrossDimension::new(dtype, [size], 0, Size::variable());
+        let node = self.builder.add_op([self], op.unwrap())[0];
+        Self { node, batched: true, ..self }
+    }
+
+    pub fn reduce_sum_across_batch(self) -> Self {
+        assert!(self.batched);
+        let dtype = self.ty().dtype();
+        let shape = [Size::variable(), self.shape.size().into()];
+        let op = ReduceAcrossDimension::new(dtype, shape, 0, Reduction::Sum);
+        let node = self.builder.add_op([self], op.unwrap())[0];
+        Self { node, batched: false, ..self }
+    }
+
+    fn broadcast_scalar(self, shape: Shape) -> Self {
+        assert!(!self.batched);
+        assert_eq!(self.shape, Shape::new(1, 1));
+        let dtype = self.ty().dtype();
+        let op = BroadcastAcrossDimension::new(dtype, [1], 0, shape.size());
+        let node = self.builder.add_op([self], op.unwrap())[0];
+        Self { node, shape, ..self }
+    }
+
     pub fn unary(self, unary: Unary) -> Self {
         let node = self.builder.add_op([self], UnaryOp::new(self.ty(), unary).unwrap())[0];
         Self { node, ..self }
     }
 
-    pub fn binary(self, rhs: Self, binary: CABinary) -> Self {
-        let node = self.builder.add_op([self, rhs], CABinaryOp::new(self.ty(), binary))[0];
+    pub fn binary(mut self, mut rhs: Self, binary: CABinary) -> Self {
+        if self.shape.size() != rhs.shape.size() {
+            if self.shape == Shape::new(1, 1) && !self.batched {
+                self = self.broadcast_scalar(rhs.shape);
+            }
+
+            if rhs.shape == Shape::new(1, 1) && !rhs.batched {
+                rhs = rhs.broadcast_scalar(self.shape);
+            }
+        }
+
+        match (self.batched, rhs.batched) {
+            (false, true) => self = self.broadcast_across_batch(),
+            (true, false) => rhs = rhs.broadcast_across_batch(),
+            _ => {}
+        }
+
+        let op = CABinaryOp::new(self.ty(), binary);
+        let node = self.builder.add_op([self, rhs], op)[0];
         Self { node, ..self }
     }
 
@@ -179,14 +227,15 @@ impl<'a> ModelNode<'a> {
         assert!(self.sparse.is_none());
         assert!(!self.batched);
         assert_eq!(self.shape.cols, sparse.shape.rows);
-        assert_eq!(sparse.shape.rows, 1);
+        assert_eq!(sparse.shape.cols, 1);
 
         let dtype = self.ty().dtype();
         let batch = if sparse.batched { Size::variable() } else { 1.into() };
+        let shape = Shape::new(self.shape.rows, 1);
         let matmul = SparseMatmul::new(dtype, batch, self.shape.rows, self.shape.cols, nnz);
         let node = self.builder.add_op([self, sparse], matmul)[0];
 
-        Self { node, ..self }
+        Self { node, batched: sparse.batched, shape, ..self }
     }
 
     pub fn matmul(self, other: Self) -> Self {
@@ -254,8 +303,25 @@ impl<'a> ModelNode<'a> {
         diff * diff
     }
 
-    pub fn concat(self, _other: Self) -> Self {
-        unimplemented!()
+    pub fn pad(self, before: usize, after: usize, value: f32) -> Self {
+        assert_eq!(self.shape.cols(), 1);
+        let size = self.shape.size();
+
+        let op = PadAcrossDimension::new(
+            if self.batched { vec![Size::variable(), size.into()] } else { vec![size.into()] },
+            usize::from(self.batched),
+            before,
+            after,
+            value.into(),
+        );
+
+        let node = self.builder.add_op([self], op.unwrap())[0];
+
+        Self { node, ..self }
+    }
+
+    pub fn concat(self, rhs: Self) -> Self {
+        self.pad(0, rhs.shape.size(), 0.0) + rhs.pad(self.shape.size(), 0, 0.0)
     }
 
     pub fn pairwise_mul(self) -> Self {

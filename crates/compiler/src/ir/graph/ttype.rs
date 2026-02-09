@@ -88,6 +88,10 @@ impl Size {
         let expected = ((size / self.factor.get()) as f64).powf(1.0 / f64::from(self.var_power)) as usize;
         (self.evaluate(expected) == size).then_some(expected)
     }
+
+    pub fn var_power(&self) -> u32 {
+        self.var_power
+    }
 }
 
 impl Add<Size> for Size {

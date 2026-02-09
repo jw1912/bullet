@@ -141,7 +141,7 @@ where
             let _ = entry_weights * loss;
         }
 
-        let model = builder.build(Default::default(), loss, [("output".into(), out)]);
+        let model = builder.build(Default::default(), loss, out);
 
         ValueTrainer(Trainer {
             optimiser: Optimiser::new(model, Default::default()).unwrap(),

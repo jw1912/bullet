@@ -1,5 +1,7 @@
+mod broadcast;
 mod elementwise;
 mod linear;
+mod reduce;
 
 use std::{
     cell::RefCell,
