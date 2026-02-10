@@ -107,12 +107,14 @@ impl ModelBuilder {
             loss = loss.reduce_sum_across_batch();
         }
 
-        let fwd = self.ir.build([output.detach()]);
+        let mut fwd = self.ir.build([output.detach()]);
         let fwd_ty = fwd.get_node(output.node).unwrap().ty();
+        fwd.transform(LowerForward).unwrap();
+        fwd.transform(InlineSubgraphs).unwrap();
+        fwd.optimise().unwrap();
 
         let mut bwd = self.ir.build([loss.detach()]);
         let bwd_ty = bwd.get_node(loss.node).unwrap().ty();
-
         let grad = bwd.add_const(TValue::F32(vec![1.0]));
         let op = bwd.get_parent_op(loss.node).unwrap();
         let (transform, grads) = TakeGradient::new(op, [grad]);
@@ -132,8 +134,11 @@ impl ModelBuilder {
             assert!(names.insert(name.clone()));
 
             shapes.insert(name.clone(), (shape, sparse));
-            fwd_tensors.insert(name.clone(), TensorInput::In(id));
             bwd_tensors.insert(name.clone(), TensorInput::In(id));
+
+            if fwd.get_node(id).is_ok() {
+                fwd_tensors.insert(name.clone(), TensorInput::In(id));
+            }
 
             if name.starts_with("weights/") {
                 let tensor = stream.make_blocking(&TValue::F32(vec![0.0; shape.size()]));
@@ -150,6 +155,7 @@ impl ModelBuilder {
         let ready_fwd = ReadyToCompileGraph::new(fwd, fwd_tensors).unwrap();
 
         bwd_tensors.insert("outputs/loss".to_string(), TensorInput::Out(loss.node));
+        bwd.optimise().unwrap();
         let ready_bwd = ReadyToCompileGraph::new(bwd, bwd_tensors).unwrap();
 
         Model {
