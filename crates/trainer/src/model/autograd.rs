@@ -182,17 +182,18 @@ impl IRTransform for TakeGradient {
 
                 let igrads = op.backward(inputs.clone(), ograds.clone())?;
 
-                // handle not all inputs having gradient and multiple
+                // handle not all inputs having gradient and
                 // multiple inputs having the same gradient
-                let mut igrad_map = HashMap::new();
+                let mut igrad_map: HashMap<_, _> = operation.inputs().iter().map(|&inp| (inp, Vec::new())).collect();
                 let mut unique_igrads = Vec::new();
                 let mut present_igrads = HashSet::new();
                 for (&inp, igrad) in operation.inputs().iter().zip(igrads.iter()) {
-                    igrad_map.insert(inp, igrad.map(|ig| ig.node()));
-                    if let Some(ig) = igrad
-                        && present_igrads.insert(ig.node())
-                    {
-                        unique_igrads.push(*ig);
+                    if let Some(ig) = igrad {
+                        igrad_map.get_mut(&inp).unwrap().push(ig.node());
+
+                        if present_igrads.insert(ig.node()) {
+                            unique_igrads.push(*ig);
+                        }
                     }
                 }
 
@@ -207,8 +208,9 @@ impl IRTransform for TakeGradient {
                 // accumulate gradients in actual graph
                 let subgraph_map: HashMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
                 for (input, new_grad_subgraph) in igrad_map {
-                    if let Some(subgraph_index) = new_grad_subgraph {
-                        let old_grad = grads.get_mut(&input).unwrap();
+                    let old_grad = grads.get_mut(&input).unwrap();
+
+                    for subgraph_index in new_grad_subgraph {
                         let new_grad = *subgraph_map.get(&subgraph_index).unwrap();
 
                         match old_grad {
@@ -263,8 +265,40 @@ mod tests {
 
         let ops = ir.ordered_operations()?;
         let mut optys = ops.iter().map(Op::op);
+        assert_eq!(ops.len(), 2);
         assert!(Op::downcast_rc::<Input>(optys.next().unwrap()).is_some());
         assert!(Op::downcast_rc::<CopyOp>(optys.next().unwrap()).is_some());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pow() -> Result<(), IRTrace> {
+        let mut ir = IR::default();
+
+        let ttype = TType::new(1, DType::F32);
+
+        let x = ir.add_input(ttype);
+
+        let y = ir.add_op([x, x], AutogradOp::new(CABinaryOp::new(ttype, CABinary::Mul)))?[0];
+
+        let grad = ir.add_const(TValue::F32(vec![1.0]));
+
+        let (transform, grads) = TakeGradient::new(ir.get_parent_op(y)?, [grad]);
+        ir.transform(transform)?;
+        ir.transform(LowerForward)?;
+        ir.transform(InlineSubgraphs)?;
+
+        let dydx = grads.borrow().get(&x).unwrap().unwrap();
+        ir.register_output(dydx);
+
+        ir.optimise()?;
+
+        let ops = ir.ordered_operations()?;
+        let mut optys = ops.iter().map(Op::op);
+        assert_eq!(ops.len(), 2);
+        assert!(Op::downcast_rc::<Input>(optys.next().unwrap()).is_some());
+        assert!(Op::downcast_rc::<CABinaryOp>(optys.next().unwrap()).is_some());
 
         Ok(())
     }
