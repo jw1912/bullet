@@ -1,13 +1,13 @@
 [package]
 name = "bullet_lib"
 version = "1.0.0"
-description = "Neural Network Trainer"
 authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 readme = { workspace = true }
 rust-version = { workspace = true }
 edition = { workspace = true }
+description = "Neural Network Trainer"
 
 [dependencies]
 bullet-compiler = { workspace = true }

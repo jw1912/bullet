@@ -21,13 +21,13 @@ impl AutogradOnCoreOp for CABinaryOp {
                 let lgrad = diff.unary(Unary::IsPositive)?;
                 let rgrad = (-diff)?.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)
-            },
+            }
             CABinary::Min => {
                 let diff = (inputs[0] - inputs[1])?;
                 let lgrad = (-diff)?.unary(Unary::IsPositive)?;
                 let rgrad = diff.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)
-            },
+            }
             _ => unimplemented!(),
         };
 
