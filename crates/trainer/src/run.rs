@@ -71,16 +71,17 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
 
     let outputs =
         trainer.optimiser.model.make_backward_output_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
-
     let gradients = trainer.optimiser.model.make_gradient_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
-
-    let mut next_batch_size = first_batch.batch_size;
-    let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
-
-    let mut batch_queued = true;
-
     let tgf = copy_stream.make_blocking(&TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
     let tlr = copy_stream.make_blocking(&TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
+
+    let mut next_batch_size = first_batch.batch_size;
+    let val = TValue::F32(vec![1.0 / next_batch_size as f32]);
+    let block = copy_stream.clone().copy_h2d_nonblocking(&val, tgf.clone()).map_err(TrainerError::Unexpected)?;
+    let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
+    drop(block);
+
+    let mut batch_queued = true;
 
     while batch_queued {
         if superbatch > steps.end_superbatch {
@@ -121,7 +122,7 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
         let compute_block2 = trainer
             .optimiser
             .update(&compute_stream, tgf.clone(), tlr.clone(), &gradients)
-            .map_err(TrainerError::GradientCalculationError)?;
+            .map_err(TrainerError::OptimiserUpdateError)?;
 
         if let Ok(next_batch_host) = receiver.recv() {
             drop(batch_on_device);

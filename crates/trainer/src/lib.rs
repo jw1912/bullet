@@ -15,6 +15,7 @@ use std::time::Instant;
 pub enum TrainerError<D: Device> {
     DataLoadingError(DataLoadingError),
     GradientCalculationError(D::Error),
+    OptimiserUpdateError(D::Error),
     Unexpected(D::Error),
     IoError,
 }

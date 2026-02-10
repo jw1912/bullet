@@ -31,7 +31,7 @@ impl Default for RAdamParams {
 }
 
 impl RAdamParams {
-    pub fn build(&self, size: usize, epsilon: f32) -> Result<ReadyToCompileGraph, IRTrace> {
+    pub fn build(&self, size: usize) -> Result<ReadyToCompileGraph, IRTrace> {
         let builder = IRBuilder::default();
 
         // args
@@ -50,7 +50,8 @@ impl RAdamParams {
         let new_m = ((self.beta1 * m)? + ((1.0 - self.beta1) * agrd)?)?;
         let new_v = ((self.beta2 * v)? + (((1.0 - self.beta2) * agrd)? * agrd)?)?;
 
-        let val_denom = (new_m / (new_v + epsilon)?)?;
+        let point5 = builder.scalar(0.5, size);
+        let val_denom = (new_m / (new_v.pow(point5)? + 0.00000001)?)?;
         let val = ((denom * val_denom)? + ((1.0 - denom)? * new_m)?)?;
 
         let mut new_w = ((w * (1.0 - (lrate * self.decay)?)?)? - ((lrate * ssize)? * val)?)?;
@@ -91,7 +92,7 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
     type Params = RAdamParams;
 
     fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Result<Self, D::Error> {
-        let op = device.compile(default_params.build(size, 0.00001).unwrap())?;
+        let op = device.compile(default_params.build(size).unwrap())?;
         let stream = device.default_stream();
 
         Ok(Self {
@@ -224,7 +225,7 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
 
         let size = self.momentum.size();
         let device = self.momentum.device();
-        self.op = device.compile(params.build(size, 0.00001).unwrap())?;
+        self.op = device.compile(params.build(size).unwrap())?;
         Ok(())
     }
 }

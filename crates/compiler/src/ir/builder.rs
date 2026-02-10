@@ -3,7 +3,9 @@ use std::cell::RefCell;
 use crate::ir::{
     IR, IRTrace,
     graph::{DType, DValue, GraphError, NodeId, OpType, Shape, Size, TType, TValue},
-    operation::{BroadcastAcrossDimension, CABinary, CopyOp, ReduceAcrossDimension, Reduction, Unary},
+    operation::{
+        BroadcastAcrossDimension, CABinary, CopyOp, NCABinary, NCABinaryOp, ReduceAcrossDimension, Reduction, Unary,
+    },
 };
 
 #[derive(Default)]
@@ -99,6 +101,10 @@ impl<'a> IRNode<'a> {
 
     pub fn reduce_max(self, shape: impl Into<Shape>, dim: usize) -> Result<Self, IRTrace> {
         self.reduce(shape, dim, Reduction::Max)
+    }
+
+    pub fn pow(self, other: Self) -> Result<Self, IRTrace> {
+        self.builder.add_op([self, other], NCABinaryOp::new(self.ty(), NCABinary::Pow)).map(|x| x[0])
     }
 
     pub fn min(self, other: Self) -> Result<Self, IRTrace> {

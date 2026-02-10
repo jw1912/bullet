@@ -26,7 +26,7 @@ impl Default for AdamWParams {
 }
 
 impl AdamWParams {
-    pub fn build(&self, size: usize, epsilon: f32) -> Result<ReadyToCompileGraph, IRTrace> {
+    pub fn build(&self, size: usize) -> Result<ReadyToCompileGraph, IRTrace> {
         let builder = IRBuilder::default();
 
         // args
@@ -46,7 +46,8 @@ impl AdamWParams {
         let new_m = ((self.beta1 * m)? + ((1.0 - self.beta1) * agrd)?)?;
         let new_v = ((self.beta2 * v)? + (((1.0 - self.beta2) * agrd)? * agrd)?)?;
 
-        let val = (new_m / (new_v + epsilon)?)?;
+        let point5 = builder.scalar(0.5, size);
+        let val = (new_m / (new_v.pow(point5)? + 0.00000001)?)?;
 
         let minw = builder.scalar(DValue::F32(self.min_weight), size);
         let maxw = builder.scalar(DValue::F32(self.max_weight), size);
@@ -85,7 +86,7 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
             );
         }
 
-        let op = device.compile(default_params.build(size, 0.00001).unwrap())?;
+        let op = device.compile(default_params.build(size).unwrap())?;
         let stream = device.default_stream();
 
         Ok(Self {
@@ -160,7 +161,7 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
     fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
         let size = self.momentum.size();
         let device = self.momentum.device();
-        self.op = device.compile(params.build(size, 0.00001).unwrap())?;
+        self.op = device.compile(params.build(size).unwrap())?;
         Ok(())
     }
 }
