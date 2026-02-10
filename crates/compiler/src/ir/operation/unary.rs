@@ -17,7 +17,8 @@ pub enum Unary {
     Abs,
     Reciprocal,
     Cast(DType),
-    Step,
+    IsPositive,
+    IsZero,
 }
 
 impl Unary {
@@ -55,9 +56,13 @@ impl Unary {
                 (DValue::I32(x), DType::F32) => DValue::F32(x as f32),
                 _ => input,
             },
-            Self::Step => match input {
-                DValue::F32(x) => DValue::F32(f32::from(x >= 0.0)),
-                DValue::I32(x) => DValue::I32(i32::from(x >= 0)),
+            Self::IsPositive => match input {
+                DValue::F32(x) => DValue::F32(f32::from(x > 0.0)),
+                DValue::I32(x) => DValue::I32(i32::from(x > 0)),
+            },
+            Self::IsZero => match input {
+                DValue::F32(x) => DValue::F32(f32::from(x == 0.0)),
+                DValue::I32(x) => DValue::I32(i32::from(x == 0)),
             },
         })
     }

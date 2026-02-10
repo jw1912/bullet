@@ -30,8 +30,11 @@ impl AdamWParams {
         let builder = IRBuilder::default();
 
         // args
-        let lrate = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-        let adjus = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
+        let ilrate = builder.add_input(1, DType::F32);
+        let iadjus = builder.add_input(1, DType::F32);
+
+        let lrate = ilrate.broadcast([1], 0, size)?;
+        let adjus = iadjus.broadcast([1], 0, size)?;
 
         // inputs
         let w = builder.add_input(size, DType::F32);
@@ -54,10 +57,8 @@ impl AdamWParams {
         ReadyToCompileGraph::new(
             ir,
             [
-                ("lrate".into(), TensorInput::In(lrate.node())),
-                ("adjus".into(), TensorInput::In(adjus.node())),
-                ("minw".into(), TensorInput::In(minw.node())),
-                ("maxw".into(), TensorInput::In(maxw.node())),
+                ("lrate".into(), TensorInput::In(ilrate.node())),
+                ("adjus".into(), TensorInput::In(iadjus.node())),
                 ("g".into(), TensorInput::In(g.node())),
                 ("w".into(), TensorInput::InOut(w.node(), new_w.node())),
                 ("m".into(), TensorInput::InOut(m.node(), new_m.node())),

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::{Add, Div, Mul, Neg, Sub},
     sync::{Arc, Mutex, MutexGuard},
 };
@@ -13,11 +13,15 @@ use bullet_compiler::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
             ReduceAcrossDimension, Reduction, SparseMatmul, Unary, UnaryOp,
         },
+        transform::inline::InlineSubgraphs,
     },
-    runtime::Device,
+    runtime::{Device, ReadyToCompileGraph, Stream, TensorInput},
 };
 
-use crate::model::{Model, Shape};
+use crate::model::{
+    Model, Shape,
+    autograd::{LowerForward, TakeGradient},
+};
 
 use super::autograd::{Autograd, AutogradOp};
 
@@ -28,20 +32,22 @@ pub enum InitSettings {
     Uniform { mean: f32, stdev: f32 },
 }
 
+type InputDesc = (String, Shape, Option<usize>);
+
 #[derive(Default)]
 pub struct ModelBuilder {
     ir: IRBuilder,
     init: Mutex<HashMap<NodeId, InitSettings>>,
-    names: Mutex<HashMap<NodeId, String>>,
+    inputs: Mutex<HashMap<NodeId, InputDesc>>,
 }
 
 impl ModelBuilder {
-    pub fn init(&self) -> MutexGuard<'_, HashMap<NodeId, InitSettings>> {
+    fn init(&self) -> MutexGuard<'_, HashMap<NodeId, InitSettings>> {
         self.init.try_lock().unwrap()
     }
 
-    pub fn names(&self) -> MutexGuard<'_, HashMap<NodeId, String>> {
-        self.names.try_lock().unwrap()
+    fn inputs(&self) -> MutexGuard<'_, HashMap<NodeId, InputDesc>> {
+        self.inputs.try_lock().unwrap()
     }
 
     pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ModelNode<'a>]>, op: impl Autograd) -> Vec<NodeId> {
@@ -58,13 +64,13 @@ impl ModelBuilder {
 
     pub fn new_dense_input<'a>(&'a self, id: &str, shape: Shape) -> ModelNode<'a> {
         let node = self.ir.add_input(Size::variable() * shape.size(), DType::F32).node();
-        assert!(self.names().insert(node, id.to_string()).is_none());
+        assert!(self.inputs().insert(node, (format!("inputs/{id}"), shape, None)).is_none());
         ModelNode { node, builder: self, batched: true, shape, sparse: None }
     }
 
     pub fn new_sparse_input<'a>(&'a self, id: &str, shape: Shape, nnz: usize) -> ModelNode<'a> {
         let node = self.ir.add_input(Size::variable() * nnz, DType::I32).node();
-        assert!(self.names().insert(node, id.to_string()).is_none());
+        assert!(self.inputs().insert(node, (format!("inputs/{id}"), shape, Some(nnz))).is_none());
         ModelNode { node, builder: self, batched: true, shape, sparse: Some(nnz) }
     }
 
@@ -76,7 +82,7 @@ impl ModelBuilder {
 
     pub fn new_weights<'a>(&'a self, id: &str, shape: Shape, init: InitSettings) -> ModelNode<'a> {
         let node = self.ir.add_input(shape.size(), DType::F32).node();
-        assert!(self.names().insert(node, id.to_string()).is_none());
+        assert!(self.inputs().insert(node, (format!("weights/{id}"), shape, None)).is_none());
         self.init().insert(node, init);
         ModelNode { node, builder: self, batched: false, shape, sparse: None }
     }
@@ -94,18 +100,67 @@ impl ModelBuilder {
         Affine { weights, bias }
     }
 
-    pub fn build<'a, D: Device>(&'a self, _device: Arc<D>, mut loss: ModelNode<'a>, output: ModelNode<'a>) -> Model<D> {
+    pub fn build<'a, D: Device>(&'a self, device: Arc<D>, mut loss: ModelNode<'a>, output: ModelNode<'a>) -> Model<D> {
         assert_eq!(loss.shape, Shape::new(1, 1));
 
         if loss.batched {
             loss = loss.reduce_sum_across_batch();
         }
 
-        let _fwd = self.ir.build([output.detach()]);
-        let _bwd = self.ir.build([loss.detach()]);
+        let mut tensors = HashMap::new();
 
-        //Model { device, weights: (), shapes: (), forward: (), backward: (), fwd_output_types: (), bwd_output_types: () }
-        unimplemented!()
+        let fwd = self.ir.build([output.detach()]);
+        let fwd_ty = fwd.get_node(output.node).unwrap().ty();
+
+        let mut fwd_tensors = tensors.clone();
+        fwd_tensors.insert("outputs/output".to_string(), TensorInput::Out(output.node));
+        let ready_fwd = ReadyToCompileGraph::new(fwd, fwd_tensors).unwrap();
+
+        let mut bwd = self.ir.build([loss.detach()]);
+        let bwd_ty = bwd.get_node(loss.node).unwrap().ty();
+        tensors.insert("outputs/loss".to_string(), TensorInput::Out(loss.node));
+
+        let grad = bwd.add_const(TValue::F32(vec![1.0]));
+        let op = bwd.get_parent_op(loss.node).unwrap();
+        let (transform, grads) = TakeGradient::new(op, [grad]);
+        bwd.transform(transform).unwrap();
+        bwd.transform(LowerForward).unwrap();
+        bwd.transform(InlineSubgraphs).unwrap();
+
+        let mut shapes = HashMap::new();
+        let mut weights = HashMap::new();
+        let stream = device.default_stream();
+
+        let mut names = HashSet::new();
+
+        for (id, (name, shape, sparse)) in self.inputs().clone() {
+            assert!(names.insert(name.clone()));
+
+            shapes.insert(name.clone(), (shape, sparse));
+            tensors.insert(name.clone(), TensorInput::In(id));
+
+            if name.starts_with("weights/") {
+                let tensor = stream.make_blocking(&TValue::F32(vec![0.0; shape.size()]));
+                weights.insert(name.clone(), tensor.unwrap());
+
+                let name = name.strip_prefix("weights/").unwrap().to_string();
+                let gid = grads.borrow().get(&id).unwrap().unwrap();
+                bwd.register_output(gid);
+                tensors.insert(format!("gradients/{name}"), TensorInput::Out(gid));
+            }
+        }
+
+        let ready_bwd = ReadyToCompileGraph::new(bwd, tensors).unwrap();
+
+        Model {
+            weights,
+            shapes,
+            forward: device.compile(ready_fwd).unwrap(),
+            backward: device.compile(ready_bwd).unwrap(),
+            fwd_output_types: [("outputs/output".to_string(), fwd_ty)].into(),
+            bwd_output_types: [("outputs/loss".to_string(), bwd_ty)].into(),
+            device,
+        }
     }
 }
 

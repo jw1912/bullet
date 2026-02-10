@@ -42,7 +42,7 @@ impl Shape {
 pub struct Model<D: Device> {
     device: Arc<D>,
     weights: TensorMap<D>,
-    shapes: HashMap<String, Shape>,
+    shapes: HashMap<String, (Shape, Option<usize>)>,
     forward: D::CompiledGraph,
     backward: D::CompiledGraph,
     fwd_output_types: HashMap<String, TType>,
@@ -164,6 +164,7 @@ impl<D: Device> Model<D> {
 
         while offset < buf.len() {
             let (buffer, id, bytes_read) = utils::read_from_byte_buffer(&buf[offset..]);
+            let id = format!("weights/{id}");
 
             let weights = self.weights.get(&id).expect("No weight with ID found!").clone();
 

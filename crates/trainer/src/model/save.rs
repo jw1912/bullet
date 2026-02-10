@@ -31,7 +31,8 @@ impl<D: Device> From<&Model<D>> for ModelWeights {
                 .iter()
                 .map(|(id, value)| {
                     let values = stream.copy_d2h_blocking(value.clone()).unwrap();
-                    (id.clone(), ShapedTValue { values, shape: *model.shapes.get(id).unwrap() })
+                    let wid = id.strip_prefix("weights/").unwrap().to_string();
+                    (wid, ShapedTValue { values, shape: model.shapes.get(id).unwrap().0 })
                 })
                 .collect(),
         }

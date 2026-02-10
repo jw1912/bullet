@@ -16,6 +16,18 @@ impl AutogradOnCoreOp for CABinaryOp {
         let (glhs, grhs) = match self.op() {
             CABinary::Add => (grad, grad),
             CABinary::Mul => ((grad * inputs[1])?, (grad * inputs[0])?),
+            CABinary::Max => {
+                let diff = (inputs[0] - inputs[1])?;
+                let lgrad = diff.unary(Unary::IsPositive)?;
+                let rgrad = (-diff)?.unary(Unary::IsPositive)?;
+                ((grad * lgrad)?, (grad * rgrad)?)
+            },
+            CABinary::Min => {
+                let diff = (inputs[0] - inputs[1])?;
+                let lgrad = (-diff)?.unary(Unary::IsPositive)?;
+                let rgrad = diff.unary(Unary::IsPositive)?;
+                ((grad * lgrad)?, (grad * rgrad)?)
+            },
             _ => unimplemented!(),
         };
 
@@ -42,7 +54,7 @@ impl AutogradOnCoreOp for UnaryOp {
                 -(x * x)?
             }
             Unary::Log => input.unary(Unary::Reciprocal),
-            Unary::Sgn | Unary::Step => {
+            Unary::Sgn | Unary::IsPositive | Unary::IsZero => {
                 let zero = DValue::zero(input.ty().dtype());
                 Ok(input.builder().scalar(zero, input.ty().size()))
             }

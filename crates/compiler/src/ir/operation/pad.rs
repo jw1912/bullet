@@ -40,8 +40,8 @@ impl PadAcrossDimension {
     }
 
     pub fn invert(&self) -> Result<SliceAcrossDimension, GraphError> {
-        let shape = [self.outer, self.dimen.into(), self.inner];
-        SliceAcrossDimension::new(self.value.dtype(), shape, 1, self.before, self.after)
+        let shape = [self.outer, (self.before + self.dimen + self.after).into(), self.inner];
+        SliceAcrossDimension::new(self.value.dtype(), shape, 1, self.before, self.before + self.dimen)
     }
 
     pub fn input_size(&self) -> Size {
@@ -152,6 +152,13 @@ mod tests {
         let TValue::I32(output) = output else { panic!() };
 
         assert_eq!(&output, &expected);
+
+        let inverse = pad.invert().unwrap();
+        assert_eq!(pad, inverse.invert().unwrap());
+        let mut inverse_output = TValue::I32(vec![0; INPUT.len()]);
+        inverse.evaluate(vec![&TValue::I32(output)], vec![&mut inverse_output]);
+        let TValue::I32(inverse_output) = inverse_output else { panic!() };
+        assert_eq!(&INPUT[..], &inverse_output[..]);
     }
 
     #[test]
@@ -177,6 +184,13 @@ mod tests {
         let TValue::I32(output) = output else { panic!() };
 
         assert_eq!(&output, &expected);
+
+        let inverse = pad.invert().unwrap();
+        assert_eq!(pad, inverse.invert().unwrap());
+        let mut inverse_output = TValue::I32(vec![0; INPUT.len()]);
+        inverse.evaluate(vec![&TValue::I32(output)], vec![&mut inverse_output]);
+        let TValue::I32(inverse_output) = inverse_output else { panic!() };
+        assert_eq!(&INPUT[..], &inverse_output[..]);
     }
 
     #[test]

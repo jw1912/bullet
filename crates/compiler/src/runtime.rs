@@ -81,6 +81,7 @@ pub trait Stream: Sized {
     ) -> BlockResult<Self, Vec<Buf<Self>>>;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TensorInput {
     In(NodeId),
     Out(NodeId),
