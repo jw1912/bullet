@@ -138,7 +138,7 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
         drop(compute_block1);
         drop(compute_block2);
 
-        let loss = outputs.get("loss").expect("`Trainer` must have a \"loss\" output!");
+        let loss = outputs.get("outputs/loss").expect("`Trainer` must have a \"loss\" output!");
         let TValue::F32(loss) = copy_stream.copy_d2h_blocking(loss.clone()).map_err(TrainerError::Unexpected)? else {
             panic!()
         };

@@ -107,18 +107,11 @@ impl ModelBuilder {
             loss = loss.reduce_sum_across_batch();
         }
 
-        let mut tensors = HashMap::new();
-
         let fwd = self.ir.build([output.detach()]);
         let fwd_ty = fwd.get_node(output.node).unwrap().ty();
 
-        let mut fwd_tensors = tensors.clone();
-        fwd_tensors.insert("outputs/output".to_string(), TensorInput::Out(output.node));
-        let ready_fwd = ReadyToCompileGraph::new(fwd, fwd_tensors).unwrap();
-
         let mut bwd = self.ir.build([loss.detach()]);
         let bwd_ty = bwd.get_node(loss.node).unwrap().ty();
-        tensors.insert("outputs/loss".to_string(), TensorInput::Out(loss.node));
 
         let grad = bwd.add_const(TValue::F32(vec![1.0]));
         let op = bwd.get_parent_op(loss.node).unwrap();
@@ -127,6 +120,8 @@ impl ModelBuilder {
         bwd.transform(LowerForward).unwrap();
         bwd.transform(InlineSubgraphs).unwrap();
 
+        let mut fwd_tensors = HashMap::new();
+        let mut bwd_tensors = HashMap::new();
         let mut shapes = HashMap::new();
         let mut weights = HashMap::new();
         let stream = device.default_stream();
@@ -137,7 +132,8 @@ impl ModelBuilder {
             assert!(names.insert(name.clone()));
 
             shapes.insert(name.clone(), (shape, sparse));
-            tensors.insert(name.clone(), TensorInput::In(id));
+            fwd_tensors.insert(name.clone(), TensorInput::In(id));
+            bwd_tensors.insert(name.clone(), TensorInput::In(id));
 
             if name.starts_with("weights/") {
                 let tensor = stream.make_blocking(&TValue::F32(vec![0.0; shape.size()]));
@@ -146,11 +142,15 @@ impl ModelBuilder {
                 let name = name.strip_prefix("weights/").unwrap().to_string();
                 let gid = grads.borrow().get(&id).unwrap().unwrap();
                 bwd.register_output(gid);
-                tensors.insert(format!("gradients/{name}"), TensorInput::Out(gid));
+                bwd_tensors.insert(format!("gradients/{name}"), TensorInput::Out(gid));
             }
         }
 
-        let ready_bwd = ReadyToCompileGraph::new(bwd, tensors).unwrap();
+        fwd_tensors.insert("outputs/output".to_string(), TensorInput::Out(output.node));
+        let ready_fwd = ReadyToCompileGraph::new(fwd, fwd_tensors).unwrap();
+
+        bwd_tensors.insert("outputs/loss".to_string(), TensorInput::Out(loss.node));
+        let ready_bwd = ReadyToCompileGraph::new(bwd, bwd_tensors).unwrap();
 
         Model {
             weights,

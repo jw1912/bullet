@@ -79,7 +79,7 @@ impl<D: Device> Model<D> {
         inputs: &TensorMap<D>,
         outputs: &TensorMap<D>,
     ) -> Result<ModelAsyncReturn<D>, D::Error> {
-        let tensors = collect_map::<D>([("weights", &self.weights), ("inputs", inputs), ("outputs", outputs)]);
+        let tensors = collect_map::<D>([("", &self.weights), ("inputs/", inputs), ("", outputs)]);
 
         stream.execute_graph(&self.forward, &tensors)
     }
@@ -92,10 +92,10 @@ impl<D: Device> Model<D> {
         gradients: &TensorMap<D>,
     ) -> Result<ModelAsyncReturn<D>, D::Error> {
         let tensors = collect_map::<D>([
-            ("weights", &self.weights),
-            ("inputs", inputs),
-            ("outputs", outputs),
-            ("gradients", gradients),
+            ("", &self.weights),
+            ("inputs/", inputs),
+            ("", outputs),
+            ("gradients/", gradients),
         ]);
 
         stream.execute_graph(&self.backward, &tensors)
@@ -190,7 +190,7 @@ fn collect_map<'a, D: Device + 'a>(x: impl AsRef<[(&'a str, &'a TensorMap<D>)]>)
 
     for (pre, submap) in x.as_ref() {
         for (name, value) in submap.iter() {
-            map.insert(format!("{pre}/{name}"), value.clone());
+            map.insert(format!("{pre}{name}"), value.clone());
         }
     }
 

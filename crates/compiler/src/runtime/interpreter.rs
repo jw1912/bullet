@@ -56,10 +56,13 @@ impl Stream for Interpreter {
     ) -> BlockResult<Self, Vec<Buf>> {
         let mut inputs = HashMap::new();
 
-        let get = |x| graph.tensors().get(x).ok_or::<GraphError>("Name not present!".into());
+        let filtered = tensors
+            .iter()
+            .filter(|(name, _)| graph.tensors().get(*name)
+            .is_some());
 
-        for (name, tensor) in tensors {
-            let input = get(name)?;
+        for (name, tensor) in filtered.clone() {
+            let input = graph.tensors().get(name).unwrap();
             let value = tensor.lock().map_err(|e| format!("{e:?}"))?.clone();
 
             if match input {
@@ -73,8 +76,8 @@ impl Stream for Interpreter {
 
         let outputs = graph.ir().evaluate(inputs)?;
 
-        for (name, tensor) in tensors {
-            let input = get(name)?;
+        for (name, tensor) in filtered {
+            let input = graph.tensors().get(name).unwrap();
 
             if let Some(out) = match input {
                 TensorInput::InOut(_, output) => Some(output),

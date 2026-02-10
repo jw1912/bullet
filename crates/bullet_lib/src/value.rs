@@ -204,7 +204,7 @@ where
         let outputs = model.make_forward_output_tensors(&stream, 1).unwrap();
         drop(model.forward(&stream, &inputs, &outputs).unwrap());
 
-        let output = outputs.get("output").unwrap().clone();
+        let output = outputs.get("outputs/output").unwrap().clone();
         let Ok(TValue::F32(output)) = stream.copy_d2h_blocking(output) else { panic!() };
         output
     }
