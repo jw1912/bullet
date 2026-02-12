@@ -11,19 +11,20 @@ impl AutogradOnCoreOp for CABinaryOp {
         inputs: Vec<IRNode<'a>>,
         output_grads: Vec<IRNode<'a>>,
     ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        let [lhs, rhs] = inputs[..] else { panic!() };
         let [grad] = output_grads[..] else { panic!() };
 
         let (glhs, grhs) = match self.op() {
             CABinary::Add => (grad, grad),
-            CABinary::Mul => ((grad * inputs[1])?, (grad * inputs[0])?),
+            CABinary::Mul => ((grad * rhs)?, (grad * lhs)?),
             CABinary::Max => {
-                let diff = (inputs[0] - inputs[1])?;
+                let diff = (lhs - rhs)?;
                 let lgrad = diff.unary(Unary::IsPositive)?;
                 let rgrad = (-diff)?.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)
             }
             CABinary::Min => {
-                let diff = (inputs[0] - inputs[1])?;
+                let diff = (lhs - rhs)?;
                 let lgrad = (-diff)?.unary(Unary::IsPositive)?;
                 let rgrad = diff.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)

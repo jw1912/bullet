@@ -384,6 +384,14 @@ impl<'a> ModelNode<'a> {
         1.0 / (1.0 + (-self).exp())
     }
 
+    pub fn abs(self) -> Self {
+        self.unary(Unary::Abs)
+    }
+
+    pub fn abs_pow(self, power: f32) -> Self {
+        (power * self.abs().unary(Unary::Log)).exp()
+    }
+
     pub fn squared_error(self, other: Self) -> Self {
         let diff = self - other;
         diff * diff

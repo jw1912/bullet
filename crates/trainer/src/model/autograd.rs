@@ -255,12 +255,11 @@ mod tests {
 
         let (transform, grads) = TakeGradient::new(ir.get_parent_op(y)?, [grad]);
         ir.transform(transform)?;
-        ir.transform(LowerForward)?;
-        ir.transform(InlineSubgraphs)?;
-
         let dydx = grads.borrow().get(&x).unwrap().unwrap();
         ir.register_output(dydx);
 
+        ir.transform(LowerForward)?;
+        ir.transform(InlineSubgraphs)?;
         ir.optimise()?;
 
         let ops = ir.ordered_operations()?;
