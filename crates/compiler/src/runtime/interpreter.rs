@@ -56,6 +56,7 @@ impl Stream for Interpreter {
     ) -> BlockResult<Self, Vec<Buf>> {
         let mut inputs = HashMap::new();
 
+
         let filtered = tensors.iter().filter(|(name, _)| graph.tensors().get(*name).is_some());
 
         for (name, tensor) in filtered.clone() {
