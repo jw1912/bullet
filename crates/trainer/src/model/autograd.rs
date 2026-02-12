@@ -1,4 +1,5 @@
 mod broadcast;
+mod dfo;
 mod elementwise;
 mod linear;
 mod reduce;
@@ -16,6 +17,8 @@ use bullet_compiler::ir::{
     operation::{CABinary, SubGraph},
     transform::{IRTransform, modify::AddOperation},
 };
+
+pub use dfo::{CReLU, DiffableFromOutput, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid};
 
 pub trait Autograd: std::any::Any + fmt::Debug + 'static {
     fn opname(&self) -> String;
@@ -74,6 +77,10 @@ pub struct AutogradOp {
 }
 
 impl AutogradOp {
+    pub fn into_forward(self) -> SubGraph {
+        self.forward
+    }
+
     pub fn downcast_rc<T: Autograd>(input: &Rc<dyn Autograd>) -> Option<&T> {
         let op: &dyn std::any::Any = input.as_ref();
         op.downcast_ref::<T>()

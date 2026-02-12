@@ -1,7 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::{Add, Div, Mul, Neg, Sub},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        Arc, Mutex, MutexGuard,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use bullet_compiler::{
@@ -20,7 +23,7 @@ use bullet_compiler::{
 
 use crate::model::{
     Model, Shape,
-    autograd::{LowerForward, TakeGradient},
+    autograd::{CReLU, DiffableFromOutput, DiffableFromOutputOp, LowerForward, ReLU, SCReLU, Sigmoid, TakeGradient},
 };
 
 use super::autograd::{Autograd, AutogradOp};
@@ -59,6 +62,8 @@ pub struct ModelBuilder {
     ir: IRBuilder,
     init: Mutex<HashMap<NodeId, InitSettings>>,
     inputs: Mutex<HashMap<NodeId, InputDesc>>,
+    no_grad: AtomicBool,
+    frozen: Mutex<HashSet<NodeId>>,
 }
 
 impl ModelBuilder {
@@ -70,10 +75,28 @@ impl ModelBuilder {
         self.inputs.try_lock().unwrap()
     }
 
+    fn is_no_grad(&self) -> bool {
+        self.no_grad.load(Ordering::SeqCst)
+    }
+
+    pub fn no_grad<T>(&self, mut f: impl FnMut() -> T) -> T {
+        self.no_grad.store(true, Ordering::SeqCst);
+        let ret = f();
+        self.no_grad.store(false, Ordering::SeqCst);
+        ret
+    }
+
     pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ModelNode<'a>]>, op: impl Autograd) -> Vec<NodeId> {
         let inputs = inputs.as_ref().iter().map(ModelNode::detach).collect::<Vec<_>>();
-        let op = self.ir.add_op(inputs, AutogradOp::new(op).unwrap()).unwrap();
-        op.iter().map(IRNode::node).collect()
+        let op = AutogradOp::new(op).unwrap();
+
+        let outputs = if self.is_no_grad() {
+            self.ir.add_op(inputs, op.into_forward()).unwrap()
+        } else {
+            self.ir.add_op(inputs, op).unwrap()
+        };
+
+        outputs.iter().map(IRNode::node).collect()
     }
 
     pub fn scalar<'a>(&'a self, value: f32) -> ModelNode<'a> {
@@ -104,6 +127,11 @@ impl ModelBuilder {
         let node = self.ir.add_input(shape.size(), DType::F32).node();
         assert!(self.inputs().insert(node, (format!("weights/{id}"), shape, None)).is_none());
         self.init().insert(node, init);
+
+        if self.is_no_grad() {
+            self.frozen.try_lock().unwrap().insert(node);
+        }
+
         ModelNode { node, builder: self, nt: NodeType { batched: false, shape, sparse: None } }
     }
 
@@ -146,6 +174,7 @@ impl ModelBuilder {
         let mut weights = HashMap::new();
         let stream = device.default_stream();
 
+        let frozen = self.frozen.try_lock().unwrap().clone();
         let mut names = HashSet::new();
 
         for (id, (name, shape, sparse)) in self.inputs().clone() {
@@ -164,8 +193,11 @@ impl ModelBuilder {
 
                 let name = name.strip_prefix("weights/").unwrap().to_string();
                 let gid = grads.borrow().get(&id).unwrap().unwrap();
-                bwd.register_output(gid);
-                bwd_tensors.insert(format!("gradients/{name}"), TensorInput::Out(gid));
+
+                if !frozen.contains(&id) {
+                    bwd.register_output(gid);
+                    bwd_tensors.insert(format!("gradients/{name}"), TensorInput::Out(gid));
+                }
             }
         }
 
@@ -363,25 +395,30 @@ impl<'a> ModelNode<'a> {
         self.binary(self.builder.scalar(value), CABinary::Max)
     }
 
+    fn dfo(self, op: impl DiffableFromOutput) -> Self {
+        let op = DiffableFromOutputOp(op, self.ty().dtype(), self.ty().size());
+        let node = self.builder.add_op([self], op)[0];
+        Self { node, ..self }
+    }
+
     pub fn relu(self) -> Self {
-        self.max(0.0)
+        self.dfo(ReLU)
     }
 
     pub fn crelu(self) -> Self {
-        self.max(0.0).min(1.0)
+        self.dfo(CReLU)
     }
 
     pub fn screlu(self) -> Self {
-        let x = self.crelu();
-        x * x
+        self.dfo(SCReLU)
+    }
+
+    pub fn sigmoid(self) -> Self {
+        self.dfo(Sigmoid)
     }
 
     pub fn exp(self) -> Self {
         self.unary(Unary::Exp)
-    }
-
-    pub fn sigmoid(self) -> Self {
-        1.0 / (1.0 + (-self).exp())
     }
 
     pub fn abs(self) -> Self {

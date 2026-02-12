@@ -45,8 +45,8 @@ impl Matmul {
 
 impl OpType for Matmul {
     fn opname(&self) -> String {
-        let Matmul { dtype, batch, lhs, rhs } = *self;
-        format!("matmul<{dtype:?}, {batch:?}, {lhs:?}, {rhs:?}>")
+        let Matmul { batch, lhs, rhs, .. } = *self;
+        format!("matmul<{batch:?}, {lhs:?}, {rhs:?}>")
     }
 
     fn inputs(&self) -> Vec<TType> {

@@ -11,7 +11,7 @@ mod sparse;
 mod subgraph;
 mod unary;
 
-pub use binary::{CABinary, CABinaryOp, NCABinary, NCABinaryOp};
+pub use binary::{CABinary, CABinaryOp};
 pub use broadcast::BroadcastAcrossDimension;
 pub use constant::{Constant, ScalarConstant};
 pub use copy::CopyOp;

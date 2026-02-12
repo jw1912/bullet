@@ -46,8 +46,7 @@ impl AdamWParams {
         let new_m = ((self.beta1 * m)? + ((1.0 - self.beta1) * agrd)?)?;
         let new_v = ((self.beta2 * v)? + (((1.0 - self.beta2) * agrd)? * agrd)?)?;
 
-        let point5 = builder.scalar(0.5, size);
-        let val = (new_m / (new_v.pow(point5)? + 0.00000001)?)?;
+        let val = (new_m / (new_v.sqrt()? + 0.00000001)?)?;
 
         let minw = builder.scalar(DValue::F32(self.min_weight), size);
         let maxw = builder.scalar(DValue::F32(self.max_weight), size);

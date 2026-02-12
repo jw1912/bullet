@@ -15,6 +15,7 @@ pub enum Unary {
     Log,
     Sgn,
     Abs,
+    Sqrt,
     Reciprocal,
     Cast(DType),
     IsPositive,
@@ -43,6 +44,7 @@ impl Unary {
             Self::Exp => fp(f32::exp)?,
             Self::Reciprocal => fp(|x| 1.0 / x)?,
             Self::Log => fp(|x| x.ln())?,
+            Self::Sqrt => fp(|x| x.sqrt())?,
             Self::Sgn => match input {
                 DValue::F32(x) => DValue::F32(x.signum()),
                 DValue::I32(x) => DValue::I32(x.signum()),
