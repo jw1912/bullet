@@ -64,6 +64,7 @@ where
 
     for fmt in &trainer.state.saved_format {
         if let Some(id) = &fmt.get_id() {
+            let id = format!("weights/{id}");
             let Some(TValue::F32(weights)) = trainer.optimiser.model.get_weights(id) else { panic!() };
             let quantised = QuantTarget::Float.quantise(false, &weights)?;
             buf.extend_from_slice(&quantised);

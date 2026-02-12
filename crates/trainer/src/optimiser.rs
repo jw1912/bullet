@@ -113,7 +113,7 @@ impl<D: Device, S: OptimiserState<D>> Optimiser<D, S> {
     }
 
     pub fn set_params_for_weight(&mut self, id: &str, params: S::Params) {
-        self.state.get_mut(id).unwrap().set_params(params).unwrap();
+        self.state.get_mut(&format!("weights/{id}")).unwrap().set_params(params).unwrap();
     }
 
     pub fn set_params(&mut self, params: S::Params) {

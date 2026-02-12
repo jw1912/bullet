@@ -10,7 +10,8 @@ use bullet_compiler::{
         frontend::IRBuilder,
         graph::{DType, DValue, NodeId, Size, TType, TValue},
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
         },
         transform::inline::InlineSubgraphs,
     },

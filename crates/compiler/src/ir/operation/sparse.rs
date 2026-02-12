@@ -26,8 +26,8 @@ impl SparseMatmul {
 
 impl OpType for SparseMatmul {
     fn opname(&self) -> String {
-        let SparseMatmul { dtype, batch, rows, cols, nnz } = *self;
-        format!("sparse.matmul<{dtype:?}, {batch:?}, {rows:?}x{cols:?}, {nnz}>")
+        let SparseMatmul { batch, rows, cols, nnz, .. } = *self;
+        format!("sparse.matmul<{batch:?}, {rows:?}x{cols:?}, {nnz}>")
     }
 
     fn inputs(&self) -> Vec<TType> {
@@ -107,8 +107,8 @@ impl SparseMatmulBwd {
 
 impl OpType for SparseMatmulBwd {
     fn opname(&self) -> String {
-        let SparseMatmulBwd { dtype, batch, rows, cols, nnz } = *self;
-        format!("sparse.matmul.bwd<{dtype:?}, {batch:?}, {rows:?}x{cols:?}, {nnz}>")
+        let SparseMatmulBwd { batch, rows, cols, nnz, .. } = *self;
+        format!("sparse.matmul.bwd<{batch:?}, {rows:?}x{cols:?}, {nnz}>")
     }
 
     fn inputs(&self) -> Vec<TType> {
