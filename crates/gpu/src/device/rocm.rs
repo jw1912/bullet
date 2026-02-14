@@ -22,16 +22,26 @@ impl From<String> for ROCmError {
     }
 }
 
-/// Stream wrapper for the ROCm runtime
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ROCmStream(raw::hipStream);
+mod sealed {
+    use super::raw;
+
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct ROCmStream(pub(super) raw::hipStream);
+
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct ROCmBlasHandle(pub(super) raw::hipblasHandle);
+}
+
+use sealed::{ROCmStream, ROCmBlasHandle};
 
 type ROCmResult = Result<(), ROCmError>;
 
 impl GpuBindings for ROCm {
     type E = ROCmError;
     type S = ROCmStream;
+    type B = ROCmBlasHandle;
 
     unsafe fn device_init(_device: c_int) -> ROCmResult {
         unsafe { err(raw::hipInit(0)) }

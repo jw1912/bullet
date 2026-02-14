@@ -22,16 +22,26 @@ impl From<String> for CudaError {
     }
 }
 
-/// Stream wrapper for the CUDA runtime
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct CudaStream(raw::cudaStream);
+mod sealed {
+    use super::raw;
+
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct CudaStream(pub(super) raw::cudaStream);
+
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct CudaBlasHandle(pub(super) raw::cublasHandle);
+}
+
+use sealed::{CudaStream, CudaBlasHandle};
 
 type CudaResult = Result<(), CudaError>;
 
 impl GpuBindings for Cuda {
     type E = CudaError;
     type S = CudaStream;
+    type B = CudaBlasHandle;
 
     unsafe fn device_init(device: c_int) -> CudaResult {
         unsafe { err(raw::cudaInitDevice(device, 0, 0)) }

@@ -196,6 +196,7 @@ impl<G: Gpu> GpuBuffer<G> {
         Ok(GpuBufferGuard(self))
     }
 
+    /// Copy buffer to host on the given stream
     pub fn to_host(self: Arc<Self>, stream: Arc<GpuStream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
         let guard = self.acquire(stream.clone())?;
         let mut value = TValue::zeros(guard.dtype, guard.size);
@@ -210,6 +211,7 @@ impl<G: Gpu> GpuBuffer<G> {
         Ok(SyncOnValue::new(sync, value))
     }
 
+    /// Create buffer from host values on the given stream
     #[allow(clippy::type_complexity)]
     pub fn from_host(
         stream: Arc<GpuStream<G>>,

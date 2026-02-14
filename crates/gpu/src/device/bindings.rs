@@ -29,6 +29,7 @@ pub struct Dim3 {
 pub trait GpuBindings {
     type E: fmt::Debug + Eq + From<String>;
     type S: Copy + fmt::Debug + Eq;
+    type B: Copy + fmt::Debug + Eq;
 
     unsafe fn device_init(device: i32) -> Result<(), Self::E>;
 
