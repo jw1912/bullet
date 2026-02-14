@@ -1,4 +1,4 @@
-use bullet_compiler::ir::{
+use bullet_compiler::{
     frontend::{IRNode, IRTrace},
     operation::{Matmul, MatrixLayout, SparseMatmul},
 };

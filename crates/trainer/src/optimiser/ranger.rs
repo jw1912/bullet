@@ -1,13 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::{
-    ir::{
-        IRTrace,
-        builder::IRBuilder,
-        graph::{DType, TValue},
-    },
-    runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput},
-};
+use bullet_compiler::frontend::{DType, IRBuilder, IRTrace, TValue};
+
+use crate::runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
 
 use super::{
     OptimiserState, OptimiserUpdateValue, WrapOptimiser,

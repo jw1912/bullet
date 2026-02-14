@@ -1,15 +1,5 @@
 pub mod builder;
-pub mod graph;
-pub mod operation;
-pub mod transform;
-
-pub mod frontend {
-    pub use crate::ir::{
-        IR, IRTrace,
-        builder::{IRBuilder, IRNode},
-        graph::{DType, DValue, Shape, Size, TType, TValue},
-    };
-}
+pub mod trace;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -17,12 +7,14 @@ use std::{
     rc::Rc,
 };
 
-use graph::{DValue, Graph, GraphError, Input, Node, NodeId, Op, OpId, OpType, Shape, Size, TType, TValue};
-use operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, Unary, UnaryOp};
-use transform::{
-    CanonicalisePass, IRTransform,
-    eliminate::{EliminateCopies, EliminateUnusedOperations},
-    modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
+use crate::{
+    graph::{DValue, Graph, GraphError, Input, Node, NodeId, Op, OpId, OpType, Shape, Size, TType, TValue},
+    operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, Unary, UnaryOp},
+    transform::{
+        CanonicalisePass, IRTransform,
+        eliminate::{EliminateCopies, EliminateUnusedOperations},
+        modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
+    },
 };
 
 use crate::utils::Ansi;
@@ -46,8 +38,12 @@ impl fmt::Display for IR {
 }
 
 impl IR {
-    pub fn graph(&self) -> Graph {
-        self.graph.clone()
+    pub fn graph(&self) -> &Graph {
+        &self.graph
+    }
+
+    pub fn graph_mut(&mut self) -> &mut Graph {
+        &mut self.graph
     }
 
     pub fn evaluate(&self, inputs: impl Into<HashMap<NodeId, TValue>>) -> Result<HashMap<NodeId, TValue>, GraphError> {
@@ -59,7 +55,7 @@ impl IR {
     }
 
     pub fn transform_dyn(&mut self, transform: Rc<dyn IRTransform>) -> Result<(), IRTrace> {
-        let graph = Box::new(self.graph());
+        let graph = Box::new(self.graph().clone());
 
         if let Some(history) = &mut self.history {
             history.push(transform.clone());

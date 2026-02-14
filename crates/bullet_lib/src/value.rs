@@ -6,15 +6,13 @@ mod save;
 use std::cell::RefCell;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
-use bullet_compiler::{
-    ir::graph::TValue,
-    runtime::{Device, Stream},
-};
+use bullet_compiler::graph::TValue;
 use bullet_trainer::{
     Trainer,
     model::save::SavedFormat,
     optimiser::OptimiserState,
     run::{self, dataloader::PreparedBatchHost, logger},
+    runtime::{Device, Stream},
 };
 
 use crate::{

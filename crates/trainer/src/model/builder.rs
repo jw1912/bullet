@@ -8,22 +8,23 @@ use std::{
 };
 
 use bullet_compiler::{
-    ir::{
-        builder::IRNode,
-        frontend::IRBuilder,
-        graph::{DType, DValue, NodeId, Size, TType, TValue},
-        operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
-            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
-        },
-        transform::inline::InlineSubgraphs,
+    frontend::{DType, DValue, IRBuilder, IRNode, Size, TType, TValue},
+    graph::NodeId,
+    operation::{
+        BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+        ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
     },
-    runtime::{Device, ReadyToCompileGraph, Stream, TensorInput},
+    transform::inline::InlineSubgraphs,
 };
 
-use crate::model::{
-    Model, Shape,
-    autograd::{CReLU, DiffableFromOutput, DiffableFromOutputOp, LowerForward, ReLU, SCReLU, Sigmoid, TakeGradient},
+use crate::{
+    model::{
+        Model, Shape,
+        autograd::{
+            CReLU, DiffableFromOutput, DiffableFromOutputOp, LowerForward, ReLU, SCReLU, Sigmoid, TakeGradient,
+        },
+    },
+    runtime::{Device, ReadyToCompileGraph, Stream, TensorInput},
 };
 
 use super::autograd::{Autograd, AutogradOp};
@@ -44,7 +45,7 @@ pub struct NodeType {
     pub sparse: Option<usize>,
 }
 
-impl From<NodeType> for bullet_compiler::ir::graph::Shape {
+impl From<NodeType> for bullet_compiler::graph::Shape {
     fn from(value: NodeType) -> Self {
         let Shape { rows, cols } = value.shape;
 

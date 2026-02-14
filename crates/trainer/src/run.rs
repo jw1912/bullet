@@ -4,10 +4,7 @@ pub mod schedule;
 
 use std::{sync::mpsc, thread, time::Instant};
 
-use bullet_compiler::{
-    ir::graph::TValue,
-    runtime::{Device, Stream},
-};
+use bullet_compiler::graph::TValue;
 
 use crate::{
     DataLoadingError, Trainer, TrainerError,
@@ -16,6 +13,7 @@ use crate::{
         dataloader::{DataLoader, PreparedBatchHost},
         schedule::TrainingSchedule,
     },
+    runtime::{Device, Stream},
 };
 
 pub fn train_custom<D: Device, O: OptimiserState<D>, S>(

@@ -7,9 +7,4 @@ repository = { workspace = true }
 readme = { workspace = true }
 rust-version = { workspace = true }
 edition = { workspace = true }
-description = "Optimises and compiles tensor DAGs"
-
-[features]
-default = []
-cuda = []
-hip = []
+description = "Create and optimise tensor DAGs"

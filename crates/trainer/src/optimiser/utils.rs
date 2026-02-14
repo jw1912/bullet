@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use bullet_compiler::runtime::{Device, Stream};
-
-use crate::model::utils::{read_from_byte_buffer, write_to_byte_buffer};
+use crate::{
+    model::utils::{read_from_byte_buffer, write_to_byte_buffer},
+    runtime::{Device, Stream},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Placement {

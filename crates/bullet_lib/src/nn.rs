@@ -1,5 +1,4 @@
-use bullet_compiler::runtime::interpreter::Interpreter;
-use bullet_trainer::model::Model as TrainerModel;
+use bullet_trainer::{model::Model as TrainerModel, runtime::interpreter::Interpreter};
 
 pub use bullet_trainer::model::{
     Shape,

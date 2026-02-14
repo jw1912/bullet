@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
-use crate::ir::{
-    IR, IRTrace,
+use crate::{
     graph::{DType, DValue, GraphError, NodeId, OpType, Shape, Size, TType, TValue},
+    ir::{IR, IRTrace},
     operation::{BroadcastAcrossDimension, CABinary, CopyOp, ReduceAcrossDimension, Reduction, Unary},
 };
 

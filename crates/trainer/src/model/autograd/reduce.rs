@@ -1,4 +1,4 @@
-use bullet_compiler::ir::{
+use bullet_compiler::{
     frontend::{IRNode, IRTrace},
     operation::{ReduceAcrossDimension, Select, SelectPad, SliceAcrossDimension},
 };

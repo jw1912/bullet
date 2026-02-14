@@ -5,13 +5,9 @@ use std::{
     sync::Arc,
 };
 
-use bullet_compiler::{
-    ir::{
-        frontend::{DType, IRBuilder, IRTrace, TValue},
-        graph::DValue,
-    },
-    runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput},
-};
+use bullet_compiler::frontend::{DType, DValue, IRBuilder, IRTrace, TValue};
+
+use crate::runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
 
 use super::{OptimiserState, OptimiserUpdateValue, utils};
 

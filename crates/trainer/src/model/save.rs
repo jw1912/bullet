@@ -4,12 +4,12 @@ use std::{
     rc::Rc,
 };
 
-use bullet_compiler::{
-    ir::graph::TValue,
+use bullet_compiler::graph::TValue;
+
+use crate::{
+    model::{Model, Shape},
     runtime::{Device, Stream},
 };
-
-use crate::model::{Model, Shape};
 
 #[derive(Clone)]
 pub struct ShapedTValue {

@@ -7,10 +7,9 @@ pub use builder::{ModelBuilder, ModelNode};
 
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::{
-    ir::graph::{DType, TType, TValue},
-    runtime::{BlockOnDrop, Buffer, Device, Stream},
-};
+use bullet_compiler::graph::{DType, TType, TValue};
+
+use crate::runtime::{BlockOnDrop, Buffer, Device, Stream};
 
 pub type TensorMap<D> = HashMap<String, Arc<<D as Device>::Buffer>>;
 type ModelAsyncReturn<D> = BlockOnDrop<<D as Device>::Stream, Vec<Arc<<D as Device>::Buffer>>>;

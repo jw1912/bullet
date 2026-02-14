@@ -10,9 +10,10 @@ edition = "2024"
 resolver = "2"
 members = [
     "crates/bullet_lib",
-    "crates/utils",
     "crates/compiler",
+    "crates/gpu",
     "crates/trainer",
+    "crates/utils",
 ]
 
 [workspace.dependencies]

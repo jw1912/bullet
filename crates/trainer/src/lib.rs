@@ -1,13 +1,14 @@
 pub mod model;
 pub mod optimiser;
 pub mod run;
+pub mod runtime;
 
-use bullet_compiler::runtime::Device;
 use optimiser::{Optimiser, OptimiserState};
 use run::{
     dataloader::{DataLoader, DataLoadingError},
     schedule::{TrainingSchedule, TrainingSteps},
 };
+use runtime::Device;
 
 use std::time::Instant;
 

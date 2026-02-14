@@ -1,4 +1,4 @@
-use bullet_compiler::ir::{
+use bullet_compiler::{
     frontend::{DValue, IRNode, IRTrace},
     operation::{CABinary, CABinaryOp, Unary, UnaryOp},
 };

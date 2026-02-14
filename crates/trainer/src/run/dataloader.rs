@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::{
-    ir::graph::TValue,
+use bullet_compiler::graph::TValue;
+
+use crate::{
+    model::TensorMap,
     runtime::{Device, Stream},
 };
-
-use crate::model::TensorMap;
 
 #[derive(Debug)]
 pub enum DataLoadingError {

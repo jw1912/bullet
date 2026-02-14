@@ -7,9 +7,10 @@ pub mod utils;
 
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
-use bullet_compiler::runtime::{BlockOnDrop, Buffer, Device};
-
-use crate::model::{Model, TensorMap};
+use crate::{
+    model::{Model, TensorMap},
+    runtime::{BlockOnDrop, Buffer, Device},
+};
 
 pub type OptimiserUpdateValue<D> = Vec<BlockOnDrop<<D as Device>::Stream, Vec<Arc<<D as Device>::Buffer>>>>;
 

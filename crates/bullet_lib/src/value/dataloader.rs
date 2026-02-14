@@ -1,4 +1,4 @@
-use bullet_compiler::ir::graph::TValue;
+use bullet_compiler::graph::TValue;
 use bullet_trainer::run::{
     dataloader::{DataLoader, DataLoadingError, PreparedBatchHost},
     schedule::TrainingSteps,

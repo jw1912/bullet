@@ -11,7 +11,7 @@ use std::{
     rc::Rc,
 };
 
-use bullet_compiler::ir::{
+use bullet_compiler::{
     frontend::{IR, IRBuilder, IRNode, IRTrace, TType, TValue},
     graph::{NodeId, Op, OpId, OpType},
     operation::{CABinary, SubGraph},
@@ -96,7 +96,7 @@ impl AutogradOp {
         let builder = IRBuilder::default();
         let inputs = op_inputs.iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
         let outputs = op.forward(inputs.clone())?;
-        let forward = builder.build(&outputs).graph();
+        let forward = builder.build(&outputs).graph().clone();
         let inputs = inputs.iter().map(IRNode::node).collect();
         let outputs = outputs.iter().map(IRNode::node).collect();
         let forward = SubGraph::new(forward, inputs, outputs)?;
@@ -204,7 +204,7 @@ impl IRTransform for TakeGradient {
                     }
                 }
 
-                let backward = builder.build(&unique_igrads).graph();
+                let backward = builder.build(&unique_igrads).graph().clone();
 
                 // add backwards subgraph to IR
                 let subgraph_inputs = [inputs, ograds].concat().iter().map(IRNode::node).collect();
@@ -237,7 +237,7 @@ impl IRTransform for TakeGradient {
 
 #[cfg(test)]
 mod tests {
-    use bullet_compiler::ir::{
+    use bullet_compiler::{
         graph::{DType, Input},
         operation::{CABinaryOp, CopyOp},
         transform::inline::InlineSubgraphs,

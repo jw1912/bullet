@@ -1,9 +1,7 @@
 use std::{fmt, rc::Rc};
 
-use bullet_compiler::ir::{
-    IRTrace,
-    builder::IRNode,
-    graph::{DType, DValue, Size, TType},
+use bullet_compiler::{
+    frontend::{DType, DValue, IRNode, IRTrace, Size, TType},
     operation::Unary,
 };
 

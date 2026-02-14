@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{nn::ExecutionContext, value::ValueTrainerState};
-use bullet_compiler::ir::graph::TValue;
+use bullet_compiler::graph::TValue;
 use bullet_trainer::{
     Trainer,
     model::save::{ModelWeights, QuantTarget},

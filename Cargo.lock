@@ -57,6 +57,13 @@ name = "bullet-compiler"
 version = "0.1.0"
 
 [[package]]
+name = "bullet-gpu"
+version = "0.1.0"
+dependencies = [
+ "bullet-compiler",
+]
+
+[[package]]
 name = "bullet-trainer"
 version = "0.1.0"
 dependencies = [
