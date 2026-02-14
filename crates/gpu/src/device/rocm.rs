@@ -34,7 +34,7 @@ mod sealed {
     pub struct ROCmBlasHandle(pub(super) raw::hipblasHandle);
 }
 
-use sealed::{ROCmStream, ROCmBlasHandle};
+use sealed::{ROCmBlasHandle, ROCmStream};
 
 type ROCmResult = Result<(), ROCmError>;
 

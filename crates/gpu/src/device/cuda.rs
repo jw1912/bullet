@@ -34,7 +34,7 @@ mod sealed {
     pub struct CudaBlasHandle(pub(super) raw::cublasHandle);
 }
 
-use sealed::{CudaStream, CudaBlasHandle};
+use sealed::{CudaBlasHandle, CudaStream};
 
 type CudaResult = Result<(), CudaError>;
 

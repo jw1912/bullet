@@ -58,7 +58,7 @@ pub trait GpuBindings {
     unsafe fn stream_launch_kernel(
         stream: Self::S,
         func: *const c_void,
-        drid_dim: Dim3,
+        grid_dim: Dim3,
         block_dim: Dim3,
         args: *mut *mut c_void,
         smem: usize,
