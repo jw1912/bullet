@@ -20,14 +20,12 @@ use std::{
 pub use bindings::{Dim3, MemcpyKind};
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
-pub trait Gpu: bindings::GpuBindings<E = Self::Error, S = Self::Stream> {
+pub trait Gpu: bindings::GpuBindings<E = Self::Error> {
     type Error: fmt::Debug + Eq + From<String>;
-    type Stream: Copy + fmt::Debug + Eq;
 }
 
 impl<G: bindings::GpuBindings> Gpu for G {
     type Error = G::E;
-    type Stream = G::S;
 }
 
 /// A GPU device, allowing the safe management of device streams
@@ -68,7 +66,7 @@ impl<G: Gpu> GpuDevice<G> {
 /// copying and launching kernels
 pub struct GpuStream<G: Gpu> {
     id: usize,
-    inner: G::Stream,
+    inner: G::S,
     device: Arc<GpuDevice<G>>,
 }
 
