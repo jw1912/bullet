@@ -1,10 +1,14 @@
+//! Minimal wrapper around the ROCm runtime, via HIP
+
 use std::ffi::{c_int, c_void};
 
 use super::bindings::{Dim3, GpuBindings, MemcpyKind};
 
+/// Marker for the ROCm runtime
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ROCm;
 
+/// Error type for the ROCm runtime
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ROCmError {
     Runtime(raw::hipError),
@@ -18,6 +22,7 @@ impl From<String> for ROCmError {
     }
 }
 
+/// Stream wrapper for the ROCm runtime
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ROCmStream(raw::hipStream);

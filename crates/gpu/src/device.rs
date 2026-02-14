@@ -19,6 +19,7 @@ use std::{
 
 pub use bindings::{Dim3, MemcpyKind};
 
+/// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<E = Self::Error, S = Self::Stream> {
     type Error: fmt::Debug + Eq + From<String>;
     type Stream: Copy + fmt::Debug + Eq;
@@ -29,6 +30,7 @@ impl<G: bindings::GpuBindings> Gpu for G {
     type Stream = G::S;
 }
 
+/// A GPU device, allowing the safe management of device streams
 pub struct GpuDevice<G: Gpu>(i32, PhantomData<G>);
 
 unsafe impl<G: Gpu> Send for GpuDevice<G> {}
@@ -52,8 +54,18 @@ impl<G: Gpu> GpuDevice<G> {
     pub fn set(&self) -> Result<(), G::Error> {
         unsafe { G::device_set(self.0) }
     }
+
+    /// Create a new stream on this device
+    pub fn new_stream(self: Arc<Self>) -> Result<Arc<GpuStream<G>>, G::Error> {
+        GpuStream::new(self.clone())
+    }
 }
 
+/// A GPU stream associated with a GPU device
+///
+/// Safely handles the stream creation, destruction and syncing,
+/// but exposes the raw unsafe stream operations such as allocating,
+/// copying and launching kernels
 pub struct GpuStream<G: Gpu> {
     id: usize,
     inner: G::Stream,
@@ -76,12 +88,12 @@ impl<G: Gpu> PartialEq for GpuStream<G> {
 impl<G: Gpu> Eq for GpuStream<G> {}
 
 impl<G: Gpu> GpuStream<G> {
-    /// The device that this stream is associated with
+    /// The device that this stream resides on
     pub fn device(&self) -> Arc<GpuDevice<G>> {
         self.device.clone()
     }
 
-    /// Created a new stream associated with the given `device`
+    /// Created a new stream on the given `device`
     pub fn new(device: Arc<GpuDevice<G>>) -> Result<Arc<Self>, G::Error> {
         device.set()?;
 

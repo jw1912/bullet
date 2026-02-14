@@ -3,6 +3,8 @@ use std::{
     fmt,
 };
 
+/// Specifies whether each of the source and destination
+/// of a copy are host or device memory
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum MemcpyKind {
     HostToHost = 0,
@@ -12,6 +14,7 @@ pub enum MemcpyKind {
     Default = 4,
 }
 
+/// Kernel grid or block dimensions
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Dim3 {
     pub x: u32,

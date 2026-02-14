@@ -1,10 +1,14 @@
+//! Minimal wrapper around the CUDA runtime
+
 use std::ffi::{c_int, c_void};
 
 use super::bindings::{Dim3, GpuBindings, MemcpyKind};
 
+/// Marker for the CUDA runtime
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Cuda;
 
+/// Error type for the CUDA runtime
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CudaError {
     Runtime(raw::cudaError),
@@ -18,6 +22,7 @@ impl From<String> for CudaError {
     }
 }
 
+/// Stream wrapper for the CUDA runtime
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct CudaStream(raw::cudaStream);
