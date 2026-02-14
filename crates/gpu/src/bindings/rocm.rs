@@ -97,7 +97,11 @@ fn err(value: raw::hipError) -> ROCmResult {
 }
 
 fn status(value: raw::hipblasStatus) -> ROCmResult {
-    if value != raw::hipblasStatus::HIPBLAS_STATUS_SUCCESS { Err(ROCmError::Blas(value)) } else { Ok(()) }
+    if value != raw::hipblasStatus::HIPBLAS_STATUS_SUCCESS {
+        Err(ROCmError::Blas(value))
+    } else {
+        Ok(())
+    }
 }
 
 #[allow(non_upper_case_globals)]
@@ -131,7 +135,6 @@ mod raw {
     #[derive(Debug, Copy, Clone)]
     pub struct HipblasContextOpaque([u8; 0]);
     pub type hipblasHandle = *mut HipblasContextOpaque;
-
 
     #[repr(i32)]
     #[non_exhaustive]
