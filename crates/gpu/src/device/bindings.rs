@@ -1,8 +1,3 @@
-#[cfg(feature = "cuda")]
-pub mod cuda;
-#[cfg(feature = "rocm")]
-pub mod rocm;
-
 use std::{
     ffi::{c_int, c_uint, c_void},
     fmt,

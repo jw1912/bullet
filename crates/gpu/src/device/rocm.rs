@@ -1,6 +1,6 @@
 use std::ffi::{c_int, c_void};
 
-use super::{Dim3, GpuBindings, MemcpyKind};
+use super::bindings::{Dim3, GpuBindings, MemcpyKind};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ROCm;

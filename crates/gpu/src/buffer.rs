@@ -1,3 +1,5 @@
+//! Simple GPU buffer, managed by a guard and a stream-syncing wrapper
+
 use std::{
     ffi::c_void,
     mem::MaybeUninit,

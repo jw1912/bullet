@@ -1,3 +1,11 @@
+//! Minimal wrapper around CUDA/ROCm devices and streams
+
+mod bindings;
+#[cfg(feature = "cuda")]
+pub mod cuda;
+#[cfg(feature = "rocm")]
+pub mod rocm;
+
 use std::{
     ffi::c_void,
     fmt,
@@ -9,14 +17,7 @@ use std::{
     },
 };
 
-use crate::bindings;
-pub use crate::bindings::{Dim3, MemcpyKind};
-
-#[cfg(feature = "cuda")]
-pub use crate::bindings::cuda;
-
-#[cfg(feature = "rocm")]
-pub use crate::bindings::rocm;
+pub use bindings::{Dim3, MemcpyKind};
 
 pub trait Gpu: bindings::GpuBindings<E = Self::Error, S = Self::Stream> {
     type Error: fmt::Debug + Eq + From<String>;
