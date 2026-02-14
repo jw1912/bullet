@@ -254,7 +254,7 @@ impl<G: Gpu> GpuBufferGuard<G> {
     }
 }
 
-#[cfg(any(feature = "cuda", feature = "hip"))]
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
     use crate::device::GpuDevice;
@@ -285,13 +285,13 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "hip")]
-    mod hip {
-        use crate::device::hip::{Hip, HipError};
+    #[cfg(feature = "rocm")]
+    mod rocm {
+        use crate::device::rocm::{ROCm, ROCmError};
 
         #[test]
-        fn from_to_host() -> Result<(), HipError> {
-            super::from_to_host::<Hip>()
+        fn from_to_host() -> Result<(), ROCmError> {
+            super::from_to_host::<ROCm>()
         }
     }
 }

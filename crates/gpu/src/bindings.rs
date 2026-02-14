@@ -1,7 +1,7 @@
 #[cfg(feature = "cuda")]
 pub mod cuda;
-#[cfg(feature = "hip")]
-pub mod hip;
+#[cfg(feature = "rocm")]
+pub mod rocm;
 
 use std::{
     ffi::{c_int, c_uint, c_void},

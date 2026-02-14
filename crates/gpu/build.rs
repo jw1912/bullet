@@ -34,7 +34,7 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=cublas");
     }
 
-    if cfg!(feature = "hip") {
+    if cfg!(feature = "rocm") {
         let hip_path = get_var_path("HIP_PATH");
 
         println!("cargo:rustc-link-search=native={}", hip_path.join("lib").to_str().unwrap());

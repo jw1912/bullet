@@ -15,8 +15,8 @@ pub use crate::bindings::{Dim3, MemcpyKind};
 #[cfg(feature = "cuda")]
 pub use crate::bindings::cuda;
 
-#[cfg(feature = "hip")]
-pub use crate::bindings::hip;
+#[cfg(feature = "rocm")]
+pub use crate::bindings::rocm;
 
 pub trait Gpu: bindings::GpuBindings<E = Self::Error, S = Self::Stream> {
     type Error: fmt::Debug + Eq + From<String>;
@@ -187,7 +187,7 @@ impl<G: Gpu> GpuStream<G> {
     }
 }
 
-#[cfg(any(feature = "cuda", feature = "hip"))]
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,18 +248,18 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "hip")]
-    mod hip {
-        use crate::device::hip::{Hip, HipError};
+    #[cfg(feature = "rocm")]
+    mod rocm {
+        use crate::device::rocm::{ROCm, ROCmError};
 
         #[test]
-        fn create_malloc_copy_sync_drop() -> Result<(), HipError> {
-            super::create_malloc_copy_sync_drop::<Hip>()
+        fn create_malloc_copy_sync_drop() -> Result<(), ROCmError> {
+            super::create_malloc_copy_sync_drop::<ROCm>()
         }
 
         #[test]
-        fn multiple_device_instances() -> Result<(), HipError> {
-            super::multiple_device_instances::<Hip>()
+        fn multiple_device_instances() -> Result<(), ROCmError> {
+            super::multiple_device_instances::<ROCm>()
         }
     }
 }
