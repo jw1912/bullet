@@ -13,6 +13,7 @@ use crate::{
 enum Arg {
     Pointer { idx: usize },
     Value(DValue),
+    Size(Size),
 }
 
 enum Inst<G: Gpu> {
@@ -32,24 +33,30 @@ enum Inst<G: Gpu> {
         func: GpuKernel<G>,
         args: Vec<Arg>,
         gdim: Box<dyn Fn(usize) -> Dim3>,
-        bdim: Box<dyn Fn(usize) -> Dim3>,
-        smem: Box<dyn Fn(usize) -> usize>,
+        bdim: Box<dyn Fn(usize) -> u32>,
+        smem: Box<dyn Fn(usize) -> u32>,
     },
 }
 
 pub struct GpuFunction<G: Gpu> {
-    mappings: HashMap<String, (usize, bool, Size)>,
-    pointers: Vec<G::DevicePtr>,
-    instructions: Vec<Inst<G>>,
+    maps: HashMap<String, (usize, bool, Size)>,
+    ptrs: Box<[G::DevicePtr]>,
+    insts: Box<[Inst<G>]>,
 }
 
 impl<G: Gpu> GpuFunction<G> {
-    pub fn new(device: Arc<GpuDevice<G>>, _ir: IR) -> Result<Self, IRTrace> {
-        let mappings = HashMap::new();
-        let pointers = Vec::new();
-        let instructions = Vec::new();
+    pub fn new(device: Arc<GpuDevice<G>>, ir: IR) -> Result<Self, IRTrace> {
+        let maps = HashMap::new();
+        let ptrs = Vec::new();
+        let insts = Vec::new();
 
-        Ok(Self { mappings, pointers, instructions })
+        for op in ir.ordered_operations()? {
+            if op.is_input() {
+                unimplemented!()
+            }
+        }
+
+        Ok(Self { maps, ptrs: ptrs.into_boxed_slice(), insts: insts.into_boxed_slice() })
     }
 
     pub fn execute(
@@ -63,7 +70,7 @@ impl<G: Gpu> GpuFunction<G> {
         let mut var_size = None;
 
         for (name, buf) in inputs {
-            let (idx, is_mut, size) = *self.mappings.get(name).ok_or("Input not in function!".into())?;
+            let (idx, is_mut, size) = *self.maps.get(name).ok_or("Input not in function!".into())?;
 
             if let Some(new_var) = size.get_var_size(buf.size()) {
                 if size.evaluate(new_var) != buf.size() {
@@ -92,7 +99,7 @@ impl<G: Gpu> GpuFunction<G> {
             let guard = buf.clone().acquire(stream.clone())?;
             let ptr = guard.ptr();
             sync.attach(guard)?;
-            self.pointers[idx] = ptr;
+            self.ptrs[idx] = ptr;
 
             if let Some(is_alr_mut) = ptrs.insert(ptr, is_mut) {
                 if is_mut || is_alr_mut {
@@ -104,25 +111,30 @@ impl<G: Gpu> GpuFunction<G> {
         let var = var_size.unwrap_or(1);
 
         unsafe {
-            for inst in &mut self.instructions {
+            for inst in &mut self.insts {
                 match inst {
                     &mut Inst::Memset { idx, bytes, value } => {
                         let bytes = bytes.evaluate(var);
-                        stream.memset(self.pointers[idx], bytes, value)?;
+                        stream.memset(self.ptrs[idx], bytes, value)?;
                     }
                     &mut Inst::Malloc { idx, bytes } => {
                         let bytes = bytes.evaluate(var);
-                        self.pointers[idx] = stream.malloc(bytes)?;
+                        self.ptrs[idx] = stream.malloc(bytes)?;
                     }
                     &mut Inst::Free { idx } => {
-                        stream.free(self.pointers[idx])?;
+                        stream.free(self.ptrs[idx])?;
                     }
                     Inst::LaunchKernel { func, args, gdim, bdim, smem } => {
+                        let mut sizes = Vec::new();
                         let mut args: Vec<_> = args
                             .iter()
                             .map(|arg| match arg {
                                 Arg::Pointer { idx } => args.as_ptr().add(*idx).cast_mut().cast(),
                                 Arg::Value(val) => val.ptr(),
+                                Arg::Size(size) => {
+                                    sizes.push(size.evaluate(var) as i32);
+                                    (sizes.last().unwrap() as *const i32).cast_mut().cast()
+                                }
                             })
                             .collect();
 

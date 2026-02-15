@@ -12,6 +12,10 @@ impl NodeId {
     pub(super) fn new(id: usize) -> Self {
         Self(id)
     }
+
+    pub fn inner(&self) -> usize {
+        self.0
+    }
 }
 
 impl Default for NodeId {

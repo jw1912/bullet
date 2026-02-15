@@ -5,7 +5,7 @@ mod bindings;
 pub mod cuda;
 
 use std::{
-    ffi::{CString, c_uint, c_void},
+    ffi::{CString, c_void},
     fmt,
     hash::Hash,
     sync::{
@@ -19,7 +19,7 @@ pub use bindings::Dim3;
 /// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<Err = Self::Error, Ptr = Self::DevicePtr> {
     type Error: fmt::Debug + Eq + From<String>;
-    type DevicePtr: Copy + Eq + Hash;
+    type DevicePtr: Copy + Default + Eq + Hash;
 }
 
 impl<G: bindings::GpuBindings> Gpu for G {
@@ -250,9 +250,9 @@ impl<G: Gpu> GpuKernel<G> {
         &self,
         stream: &GpuStream<G>,
         grid_dim: Dim3,
-        block_dim: Dim3,
+        block_size: u32,
         args: *mut *mut c_void,
-        smem: usize,
+        smem: u32,
     ) -> Result<(), G::Error> {
         let o1 = stream.device.ordinal();
         let o2 = self.module.device.ordinal();
@@ -260,8 +260,14 @@ impl<G: Gpu> GpuKernel<G> {
             return Err(format!("Attempted to launch GPU{o1} kernel on GPU{o2}!").into());
         }
 
+        if block_size > 1024 {
+            return Err(format!("Attempted to launch kernel with {block_size} > 1024 threads per block!").into());
+        }
+
+        let block_dim = Dim3 { x: block_size, y: 1, z: 1 };
+
         stream.device.set()?;
-        unsafe { G::kernel_launch(self.kernel, stream.inner, grid_dim, block_dim, args, smem as c_uint) }
+        unsafe { G::kernel_launch(self.kernel, stream.inner, grid_dim, block_dim, args, smem) }
     }
 
     /// Get the device that this kernel is on
@@ -316,14 +322,14 @@ mod tests {
         let device = GpuDevice::<G>::new(0)?;
         let stream = GpuStream::new(device.clone())?;
 
-        let copy_kernel = "
+        let add_one_kernel = "
             extern \"C\" __global__ void kernel(const int size, const float* src, float* dst) {
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-                if (tid < size) dst[tid] = src[tid];
+                if (tid < size) dst[tid] = src[tid] + 1.0;
             }
         ";
 
-        let module = GpuModule::new(device.clone(), copy_kernel)?;
+        let module = GpuModule::new(device.clone(), add_one_kernel)?;
         let kernel = module.get_kernel("kernel")?;
 
         unsafe {
@@ -336,20 +342,21 @@ mod tests {
             stream.memcpy_h2d(host_src.as_ptr().cast(), dev_src, 16)?;
 
             let gdim = Dim3 { x: 1, y: 1, z: 1 };
-            let bdim = Dim3 { x: 4, y: 1, z: 1 };
             let size = 4i32;
             let mut args = Vec::new();
             args.push((&size) as *const i32 as *mut c_void);
             args.push((&dev_src) as *const G::DevicePtr as *mut c_void);
             args.push((&dev_dst) as *const G::DevicePtr as *mut c_void);
 
-            kernel.launch(&stream, gdim, bdim, args.as_mut_ptr(), 0)?;
+            kernel.launch(&stream, gdim, 4, args.as_mut_ptr(), 0)?;
 
             stream.memcpy_d2h(dev_dst, host_dst.as_mut_ptr().cast(), 16)?;
             stream.sync()?;
         }
 
-        assert_eq!(host_dst, host_src);
+        for (d, s) in host_dst.into_iter().zip(host_src) {
+            assert_eq!(d, s + 1.0);
+        }
 
         Ok(())
     }

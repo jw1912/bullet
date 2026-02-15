@@ -19,7 +19,7 @@ pub struct Dim3 {
 pub trait GpuBindings {
     type Err: fmt::Debug + Eq + From<String>;
     type Dev: Copy;
-    type Ptr: Copy + Eq + Hash;
+    type Ptr: Copy + Default + Eq + Hash;
     type Ctx: Copy;
     type Stream: Copy;
     type BlasHandle: Copy;

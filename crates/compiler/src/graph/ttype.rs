@@ -90,6 +90,10 @@ impl Size {
         (self.evaluate(expected) == size).then_some(expected)
     }
 
+    pub fn factor(&self) -> usize {
+        self.factor.get()
+    }
+
     pub fn var_power(&self) -> u32 {
         self.var_power
     }
