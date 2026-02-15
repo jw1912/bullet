@@ -15,4 +15,4 @@ bullet-compiler = { workspace = true }
 [features]
 default = []
 cuda = []
-hip = []
+rocm = []
