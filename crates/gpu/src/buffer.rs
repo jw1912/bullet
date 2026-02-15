@@ -1,15 +1,13 @@
 //! Simple GPU buffer, managed by a guard and a stream-syncing wrapper
 
 use std::{
-    ffi::c_void,
-    mem::MaybeUninit,
     ops::Deref,
     sync::{Arc, Mutex},
 };
 
 use bullet_compiler::graph::{DType, TValue};
 
-use crate::device::{Gpu, GpuStream, MemcpyKind};
+use crate::runtime::{Gpu, GpuStream};
 
 /// Keeps buffer ownership alive on a given stream until
 /// dropped, at which point it syncs the stream
@@ -93,7 +91,7 @@ impl<G: Gpu, T> SyncOnValue<G, T> {
 }
 
 pub struct GpuBuffer<G: Gpu> {
-    ptr: *mut c_void,
+    ptr: G::DevicePtr,
     dtype: DType,
     size: usize,
     creator: Arc<GpuStream<G>>,
@@ -125,19 +123,7 @@ impl<G: Gpu> GpuBuffer<G> {
             return Err("Attempted to allocated 0-size device memory!".to_string().into());
         }
 
-        let ptr = unsafe {
-            let mut ptr = MaybeUninit::uninit();
-            stream.malloc(ptr.as_mut_ptr(), dtype.bytes() * size)?;
-            ptr.assume_init()
-        };
-
-        if ptr.is_null() {
-            return Err("Allocated pointer was null!".to_string().into());
-        }
-
-        if ptr.align_offset(dtype.bytes()) != 0 {
-            return Err("Device allocated pointer is not appropriately aligned!".to_string().into());
-        }
+        let ptr = stream.malloc(dtype.bytes() * size)?;
 
         let buf = Arc::new(Self { ptr, dtype, size, creator: stream.clone(), owner: Mutex::new(None) });
         let mut sync = SyncOnDrop::new(stream.clone());
@@ -202,7 +188,7 @@ impl<G: Gpu> GpuBuffer<G> {
         let mut value = TValue::zeros(guard.dtype, guard.size);
 
         unsafe {
-            stream.memcpy(guard.ptr(), value.mut_ptr(), guard.bytes(), MemcpyKind::DeviceToHost)?;
+            stream.memcpy_d2h(guard.ptr(), value.mut_ptr(), guard.bytes())?;
         }
 
         let mut sync = SyncOnDrop::new(stream);
@@ -221,7 +207,7 @@ impl<G: Gpu> GpuBuffer<G> {
             let buf = Self::uninit(stream.clone(), value.dtype(), value.size())?;
             let guard = &buf.guards()[0];
 
-            stream.memcpy(value.ptr(), guard.ptr(), guard.bytes(), MemcpyKind::HostToDevice)?;
+            stream.memcpy_h2d(value.ptr(), guard.ptr(), guard.bytes())?;
 
             Ok(buf.attach_value(value))
         }
@@ -253,7 +239,7 @@ impl<G: Gpu> Drop for GpuBufferGuard<G> {
 }
 
 impl<G: Gpu> GpuBufferGuard<G> {
-    pub fn ptr(&self) -> *mut c_void {
+    pub fn ptr(&self) -> G::DevicePtr {
         self.0.ptr
     }
 }
@@ -261,7 +247,7 @@ impl<G: Gpu> GpuBufferGuard<G> {
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
-    use crate::device::GpuDevice;
+    use crate::runtime::GpuDevice;
 
     use super::*;
 
@@ -281,7 +267,7 @@ mod tests {
 
     #[cfg(feature = "cuda")]
     mod cuda {
-        use crate::device::cuda::{Cuda, CudaError};
+        use crate::runtime::cuda::{Cuda, CudaError};
 
         #[test]
         fn from_to_host() -> Result<(), CudaError> {
@@ -291,7 +277,7 @@ mod tests {
 
     #[cfg(feature = "rocm")]
     mod rocm {
-        use crate::device::rocm::{ROCm, ROCmError};
+        use crate::runtime::rocm::{ROCm, ROCmError};
 
         #[test]
         fn from_to_host() -> Result<(), ROCmError> {

@@ -1,21 +1,21 @@
-use std::{collections::HashMap, ffi::c_void, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use bullet_compiler::{
-    graph::Size,
+    graph::{DValue, Size},
     ir::{IR, IRTrace},
 };
 
 use crate::{
     buffer::{GpuBuffer, SyncOnDrop, SyncOnValue},
-    device::{Dim3, Gpu, GpuDevice, GpuStream},
+    runtime::{Dim3, Gpu, GpuDevice, GpuKernel, GpuStream},
 };
 
-trait Arg {}
-impl Arg for *mut c_void {}
-impl Arg for i32 {}
-impl Arg for f32 {}
+enum Arg {
+    Pointer { idx: usize },
+    Value(DValue),
+}
 
-enum Inst {
+enum Inst<G: Gpu> {
     Memset {
         idx: usize,
         bytes: Size,
@@ -29,8 +29,8 @@ enum Inst {
         idx: usize,
     },
     LaunchKernel {
-        func: *const c_void,
-        args: Vec<Box<dyn Arg>>,
+        func: GpuKernel<G>,
+        args: Vec<Arg>,
         gdim: Box<dyn Fn(usize) -> Dim3>,
         bdim: Box<dyn Fn(usize) -> Dim3>,
         smem: Box<dyn Fn(usize) -> usize>,
@@ -38,10 +38,9 @@ enum Inst {
 }
 
 pub struct GpuFunction<G: Gpu> {
-    device: Arc<GpuDevice<G>>,
     mappings: HashMap<String, (usize, bool, Size)>,
-    pointers: Vec<*mut c_void>,
-    instructions: Vec<Inst>,
+    pointers: Vec<G::DevicePtr>,
+    instructions: Vec<Inst<G>>,
 }
 
 impl<G: Gpu> GpuFunction<G> {
@@ -50,7 +49,7 @@ impl<G: Gpu> GpuFunction<G> {
         let pointers = Vec::new();
         let instructions = Vec::new();
 
-        Ok(Self { device, mappings, pointers, instructions })
+        Ok(Self { mappings, pointers, instructions })
     }
 
     pub fn execute(
@@ -66,14 +65,28 @@ impl<G: Gpu> GpuFunction<G> {
         for (name, buf) in inputs {
             let (idx, is_mut, size) = *self.mappings.get(name).ok_or("Input not in function!".into())?;
 
-            match (var_size, size.get_var_size(buf.size())) {
-                (_, None) => {}
-                (Some(x), Some(y)) => {
-                    if x != y {
-                        return Err(format!("Mismatched var sizes: {x} != {y}!").into());
+            if let Some(new_var) = size.get_var_size(buf.size()) {
+                if size.evaluate(new_var) != buf.size() {
+                    return Err("Mismatched sizes!".to_string().into());
+                }
+
+                match var_size {
+                    None => var_size = Some(new_var),
+                    Some(old_var) => {
+                        if old_var != new_var {
+                            return Err("Mismatched var sizes!".to_string().into());
+                        }
                     }
                 }
-                (None, Some(size)) => var_size = Some(size),
+            } else {
+                match size.evaluate_constant() {
+                    None => return Err("Invalid var size!".to_string().into()),
+                    Some(len) => {
+                        if len != buf.size() {
+                            return Err("Mismatched sizes!".to_string().into());
+                        }
+                    }
+                }
             }
 
             let guard = buf.clone().acquire(stream.clone())?;
@@ -99,16 +112,21 @@ impl<G: Gpu> GpuFunction<G> {
                     }
                     &mut Inst::Malloc { idx, bytes } => {
                         let bytes = bytes.evaluate(var);
-                        stream.malloc(&mut self.pointers[idx], bytes)?;
+                        self.pointers[idx] = stream.malloc(bytes)?;
                     }
                     &mut Inst::Free { idx } => {
                         stream.free(self.pointers[idx])?;
                     }
                     Inst::LaunchKernel { func, args, gdim, bdim, smem } => {
-                        let mut args: Vec<_> =
-                            args.iter_mut().map(|arg| arg.as_mut() as *mut dyn Arg as *mut c_void).collect();
+                        let mut args: Vec<_> = args
+                            .iter()
+                            .map(|arg| match arg {
+                                Arg::Pointer { idx } => args.as_ptr().add(*idx).cast_mut().cast(),
+                                Arg::Value(val) => val.ptr(),
+                            })
+                            .collect();
 
-                        stream.launch_kernel(*func, gdim(var), bdim(var), args.as_mut_ptr(), smem(var))?;
+                        func.launch(&stream, gdim(var), bdim(var), args.as_mut_ptr(), smem(var))?;
                     }
                 }
             }

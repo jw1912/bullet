@@ -304,6 +304,13 @@ impl DValue {
     pub fn i32(self) -> Option<i32> {
         if let Self::I32(x) = self { Some(x) } else { None }
     }
+
+    pub fn ptr(&self) -> *mut c_void {
+        match self {
+            Self::F32(x) => (x as *const f32).cast_mut().cast(),
+            Self::I32(x) => (x as *const i32).cast_mut().cast(),
+        }
+    }
 }
 
 impl fmt::Display for DValue {
