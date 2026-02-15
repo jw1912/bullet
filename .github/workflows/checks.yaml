@@ -4,63 +4,33 @@ on:
       branches:
         - main
 
-name: check-clippy-test
+name: cargo
 jobs:
-  acyclib:
-    name: acyclib
+  clippy:
+    name: clippy
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
             components: clippy
-        - run: cargo check --package acyclib
-        - run: cargo clippy --package acyclib
-        - run: cargo test --package acyclib
+        - run: cargo clippy --workspace
 
-  bullet_hip_backend:
-    name: bullet_hip_backend
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: clippy
-        - run: cargo check --package bullet_hip_backend --features gh-actions
-        - run: cargo clippy --package bullet_hip_backend --features gh-actions
+        - run: cargo test --workspace
 
-  bullet_lib:
-    name: bullet_lib
+  format:
+    name: format
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
-            components: clippy
-        - run: cargo check --package bullet_lib --features cpu --no-default-features
-        - run: cargo clippy --package bullet_lib --features cpu --no-default-features
-        - run: cargo test --package bullet_lib --features cpu --no-default-features
+            components: rustfmt
+        - run: cargo fmt -- --check
 
-  bullet_utils:
-    name: bullet_utils
-    runs-on: ubuntu-latest
-    steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: clippy
-        - run: cargo check --package bullet-utils
-        - run: cargo clippy --package bullet-utils
-        - run: cargo test --package bullet-utils
-
-  examples:
-    name: examples
-    runs-on: ubuntu-latest
-    steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: clippy
-        - run: cargo check --examples --features cpu --no-default-features
-        - run: cargo clippy --examples --features cpu --no-default-features
-        - run: cargo test --examples --features cpu --no-default-features

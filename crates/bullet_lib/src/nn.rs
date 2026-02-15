@@ -1,29 +1,17 @@
-pub use acyclib::{
-    device::tensor::Shape,
-    graph::{
-        Node,
-        builder::{Affine, GraphBuilder as NetworkBuilder, GraphBuilderNode as NetworkBuilderNode, InitSettings},
-    },
+use bullet_trainer::{model::Model as TrainerModel, runtime::interpreter::Interpreter};
+
+pub use bullet_trainer::model::{
+    Shape,
+    builder::{Affine, InitSettings, ModelBuilder, ModelNode},
 };
 
-#[cfg(any(feature = "multigpu", feature = "cpu"))]
-pub type Graph = acyclib::graph::multi::MultiDeviceGraph<ExecutionContext>;
-
-#[cfg(not(any(feature = "multigpu", feature = "cpu")))]
-pub type Graph = acyclib::graph::Graph<ExecutionContext>;
-
-#[cfg(all(feature = "cpu", not(feature = "cuda")))]
-pub use acyclib::device::cpu::{CpuError as DeviceError, CpuMarker as BackendMarker, CpuThread as ExecutionContext};
-
-#[cfg(all(any(feature = "hip", feature = "hip-cuda"), not(feature = "cpu"), not(feature = "cuda")))]
-pub use bullet_hip_backend::{DeviceError, ExecutionContext, HipMarker as BackendMarker};
-
-#[cfg(feature = "cuda")]
-pub use bullet_cuda_backend::{CudaDevice as ExecutionContext, CudaError as DeviceError, CudaMarker as BackendMarker};
+pub type ExecutionContext = Interpreter;
+pub type Model = TrainerModel<ExecutionContext>;
 
 pub mod optimiser {
-    use crate::nn::ExecutionContext;
-    use acyclib::trainer::optimiser::{self, OptimiserState, radam};
+    use super::ExecutionContext;
+
+    use bullet_trainer::optimiser::{self, OptimiserState, radam};
 
     pub type AdamWOptimiser = optimiser::adam::AdamW<ExecutionContext>;
     pub type RAdamOptimiser = radam::RAdam<ExecutionContext>;

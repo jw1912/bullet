@@ -1,4 +1,4 @@
-use acyclib::trainer::logger::ansi;
+use bullet_trainer::run::logger::ansi;
 
 #[derive(Clone, Copy)]
 pub struct TestDataset<'a> {

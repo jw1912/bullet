@@ -17,7 +17,7 @@ use bullet_lib::{
 
 fn main() {
     // hyperparams to fiddle with
-    let hl_size = 1024;
+    let hl_size = 3072;
     let dataset_path = "data/baseline.data";
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);
@@ -47,7 +47,7 @@ fn main() {
             // merge in the factoriser weights
             SavedFormat::id("l0w")
                 .transform(|store, weights| {
-                    let factoriser = store.get("l0f").values.repeat(NUM_INPUT_BUCKETS);
+                    let factoriser = store.get("l0f").values.f32().repeat(NUM_INPUT_BUCKETS);
                     weights.into_iter().zip(factoriser).map(|(a, b)| a + b).collect()
                 })
                 .round()

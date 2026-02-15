@@ -2,6 +2,7 @@ use bullet_lib::{
     game::inputs::Chess768,
     nn::optimiser::AdamW,
     trainer::{
+        save::SavedFormat,
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::LocalSettings,
     },
@@ -11,10 +12,14 @@ use bullet_lib::{
 fn main() {
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
-        .use_threads(4)
         .optimiser(AdamW)
         .inputs(Chess768)
-        .save_format(&[])
+        .save_format(&[
+            SavedFormat::id("l0w").round().quantise::<i16>(255),
+            SavedFormat::id("l0b").round().quantise::<i16>(255),
+            SavedFormat::id("l1w").round().quantise::<i16>(64),
+            SavedFormat::id("l1b").round().quantise::<i16>(255 * 64),
+        ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs| {
             // weights
@@ -42,6 +47,9 @@ fn main() {
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
     let data_loader = DirectSequentialDataLoader::new(&["examples/tests/batch.bf"]);
+
+    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("Eval: {eval:.3}cp");
 
     trainer.run(&schedule, &settings, &data_loader);
 

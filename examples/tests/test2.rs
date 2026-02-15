@@ -56,7 +56,7 @@ fn main() {
             let skip_neuron = out.slice_rows(15, 16);
 
             out = out.slice_rows(0, 15);
-            out = out.concat(out.abs_pow(2.0)).crelu();
+            out = out.concat(out * out).crelu();
 
             out = l2.forward(out).select(buckets).screlu();
             out = l3.forward(out).select(buckets);

@@ -47,7 +47,7 @@ fn main() {
         .save_format(&[
             SavedFormat::id("l0w")
                 .transform(|store, weights| {
-                    let factoriser = store.get("l0f").values.repeat(NUM_INPUT_BUCKETS);
+                    let factoriser = store.get("l0f").values.f32().repeat(NUM_INPUT_BUCKETS);
                     weights.into_iter().zip(factoriser).map(|(a, b)| a + b).collect()
                 })
                 .round()
