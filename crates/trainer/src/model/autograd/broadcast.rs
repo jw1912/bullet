@@ -1,6 +1,6 @@
 use bullet_compiler::{
     frontend::{IRNode, IRTrace},
-    operation::{BroadcastAcrossDimension, PadAcrossDimension},
+    tensor::operation::{BroadcastAcrossDimension, PadAcrossDimension},
 };
 
 use super::AutogradOnCoreOp;

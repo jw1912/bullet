@@ -1,6 +1,6 @@
 use bullet_compiler::{
     frontend::{IRNode, IRTrace},
-    operation::{ReduceAcrossDimension, Select, SelectPad, SliceAcrossDimension},
+    tensor::operation::{ReduceAcrossDimension, Select, SelectPad, SliceAcrossDimension},
 };
 
 use super::AutogradOnCoreOp;

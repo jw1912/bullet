@@ -5,15 +5,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bullet_compiler::graph::{DType, TValue};
+use bullet_compiler::tensor::{DType, TValue};
 
-use crate::runtime::{Gpu, GpuStream};
+use crate::runtime::{Gpu, Stream};
 
 /// Keeps buffer ownership alive on a given stream until
 /// dropped, at which point it syncs the stream
 pub struct SyncOnDrop<G: Gpu> {
-    stream: Arc<GpuStream<G>>,
-    guards: Vec<GpuBufferGuard<G>>,
+    stream: Arc<Stream<G>>,
+    guards: Vec<BufferGuard<G>>,
 }
 
 impl<G: Gpu> Drop for SyncOnDrop<G> {
@@ -23,19 +23,19 @@ impl<G: Gpu> Drop for SyncOnDrop<G> {
 }
 
 impl<G: Gpu> SyncOnDrop<G> {
-    pub fn new(stream: Arc<GpuStream<G>>) -> Self {
+    pub fn new(stream: Arc<Stream<G>>) -> Self {
         Self { stream, guards: Vec::new() }
     }
 
-    pub fn stream(&self) -> Arc<GpuStream<G>> {
+    pub fn stream(&self) -> Arc<Stream<G>> {
         self.stream.clone()
     }
 
-    pub fn guards(&self) -> &[GpuBufferGuard<G>] {
+    pub fn guards(&self) -> &[BufferGuard<G>] {
         &self.guards
     }
 
-    pub fn attach(&mut self, guard: GpuBufferGuard<G>) -> Result<(), G::Error> {
+    pub fn attach(&mut self, guard: BufferGuard<G>) -> Result<(), G::Error> {
         if guard.owner().unwrap() != self.stream {
             return Err("Guard is owned by a different stream!".to_string().into());
         }
@@ -73,15 +73,15 @@ impl<G: Gpu, T> SyncOnValue<G, T> {
         &self.value
     }
 
-    pub fn stream(&self) -> Arc<GpuStream<G>> {
+    pub fn stream(&self) -> Arc<Stream<G>> {
         self.sync.stream()
     }
 
-    pub fn guards(&self) -> &[GpuBufferGuard<G>] {
+    pub fn guards(&self) -> &[BufferGuard<G>] {
         self.sync.guards()
     }
 
-    pub fn attach_guard(&mut self, guard: GpuBufferGuard<G>) {
+    pub fn attach_guard(&mut self, guard: BufferGuard<G>) {
         self.sync.guards.push(guard);
     }
 
@@ -90,15 +90,15 @@ impl<G: Gpu, T> SyncOnValue<G, T> {
     }
 }
 
-pub struct GpuBuffer<G: Gpu> {
+pub struct Buffer<G: Gpu> {
     ptr: G::DevicePtr,
     dtype: DType,
     size: usize,
-    creator: Arc<GpuStream<G>>,
-    owner: Mutex<Option<(Arc<GpuStream<G>>, usize)>>,
+    creator: Arc<Stream<G>>,
+    owner: Mutex<Option<(Arc<Stream<G>>, usize)>>,
 }
 
-impl<G: Gpu> Drop for GpuBuffer<G> {
+impl<G: Gpu> Drop for Buffer<G> {
     fn drop(&mut self) {
         unsafe {
             self.creator.free(self.ptr).unwrap();
@@ -106,7 +106,7 @@ impl<G: Gpu> Drop for GpuBuffer<G> {
     }
 }
 
-impl<G: Gpu> GpuBuffer<G> {
+impl<G: Gpu> Buffer<G> {
     /// New uninitialised buffer on the device, allocated by `stream`,
     /// with given size and dtype
     ///
@@ -115,7 +115,7 @@ impl<G: Gpu> GpuBuffer<G> {
     /// The user must ensure that the memory is initialised before it
     /// is ever read
     pub unsafe fn uninit(
-        stream: Arc<GpuStream<G>>,
+        stream: Arc<Stream<G>>,
         dtype: DType,
         size: usize,
     ) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
@@ -133,7 +133,7 @@ impl<G: Gpu> GpuBuffer<G> {
     }
 
     /// New zeroed buffer on the device with given size and dtype
-    pub fn zeroed(stream: Arc<GpuStream<G>>, dtype: DType, size: usize) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
+    pub fn zeroed(stream: Arc<Stream<G>>, dtype: DType, size: usize) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
         unsafe {
             let sync = Self::uninit(stream.clone(), dtype, size)?;
             let aqcuired = sync.value_ref().clone().acquire(stream.clone())?;
@@ -155,7 +155,7 @@ impl<G: Gpu> GpuBuffer<G> {
         self.dtype.bytes() * self.size
     }
 
-    pub fn owner(&self) -> Option<Arc<GpuStream<G>>> {
+    pub fn owner(&self) -> Option<Arc<Stream<G>>> {
         self.owner.lock().unwrap().as_ref().map(|x| x.0.clone())
     }
 
@@ -164,7 +164,7 @@ impl<G: Gpu> GpuBuffer<G> {
     ///
     /// Returns an error if this buffer is already owned by a
     /// different stream
-    pub fn acquire(self: Arc<Self>, stream: Arc<GpuStream<G>>) -> Result<GpuBufferGuard<G>, G::Error> {
+    pub fn acquire(self: Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
         let mut owner = self.owner.lock().unwrap();
 
         if let Some((owning, count)) = owner.as_mut() {
@@ -179,11 +179,11 @@ impl<G: Gpu> GpuBuffer<G> {
 
         drop(owner);
 
-        Ok(GpuBufferGuard(self))
+        Ok(BufferGuard(self))
     }
 
     /// Copy buffer to host on the given stream
-    pub fn to_host(self: Arc<Self>, stream: Arc<GpuStream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
+    pub fn to_host(self: Arc<Self>, stream: Arc<Stream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
         let guard = self.acquire(stream.clone())?;
         let mut value = TValue::zeros(guard.dtype, guard.size);
 
@@ -199,10 +199,7 @@ impl<G: Gpu> GpuBuffer<G> {
 
     /// Create buffer from host values on the given stream
     #[allow(clippy::type_complexity)]
-    pub fn from_host(
-        stream: Arc<GpuStream<G>>,
-        value: &TValue,
-    ) -> Result<SyncOnValue<G, (Arc<Self>, &TValue)>, G::Error> {
+    pub fn from_host(stream: Arc<Stream<G>>, value: &TValue) -> Result<SyncOnValue<G, (Arc<Self>, &TValue)>, G::Error> {
         unsafe {
             let buf = Self::uninit(stream.clone(), value.dtype(), value.size())?;
             let guard = &buf.guards()[0];
@@ -214,17 +211,17 @@ impl<G: Gpu> GpuBuffer<G> {
     }
 }
 
-pub struct GpuBufferGuard<G: Gpu>(Arc<GpuBuffer<G>>);
+pub struct BufferGuard<G: Gpu>(Arc<Buffer<G>>);
 
-impl<G: Gpu> Deref for GpuBufferGuard<G> {
-    type Target = Arc<GpuBuffer<G>>;
+impl<G: Gpu> Deref for BufferGuard<G> {
+    type Target = Arc<Buffer<G>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<G: Gpu> Drop for GpuBufferGuard<G> {
+impl<G: Gpu> Drop for BufferGuard<G> {
     fn drop(&mut self) {
         let mut owner = self.0.owner.lock().unwrap();
 
@@ -238,7 +235,7 @@ impl<G: Gpu> Drop for GpuBufferGuard<G> {
     }
 }
 
-impl<G: Gpu> GpuBufferGuard<G> {
+impl<G: Gpu> BufferGuard<G> {
     pub fn ptr(&self) -> G::DevicePtr {
         self.0.ptr
     }
@@ -247,17 +244,17 @@ impl<G: Gpu> GpuBufferGuard<G> {
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
-    use crate::runtime::GpuDevice;
+    use crate::runtime::Device;
 
     use super::*;
 
     fn from_to_host<G: Gpu>() -> Result<(), G::Error> {
         let host_src = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
 
-        let device = GpuDevice::<G>::new(0)?;
-        let stream = GpuStream::new(device.clone())?;
+        let device = Device::<G>::new(0)?;
+        let stream = Stream::new(device.clone())?;
 
-        let buf = GpuBuffer::from_host(stream.clone(), &host_src)?.value().0;
+        let buf = Buffer::from_host(stream.clone(), &host_src)?.value().0;
         let host_dst = buf.to_host(stream)?.value();
 
         assert_eq!(host_src, host_dst);

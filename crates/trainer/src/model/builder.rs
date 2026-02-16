@@ -9,12 +9,14 @@ use std::{
 
 use bullet_compiler::{
     frontend::{DType, DValue, IRBuilder, IRNode, Size, TType, TValue},
-    graph::NodeId,
-    operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
-        ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
+    ir::NodeId,
+    tensor::{
+        operation::{
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
+        },
+        transform::inline::InlineSubgraphs,
     },
-    transform::inline::InlineSubgraphs,
 };
 
 use crate::{
@@ -45,7 +47,7 @@ pub struct NodeType {
     pub sparse: Option<usize>,
 }
 
-impl From<NodeType> for bullet_compiler::graph::Shape {
+impl From<NodeType> for bullet_compiler::tensor::Shape {
     fn from(value: NodeType) -> Self {
         let Shape { rows, cols } = value.shape;
 

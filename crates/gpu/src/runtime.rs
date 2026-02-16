@@ -28,16 +28,16 @@ impl<G: bindings::GpuBindings> Gpu for G {
 }
 
 /// A GPU device, allowing the safe management of device streams
-pub struct GpuDevice<G: Gpu> {
+pub struct Device<G: Gpu> {
     ordinal: i32,
     context: G::Ctx,
     device: G::Dev,
 }
 
-unsafe impl<G: Gpu> Send for GpuDevice<G> {}
-unsafe impl<G: Gpu> Sync for GpuDevice<G> {}
+unsafe impl<G: Gpu> Send for Device<G> {}
+unsafe impl<G: Gpu> Sync for Device<G> {}
 
-impl<G: Gpu> Drop for GpuDevice<G> {
+impl<G: Gpu> Drop for Device<G> {
     fn drop(&mut self) {
         unsafe {
             let _ = G::context_destroy(self.device);
@@ -45,7 +45,7 @@ impl<G: Gpu> Drop for GpuDevice<G> {
     }
 }
 
-impl<G: Gpu> GpuDevice<G> {
+impl<G: Gpu> Device<G> {
     pub fn new(ordinal: i32) -> Result<Arc<Self>, G::Error> {
         unsafe {
             G::driver_init()?;
@@ -68,8 +68,8 @@ impl<G: Gpu> GpuDevice<G> {
     }
 
     /// Create a new stream on this device
-    pub fn new_stream(self: Arc<Self>) -> Result<Arc<GpuStream<G>>, G::Error> {
-        GpuStream::new(self.clone())
+    pub fn new_stream(self: Arc<Self>) -> Result<Arc<Stream<G>>, G::Error> {
+        Stream::new(self.clone())
     }
 }
 
@@ -78,35 +78,35 @@ impl<G: Gpu> GpuDevice<G> {
 /// Safely handles the stream creation, destruction and syncing,
 /// but exposes the raw unsafe stream operations such as allocating,
 /// copying and launching kernels
-pub struct GpuStream<G: Gpu> {
+pub struct Stream<G: Gpu> {
     id: usize,
     inner: G::Stream,
-    device: Arc<GpuDevice<G>>,
+    device: Arc<Device<G>>,
 }
 
-impl<G: Gpu> Drop for GpuStream<G> {
+impl<G: Gpu> Drop for Stream<G> {
     fn drop(&mut self) {
         self.sync().unwrap();
         unsafe { G::stream_destroy(self.inner).unwrap() };
     }
 }
 
-impl<G: Gpu> PartialEq for GpuStream<G> {
+impl<G: Gpu> PartialEq for Stream<G> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<G: Gpu> Eq for GpuStream<G> {}
+impl<G: Gpu> Eq for Stream<G> {}
 
-impl<G: Gpu> GpuStream<G> {
+impl<G: Gpu> Stream<G> {
     /// The device that this stream resides on
-    pub fn device(&self) -> Arc<GpuDevice<G>> {
+    pub fn device(&self) -> Arc<Device<G>> {
         self.device.clone()
     }
 
     /// Created a new stream on the given `device`
-    pub fn new(device: Arc<GpuDevice<G>>) -> Result<Arc<Self>, G::Error> {
+    pub fn new(device: Arc<Device<G>>) -> Result<Arc<Self>, G::Error> {
         device.set()?;
 
         let inner = unsafe { G::stream_create()? };
@@ -187,21 +187,21 @@ impl<G: Gpu> GpuStream<G> {
     }
 }
 
-pub struct GpuModule<G: Gpu> {
+pub struct Module<G: Gpu> {
     module: G::Module,
-    device: Arc<GpuDevice<G>>,
+    device: Arc<Device<G>>,
 }
 
-impl<G: Gpu> Drop for GpuModule<G> {
+impl<G: Gpu> Drop for Module<G> {
     fn drop(&mut self) {
         unsafe { G::module_destroy(self.module).unwrap() }
     }
 }
 
-impl<G: Gpu> GpuModule<G> {
+impl<G: Gpu> Module<G> {
     /// Compiles the source code and loads the resulting module
     /// onto the device
-    pub fn new(device: Arc<GpuDevice<G>>, source_code: impl Into<String>) -> Result<Arc<Self>, G::Error> {
+    pub fn new(device: Arc<Device<G>>, source_code: impl Into<String>) -> Result<Arc<Self>, G::Error> {
         let src = CString::new(source_code.into()).map_err(|e| format!("{e:?}"))?;
 
         device.set()?;
@@ -213,7 +213,7 @@ impl<G: Gpu> GpuModule<G> {
     }
 
     /// Get kernel with given name from module
-    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>) -> Result<GpuKernel<G>, G::Error> {
+    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>) -> Result<Kernel<G>, G::Error> {
         let name = CString::new(name.into()).map_err(|e| format!("{e:?}"))?;
         let kernel = unsafe { G::module_get_kernel(self.module, &name)? };
 
@@ -221,21 +221,21 @@ impl<G: Gpu> GpuModule<G> {
             G::kernel_load(kernel)?;
         }
 
-        Ok(GpuKernel { kernel, module: self.clone() })
+        Ok(Kernel { kernel, module: self.clone() })
     }
 
     /// Get device that this module is on
-    pub fn device(&self) -> Arc<GpuDevice<G>> {
+    pub fn device(&self) -> Arc<Device<G>> {
         self.device.clone()
     }
 }
 
-pub struct GpuKernel<G: Gpu> {
+pub struct Kernel<G: Gpu> {
     kernel: G::Kernel,
-    module: Arc<GpuModule<G>>,
+    module: Arc<Module<G>>,
 }
 
-impl<G: Gpu> GpuKernel<G> {
+impl<G: Gpu> Kernel<G> {
     /// Queue a GPU kernel for execution on this stream.
     ///
     /// ### Safety
@@ -248,7 +248,7 @@ impl<G: Gpu> GpuKernel<G> {
     /// completed via a stream sync
     pub unsafe fn launch(
         &self,
-        stream: &GpuStream<G>,
+        stream: &Stream<G>,
         grid_dim: Dim3,
         block_size: u32,
         args: *mut *mut c_void,
@@ -271,7 +271,7 @@ impl<G: Gpu> GpuKernel<G> {
     }
 
     /// Get the device that this kernel is on
-    pub fn device(&self) -> Arc<GpuDevice<G>> {
+    pub fn device(&self) -> Arc<Device<G>> {
         self.module.device()
     }
 }
@@ -285,8 +285,8 @@ mod tests {
         let host_src = [1.0f32, 2.0, 3.0, 4.0];
         let mut host_dst = [0.0, 0.0, 0.0, 0.0];
 
-        let device = GpuDevice::<G>::new(0)?;
-        let stream = GpuStream::new(device.clone())?;
+        let device = Device::<G>::new(0)?;
+        let stream = Stream::new(device.clone())?;
 
         unsafe {
             let dev_ptr = stream.malloc(16)?;
@@ -302,10 +302,10 @@ mod tests {
     }
 
     fn multiple_device_instances<G: Gpu>() -> Result<(), G::Error> {
-        let a = GpuDevice::<G>::new(0)?;
-        let sa = GpuStream::new(a.clone())?;
-        let b = GpuDevice::<G>::new(0)?;
-        let sb = GpuStream::new(b.clone())?;
+        let a = Device::<G>::new(0)?;
+        let sa = Stream::new(a.clone())?;
+        let b = Device::<G>::new(0)?;
+        let sb = Stream::new(b.clone())?;
 
         drop(sa);
         drop(a);
@@ -319,8 +319,8 @@ mod tests {
         let host_src = [1.0f32, 2.0, 3.0, 4.0];
         let mut host_dst = [0.0, 0.0, 0.0, 0.0];
 
-        let device = GpuDevice::<G>::new(0)?;
-        let stream = GpuStream::new(device.clone())?;
+        let device = Device::<G>::new(0)?;
+        let stream = Stream::new(device.clone())?;
 
         let add_one_kernel = "
             extern \"C\" __global__ void kernel(const int size, const float* src, float* dst) {
@@ -329,7 +329,7 @@ mod tests {
             }
         ";
 
-        let module = GpuModule::new(device.clone(), add_one_kernel)?;
+        let module = Module::new(device.clone(), add_one_kernel)?;
         let kernel = module.get_kernel("kernel")?;
 
         unsafe {

@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bullet_compiler::graph::{DType, DValue, GraphError, TValue};
+use bullet_compiler::tensor::{DType, DValue, IRTrace, TValue};
 
 use crate::runtime::{BlockOnDrop, BlockResult, Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
 
@@ -15,7 +15,7 @@ type Buf = Arc<Mutex<TValue>>;
 impl Stream for Interpreter {
     type Device = Self;
 
-    fn block_until_done(&self) -> Result<(), GraphError> {
+    fn block_until_done(&self) -> Result<(), IRTrace> {
         Ok(())
     }
 
@@ -30,7 +30,7 @@ impl Stream for Interpreter {
         Ok(BlockOnDrop::new(self, bufs))
     }
 
-    fn make_nonblocking(self: Arc<Self>, src: &TValue) -> Result<BlockOnDrop<Self, (&TValue, Buf)>, GraphError> {
+    fn make_nonblocking(self: Arc<Self>, src: &TValue) -> Result<BlockOnDrop<Self, (&TValue, Buf)>, IRTrace> {
         let buf = Arc::new(Mutex::new(src.clone()));
         Ok(BlockOnDrop::new(self, (src, buf)))
     }
@@ -39,12 +39,12 @@ impl Stream for Interpreter {
         self: Arc<Self>,
         src: &TValue,
         dst: Buf,
-    ) -> Result<BlockOnDrop<Self, (&TValue, Buf)>, GraphError> {
+    ) -> Result<BlockOnDrop<Self, (&TValue, Buf)>, IRTrace> {
         *dst.lock().map_err(|e| format!("{e:?}"))? = src.clone();
         Ok(BlockOnDrop::new(self, (src, dst)))
     }
 
-    fn copy_d2h_blocking(self: &Arc<Self>, src: Buf) -> Result<TValue, GraphError> {
+    fn copy_d2h_blocking(self: &Arc<Self>, src: Buf) -> Result<TValue, IRTrace> {
         Ok(src.lock().map_err(|e| format!("{e:?}"))?.clone())
     }
 
@@ -80,7 +80,7 @@ impl Stream for Interpreter {
                 TensorInput::Out(output) => Some(output),
                 TensorInput::In(_) => None,
             } {
-                let value = outputs.get(out).ok_or::<GraphError>("Output node missing!".into())?;
+                let value = outputs.get(out).ok_or::<IRTrace>("Output node missing!".into())?;
                 *tensor.lock().map_err(|e| format!("{e:?}"))? = value.clone();
             }
         }
@@ -106,7 +106,7 @@ impl Buffer for Mutex<TValue> {
 }
 
 impl Device for Interpreter {
-    type Error = GraphError;
+    type Error = IRTrace;
     type Stream = Self;
     type Buffer = Mutex<TValue>;
     type CompiledGraph = ReadyToCompileGraph;
@@ -115,11 +115,11 @@ impl Device for Interpreter {
         self.clone()
     }
 
-    fn new_stream(self: &Arc<Self>) -> Result<Arc<Self>, GraphError> {
+    fn new_stream(self: &Arc<Self>) -> Result<Arc<Self>, IRTrace> {
         Ok(self.clone())
     }
 
-    fn compile(self: &Arc<Self>, graph: ReadyToCompileGraph) -> Result<ReadyToCompileGraph, GraphError> {
+    fn compile(self: &Arc<Self>, graph: ReadyToCompileGraph) -> Result<ReadyToCompileGraph, IRTrace> {
         Ok(graph)
     }
 }

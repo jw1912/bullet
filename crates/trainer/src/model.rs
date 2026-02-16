@@ -7,7 +7,7 @@ pub use builder::{ModelBuilder, ModelNode};
 
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::graph::{DType, TType, TValue};
+use bullet_compiler::tensor::{DType, TType, TValue};
 
 use crate::runtime::{BlockOnDrop, Buffer, Device, Stream};
 

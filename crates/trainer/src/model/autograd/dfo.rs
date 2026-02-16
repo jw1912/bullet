@@ -2,7 +2,7 @@ use std::{fmt, rc::Rc};
 
 use bullet_compiler::{
     frontend::{DType, DValue, IRNode, IRTrace, Size, TType},
-    operation::Unary,
+    tensor::operation::Unary,
 };
 
 use crate::model::autograd::{Autograd, AutogradOp};

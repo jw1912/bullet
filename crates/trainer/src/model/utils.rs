@@ -1,4 +1,4 @@
-use bullet_compiler::graph::TValue;
+use bullet_compiler::tensor::TValue;
 
 pub fn write_to_byte_buffer(value: &TValue, id: &str) -> std::io::Result<Vec<u8>> {
     use std::io::{Error, ErrorKind, Write};

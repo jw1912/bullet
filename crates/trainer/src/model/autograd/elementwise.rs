@@ -1,6 +1,6 @@
 use bullet_compiler::{
     frontend::{DValue, IRNode, IRTrace},
-    operation::{CABinary, CABinaryOp, Unary, UnaryOp},
+    tensor::operation::{CABinary, CABinaryOp, Unary, UnaryOp},
 };
 
 use super::AutogradOnCoreOp;

@@ -6,7 +6,7 @@ mod save;
 use std::cell::RefCell;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
-use bullet_compiler::graph::TValue;
+use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     Trainer,
     model::save::SavedFormat,

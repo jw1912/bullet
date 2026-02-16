@@ -1,13 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::{
-    graph::{DValue, Size},
-    ir::{IR, IRTrace},
-};
+use bullet_compiler::tensor::{DValue, IRTrace, Size, TensorIR};
 
 use crate::{
-    buffer::{GpuBuffer, SyncOnDrop, SyncOnValue},
-    runtime::{Dim3, Gpu, GpuDevice, GpuKernel, GpuStream},
+    buffer::{Buffer, SyncOnDrop, SyncOnValue},
+    runtime::{Device, Dim3, Gpu, Kernel, Stream},
 };
 
 enum Arg {
@@ -30,7 +27,7 @@ enum Inst<G: Gpu> {
         idx: usize,
     },
     LaunchKernel {
-        func: GpuKernel<G>,
+        func: Kernel<G>,
         args: Vec<Arg>,
         gdim: Box<dyn Fn(usize) -> Dim3>,
         bdim: Box<dyn Fn(usize) -> u32>,
@@ -38,20 +35,20 @@ enum Inst<G: Gpu> {
     },
 }
 
-pub struct GpuFunction<G: Gpu> {
+pub struct Function<G: Gpu> {
     maps: HashMap<String, (usize, bool, Size)>,
     ptrs: Box<[G::DevicePtr]>,
     insts: Box<[Inst<G>]>,
 }
 
-impl<G: Gpu> GpuFunction<G> {
-    pub fn new(device: Arc<GpuDevice<G>>, ir: IR) -> Result<Self, IRTrace> {
+impl<G: Gpu> Function<G> {
+    pub fn new(device: Arc<Device<G>>, ir: TensorIR) -> Result<Self, IRTrace> {
         let maps = HashMap::new();
         let ptrs = Vec::new();
         let insts = Vec::new();
 
         for op in ir.ordered_operations()? {
-            if op.is_input() {
+            if op.data().is_input() {
                 unimplemented!()
             }
         }
@@ -61,8 +58,8 @@ impl<G: Gpu> GpuFunction<G> {
 
     pub fn execute(
         &mut self,
-        stream: Arc<GpuStream<G>>,
-        inputs: &HashMap<String, Arc<GpuBuffer<G>>>,
+        stream: Arc<Stream<G>>,
+        inputs: &HashMap<String, Arc<Buffer<G>>>,
     ) -> Result<SyncOnValue<G, &mut Self>, G::Error> {
         let mut sync = SyncOnDrop::new(stream.clone());
 

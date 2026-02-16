@@ -7,8 +7,8 @@ use std::{
 };
 
 use bullet_compiler::{
-    graph::{DType, DValue, NodeId, TValue},
-    ir::{IR, IRTrace},
+    ir::NodeId,
+    tensor::{DType, DValue, IRTrace, TValue, TensorIR},
 };
 
 /// Ensures required objects for nonblocking operations are not
@@ -102,12 +102,12 @@ pub trait Device {
 }
 
 pub struct ReadyToCompileGraph {
-    ir: IR,
+    ir: TensorIR,
     tensors: HashMap<String, TensorInput>,
 }
 
 impl ReadyToCompileGraph {
-    pub fn new(ir: IR, tensors: HashMap<String, TensorInput>) -> Result<ReadyToCompileGraph, IRTrace> {
+    pub fn new(ir: TensorIR, tensors: HashMap<String, TensorInput>) -> Result<ReadyToCompileGraph, IRTrace> {
         let mut present = HashSet::new();
 
         for value in tensors.values() {
@@ -153,7 +153,7 @@ impl ReadyToCompileGraph {
         Ok(Self { ir, tensors })
     }
 
-    pub fn ir(&self) -> &IR {
+    pub fn ir(&self) -> &TensorIR {
         &self.ir
     }
 

@@ -1,29 +1,75 @@
-mod stubs;
+mod compute;
+mod dims;
+mod mem;
 
-use std::fmt::{self, Write};
+use std::{
+    collections::HashSet,
+    fmt::{self, Write},
+    rc::Rc,
+};
 
-use bullet_compiler::graph::{DType, Graph, GraphError, NodeId, Size, TType};
+use bullet_compiler::{
+    ir::NodeId,
+    tensor::{DType, DValue, IRTrace, OpType, Size, TType, TValue, TensorIR, operation::ScalarConstant},
+};
+
+pub use compute::ComputeStub;
+
+#[derive(Clone, Debug)]
+pub struct Stub {
+    pub terminal: Vec<usize>,
+    pub inputs: Vec<(TType, bool)>,
+    pub outputs: Vec<TType>,
+    pub source: String,
+}
+
+impl OpType for Stub {
+    fn opname(&self) -> String {
+        "gpu.stub".to_string()
+    }
+
+    fn inputs(&self) -> Vec<TType> {
+        self.inputs.iter().map(|x| x.0).collect()
+    }
+
+    fn outputs(&self) -> Vec<TType> {
+        self.outputs.clone()
+    }
+
+    fn equals(&self, _: &Rc<dyn OpType>) -> bool {
+        false
+    }
+
+    fn commutating_groups(&self) -> Vec<HashSet<usize>> {
+        Vec::new()
+    }
+
+    fn evaluate(&self, _: Vec<&TValue>, _: Vec<&mut TValue>) {
+        unimplemented!()
+    }
+}
 
 pub struct Codegen {
     size: Size,
-    graph: Graph,
+    graph: TensorIR,
     tid: NodeId,
     var: NodeId,
+    locked: HashSet<NodeId>,
 }
 
 impl Codegen {
-    pub fn new(size: Size) -> Result<Self, GraphError> {
-        let mut graph = Graph::default();
+    pub fn new(size: Size) -> Result<Self, IRTrace> {
+        let mut graph = TensorIR::default();
 
-        let [var] = graph.add_op([], stubs::VarSizeStub(size))?[..] else {
+        let [var] = graph.add_op([], Ok::<_, IRTrace>(dims::var_size_stub(size)))?[..] else {
             return Err("Invalid number outputs!".into());
         };
 
-        let [tid] = graph.add_op([var], stubs::ThreadIdxStub(size))?[..] else {
+        let [tid] = graph.add_op([var], Ok::<_, IRTrace>(dims::thread_idx_stub(size)))?[..] else {
             return Err("Invalid number outputs!".into());
         };
 
-        Ok(Self { size, graph, tid, var })
+        Ok(Self { size, graph, tid, var, locked: HashSet::new() })
     }
 
     pub fn tid(&self) -> NodeId {
@@ -34,52 +80,51 @@ impl Codegen {
         self.graph.add_input(ttype)
     }
 
-    pub fn read(&mut self, buf: NodeId, idx: NodeId) -> Result<NodeId, GraphError> {
-        if !self.graph.is_input(buf) {
-            return Err("Cannot read from non-leaf!".into());
+    fn add_stub(&mut self, inputs: impl AsRef<[NodeId]>, stub: Stub) -> Result<Vec<NodeId>, IRTrace> {
+        for (&(_, is_buf), &id) in stub.inputs.iter().zip(inputs.as_ref()) {
+            if self.locked.contains(&id) {
+                return Err(format!("Node {id:?} is marked as locked!").into());
+            }
+
+            if is_buf != self.graph.is_input(id)? {
+                return Err("Cannot read from non-leaf!".into());
+            }
         }
 
-        let buf_ty = self.graph.get_node(buf)?.ty();
-        let idx_ty = self.graph.get_node(idx)?.ty();
+        for &terminal in &stub.terminal {
+            let id = inputs.as_ref()[terminal];
 
-        if idx_ty != TType::new(self.size, DType::I32) {
-            return Err(format!("Invalid index type for read: {idx_ty:?}!").into());
+            if !self.graph.is_input(id)? {
+                return Err("Cannot mark non-buffer as terminal!".into());
+            }
+
+            self.locked.insert(id);
         }
 
-        self.graph.add_op([buf, idx], stubs::ReadStub(buf_ty, self.size)).map(|x| x[0])
+        self.graph.add_op(inputs, Ok::<_, IRTrace>(stub))
     }
 
-    pub fn write(&mut self, buf: NodeId, val: NodeId) -> Result<(), GraphError> {
-        if !self.graph.is_input(buf) {
-            return Err("Cannot write to non-leaf!".into());
-        }
+    pub fn add_const(&mut self, value: DValue) -> NodeId {
+        self.graph.add_scalar(value, self.size)
+    }
 
-        if self.graph.is_input(val) {
-            return Err("Cannot write leaf value!".into());
-        }
-
+    pub fn read(&mut self, buf: NodeId, idx: NodeId) -> Result<NodeId, IRTrace> {
         let buf_ty = self.graph.get_node(buf)?.ty();
-        let val_ty = self.graph.get_node(val)?.ty();
+        self.add_stub([buf, idx], mem::read_stub(buf_ty, self.size)).map(|x| x[0])
+    }
+
+    pub fn write(&mut self, buf: NodeId, val: NodeId) -> Result<(), IRTrace> {
+        let buf_ty = self.graph.get_node(buf)?.ty();
 
         if buf_ty.size() != self.size {
             return Err("Only pointwise writes supported!".into());
         }
 
-        if buf_ty != val_ty {
-            return Err(format!("Buffer and value must be same type for write: {buf_ty:?} != {val_ty:?}!").into());
-        }
-
-        self.graph.add_op([buf, val, self.tid], stubs::WriteStub(buf_ty)).map(|_| ())
+        self.add_stub([buf, val, self.tid], mem::write_stub(buf_ty)).map(|_| ())
     }
 
-    pub fn compute(&mut self, inputs: impl AsRef<[NodeId]>, op: stubs::ComputeStub) -> Result<Vec<NodeId>, GraphError> {
-        for &input in inputs.as_ref() {
-            if self.graph.is_input(input) {
-                return Err("Cannot compute directly on buffer!".into());
-            }
-        }
-
-        self.graph.add_op(inputs, op)
+    pub fn compute(&mut self, inputs: impl AsRef<[NodeId]>, op: ComputeStub) -> Result<Vec<NodeId>, IRTrace> {
+        self.add_stub(inputs, op.into())
     }
 
     pub fn generate(self) -> Result<String, fmt::Error> {
@@ -92,34 +137,30 @@ impl Codegen {
         let mut inputs = Vec::new();
         let mut code = String::new();
 
-        for op_id in self.graph.topo_order_ops().unwrap() {
-            let op = self.graph.get_op(op_id).unwrap();
-
-            if op.is_input() {
+        for op in self.graph.ordered_operations().unwrap() {
+            if op.data().is_input() {
                 inputs.push(op.outputs()[0]);
-            } else if op.downcast::<stubs::VarSizeStub>().is_some() {
-            } else if op.downcast::<stubs::ThreadIdxStub>().is_some() {
-                let tid = name(op.outputs()[0]);
-                let mut size = format!("{}", self.size.factor());
-                for _ in 0..self.size.var_power() {
-                    size += &format!(" * {}", name(self.var));
+            } else if let Some(scalar) = op.data().downcast::<ScalarConstant>() {
+                let nm = name(op.outputs()[0]);
+                let s = match scalar.0 {
+                    DValue::F32(x) => format!("const float {nm} = {x};"),
+                    DValue::I32(x) => format!("const int {nm} = {x};"),
+                };
+                writeln!(&mut code, "{s}")?;
+            } else if let Some(stub) = op.data().downcast::<Stub>() {
+                let mut src = stub.source.clone();
+
+                for (i, &id) in op.inputs().iter().enumerate() {
+                    src = src.replace(&format!("INPUT{}", i + 1), &name(id));
                 }
 
-                writeln!(
-                    &mut code,
-                    "const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + gridDim.x * gridDim.y * blockIdx.z;"
-                )?;
-                writeln!(&mut code, "const int {tid} = idx_in_grid * blockDim.x + threadIdx.x;")?;
-                writeln!(&mut code, "if ({tid} >= ({size})) return;")?;
-            } else if let Some(read) = op.downcast::<stubs::ReadStub>() {
-                let [buf, idx] = *op.inputs() else { panic!() };
-                let [out] = *op.outputs() else { panic!() };
+                for (i, &id) in op.outputs().iter().enumerate() {
+                    src = src.replace(&format!("OUTPUT{}", i + 1), &name(id));
+                }
 
-                writeln!(&mut code, "const {} {} = {}[{}];", dty(read.0.dtype()), name(out), name(buf), name(idx),)?;
-            } else if op.downcast::<stubs::WriteStub>().is_some() {
-                let [buf, val, idx] = *op.inputs() else { panic!() };
-
-                writeln!(&mut code, "{}[{}] = {};", name(buf), name(idx), name(val),)?;
+                writeln!(&mut code, "{src}")?;
+            } else {
+                unimplemented!();
             }
         }
 
@@ -151,48 +192,61 @@ impl Codegen {
 mod tests {
     use std::ffi::c_void;
 
-    use bullet_compiler::graph::TValue;
+    use bullet_compiler::tensor::TValue;
 
     use crate::{
-        buffer::GpuBuffer,
-        runtime::{Dim3, Gpu, GpuDevice, GpuModule, GpuStream},
+        buffer::Buffer,
+        runtime::{Device, Dim3, Gpu, Module, Stream},
     };
 
     use super::*;
 
-    fn copy<G: Gpu>() -> Result<(), G::Error> {
-        let mut codegen = Codegen::new(Size::variable()).unwrap();
+    fn fmadd<G: Gpu>() -> Result<(), G::Error> {
+        let threads = Size::variable();
+        let ttype = TType::new(threads, DType::F32);
 
-        let ty = TType::new(Size::variable(), DType::F32);
-        let input = codegen.add_buf(ty);
-        let output = codegen.add_buf(ty);
+        let mut codegen = Codegen::new(threads).unwrap();
+        let input1 = codegen.add_buf(ttype);
+        let input2 = codegen.add_buf(ttype);
+        let output = codegen.add_buf(ttype);
+
         let tid = codegen.tid();
+        let scalar = codegen.add_const(2.0.into());
+        let value1 = codegen.read(input1, tid).unwrap();
+        let value2 = codegen.read(input2, tid).unwrap();
 
-        let value = codegen.read(input, tid).unwrap();
-        codegen.write(output, value).unwrap();
-
-        let device = GpuDevice::<G>::new(0)?;
+        let value3 = codegen.compute([scalar, value1], ComputeStub::binary(ttype, "INPUT1 * INPUT2")).unwrap()[0];
+        let value4 = codegen.compute([value3, value2], ComputeStub::binary(ttype, "INPUT1 + INPUT2")).unwrap()[0];
+        codegen.write(output, value4).unwrap();
 
         let source = codegen.generate().unwrap();
-        let kernel = GpuModule::new(device.clone(), source)?.get_kernel("kernel")?;
-        let stream = GpuStream::new(device)?;
 
-        let values = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
-        let input_buf = GpuBuffer::from_host(stream.clone(), &values)?.value().0;
+        println!("{source}");
+
+        let device = Device::<G>::new(0)?;
+        let kernel = Module::new(device.clone(), source)?.get_kernel("kernel")?;
+        let stream = Stream::new(device)?;
+
+        let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
+        let values2 = TValue::F32(vec![4.0, 3.0, 2.0, 1.0]);
+
+        let input1_buf = Buffer::from_host(stream.clone(), &values1)?.value().0;
+        let input2_buf = Buffer::from_host(stream.clone(), &values2)?.value().0;
 
         fn cast<T>(x: &T) -> *mut c_void {
             (x as *const T).cast_mut().cast()
         }
 
         unsafe {
-            let output_buf = GpuBuffer::uninit(stream.clone(), values.dtype(), values.size())?.value();
+            let output_buf = Buffer::uninit(stream.clone(), values1.dtype(), values1.size())?.value();
 
-            let size = values.size() as i32;
-            let input_ptr = input_buf.acquire(stream.clone())?.ptr();
+            let size = values1.size() as i32;
+            let input1_ptr = input1_buf.acquire(stream.clone())?.ptr();
+            let input2_ptr = input2_buf.acquire(stream.clone())?.ptr();
             let output_ptr = output_buf.clone().acquire(stream.clone())?.ptr();
 
             let grid_dim = Dim3 { x: 1, y: 1, z: 1 };
-            let mut args = [cast(&size), cast(&input_ptr), cast(&output_ptr)];
+            let mut args = [cast(&size), cast(&input1_ptr), cast(&input2_ptr), cast(&output_ptr)];
 
             kernel.launch(&stream, grid_dim, size as u32, args.as_mut_ptr(), 0)?;
 
@@ -200,7 +254,7 @@ mod tests {
 
             let actual = output_buf.to_host(stream.clone())?.value();
 
-            assert_eq!(values, actual);
+            assert_eq!(actual, TValue::F32(vec![6.0, 7.0, 8.0, 9.0]));
         }
 
         Ok(())
@@ -211,8 +265,8 @@ mod tests {
         use crate::runtime::cuda::{Cuda, CudaError};
 
         #[test]
-        fn copy() -> Result<(), CudaError> {
-            super::copy::<Cuda>()
+        fn fmadd() -> Result<(), CudaError> {
+            super::fmadd::<Cuda>()
         }
     }
 
@@ -221,8 +275,8 @@ mod tests {
         use crate::runtime::rocm::{ROCm, ROCmError};
 
         #[test]
-        fn copy() -> Result<(), ROCmError> {
-            super::copy::<ROCm>()
+        fn fmadd() -> Result<(), ROCmError> {
+            super::fmadd::<ROCm>()
         }
     }
 }

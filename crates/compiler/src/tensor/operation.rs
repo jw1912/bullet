@@ -1,0 +1,103 @@
+mod binary;
+mod broadcast;
+mod constant;
+mod copy;
+mod matmul;
+mod pad;
+mod reduce;
+mod select;
+mod slice;
+mod sparse;
+mod subgraph;
+mod unary;
+
+use std::{any::Any, collections::HashSet, fmt::Debug, rc::Rc};
+
+pub use binary::{CABinary, CABinaryOp};
+pub use broadcast::BroadcastAcrossDimension;
+pub use constant::{Constant, ScalarConstant};
+pub use copy::CopyOp;
+pub use matmul::{Matmul, MatrixLayout};
+pub use pad::PadAcrossDimension;
+pub use reduce::{ReduceAcrossDimension, Reduction};
+pub use select::{Select, SelectPad};
+pub use slice::SliceAcrossDimension;
+pub use sparse::{SparseMatmul, SparseMatmulBwd};
+pub use subgraph::SubGraph;
+pub use unary::{Unary, UnaryOp};
+
+use crate::{
+    ir::Operation,
+    tensor::{TType, TValue},
+};
+
+pub trait OpType: Any + Debug + 'static {
+    fn opname(&self) -> String;
+
+    fn inputs(&self) -> Vec<TType>;
+
+    fn outputs(&self) -> Vec<TType>;
+
+    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>);
+
+    fn equals(&self, other: &Rc<dyn OpType>) -> bool;
+
+    fn commutating_groups(&self) -> Vec<HashSet<usize>> {
+        Vec::new()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TensorOp(pub Rc<dyn OpType>);
+
+impl Operation<TType> for TensorOp {
+    fn opname(&self) -> String {
+        self.0.opname()
+    }
+
+    fn inputs(&self) -> Vec<TType> {
+        self.0.inputs()
+    }
+
+    fn outputs(&self) -> Vec<TType> {
+        self.0.outputs()
+    }
+}
+
+impl TensorOp {
+    pub fn downcast_rc<T: OpType>(input: &Rc<dyn OpType>) -> Option<&T> {
+        let op: &dyn Any = input.as_ref();
+        op.downcast_ref::<T>()
+    }
+
+    pub fn downcast<T: OpType>(&self) -> Option<&T> {
+        Self::downcast_rc::<T>(&self.0)
+    }
+
+    pub fn is_input(&self) -> bool {
+        self.downcast::<Input>().is_some()
+    }
+}
+
+#[derive(Debug)]
+pub struct Input(pub TType);
+
+impl OpType for Input {
+    fn opname(&self) -> String {
+        format!("leaf<{:?}>", self.0)
+    }
+
+    fn inputs(&self) -> Vec<TType> {
+        Vec::new()
+    }
+
+    fn outputs(&self) -> Vec<TType> {
+        vec![self.0]
+    }
+
+    fn evaluate(&self, _: Vec<&TValue>, _: Vec<&mut TValue>) {}
+
+    fn equals(&self, _: &Rc<dyn OpType>) -> bool {
+        false
+    }
+}

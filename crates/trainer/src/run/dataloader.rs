@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::graph::TValue;
+use bullet_compiler::tensor::TValue;
 
 use crate::{
     model::TensorMap,

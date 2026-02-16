@@ -4,7 +4,7 @@ pub mod schedule;
 
 use std::{sync::mpsc, thread, time::Instant};
 
-use bullet_compiler::graph::TValue;
+use bullet_compiler::tensor::TValue;
 
 use crate::{
     DataLoadingError, Trainer, TrainerError,

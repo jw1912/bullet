@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use bullet_compiler::graph::TValue;
+use bullet_compiler::tensor::TValue;
 
 use crate::{
     model::{Model, Shape},

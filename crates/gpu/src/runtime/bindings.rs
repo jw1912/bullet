@@ -13,7 +13,7 @@ pub struct Dim3 {
 }
 
 /// This is a private trait, so nobody outside the crate can access these methods
-/// and instead must go through the `GpuDevice` and `GpuStream` structs defined in
+/// and instead must go through the `Device` and `Stream` structs defined in
 /// `crate::gpu::device`
 #[allow(clippy::missing_safety_doc)]
 pub trait GpuBindings {

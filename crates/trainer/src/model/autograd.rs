@@ -12,10 +12,13 @@ use std::{
 };
 
 use bullet_compiler::{
-    frontend::{IR, IRBuilder, IRNode, IRTrace, TType, TValue},
-    graph::{NodeId, Op, OpId, OpType},
-    operation::{CABinary, SubGraph},
-    transform::{IRTransform, modify::AddOperation},
+    frontend::{IRBuilder, IRNode, IRTrace, TType, TValue, TensorIR},
+    ir::{NodeId, OpId},
+    tensor::{
+        OpType, TensorOp,
+        operation::{CABinary, SubGraph},
+        transform::{IRTransform, modify::AddOperation},
+    },
 };
 
 pub use dfo::{CReLU, DiffableFromOutput, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid};
@@ -96,7 +99,7 @@ impl AutogradOp {
         let builder = IRBuilder::default();
         let inputs = op_inputs.iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
         let outputs = op.forward(inputs.clone())?;
-        let forward = builder.build(&outputs).graph().clone();
+        let forward = builder.build(&outputs);
         let inputs = inputs.iter().map(IRNode::node).collect();
         let outputs = outputs.iter().map(IRNode::node).collect();
         let forward = SubGraph::new(forward, inputs, outputs)?;
@@ -119,7 +122,11 @@ impl OpType for AutogradOp {
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(AutogradOp { op, .. }) = Op::downcast_rc(other) { self.op.equals(op) } else { false }
+        if let Some(AutogradOp { op, .. }) = TensorOp::downcast_rc(other) {
+            self.op.equals(op)
+        } else {
+            false
+        }
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) {
@@ -131,9 +138,9 @@ impl OpType for AutogradOp {
 pub struct LowerForward;
 
 impl IRTransform for LowerForward {
-    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         for op in ir.operations() {
-            if let Some(AutogradOp { forward, .. }) = op.downcast().cloned() {
+            if let Some(AutogradOp { forward, .. }) = op.data().downcast().cloned() {
                 ir.replace_op(op.id(), AddOperation::new(op.inputs().to_vec(), Ok(Rc::new(forward))))?;
             }
         }
@@ -159,7 +166,7 @@ impl TakeGradient {
 }
 
 impl IRTransform for TakeGradient {
-    fn apply(&self, ir: &mut IR) -> Result<(), IRTrace> {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         let ops = ir.get_dependent_ops_set(self.root)?;
 
         let root_outputs = ir.get_op(self.root)?.outputs().to_vec();
@@ -173,7 +180,7 @@ impl IRTransform for TakeGradient {
         }
 
         for operation in ir.ordered_operations()?.iter().rev().filter(|operation| ops.contains(&operation.id())) {
-            if let Some(AutogradOp { op, .. }) = operation.downcast() {
+            if let Some(AutogradOp { op, .. }) = operation.data().downcast() {
                 let op_ograds = operation.outputs().iter().map(|i| grads.get(i).unwrap().unwrap()).collect::<Vec<_>>();
 
                 // create backwards subgraph
@@ -204,9 +211,9 @@ impl IRTransform for TakeGradient {
                     }
                 }
 
-                let backward = builder.build(&unique_igrads).graph().clone();
+                let backward = builder.build(&unique_igrads);
 
-                // add backwards subgraph to IR
+                // add backwards subgraph to TensorIR
                 let subgraph_inputs = [inputs, ograds].concat().iter().map(IRNode::node).collect();
                 let subgraph_outputs: Vec<_> = unique_igrads.iter().map(IRNode::node).collect();
                 let subgraph = SubGraph::new(backward, subgraph_inputs, subgraph_outputs.clone())?;
@@ -237,9 +244,9 @@ impl IRTransform for TakeGradient {
 
 #[cfg(test)]
 mod tests {
-    use bullet_compiler::{
-        graph::{DType, Input},
-        operation::{CABinaryOp, CopyOp},
+    use bullet_compiler::tensor::{
+        DType,
+        operation::{CABinaryOp, CopyOp, Input},
         transform::inline::InlineSubgraphs,
     };
 
@@ -247,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_axby() -> Result<(), IRTrace> {
-        let mut ir = IR::default();
+        let mut ir = TensorIR::default();
 
         let ttype = TType::new(1, DType::F32);
 
@@ -270,17 +277,17 @@ mod tests {
         ir.optimise()?;
 
         let ops = ir.ordered_operations()?;
-        let mut optys = ops.iter().map(Op::op);
+        let mut optys = ops.iter().map(|x| &x.data().0);
         assert_eq!(ops.len(), 2);
-        assert!(Op::downcast_rc::<Input>(optys.next().unwrap()).is_some());
-        assert!(Op::downcast_rc::<CopyOp>(optys.next().unwrap()).is_some());
+        assert!(TensorOp::downcast_rc::<Input>(optys.next().unwrap()).is_some());
+        assert!(TensorOp::downcast_rc::<CopyOp>(optys.next().unwrap()).is_some());
 
         Ok(())
     }
 
     #[test]
     fn test_pow() -> Result<(), IRTrace> {
-        let mut ir = IR::default();
+        let mut ir = TensorIR::default();
 
         let ttype = TType::new(1, DType::F32);
 
@@ -301,10 +308,10 @@ mod tests {
         ir.optimise()?;
 
         let ops = ir.ordered_operations()?;
-        let mut optys = ops.iter().map(Op::op);
+        let mut optys = ops.iter().map(|x| &x.data().0);
         assert_eq!(ops.len(), 2);
-        assert!(Op::downcast_rc::<Input>(optys.next().unwrap()).is_some());
-        assert!(Op::downcast_rc::<CABinaryOp>(optys.next().unwrap()).is_some());
+        assert!(TensorOp::downcast_rc::<Input>(optys.next().unwrap()).is_some());
+        assert!(TensorOp::downcast_rc::<CABinaryOp>(optys.next().unwrap()).is_some());
 
         Ok(())
     }
