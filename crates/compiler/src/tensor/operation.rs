@@ -38,9 +38,14 @@ pub trait OpType: Any + Debug + 'static {
 
     fn outputs(&self) -> Vec<TType>;
 
-    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>);
+    /// Returns true if self is provably equal to other
+    fn equals(&self, _other: &Rc<dyn OpType>) -> bool;
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool;
+    /// Evaluates the operation given concrete inputs and sized
+    /// output buffers. Returns false if not available.
+    fn evaluate(&self, _inputs: Vec<&TValue>, _outputs: Vec<&mut TValue>) -> bool {
+        false
+    }
 
     fn commutating_groups(&self) -> Vec<HashSet<usize>> {
         Vec::new()
@@ -94,8 +99,6 @@ impl OpType for Input {
     fn outputs(&self) -> Vec<TType> {
         vec![self.0]
     }
-
-    fn evaluate(&self, _: Vec<&TValue>, _: Vec<&mut TValue>) {}
 
     fn equals(&self, _: &Rc<dyn OpType>) -> bool {
         false

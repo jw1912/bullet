@@ -73,7 +73,7 @@ impl OpType for CABinaryOp {
         vec![self.ty]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         assert_eq!(inputs.len(), 2);
         assert_eq!(outputs.len(), 1);
 
@@ -84,6 +84,8 @@ impl OpType for CABinaryOp {
         for idx in 0..size {
             outputs[0].write(idx, self.op.evaluate(inputs[0].read(idx), inputs[1].read(idx)).unwrap());
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {

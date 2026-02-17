@@ -23,7 +23,7 @@ impl OpType for CopyOp {
         vec![self.0]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
@@ -33,6 +33,8 @@ impl OpType for CopyOp {
         for idx in 0..size {
             outputs[0].write(idx, inputs[0].read(idx));
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {

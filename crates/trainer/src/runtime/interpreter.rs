@@ -70,7 +70,7 @@ impl Stream for Interpreter {
             }
         }
 
-        let outputs = graph.ir().evaluate(inputs)?;
+        let outputs = graph.ir().evaluate(inputs)?.ok_or("Could not execute graph!")?;
 
         for (name, tensor) in filtered {
             let input = graph.tensors().get(name).unwrap();

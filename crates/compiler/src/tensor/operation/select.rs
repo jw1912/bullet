@@ -11,7 +11,7 @@ pub struct Select {
 }
 
 impl Select {
-    pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], indices: &[i32], output: &mut [T]) {
+    pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], indices: &[i32], output: &mut [T]) -> bool {
         let subdim = self.inner / self.divisor;
         let input_size = self.batch * self.inner;
         let output_size = self.batch * subdim;
@@ -42,6 +42,8 @@ impl Select {
             let iidx = inner * o + subdim * index;
             output[oidx..(subdim + oidx)].copy_from_slice(&input[iidx..(subdim + iidx)]);
         }
+
+        true
     }
 }
 
@@ -59,7 +61,7 @@ impl OpType for Select {
         vec![TType::new(self.batch * (self.inner / self.divisor), self.dtype)]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         assert_eq!(inputs.len(), 2);
         assert_eq!(outputs.len(), 1);
 
@@ -77,6 +79,8 @@ impl OpType for Select {
                 self.apply(input, indices, output);
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {
@@ -145,7 +149,7 @@ impl OpType for SelectPad {
         vec![TType::new(self.batch * self.inner, self.dtype)]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         assert_eq!(inputs.len(), 2);
         assert_eq!(outputs.len(), 1);
 
@@ -163,6 +167,8 @@ impl OpType for SelectPad {
                 self.apply(input, indices, output);
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {

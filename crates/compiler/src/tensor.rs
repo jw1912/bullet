@@ -1,4 +1,3 @@
-pub mod ansi;
 pub mod builder;
 pub mod operation;
 mod pattern;
@@ -23,7 +22,6 @@ use transform::{
     modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
 };
 
-use ansi::Ansi;
 pub use operation::{OpType, TensorOp};
 pub use ttype::{DType, DValue, Shape, Size, TType, TValue};
 
@@ -50,7 +48,10 @@ impl TensorIR {
         &mut self.ir
     }
 
-    pub fn evaluate(&self, inputs: impl Into<HashMap<NodeId, TValue>>) -> Result<HashMap<NodeId, TValue>, IRTrace> {
+    pub fn evaluate(
+        &self,
+        inputs: impl Into<HashMap<NodeId, TValue>>,
+    ) -> Result<Option<HashMap<NodeId, TValue>>, IRTrace> {
         let mut values: HashMap<_, _> =
             inputs.into().into_iter().map(|(id, tensor)| (id, RefCell::new(tensor))).collect();
 
@@ -109,7 +110,8 @@ impl TensorIR {
                 .evaluate(op_inputs.iter().map(|x| &**x).collect(), op_outputs.iter_mut().map(|x| &mut **x).collect());
         }
 
-        Ok(values.into_iter().filter_map(|x| self.is_output(x.0).then(|| (x.0, x.1.into_inner()))).collect())
+        let filter = |x: (_, RefCell<_>)| self.is_output(x.0).then(|| (x.0, x.1.into_inner()));
+        Ok(Some(values.into_iter().filter_map(filter).collect()))
     }
 
     pub fn transform(&mut self, transform: impl IRTransform) -> Result<(), IRTrace> {
@@ -327,19 +329,16 @@ impl IRTrace {
         match self {
             Self::Root(err) => write!(f, "{err:?}"),
             Self::Frame(ir, transform, _) => {
-                let orange = Ansi::rgb(212, 114, 34);
-                let clear = Ansi::Clear;
-
-                writeln!(f, "{orange}Error applying{clear}")?;
+                writeln!(f, "Error applying")?;
                 writeln!(f, "{transform:?}")?;
-                writeln!(f, "{orange}on ir{clear}")?;
+                writeln!(f, "on ir")?;
                 write!(f, "{ir}")
             }
         }
     }
 
     pub fn full_string(&self, f: &mut impl fmt::Write, frame: usize) -> fmt::Result {
-        writeln!(f, "{}Depth {frame}:{}", Ansi::rgb(255, 0, 0), Ansi::Clear)?;
+        writeln!(f, "Depth {frame}:")?;
 
         self.frame(f)?;
 

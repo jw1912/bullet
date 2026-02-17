@@ -67,15 +67,17 @@ impl OpType for SubGraph {
         self.outputs.iter().map(|o| self.graph.get_node(*o).unwrap().ty()).collect()
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
         let inputs = inputs.iter().cloned().cloned();
         let inputs: HashMap<NodeId, TValue> = self.inputs.iter().cloned().zip(inputs).collect();
 
-        let outs = self.graph.evaluate(inputs).unwrap();
+        let Some(outs) = self.graph.evaluate(inputs).unwrap() else { return false };
 
         for (id, out) in self.outputs.iter().zip(outputs) {
             *out = outs.get(id).unwrap().clone();
         }
+
+        true
     }
 
     fn equals(&self, _other: &Rc<dyn OpType>) -> bool {

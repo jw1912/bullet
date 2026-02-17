@@ -129,8 +129,8 @@ impl OpType for AutogradOp {
         }
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) {
-        self.forward.evaluate(inputs, outputs);
+    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
+        self.forward.evaluate(inputs, outputs)
     }
 }
 

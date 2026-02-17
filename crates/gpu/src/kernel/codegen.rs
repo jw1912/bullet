@@ -10,7 +10,7 @@ use std::{
 
 use bullet_compiler::{
     ir::NodeId,
-    tensor::{DType, DValue, IRTrace, OpType, Size, TType, TValue, TensorIR, operation::ScalarConstant},
+    tensor::{DType, DValue, IRTrace, OpType, Size, TType, TensorIR, operation::ScalarConstant},
 };
 
 pub use compute::ComputeStub;
@@ -42,10 +42,6 @@ impl OpType for Stub {
 
     fn commutating_groups(&self) -> Vec<HashSet<usize>> {
         Vec::new()
-    }
-
-    fn evaluate(&self, _: Vec<&TValue>, _: Vec<&mut TValue>) {
-        unimplemented!()
     }
 }
 

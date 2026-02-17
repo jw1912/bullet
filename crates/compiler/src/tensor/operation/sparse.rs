@@ -37,7 +37,7 @@ impl OpType for SparseMatmul {
         vec![TType::new(batch * rows, dtype)]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         let d = inputs[0];
         let s = inputs[1];
         let o = &mut outputs[0];
@@ -80,6 +80,8 @@ impl OpType for SparseMatmul {
                 o.write(r * bi + ri, sum);
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {
@@ -118,7 +120,7 @@ impl OpType for SparseMatmulBwd {
         vec![TType::new(rows * cols, dtype)]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         let d = inputs[0];
         let s = inputs[1];
         let o = &mut outputs[0];
@@ -164,6 +166,8 @@ impl OpType for SparseMatmulBwd {
                 }
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {

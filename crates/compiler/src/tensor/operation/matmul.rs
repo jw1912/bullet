@@ -59,7 +59,7 @@ impl OpType for Matmul {
         vec![TType::new(batch * lhs.rows * rhs.cols, dtype)]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         let l = inputs[0];
         let r = inputs[1];
         let o = &mut outputs[0];
@@ -104,6 +104,8 @@ impl OpType for Matmul {
                 }
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {

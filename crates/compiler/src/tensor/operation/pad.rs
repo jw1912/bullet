@@ -109,7 +109,7 @@ impl OpType for PadAcrossDimension {
         vec![TType::new(self.output_size(), self.value.dtype())]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
@@ -125,6 +125,8 @@ impl OpType for PadAcrossDimension {
                 self.apply(input, output, value);
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {

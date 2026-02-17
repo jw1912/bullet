@@ -96,7 +96,7 @@ impl OpType for SliceAcrossDimension {
         vec![TType::new(self.output_size(), self.dtype)]
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) {
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
         assert_eq!(inputs.len(), 1);
         assert_eq!(outputs.len(), 1);
 
@@ -112,6 +112,8 @@ impl OpType for SliceAcrossDimension {
                 self.apply(input, output);
             }
         }
+
+        true
     }
 
     fn equals(&self, other: &Rc<dyn OpType>) -> bool {
