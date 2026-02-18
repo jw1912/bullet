@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::frontend::{DType, DValue, IRBuilder, IRTrace};
+use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace};
 
 use crate::runtime::{Device, ReadyToCompileGraph, Stream, TensorInput};
 

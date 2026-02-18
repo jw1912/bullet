@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use bullet_compiler::frontend::{DType, DValue, IRBuilder, IRTrace, TValue};
+use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, TValue};
 
 use crate::runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
 

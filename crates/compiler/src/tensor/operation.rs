@@ -1,30 +1,30 @@
-mod binary;
-mod broadcast;
+pub mod autograd;
 mod constant;
-mod copy;
-mod matmul;
-mod pad;
-mod reduce;
-mod select;
-mod slice;
-mod sparse;
+mod index;
+mod linear;
+mod pointwise;
 mod subgraph;
-mod unary;
 
 use std::{any::Any, collections::HashSet, fmt::Debug, rc::Rc};
 
-pub use binary::{CABinary, CABinaryOp};
-pub use broadcast::BroadcastAcrossDimension;
 pub use constant::{Constant, ScalarConstant};
-pub use copy::CopyOp;
-pub use matmul::{Matmul, MatrixLayout};
-pub use pad::PadAcrossDimension;
-pub use reduce::{ReduceAcrossDimension, Reduction};
-pub use select::{Select, SelectPad};
-pub use slice::SliceAcrossDimension;
-pub use sparse::{SparseMatmul, SparseMatmulBwd};
+pub use index::{
+    broadcast::BroadcastAcrossDimension,
+    pad::PadAcrossDimension,
+    select::{Select, SelectPad},
+    slice::SliceAcrossDimension,
+};
+pub use linear::{
+    matmul::{Matmul, MatrixLayout},
+    reduce::{ReduceAcrossDimension, Reduction},
+    sparse::{SparseMatmul, SparseMatmulBwd},
+};
+pub use pointwise::{
+    binary::{CABinary, CABinaryOp},
+    copy::CopyOp,
+    unary::{Unary, UnaryOp},
+};
 pub use subgraph::SubGraph;
-pub use unary::{Unary, UnaryOp};
 
 use crate::{
     ir::Operation,

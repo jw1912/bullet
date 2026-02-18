@@ -1,6 +1,6 @@
-use bullet_compiler::{
-    frontend::{DValue, IRNode, IRTrace},
-    tensor::operation::{CABinary, CABinaryOp, Unary, UnaryOp},
+use crate::tensor::{
+    DValue, IRNode, IRTrace,
+    operation::{CABinary, CABinaryOp, Unary, UnaryOp},
 };
 
 use super::AutogradOnCoreOp;
@@ -29,7 +29,6 @@ impl AutogradOnCoreOp for CABinaryOp {
                 let rgrad = diff.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)
             }
-            _ => unimplemented!(),
         };
 
         Ok(vec![Some(glhs), Some(grhs)])

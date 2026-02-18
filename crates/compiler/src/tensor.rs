@@ -1,4 +1,4 @@
-pub mod builder;
+mod builder;
 pub mod operation;
 mod pattern;
 pub mod transform;
@@ -22,6 +22,7 @@ use transform::{
     modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
 };
 
+pub use builder::{IRBuilder, IRNode};
 pub use operation::{OpType, TensorOp};
 pub use ttype::{DType, DValue, Shape, Size, TType, TValue};
 

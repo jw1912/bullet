@@ -1,3 +1,4 @@
+pub mod autograd;
 pub mod canonicalise;
 pub mod eliminate;
 pub mod foldrules;
@@ -16,10 +17,7 @@ pub trait IRTransform: std::fmt::Debug + 'static {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        frontend::*,
-        tensor::{IRTrace, transform::CanonicalisePass},
-    };
+    use crate::tensor::{transform::CanonicalisePass, *};
 
     #[test]
     fn constant_fold_all() -> Result<(), IRTrace> {

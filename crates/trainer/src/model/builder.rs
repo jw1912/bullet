@@ -8,28 +8,28 @@ use std::{
 };
 
 use bullet_compiler::{
-    frontend::{DType, DValue, IRBuilder, IRNode, Size, TType, TValue},
     ir::NodeId,
     tensor::{
+        DType, DValue, IRBuilder, IRNode, Size, TType, TValue,
         operation::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
             ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
+            autograd::{
+                Autograd, AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, ReLU, SCReLU,
+                Sigmoid,
+            },
         },
-        transform::inline::InlineSubgraphs,
+        transform::{
+            autograd::{LowerForward, TakeGradient},
+            inline::InlineSubgraphs,
+        },
     },
 };
 
 use crate::{
-    model::{
-        Model, Shape,
-        autograd::{
-            CReLU, DiffableFromOutput, DiffableFromOutputOp, LowerForward, ReLU, SCReLU, Sigmoid, TakeGradient,
-        },
-    },
+    model::{Model, Shape},
     runtime::{Device, ReadyToCompileGraph, Stream, TensorInput},
 };
-
-use super::autograd::{Autograd, AutogradOp};
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
@@ -435,6 +435,12 @@ impl<'a> ModelNode<'a> {
     pub fn squared_error(self, other: Self) -> Self {
         let diff = self - other;
         diff * diff
+    }
+
+    pub fn faux_quantise(self, value: f32, round: bool) -> Self {
+        let op = FauxQuantise(self.ty(), value.into(), round);
+        let node = self.builder.add_op([self], op)[0];
+        Self { node, ..self }
     }
 
     pub fn pad(self, before: usize, after: usize, value: f32) -> Self {

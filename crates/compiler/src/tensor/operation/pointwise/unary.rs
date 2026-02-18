@@ -23,6 +23,8 @@ pub enum Unary {
     Cast(DType),
     IsPositive,
     IsZero,
+    Round,
+    Truncate,
 }
 
 impl Unary {
@@ -48,6 +50,8 @@ impl Unary {
             Self::Reciprocal => fp(|x| 1.0 / x)?,
             Self::Log => fp(|x| x.ln())?,
             Self::Sqrt => fp(|x| x.sqrt())?,
+            Self::Round => fp(|x| x.round())?,
+            Self::Truncate => fp(|x| x.trunc())?,
             Self::Sgn => match input {
                 DValue::F32(x) => DValue::F32(x.signum()),
                 DValue::I32(x) => DValue::I32(x.signum()),

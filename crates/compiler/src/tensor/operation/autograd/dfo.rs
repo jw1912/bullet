@@ -1,11 +1,8 @@
 use std::{fmt, rc::Rc};
 
-use bullet_compiler::{
-    frontend::{DType, DValue, IRNode, IRTrace, Size, TType},
-    tensor::operation::Unary,
-};
+use crate::tensor::{DType, DValue, IRNode, IRTrace, Size, TType, operation::Unary};
 
-use crate::model::autograd::{Autograd, AutogradOp};
+use super::{Autograd, AutogradOp};
 
 pub trait DiffableFromOutput: fmt::Debug + PartialEq + 'static {
     fn forward<'a>(&self, input: IRNode<'a>) -> Result<IRNode<'a>, IRTrace>;

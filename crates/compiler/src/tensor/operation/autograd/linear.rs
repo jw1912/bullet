@@ -1,6 +1,6 @@
-use bullet_compiler::{
-    frontend::{IRNode, IRTrace},
-    tensor::operation::{Matmul, MatrixLayout, SparseMatmul},
+use crate::tensor::{
+    IRNode, IRTrace,
+    operation::{Matmul, MatrixLayout, SparseMatmul},
 };
 
 use super::AutogradOnCoreOp;

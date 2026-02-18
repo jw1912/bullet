@@ -59,7 +59,7 @@ impl IRTransform for InlineSubgraphs {
 
 #[cfg(test)]
 mod tests {
-    use crate::frontend::{DType, IRBuilder, TType};
+    use crate::tensor::{DType, IRBuilder, TType};
 
     use super::*;
 

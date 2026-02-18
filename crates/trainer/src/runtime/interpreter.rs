@@ -128,7 +128,7 @@ impl Device for Interpreter {
 mod tests {
     use super::*;
 
-    use bullet_compiler::frontend::{IRBuilder, IRTrace};
+    use bullet_compiler::tensor::{IRBuilder, IRTrace};
 
     #[test]
     fn test_axby() -> Result<(), IRTrace> {
