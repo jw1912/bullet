@@ -10,7 +10,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = "1.0.86"
-bulletformat = { workspace = true }
-montyformat = { workspace = true }
+bulletformat = "1.8.0"
+montyformat = "0.9.2"
 structopt = "0.3.26"
-viriformat = { workspace = true }
+viriformat = "2.0.1"

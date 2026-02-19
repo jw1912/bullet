@@ -12,10 +12,11 @@ description = "Neural Network Trainer"
 [dependencies]
 bullet-compiler = { workspace = true }
 bullet-trainer = { workspace = true }
-bulletformat = { workspace = true }
-montyformat = { workspace = true }
+bulletformat = "1.8.0"
+montyformat = "0.9.2"
+parking_lot = "0.12.4"
 sfbinpack = "0.6.0"
-viriformat = { workspace = true }
+viriformat = "2.0.1"
 
 [[example]]
 name = "simple"
