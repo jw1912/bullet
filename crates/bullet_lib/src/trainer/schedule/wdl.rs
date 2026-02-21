@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use acyclib::trainer::logger::ansi;
+use bullet_trainer::run::logger::ansi;
 
 /// WDL lambda scheduling. Types implementing this trait output a WDL lambda
 /// at each point in training, indexed by batch and superbatch.
