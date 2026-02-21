@@ -5,7 +5,6 @@ use crate::{
     tensor::{DType, DValue, OpType, TType, TValue, TensorOp},
 };
 
-#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Unary {
     Sin,

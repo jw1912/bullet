@@ -1,17 +1,23 @@
 mod op;
 mod str;
 
-use std::fmt::{self, Write};
+use std::{
+    collections::HashSet,
+    fmt::{self, Write},
+    rc::Rc,
+};
 
 use bullet_compiler::{
     ir::{IR, IRError, NodeId, TypeSystem},
     tensor::{
-        DType, DValue, Size,
+        DType, DValue, Size, TType,
         operation::{CABinary, Unary},
     },
 };
 
 use op::{MemIO, PointwiseOp};
+
+use crate::{kernel::KernelSrc, runtime::Dim3};
 
 use self::str::{code_str, tystr};
 
@@ -33,6 +39,9 @@ pub struct PointwiseIR {
     size: Size,
     tid: NodeId,
     var: NodeId,
+    bufs: Vec<NodeId>,
+    read_from: HashSet<NodeId>,
+    written_to: HashSet<NodeId>,
 }
 
 impl PointwiseIR {
@@ -47,7 +56,7 @@ impl PointwiseIR {
             return Err("Invalid number outputs!".into());
         };
 
-        Ok(Self { ir, tid, var, size })
+        Ok(Self { ir, tid, var, size, bufs: Vec::new(), read_from: HashSet::new(), written_to: HashSet::new() })
     }
 
     pub fn tid(&self) -> NodeId {
@@ -58,8 +67,10 @@ impl PointwiseIR {
         self.var
     }
 
-    pub fn add_buf(&mut self, ty: DType) -> NodeId {
-        self.ir.add_op([], PointwiseOp::Buffer(ty)).unwrap()[0]
+    pub fn add_buf(&mut self, ty: TType) -> NodeId {
+        let node = self.ir.add_op([], PointwiseOp::Buffer(ty.dtype(), ty.size())).unwrap()[0];
+        self.bufs.push(node);
+        node
     }
 
     pub fn add_const(&mut self, value: DValue, p2size: u8) -> NodeId {
@@ -77,6 +88,7 @@ impl PointwiseIR {
 
         let io = MemIO { buf_ty, p2size };
 
+        self.read_from.insert(buf);
         self.ir.add_op([buf, idx], PointwiseOp::Read(io)).map(|x| x[0])
     }
 
@@ -99,6 +111,7 @@ impl PointwiseIR {
 
         let io = MemIO { buf_ty, p2size };
 
+        self.written_to.insert(buf);
         self.ir.add_op([buf, idx, val], PointwiseOp::Write(io)).map(|_| ())
     }
 
@@ -126,17 +139,14 @@ impl PointwiseIR {
         self.ir.add_op([lhs, rhs], PointwiseOp::Binary { ty, p2size, op }).map(|x| x[0])
     }
 
-    pub fn generate(self) -> Result<String, fmt::Error> {
+    pub fn source_code(&self) -> Result<String, fmt::Error> {
         let name = |id: NodeId| format!("n{}", id.inner());
-        let mut inputs = Vec::new();
         let mut code = String::new();
 
         for op_id in self.ir.topo_order_ops().unwrap() {
             let op = self.ir.op(op_id).unwrap();
 
-            if let PointwiseOp::VarSize = op.data() {
-            } else if let PointwiseOp::Buffer { .. } = op.data() {
-                inputs.push(op.outputs()[0]);
+            if let PointwiseOp::VarSize | PointwiseOp::Buffer { .. } = op.data() {
             } else {
                 println!("{:?}", op.data());
                 let mut src = code_str(*op.data(), self.size).unwrap();
@@ -153,13 +163,15 @@ impl PointwiseIR {
             }
         }
 
-        inputs.sort();
-
         let mut src = String::new();
 
-        write!(&mut src, "extern \"C\" __global__ void kernel(const int {}", name(self.var))?;
+        write!(&mut src, "extern \"C\" __global__ void kernel(")?;
 
-        for &input in &inputs {
+        if self.size.var_power() > 0 {
+            write!(&mut src, "const int {}", name(self.var))?;
+        }
+
+        for &input in &self.bufs {
             let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
             write!(&mut src, ", {}* {}", tystr(ty), name(input))?;
         }
@@ -173,6 +185,49 @@ impl PointwiseIR {
         writeln!(&mut src, "}}")?;
 
         Ok(src)
+    }
+
+    pub fn lower(&self) -> Result<KernelSrc, IRError> {
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+        let mut arg_order = Vec::new();
+
+        for &buf in &self.bufs {
+            let rf = self.read_from.contains(&buf);
+            let wt = self.written_to.contains(&buf);
+
+            if rf && wt {
+                return Err("Buffer read from and written to!".into());
+            }
+
+            let PointwiseOp::Buffer(dtype, size) = *self.ir.op(self.ir.parent_op(buf)?)?.data() else { panic!() };
+
+            if rf {
+                arg_order.push((inputs.len(), true));
+                inputs.push(TType::new(size, dtype));
+            } else if wt {
+                arg_order.push((outputs.len(), false));
+                outputs.push(TType::new(size, dtype));
+            } else {
+                return Err("Unused buffer!".into());
+            }
+        }
+
+        let source = self.source_code().map_err(|e| IRError::from(format!("{e:?}")))?;
+
+        unsafe {
+            Ok(KernelSrc::new(
+                inputs,
+                outputs,
+                source,
+                self.size.var_power() > 0,
+                arg_order,
+                Default::default(),
+                Rc::new(|s| Dim3 { x: s.div_ceil(256) as u32, y: 1, z: 1 }),
+                Rc::new(|_| 256),
+                Rc::new(|_| 0),
+            ))
+        }
     }
 }
 
@@ -191,10 +246,12 @@ mod tests {
     use super::*;
 
     fn fmadd<G: Gpu>() -> Result<(), G::Error> {
+        let ty = TType::new(Size::variable(), DType::F32);
+
         let mut ir = PointwiseIR::new(Size::variable()).unwrap();
-        let input1 = ir.add_buf(DType::F32);
-        let input2 = ir.add_buf(DType::F32);
-        let output = ir.add_buf(DType::F32);
+        let input1 = ir.add_buf(ty);
+        let input2 = ir.add_buf(ty);
+        let output = ir.add_buf(ty);
 
         let tid = ir.tid();
 
@@ -206,9 +263,7 @@ mod tests {
         let value4 = ir.binary(value3, value2, CABinary::Add).unwrap();
         ir.write(output, tid, value4).unwrap();
 
-        let source = ir.generate().unwrap();
-
-        println!("{source}");
+        let source = ir.source_code().unwrap();
 
         let device = Device::<G>::new(0)?;
         let kernel = Module::new(device.clone(), source)?.get_kernel("kernel")?;

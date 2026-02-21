@@ -59,7 +59,9 @@ impl AutogradOnCoreOp for UnaryOp {
                 Ok(input.builder().scalar(zero, input.ty().size()))
             }
             Unary::Cast(_) => Ok(grad),
-            _ => unimplemented!(),
+            Unary::Sinh | Unary::Cosh | Unary::Tanh | Unary::Tan | Unary::Truncate | Unary::Round | Unary::Sqrt => {
+                unimplemented!()
+            }
         }?;
 
         if let Unary::Cast(_) = self.op() {

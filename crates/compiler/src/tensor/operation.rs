@@ -39,7 +39,9 @@ pub trait OpType: Any + Debug + 'static {
     fn outputs(&self) -> Vec<TType>;
 
     /// Returns true if self is provably equal to other
-    fn equals(&self, _other: &Rc<dyn OpType>) -> bool;
+    fn equals(&self, _other: &Rc<dyn OpType>) -> bool {
+        false
+    }
 
     /// Evaluates the operation given concrete inputs and sized
     /// output buffers. Returns false if not available.

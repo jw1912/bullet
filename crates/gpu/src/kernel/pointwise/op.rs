@@ -1,7 +1,7 @@
 use bullet_compiler::{
     ir::Operation,
     tensor::{
-        DType, DValue,
+        DType, DValue, Size,
         operation::{CABinary, Unary},
     },
 };
@@ -16,7 +16,7 @@ pub struct MemIO {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PointwiseOp {
-    Buffer(DType),
+    Buffer(DType, Size),
     Read(MemIO),
     Write(MemIO),
     AtomicAdd(MemIO),
@@ -53,7 +53,7 @@ impl Operation<PType> for PointwiseOp {
 
     fn outputs(&self) -> Vec<PType> {
         match *self {
-            Self::Buffer(ty) => vec![PType::Pointer(ty)],
+            Self::Buffer(ty, _) => vec![PType::Pointer(ty)],
             Self::Read(io) => vec![PType::Variable { ty: io.buf_ty, p2size: io.p2size }],
             Self::Write(_) | Self::AtomicAdd(_) => Vec::new(),
             Self::Unary { ty, p2size, op } => {

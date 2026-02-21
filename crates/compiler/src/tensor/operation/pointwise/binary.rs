@@ -3,7 +3,6 @@ use std::{collections::HashSet, rc::Rc};
 use crate::tensor::{DValue, OpType, TType, TValue, operation::TensorOp};
 
 /// Commutative & associative binary operations.
-#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CABinary {
     Add,

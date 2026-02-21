@@ -86,7 +86,6 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 CABinary::Mul => format!("{x} * {y};"),
                 CABinary::Min => format!("min({x}, {y});"),
                 CABinary::Max => format!("max({x}, {y});"),
-                _ => unimplemented!(),
             };
 
             match p2size {
@@ -131,7 +130,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                         Unary::Sqrt => "sqrtf",
                         Unary::Round => "roundf",
                         Unary::Truncate => "truncf",
-                        _ => unimplemented!(),
+                        Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero => unimplemented!(),
                     };
 
                     format!("{opstr}({x})")
