@@ -7,7 +7,8 @@ use bullet_compiler::{
 
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
-    operations::{kernel::KernelSrc, pointwise::LowerPointwise},
+    kernel::KernelSrc,
+    pointwise::LowerPointwise,
     runtime::{Device, Dim3, Gpu, Kernel, Module, Stream},
 };
 

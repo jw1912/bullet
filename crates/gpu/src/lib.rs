@@ -2,7 +2,8 @@
 
 pub mod buffer;
 pub mod function;
-pub mod operations;
+pub mod kernel;
+pub mod pointwise;
 pub mod runtime;
 
 #[cfg(any(feature = "cuda", feature = "rocm"))]

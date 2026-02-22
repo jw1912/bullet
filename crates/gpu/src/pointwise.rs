@@ -75,8 +75,11 @@ impl IRTransform for LowerPointwise {
                         continue;
                     }
 
-                    // `op_i`` comes before `op_j`` in topo ordering so know that if
-                    // there is a dependency then `op_j`` is dependent on `op_i``
+                    // `op_i` comes before `op_j` in topo ordering so know that if
+                    // there is a dependency then `op_j` is dependent on `op_i`
+                    // we can only fuse `op_i` and `op_j` if there does not exist
+                    // an in between the is dependent on `op_i` and is depended
+                    // upon by `op_j`
                     if ir.is_immediate_dependent_op(op_i.id(), op_j.id())? {
                         continue 'outer;
                     }

@@ -13,12 +13,10 @@ use bullet_compiler::{
 };
 
 use crate::{
-    operations::{
-        kernel::KernelSrc,
-        pointwise::{
-            operations::{MemIO, PType, PointwiseOp},
-            write::{code_str, tystr},
-        },
+    kernel::KernelSrc,
+    pointwise::{
+        operations::{MemIO, PType, PointwiseOp},
+        write::{code_str, tystr},
     },
     runtime::Dim3,
 };

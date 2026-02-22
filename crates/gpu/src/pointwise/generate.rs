@@ -5,7 +5,7 @@ use bullet_compiler::tensor::{
     operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, ScalarConstant, SubGraph, UnaryOp},
 };
 
-use crate::operations::pointwise::ir::PointwiseIR;
+use super::PointwiseIR;
 
 pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
     let ir = sub.internal_graph();
@@ -146,7 +146,7 @@ mod tests {
 
     use crate::{
         buffer::Buffer,
-        operations::kernel::KernelSrc,
+        kernel::KernelSrc,
         runtime::{Device, Gpu, Stream},
     };
 
