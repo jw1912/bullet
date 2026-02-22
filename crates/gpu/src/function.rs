@@ -7,10 +7,11 @@ use bullet_compiler::{
 
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
-    operations::kernel::KernelSrc,
+    operations::{kernel::KernelSrc, pointwise::LowerPointwise},
     runtime::{Device, Dim3, Gpu, Kernel, Module, Stream},
 };
 
+#[derive(Debug)]
 enum Arg {
     Pointer { idx: usize },
     Size(Size),
@@ -44,7 +45,9 @@ pub struct Function<G: Gpu> {
 }
 
 impl<G: Gpu> Function<G> {
-    pub fn new(device: Arc<Device<G>>, ir: TensorIR) -> Result<Self, IRTrace> {
+    pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
+        ir.transform(LowerPointwise)?;
+
         let mut maps = HashMap::new();
         let mut num_ptrs = 0;
         let mut insts = Vec::new();

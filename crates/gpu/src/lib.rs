@@ -16,7 +16,6 @@ mod tests {
     use crate::{
         buffer::Buffer,
         function::Function,
-        operations::pointwise::LowerPointwise,
         runtime::{Device, Gpu},
     };
 
@@ -40,9 +39,9 @@ mod tests {
     }
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
-        let (mut ir, [a, b, x, y]) = make_axby().unwrap();
+        let batch_size = 256;
 
-        ir.transform(LowerPointwise).unwrap();
+        let (ir, [a, b, x, y]) = make_axby().unwrap();
 
         let device = Device::<G>::new(0)?;
         let stream = device.clone().new_stream()?;
@@ -51,12 +50,14 @@ mod tests {
 
         let buf_a =
             Buffer::from_host(stream.clone(), &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?.value().0;
-        let buf_b = Buffer::from_host(stream.clone(), &TValue::F32(vec![1.0]))?.value().0;
-        let buf_x =
-            Buffer::from_host(stream.clone(), &TValue::F32([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0].repeat(16)))?
-                .value()
-                .0;
-        let buf_y = Buffer::from_host(stream.clone(), &TValue::F32(vec![0.0; 8 * 16]))?.value().0;
+        let buf_b = Buffer::from_host(stream.clone(), &TValue::F32(vec![2.0]))?.value().0;
+        let buf_x = Buffer::from_host(
+            stream.clone(),
+            &TValue::F32([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0].repeat(batch_size)),
+        )?
+        .value()
+        .0;
+        let buf_y = Buffer::from_host(stream.clone(), &TValue::F32(vec![10.0; 8 * batch_size]))?.value().0;
 
         let sync = func.execute(
             stream.clone(),
@@ -67,7 +68,7 @@ mod tests {
 
         assert_eq!(
             buf_y.clone().to_host(stream.clone())?.value(),
-            TValue::F32([9.0, 15.0, 19.0, 21.0, 21.0, 19.0, 15.0, 9.0].repeat(16))
+            TValue::F32([10.0, 16.0, 20.0, 22.0, 22.0, 20.0, 16.0, 10.0].repeat(batch_size))
         );
 
         assert!(

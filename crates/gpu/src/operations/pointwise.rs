@@ -3,6 +3,8 @@ mod ir;
 mod operations;
 mod write;
 
+use std::collections::HashSet;
+
 use bullet_compiler::tensor::{
     IRTrace, OpType, TType, TValue, TensorIR, TensorOp,
     operation::SubGraph,
@@ -59,7 +61,30 @@ impl IRTransform for LowerPointwise {
         }
 
         // perform fusions of the FusedPointwise where possible
-        println!("TODO: pointwise fusions!");
+        let mut failed = HashSet::new();
+        let mut success = true;
+        'outer: while success {
+            success = false;
+
+            let ops = ir.ordered_operations()?;
+            let ops = ops.into_iter().filter(|op| op.data().downcast::<FusedPointwise>().is_some()).collect::<Vec<_>>();
+
+            for (i, op_i) in ops.iter().enumerate() {
+                for op_j in ops.iter().skip(i + 1) {
+                    if failed.contains(&(op_i.id(), op_j.id())) {
+                        continue;
+                    }
+
+                    // `op_i`` comes before `op_j`` in topo ordering so know that if
+                    // there is a dependency then `op_j`` is dependent on `op_i``
+                    if ir.is_immediate_dependent_op(op_i.id(), op_j.id())? {
+                        continue 'outer;
+                    }
+
+                    failed.insert((op_i.id(), op_j.id()));
+                }
+            }
+        }
 
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {

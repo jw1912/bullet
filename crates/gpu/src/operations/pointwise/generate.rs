@@ -56,7 +56,7 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
     let p2actual = 2usize.pow(p2size);
     let p2size = p2size as u8;
 
-    let mut pntwise = PointwiseIR::new(size)?;
+    let mut pntwise = PointwiseIR::new(size / p2actual)?;
     let mut mapping = HashMap::new();
 
     let inp_buf_map: HashMap<_, _> =
@@ -92,16 +92,12 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
             // into the appropriate p2 size to avoid killing the vectorization
             // on the rest of the kernel
             if p2size > 0 && broadcast.inner() == Size::constant(1) {
-                // tid = (repeats * oidx + ridx) / 8
-                // iidx = oidx;
                 let repeats = pntwise.eval_size(broadcast.repeats() / p2actual);
                 let idx = pntwise.div(tid, repeats)?;
                 let scalar = pntwise.read(buf, idx, 0)?;
                 let output = pntwise.broadcast(scalar, p2size)?;
                 mapping.insert(out, output);
             } else {
-                // tid = repeats * inner * oidx + inner * ridx + iidx
-                // iidx = inner * oidx + iidx;
                 let repeats = pntwise.eval_size(broadcast.repeats());
                 let inner = pntwise.eval_size(broadcast.inner() / p2actual);
                 let oidx_denom = pntwise.binary(repeats, inner, CABinary::Mul)?;

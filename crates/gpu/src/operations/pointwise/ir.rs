@@ -300,6 +300,7 @@ impl PointwiseIR {
         }
 
         let source = self.source_code().map_err(|e| IRError::from(format!("{e:?}")))?;
+        let total = self.size;
 
         unsafe {
             Ok(KernelSrc::new(
@@ -309,7 +310,7 @@ impl PointwiseIR {
                 self.size.var_power() > 0,
                 arg_order,
                 Default::default(),
-                Rc::new(|s| Dim3 { x: s.div_ceil(256) as u32, y: 1, z: 1 }),
+                Rc::new(move |s| Dim3 { x: total.evaluate(s).div_ceil(256) as u32, y: 1, z: 1 }),
                 Rc::new(|_| 256),
                 Rc::new(|_| 0),
             ))

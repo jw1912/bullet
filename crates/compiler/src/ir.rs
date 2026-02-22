@@ -265,6 +265,24 @@ impl<T: TypeSystem> IR<T> {
 
         Ok(set)
     }
+
+    /// Returns false if there is another operation that is dependent on
+    /// `parent` that must be computed before being able to compute `child`
+    pub fn is_immediate_dependent_op(&self, parent: OpId, child: OpId) -> Result<bool, IRError> {
+        let mut is_dependent = false;
+
+        for parent_node in self.op(child)?.inputs() {
+            let parent_op = self.parent_op(*parent_node)?;
+
+            if parent_op == parent {
+                is_dependent = true;
+            } else if self.get_dependent_ops_set(parent_op)?.contains(&parent) {
+                return Ok(false);
+            }
+        }
+
+        Ok(is_dependent)
+    }
 }
 
 impl<T: TypeSystem> fmt::Display for IR<T> {

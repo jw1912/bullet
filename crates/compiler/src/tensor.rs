@@ -314,6 +314,10 @@ impl TensorIR {
         self.ir.get_dependent_ops_set(op).map_err(|e| e.into())
     }
 
+    pub fn is_immediate_dependent_op(&self, parent: OpId, child: OpId) -> Result<bool, IRTrace> {
+        self.ir.is_immediate_dependent_op(parent, child).map_err(|e| e.into())
+    }
+
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
         self.transform(CanonicalisePass::all())
     }
