@@ -7,7 +7,7 @@ use bullet_compiler::{
 
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
-    kernel::KernelSrc,
+    operations::kernel::KernelSrc,
     runtime::{Device, Dim3, Gpu, Kernel, Module, Stream},
 };
 
@@ -197,7 +197,7 @@ impl<G: Gpu> Function<G> {
                         let mut args: Vec<_> = args
                             .iter()
                             .map(|arg| match arg {
-                                Arg::Pointer { idx } => args.as_ptr().add(*idx).cast_mut().cast(),
+                                Arg::Pointer { idx } => ptrs.as_ptr().add(*idx).cast_mut().cast(),
                                 Arg::Size(size) => {
                                     sizes.push(size.evaluate(var) as i32);
                                     (sizes.last().unwrap() as *const i32).cast_mut().cast()

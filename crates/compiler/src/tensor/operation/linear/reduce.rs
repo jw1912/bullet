@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, ops::Add, rc::Rc};
+use std::{cmp::Ordering, ops::Add};
 
 use crate::{
     ir::IRError,
@@ -133,8 +133,8 @@ impl OpType for ReduceAcrossDimension {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     ir::IRError,
     tensor::{DValue, OpType, Shape, Size, TType, TValue, TensorOp, operation::SliceAcrossDimension},
@@ -129,8 +127,8 @@ impl OpType for PadAcrossDimension {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

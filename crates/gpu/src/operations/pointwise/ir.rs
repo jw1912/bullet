@@ -1,6 +1,3 @@
-mod op;
-mod str;
-
 use std::{
     collections::HashSet,
     fmt::{self, Write},
@@ -10,22 +7,21 @@ use std::{
 use bullet_compiler::{
     ir::{IR, IRError, NodeId, TypeSystem},
     tensor::{
-        DType, DValue, Size, TType,
+        DType, DValue, IRTrace, Size, TType,
         operation::{CABinary, Unary},
     },
 };
 
-use op::{MemIO, PointwiseOp};
-
-use crate::{kernel::KernelSrc, runtime::Dim3};
-
-use self::str::{code_str, tystr};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PType {
-    Pointer(DType),
-    Variable { ty: DType, p2size: u8 },
-}
+use crate::{
+    operations::{
+        kernel::KernelSrc,
+        pointwise::{
+            operations::{MemIO, PType, PointwiseOp},
+            write::{code_str, tystr},
+        },
+    },
+    runtime::Dim3,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Pointwise;
@@ -34,6 +30,7 @@ impl TypeSystem for Pointwise {
     type OpData = PointwiseOp;
 }
 
+#[derive(Clone, Debug)]
 pub struct PointwiseIR {
     ir: IR<Pointwise>,
     size: Size,
@@ -65,6 +62,10 @@ impl PointwiseIR {
 
     pub fn var(&self) -> NodeId {
         self.var
+    }
+
+    pub fn eval_size(&mut self, size: Size) -> NodeId {
+        self.ir.add_op([self.var], PointwiseOp::EvalSize(size)).unwrap()[0]
     }
 
     pub fn add_buf(&mut self, ty: TType) -> NodeId {
@@ -115,6 +116,14 @@ impl PointwiseIR {
         self.ir.add_op([buf, idx, val], PointwiseOp::Write(io)).map(|_| ())
     }
 
+    pub fn broadcast(&mut self, node: NodeId, p2size: u8) -> Result<NodeId, IRError> {
+        let PType::Variable { ty, p2size: 0 } = self.ir.node(node)?.ty() else {
+            return Err("Only scalar variables allowed in broadcast!".into());
+        };
+
+        self.ir.add_op([node], PointwiseOp::Broadcast(ty, p2size.try_into().unwrap())).map(|x| x[0])
+    }
+
     pub fn unary(&mut self, node: NodeId, op: Unary) -> Result<NodeId, IRError> {
         let PType::Variable { ty, p2size } = self.ir.node(node)?.ty() else {
             return Err("Only variables allowed in unary ops!".into());
@@ -139,6 +148,55 @@ impl PointwiseIR {
         self.ir.add_op([lhs, rhs], PointwiseOp::Binary { ty, p2size, op }).map(|x| x[0])
     }
 
+    pub fn div(&mut self, lhs: NodeId, rhs: NodeId) -> Result<NodeId, IRError> {
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(lhs)?.ty() else {
+            return Err("Only scalar integer variables allowed in div!".into());
+        };
+
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(rhs)?.ty() else {
+            return Err("Only scalar integer variables allowed in div!".into());
+        };
+
+        self.ir.add_op([lhs, rhs], PointwiseOp::Div).map(|x| x[0])
+    }
+
+    pub fn rem(&mut self, lhs: NodeId, rhs: NodeId) -> Result<NodeId, IRError> {
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(lhs)?.ty() else {
+            return Err("Only scalar integer variables allowed in rem!".into());
+        };
+
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(rhs)?.ty() else {
+            return Err("Only scalar integer variables allowed in rem!".into());
+        };
+
+        self.ir.add_op([lhs, rhs], PointwiseOp::Rem).map(|x| x[0])
+    }
+
+    pub fn eliminate_common_subexprs(&mut self) -> Result<(), IRTrace> {
+        while self.eliminate_single_common_subexpr()? {}
+        Ok(())
+    }
+
+    fn eliminate_single_common_subexpr(&mut self) -> Result<bool, IRTrace> {
+        let ops = self.ir.operations().cloned();
+
+        for (i, op_i) in ops.clone().enumerate() {
+            for op_j in ops.clone().skip(i + 1) {
+                if op_i.inputs() == op_j.inputs() && op_i.data() == op_j.data() && !op_i.data().is_unique() {
+                    for (&out_i, &out_j) in op_i.outputs().iter().zip(op_j.outputs()) {
+                        self.ir.replace_input_no_cycle_check(out_i, out_j)?;
+                    }
+
+                    self.ir.remove_op(op_j.id())?;
+
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
     pub fn source_code(&self) -> Result<String, fmt::Error> {
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
@@ -148,7 +206,6 @@ impl PointwiseIR {
 
             if let PointwiseOp::VarSize | PointwiseOp::Buffer { .. } = op.data() {
             } else {
-                println!("{:?}", op.data());
                 let mut src = code_str(*op.data(), self.size).unwrap();
 
                 for (i, &id) in op.inputs().iter().enumerate() {
@@ -187,7 +244,36 @@ impl PointwiseIR {
         Ok(src)
     }
 
-    pub fn lower(&self) -> Result<KernelSrc, IRError> {
+    pub fn estimate_memory_cost(&self) -> Result<Size, IRError> {
+        let mut cost = 0;
+
+        for op in self.ir.operations() {
+            use PointwiseOp as P;
+            match op.data() {
+                P::Read(io) | P::Write(io) | P::AtomicAdd(io) => {
+                    let bytes_per_thread = io.buf_ty.bytes() * 2usize.pow(u32::from(io.p2size));
+                    cost += bytes_per_thread * [8, 7, 6][usize::from(io.p2size)];
+                }
+                P::Unary { .. }
+                | P::Binary { .. }
+                | P::ThreadId
+                | P::Constant { .. }
+                | P::Buffer { .. }
+                | P::VarSize
+                | P::Div
+                | P::Rem
+                | P::EvalSize(_)
+                | P::Broadcast(_, _) => {}
+            }
+        }
+
+        Ok(self.size * cost)
+    }
+
+    /// ### Safety
+    ///
+    /// User must ensure same invariants as KernelSrc hold
+    pub unsafe fn lower(&self) -> Result<KernelSrc, IRError> {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
@@ -234,13 +320,11 @@ impl PointwiseIR {
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
-    use std::ffi::c_void;
-
     use bullet_compiler::tensor::TValue;
 
     use crate::{
         buffer::Buffer,
-        runtime::{Device, Dim3, Gpu, Module, Stream},
+        runtime::{Device, Gpu, Stream},
     };
 
     use super::*;
@@ -263,10 +347,8 @@ mod tests {
         let value4 = ir.binary(value3, value2, CABinary::Add).unwrap();
         ir.write(output, tid, value4).unwrap();
 
-        let source = ir.source_code().unwrap();
-
         let device = Device::<G>::new(0)?;
-        let kernel = Module::new(device.clone(), source)?.get_kernel("kernel")?;
+        let mut kernel = unsafe { ir.lower().unwrap() }.compile(device.clone())?;
         let stream = Stream::new(device)?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
@@ -275,24 +357,12 @@ mod tests {
         let input1_buf = Buffer::from_host(stream.clone(), &values1)?.value().0;
         let input2_buf = Buffer::from_host(stream.clone(), &values2)?.value().0;
 
-        fn cast<T>(x: &T) -> *mut c_void {
-            (x as *const T).cast_mut().cast()
-        }
-
         unsafe {
             let output_buf = Buffer::uninit(stream.clone(), values1.dtype(), values1.size())?.value();
 
-            let size = 1i32;
-            let input1_ptr = input1_buf.acquire(stream.clone())?.ptr();
-            let input2_ptr = input2_buf.acquire(stream.clone())?.ptr();
-            let output_ptr = output_buf.clone().acquire(stream.clone())?.ptr();
+            let sync = kernel.execute(stream.clone(), vec![input1_buf, input2_buf], vec![output_buf.clone()])?;
 
-            let grid_dim = Dim3 { x: 1, y: 1, z: 1 };
-            let mut args = [cast(&size), cast(&input1_ptr), cast(&input2_ptr), cast(&output_ptr)];
-
-            kernel.launch(&stream, grid_dim, size as u32, args.as_mut_ptr(), 0)?;
-
-            stream.sync()?;
+            drop(sync);
 
             let actual = output_buf.to_host(stream.clone())?.value();
 

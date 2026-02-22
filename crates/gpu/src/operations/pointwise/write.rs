@@ -3,7 +3,7 @@ use bullet_compiler::tensor::{
     operation::{CABinary, Unary},
 };
 
-use super::op::PointwiseOp;
+use crate::operations::pointwise::operations::PointwiseOp;
 
 pub fn tystr(dtype: DType) -> &'static str {
     match dtype {
@@ -15,6 +15,8 @@ pub fn tystr(dtype: DType) -> &'static str {
 pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
     match op {
         PointwiseOp::Buffer { .. } | PointwiseOp::VarSize => None,
+        PointwiseOp::Div => Some("const int OUT1 = IN1 / IN2;".into()),
+        PointwiseOp::Rem => Some("const int OUT1 = IN1 % IN2;".into()),
         PointwiseOp::Read(io) => {
             let ty = tystr(io.buf_ty);
             if io.p2size == 0 {
@@ -62,6 +64,14 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 3.. => None,
             }
         }
+        PointwiseOp::EvalSize(size) => {
+            let mut size_str = format!("{}", size.factor());
+            for _ in 0..size.var_power() {
+                size_str += " * IN1";
+            }
+
+            Some(format!("const int OUT1 = {size_str};"))
+        }
         PointwiseOp::ThreadId => {
             let mut size_str = format!("{}", size.factor());
             for _ in 0..size.var_power() {
@@ -75,6 +85,14 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 if (OUT1 >= ({size_str})) return;\
             "
             ))
+        }
+        PointwiseOp::Broadcast(ty, p2size) => {
+            let ty = tystr(ty);
+            match p2size.get() {
+                1 => Some(format!("const {ty}2 OUT1 = make_{ty}2(IN1, IN1);")),
+                2 => Some(format!("const {ty}4 OUT1 = make_{ty}4(IN1, IN1, IN1, IN1);")),
+                _ => None,
+            }
         }
         PointwiseOp::Binary { ty, p2size, op } => {
             let ty = tystr(ty);

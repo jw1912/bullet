@@ -31,7 +31,7 @@ impl IRTransform for InlineSubgraphs {
                         }
 
                         let op_inputs: Vec<_> = int_op.inputs().iter().map(|i| *map.get(i).unwrap()).collect();
-                        let op_outputs = ir.add_dyn_op(op_inputs, Ok(int_op.data().0.clone()))?;
+                        let op_outputs = ir.add_dyn_op(op_inputs, Ok(int_op.data().clone()))?;
 
                         for (&out, &int_out) in op_outputs.iter().zip(int_op.outputs()) {
                             map.insert(int_out, out);

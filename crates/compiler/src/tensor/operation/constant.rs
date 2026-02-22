@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::tensor::{DValue, OpType, Size, TType, TValue, TensorOp};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -34,8 +32,8 @@ impl OpType for Constant {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 
@@ -80,7 +78,7 @@ impl OpType for ScalarConstant {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }

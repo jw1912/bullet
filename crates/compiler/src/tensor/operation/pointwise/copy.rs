@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::tensor::{OpType, TType, TValue, TensorOp};
 
 /// Internal copy operation used for a few special cases. For example:
@@ -37,8 +35,8 @@ impl OpType for CopyOp {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     ir::IRError,
     tensor::{
@@ -47,6 +45,22 @@ impl BroadcastAcrossDimension {
 
     pub fn output_size(&self) -> Size {
         self.repeats * self.input_size()
+    }
+
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    pub fn outer(&self) -> Size {
+        self.outer
+    }
+
+    pub fn inner(&self) -> Size {
+        self.inner
+    }
+
+    pub fn repeats(&self) -> Size {
+        self.repeats
     }
 
     pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], output: &mut [T]) {
@@ -116,8 +130,8 @@ impl OpType for BroadcastAcrossDimension {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

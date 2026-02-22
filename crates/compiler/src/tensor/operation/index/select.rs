@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::tensor::{DType, OpType, Size, TType, TValue, TensorOp};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -83,8 +81,8 @@ impl OpType for Select {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 
@@ -171,8 +169,8 @@ impl OpType for SelectPad {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     ir::IRError,
     tensor::{DType, DValue, OpType, TType, TValue, TensorOp},
@@ -131,8 +129,8 @@ impl OpType for UnaryOp {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

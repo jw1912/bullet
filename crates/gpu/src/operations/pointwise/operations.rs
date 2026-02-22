@@ -1,3 +1,5 @@
+use std::num::NonZeroU8;
+
 use bullet_compiler::{
     ir::Operation,
     tensor::{
@@ -6,7 +8,11 @@ use bullet_compiler::{
     },
 };
 
-use super::PType;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PType {
+    Pointer(DType),
+    Variable { ty: DType, p2size: u8 },
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MemIO {
@@ -19,17 +25,39 @@ pub enum PointwiseOp {
     Buffer(DType, Size),
     Read(MemIO),
     Write(MemIO),
+    #[allow(unused)]
     AtomicAdd(MemIO),
-    Unary { ty: DType, p2size: u8, op: Unary },
-    Binary { ty: DType, p2size: u8, op: CABinary },
-    Constant { value: DValue, p2size: u8 },
+    Unary {
+        ty: DType,
+        p2size: u8,
+        op: Unary,
+    },
+    Binary {
+        ty: DType,
+        p2size: u8,
+        op: CABinary,
+    },
+    Constant {
+        value: DValue,
+        p2size: u8,
+    },
     ThreadId,
     VarSize,
+    Div,
+    Rem,
+    EvalSize(Size),
+    Broadcast(DType, NonZeroU8),
+}
+
+impl PointwiseOp {
+    pub fn is_unique(&self) -> bool {
+        matches!(self, Self::Buffer(_, _) | Self::AtomicAdd(_))
+    }
 }
 
 impl Operation<PType> for PointwiseOp {
     fn opname(&self) -> String {
-        "something".to_string()
+        format!("{self:?}").to_lowercase()
     }
 
     fn inputs(&self) -> Vec<PType> {
@@ -45,9 +73,12 @@ impl Operation<PType> for PointwiseOp {
                 ]
             }
             Self::Unary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
-            Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }, PType::Variable { ty, p2size }],
+            Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }; 2],
             Self::ThreadId => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Constant { .. } | Self::Buffer { .. } | Self::VarSize => Vec::new(),
+            Self::Div | Self::Rem => vec![PType::Variable { ty: DType::I32, p2size: 0 }; 2],
+            Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
+            Self::Broadcast(ty, _) => vec![PType::Variable { ty, p2size: 0 }],
         }
     }
 
@@ -68,6 +99,8 @@ impl Operation<PType> for PointwiseOp {
             Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
             Self::Constant { value, p2size } => vec![PType::Variable { ty: value.dtype(), p2size }],
             Self::ThreadId | Self::VarSize => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
+            Self::Div | Self::Rem | Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
+            Self::Broadcast(ty, p2size) => vec![PType::Variable { ty, p2size: p2size.get() }],
         }
     }
 }

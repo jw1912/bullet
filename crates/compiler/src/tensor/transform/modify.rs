@@ -2,18 +2,18 @@ use std::{cell::RefCell, fmt, rc::Rc};
 
 use crate::{
     ir::{NodeId, OpId},
-    tensor::{IRTrace, OpType, TensorIR, TensorOp, transform::IRTransform},
+    tensor::{IRTrace, TensorIR, TensorOp, transform::IRTransform},
 };
 
 #[derive(Clone)]
 pub struct AddOperation {
     inputs: Vec<NodeId>,
-    operation: Result<Rc<dyn OpType>, IRTrace>,
+    operation: Result<TensorOp, IRTrace>,
     outputs: Rc<RefCell<Vec<NodeId>>>,
 }
 
 impl AddOperation {
-    pub fn new(inputs: impl Into<Vec<NodeId>>, operation: Result<Rc<dyn OpType>, IRTrace>) -> Self {
+    pub fn new(inputs: impl Into<Vec<NodeId>>, operation: Result<TensorOp, IRTrace>) -> Self {
         Self { inputs: inputs.into(), operation, outputs: Rc::default() }
     }
 
@@ -35,7 +35,7 @@ impl fmt::Debug for AddOperation {
 
 impl IRTransform for AddOperation {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
-        *self.outputs.borrow_mut() = ir.ir_mut().add_op(&self.inputs, TensorOp(self.operation.clone()?))?;
+        *self.outputs.borrow_mut() = ir.ir_mut().add_op(&self.inputs, self.operation.clone()?)?;
         Ok(())
     }
 }

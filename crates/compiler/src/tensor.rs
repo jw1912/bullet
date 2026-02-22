@@ -210,7 +210,7 @@ impl TensorIR {
     pub fn add_dyn_op(
         &mut self,
         inputs: impl AsRef<[NodeId]>,
-        op: Result<Rc<dyn OpType>, IRTrace>,
+        op: Result<TensorOp, IRTrace>,
     ) -> Result<Vec<NodeId>, IRTrace> {
         let inputs = inputs.as_ref().to_vec();
         let transform = AddOperation::new(inputs, op);
@@ -222,8 +222,8 @@ impl TensorIR {
         inputs: impl AsRef<[NodeId]>,
         op: Result<impl OpType, impl Into<IRTrace>>,
     ) -> Result<Vec<NodeId>, IRTrace> {
-        fn convert(x: impl OpType) -> Rc<dyn OpType> {
-            Rc::new(x)
+        fn convert(x: impl OpType) -> TensorOp {
+            TensorOp(Rc::new(x))
         }
 
         let op = op.map(convert).map_err(|e| e.into());
@@ -306,7 +306,7 @@ impl TensorIR {
         new_inputs: impl Into<Vec<NodeId>>,
         new_op: impl OpType,
     ) -> Result<OpId, IRTrace> {
-        let add = AddOperation::new(new_inputs.into(), Ok(Rc::new(new_op)));
+        let add = AddOperation::new(new_inputs.into(), Ok(TensorOp::new(new_op)));
         self.replace_op(op, add)
     }
 

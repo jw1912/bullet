@@ -110,12 +110,8 @@ impl OpType for AutogradOp {
         self.forward.outputs()
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(AutogradOp { op, .. }) = TensorOp::downcast_rc(other) {
-            self.op.equals(op)
-        } else {
-            false
-        }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(AutogradOp { op, .. }) = other.downcast() { self.op.equals(op) } else { false }
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {

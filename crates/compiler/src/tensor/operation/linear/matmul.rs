@@ -1,4 +1,4 @@
-use std::{fmt, rc::Rc};
+use std::fmt;
 
 use crate::{
     ir::IRError,
@@ -108,8 +108,8 @@ impl OpType for Matmul {
         true
     }
 
-    fn equals(&self, other: &Rc<dyn OpType>) -> bool {
-        if let Some(other) = TensorOp::downcast_rc::<Self>(other) { self == other } else { false }
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }
 

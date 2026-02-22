@@ -39,7 +39,7 @@ pub trait OpType: Any + Debug + 'static {
     fn outputs(&self) -> Vec<TType>;
 
     /// Returns true if self is provably equal to other
-    fn equals(&self, _other: &Rc<dyn OpType>) -> bool {
+    fn equals(&self, _other: &TensorOp) -> bool {
         false
     }
 
@@ -72,6 +72,22 @@ impl Operation<TType> for TensorOp {
 }
 
 impl TensorOp {
+    pub fn new(op: impl OpType) -> Self {
+        Self(Rc::new(op))
+    }
+
+    pub fn opname(&self) -> String {
+        self.0.opname()
+    }
+
+    pub fn inputs(&self) -> Vec<TType> {
+        self.0.inputs()
+    }
+
+    pub fn outputs(&self) -> Vec<TType> {
+        self.0.outputs()
+    }
+
     pub fn downcast_rc<T: OpType>(input: &Rc<dyn OpType>) -> Option<&T> {
         let op: &dyn Any = input.as_ref();
         op.downcast_ref::<T>()
@@ -102,7 +118,7 @@ impl OpType for Input {
         vec![self.0]
     }
 
-    fn equals(&self, _: &Rc<dyn OpType>) -> bool {
+    fn equals(&self, _: &TensorOp) -> bool {
         false
     }
 }

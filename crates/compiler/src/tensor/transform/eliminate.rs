@@ -63,7 +63,7 @@ fn eliminate_single_common_subexpr(ir: &mut TensorIR) -> Result<bool, IRTrace> {
 
     for (i, op_i) in ops.iter().enumerate() {
         for op_j in ops.iter().skip(i + 1) {
-            if op_i.inputs() == op_j.inputs() && op_i.data().0.equals(&op_j.data().0) {
+            if op_i.inputs() == op_j.inputs() && op_i.data().0.equals(op_j.data()) {
                 for (&out_i, &out_j) in op_i.outputs().iter().zip(op_j.outputs()) {
                     ir.replace_input(out_i, out_j)?;
 

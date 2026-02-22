@@ -1,4 +1,4 @@
-use std::{fmt, rc::Rc};
+use std::fmt;
 
 use crate::{
     ir::Op,
@@ -66,7 +66,7 @@ macro_rules! foldrule {
                         ({
                             let new_op = $new_op;
                             let new_inputs = vec![$($output.id()),*];
-                            return Ok(Some(AddOperation::new(new_inputs, Ok(Rc::new(new_op)))));
+                            return Ok(Some(AddOperation::new(new_inputs, Ok($crate::tensor::TensorOp::new(new_op)))));
                         })
                         ($($($cond)*)?)
                     }

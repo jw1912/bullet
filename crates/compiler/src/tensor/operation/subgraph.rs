@@ -1,9 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::collections::{HashMap, HashSet};
 
-use crate::tensor::{IRTrace, NodeId, OpType, TType, TValue, TensorIR};
+use crate::tensor::{IRTrace, NodeId, OpType, TType, TValue, TensorIR, TensorOp};
 
 #[derive(Clone, Debug)]
 pub struct SubGraph {
@@ -52,6 +49,19 @@ impl SubGraph {
     pub fn internal_outputs(&self) -> &[NodeId] {
         &self.outputs
     }
+
+    pub fn from_op(op: TensorOp) -> Result<Self, IRTrace> {
+        let mut ir = TensorIR::default();
+
+        let inputs = op.inputs().iter().map(|&i| ir.add_input(i)).collect();
+        let outputs = ir.add_dyn_op(&inputs, Ok::<_, IRTrace>(op))?;
+
+        for &output in &outputs {
+            ir.register_output(output);
+        }
+
+        Self::new(ir, inputs, outputs)
+    }
 }
 
 impl OpType for SubGraph {
@@ -80,7 +90,7 @@ impl OpType for SubGraph {
         true
     }
 
-    fn equals(&self, _other: &Rc<dyn OpType>) -> bool {
+    fn equals(&self, _other: &TensorOp) -> bool {
         false
     }
 }
