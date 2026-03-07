@@ -5,11 +5,16 @@ use std::{
     sync::Arc,
 };
 
-use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, TValue};
+use bullet_compiler::tensor::{DType, DValue, IRTrace, TValue};
+use bullet_gpu::{
+    buffer::Buffer,
+    kernel::{CompiledKernel, KernelSrc},
+    runtime::{Gpu, Stream},
+};
 
-use crate::runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
+use crate::optimiser::OptimiserUpdateResult;
 
-use super::{OptimiserState, OptimiserUpdateValue, utils};
+use super::{OptimiserState, utils};
 
 #[derive(Clone, Copy, Debug)]
 pub struct RAdamParams {
@@ -27,88 +32,47 @@ impl Default for RAdamParams {
 }
 
 impl RAdamParams {
-    pub fn build(&self, size: usize) -> Result<ReadyToCompileGraph, IRTrace> {
-        let builder = IRBuilder::default();
-
-        // args
-        let lrate = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-        let adjus = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-        let ssize = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-        let denom = builder.add_input(1, DType::F32).broadcast([1], 0, size)?;
-
-        // inputs
-        let w = builder.add_input(size, DType::F32);
-        let g = builder.add_input(size, DType::F32);
-        let m = builder.add_input(size, DType::F32);
-        let v = builder.add_input(size, DType::F32);
-
-        let agrd = (adjus * g)?;
-        let new_m = ((self.beta1 * m)? + ((1.0 - self.beta1) * agrd)?)?;
-        let new_v = ((self.beta2 * v)? + (((1.0 - self.beta2) * agrd)? * agrd)?)?;
-
-        let val_denom = (new_m / (new_v.sqrt()? + 0.00000001)?)?;
-        let val = ((denom * val_denom)? + ((1.0 - denom)? * new_m)?)?;
-
-        let mut new_w = ((w * (1.0 - (lrate * self.decay)?)?)? - ((lrate * ssize)? * val)?)?;
-
-        if let Some((min, max)) = self.clip {
-            let min = builder.scalar(DValue::F32(min), size);
-            let max = builder.scalar(DValue::F32(max), size);
-            new_w = new_w.min(max)?.max(min)?;
-        }
-
-        let ir = builder.build([new_w, new_m, new_v]);
-
-        let mut tensors: HashMap<String, TensorInput> =
-            [("lrate", lrate), ("adjus", adjus), ("ssize", ssize), ("denom", denom), ("g", g)]
-                .iter()
-                .map(|(id, node)| (id.to_string(), TensorInput::In(node.node())))
-                .collect();
-
-        tensors.insert("w".into(), TensorInput::InOut(w.node(), new_w.node()));
-        tensors.insert("m".into(), TensorInput::InOut(m.node(), new_m.node()));
-        tensors.insert("v".into(), TensorInput::InOut(v.node(), new_v.node()));
-
-        ReadyToCompileGraph::new(ir, tensors)
+    pub fn build(&self, _size: usize) -> Result<KernelSrc, IRTrace> {
+        unimplemented!()
     }
 }
 
-pub struct RAdam<D: Device> {
-    momentum: Arc<D::Buffer>,
-    velocity: Arc<D::Buffer>,
-    op: D::CompiledGraph,
+pub struct RAdam<G: Gpu> {
+    momentum: Arc<Buffer<G>>,
+    velocity: Arc<Buffer<G>>,
+    op: CompiledKernel<G>,
     params: RAdamParams,
     step: usize,
-    step_size: Arc<D::Buffer>,
-    denom: Arc<D::Buffer>,
+    step_size: Arc<Buffer<G>>,
+    denom: Arc<Buffer<G>>,
 }
 
-impl<D: Device> OptimiserState<D> for RAdam<D> {
+impl<G: Gpu> OptimiserState<G> for RAdam<G> {
     type Params = RAdamParams;
 
-    fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Result<Self, D::Error> {
-        let op = device.compile(default_params.build(size).unwrap())?;
-        let stream = device.default_stream();
+    fn new(stream: &Arc<Stream<G>>, size: usize, default_params: Self::Params) -> Result<Self, G::Error> {
+        let op = default_params.build(size).unwrap().compile(stream.device())?;
 
         Ok(Self {
-            momentum: stream.make_blocking(&TValue::zeros(DType::F32, size))?,
-            velocity: stream.make_blocking(&TValue::zeros(DType::F32, size))?,
+            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
+            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
             op,
             params: default_params,
             step: 0,
-            step_size: stream.make_blocking(&TValue::zeros(DType::F32, 1))?,
-            denom: stream.make_blocking(&TValue::zeros(DType::F32, 1))?,
+            step_size: Buffer::from_host(stream, &TValue::zeros(DType::F32, 1))?.value().0,
+            denom: Buffer::from_host(stream, &TValue::zeros(DType::F32, 1))?.value().0,
         })
     }
 
-    fn update(
-        &mut self,
-        stream: &Arc<D::Stream>,
-        weights: Arc<D::Buffer>,
-        grads: Arc<D::Buffer>,
-        gradient_factor: Arc<D::Buffer>,
-        learning_rate: Arc<D::Buffer>,
-    ) -> Result<OptimiserUpdateValue<D>, D::Error> {
+    #[allow(unused)]
+    fn update<'a>(
+        &'a mut self,
+        stream: &Arc<Stream<G>>,
+        weights: Arc<Buffer<G>>,
+        grads: Arc<Buffer<G>>,
+        gradient_factor: Arc<Buffer<G>>,
+        learning_rate: Arc<Buffer<G>>,
+    ) -> OptimiserUpdateResult<'a, G> {
         assert_eq!(weights.size(), self.momentum.size());
         assert_eq!(weights.size(), self.velocity.size());
 
@@ -136,42 +100,28 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
         let mut blocks = Vec::new();
 
         let scalars = [(DValue::F32(step_size), self.step_size.clone()), (DValue::F32(denom), self.denom.clone())];
-        blocks.push(stream.clone().copy_scalars_nonblocking(scalars)?);
 
-        let args = [
-            ("w", weights),
-            ("m", self.momentum.clone()),
-            ("v", self.velocity.clone()),
-            ("g", grads),
-            ("adjus", gradient_factor),
-            ("lrate", learning_rate),
-            ("ssize", self.step_size.clone()),
-            ("denom", self.denom.clone()),
-        ]
-        .into_iter()
-        .map(|(x, y)| (x.to_string(), y))
-        .collect();
-
-        blocks.push(stream.execute_graph(&self.op, &args)?);
+        unimplemented!();
 
         Ok(blocks)
     }
 
-    fn reset(&mut self) -> Result<(), D::Error> {
+    fn reset(&mut self) -> Result<(), G::Error> {
         self.step = 0;
-        let stream = self.momentum.device().default_stream();
+        let stream = self.momentum.creator();
         let size = self.momentum.size();
-        stream.copy_h2d_blocking(&TValue::zeros(DType::F32, size), self.momentum.clone())?;
-        stream.copy_h2d_blocking(&TValue::zeros(DType::F32, size), self.velocity.clone())
+        self.momentum.copy_from_host(&stream, &TValue::zeros(DType::F32, size))?;
+        self.velocity.copy_from_host(&stream, &TValue::zeros(DType::F32, size))?;
+        Ok(())
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::Error> {
-        let stream = map.iter().next().unwrap().1.momentum.device().default_stream();
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error> {
+        let stream = map.iter().next().unwrap().1.momentum.creator();
 
         let momentum: Vec<_> = map.iter().map(|(id, single)| (id, &single.momentum)).collect();
         let velocity: Vec<_> = map.iter().map(|(id, single)| (id, &single.velocity)).collect();
-        utils::write_weights_to_file::<D>(&stream, &momentum, &format!("{path}/momentum.bin"))?;
-        utils::write_weights_to_file::<D>(&stream, &velocity, &format!("{path}/velocity.bin"))?;
+        utils::write_weights_to_file::<G>(&stream, &momentum, &format!("{path}/momentum.bin"))?;
+        utils::write_weights_to_file::<G>(&stream, &velocity, &format!("{path}/velocity.bin"))?;
 
         let mut file = File::create(format!("{path}/step.txt")).unwrap();
         for (id, single) in map.iter() {
@@ -181,7 +131,7 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
         Ok(())
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), D::Error> {
+    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
         let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
         let mut momentum = utils::load_weights_from_file(&paths[0]);
         let mut velocity = utils::load_weights_from_file(&paths[1]);
@@ -206,21 +156,21 @@ impl<D: Device> OptimiserState<D> for RAdam<D> {
             assert_eq!(id1, id3);
 
             let single = map.get_mut(&id1).unwrap();
-            let stream = single.momentum.device().default_stream();
-            stream.copy_h2d_blocking(&TValue::F32(mom), single.momentum.clone())?;
-            stream.copy_h2d_blocking(&TValue::F32(vel), single.velocity.clone())?;
+            let stream = single.momentum.creator();
+            single.momentum.copy_from_host(&stream, &TValue::F32(mom))?;
+            single.velocity.copy_from_host(&stream, &TValue::F32(vel))?;
             single.step = step;
         }
 
         Ok(())
     }
 
-    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
+    fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         self.params = params;
 
         let size = self.momentum.size();
-        let device = self.momentum.device();
-        self.op = device.compile(params.build(size).unwrap())?;
+        let device = self.momentum.creator().device();
+        self.op = params.build(size).unwrap().compile(device)?;
         Ok(())
     }
 }

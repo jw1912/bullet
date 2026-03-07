@@ -1,11 +1,16 @@
-use bullet_trainer::{model::Model as TrainerModel, runtime::interpreter::Interpreter};
+use bullet_trainer::model::Model as TrainerModel;
 
 pub use bullet_trainer::model::{
     Shape,
     builder::{Affine, InitSettings, ModelBuilder, ModelNode},
 };
 
-pub type ExecutionContext = Interpreter;
+#[cfg(feature = "cuda")]
+pub type ExecutionContext = bullet_gpu::runtime::cuda::Cuda;
+
+#[cfg(not(feature = "cuda"))]
+pub type ExecutionContext = bullet_gpu::runtime::mock::MockGpu;
+
 pub type Model = TrainerModel<ExecutionContext>;
 
 pub mod optimiser {

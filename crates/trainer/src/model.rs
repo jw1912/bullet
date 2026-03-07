@@ -6,12 +6,17 @@ pub use builder::{ModelBuilder, ModelNode};
 
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::tensor::{DType, TType, TValue};
+use bullet_compiler::{
+    ir::NodeId,
+    tensor::{DType, TType, TValue},
+};
+use bullet_gpu::{
+    buffer::{Buffer, SyncOnValue},
+    function::Function,
+    runtime::{Device, Gpu, Stream},
+};
 
-use crate::runtime::{BlockOnDrop, Buffer, Device, Stream};
-
-pub type TensorMap<D> = HashMap<String, Arc<<D as Device>::Buffer>>;
-type ModelAsyncReturn<D> = BlockOnDrop<<D as Device>::Stream, Vec<Arc<<D as Device>::Buffer>>>;
+pub type TensorMap<G> = HashMap<String, Arc<Buffer<G>>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shape {
@@ -37,104 +42,110 @@ impl Shape {
     }
 }
 
-pub struct Model<D: Device> {
-    device: Arc<D>,
-    weights: TensorMap<D>,
+pub struct Model<G: Gpu> {
+    stream: Arc<Stream<G>>,
+    weights: TensorMap<G>,
     shapes: HashMap<String, (Shape, Option<usize>)>,
-    forward: D::CompiledGraph,
-    backward: D::CompiledGraph,
+    forward: Function<G>,
+    fwd_map: HashMap<String, NodeId>,
+    backward: Function<G>,
+    bwd_map: HashMap<String, NodeId>,
     fwd_output_types: HashMap<String, TType>,
     bwd_output_types: HashMap<String, TType>,
 }
 
-impl<D: Device> Model<D> {
-    pub fn device(&self) -> Arc<D> {
-        self.device.clone()
+impl<G: Gpu> Model<G> {
+    pub fn stream(&self) -> Arc<Stream<G>> {
+        self.stream.clone()
     }
 
-    pub fn weights(&self) -> &TensorMap<D> {
+    pub fn device(&self) -> Arc<Device<G>> {
+        self.stream.device()
+    }
+
+    pub fn weights(&self) -> &TensorMap<G> {
         &self.weights
     }
 
     pub fn get_weights(&self, id: impl Into<String>) -> Option<TValue> {
-        self.weights
-            .get(&id.into())
-            .cloned()
-            .map(|tensor| self.device().default_stream().copy_d2h_blocking(tensor).unwrap())
+        self.weights.get(&id.into()).cloned().map(|tensor| tensor.clone().to_host(&tensor.creator()).unwrap().value())
     }
 
     pub fn set_weights(&self, id: impl Into<String>, new_value: &TValue) -> bool {
         self.weights
             .get(&id.into())
             .cloned()
-            .map(|tensor| self.device().default_stream().copy_h2d_blocking(new_value, tensor).unwrap())
+            .map(|tensor| tensor.copy_from_host(&self.stream, new_value).unwrap())
             .is_some()
     }
 
     pub fn forward(
         &self,
-        stream: &Arc<D::Stream>,
-        inputs: &TensorMap<D>,
-        outputs: &TensorMap<D>,
-    ) -> Result<ModelAsyncReturn<D>, D::Error> {
-        let tensors = collect_map::<D>([("", "", &self.weights), ("inputs/", "", inputs), ("", "", outputs)]);
+        stream: &Arc<Stream<G>>,
+        inputs: &TensorMap<G>,
+        outputs: &TensorMap<G>,
+    ) -> Result<SyncOnValue<G, &Function<G>>, G::Error> {
+        let _tensors = collect_map::<G>([("", "", &self.weights), ("inputs/", "", inputs), ("", "", outputs)]);
 
-        stream.execute_graph(&self.forward, &tensors)
+        self.forward.execute(stream.clone(), &HashMap::new())?;
+        unimplemented!()
     }
 
     pub fn backward(
         &self,
-        stream: &Arc<D::Stream>,
-        inputs: &TensorMap<D>,
-        outputs: &TensorMap<D>,
-        gradients: &TensorMap<D>,
-    ) -> Result<ModelAsyncReturn<D>, D::Error> {
-        let tensors = collect_map::<D>([
+        stream: &Arc<Stream<G>>,
+        inputs: &TensorMap<G>,
+        outputs: &TensorMap<G>,
+        gradients: &TensorMap<G>,
+    ) -> Result<SyncOnValue<G, &Function<G>>, G::Error> {
+        let _tensors = collect_map::<G>([
             ("", "", &self.weights),
             ("inputs/", "", inputs),
             ("", "", outputs),
             ("gradients/", "weights/", gradients),
         ]);
 
-        stream.execute_graph(&self.backward, &tensors)
+        self.backward.execute(stream.clone(), &HashMap::new())?;
+        unimplemented!()
     }
 
-    pub fn make_gradient_tensors(&self, stream: &Arc<D::Stream>) -> Result<TensorMap<D>, D::Error> {
+    pub fn make_gradient_tensors(&self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
         self.weights()
             .iter()
             .map(|(id, weight)| {
-                stream.clone().make_blocking(&TValue::zeros(weight.dtype(), weight.size())).map(|buf| (id.clone(), buf))
+                Buffer::from_host(stream, &TValue::zeros(weight.dtype(), weight.size()))
+                    .map(|buf| (id.clone(), buf.value().0))
             })
             .collect()
     }
 
-    pub fn make_backward_output_tensors(&self, stream: &Arc<D::Stream>) -> Result<TensorMap<D>, D::Error> {
+    pub fn make_backward_output_tensors(&self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
         self.bwd_output_types
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate_constant().expect("`Model` only supports constant-size outputs!");
-                stream.clone().make_blocking(&TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf))
+                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf.value().0))
             })
             .collect()
     }
 
     pub fn make_forward_output_tensors(
         &self,
-        stream: &Arc<D::Stream>,
+        stream: &Arc<Stream<G>>,
         batch_size: usize,
-    ) -> Result<TensorMap<D>, D::Error> {
+    ) -> Result<TensorMap<G>, G::Error> {
         self.fwd_output_types
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate(batch_size);
-                stream.clone().make_blocking(&TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf))
+                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf.value().0))
             })
             .collect()
     }
 
     /// Writes the weights of a graph to a file. If `gradients` is true,
     /// it will instead write the gradients of those weights.
-    pub fn write_to(&self, writer: &mut impl std::io::Write) -> Result<(), D::Error> {
+    pub fn write_to(&self, writer: &mut impl std::io::Write) -> Result<(), G::Error> {
         let mut buf = Vec::new();
 
         for (id, value) in self.weights.clone() {
@@ -142,7 +153,7 @@ impl<D: Device> Model<D> {
                 unimplemented!("Non f32 writing!");
             }
 
-            let this_buf = self.device().default_stream().copy_d2h_blocking(value.clone())?;
+            let this_buf = value.clone().to_host(&self.stream)?.value();
             let byte_buf = utils::write_to_byte_buffer(&this_buf, &id).unwrap();
             buf.extend_from_slice(&byte_buf);
         }
@@ -154,7 +165,7 @@ impl<D: Device> Model<D> {
 
     /// Loads the weights of a graph from a file. If `gradients` is true,
     /// it will instead load the gradients of those weights.
-    pub fn load_from(&mut self, mut reader: impl std::io::Read) -> Result<(), D::Error> {
+    pub fn load_from(&mut self, mut reader: impl std::io::Read) -> Result<(), G::Error> {
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).unwrap();
 
@@ -174,7 +185,7 @@ impl<D: Device> Model<D> {
                 panic!("Invalid buffer size!");
             }
 
-            self.device().default_stream().copy_h2d_blocking(&TValue::F32(buffer), weights)?;
+            weights.copy_from_host(&self.stream, &TValue::F32(buffer))?;
 
             offset += bytes_read;
         }
@@ -183,7 +194,7 @@ impl<D: Device> Model<D> {
     }
 }
 
-fn collect_map<'a, D: Device + 'a>(x: impl AsRef<[(&'a str, &'a str, &'a TensorMap<D>)]>) -> TensorMap<D> {
+fn collect_map<'a, G: Gpu + 'a>(x: impl AsRef<[(&'a str, &'a str, &'a TensorMap<G>)]>) -> TensorMap<G> {
     let mut map = HashMap::new();
 
     for (pre, strip, submap) in x.as_ref() {

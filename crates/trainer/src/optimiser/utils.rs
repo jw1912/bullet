@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
-use crate::{
-    model::utils::{read_from_byte_buffer, write_to_byte_buffer},
-    runtime::{Device, Stream},
+use bullet_gpu::{
+    buffer::Buffer,
+    runtime::{Gpu, Stream},
 };
+
+use crate::model::utils::{read_from_byte_buffer, write_to_byte_buffer};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Placement {
@@ -12,17 +14,17 @@ pub enum Placement {
 }
 
 /// Write a set of labelled weights from a `HashMap` into a file.
-pub fn write_weights_to_file<D: Device>(
-    stream: &Arc<D::Stream>,
-    map: &[(impl AsRef<str>, &Arc<D::Buffer>)],
+pub fn write_weights_to_file<G: Gpu>(
+    stream: &Arc<Stream<G>>,
+    map: &[(impl AsRef<str>, &Arc<Buffer<G>>)],
     path: &str,
-) -> Result<(), D::Error> {
+) -> Result<(), G::Error> {
     use std::{fs::File, io::Write};
 
     let mut buf = Vec::new();
 
     for (id, weights) in map {
-        let this_buf = stream.copy_d2h_blocking((*weights).clone())?;
+        let this_buf = (*weights).clone().to_host(stream)?.value();
         let byte_buf = write_to_byte_buffer(&this_buf, id.as_ref()).unwrap();
         buf.extend_from_slice(&byte_buf);
     }

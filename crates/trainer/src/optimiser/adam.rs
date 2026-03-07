@@ -1,10 +1,19 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::Arc,
+};
 
-use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, TValue};
+use bullet_compiler::tensor::{DType, IRTrace, TType, TValue};
+use bullet_gpu::{
+    buffer::Buffer,
+    kernel::{CompiledKernel, KernelSrc},
+    runtime::{Dim3, Gpu, Stream},
+};
 
-use crate::runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
+use crate::optimiser::OptimiserUpdateResult;
 
-use super::{OptimiserState, OptimiserUpdateValue, utils};
+use super::{OptimiserState, utils};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -22,118 +31,173 @@ impl Default for AdamWParams {
 }
 
 impl AdamWParams {
-    pub fn build(&self, size: usize) -> Result<ReadyToCompileGraph, IRTrace> {
-        let builder = IRBuilder::default();
+    pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
+        let op = "\
+            __device__ __forceinline__ void adamOp(
+                const float adj,
+                const float rate,
+                float* p,
+                float* m,
+                float* v,
+                const float* g)
+            {
+                p[0] *= 1.0F - static_cast<float>(DECAY) * rate;
 
-        // args
-        let ilrate = builder.add_input(1, DType::F32);
-        let iadjus = builder.add_input(1, DType::F32);
+                const float grad = adj * g[0];
+                m[0] = beta1 * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
+                v[0] = beta2 * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
 
-        let lrate = ilrate.broadcast([1], 0, size)?;
-        let adjus = iadjus.broadcast([1], 0, size)?;
+                float val = m[0] / (sqrtf(v[0]) + static_cast<float>(EPSILON));
+                p[0] -= rate * val;
 
-        // inputs
-        let w = builder.add_input(size, DType::F32);
-        let g = builder.add_input(size, DType::F32);
-        let m = builder.add_input(size, DType::F32);
-        let v = builder.add_input(size, DType::F32);
+                p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
+            }"
+        .replace("DECAY", &self.decay.to_string())
+        .replace("BETA1", &self.beta1.to_string())
+        .replace("BETA2", &self.beta2.to_string())
+        .replace("WMIN", &self.min_weight.to_string())
+        .replace("WMAX", &self.max_weight.to_string())
+        .replace("EPSILON", "0.000000001F");
 
-        let agrd = (adjus * g)?;
-        let new_m = ((self.beta1 * m)? + ((1.0 - self.beta1) * agrd)?)?;
-        let new_v = ((self.beta2 * v)? + (((1.0 - self.beta2) * agrd)? * agrd)?)?;
+        let decl = "
+            __global__ void AdamKernel(
+                const float* adj_ptr,
+                const float* rate_ptr,
+                const float* gradients,
+                float* network,
+                float* momentum,
+                float* velocity,
+            )";
 
-        let val = (new_m / (new_v.sqrt()? + 0.00000001)?)?;
+        let body = if size.is_multiple_of(4) {
+            format!(
+                "
+                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-        let minw = builder.scalar(DValue::F32(self.min_weight), size);
-        let maxw = builder.scalar(DValue::F32(self.max_weight), size);
-        let new_w = ((w * (1.0 - (lrate * self.decay)?)?)? - (lrate * val)?)?.min(maxw)?.max(minw)?;
+                if (tid < {})
+                {{
+                    const float adj = ajd_ptr[0];
+                    const float rate = rate_ptr[0];
+                    float4 p = ((float4 *)network)[tid];
+                    float4 m = ((float4 *)momentum)[tid];
+                    float4 v = ((float4 *)velocity)[tid];
+                    const float4 g = ((const float4 *)gradients)[tid];
 
-        let ir = builder.build([new_w, new_m, new_v]);
+                    adamOp(adj, rate, &p.x, &m.x, &v.x, &g.x);
+                    adamOp(adj, rate, &p.y, &m.y, &v.y, &g.y);
+                    adamOp(adj, rate, &p.z, &m.z, &v.z, &g.z);
+                    adamOp(adj, rate, &p.w, &m.w, &v.w, &g.w);
 
-        ReadyToCompileGraph::new(
-            ir,
-            [
-                ("lrate".into(), TensorInput::In(ilrate.node())),
-                ("adjus".into(), TensorInput::In(iadjus.node())),
-                ("g".into(), TensorInput::In(g.node())),
-                ("w".into(), TensorInput::InOut(w.node(), new_w.node())),
-                ("m".into(), TensorInput::InOut(m.node(), new_m.node())),
-                ("v".into(), TensorInput::InOut(v.node(), new_v.node())),
-            ]
-            .into(),
-        )
+                    ((float4 *)network)[tid] = p;
+                    ((float4 *)momentum)[tid] = m;
+                    ((float4 *)velocity)[tid] = v;
+                }}",
+                size / 4,
+            )
+        } else {
+            format!(
+                "
+                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+                if (tid < {size})
+                {{
+                    const float adj = ajd_ptr[0];
+                    const float rate = rate_ptr[0];
+                    float p = network[tid];
+                    float m = momentum[tid];
+                    float v = velocity[tid];
+                    const float g = gradients[tid];
+
+                    adamOp(adj, rate, &p, &m, &v, &g);
+
+                    network[tid] = p;
+                    momentum[tid] = m;
+                    velocity[tid] = v;
+                }}"
+            )
+        };
+
+        let ty = TType::new(size, DType::F32);
+
+        let total_threads = if size.is_multiple_of(4) { size / 4 } else { size };
+        let src = unsafe {
+            KernelSrc::new(
+                vec![TType::new(1, DType::F32), TType::new(1, DType::F32), ty],
+                vec![ty; 3],
+                format!("{op}{decl}{{{body}}}"),
+                false,
+                vec![(0, true), (1, true), (2, true), (0, false), (1, false), (2, false)],
+                HashSet::new(),
+                Rc::new(move |_| Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 }),
+                Rc::new(|_| 256),
+                Rc::new(|_| 0),
+            )
+        };
+
+        Ok(src)
     }
 }
 
-pub struct AdamW<D: Device> {
-    momentum: Arc<D::Buffer>,
-    velocity: Arc<D::Buffer>,
-    op: D::CompiledGraph,
+pub struct AdamW<G: Gpu> {
+    momentum: Arc<Buffer<G>>,
+    velocity: Arc<Buffer<G>>,
+    op: CompiledKernel<G>,
 }
 
-impl<D: Device> OptimiserState<D> for AdamW<D> {
+impl<G: Gpu> OptimiserState<G> for AdamW<G> {
     type Params = AdamWParams;
 
-    fn new(device: Arc<D>, size: usize, default_params: Self::Params) -> Result<Self, D::Error> {
+    fn new(stream: &Arc<Stream<G>>, size: usize, default_params: Self::Params) -> Result<Self, G::Error> {
         if default_params.max_weight < default_params.min_weight {
             return Err(
                 format!("Invalid clipping: {} >= {}", default_params.min_weight, default_params.max_weight).into()
             );
         }
 
-        let op = device.compile(default_params.build(size).unwrap())?;
-        let stream = device.default_stream();
+        let op = default_params.build(size).unwrap().compile(stream.device())?;
 
         Ok(Self {
-            momentum: stream.make_blocking(&TValue::zeros(DType::F32, size))?,
-            velocity: stream.make_blocking(&TValue::zeros(DType::F32, size))?,
+            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
+            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
             op,
         })
     }
 
-    fn update(
-        &mut self,
-        stream: &Arc<D::Stream>,
-        weights: Arc<D::Buffer>,
-        grads: Arc<D::Buffer>,
-        gradient_factor: Arc<D::Buffer>,
-        learning_rate: Arc<D::Buffer>,
-    ) -> Result<OptimiserUpdateValue<D>, D::Error> {
-        assert_eq!(weights.size(), self.momentum.size());
-        assert_eq!(weights.size(), self.velocity.size());
-
-        let args = [
-            ("w", weights),
-            ("m", self.momentum.clone()),
-            ("v", self.velocity.clone()),
-            ("g", grads),
-            ("adjus", gradient_factor),
-            ("lrate", learning_rate),
-        ]
-        .into_iter()
-        .map(|(x, y)| (x.to_string(), y))
-        .collect();
-
-        stream.execute_graph(&self.op, &args).map(|x| vec![x])
+    fn update<'a>(
+        &'a mut self,
+        stream: &Arc<Stream<G>>,
+        weights: Arc<Buffer<G>>,
+        grads: Arc<Buffer<G>>,
+        gradient_factor: Arc<Buffer<G>>,
+        learning_rate: Arc<Buffer<G>>,
+    ) -> OptimiserUpdateResult<'a, G> {
+        self.op
+            .execute(
+                stream.clone(),
+                vec![gradient_factor, learning_rate, grads],
+                vec![weights, self.momentum.clone(), self.velocity.clone()],
+            )
+            .map(|x| vec![x])
     }
 
-    fn reset(&mut self) -> Result<(), D::Error> {
-        let stream = self.momentum.device().default_stream();
+    fn reset(&mut self) -> Result<(), G::Error> {
+        let stream = self.momentum.creator();
         let size = self.momentum.size();
-        stream.copy_h2d_blocking(&TValue::zeros(DType::F32, size), self.momentum.clone())?;
-        stream.copy_h2d_blocking(&TValue::zeros(DType::F32, size), self.velocity.clone())
+        self.momentum.copy_from_host(&stream, &TValue::zeros(DType::F32, size))?;
+        self.velocity.copy_from_host(&stream, &TValue::zeros(DType::F32, size))?;
+        Ok(())
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::Error> {
-        let stream = map.iter().next().unwrap().1.momentum.device().default_stream();
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error> {
+        let stream = map.iter().next().unwrap().1.momentum.creator();
 
         let momentum: Vec<_> = map.iter().map(|(id, single)| (id, &single.momentum)).collect();
         let velocity: Vec<_> = map.iter().map(|(id, single)| (id, &single.velocity)).collect();
-        utils::write_weights_to_file::<D>(&stream, &momentum, &format!("{path}/momentum.bin"))?;
-        utils::write_weights_to_file::<D>(&stream, &velocity, &format!("{path}/velocity.bin"))
+        utils::write_weights_to_file::<G>(&stream, &momentum, &format!("{path}/momentum.bin"))?;
+        utils::write_weights_to_file::<G>(&stream, &velocity, &format!("{path}/velocity.bin"))
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), D::Error> {
+    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
         let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
         let mut momentum = utils::load_weights_from_file(&paths[0]);
         let mut velocity = utils::load_weights_from_file(&paths[1]);
@@ -145,18 +209,18 @@ impl<D: Device> OptimiserState<D> for AdamW<D> {
             assert_eq!(id1, id2);
 
             let single = map.get_mut(&id1).unwrap();
-            let stream = single.momentum.device().default_stream();
-            stream.copy_h2d_blocking(&TValue::F32(mom), single.momentum.clone())?;
-            stream.copy_h2d_blocking(&TValue::F32(vel), single.velocity.clone())?;
+            let stream = single.momentum.creator();
+            single.momentum.copy_from_host(&stream, &TValue::F32(mom))?;
+            single.velocity.copy_from_host(&stream, &TValue::F32(vel))?;
         }
 
         Ok(())
     }
 
-    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
+    fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         let size = self.momentum.size();
-        let device = self.momentum.device();
-        self.op = device.compile(params.build(size).unwrap())?;
+        let device = self.momentum.creator().device();
+        self.op = params.build(size).unwrap().compile(device)?;
         Ok(())
     }
 }

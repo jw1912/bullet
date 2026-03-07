@@ -1,34 +1,43 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bullet_compiler::tensor::{DType, IRBuilder, IRTrace, TValue};
+use bullet_compiler::{
+    ir::IRError,
+    tensor::{DType, TType, TValue, operation::CABinary},
+};
+use bullet_gpu::{
+    buffer::Buffer,
+    kernel::{CompiledKernel, KernelSrc},
+    pointwise::PointwiseIR,
+    runtime::{Gpu, Stream},
+};
 
-use crate::runtime::{Buffer, Device, ReadyToCompileGraph, Stream, TensorInput};
+use crate::optimiser::OptimiserUpdateResult;
 
 use super::{
-    OptimiserState, OptimiserUpdateValue, WrapOptimiser,
+    OptimiserState, WrapOptimiser,
     radam::{RAdam, RAdamParams},
     utils,
 };
 
-fn build_ranger_op(size: usize, alpha: f32) -> Result<ReadyToCompileGraph, IRTrace> {
-    let builder = IRBuilder::default();
+fn build_ranger_op(size: usize, alpha: f32) -> Result<KernelSrc, IRError> {
+    let mut pntwise = PointwiseIR::new(size.into())?;
 
-    let w = builder.add_input(size, DType::F32);
-    let s = builder.add_input(size, DType::F32);
+    let w = pntwise.add_buf(TType::new(size, DType::F32));
+    let s = pntwise.add_buf(TType::new(size, DType::F32));
+    let old_w = pntwise.read(w, pntwise.tid(), 0)?;
+    let old_s = pntwise.read(s, pntwise.tid(), 0)?;
 
-    let new_w = (((1.0 - alpha) * s)? + (alpha * w)?)?;
-    let new_s = new_w.copy()?;
+    let wweight = pntwise.add_const((1.0 - alpha).into(), 0);
+    let lhs = pntwise.binary(wweight, old_w, CABinary::Mul)?;
 
-    let ir = builder.build([new_w, new_s]);
+    let sweight = pntwise.add_const((1.0 - alpha).into(), 0);
+    let rhs = pntwise.binary(sweight, old_s, CABinary::Mul)?;
 
-    ReadyToCompileGraph::new(
-        ir,
-        [
-            ("w".to_string(), TensorInput::InOut(w.node(), new_w.node())),
-            ("s".to_string(), TensorInput::InOut(s.node(), new_s.node())),
-        ]
-        .into(),
-    )
+    let new_w = pntwise.binary(lhs, rhs, CABinary::Add)?;
+    pntwise.write(w, pntwise.tid(), new_w)?;
+    pntwise.write(s, pntwise.tid(), new_w)?;
+
+    unsafe { pntwise.lower() }
 }
 
 #[derive(Clone, Debug)]
@@ -44,87 +53,86 @@ impl<T: Default> Default for RangerLookaheadParams<T> {
     }
 }
 
-pub struct RangerLookahead<D: Device, S> {
+pub struct RangerLookahead<G: Gpu, S> {
     inner: S,
-    slow_params: Arc<D::Buffer>,
+    slow_params: Arc<Buffer<G>>,
     k: usize,
     step: usize,
-    op: D::CompiledGraph,
+    op: CompiledKernel<G>,
 }
 
-impl<D: Device, S: OptimiserState<D>> OptimiserState<D> for RangerLookahead<D, S> {
+impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
     type Params = RangerLookaheadParams<S::Params>;
 
-    fn new(device: Arc<D>, size: usize, params: Self::Params) -> Result<Self, D::Error> {
+    fn new(stream: &Arc<Stream<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
         Ok(Self {
-            op: device.compile(build_ranger_op(size, params.alpha).unwrap())?,
-            slow_params: device.default_stream().make_blocking(&TValue::F32(vec![0.0; size]))?,
-            inner: S::new(device, size, params.inner.clone())?,
+            op: build_ranger_op(size, params.alpha).unwrap().compile(stream.device())?,
+            slow_params: Buffer::from_host(stream, &TValue::F32(vec![0.0; size]))?.value().0,
+            inner: S::new(stream, size, params.inner.clone())?,
             k: params.k,
             step: 0,
         })
     }
 
-    fn update(
-        &mut self,
-        stream: &Arc<D::Stream>,
-        weights: Arc<D::Buffer>,
-        grads: Arc<D::Buffer>,
-        gradient_factor: Arc<D::Buffer>,
-        learning_rate: Arc<D::Buffer>,
-    ) -> Result<OptimiserUpdateValue<D>, D::Error> {
+    fn update<'a>(
+        &'a mut self,
+        stream: &Arc<Stream<G>>,
+        weights: Arc<Buffer<G>>,
+        grads: Arc<Buffer<G>>,
+        gradient_factor: Arc<Buffer<G>>,
+        learning_rate: Arc<Buffer<G>>,
+    ) -> OptimiserUpdateResult<'a, G> {
         let mut blocks = Vec::new();
 
         self.step += 1;
         blocks.extend(self.inner.update(stream, weights.clone(), grads, gradient_factor, learning_rate)?);
 
         if self.step.is_multiple_of(self.k) {
-            let args = [("w".into(), weights), ("s".into(), self.slow_params.clone())].into();
-            blocks.push(stream.execute_graph(&self.op, &args)?);
+            blocks.push(self.op.execute(stream.clone(), Vec::new(), vec![weights, self.slow_params.clone()])?);
         }
 
         Ok(blocks)
     }
 
-    fn reset(&mut self) -> Result<(), D::Error> {
+    fn reset(&mut self) -> Result<(), G::Error> {
         self.inner.reset()?;
         self.step = 0;
         Ok(())
     }
 
-    fn set_params(&mut self, params: Self::Params) -> Result<(), D::Error> {
+    fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         self.inner.set_params(params.inner)?;
-        let device = self.slow_params.device();
-        self.op = device.compile(build_ranger_op(self.slow_params.size(), params.alpha).unwrap())?;
+        let device = self.slow_params.creator().device();
+        self.op = build_ranger_op(self.slow_params.size(), params.alpha).unwrap().compile(device)?;
         self.k = params.k;
         self.step = 0;
         Ok(())
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), D::Error> {
+    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
         let slow_params = utils::load_weights_from_file(&format!("{path}/slow.bin"));
 
         for (id, par) in slow_params {
             let single = map.get_mut(&id).unwrap();
-            let stream = single.slow_params.device().default_stream();
-            stream.copy_h2d_blocking(&TValue::F32(par), single.slow_params.clone())?;
+            let stream = single.slow_params.creator();
+            single.slow_params.copy_from_host(&stream, &TValue::F32(par))?;
         }
 
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.inner)).collect();
         S::load_from_checkpoint(&mut map, path)
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), D::Error> {
-        let stream = map.iter().next().unwrap().1.slow_params.device().default_stream();
+    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error> {
+        let stream = map.iter().next().unwrap().1.slow_params.creator();
         let slow_params: Vec<_> = map.iter().map(|(id, single)| (id, &single.slow_params)).collect();
-        utils::write_weights_to_file::<D>(&stream, &slow_params, &format!("{path}/slow.bin"))?;
+        utils::write_weights_to_file::<G>(&stream, &slow_params, &format!("{path}/slow.bin"))?;
 
         let map = map.iter().map(|(id, single)| (id.clone(), &single.inner)).collect();
         S::write_to_checkpoint(&map, path)
     }
 }
 
-pub type Ranger<D> = WrapOptimiser<RangerLookahead<D, RAdam<D>>, RangerParams>;
+pub type Ranger<G> = WrapOptimiser<RangerLookahead<G, RAdam<G>>, RangerParams>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RangerParams {

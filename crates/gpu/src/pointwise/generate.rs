@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bullet_compiler::tensor::{
     IRTrace, Size,
-    operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, ScalarConstant, SubGraph, UnaryOp},
+    operation::{
+        BroadcastAcrossDimension, CABinary, CABinaryOp, ScalarConstant, SparseMatmul, SparseMatmulBwd, SubGraph,
+        UnaryOp,
+    },
 };
 
 use super::PointwiseIR;
@@ -38,6 +41,18 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
         } else if let Some(unary) = data.downcast::<UnaryOp>() {
             let size = unary.output_type().size();
             (size, size.factor())
+        } else if let Some(matmul) = data.downcast::<SparseMatmul>() {
+            if !(ir.is_input(op.inputs()[0])? && ir.is_input(op.inputs()[1])?) {
+                return Ok(None);
+            }
+
+            (matmul.batch() * matmul.rows(), matmul.rows())
+        } else if let Some(bwd) = data.downcast::<SparseMatmulBwd>() {
+            if !(ir.is_input(op.inputs()[1])? && ir.is_output(op.outputs()[0])) {
+                return Ok(None);
+            }
+
+            (bwd.0.batch() * bwd.0.rows(), 0)
         } else {
             return Ok(None);
         };
@@ -68,11 +83,13 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
     let get_val = |node, pntw: &mut PointwiseIR, map: &HashMap<_, _>| {
         if ir.is_input(node)? {
             let buf = *inp_buf_map.get(&node).unwrap();
-            pntw.read(buf, pntw.tid(), p2size).map_err(IRTrace::from)
+            pntw.read(buf, pntw.tid(), p2size).map(Option::Some).map_err(IRTrace::from)
         } else {
-            Ok(*map.get(&node).unwrap())
+            Ok(map.get(&node).cloned())
         }
     };
+
+    let mut handled_writes = HashSet::new();
 
     for op in ir.ordered_operations()? {
         let data = op.data();
@@ -110,25 +127,40 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
             }
         } else if let Some(binary) = data.downcast::<CABinaryOp>() {
             let out = op.outputs()[0];
-            let lhs = get_val(op.inputs()[0], &mut pntwise, &mapping)?;
-            let rhs = get_val(op.inputs()[1], &mut pntwise, &mapping)?;
+            let Some(lhs) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
+            let Some(rhs) = get_val(op.inputs()[1], &mut pntwise, &mapping)? else { return Ok(None) };
 
             let output = pntwise.binary(lhs, rhs, binary.op())?;
             mapping.insert(out, output);
         } else if let Some(unary) = data.downcast::<UnaryOp>() {
             let out = op.outputs()[0];
-            let input = get_val(op.inputs()[0], &mut pntwise, &mapping)?;
+            let Some(input) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
 
             let output = pntwise.unary(input, unary.op())?;
             mapping.insert(out, output);
+        } else if let Some(matmul) = data.downcast::<SparseMatmul>() {
+            let weights = *inp_buf_map.get(&op.inputs()[0]).unwrap();
+            let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
+            let output = pntwise.sparse_matmul(weights, indices, p2size, *matmul)?;
+            mapping.insert(op.outputs()[0], output);
+        } else if let Some(bwd) = data.downcast::<SparseMatmulBwd>() {
+            let out = op.outputs()[0];
+            let out_id = *out_buf_map.get(&out).unwrap();
+
+            let weights = *out_buf_map.get(&out).unwrap();
+            let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
+            let Some(gradients) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
+
+            pntwise.sparse_matmul_bwd(weights, indices, gradients, bwd.0)?;
+            handled_writes.insert(out_id);
         } else {
             unreachable!();
         };
 
         for &output in op.outputs() {
-            if ir.is_output(output) {
+            if ir.is_output(output) && !handled_writes.contains(&output) {
                 let id = *out_buf_map.get(&output).unwrap();
-                let val = get_val(output, &mut pntwise, &mapping)?;
+                let Some(val) = get_val(output, &mut pntwise, &mapping)? else { return Ok(None) };
                 pntwise.write(id, pntwise.tid(), val)?;
             }
         }
@@ -170,18 +202,18 @@ mod tests {
 
         let src = make_axby().unwrap();
 
-        let mut axby = src.compile(device)?;
+        let axby = src.compile(device)?;
 
         let aval = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
         let bval = TValue::F32(vec![4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0]);
         let xval = TValue::F32([4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0].repeat(4));
 
-        let aval_buf = Buffer::from_host(stream.clone(), &aval)?.value().0;
-        let bval_buf = Buffer::from_host(stream.clone(), &bval)?.value().0;
-        let xval_buf = Buffer::from_host(stream.clone(), &xval)?.value().0;
+        let aval_buf = Buffer::from_host(&stream, &aval)?.value().0;
+        let bval_buf = Buffer::from_host(&stream, &bval)?.value().0;
+        let xval_buf = Buffer::from_host(&stream, &xval)?.value().0;
 
-        let x2val_buf = Buffer::zeroed(stream.clone(), xval.dtype(), xval.size())?.value();
-        let yval_buf = Buffer::zeroed(stream.clone(), xval.dtype(), xval.size())?.value();
+        let x2val_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value();
+        let yval_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value();
 
         let sync = axby.execute(
             stream.clone(),
@@ -191,8 +223,8 @@ mod tests {
 
         drop(sync);
 
-        let actualx = x2val_buf.to_host(stream.clone())?.value();
-        let actualy = yval_buf.to_host(stream.clone())?.value();
+        let actualx = x2val_buf.to_host(&stream)?.value();
+        let actualy = yval_buf.to_host(&stream)?.value();
 
         assert_eq!(actualx, xval);
         #[rustfmt::skip]

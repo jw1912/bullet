@@ -5,6 +5,10 @@ pub mod schedule;
 use std::{sync::mpsc, thread, time::Instant};
 
 use bullet_compiler::tensor::TValue;
+use bullet_gpu::{
+    buffer::{Buffer, SyncOnValue},
+    runtime::Gpu,
+};
 
 use crate::{
     DataLoadingError, Trainer, TrainerError,
@@ -13,16 +17,15 @@ use crate::{
         dataloader::{DataLoader, PreparedBatchHost},
         schedule::TrainingSchedule,
     },
-    runtime::{Device, Stream},
 };
 
-pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
-    trainer: &mut Trainer<D, O, S>,
+pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
+    trainer: &mut Trainer<G, O, S>,
     schedule: TrainingSchedule,
     dataloader: impl DataLoader,
-    mut batch_callback: impl FnMut(&mut Trainer<D, O, S>, usize, usize, f32),
-    mut superbatch_callback: impl FnMut(&mut Trainer<D, O, S>, usize),
-) -> Result<(), TrainerError<D>> {
+    mut batch_callback: impl FnMut(&mut Trainer<G, O, S>, usize, usize, f32),
+    mut superbatch_callback: impl FnMut(&mut Trainer<G, O, S>, usize),
+) -> Result<(), TrainerError<G>> {
     logger::clear_colours();
     println!("{}", logger::ansi("Beginning Training", "34;1"));
 
@@ -70,14 +73,12 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
     let outputs =
         trainer.optimiser.model.make_backward_output_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
     let gradients = trainer.optimiser.model.make_gradient_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
-    let tgf = copy_stream.make_blocking(&TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
-    let tlr = copy_stream.make_blocking(&TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
+    let tlr = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?.value().0;
 
     let mut next_batch_size = first_batch.batch_size;
     let val = TValue::F32(vec![1.0 / next_batch_size as f32]);
-    let block = copy_stream.clone().copy_h2d_nonblocking(&val, tgf.clone()).map_err(TrainerError::Unexpected)?;
+    let tgf = Buffer::from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?.value().0;
     let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
-    drop(block);
 
     let mut batch_queued = true;
 
@@ -96,7 +97,7 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
         let lrate = lr(curr_batch, superbatch);
 
         let val = TValue::F32(vec![lrate]);
-        let lrdrop = copy_stream.clone().copy_h2d_nonblocking(&val, tlr.clone()).map_err(TrainerError::Unexpected)?;
+        let lrdrop = tlr.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
 
         if curr_batch == 0 {
             if lrate < prev_lr {
@@ -115,6 +116,8 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
             .backward(&compute_stream, &batch_on_device, &outputs, &gradients)
             .map_err(TrainerError::GradientCalculationError)?;
 
+        let compute_block1 = unsafe { compute_block1.detach_value() };
+
         drop(lrdrop);
 
         let compute_block2 = trainer
@@ -126,8 +129,7 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
             drop(batch_on_device);
             next_batch_size = next_batch_host.batch_size;
             let val = TValue::F32(vec![1.0 / next_batch_size as f32]);
-            let block =
-                copy_stream.clone().copy_h2d_nonblocking(&val, tgf.clone()).map_err(TrainerError::Unexpected)?;
+            let block = tgf.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
             batch_on_device = next_batch_host.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
             drop(block);
         } else {
@@ -138,7 +140,9 @@ pub fn train_custom<D: Device, O: OptimiserState<D>, S>(
         drop(compute_block2);
 
         let loss = outputs.get("outputs/loss").expect("`Trainer` must have a \"loss\" output!");
-        let TValue::F32(loss) = copy_stream.copy_d2h_blocking(loss.clone()).map_err(TrainerError::Unexpected)? else {
+        let TValue::F32(loss) =
+            loss.clone().to_host(&copy_stream).map(SyncOnValue::value).map_err(TrainerError::Unexpected)?
+        else {
             panic!()
         };
         let [loss] = loss[..] else { panic!() };

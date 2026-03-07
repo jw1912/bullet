@@ -1,45 +1,44 @@
 pub mod model;
 pub mod optimiser;
 pub mod run;
-pub mod runtime;
 
+use bullet_gpu::runtime::Gpu;
 use optimiser::{Optimiser, OptimiserState};
 use run::{
     dataloader::{DataLoader, DataLoadingError},
     schedule::{TrainingSchedule, TrainingSteps},
 };
-use runtime::Device;
 
 use std::time::Instant;
 
 #[derive(Debug)]
-pub enum TrainerError<D: Device> {
+pub enum TrainerError<G: Gpu> {
     DataLoadingError(DataLoadingError),
-    GradientCalculationError(D::Error),
-    OptimiserUpdateError(D::Error),
-    Unexpected(D::Error),
+    GradientCalculationError(G::Error),
+    OptimiserUpdateError(G::Error),
+    Unexpected(G::Error),
     IoError,
 }
 
-impl<D: Device> From<DataLoadingError> for TrainerError<D> {
+impl<G: Gpu> From<DataLoadingError> for TrainerError<G> {
     fn from(value: DataLoadingError) -> Self {
         Self::DataLoadingError(value)
     }
 }
 
-pub struct Trainer<D: Device, O: OptimiserState<D>, S> {
-    pub optimiser: Optimiser<D, O>,
+pub struct Trainer<G: Gpu, O: OptimiserState<G>, S> {
+    pub optimiser: Optimiser<G, O>,
     pub state: S,
 }
 
-impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
+impl<G: Gpu, O: OptimiserState<G>, S> Trainer<G, O, S> {
     pub fn train_custom(
         &mut self,
         schedule: TrainingSchedule,
         dataloader: impl DataLoader,
         batch_callback: impl FnMut(&mut Self, usize, usize, f32),
         superbatch_callback: impl FnMut(&mut Self, usize),
-    ) -> Result<(), TrainerError<D>> {
+    ) -> Result<(), TrainerError<G>> {
         run::train_custom(self, schedule, dataloader, batch_callback, superbatch_callback)
     }
 
@@ -47,7 +46,7 @@ impl<D: Device, O: OptimiserState<D>, S> Trainer<D, O, S> {
         &self,
         dataloader: impl DataLoader,
         steps: TrainingSteps,
-    ) -> Result<(), TrainerError<D>> {
+    ) -> Result<(), TrainerError<G>> {
         let mut batch_no = 0;
         let mut superbatch = steps.start_superbatch;
 

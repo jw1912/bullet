@@ -168,5 +168,78 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 3.. => None,
             }
         }
+        PointwiseOp::SpMM { nnz, rows, cols, ty, p2size } => {
+            let ty = tystr(ty);
+            match p2size {
+                0 => Some(format!(
+                    "\
+                    {ty} OUT1 = 0;
+                    int UNIQ1 = IN3 / {rows};
+                    int UNIQ2 = IN3 % {rows};
+
+                    for (int i = 0; i < {nnz}; i++) {{
+                        const int j = IN2[{nnz} * UNIQ1 + i];
+                        if (j < 0 || j >= {cols}) break;
+                        OUT1 += IN1[j * {rows} + UNIQ2];
+                    }}"
+                )),
+                1 => {
+                    let m = rows / 2;
+                    Some(format!(
+                        "\
+                        {ty}2 OUT1 = make_{ty}2(0, 0, 0, 0);
+                        int UNIQ1 = IN3 / {m};
+                        int UNIQ2 = IN3 % {m};
+
+                        for (int i = 0; i < {nnz}; i++) {{
+                            const int j = IN2[{nnz} * UNIQ1 + i];
+
+                            if (j < 0 || j >= {cols}) break;
+
+                            const {ty}2 a = reinterpret_cast<{ty}2*>(IN1)[j * {m} + UNIQ2];
+
+                            OUT1.x += a.x;
+                            OUT1.y += a.y;
+                        }}"
+                    ))
+                }
+                2 => {
+                    let m = rows / 4;
+                    Some(format!(
+                        "\
+                        {ty}4 OUT1 = make_{ty}4(0, 0, 0, 0);
+                        int UNIQ1 = IN3 / {m};
+                        int UNIQ2 = IN3 % {m};
+
+                        for (int i = 0; i < {nnz}; i++) {{
+                            const int j = IN2[{nnz} * UNIQ1 + i];
+
+                            if (j < 0 || j >= {cols}) break;
+
+                            const {ty}4 a = reinterpret_cast<{ty}4*>(IN1)[j * {m} + UNIQ2];
+
+                            OUT1.x += a.x;
+                            OUT1.y += a.y;
+                            OUT1.z += a.z;
+                            OUT1.w += a.w;
+                        }}"
+                    ))
+                }
+                3.. => None,
+            }
+        }
+        PointwiseOp::SpMMT { nnz, rows, cols, .. } => Some(format!(
+            "\
+                if (IN4 != 0) {{
+                    int UNIQ1 = IN3 / {rows};
+                    int UNIQ2 = IN3 % {rows};
+
+                    for (int i = 0; i < {nnz}; i++) {{
+                        const int j = IN2[{nnz} * UNIQ1 + i];
+                        if (j < 0 || j >= {cols}) break;
+                        atomicAdd(IN1 + j * {rows} + UNIQ2, IN4);
+                    }}
+                }}"
+        )),
     }
 }

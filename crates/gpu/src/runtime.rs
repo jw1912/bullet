@@ -3,6 +3,7 @@
 mod bindings;
 #[cfg(feature = "cuda")]
 pub mod cuda;
+pub mod mock;
 
 use std::{
     ffi::{CString, c_void},

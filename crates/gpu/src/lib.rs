@@ -47,18 +47,15 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = device.clone().new_stream()?;
 
-        let mut func = Function::new(device, ir).unwrap();
+        let func = Function::new(device, ir).unwrap();
 
-        let buf_a =
-            Buffer::from_host(stream.clone(), &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?.value().0;
-        let buf_b = Buffer::from_host(stream.clone(), &TValue::F32(vec![2.0]))?.value().0;
-        let buf_x = Buffer::from_host(
-            stream.clone(),
-            &TValue::F32([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0].repeat(batch_size)),
-        )?
-        .value()
-        .0;
-        let buf_y = Buffer::from_host(stream.clone(), &TValue::F32(vec![10.0; 8 * batch_size]))?.value().0;
+        let buf_a = Buffer::from_host(&stream, &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?.value().0;
+        let buf_b = Buffer::from_host(&stream, &TValue::F32(vec![2.0]))?.value().0;
+        let buf_x =
+            Buffer::from_host(&stream, &TValue::F32([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0].repeat(batch_size)))?
+                .value()
+                .0;
+        let buf_y = Buffer::from_host(&stream, &TValue::F32(vec![10.0; 8 * batch_size]))?.value().0;
 
         let sync = func.execute(
             stream.clone(),
@@ -68,7 +65,7 @@ mod tests {
         drop(sync);
 
         assert_eq!(
-            buf_y.clone().to_host(stream.clone())?.value(),
+            buf_y.clone().to_host(&stream)?.value(),
             TValue::F32([10.0, 16.0, 20.0, 22.0, 22.0, 20.0, 16.0, 10.0].repeat(batch_size))
         );
 

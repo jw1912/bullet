@@ -73,6 +73,17 @@ impl<G: Gpu, T> SyncOnValue<G, T> {
         &self.value
     }
 
+    /// Drop the stored value, returning the SyncOnDrop only (so
+    /// not syncing)
+    ///
+    /// ### Safety
+    ///
+    /// This is marked as blanket "unsafe" because some values may
+    /// require stream syncing before they can legally be dropped
+    pub unsafe fn detach_value(self) -> SyncOnDrop<G> {
+        self.sync
+    }
+
     pub fn stream(&self) -> Arc<Stream<G>> {
         self.sync.stream()
     }
@@ -115,7 +126,7 @@ impl<G: Gpu> Buffer<G> {
     /// The user must ensure that the memory is initialised before it
     /// is ever read
     pub unsafe fn uninit(
-        stream: Arc<Stream<G>>,
+        stream: &Arc<Stream<G>>,
         dtype: DType,
         size: usize,
     ) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
@@ -127,15 +138,15 @@ impl<G: Gpu> Buffer<G> {
 
         let buf = Arc::new(Self { ptr, dtype, size, creator: stream.clone(), owner: Mutex::new(None) });
         let mut sync = SyncOnDrop::new(stream.clone());
-        sync.attach(buf.clone().acquire(stream)?)?;
+        sync.attach(buf.clone().acquire(stream.clone())?)?;
 
         Ok(SyncOnValue::new(sync, buf))
     }
 
     /// New zeroed buffer on the device with given size and dtype
-    pub fn zeroed(stream: Arc<Stream<G>>, dtype: DType, size: usize) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
+    pub fn zeroed(stream: &Arc<Stream<G>>, dtype: DType, size: usize) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
         unsafe {
-            let sync = Self::uninit(stream.clone(), dtype, size)?;
+            let sync = Self::uninit(stream, dtype, size)?;
             let aqcuired = sync.value_ref().clone().acquire(stream.clone())?;
             stream.memset(aqcuired.ptr(), aqcuired.bytes(), 0)?;
             Ok(sync)
@@ -164,7 +175,7 @@ impl<G: Gpu> Buffer<G> {
     ///
     /// Returns an error if this buffer is already owned by a
     /// different stream
-    pub fn acquire(self: Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
+    pub fn acquire(self: &Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
         let mut owner = self.owner.lock().unwrap();
 
         if let Some((owning, count)) = owner.as_mut() {
@@ -179,19 +190,19 @@ impl<G: Gpu> Buffer<G> {
 
         drop(owner);
 
-        Ok(BufferGuard(self))
+        Ok(BufferGuard(self.clone()))
     }
 
     /// Copy buffer to host on the given stream
-    pub fn to_host(self: Arc<Self>, stream: Arc<Stream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
-        let guard = self.acquire(stream.clone())?;
+    pub fn to_host(self: &Arc<Self>, stream: &Arc<Stream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
+        let guard = self.clone().acquire(stream.clone())?;
         let mut value = TValue::zeros(guard.dtype, guard.size);
 
         unsafe {
             stream.memcpy_d2h(guard.ptr(), value.mut_ptr(), guard.bytes())?;
         }
 
-        let mut sync = SyncOnDrop::new(stream);
+        let mut sync = SyncOnDrop::new(stream.clone());
         sync.attach(guard)?;
 
         Ok(SyncOnValue::new(sync, value))
@@ -199,15 +210,38 @@ impl<G: Gpu> Buffer<G> {
 
     /// Create buffer from host values on the given stream
     #[allow(clippy::type_complexity)]
-    pub fn from_host(stream: Arc<Stream<G>>, value: &TValue) -> Result<SyncOnValue<G, (Arc<Self>, &TValue)>, G::Error> {
+    pub fn from_host<'a>(
+        stream: &Arc<Stream<G>>,
+        value: &'a TValue,
+    ) -> Result<SyncOnValue<G, (Arc<Self>, &'a TValue)>, G::Error> {
         unsafe {
-            let buf = Self::uninit(stream.clone(), value.dtype(), value.size())?;
+            let buf = Self::uninit(stream, value.dtype(), value.size())?;
             let guard = &buf.guards()[0];
 
             stream.memcpy_h2d(value.ptr(), guard.ptr(), guard.bytes())?;
 
             Ok(buf.attach_value(value))
         }
+    }
+
+    pub fn copy_from_host<'a>(
+        self: &Arc<Self>,
+        stream: &Arc<Stream<G>>,
+        value: &'a TValue,
+    ) -> Result<SyncOnValue<G, &'a TValue>, G::Error> {
+        unsafe {
+            let mut sync = SyncOnDrop::new(stream.clone());
+            let guard = self.clone().acquire(stream.clone())?;
+
+            stream.memcpy_h2d(value.ptr(), guard.ptr(), guard.bytes())?;
+
+            sync.attach(guard)?;
+            Ok(SyncOnValue::new(sync, value))
+        }
+    }
+
+    pub fn creator(&self) -> Arc<Stream<G>> {
+        self.creator.clone()
     }
 }
 
@@ -254,8 +288,8 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = Stream::new(device.clone())?;
 
-        let buf = Buffer::from_host(stream.clone(), &host_src)?.value().0;
-        let host_dst = buf.to_host(stream)?.value();
+        let buf = Buffer::from_host(&stream, &host_src)?.value().0;
+        let host_dst = buf.to_host(&stream)?.value();
 
         assert_eq!(host_src, host_dst);
 

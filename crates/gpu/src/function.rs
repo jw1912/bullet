@@ -124,10 +124,10 @@ impl<G: Gpu> Function<G> {
     }
 
     pub fn execute(
-        &mut self,
+        &self,
         stream: Arc<Stream<G>>,
         inputs: &HashMap<NodeId, Arc<Buffer<G>>>,
-    ) -> Result<SyncOnValue<G, &mut Self>, G::Error> {
+    ) -> Result<SyncOnValue<G, &Self>, G::Error> {
         let mut sync = SyncOnDrop::new(stream.clone());
 
         let mut ptrs = vec![G::DevicePtr::default(); self.num_ptrs];
@@ -183,16 +183,16 @@ impl<G: Gpu> Function<G> {
         let mut sizes = Vec::new();
 
         unsafe {
-            for inst in &mut self.insts {
+            for inst in &self.insts {
                 match inst {
-                    &mut Inst::Malloc { idx, ty } => {
+                    &Inst::Malloc { idx, ty } => {
                         let bytes = ty.size().evaluate(var) * ty.dtype().bytes();
                         ptrs[idx] = stream.malloc(bytes)?;
                     }
-                    &mut Inst::Free { idx } => {
+                    &Inst::Free { idx } => {
                         stream.free(ptrs[idx])?;
                     }
-                    &mut Inst::Zero { idx, ty } => {
+                    &Inst::Zero { idx, ty } => {
                         let bytes = ty.size().evaluate(var) * ty.dtype().bytes();
                         stream.memset(ptrs[idx], bytes, 0)?;
                     }

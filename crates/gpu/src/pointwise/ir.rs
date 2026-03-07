@@ -8,7 +8,7 @@ use bullet_compiler::{
     ir::{IR, IRError, NodeId, TypeSystem},
     tensor::{
         DType, DValue, IRTrace, Size, TType,
-        operation::{CABinary, Unary},
+        operation::{CABinary, SparseMatmul, Unary},
     },
 };
 
@@ -37,6 +37,7 @@ pub struct PointwiseIR {
     bufs: Vec<NodeId>,
     read_from: HashSet<NodeId>,
     written_to: HashSet<NodeId>,
+    needs_zero: HashSet<NodeId>,
 }
 
 impl PointwiseIR {
@@ -51,7 +52,16 @@ impl PointwiseIR {
             return Err("Invalid number outputs!".into());
         };
 
-        Ok(Self { ir, tid, var, size, bufs: Vec::new(), read_from: HashSet::new(), written_to: HashSet::new() })
+        Ok(Self {
+            ir,
+            tid,
+            var,
+            size,
+            bufs: Vec::new(),
+            read_from: HashSet::new(),
+            written_to: HashSet::new(),
+            needs_zero: HashSet::new(),
+        })
     }
 
     pub fn tid(&self) -> NodeId {
@@ -170,6 +180,51 @@ impl PointwiseIR {
         self.ir.add_op([lhs, rhs], PointwiseOp::Rem).map(|x| x[0])
     }
 
+    pub fn sparse_matmul(
+        &mut self,
+        weights: NodeId,
+        indices: NodeId,
+        p2size: u8,
+        matmul: SparseMatmul,
+    ) -> Result<NodeId, IRError> {
+        let PType::Pointer(ty) = self.ir.node(weights)?.ty() else {
+            return Err("Only pointer allowed!".into());
+        };
+
+        let PType::Pointer(DType::I32) = self.ir.node(indices)?.ty() else {
+            return Err("Only integer pointer allowed!".into());
+        };
+
+        let op = PointwiseOp::SpMM { nnz: matmul.nnz(), rows: matmul.rows(), cols: matmul.cols(), ty, p2size };
+
+        self.read_from.insert(weights);
+        self.read_from.insert(indices);
+        self.ir.add_op([weights, indices, self.tid], op).map(|x| x[0])
+    }
+
+    pub fn sparse_matmul_bwd(
+        &mut self,
+        weights: NodeId,
+        indices: NodeId,
+        gradients: NodeId,
+        matmul: SparseMatmul,
+    ) -> Result<(), IRError> {
+        let PType::Pointer(ty) = self.ir.node(weights)?.ty() else {
+            return Err("Only pointer allowed!".into());
+        };
+
+        let PType::Pointer(DType::I32) = self.ir.node(indices)?.ty() else {
+            return Err("Only integer pointer allowed!".into());
+        };
+
+        let op = PointwiseOp::SpMMT { nnz: matmul.nnz(), rows: matmul.rows(), cols: matmul.cols(), ty };
+
+        self.needs_zero.insert(weights);
+        self.read_from.insert(indices);
+        self.written_to.insert(weights);
+        self.ir.add_op([weights, indices, self.tid, gradients], op).map(|_| ())
+    }
+
     pub fn eliminate_common_subexprs(&mut self) -> Result<(), IRTrace> {
         while self.eliminate_single_common_subexpr()? {}
         Ok(())
@@ -245,12 +300,21 @@ impl PointwiseIR {
     pub fn estimate_memory_cost(&self) -> Result<Size, IRError> {
         let mut cost = 0;
 
+        let estcost = |bytes, p2size| bytes * [8, 7, 6][usize::from(p2size)];
+
         for op in self.ir.operations() {
             use PointwiseOp as P;
-            match op.data() {
+            match *op.data() {
                 P::Read(io) | P::Write(io) | P::AtomicAdd(io) => {
                     let bytes_per_thread = io.buf_ty.bytes() * 2usize.pow(u32::from(io.p2size));
-                    cost += bytes_per_thread * [8, 7, 6][usize::from(io.p2size)];
+                    cost += estcost(bytes_per_thread, io.p2size);
+                }
+                P::SpMM { nnz, ty, p2size, .. } => {
+                    let bytes_per_thread = nnz * ty.bytes() * 2usize.pow(u32::from(p2size));
+                    cost += estcost(bytes_per_thread, p2size);
+                }
+                P::SpMMT { nnz, ty, .. } => {
+                    cost += estcost(nnz * ty.bytes(), 0);
                 }
                 P::Unary { .. }
                 | P::Binary { .. }
@@ -275,24 +339,27 @@ impl PointwiseIR {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
+        let mut requires_zero = HashSet::new();
 
         for &buf in &self.bufs {
             let rf = self.read_from.contains(&buf);
             let wt = self.written_to.contains(&buf);
 
-            if rf && wt {
-                return Err("Buffer read from and written to!".into());
-            }
-
             let PointwiseOp::Buffer(dtype, size) = *self.ir.op(self.ir.parent_op(buf)?)?.data() else { panic!() };
 
-            if rf {
+            if wt {
+                arg_order.push((outputs.len(), false));
+
+                if self.needs_zero.contains(&buf) {
+                    requires_zero.insert(outputs.len());
+                }
+
+                outputs.push(TType::new(size, dtype));
+            } else if rf {
                 arg_order.push((inputs.len(), true));
                 inputs.push(TType::new(size, dtype));
-            } else if wt {
-                arg_order.push((outputs.len(), false));
-                outputs.push(TType::new(size, dtype));
             } else {
+                println!("{}", self.source_code().unwrap());
                 return Err("Unused buffer!".into());
             }
         }
@@ -307,7 +374,7 @@ impl PointwiseIR {
                 source,
                 self.size.var_power() > 0,
                 arg_order,
-                Default::default(),
+                requires_zero,
                 Rc::new(move |s| Dim3 { x: total.evaluate(s).div_ceil(256) as u32, y: 1, z: 1 }),
                 Rc::new(|_| 256),
                 Rc::new(|_| 0),
@@ -334,7 +401,6 @@ mod tests {
         let mut ir = PointwiseIR::new(Size::variable()).unwrap();
         let input1 = ir.add_buf(ty);
         let input2 = ir.add_buf(ty);
-        let output = ir.add_buf(ty);
 
         let tid = ir.tid();
 
@@ -344,29 +410,25 @@ mod tests {
 
         let value3 = ir.binary(scalar, value1, CABinary::Mul).unwrap();
         let value4 = ir.binary(value3, value2, CABinary::Add).unwrap();
-        ir.write(output, tid, value4).unwrap();
+        ir.write(input2, tid, value4).unwrap();
 
         let device = Device::<G>::new(0)?;
-        let mut kernel = unsafe { ir.lower().unwrap() }.compile(device.clone())?;
+        let kernel = unsafe { ir.lower().unwrap() }.compile(device.clone())?;
         let stream = Stream::new(device)?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
         let values2 = TValue::F32(vec![4.0, 3.0, 2.0, 1.0]);
 
-        let input1_buf = Buffer::from_host(stream.clone(), &values1)?.value().0;
-        let input2_buf = Buffer::from_host(stream.clone(), &values2)?.value().0;
+        let input1_buf = Buffer::from_host(&stream, &values1)?.value().0;
+        let input2_buf = Buffer::from_host(&stream, &values2)?.value().0;
 
-        unsafe {
-            let output_buf = Buffer::uninit(stream.clone(), values1.dtype(), values1.size())?.value();
+        let sync = kernel.execute(stream.clone(), vec![input1_buf], vec![input2_buf.clone()])?;
 
-            let sync = kernel.execute(stream.clone(), vec![input1_buf, input2_buf], vec![output_buf.clone()])?;
+        drop(sync);
 
-            drop(sync);
+        let actual = input2_buf.to_host(&stream)?.value();
 
-            let actual = output_buf.to_host(stream.clone())?.value();
-
-            assert_eq!(actual, TValue::F32(vec![6.0, 7.0, 8.0, 9.0]));
-        }
+        assert_eq!(actual, TValue::F32(vec![6.0, 7.0, 8.0, 9.0]));
 
         Ok(())
     }

@@ -25,11 +25,13 @@ use bullet_compiler::{
         },
     },
 };
-
-use crate::{
-    model::{Model, Shape},
-    runtime::{Device, ReadyToCompileGraph, Stream, TensorInput},
+use bullet_gpu::{
+    buffer::Buffer,
+    function::Function,
+    runtime::{Device, Gpu},
 };
+
+use crate::model::{Model, Shape};
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
@@ -151,7 +153,12 @@ impl ModelBuilder {
         Affine { weights, bias }
     }
 
-    pub fn build<'a, D: Device>(&'a self, device: Arc<D>, mut loss: ModelNode<'a>, output: ModelNode<'a>) -> Model<D> {
+    pub fn build<'a, G: Gpu>(
+        &'a self,
+        device: Arc<Device<G>>,
+        mut loss: ModelNode<'a>,
+        output: ModelNode<'a>,
+    ) -> Model<G> {
         assert_eq!(loss.nt.shape, Shape::new(1, 1));
 
         if loss.nt.batched {
@@ -171,11 +178,11 @@ impl ModelBuilder {
         let (transform, grads) = TakeGradient::new(op, [grad]);
         bwd.transform(transform).unwrap();
 
-        let mut fwd_tensors = HashMap::new();
-        let mut bwd_tensors = HashMap::new();
+        let mut fwd_map = HashMap::new();
+        let mut bwd_map = HashMap::new();
         let mut shapes = HashMap::new();
         let mut weights = HashMap::new();
-        let stream = device.default_stream();
+        let stream = device.clone().new_stream().unwrap();
 
         let frozen = self.frozen.try_lock().unwrap().clone();
         let mut names = HashSet::new();
@@ -184,43 +191,46 @@ impl ModelBuilder {
             assert!(names.insert(name.clone()));
 
             shapes.insert(name.clone(), (shape, sparse));
-            bwd_tensors.insert(name.clone(), TensorInput::In(id));
+            bwd_map.insert(name.clone(), id);
 
             if fwd.get_node(id).is_ok() {
-                fwd_tensors.insert(name.clone(), TensorInput::In(id));
+                fwd_map.insert(name.clone(), id);
             }
 
             if name.starts_with("weights/") {
-                let tensor = stream.make_blocking(&TValue::F32(vec![0.0; shape.size()]));
-                weights.insert(name.clone(), tensor.unwrap());
+                let zeros = TValue::F32(vec![0.0; shape.size()]);
+                let tensor = Buffer::from_host(&stream, &zeros);
+                weights.insert(name.clone(), tensor.unwrap().value().0);
 
                 let name = name.strip_prefix("weights/").unwrap().to_string();
                 let gid = grads.borrow().get(&id).unwrap().unwrap();
 
                 if !frozen.contains(&id) {
                     bwd.register_output(gid);
-                    bwd_tensors.insert(format!("gradients/{name}"), TensorInput::Out(gid));
+                    bwd_map.insert(format!("gradients/{name}"), gid);
                 }
             }
         }
 
-        fwd_tensors.insert("outputs/output".to_string(), TensorInput::Out(output.node));
-        let ready_fwd = ReadyToCompileGraph::new(fwd, fwd_tensors).unwrap();
+        fwd_map.insert("outputs/output".to_string(), output.node);
+        let forward = Function::new(device.clone(), fwd).unwrap();
 
-        bwd_tensors.insert("outputs/loss".to_string(), TensorInput::Out(loss.node));
+        bwd_map.insert("outputs/loss".to_string(), loss.node);
         bwd.transform(LowerForward).unwrap();
         bwd.transform(InlineSubgraphs).unwrap();
         bwd.optimise().unwrap();
-        let ready_bwd = ReadyToCompileGraph::new(bwd, bwd_tensors).unwrap();
+        let backward = Function::new(device.clone(), bwd).unwrap();
 
         Model {
             weights,
             shapes,
-            forward: device.compile(ready_fwd).unwrap(),
-            backward: device.compile(ready_bwd).unwrap(),
+            forward,
+            fwd_map,
+            backward,
+            bwd_map,
             fwd_output_types: [("outputs/output".to_string(), fwd_ty)].into(),
             bwd_output_types: [("outputs/loss".to_string(), bwd_ty)].into(),
-            device,
+            stream,
         }
     }
 }

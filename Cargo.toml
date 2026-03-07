@@ -18,4 +18,5 @@ members = [
 
 [workspace.dependencies]
 bullet-compiler = { path = "crates/compiler", version = "0.1.0" }
+bullet-gpu = { path = "crates/gpu", version = "0.1.0" }
 bullet-trainer = { path = "crates/trainer", version = "0.1.0" }

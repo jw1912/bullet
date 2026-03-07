@@ -10,5 +10,10 @@ edition = { workspace = true }
 
 [dependencies]
 bullet-compiler = { workspace = true }
+bullet-gpu = { workspace = true }
 rand = "0.9"
 rand_distr = "0.5.1"
+
+[features]
+cuda = ["bullet-gpu/cuda"]
+rocm = ["bullet-gpu/rocm"]

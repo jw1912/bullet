@@ -1,11 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bullet_compiler::tensor::TValue;
-
-use crate::{
-    model::TensorMap,
-    runtime::{Device, Stream},
+use bullet_gpu::{
+    buffer::Buffer,
+    runtime::{Gpu, Stream},
 };
+
+use crate::model::TensorMap;
 
 #[derive(Debug)]
 pub enum DataLoadingError {
@@ -24,19 +25,16 @@ pub struct PreparedBatchHost {
 }
 
 impl PreparedBatchHost {
-    pub fn to_device_blocking<S: Stream>(
-        self,
-        stream: &Arc<S>,
-    ) -> Result<TensorMap<S::Device>, <S::Device as Device>::Error> {
+    pub fn to_device_blocking<G: Gpu>(self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
         let on_device = self
             .inputs
             .iter()
-            .map(|(id, value)| stream.clone().make_nonblocking(value).map(|tensor| (id, tensor)))
+            .map(|(id, value)| Buffer::from_host(stream, value).map(|tensor| (id, tensor)))
             .collect::<Result<HashMap<_, _>, _>>()?;
 
-        let res = on_device.into_iter().map(|(id, value)| (id.clone(), value.value().1.clone())).collect();
+        let res = on_device.into_iter().map(|(id, value)| (id.clone(), value.value().0)).collect();
 
-        stream.block_until_done()?;
+        stream.sync()?;
 
         Ok(res)
     }

@@ -5,11 +5,9 @@ use std::{
 };
 
 use bullet_compiler::tensor::TValue;
+use bullet_gpu::runtime::Gpu;
 
-use crate::{
-    model::{Model, Shape},
-    runtime::{Device, Stream},
-};
+use crate::model::{Model, Shape};
 
 #[derive(Clone)]
 pub struct ShapedTValue {
@@ -21,16 +19,14 @@ pub struct ModelWeights {
     stores: HashMap<String, ShapedTValue>,
 }
 
-impl<D: Device> From<&Model<D>> for ModelWeights {
-    fn from(model: &Model<D>) -> Self {
-        let stream = model.device().default_stream();
-
+impl<G: Gpu> From<&Model<G>> for ModelWeights {
+    fn from(model: &Model<G>) -> Self {
         Self {
             stores: model
                 .weights()
                 .iter()
                 .map(|(id, value)| {
-                    let values = stream.copy_d2h_blocking(value.clone()).unwrap();
+                    let values = value.clone().to_host(&value.creator()).unwrap().value();
                     let wid = id.strip_prefix("weights/").unwrap().to_string();
                     (wid, ShapedTValue { values, shape: model.shapes.get(id).unwrap().0 })
                 })

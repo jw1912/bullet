@@ -139,11 +139,11 @@ impl<G: Gpu> CompiledKernel<G> {
     }
 
     pub fn execute(
-        &mut self,
+        &self,
         stream: Arc<Stream<G>>,
         inputs: Vec<Arc<Buffer<G>>>,
         outputs: Vec<Arc<Buffer<G>>>,
-    ) -> Result<SyncOnValue<G, &mut Self>, G::Error> {
+    ) -> Result<SyncOnValue<G, &Self>, G::Error> {
         let mut sync = SyncOnDrop::new(stream.clone());
 
         let inputs =

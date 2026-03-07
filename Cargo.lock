@@ -68,6 +68,7 @@ name = "bullet-trainer"
 version = "0.1.0"
 dependencies = [
  "bullet-compiler",
+ "bullet-gpu",
  "rand",
  "rand_distr",
 ]
@@ -88,6 +89,7 @@ name = "bullet_lib"
 version = "1.0.0"
 dependencies = [
  "bullet-compiler",
+ "bullet-gpu",
  "bullet-trainer",
  "bulletformat",
  "montyformat",

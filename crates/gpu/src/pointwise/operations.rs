@@ -47,6 +47,19 @@ pub enum PointwiseOp {
     Rem,
     EvalSize(Size),
     Broadcast(DType, NonZeroU8),
+    SpMM {
+        nnz: usize,
+        rows: usize,
+        cols: usize,
+        ty: DType,
+        p2size: u8,
+    },
+    SpMMT {
+        nnz: usize,
+        rows: usize,
+        cols: usize,
+        ty: DType,
+    },
 }
 
 impl PointwiseOp {
@@ -79,6 +92,15 @@ impl Operation<PType> for PointwiseOp {
             Self::Div | Self::Rem => vec![PType::Variable { ty: DType::I32, p2size: 0 }; 2],
             Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Broadcast(ty, _) => vec![PType::Variable { ty, p2size: 0 }],
+            Self::SpMM { ty, .. } => {
+                vec![PType::Pointer(ty), PType::Pointer(DType::I32), PType::Variable { ty: DType::I32, p2size: 0 }]
+            }
+            Self::SpMMT { ty, .. } => vec![
+                PType::Pointer(ty),
+                PType::Pointer(DType::I32),
+                PType::Variable { ty: DType::I32, p2size: 0 },
+                PType::Variable { ty, p2size: 0 },
+            ],
         }
     }
 
@@ -86,7 +108,7 @@ impl Operation<PType> for PointwiseOp {
         match *self {
             Self::Buffer(ty, _) => vec![PType::Pointer(ty)],
             Self::Read(io) => vec![PType::Variable { ty: io.buf_ty, p2size: io.p2size }],
-            Self::Write(_) | Self::AtomicAdd(_) => Vec::new(),
+            Self::Write(_) | Self::AtomicAdd(_) | Self::SpMMT { .. } => Vec::new(),
             Self::Unary { ty, p2size, op } => {
                 let ty = match op {
                     Unary::Cast(ty) => ty,
@@ -101,6 +123,7 @@ impl Operation<PType> for PointwiseOp {
             Self::ThreadId | Self::VarSize => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Div | Self::Rem | Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Broadcast(ty, p2size) => vec![PType::Variable { ty, p2size: p2size.get() }],
+            Self::SpMM { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
         }
     }
 }
