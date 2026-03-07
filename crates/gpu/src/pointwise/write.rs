@@ -28,6 +28,27 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 None
             }
         }
+        PointwiseOp::ConditionalRead(io, value) => {
+            let ty = tystr(io.buf_ty);
+            let vl = match value {
+                DValue::F32(x) => x.to_string(),
+                DValue::I32(x) => x.to_string(),
+            };
+
+            if io.p2size == 0 {
+                Some(format!("const {ty} OUT1 = IN3 > 0 ? IN1[IN2] : {vl};"))
+            } else if io.p2size < 3 {
+                let sz = 2u32.pow(io.p2size as u32);
+                let vl = if io.p2size == 2 {
+                    format!("make_{ty}2({vl}, {vl})")
+                } else {
+                    format!("make_{ty}4({vl}, {vl}, {vl}, {vl})")
+                };
+                Some(format!("const {ty}{sz} OUT1 = IN3 > 0 ? reinterpret_cast<{ty}{sz}*>(IN1)[IN2] : {vl};"))
+            } else {
+                None
+            }
+        }
         PointwiseOp::Write(io) => {
             let ty = tystr(io.buf_ty);
             if io.p2size == 0 {
@@ -128,8 +149,9 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                     format!("{x} == {ty}(0) ? {ty}(0) : x > {ty}(0) ? {ty}(1) : {ty}(-1)")
                 }
                 Unary::Reciprocal => format!("1.0F / {x}"),
-                Unary::IsPositive => format!("{x} > {ty}(0)"),
-                Unary::IsZero => format!("{x} == {ty}(0)"),
+                Unary::IsPositive => format!("{x} > static_cast<{ty}>(0)"),
+                Unary::IsZero => format!("{x} == static_cast<{ty}>(0)"),
+                Unary::IsNonNegative => format!("{x} >= static_cast<{ty}>(0)"),
                 _ => {
                     let opstr = match op {
                         Unary::Cast(nty) => match nty {
@@ -148,7 +170,9 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                         Unary::Sqrt => "sqrtf",
                         Unary::Round => "roundf",
                         Unary::Truncate => "truncf",
-                        Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero => unimplemented!(),
+                        Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
+                            unimplemented!()
+                        }
                     };
 
                     format!("{opstr}({x})")

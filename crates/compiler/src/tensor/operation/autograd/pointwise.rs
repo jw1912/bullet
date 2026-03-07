@@ -54,7 +54,7 @@ impl AutogradOnCoreOp for UnaryOp {
                 -(x * x)?
             }
             Unary::Log => input.unary(Unary::Reciprocal),
-            Unary::Sgn | Unary::IsPositive | Unary::IsZero => {
+            Unary::Sgn | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
                 let zero = DValue::zero(input.ty().dtype());
                 Ok(input.builder().scalar(zero, input.ty().size()))
             }

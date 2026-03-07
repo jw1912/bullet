@@ -2,7 +2,9 @@ use std::cell::RefCell;
 
 use crate::tensor::{
     DType, DValue, IRTrace, NodeId, OpType, Shape, Size, TType, TValue, TensorIR,
-    operation::{BroadcastAcrossDimension, CABinary, CopyOp, ReduceAcrossDimension, Reduction, Unary},
+    operation::{
+        BroadcastAcrossDimension, CABinary, CopyOp, PadAcrossDimension, ReduceAcrossDimension, Reduction, Unary,
+    },
 };
 
 #[derive(Default)]
@@ -124,6 +126,18 @@ impl<'a> IRNode<'a> {
     pub fn binary(self, rhs: Self, op: CABinary) -> Result<Self, IRTrace> {
         let node = self.builder.ir.borrow_mut().add_binary(self.node, rhs.node, op)?;
         Ok(Self { builder: self.builder, node })
+    }
+
+    pub fn pad(
+        self,
+        shape: impl Into<Shape>,
+        dim: usize,
+        before: usize,
+        after: usize,
+        value: DValue,
+    ) -> Result<Self, IRTrace> {
+        let op = PadAcrossDimension::new(shape, dim, before, after, value)?;
+        self.builder.add_op([self], op).map(|x| x[0])
     }
 }
 

@@ -101,6 +101,36 @@ impl PointwiseIR {
         self.ir.add_op([buf, idx], PointwiseOp::Read(io)).map(|x| x[0])
     }
 
+    pub fn conditional_read(
+        &mut self,
+        buf: NodeId,
+        idx: NodeId,
+        cond: NodeId,
+        fallback: DValue,
+        p2size: u8,
+    ) -> Result<NodeId, IRError> {
+        let PType::Pointer(buf_ty) = self.ir.node(buf)?.ty() else {
+            return Err("Only buffers allowed as input here!".into());
+        };
+
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(idx)?.ty() else {
+            return Err("Only scalar integers allowed as indices!".into());
+        };
+
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(cond)?.ty() else {
+            return Err("Only scalar integers allowed as condition!".into());
+        };
+
+        if fallback.dtype() != buf_ty {
+            return Err("Fallback value does not match dtype!".into());
+        }
+
+        let io = MemIO { buf_ty, p2size };
+
+        self.read_from.insert(buf);
+        self.ir.add_op([buf, idx, cond], PointwiseOp::ConditionalRead(io, fallback)).map(|x| x[0])
+    }
+
     pub fn write(&mut self, buf: NodeId, idx: NodeId, val: NodeId) -> Result<(), IRError> {
         let PType::Pointer(buf_ty) = self.ir.node(buf)?.ty() else {
             return Err("Only buffers allowed as input here!".into());
@@ -277,13 +307,15 @@ impl PointwiseIR {
 
         write!(&mut src, "extern \"C\" __global__ void kernel(")?;
 
-        if self.size.var_power() > 0 {
+        let varp = self.size.var_power();
+        if varp > 0 {
             write!(&mut src, "const int {}", name(self.var))?;
         }
 
-        for &input in &self.bufs {
+        for (i, &input) in self.bufs.iter().enumerate() {
+            let comma = if i > 0 || varp > 0 { ", " } else { "" };
             let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
-            write!(&mut src, ", {}* {}", tystr(ty), name(input))?;
+            write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
         }
 
         writeln!(&mut src, ") {{")?;
@@ -305,7 +337,7 @@ impl PointwiseIR {
         for op in self.ir.operations() {
             use PointwiseOp as P;
             match *op.data() {
-                P::Read(io) | P::Write(io) | P::AtomicAdd(io) => {
+                P::Read(io) | P::Write(io) | P::AtomicAdd(io) | P::ConditionalRead(io, _) => {
                     let bytes_per_thread = io.buf_ty.bytes() * 2usize.pow(u32::from(io.p2size));
                     cost += estcost(bytes_per_thread, io.p2size);
                 }

@@ -85,10 +85,9 @@ impl<G: Gpu> Model<G> {
         inputs: &TensorMap<G>,
         outputs: &TensorMap<G>,
     ) -> Result<SyncOnValue<G, &Function<G>>, G::Error> {
-        let _tensors = collect_map::<G>([("", "", &self.weights), ("inputs/", "", inputs), ("", "", outputs)]);
-
-        self.forward.execute(stream.clone(), &HashMap::new())?;
-        unimplemented!()
+        let tensors = collect_map::<G>([("", "", &self.weights), ("inputs/", "", inputs), ("", "", outputs)]);
+        let map = self.fwd_map.iter().map(|(name, &id)| (id, tensors.get(name).unwrap().clone())).collect();
+        self.forward.execute(stream.clone(), &map)
     }
 
     pub fn backward(
@@ -98,15 +97,14 @@ impl<G: Gpu> Model<G> {
         outputs: &TensorMap<G>,
         gradients: &TensorMap<G>,
     ) -> Result<SyncOnValue<G, &Function<G>>, G::Error> {
-        let _tensors = collect_map::<G>([
+        let tensors = collect_map::<G>([
             ("", "", &self.weights),
             ("inputs/", "", inputs),
             ("", "", outputs),
             ("gradients/", "weights/", gradients),
         ]);
-
-        self.backward.execute(stream.clone(), &HashMap::new())?;
-        unimplemented!()
+        let map = self.bwd_map.iter().map(|(name, &id)| (id, tensors.get(name).unwrap().clone())).collect();
+        self.backward.execute(stream.clone(), &map)
     }
 
     pub fn make_gradient_tensors(&self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {

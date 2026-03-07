@@ -5,12 +5,12 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PadAcrossDimension {
-    outer: Size,
-    dimen: usize,
-    inner: Size,
-    before: usize,
-    after: usize,
-    value: DValue,
+    pub outer: Size,
+    pub dimen: usize,
+    pub inner: Size,
+    pub before: usize,
+    pub after: usize,
+    pub value: DValue,
 }
 
 impl PadAcrossDimension {

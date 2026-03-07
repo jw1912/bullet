@@ -24,6 +24,7 @@ pub struct MemIO {
 pub enum PointwiseOp {
     Buffer(DType, Size),
     Read(MemIO),
+    ConditionalRead(MemIO, DValue),
     Write(MemIO),
     #[allow(unused)]
     AtomicAdd(MemIO),
@@ -78,6 +79,13 @@ impl Operation<PType> for PointwiseOp {
             Self::Read(io) => {
                 vec![PType::Pointer(io.buf_ty), PType::Variable { ty: DType::I32, p2size: 0 }]
             }
+            Self::ConditionalRead(io, _) => {
+                vec![
+                    PType::Pointer(io.buf_ty),
+                    PType::Variable { ty: DType::I32, p2size: 0 },
+                    PType::Variable { ty: DType::I32, p2size: 0 },
+                ]
+            }
             Self::Write(io) | Self::AtomicAdd(io) => {
                 vec![
                     PType::Pointer(io.buf_ty),
@@ -108,11 +116,12 @@ impl Operation<PType> for PointwiseOp {
         match *self {
             Self::Buffer(ty, _) => vec![PType::Pointer(ty)],
             Self::Read(io) => vec![PType::Variable { ty: io.buf_ty, p2size: io.p2size }],
+            Self::ConditionalRead(io, _) => vec![PType::Variable { ty: io.buf_ty, p2size: io.p2size }],
             Self::Write(_) | Self::AtomicAdd(_) | Self::SpMMT { .. } => Vec::new(),
             Self::Unary { ty, p2size, op } => {
                 let ty = match op {
                     Unary::Cast(ty) => ty,
-                    Unary::Sgn | Unary::Abs => ty,
+                    Unary::Sgn | Unary::Abs | Unary::IsNonNegative | Unary::IsPositive | Unary::IsZero => ty,
                     _ => (ty != DType::I32).then_some(ty).unwrap(),
                 };
 

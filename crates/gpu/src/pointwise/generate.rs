@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
 use bullet_compiler::tensor::{
-    IRTrace, Size,
+    DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, ScalarConstant, SparseMatmul, SparseMatmulBwd, SubGraph,
-        UnaryOp,
+        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, SparseMatmul,
+        SparseMatmulBwd, SubGraph, Unary, UnaryOp,
     },
 };
 
@@ -52,7 +52,13 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
                 return Ok(None);
             }
 
-            (bwd.0.batch() * bwd.0.rows(), 0)
+            (bwd.0.batch() * bwd.0.rows(), 1)
+        } else if let Some(pad) = data.downcast::<PadAcrossDimension>() {
+            if !ir.is_input(op.inputs()[0])? {
+                return Ok(None);
+            }
+
+            (pad.output_size(), 1)
         } else {
             return Ok(None);
         };
@@ -153,6 +159,44 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
 
             pntwise.sparse_matmul_bwd(weights, indices, gradients, bwd.0)?;
             handled_writes.insert(out_id);
+        } else if let Some(pad) = data.downcast::<PadAcrossDimension>() {
+            assert_eq!(p2size, 0);
+            let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
+
+            let before = i32::try_from(pad.before).unwrap();
+            let after = i32::try_from(pad.after).unwrap();
+            let dimen = i32::try_from(pad.dimen).unwrap();
+            let inner = pntwise.eval_size(pad.inner);
+
+            let bda = pntwise.add_const(DValue::I32(before + dimen + after), 0);
+            let stride = pntwise.binary(inner, bda, CABinary::Mul)?;
+
+            let tid = pntwise.tid();
+            let idx_outer = pntwise.div(tid, stride)?;
+            let idx_non_outer = pntwise.rem(tid, stride)?;
+            let idx_bda = pntwise.div(idx_non_outer, inner)?;
+            let idx_inner = pntwise.rem(idx_non_outer, inner)?;
+
+            let offset = pntwise.add_const(DValue::I32(-before), 0);
+            let idx_dimen = pntwise.binary(idx_bda, offset, CABinary::Add)?;
+
+            let dimen = pntwise.add_const(DValue::I32(dimen), 0);
+            let mut idx = pntwise.binary(dimen, idx_outer, CABinary::Mul)?;
+            idx = pntwise.binary(idx, idx_dimen, CABinary::Add)?;
+            idx = pntwise.binary(idx, inner, CABinary::Mul)?;
+            idx = pntwise.binary(idx, idx_inner, CABinary::Add)?;
+
+            let p1 = pntwise.unary(idx_dimen, Unary::IsNonNegative)?;
+
+            let minus_one = pntwise.add_const(DValue::I32(-1), 0);
+            let neg_idx = pntwise.binary(minus_one, idx_dimen, CABinary::Mul)?;
+            let overflow = pntwise.binary(dimen, neg_idx, CABinary::Add)?;
+            let p2 = pntwise.unary(overflow, Unary::IsPositive)?;
+
+            let cond = pntwise.binary(p1, p2, CABinary::Mul)?;
+
+            let output = pntwise.conditional_read(buf, idx, cond, pad.value, p2size)?;
+            mapping.insert(op.outputs()[0], output);
         } else {
             unreachable!();
         };
@@ -174,7 +218,7 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
-    use bullet_compiler::tensor::{DType, IRBuilder, IRTrace, Size, TValue, operation::SubGraph};
+    use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, Size, TValue, operation::SubGraph};
 
     use crate::{
         buffer::Buffer,
@@ -238,6 +282,47 @@ mod tests {
         Ok(())
     }
 
+    fn make_concat(dim: usize) -> Result<KernelSrc, IRTrace> {
+        let builder = IRBuilder::default();
+
+        let a = builder.add_input(8, DType::F32);
+        let b = builder.add_input(8, DType::F32);
+
+        let apad = a.pad([2, 2, 2], dim, 0, 2, DValue::F32(0.0))?;
+        let bpad = b.pad([2, 2, 2], dim, 2, 0, DValue::F32(0.0))?;
+        let concat = (apad + bpad)?;
+
+        let ir = builder.build([concat]);
+
+        let sub = SubGraph::new(ir, vec![a.node(), b.node()], vec![concat.node()])?;
+        unsafe { super::generate(&sub)?.unwrap().lower().map_err(IRTrace::from) }
+    }
+
+    fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
+        let device = Device::<G>::new(0)?;
+        let stream = Stream::new(device.clone())?;
+
+        let src = make_concat(dim).unwrap();
+
+        let concat = src.compile(device)?;
+
+        let aval = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+        let bval = TValue::F32(vec![4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0]);
+
+        let aval_buf = Buffer::from_host(&stream, &aval)?.value().0;
+        let bval_buf = Buffer::from_host(&stream, &bval)?.value().0;
+
+        let concat_buf = Buffer::zeroed(&stream, DType::F32, 16)?.value();
+
+        let sync = concat.execute(stream.clone(), vec![aval_buf, bval_buf], vec![concat_buf.clone()])?;
+
+        drop(sync);
+
+        assert_eq!(concat_buf.to_host(&stream)?.value(), TValue::F32(expected.into()));
+
+        Ok(())
+    }
+
     #[cfg(feature = "cuda")]
     mod cuda {
         use crate::runtime::cuda::{Cuda, CudaError};
@@ -245,6 +330,13 @@ mod tests {
         #[test]
         fn axby() -> Result<(), CudaError> {
             super::axby::<Cuda>()
+        }
+
+        #[test]
+        fn concat() -> Result<(), CudaError> {
+            super::concat::<Cuda>(0, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0])?;
+            super::concat::<Cuda>(1, [1.0, 2.0, 3.0, 4.0, 4.0, 3.0, 2.0, 1.0, 5.0, 6.0, 7.0, 8.0, 1.0, 2.0, 3.0, 4.0])?;
+            super::concat::<Cuda>(2, [1.0, 2.0, 4.0, 3.0, 3.0, 4.0, 2.0, 1.0, 5.0, 6.0, 1.0, 2.0, 7.0, 8.0, 3.0, 4.0])
         }
     }
 
@@ -255,6 +347,11 @@ mod tests {
         #[test]
         fn axby() -> Result<(), ROCmError> {
             super::axby::<ROCm>()
+        }
+
+        #[test]
+        fn concat() -> Result<(), ROCmError> {
+            super::concat::<ROCm>()
         }
     }
 }

@@ -20,6 +20,7 @@ pub enum Unary {
     Cast(DType),
     IsPositive,
     IsZero,
+    IsNonNegative,
     Round,
     Truncate,
 }
@@ -69,6 +70,10 @@ impl Unary {
             Self::IsZero => match input {
                 DValue::F32(x) => DValue::F32(f32::from(x == 0.0)),
                 DValue::I32(x) => DValue::I32(i32::from(x == 0)),
+            },
+            Self::IsNonNegative => match input {
+                DValue::F32(x) => DValue::F32(f32::from(x >= 0.0)),
+                DValue::I32(x) => DValue::I32(i32::from(x >= 0)),
             },
         })
     }
