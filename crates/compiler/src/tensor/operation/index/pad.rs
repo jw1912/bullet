@@ -5,15 +5,39 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PadAcrossDimension {
-    pub outer: Size,
-    pub dimen: usize,
-    pub inner: Size,
-    pub before: usize,
-    pub after: usize,
-    pub value: DValue,
+    outer: Size,
+    dimen: usize,
+    inner: Size,
+    before: usize,
+    after: usize,
+    value: DValue,
 }
 
 impl PadAcrossDimension {
+    pub fn outer(&self) -> Size {
+        self.outer
+    }
+
+    pub fn dimen(&self) -> usize {
+        self.dimen
+    }
+
+    pub fn inner(&self) -> Size {
+        self.inner
+    }
+
+    pub fn before(&self) -> usize {
+        self.before
+    }
+
+    pub fn after(&self) -> usize {
+        self.after
+    }
+
+    pub fn value(&self) -> DValue {
+        self.value
+    }
+
     pub fn new(
         shape: impl Into<Shape>,
         dim: usize,

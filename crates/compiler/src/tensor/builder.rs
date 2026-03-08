@@ -3,7 +3,8 @@ use std::cell::RefCell;
 use crate::tensor::{
     DType, DValue, IRTrace, NodeId, OpType, Shape, Size, TType, TValue, TensorIR,
     operation::{
-        BroadcastAcrossDimension, CABinary, CopyOp, PadAcrossDimension, ReduceAcrossDimension, Reduction, Unary,
+        BroadcastAcrossDimension, CABinary, CopyOp, PadAcrossDimension, ReduceAcrossDimension, Reduction,
+        SliceAcrossDimension, Unary,
     },
 };
 
@@ -137,6 +138,11 @@ impl<'a> IRNode<'a> {
         value: DValue,
     ) -> Result<Self, IRTrace> {
         let op = PadAcrossDimension::new(shape, dim, before, after, value)?;
+        self.builder.add_op([self], op).map(|x| x[0])
+    }
+
+    pub fn slice(self, shape: impl Into<Shape>, dim: usize, start: usize, end: usize) -> Result<Self, IRTrace> {
+        let op = SliceAcrossDimension::new(self.ty().dtype(), shape, dim, start, end)?;
         self.builder.add_op([self], op).map(|x| x[0])
     }
 }

@@ -165,6 +165,8 @@ impl<G: Gpu> CompiledKernel<G> {
             let concrete_size = buf.size();
             if let Some(var) = ttype.size().get_var_size(concrete_size) {
                 vars.insert(var);
+            } else if ttype.size().evaluate_constant().unwrap() != concrete_size {
+                return Err("Mismatched sizes!".to_string().into());
             }
         }
 

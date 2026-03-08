@@ -13,6 +13,30 @@ pub struct SliceAcrossDimension {
 }
 
 impl SliceAcrossDimension {
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    pub fn outer(&self) -> Size {
+        self.outer
+    }
+
+    pub fn dimen(&self) -> usize {
+        self.dimen
+    }
+
+    pub fn inner(&self) -> Size {
+        self.inner
+    }
+
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
     pub fn new(dtype: DType, shape: impl Into<Shape>, dim: usize, start: usize, end: usize) -> Result<Self, IRError> {
         let shape = shape.into();
         let shape_dim = shape.dim();

@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, SparseMatmul,
-        SparseMatmulBwd, SubGraph, Unary, UnaryOp,
+        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, SliceAcrossDimension,
+        SparseMatmul, SparseMatmulBwd, SubGraph, Unary, UnaryOp,
     },
 };
 
@@ -59,6 +59,12 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
             }
 
             (pad.output_size(), 1)
+        } else if let Some(slice) = data.downcast::<SliceAcrossDimension>() {
+            if !ir.is_input(op.inputs()[0])? {
+                return Ok(None);
+            }
+
+            (slice.output_size(), 1)
         } else {
             return Ok(None);
         };
@@ -163,10 +169,10 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
             assert_eq!(p2size, 0);
             let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
 
-            let before = i32::try_from(pad.before).unwrap();
-            let after = i32::try_from(pad.after).unwrap();
-            let dimen = i32::try_from(pad.dimen).unwrap();
-            let inner = pntwise.eval_size(pad.inner);
+            let before = i32::try_from(pad.before()).unwrap();
+            let after = i32::try_from(pad.after()).unwrap();
+            let dimen = i32::try_from(pad.dimen()).unwrap();
+            let inner = pntwise.eval_size(pad.inner());
 
             let bda = pntwise.add_const(DValue::I32(before + dimen + after), 0);
             let stride = pntwise.binary(inner, bda, CABinary::Mul)?;
@@ -195,7 +201,35 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
 
             let cond = pntwise.binary(p1, p2, CABinary::Mul)?;
 
-            let output = pntwise.conditional_read(buf, idx, cond, pad.value, p2size)?;
+            let output = pntwise.conditional_read(buf, idx, cond, pad.value(), p2size)?;
+            mapping.insert(op.outputs()[0], output);
+        } else if let Some(slice) = data.downcast::<SliceAcrossDimension>() {
+            assert_eq!(p2size, 0);
+            let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
+
+            let inner = pntwise.eval_size(slice.inner());
+            let slicelen = i32::try_from(slice.end() - slice.start()).unwrap();
+            let slicelen = pntwise.add_const(DValue::I32(slicelen), 0);
+            let stride = pntwise.binary(inner, slicelen, CABinary::Mul)?;
+
+            let tid = pntwise.tid();
+            let idx_outer = pntwise.div(tid, stride)?;
+            let idx_non_outer = pntwise.rem(tid, stride)?;
+            let idx_slice = pntwise.div(idx_non_outer, inner)?;
+            let idx_inner = pntwise.rem(idx_non_outer, inner)?;
+
+            let dimen = i32::try_from(slice.dimen()).unwrap();
+            let dimen = pntwise.add_const(DValue::I32(dimen), 0);
+            let start = i32::try_from(slice.start()).unwrap();
+            let start = pntwise.add_const(DValue::I32(start), 0);
+
+            let mut idx = pntwise.binary(dimen, idx_outer, CABinary::Mul)?;
+            idx = pntwise.binary(idx, start, CABinary::Add)?;
+            idx = pntwise.binary(idx, idx_slice, CABinary::Add)?;
+            idx = pntwise.binary(idx, inner, CABinary::Mul)?;
+            idx = pntwise.binary(idx, idx_inner, CABinary::Add)?;
+
+            let output = pntwise.read(buf, idx, p2size)?;
             mapping.insert(op.outputs()[0], output);
         } else {
             unreachable!();
@@ -323,6 +357,38 @@ mod tests {
         Ok(())
     }
 
+    fn make_slice(dim: usize) -> Result<KernelSrc, IRTrace> {
+        let builder = IRBuilder::default();
+
+        let input = builder.add_input(8, DType::F32);
+        let slice = input.slice([2, 2, 2], dim, 0, 1)?;
+
+        let ir = builder.build([slice]);
+
+        let sub = SubGraph::new(ir, vec![input.node()], vec![slice.node()])?;
+        unsafe { super::generate(&sub)?.unwrap().lower().map_err(IRTrace::from) }
+    }
+
+    fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
+        let device = Device::<G>::new(0)?;
+        let stream = Stream::new(device.clone())?;
+
+        let src = make_slice(dim).unwrap();
+
+        let slice = src.compile(device)?;
+
+        let input = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+        let input_buf = Buffer::from_host(&stream, &input)?.value().0;
+        let slice_buf = Buffer::zeroed(&stream, DType::F32, 4)?.value();
+        let sync = slice.execute(stream.clone(), vec![input_buf], vec![slice_buf.clone()])?;
+
+        drop(sync);
+
+        assert_eq!(slice_buf.to_host(&stream)?.value(), TValue::F32(expected.into()));
+
+        Ok(())
+    }
+
     #[cfg(feature = "cuda")]
     mod cuda {
         use crate::runtime::cuda::{Cuda, CudaError};
@@ -338,6 +404,13 @@ mod tests {
             super::concat::<Cuda>(1, [1.0, 2.0, 3.0, 4.0, 4.0, 3.0, 2.0, 1.0, 5.0, 6.0, 7.0, 8.0, 1.0, 2.0, 3.0, 4.0])?;
             super::concat::<Cuda>(2, [1.0, 2.0, 4.0, 3.0, 3.0, 4.0, 2.0, 1.0, 5.0, 6.0, 1.0, 2.0, 7.0, 8.0, 3.0, 4.0])
         }
+
+        #[test]
+        fn slice() -> Result<(), CudaError> {
+            super::slice::<Cuda>(0, [1.0, 2.0, 3.0, 4.0])?;
+            super::slice::<Cuda>(1, [1.0, 2.0, 5.0, 6.0])?;
+            super::slice::<Cuda>(2, [1.0, 3.0, 5.0, 7.0])
+        }
     }
 
     #[cfg(feature = "rocm")]
@@ -351,7 +424,16 @@ mod tests {
 
         #[test]
         fn concat() -> Result<(), ROCmError> {
-            super::concat::<ROCm>()
+            super::concat::<ROCm>(0, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0])?;
+            super::concat::<ROCm>(1, [1.0, 2.0, 3.0, 4.0, 4.0, 3.0, 2.0, 1.0, 5.0, 6.0, 7.0, 8.0, 1.0, 2.0, 3.0, 4.0])?;
+            super::concat::<ROCm>(2, [1.0, 2.0, 4.0, 3.0, 3.0, 4.0, 2.0, 1.0, 5.0, 6.0, 1.0, 2.0, 7.0, 8.0, 3.0, 4.0])
+        }
+
+        #[test]
+        fn slice() -> Result<(), ROCmError> {
+            super::slice::<ROCm>(0, [1.0, 2.0, 3.0, 4.0])?;
+            super::slice::<ROCm>(1, [1.0, 2.0, 5.0, 6.0])?;
+            super::slice::<ROCm>(2, [1.0, 3.0, 5.0, 7.0])
         }
     }
 }
