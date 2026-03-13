@@ -44,8 +44,8 @@ impl AdamWParams {
                 p[0] *= 1.0F - static_cast<float>(DECAY) * rate;
 
                 const float grad = adj * g[0];
-                m[0] = beta1 * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
-                v[0] = beta2 * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
+                m[0] = static_cast<float>(BETA1) * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
+                v[0] = static_cast<float>(BETA2) * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
 
                 float val = m[0] / (sqrtf(v[0]) + static_cast<float>(EPSILON));
                 p[0] -= rate * val;
@@ -60,13 +60,13 @@ impl AdamWParams {
         .replace("EPSILON", "0.000000001F");
 
         let decl = "
-            __global__ void AdamKernel(
+            extern \"C\" __global__ void kernel(
                 const float* adj_ptr,
                 const float* rate_ptr,
                 const float* gradients,
                 float* network,
                 float* momentum,
-                float* velocity,
+                float* velocity
             )";
 
         let body = if size.is_multiple_of(4) {
@@ -76,7 +76,7 @@ impl AdamWParams {
 
                 if (tid < {})
                 {{
-                    const float adj = ajd_ptr[0];
+                    const float adj = adj_ptr[0];
                     const float rate = rate_ptr[0];
                     float4 p = ((float4 *)network)[tid];
                     float4 m = ((float4 *)momentum)[tid];
@@ -101,7 +101,7 @@ impl AdamWParams {
 
                 if (tid < {size})
                 {{
-                    const float adj = ajd_ptr[0];
+                    const float adj = adj_ptr[0];
                     const float rate = rate_ptr[0];
                     float p = network[tid];
                     float m = momentum[tid];

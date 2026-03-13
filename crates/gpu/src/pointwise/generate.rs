@@ -157,14 +157,13 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
             mapping.insert(op.outputs()[0], output);
         } else if let Some(bwd) = data.downcast::<SparseMatmulBwd>() {
             let out = op.outputs()[0];
-            let out_id = *out_buf_map.get(&out).unwrap();
 
             let weights = *out_buf_map.get(&out).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
             let Some(gradients) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
 
             pntwise.sparse_matmul_bwd(weights, indices, gradients, bwd.0)?;
-            handled_writes.insert(out_id);
+            handled_writes.insert(out);
         } else if let Some(pad) = data.downcast::<PadAcrossDimension>() {
             assert_eq!(p2size, 0);
             let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();

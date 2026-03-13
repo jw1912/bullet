@@ -24,6 +24,7 @@ pub trait FoldRule: fmt::Debug + 'static {
     fn fold(&self, ir: &TensorIR, operation: &Op<Tensor>) -> Result<Option<AddOperation>, IRTrace>;
 }
 
+#[macro_export]
 macro_rules! foldrule {
     (@maybe_matching ($inner:expr) ($($matching:pat = $cond:expr;)+)) => {
         if $(let $matching = $cond)&&+ {

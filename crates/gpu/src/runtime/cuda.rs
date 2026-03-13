@@ -5,6 +5,8 @@ use std::{
     mem::MaybeUninit,
 };
 
+use crate::runtime::bindings::GemmConfig;
+
 use super::bindings::{Dim3, GpuBindings};
 
 use raw::*;
@@ -17,6 +19,7 @@ pub struct Cuda;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CudaError {
     Driver(String),
+    Blas(String),
     Nvrtc(String),
     Message(String),
 }
@@ -177,6 +180,75 @@ impl GpuBindings for Cuda {
 
         Ok(ptx)
     }
+
+    unsafe fn blas_create() -> Result<cublasHandle, CudaError> {
+        let mut handle = MaybeUninit::uninit();
+        error::blas(cublasCreate_v2(handle.as_mut_ptr()))?;
+        Ok(handle.assume_init())
+    }
+
+    unsafe fn blas_destroy(handle: cublasHandle) -> CudaResult {
+        error::blas(cublasDestroy_v2(handle))
+    }
+
+    unsafe fn blas_set_stream(handle: cublasHandle, stream: CUstream) -> CudaResult {
+        error::blas(cublasSetStream_v2(handle, stream))
+    }
+
+    unsafe fn blas_gemm(
+        handle: cublasHandle,
+        config: GemmConfig,
+        a: CUdeviceptr,
+        b: CUdeviceptr,
+        c: CUdeviceptr,
+    ) -> CudaResult {
+        error::blas(cublasSgemm_v2(
+            handle,
+            config.row_mjr_a.into(),
+            config.row_mjr_b.into(),
+            config.m,
+            config.n,
+            config.k,
+            &config.alpha,
+            a as *const f32,
+            if config.row_mjr_a { config.k } else { config.m },
+            b as *const f32,
+            if config.row_mjr_b { config.n } else { config.k },
+            &config.beta,
+            c as *mut f32,
+            config.m,
+        ))
+    }
+
+    unsafe fn blas_gemm_batched(
+        handle: cublasHandle,
+        batch_size: c_int,
+        config: GemmConfig,
+        a: CUdeviceptr,
+        b: CUdeviceptr,
+        c: CUdeviceptr,
+    ) -> CudaResult {
+        error::blas(cublasSgemmStridedBatched(
+            handle,
+            config.row_mjr_a.into(),
+            config.row_mjr_b.into(),
+            config.m,
+            config.n,
+            config.k,
+            &config.alpha,
+            a as *const f32,
+            if config.row_mjr_a { config.k } else { config.m },
+            (config.m * config.n).into(),
+            b as *const f32,
+            if config.row_mjr_b { config.n } else { config.k },
+            (config.n * config.k).into(),
+            &config.beta,
+            c as *mut f32,
+            config.m,
+            (config.m * config.k).into(),
+            batch_size,
+        ))
+    }
 }
 
 mod error {
@@ -202,6 +274,20 @@ mod error {
         }
     }
 
+    pub unsafe fn blas(value: cublasStatus) -> CudaResult {
+        if value == 0 {
+            Ok(())
+        } else {
+            unsafe {
+                let name = cublasGetStatusName(value);
+                let name = CStr::from_ptr(name).to_str().unwrap();
+                let desc = cublasGetStatusString(value);
+                let desc = CStr::from_ptr(desc).to_str().unwrap();
+                Err(CudaError::Blas(format!("{name}: {desc}")))
+            }
+        }
+    }
+
     pub unsafe fn nvrtc(value: nvrtcResult) -> CudaResult {
         if value == 0 {
             Ok(())
@@ -221,7 +307,7 @@ mod error {
 #[allow(improper_ctypes)]
 #[allow(clippy::enum_variant_names)]
 mod raw {
-    use std::ffi::{c_char, c_int, c_uchar, c_uint, c_ulonglong, c_void};
+    use std::ffi::{c_char, c_int, c_longlong, c_uchar, c_uint, c_ulonglong, c_void};
 
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
@@ -295,6 +381,68 @@ mod raw {
     // cuBLAS
 
     pub type cublasHandle = *mut Opaque;
+    pub type cublasStatus = c_int;
+
+    #[allow(unused)]
+    #[repr(i32)]
+    #[non_exhaustive]
+    #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+    pub enum cublasOperation {
+        CUBLAS_OP_N = 0,
+        CUBLAS_OP_T = 1,
+        CUBLAS_OP_C = 2,
+        CUBLAS_OP_CONJG = 3,
+    }
+
+    impl From<bool> for cublasOperation {
+        fn from(value: bool) -> Self {
+            if value { Self::CUBLAS_OP_T } else { Self::CUBLAS_OP_N }
+        }
+    }
+
+    unsafe extern "C" {
+        pub fn cublasGetStatusName(status: cublasStatus) -> *const c_char;
+        pub fn cublasGetStatusString(status: cublasStatus) -> *const c_char;
+        pub fn cublasCreate_v2(handle: *mut cublasHandle) -> cublasStatus;
+        pub fn cublasDestroy_v2(handle: cublasHandle) -> cublasStatus;
+        pub fn cublasSetStream_v2(handle: cublasHandle, streamId: CUstream) -> cublasStatus;
+        pub fn cublasSgemm_v2(
+            handle: cublasHandle,
+            transa: cublasOperation,
+            transb: cublasOperation,
+            m: c_int,
+            n: c_int,
+            k: c_int,
+            alpha: *const f32,
+            A: *const f32,
+            lda: c_int,
+            B: *const f32,
+            ldb: c_int,
+            beta: *const f32,
+            C: *mut f32,
+            ldc: c_int,
+        ) -> cublasStatus;
+        pub fn cublasSgemmStridedBatched(
+            handle: cublasHandle,
+            transa: cublasOperation,
+            transb: cublasOperation,
+            m: c_int,
+            n: c_int,
+            k: c_int,
+            alpha: *const f32,
+            A: *const f32,
+            lda: c_int,
+            strideA: c_longlong,
+            B: *const f32,
+            ldb: c_int,
+            strideB: c_longlong,
+            beta: *const f32,
+            C: *mut f32,
+            ldc: c_int,
+            strideC: c_longlong,
+            batchCount: c_int,
+        ) -> cublasStatus;
+    }
 
     // NVRTC
 

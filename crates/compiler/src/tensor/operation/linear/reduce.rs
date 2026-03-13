@@ -43,6 +43,26 @@ pub struct ReduceAcrossDimension {
 }
 
 impl ReduceAcrossDimension {
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    pub fn outer(&self) -> Size {
+        self.outer
+    }
+
+    pub fn dimen(&self) -> Size {
+        self.dimen
+    }
+
+    pub fn inner(&self) -> Size {
+        self.inner
+    }
+
+    pub fn reduction(&self) -> Reduction {
+        self.reduction
+    }
+
     pub fn invert(&self) -> Result<Option<BroadcastAcrossDimension>, IRError> {
         if let Reduction::Sum = self.reduction {
             Ok(Some(BroadcastAcrossDimension::new(self.dtype, [self.outer, self.inner], 1, self.dimen)?))

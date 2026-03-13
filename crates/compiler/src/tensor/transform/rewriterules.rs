@@ -23,7 +23,7 @@ impl<A: RewriteRule, B: RewriteRule> RewriteRule for RewriteNest<A, B> {
 }
 
 #[derive(Debug)]
-pub struct RewritePass<T>(T);
+pub struct RewritePass<T>(pub T);
 
 impl<T: RewriteRule> IRTransform for RewritePass<T> {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
@@ -39,6 +39,7 @@ impl<T: RewriteRule> IRTransform for RewritePass<T> {
     }
 }
 
+#[macro_export]
 macro_rules! rewriterule {
     {
         rulename $name:ident on $irname:ident
@@ -61,11 +62,11 @@ macro_rules! rewriterule {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub struct $name;
 
-        impl RewriteRule for $name {
+        impl $crate::tensor::transform::rewriterules::RewriteRule for $name {
             fn apply(
                 &self,
                 $irname: &mut TensorIR,
-                $op: Op<Tensor>,
+                $op: $crate::ir::Op<$crate::tensor::Tensor>,
             ) -> Result<bool, IRTrace> {
                 $($crate::if_find_and_bind_pattern!(
                     $irname,

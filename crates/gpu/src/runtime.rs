@@ -15,7 +15,7 @@ use std::{
     },
 };
 
-pub use bindings::Dim3;
+pub use bindings::{Dim3, GemmConfig};
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<Err = Self::Error, Ptr = Self::DevicePtr> {
@@ -274,6 +274,63 @@ impl<G: Gpu> Kernel<G> {
     /// Get the device that this kernel is on
     pub fn device(&self) -> Arc<Device<G>> {
         self.module.device()
+    }
+}
+
+pub struct Blas<G: Gpu> {
+    handle: G::BlasHandle,
+    device: Arc<Device<G>>,
+}
+
+impl<G: Gpu> Drop for Blas<G> {
+    fn drop(&mut self) {
+        let _ = self.device.set();
+        let _ = unsafe { G::blas_destroy(self.handle) };
+    }
+}
+
+impl<G: Gpu> Blas<G> {
+    pub fn new(device: Arc<Device<G>>) -> Result<Self, G::Error> {
+        device.set()?;
+        let handle = unsafe { G::blas_create() }?;
+        Ok(Self { handle, device })
+    }
+
+    /// ### Safety
+    ///
+    /// Valid pointers, non-overlapping ABb with C, etc
+    pub unsafe fn gemm(
+        &self,
+        stream: &Stream<G>,
+        cfg: GemmConfig,
+        a: G::DevicePtr,
+        b: G::DevicePtr,
+        c: G::DevicePtr,
+    ) -> Result<(), G::Error> {
+        self.device.set()?;
+        unsafe {
+            G::blas_set_stream(self.handle, stream.inner)?;
+            G::blas_gemm(self.handle, cfg, a, b, c)
+        }
+    }
+
+    /// ### Safety
+    ///
+    /// Valid pointers, non-overlapping ABb with C, etc
+    pub unsafe fn batched_gemm(
+        &self,
+        stream: &Stream<G>,
+        batch: usize,
+        cfg: GemmConfig,
+        a: G::DevicePtr,
+        b: G::DevicePtr,
+        c: G::DevicePtr,
+    ) -> Result<(), G::Error> {
+        self.device.set()?;
+        unsafe {
+            G::blas_set_stream(self.handle, stream.inner)?;
+            G::blas_gemm_batched(self.handle, batch.try_into().unwrap(), cfg, a, b, c)
+        }
     }
 }
 

@@ -20,7 +20,7 @@ mod tests {
         runtime::{Device, Gpu},
     };
 
-    fn make_axby() -> Result<(TensorIR, [NodeId; 4]), IRTrace> {
+    fn make_axby() -> Result<(TensorIR, [NodeId; 6]), IRTrace> {
         let size = Size::variable();
 
         let builder = IRBuilder::default();
@@ -31,18 +31,20 @@ mod tests {
         let x = builder.add_input(size * 8, DType::F32);
 
         let y = ((a.broadcast([8], 0, size)? * x)? + b.broadcast([1], 0, size * 8)?)?;
+        let z = y.reduce_sum([size, 8.into()], 1)?;
+        let w = y.reduce_sum([size, 8.into()], 0)?;
 
-        let mut ir = builder.build([y]);
+        let mut ir = builder.build([y, z, w]);
 
         ir.optimise()?;
 
-        Ok((ir, [a.node(), b.node(), x.node(), y.node()]))
+        Ok((ir, [a.node(), b.node(), x.node(), y.node(), z.node(), w.node()]))
     }
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
         let batch_size = 256;
 
-        let (ir, [a, b, x, y]) = make_axby().unwrap();
+        let (ir, [a, b, x, y, z, w]) = make_axby().unwrap();
 
         let device = Device::<G>::new(0)?;
         let stream = device.clone().new_stream()?;
@@ -56,10 +58,20 @@ mod tests {
                 .value()
                 .0;
         let buf_y = Buffer::from_host(&stream, &TValue::F32(vec![10.0; 8 * batch_size]))?.value().0;
+        let buf_z = Buffer::from_host(&stream, &TValue::F32(vec![10.0; batch_size]))?.value().0;
+        let buf_w = Buffer::from_host(&stream, &TValue::F32(vec![10.0; 8]))?.value().0;
 
         let sync = func.execute(
             stream.clone(),
-            &[(a, buf_a.clone()), (b, buf_b.clone()), (x, buf_x.clone()), (y, buf_y.clone())].into(),
+            &[
+                (a, buf_a.clone()),
+                (b, buf_b.clone()),
+                (x, buf_x.clone()),
+                (y, buf_y.clone()),
+                (z, buf_z.clone()),
+                (w, buf_w.clone()),
+            ]
+            .into(),
         )?;
 
         drop(sync);
@@ -68,6 +80,15 @@ mod tests {
             buf_y.clone().to_host(&stream)?.value(),
             TValue::F32([10.0, 16.0, 20.0, 22.0, 22.0, 20.0, 16.0, 10.0].repeat(batch_size))
         );
+
+        assert_eq!(
+            buf_w.clone().to_host(&stream)?.value(),
+            TValue::F32(
+                [10.0, 16.0, 20.0, 22.0, 22.0, 20.0, 16.0, 10.0].iter().map(|x| batch_size as f32 * x).collect()
+            )
+        );
+
+        assert_eq!(buf_z.clone().to_host(&stream)?.value(), TValue::F32([136.0].repeat(batch_size)));
 
         assert!(
             func.execute(

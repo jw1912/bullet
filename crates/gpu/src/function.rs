@@ -2,14 +2,19 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use bullet_compiler::{
     ir::NodeId,
-    tensor::{IRTrace, Size, TType, TensorIR},
+    rewriterule,
+    tensor::{
+        DType, IRTrace, Size, TType, TensorIR,
+        operation::{Matmul, MatrixLayout, ReduceAcrossDimension, Reduction},
+        transform::rewriterules::RewritePass,
+    },
 };
 
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
     pointwise::LowerPointwise,
-    runtime::{Device, Dim3, Gpu, Kernel, Module, Stream},
+    runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
 #[derive(Debug)]
@@ -37,21 +42,30 @@ enum Inst<G: Gpu> {
         bdim: Rc<dyn Fn(usize) -> u32>,
         smem: Rc<dyn Fn(usize) -> u32>,
     },
+    Matmul {
+        cfg: Matmul,
+        a: usize,
+        b: usize,
+        c: usize,
+    },
 }
 
 pub struct Function<G: Gpu> {
     maps: HashMap<NodeId, (usize, bool, TType)>,
     insts: Box<[Inst<G>]>,
     num_ptrs: usize,
+    blas: Option<Blas<G>>,
 }
 
 impl<G: Gpu> Function<G> {
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
+        ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(LowerPointwise)?;
 
         let mut maps = HashMap::new();
         let mut num_ptrs = 0;
         let mut insts = Vec::new();
+        let mut requires_blas = false;
 
         let mut times_seen = HashMap::new();
         let mut indices = HashMap::new();
@@ -96,19 +110,34 @@ impl<G: Gpu> Function<G> {
                     insts.push(Inst::Zero { idx: *indices.get(&node_id).unwrap(), ty });
                 }
 
-                let func = Module::new(device.clone(), source)
-                    .map_err(|e| IRTrace::from(format!("{e:?}")))?
+                let func = Module::new(device.clone(), source.clone())
+                    .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?
                     .get_kernel("kernel")
-                    .map_err(|e| IRTrace::from(format!("{e:?}")))?;
+                    .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });
+            } else if let Some(cfg) = data.downcast::<Matmul>().cloned() {
+                if cfg.dtype != DType::F32 {
+                    return Err("Unsupported matmul dtype!".into());
+                }
+
+                let [a, b] = op.inputs()[..] else { return Err("Invalid inputs!".into()) };
+                let [c] = op.outputs()[..] else { return Err("Invalid inputs!".into()) };
+
+                requires_blas = true;
+                insts.push(Inst::Matmul {
+                    cfg,
+                    a: *indices.get(&a).unwrap(),
+                    b: *indices.get(&b).unwrap(),
+                    c: *indices.get(&c).unwrap(),
+                })
             } else if !data.is_input() {
                 return Err(format!("Unsupported operation: {data:?}").into());
             }
 
             // free buffers that see no more usage
             for &input in op.inputs() {
-                if !ir.is_input(input)? {
+                if !ir.is_input(input)? && !ir.is_output(input) {
                     let times_seen = times_seen.get_mut(&input).unwrap();
                     *times_seen += 1;
 
@@ -120,7 +149,8 @@ impl<G: Gpu> Function<G> {
             }
         }
 
-        Ok(Self { maps, insts: insts.into_boxed_slice(), num_ptrs })
+        let blas = requires_blas.then(|| Blas::new(device).unwrap());
+        Ok(Self { maps, insts: insts.into_boxed_slice(), num_ptrs, blas })
     }
 
     pub fn execute(
@@ -211,10 +241,54 @@ impl<G: Gpu> Function<G> {
 
                         func.launch(&stream, gdim(var), bdim(var), args.as_mut_ptr(), smem(var))?;
                     }
+                    &Inst::Matmul { cfg, a, b, c } => {
+                        let handle = self.blas.as_ref().unwrap();
+                        let config = GemmConfig {
+                            row_mjr_a: !cfg.lhs.col_mjr,
+                            row_mjr_b: !cfg.rhs.col_mjr,
+                            m: cfg.lhs.rows.evaluate(var).try_into().unwrap(),
+                            n: cfg.rhs.cols.evaluate(var).try_into().unwrap(),
+                            k: cfg.lhs.cols.evaluate(var).try_into().unwrap(),
+                            alpha: 1.0,
+                            beta: 0.0,
+                        };
+
+                        if let Some(1) = cfg.batch.evaluate_constant() {
+                            handle.gemm(stream.as_ref(), config, ptrs[a], ptrs[b], ptrs[c])?;
+                        } else {
+                            let batch = cfg.batch.evaluate(var);
+                            handle.batched_gemm(stream.as_ref(), batch, config, ptrs[a], ptrs[b], ptrs[c])?;
+                        }
+                    }
                 }
             }
         }
 
         Ok(SyncOnValue::new(sync, self))
+    }
+}
+
+rewriterule! {
+    rulename ReduceToMatmul on ir
+    rewrites op (output = [ReduceAcrossDimension] (input))
+    {
+        if output.dtype() == DType::F32 && output.reduction() == Reduction::Sum {
+            let input = input.id();
+
+            let (new_scalar, new_op) = if let Some(1) = output.inner().evaluate_constant() {
+                let new_scalar = ir.add_scalar(1.0, output.dimen());
+                let lhs = MatrixLayout { rows: 1.into(), cols: output.dimen(), col_mjr: true };
+                let rhs = MatrixLayout { rows: output.dimen(), cols: output.outer(), col_mjr: true };
+                (new_scalar, Matmul::new(DType::F32, 1, lhs, rhs)?)
+            } else {
+                let new_scalar = ir.add_scalar(1.0, output.outer() * output.dimen());
+                let lhs = MatrixLayout { rows: 1.into(), cols: output.dimen(), col_mjr: true };
+                let rhs = MatrixLayout { rows: output.dimen(), cols: output.inner(), col_mjr: false };
+                (new_scalar, Matmul::new(DType::F32, output.outer(), lhs, rhs)?)
+            };
+
+            ir.replace_operation(op.id(), [new_scalar, input], new_op)?;
+            return Ok(true);
+        }
     }
 }

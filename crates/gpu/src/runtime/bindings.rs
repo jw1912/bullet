@@ -12,6 +12,17 @@ pub struct Dim3 {
     pub z: u32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct GemmConfig {
+    pub row_mjr_a: bool,
+    pub row_mjr_b: bool,
+    pub m: c_int,
+    pub n: c_int,
+    pub k: c_int,
+    pub alpha: f32,
+    pub beta: f32,
+}
+
 /// This is a private trait, so nobody outside the crate can access these methods
 /// and instead must go through the `Device` and `Stream` structs
 #[allow(clippy::missing_safety_doc)]
@@ -84,6 +95,29 @@ pub trait GpuBindings: 'static {
         num_options: c_int,
         options: *const *const c_char,
     ) -> Result<Vec<c_char>, Self::Err>;
+
+    unsafe fn blas_create() -> Result<Self::BlasHandle, Self::Err>;
+
+    unsafe fn blas_destroy(handle: Self::BlasHandle) -> Result<(), Self::Err>;
+
+    unsafe fn blas_set_stream(handle: Self::BlasHandle, stream: Self::Stream) -> Result<(), Self::Err>;
+
+    unsafe fn blas_gemm(
+        handle: Self::BlasHandle,
+        config: GemmConfig,
+        a: Self::Ptr,
+        b: Self::Ptr,
+        c: Self::Ptr,
+    ) -> Result<(), Self::Err>;
+
+    unsafe fn blas_gemm_batched(
+        handle: Self::BlasHandle,
+        batch_size: c_int,
+        config: GemmConfig,
+        a: Self::Ptr,
+        b: Self::Ptr,
+        c: Self::Ptr,
+    ) -> Result<(), Self::Err>;
 }
 
 const _C_INT_IS_I32: () = assert!(std::mem::size_of::<i32>() == std::mem::size_of::<c_int>());
