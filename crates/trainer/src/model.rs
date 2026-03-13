@@ -105,16 +105,6 @@ impl<G: Gpu> Model<G> {
         ]);
         let map = self.bwd_map.iter().map(|(name, &id)| (id, tensors.get(name).unwrap().clone())).collect();
 
-        /*let x = self.backward.execute(stream.clone(), &map);
-
-        stream.sync()?;
-
-        for (name, grad) in gradients {
-            let value = grad.to_host(stream)?.value();
-            println!("{name}:\n{:?}", value.read(value.size() / 2));
-        }
-
-        x*/
         self.backward.execute(stream.clone(), &map)
     }
 

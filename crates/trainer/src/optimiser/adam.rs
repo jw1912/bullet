@@ -67,7 +67,7 @@ impl AdamWParams {
             .replace("BETA2", &self.beta2.to_string())
             .replace("WMIN", &self.min_weight.to_string())
             .replace("WMAX", &self.max_weight.to_string())
-            .replace("EPSILON", "0.000000001F");
+            .replace("EPSILON", "0.00000001F");
 
         let body = if size.is_multiple_of(4) {
             format!(
