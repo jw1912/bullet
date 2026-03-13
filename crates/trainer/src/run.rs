@@ -95,9 +95,12 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         }
 
         let lrate = lr(curr_batch, superbatch);
+        let this_batch_size = next_batch_size;
 
         let val = TValue::F32(vec![lrate]);
         let lrdrop = tlr.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
+        let val = TValue::F32(vec![1.0 / this_batch_size as f32]);
+        let gfdrop = tgf.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
 
         if curr_batch == 0 {
             if lrate < prev_lr {
@@ -108,7 +111,6 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         }
 
         prev_lr = lrate;
-        let this_batch_size = next_batch_size;
 
         let compute_block1 = trainer
             .optimiser
@@ -119,6 +121,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let compute_block1 = unsafe { compute_block1.detach_value() };
 
         drop(lrdrop);
+        drop(gfdrop);
 
         let compute_block2 = trainer
             .optimiser
@@ -128,10 +131,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         if let Ok(next_batch_host) = receiver.recv() {
             drop(batch_on_device);
             next_batch_size = next_batch_host.batch_size;
-            let val = TValue::F32(vec![1.0 / next_batch_size as f32]);
-            let block = tgf.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
             batch_on_device = next_batch_host.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
-            drop(block);
         } else {
             batch_queued = false;
         }
