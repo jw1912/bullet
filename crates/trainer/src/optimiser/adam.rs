@@ -30,44 +30,44 @@ impl Default for AdamWParams {
     }
 }
 
+const OP: &str = "\
+__device__ __forceinline__ void adamOp(
+    const float grad,
+    const float rate,
+    float* p,
+    float* m,
+    float* v
+) {
+    p[0] *= 1.0F - static_cast<float>(DECAY) * rate;
+
+    m[0] = static_cast<float>(BETA1) * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
+    v[0] = static_cast<float>(BETA2) * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
+
+    float val = m[0] / (sqrtf(v[0]) + static_cast<float>(EPSILON));
+    p[0] -= rate * val;
+
+    p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
+}";
+
+const DECL: &str = "
+extern \"C\" __global__ void kernel(
+    const float* adj_ptr,
+    const float* rate_ptr,
+    const float* gradients,
+    float* network,
+    float* momentum,
+    float* velocity
+)";
+
 impl AdamWParams {
     pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
-        let op = "\
-            __device__ __forceinline__ void adamOp(
-                const float adj,
-                const float rate,
-                float* p,
-                float* m,
-                float* v,
-                const float* g)
-            {
-                p[0] *= 1.0F - static_cast<float>(DECAY) * rate;
-
-                const float grad = adj * g[0];
-                m[0] = static_cast<float>(BETA1) * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
-                v[0] = static_cast<float>(BETA2) * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
-
-                float val = m[0] / (sqrtf(v[0]) + static_cast<float>(EPSILON));
-                p[0] -= rate * val;
-
-                p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
-            }"
-        .replace("DECAY", &self.decay.to_string())
-        .replace("BETA1", &self.beta1.to_string())
-        .replace("BETA2", &self.beta2.to_string())
-        .replace("WMIN", &self.min_weight.to_string())
-        .replace("WMAX", &self.max_weight.to_string())
-        .replace("EPSILON", "0.000000001F");
-
-        let decl = "
-            extern \"C\" __global__ void kernel(
-                const float* adj_ptr,
-                const float* rate_ptr,
-                const float* gradients,
-                float* network,
-                float* momentum,
-                float* velocity
-            )";
+        let op = OP
+            .replace("DECAY", &self.decay.to_string())
+            .replace("BETA1", &self.beta1.to_string())
+            .replace("BETA2", &self.beta2.to_string())
+            .replace("WMIN", &self.min_weight.to_string())
+            .replace("WMAX", &self.max_weight.to_string())
+            .replace("EPSILON", "0.000000001F");
 
         let body = if size.is_multiple_of(4) {
             format!(
@@ -83,10 +83,10 @@ impl AdamWParams {
                     float4 v = ((float4 *)velocity)[tid];
                     const float4 g = ((const float4 *)gradients)[tid];
 
-                    adamOp(adj, rate, &p.x, &m.x, &v.x, &g.x);
-                    adamOp(adj, rate, &p.y, &m.y, &v.y, &g.y);
-                    adamOp(adj, rate, &p.z, &m.z, &v.z, &g.z);
-                    adamOp(adj, rate, &p.w, &m.w, &v.w, &g.w);
+                    adamOp(adj * g.x, rate, &p.x, &m.x, &v.x);
+                    adamOp(adj * g.y, rate, &p.y, &m.y, &v.y);
+                    adamOp(adj * g.z, rate, &p.z, &m.z, &v.z);
+                    adamOp(adj * g.w, rate, &p.w, &m.w, &v.w);
 
                     ((float4 *)network)[tid] = p;
                     ((float4 *)momentum)[tid] = m;
@@ -108,7 +108,7 @@ impl AdamWParams {
                     float v = velocity[tid];
                     const float g = gradients[tid];
 
-                    adamOp(adj, rate, &p, &m, &v, &g);
+                    adamOp(adj * g, rate, &p, &m, &v);
 
                     network[tid] = p;
                     momentum[tid] = m;
@@ -124,7 +124,7 @@ impl AdamWParams {
             KernelSrc::new(
                 vec![TType::new(1, DType::F32), TType::new(1, DType::F32), ty],
                 vec![ty; 3],
-                format!("{op}{decl}{{{body}}}"),
+                format!("{op}{DECL}{{{body}}}"),
                 false,
                 vec![(0, true), (1, true), (2, true), (0, false), (1, false), (2, false)],
                 HashSet::new(),

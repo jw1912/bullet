@@ -74,10 +74,9 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         trainer.optimiser.model.make_backward_output_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
     let gradients = trainer.optimiser.model.make_gradient_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
     let tlr = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?.value().0;
+    let tgf = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?.value().0;
 
     let mut next_batch_size = first_batch.batch_size;
-    let val = TValue::F32(vec![1.0 / next_batch_size as f32]);
-    let tgf = Buffer::from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?.value().0;
     let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
 
     let mut batch_queued = true;
@@ -97,10 +96,10 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let lrate = lr(curr_batch, superbatch);
         let this_batch_size = next_batch_size;
 
-        let val = TValue::F32(vec![lrate]);
-        let lrdrop = tlr.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
-        let val = TValue::F32(vec![1.0 / this_batch_size as f32]);
-        let gfdrop = tgf.copy_from_host(&copy_stream, &val).map_err(TrainerError::Unexpected)?;
+        let lrdrop = TValue::F32(vec![lrate]);
+        let lrdrop = tlr.copy_from_host(&copy_stream, &lrdrop).map_err(TrainerError::Unexpected)?;
+        let gfdrop = TValue::F32(vec![1.0 / this_batch_size as f32]);
+        let gfdrop = tgf.copy_from_host(&copy_stream, &gfdrop).map_err(TrainerError::Unexpected)?;
 
         if curr_batch == 0 {
             if lrate < prev_lr {
