@@ -79,7 +79,7 @@ impl KernelSrc {
 
 impl OpType for KernelSrc {
     fn opname(&self) -> String {
-        format!("gpu.kernel.{}", self.name)
+        format!("gpu.rtc.{}", self.name)
     }
 
     fn inputs(&self) -> Vec<TType> {
