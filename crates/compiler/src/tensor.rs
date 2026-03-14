@@ -380,6 +380,17 @@ impl fmt::Display for TensorIR {
             x.map_err(|_| fmt::Error)
         }
 
+        let mut names = HashMap::new();
+        let mut get_name = |node| {
+            if let Some(&id) = names.get(&node) {
+                id
+            } else {
+                let id = names.len();
+                names.insert(node, id);
+                id
+            }
+        };
+
         write!(f, "irgraph(")?;
         let leaves = self.ir.operations().filter(|x| x.data().is_input()).collect::<Vec<_>>();
         let mline = leaves.len() >= 5;
@@ -395,7 +406,7 @@ impl fmt::Display for TensorIR {
             let node = leaf.outputs()[0];
             let ty = map(self.get_node(node))?.ty();
 
-            write!(f, "{node:?}: {ty:?}")?;
+            write!(f, "%{}: {ty:?}", get_name(node))?;
         }
 
         if mline {
@@ -417,15 +428,12 @@ impl fmt::Display for TensorIR {
                 write!(f, "[")?;
             }
 
-            let output_tys =
-                map(outputs.iter().map(|x| self.get_node(*x).map(Node::ty)).collect::<Result<Vec<_>, _>>())?;
-
-            for (i, (&output, ty)) in outputs.iter().zip(output_tys).enumerate() {
+            for (i, &output) in outputs.iter().enumerate() {
                 if i != 0 {
                     write!(f, ", ")?;
                 }
 
-                write!(f, "{output:?}: {ty:?}")?;
+                write!(f, "%{}", get_name(output))?;
             }
 
             if outputs.len() > 1 {
@@ -439,7 +447,7 @@ impl fmt::Display for TensorIR {
                     write!(f, ", ")?;
                 }
 
-                write!(f, "{input:?}")?;
+                write!(f, "%{}", get_name(input))?;
             }
 
             writeln!(f, ")")?;
@@ -451,7 +459,7 @@ impl fmt::Display for TensorIR {
                 write!(f, ", ")?;
             }
 
-            write!(f, "{output:?}")?;
+            write!(f, "%{}", get_name(output))?;
         }
 
         writeln!(f)?;

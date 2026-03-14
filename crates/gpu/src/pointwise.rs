@@ -9,14 +9,14 @@ use bullet_compiler::{
     ir::{NodeId, Op},
     tensor::{
         IRTrace, OpType, TType, TValue, Tensor, TensorIR, TensorOp,
-        operation::SubGraph,
-        transform::{IRTransform, inline::InlineSubgraphs, modify::AddOperation},
+        operation::{ScalarConstant, SubGraph},
+        transform::{IRTransform, eliminate::EliminateUnusedOperations, inline::InlineSubgraphs, modify::AddOperation},
     },
 };
 
 pub use ir::PointwiseIR;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FusedPointwise {
     sub: SubGraph,
     ir: PointwiseIR,
@@ -36,7 +36,9 @@ impl FusedPointwise {
 
 impl OpType for FusedPointwise {
     fn opname(&self) -> String {
-        "fused-pointwise".into()
+        let src = format!("{:?}", format!("{}", self.sub.internal_graph()));
+        let src = src.strip_prefix("\"irgraph").unwrap().strip_suffix('"').unwrap().replace("\\n", "\\l");
+        format!("Fused Kernel\\n{src}\\l")
     }
 
     fn inputs(&self) -> Vec<TType> {
@@ -56,6 +58,20 @@ impl OpType for FusedPointwise {
 pub struct LowerPointwise;
 impl IRTransform for LowerPointwise {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        // separate out all `ScalarConst`s, as otherwise we end up
+        // materialising them in kernel A and passing to kernel B,
+        // rather than handling internally for each
+        for op in ir.operations() {
+            for &input in op.inputs() {
+                if let Some(&ScalarConstant(value, size)) = ir.parent_op(input)? {
+                    let new_scalar = ir.add_scalar(value, size);
+                    ir.ir_mut().replace_single_input(op.id(), new_scalar, input)?;
+                }
+            }
+        }
+
+        ir.transform(EliminateUnusedOperations)?;
+
         // lower individual ops to FusedPointwise
         for op in ir.operations() {
             if let Some((pntwise, inputs)) = FusedPointwise::from_op(op.data().clone(), op.inputs()).unwrap() {
@@ -66,15 +82,26 @@ impl IRTransform for LowerPointwise {
 
         // perform fusions of the FusedPointwise where possible
         let mut failed = HashSet::new();
-        let mut success = true;
-        'outer: while success {
-            success = false;
+        let mut costs = HashMap::new();
+
+        loop {
+            let mut candidates = HashMap::new();
 
             let ops = ir.ordered_operations()?;
-            let ops = ops.into_iter().filter(|op| op.data().downcast::<FusedPointwise>().is_some()).collect::<Vec<_>>();
+            let ops = ops
+                .into_iter()
+                .filter(|op| {
+                    if let Some(pntwise) = op.data().downcast::<FusedPointwise>() {
+                        costs.insert(op.id(), pntwise.ir.estimate_memory_cost().unwrap());
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .collect::<Vec<_>>();
 
             for (i, op_i) in ops.iter().enumerate() {
-                for op_j in ops.iter().skip(i + 1) {
+                'inner: for op_j in ops.iter().skip(i + 1) {
                     if failed.contains(&(op_i.id(), op_j.id())) {
                         continue;
                     }
@@ -86,21 +113,56 @@ impl IRTransform for LowerPointwise {
                     if ir.is_immediate_dependent_op(op_i.id(), op_j.id())? {
                         let (subgraph, inputs, outputs) = fuse_subgraphs(ir, op_i, op_j)?;
                         if let Some(pntwise) = FusedPointwise::new(subgraph.clone())? {
-                            let new_outputs = ir.add_op(inputs, Ok::<_, IRTrace>(pntwise))?;
-                            for (new, old) in new_outputs.into_iter().zip(outputs) {
-                                ir.swap_outputs(new, old)?;
+                            let new_cost = pntwise.ir.estimate_memory_cost()?;
+                            let old_cost =
+                                costs.get(&op_i.id()).unwrap().dominator_sum(*costs.get(&op_j.id()).unwrap());
+
+                            if new_cost.is_le(old_cost) {
+                                let saving = if new_cost.var_power() != old_cost.var_power() {
+                                    Some(old_cost)
+                                } else if new_cost.factor() != old_cost.factor() {
+                                    Some(old_cost - new_cost)
+                                } else {
+                                    None
+                                };
+                                candidates.insert((op_i.id(), op_j.id()), (pntwise, inputs, outputs, new_cost, saving));
+                                continue 'inner;
                             }
-
-                            ir.remove_op(op_j.id())?;
-                            ir.remove_op(op_i.id())?;
-
-                            success = true;
-                            continue 'outer;
                         }
                     }
 
                     failed.insert((op_i.id(), op_j.id()));
                 }
+            }
+
+            if candidates.is_empty() {
+                break;
+            } else {
+                let first = candidates.iter().next().unwrap();
+                let mut max_saving = first.1.4;
+                let mut argmin = *first.0;
+
+                for (arg, (_, _, _, _, saving)) in &candidates {
+                    if match (max_saving, saving) {
+                        (Some(x), Some(y)) => x.is_le(*y),
+                        (None, Some(_)) => true,
+                        (_, None) => false,
+                    } {
+                        max_saving = *saving;
+                        argmin = *arg;
+                    }
+                }
+
+                let (pntwise, inputs, outputs, cost, _) = candidates.get(&argmin).cloned().unwrap();
+                let new_outputs = ir.add_op(inputs, Ok::<_, IRTrace>(pntwise))?;
+                costs.insert(ir.get_parent_op(new_outputs[0])?, cost);
+
+                for (new, old) in new_outputs.into_iter().zip(outputs) {
+                    ir.swap_outputs(new, old)?;
+                }
+
+                ir.remove_op(argmin.1)?;
+                ir.remove_op(argmin.0)?;
             }
         }
 

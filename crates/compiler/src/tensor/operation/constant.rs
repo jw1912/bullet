@@ -78,7 +78,7 @@ impl OpType for ScalarConstant {
         true
     }
 
-    fn equals(&self, _other: &TensorOp) -> bool {
-        false
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 }

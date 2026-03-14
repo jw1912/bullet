@@ -73,6 +73,10 @@ impl Size {
         self.var_power <= rhs.var_power && self.factor <= rhs.factor
     }
 
+    pub fn is_lt(&self, rhs: Self) -> bool {
+        self.var_power < rhs.var_power || (self.var_power == rhs.var_power && self.factor < rhs.factor)
+    }
+
     pub fn evaluate(&self, var_size: usize) -> usize {
         self.factor.get() * var_size.pow(self.var_power)
     }
@@ -96,6 +100,16 @@ impl Size {
 
     pub fn var_power(&self) -> u32 {
         self.var_power
+    }
+
+    pub fn dominator_sum(self, rhs: Self) -> Self {
+        if self.var_power > rhs.var_power {
+            self
+        } else if self.var_power < rhs.var_power {
+            rhs
+        } else {
+            self + rhs
+        }
     }
 }
 

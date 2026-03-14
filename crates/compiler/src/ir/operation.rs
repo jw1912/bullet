@@ -75,7 +75,7 @@ impl<T: TypeSystem> Op<T> {
         &self.outputs
     }
 
-    pub fn swap_input_with(&mut self, new: NodeId, old: NodeId) -> usize {
+    pub(super) fn swap_input_with(&mut self, new: NodeId, old: NodeId) -> usize {
         let mut count = 0;
 
         for id in &mut self.inputs {
@@ -88,7 +88,7 @@ impl<T: TypeSystem> Op<T> {
         count
     }
 
-    pub fn swap_output_with(&mut self, new: NodeId, old: NodeId) -> Result<(), IRError> {
+    pub(super) fn swap_output_with(&mut self, new: NodeId, old: NodeId) -> Result<(), IRError> {
         let mut found = false;
 
         for id in &mut self.outputs {

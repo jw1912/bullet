@@ -243,11 +243,16 @@ impl<T: TypeSystem> IR<T> {
         }
 
         for op_id in self.ops.keys().cloned().collect::<Vec<_>>() {
-            let count = self.op_mut(op_id)?.swap_input_with(new, old);
-            self.node_mut(new)?.children += count;
-            self.node_mut(old)?.children = 0;
+            self.replace_single_input(op_id, new, old)?;
         }
 
+        Ok(())
+    }
+
+    pub fn replace_single_input(&mut self, op: OpId, new: NodeId, old: NodeId) -> Result<(), IRError> {
+        let count = self.op_mut(op)?.swap_input_with(new, old);
+        self.node_mut(new)?.children += count;
+        self.node_mut(old)?.children = 0;
         Ok(())
     }
 
@@ -300,7 +305,7 @@ impl<T: TypeSystem> fmt::Display for IR<T> {
             }
         };
 
-        writeln!(f, "digraph G {{ node [style=filled,color=lightgrey];")?;
+        writeln!(f, "digraph G {{ node [style=filled,shape=rect,fillcolor=lightgrey];")?;
 
         for op_id in op_ids {
             let op = self.op(op_id).unwrap();
@@ -310,7 +315,7 @@ impl<T: TypeSystem> fmt::Display for IR<T> {
             let lbl = op_id.inner();
 
             if inputs.is_empty() {
-                writeln!(f, "op{lbl} [label=\"{opname}\", style=filled, color=lightblue];")?;
+                writeln!(f, "op{lbl} [label=\"{opname}\", style=filled, fillcolor=lightblue];")?;
             } else {
                 writeln!(f, "op{lbl} [label=\"{opname}\"];")?;
 
