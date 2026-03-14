@@ -85,7 +85,7 @@ impl<G: Gpu> Model<G> {
         inputs: &TensorMap<G>,
         outputs: &TensorMap<G>,
     ) -> Result<SyncOnValue<G, &Function<G>>, G::Error> {
-        let tensors = collect_map::<G>([("", "", &self.weights), ("inputs/", "", inputs), ("", "", outputs)]);
+        let tensors = collect_map::<G>([("weights/", &self.weights), ("inputs/", inputs), ("", outputs)]);
         let map = self.fwd_map.iter().map(|(name, &id)| (id, tensors.get(name).unwrap().clone())).collect();
         self.forward.execute(stream.clone(), &map)
     }
@@ -98,10 +98,10 @@ impl<G: Gpu> Model<G> {
         gradients: &TensorMap<G>,
     ) -> Result<SyncOnValue<G, &Function<G>>, G::Error> {
         let tensors = collect_map::<G>([
-            ("", "", &self.weights),
-            ("inputs/", "", inputs),
-            ("", "", outputs),
-            ("gradients/", "weights/", gradients),
+            ("weights/", &self.weights),
+            ("inputs/", inputs),
+            ("", outputs),
+            ("gradients/", gradients),
         ]);
         let map = self.bwd_map.iter().map(|(name, &id)| (id, tensors.get(name).unwrap().clone())).collect();
 
@@ -172,8 +172,6 @@ impl<G: Gpu> Model<G> {
 
         while offset < buf.len() {
             let (buffer, id, bytes_read) = utils::read_from_byte_buffer(&buf[offset..]);
-            let id = format!("weights/{id}");
-
             let weights = self.weights.get(&id).expect("No weight with ID found!").clone();
 
             if weights.dtype() != DType::F32 {
@@ -193,12 +191,12 @@ impl<G: Gpu> Model<G> {
     }
 }
 
-fn collect_map<'a, G: Gpu + 'a>(x: impl AsRef<[(&'a str, &'a str, &'a TensorMap<G>)]>) -> TensorMap<G> {
+fn collect_map<'a, G: Gpu + 'a>(x: impl AsRef<[(&'a str, &'a TensorMap<G>)]>) -> TensorMap<G> {
     let mut map = HashMap::new();
 
-    for (pre, strip, submap) in x.as_ref() {
+    for (pre, submap) in x.as_ref() {
         for (name, value) in submap.iter() {
-            map.insert(format!("{pre}{}", name.strip_prefix(strip).unwrap()), value.clone());
+            map.insert(format!("{pre}{name}"), value.clone());
         }
     }
 

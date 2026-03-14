@@ -200,9 +200,9 @@ impl ModelBuilder {
             if name.starts_with("weights/") {
                 let zeros = TValue::F32(vec![0.0; shape.size()]);
                 let tensor = Buffer::from_host(&stream, &zeros);
-                weights.insert(name.clone(), tensor.unwrap().value().0);
-
                 let name = name.strip_prefix("weights/").unwrap().to_string();
+
+                weights.insert(name.clone(), tensor.unwrap().value().0);
                 let gid = grads.borrow().get(&id).unwrap().unwrap();
 
                 if !frozen.contains(&id) {

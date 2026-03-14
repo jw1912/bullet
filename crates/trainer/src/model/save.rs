@@ -27,8 +27,8 @@ impl<G: Gpu> From<&Model<G>> for ModelWeights {
                 .iter()
                 .map(|(id, value)| {
                     let values = value.clone().to_host(&value.creator()).unwrap().value();
-                    let wid = id.strip_prefix("weights/").unwrap().to_string();
-                    (wid, ShapedTValue { values, shape: model.shapes.get(id).unwrap().0 })
+                    let shape = model.shapes.get(&format!("weights/{id}")).unwrap().0;
+                    (id.clone(), ShapedTValue { values, shape })
                 })
                 .collect(),
         }
