@@ -6,7 +6,7 @@ mod ttype;
 
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt,
     rc::Rc,
 };
@@ -310,7 +310,7 @@ impl TensorIR {
         self.replace_op(op, add)
     }
 
-    pub fn get_dependent_ops_set(&self, op: OpId) -> Result<HashSet<OpId>, IRTrace> {
+    pub fn get_dependent_ops_set(&self, op: OpId) -> Result<BTreeSet<OpId>, IRTrace> {
         self.ir.get_dependent_ops_set(op).map_err(|e| e.into())
     }
 

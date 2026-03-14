@@ -217,21 +217,20 @@ impl ModelBuilder {
             }
         }
 
-        fwd_map.insert("outputs/output".to_string(), output.node);
-        let forward = Function::new(device.clone(), fwd).unwrap();
+        println!("{fwd}");
 
+        fwd_map.insert("outputs/output".to_string(), output.node);
         bwd_map.insert("outputs/loss".to_string(), loss.node);
         bwd.transform(LowerForward).unwrap();
         bwd.transform(InlineSubgraphs).unwrap();
         bwd.optimise().unwrap();
-        let backward = Function::new(device.clone(), bwd).unwrap();
 
         Model {
             weights,
             shapes,
-            forward,
+            forward: Function::new(device.clone(), fwd).unwrap(),
             fwd_map,
-            backward,
+            backward: Function::new(device.clone(), bwd).unwrap(),
             bwd_map,
             fwd_output_types: [("outputs/output".to_string(), fwd_ty)].into(),
             bwd_output_types: [("outputs/loss".to_string(), bwd_ty)].into(),

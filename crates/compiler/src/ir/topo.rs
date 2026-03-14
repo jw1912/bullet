@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
-pub fn topo_order(mut edges_rev: HashMap<usize, HashSet<usize>>) -> Option<Vec<usize>> {
-    let mut edges: HashMap<usize, HashSet<usize>> = edges_rev.keys().map(|idx| (*idx, HashSet::new())).collect();
+pub fn topo_order(mut edges_rev: BTreeMap<usize, BTreeSet<usize>>) -> Option<Vec<usize>> {
+    let mut edges: BTreeMap<usize, BTreeSet<usize>> = edges_rev.keys().map(|idx| (*idx, BTreeSet::new())).collect();
 
     for (&idx, parents) in edges_rev.iter() {
         for parent in parents {
@@ -9,7 +9,7 @@ pub fn topo_order(mut edges_rev: HashMap<usize, HashSet<usize>>) -> Option<Vec<u
         }
     }
 
-    let mut leafs: HashSet<usize> =
+    let mut leafs: BTreeSet<usize> =
         edges_rev.iter().filter_map(|(&idx, parents)| parents.is_empty().then_some(idx)).collect();
 
     let mut topo = Vec::new();
@@ -35,5 +35,5 @@ pub fn topo_order(mut edges_rev: HashMap<usize, HashSet<usize>>) -> Option<Vec<u
         }
     }
 
-    (edges.values().all(HashSet::is_empty) && edges_rev.values().all(HashSet::is_empty)).then_some(topo)
+    (edges.values().all(BTreeSet::is_empty) && edges_rev.values().all(BTreeSet::is_empty)).then_some(topo)
 }

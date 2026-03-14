@@ -5,7 +5,7 @@ mod operation;
 mod topo;
 
 use std::{
-    collections::{HashMap, HashSet, hash_map::Values},
+    collections::{BTreeMap, BTreeSet, btree_map::Values},
     fmt,
 };
 
@@ -39,9 +39,9 @@ impl<T: Into<String>> From<T> for IRError {
 /// generic over the type system
 #[derive(Clone, Default, Debug)]
 pub struct IR<T: TypeSystem> {
-    nodes: HashMap<NodeId, Node<T>>,
-    ops: HashMap<OpId, Op<T>>,
-    links: HashMap<NodeId, OpId>,
+    nodes: BTreeMap<NodeId, Node<T>>,
+    ops: BTreeMap<OpId, Op<T>>,
+    links: BTreeMap<NodeId, OpId>,
 }
 
 impl<T: TypeSystem> IR<T> {
@@ -98,9 +98,9 @@ impl<T: TypeSystem> IR<T> {
 
     /// Returns an error if any graph invariants are broken, otherwise returns `Ok(())`
     pub fn check_valid(&self) -> Result<(), IRError> {
-        let mut registered_outputs = HashSet::new();
-        let mut expected_child_count = HashMap::new();
-        let mut actual_child_count: HashMap<_, _> = self.nodes().map(|x| (x.id(), 0)).collect();
+        let mut registered_outputs = BTreeSet::new();
+        let mut expected_child_count = BTreeMap::new();
+        let mut actual_child_count: BTreeMap<_, _> = self.nodes().map(|x| (x.id(), 0)).collect();
 
         fn check<T: Into<String>>(cond: bool, msg: T) -> Result<(), IRError> {
             cond.then_some(()).ok_or(format!("{}!", msg.into()).into())
@@ -252,8 +252,8 @@ impl<T: TypeSystem> IR<T> {
     }
 
     /// Finds all operations that are required to complete before this one can be performed
-    pub fn get_dependent_ops_set(&self, id: OpId) -> Result<HashSet<OpId>, IRError> {
-        let mut set: HashSet<_> = [id].into();
+    pub fn get_dependent_ops_set(&self, id: OpId) -> Result<BTreeSet<OpId>, IRError> {
+        let mut set: BTreeSet<_> = [id].into();
 
         for parent in self.op(id)?.inputs() {
             let parent_op = self.parent_op(*parent)?;
