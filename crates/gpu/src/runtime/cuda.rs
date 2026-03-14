@@ -238,14 +238,14 @@ impl GpuBindings for Cuda {
             &config.alpha,
             a as *const f32,
             if config.row_mjr_a { config.k } else { config.m },
-            (config.m * config.n).into(),
+            (config.m * config.k).into(),
             b as *const f32,
             if config.row_mjr_b { config.n } else { config.k },
-            (config.n * config.k).into(),
+            (config.k * config.n).into(),
             &config.beta,
             c as *mut f32,
             config.m,
-            (config.m * config.k).into(),
+            (config.m * config.n).into(),
             batch_size,
         ))
     }
