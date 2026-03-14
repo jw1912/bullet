@@ -50,17 +50,37 @@ impl SubGraph {
         &self.outputs
     }
 
-    pub fn from_op(op: TensorOp) -> Result<Self, IRTrace> {
+    pub fn from_op(op: TensorOp, outer_inputs: &[NodeId]) -> Result<(Self, Vec<NodeId>), IRTrace> {
         let mut ir = TensorIR::default();
 
-        let inputs = op.inputs().iter().map(|&i| ir.add_input(i)).collect();
-        let outputs = ir.add_dyn_op(&inputs, Ok::<_, IRTrace>(op))?;
+        if outer_inputs.len() != op.inputs().len() {
+            return Err("Mismatched inputs length in SubGraph::from_op!".into());
+        }
+
+        let mut seen = HashMap::new();
+        let mut sub_inputs = Vec::new();
+        let mut op_inputs = Vec::new();
+        let mut filtered = Vec::new();
+
+        for (&i, &id) in op.inputs().iter().zip(outer_inputs) {
+            if let Some(&new) = seen.get(&id) {
+                op_inputs.push(new);
+            } else {
+                let new = ir.add_input(i);
+                seen.insert(id, new);
+                filtered.push(id);
+                sub_inputs.push(new);
+                op_inputs.push(new);
+            }
+        }
+
+        let outputs = ir.add_dyn_op(&op_inputs, Ok::<_, IRTrace>(op))?;
 
         for &output in &outputs {
             ir.register_output(output);
         }
 
-        Self::new(ir, inputs, outputs)
+        Self::new(ir, sub_inputs, outputs).map(|x| (x, filtered))
     }
 }
 

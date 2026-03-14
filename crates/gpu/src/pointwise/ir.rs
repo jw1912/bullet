@@ -299,6 +299,8 @@ impl PointwiseIR {
                     src = src.replace(&format!("OUT{}", i + 1), &name(id));
                 }
 
+                src = src.replace("UNIQ", &format!("uniq_{}_", op_id.inner()));
+
                 writeln!(&mut code, "{src}")?;
             }
         }

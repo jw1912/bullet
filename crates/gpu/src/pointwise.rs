@@ -3,12 +3,15 @@ mod ir;
 mod operations;
 mod write;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use bullet_compiler::tensor::{
-    IRTrace, OpType, TType, TValue, TensorIR, TensorOp,
-    operation::SubGraph,
-    transform::{IRTransform, modify::AddOperation},
+use bullet_compiler::{
+    ir::{NodeId, Op},
+    tensor::{
+        IRTrace, OpType, TType, TValue, Tensor, TensorIR, TensorOp,
+        operation::SubGraph,
+        transform::{IRTransform, inline::InlineSubgraphs, modify::AddOperation},
+    },
 };
 
 pub use ir::PointwiseIR;
@@ -25,8 +28,9 @@ impl FusedPointwise {
         Ok(maybe_ir.map(|ir| Self { sub, ir }))
     }
 
-    pub fn from_op(op: TensorOp) -> Result<Option<Self>, IRTrace> {
-        Self::new(SubGraph::from_op(op)?)
+    pub fn from_op(op: TensorOp, inputs: &[NodeId]) -> Result<Option<(Self, Vec<NodeId>)>, IRTrace> {
+        let (graph, inputs) = SubGraph::from_op(op, inputs)?;
+        Ok(Self::new(graph)?.map(|x| (x, inputs)))
     }
 }
 
@@ -54,8 +58,8 @@ impl IRTransform for LowerPointwise {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         // lower individual ops to FusedPointwise
         for op in ir.operations() {
-            if let Some(pntwise) = FusedPointwise::from_op(op.data().clone())? {
-                let add = AddOperation::new(op.inputs(), Ok(TensorOp::new(pntwise)));
+            if let Some((pntwise, inputs)) = FusedPointwise::from_op(op.data().clone(), op.inputs()).unwrap() {
+                let add = AddOperation::new(inputs, Ok(TensorOp::new(pntwise)));
                 ir.replace_op(op.id(), add)?;
             }
         }
@@ -80,7 +84,19 @@ impl IRTransform for LowerPointwise {
                     // and `op_j` if there does not exist an in between op that is dependent
                     // on `op_i` and is depended upon by `op_j`
                     if ir.is_immediate_dependent_op(op_i.id(), op_j.id())? {
-                        continue 'outer;
+                        let (subgraph, inputs, outputs) = fuse_subgraphs(ir, op_i, op_j)?;
+                        if let Some(pntwise) = FusedPointwise::new(subgraph.clone())? {
+                            let new_outputs = ir.add_op(inputs, Ok::<_, IRTrace>(pntwise))?;
+                            for (new, old) in new_outputs.into_iter().zip(outputs) {
+                                ir.swap_outputs(new, old)?;
+                            }
+
+                            ir.remove_op(op_j.id())?;
+                            ir.remove_op(op_i.id())?;
+
+                            success = true;
+                            continue 'outer;
+                        }
                     }
 
                     failed.insert((op_i.id(), op_j.id()));
@@ -112,4 +128,68 @@ impl IRTransform for LowerPointwise {
 
         Ok(())
     }
+}
+
+fn fuse_subgraphs(
+    ir: &TensorIR,
+    op_i: &Op<Tensor>,
+    op_j: &Op<Tensor>,
+) -> Result<(SubGraph, Vec<NodeId>, Vec<NodeId>), IRTrace> {
+    let sub_i = &op_i.data().downcast::<FusedPointwise>().unwrap().sub;
+    let sub_j = &op_j.data().downcast::<FusedPointwise>().unwrap().sub;
+
+    let mut new_sub = TensorIR::default();
+
+    let mut map = HashMap::new();
+    let mut inputs_i = Vec::new();
+    for &input in op_i.inputs() {
+        let new_input = new_sub.add_input(ir.get_node(input)?.ty());
+        map.insert(input, new_input);
+        inputs_i.push(new_input);
+    }
+
+    let mut total_outputs = Vec::new();
+
+    let op_j_set = op_j.inputs().iter().cloned().collect::<HashSet<_>>();
+
+    let outputs_i = new_sub.add_op(inputs_i, Ok::<_, IRTrace>(sub_i.clone()))?;
+    for (&out, &new_out) in op_i.outputs().iter().zip(outputs_i.iter()) {
+        map.insert(out, new_out);
+
+        if !op_j_set.contains(&out) || ir.get_node(out)?.children() > 1 {
+            total_outputs.push(out);
+            new_sub.register_output(new_out);
+        }
+    }
+
+    let mut total_inputs = op_i.inputs().to_vec();
+
+    let mut inputs_j = Vec::new();
+    for &input in op_j.inputs() {
+        if let Some(&new_input) = map.get(&input) {
+            inputs_j.push(new_input);
+        } else {
+            let new_input = new_sub.add_input(ir.get_node(input)?.ty());
+            map.insert(input, new_input);
+            inputs_j.push(new_input);
+            total_inputs.push(input);
+        }
+    }
+
+    let outputs_j = new_sub.add_op(inputs_j, Ok::<_, IRTrace>(sub_j.clone()))?;
+    for (&out, &new_out) in op_j.outputs().iter().zip(outputs_j.iter()) {
+        map.insert(out, new_out);
+        total_outputs.push(out);
+        new_sub.register_output(new_out);
+    }
+
+    new_sub.transform(InlineSubgraphs)?;
+
+    let subgraph = SubGraph::new(
+        new_sub,
+        total_inputs.iter().map(|x| *map.get(x).unwrap()).collect(),
+        total_outputs.iter().map(|x| *map.get(x).unwrap()).collect(),
+    )?;
+
+    Ok((subgraph, total_inputs, total_outputs))
 }
