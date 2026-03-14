@@ -229,6 +229,14 @@ impl<G: Gpu> Buffer<G> {
         stream: &Arc<Stream<G>>,
         value: &'a TValue,
     ) -> Result<SyncOnValue<G, &'a TValue>, G::Error> {
+        if self.size() != value.size() {
+            return Err(format!("Mismatched sizes: {} != {}", self.size(), value.size()).into());
+        }
+
+        if self.dtype() != value.dtype() {
+            return Err(format!("Mismatched DType: {:?} != {:?}", self.dtype(), value.dtype()).into());
+        }
+
         unsafe {
             let mut sync = SyncOnDrop::new(stream.clone());
             let guard = self.clone().acquire(stream.clone())?;

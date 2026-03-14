@@ -31,7 +31,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu},
 };
 
-use crate::model::{Model, Shape};
+use crate::model::{Model, Shape, rng};
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitSettings {
@@ -198,8 +198,13 @@ impl ModelBuilder {
             }
 
             if name.starts_with("weights/") {
-                let zeros = TValue::F32(vec![0.0; shape.size()]);
-                let tensor = Buffer::from_host(&stream, &zeros);
+                let init = match self.init.lock().unwrap().get(&id).unwrap() {
+                    InitSettings::Zeroed => vec![0.0; shape.size()],
+                    InitSettings::Uniform { mean, stdev } => rng::vec_f32(shape.size(), *mean, *stdev, false),
+                    InitSettings::Normal { mean, stdev } => rng::vec_f32(shape.size(), *mean, *stdev, true),
+                };
+                let init = TValue::F32(init);
+                let tensor = Buffer::from_host(&stream, &init);
                 let name = name.strip_prefix("weights/").unwrap().to_string();
 
                 weights.insert(name.clone(), tensor.unwrap().value().0);

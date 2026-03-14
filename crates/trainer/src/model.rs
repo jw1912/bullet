@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod rng;
 pub mod save;
 pub mod utils;
 
