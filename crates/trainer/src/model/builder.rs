@@ -217,8 +217,6 @@ impl ModelBuilder {
             }
         }
 
-        println!("{fwd}");
-
         fwd_map.insert("outputs/output".to_string(), output.node);
         bwd_map.insert("outputs/loss".to_string(), loss.node);
         bwd.transform(LowerForward).unwrap();

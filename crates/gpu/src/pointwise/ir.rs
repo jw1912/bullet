@@ -391,7 +391,6 @@ impl PointwiseIR {
                 arg_order.push((inputs.len(), true));
                 inputs.push(TType::new(size, dtype));
             } else {
-                println!("{}", self.source_code(&name).unwrap());
                 return Err("Unused buffer!".into());
             }
         }
