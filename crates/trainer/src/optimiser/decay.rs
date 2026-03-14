@@ -36,7 +36,7 @@ fn build_decay_op(size: usize, decay: f32) -> Result<KernelSrc, IRError> {
 
     pntwise.write(w, pntwise.tid(), new_w)?;
 
-    unsafe { pntwise.lower() }
+    unsafe { pntwise.lower("decay".to_string()) }
 }
 
 #[derive(Clone, Debug)]

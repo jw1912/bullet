@@ -25,7 +25,7 @@ fn build_clip_op(size: usize, min: f32, max: f32) -> Result<KernelSrc, IRError> 
     let new_w = pntwise.binary(high, min, CABinary::Max)?;
     pntwise.write(w, pntwise.tid(), new_w)?;
 
-    unsafe { pntwise.lower() }
+    unsafe { pntwise.lower("clip".to_string()) }
 }
 
 #[derive(Clone, Debug)]

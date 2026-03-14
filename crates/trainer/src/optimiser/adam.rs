@@ -50,7 +50,7 @@ __device__ __forceinline__ void adamOp(
 }";
 
 const DECL: &str = "
-extern \"C\" __global__ void kernel(
+extern \"C\" __global__ void adamw(
     const float* adj_ptr,
     const float* rate_ptr,
     const float* gradients,
@@ -124,6 +124,7 @@ impl AdamWParams {
             KernelSrc::new(
                 vec![TType::new(1, DType::F32), TType::new(1, DType::F32), ty],
                 vec![ty; 3],
+                "adamw".to_string(),
                 format!("{op}{DECL}{{{body}}}"),
                 false,
                 vec![(0, true), (1, true), (2, true), (0, false), (1, false), (2, false)],

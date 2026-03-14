@@ -11,6 +11,7 @@ use crate::{
 pub struct KernelSrc {
     pub(crate) inputs: Vec<TType>,
     pub(crate) outputs: Vec<TType>,
+    pub(crate) name: String,
     pub(crate) source: String,
     pub(crate) requires_var_size_arg: bool,
     pub(crate) arg_order: Vec<(usize, bool)>,
@@ -37,6 +38,7 @@ impl KernelSrc {
     pub unsafe fn new(
         inputs: Vec<TType>,
         outputs: Vec<TType>,
+        name: String,
         source: String,
         requires_var_size_arg: bool,
         arg_order: Vec<(usize, bool)>,
@@ -55,11 +57,11 @@ impl KernelSrc {
             arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<HashSet<_>>().len()
         );
 
-        Self { inputs, outputs, source, requires_var_size_arg, arg_order, requires_zero, gdim, bdim, smem }
+        Self { inputs, outputs, name, source, requires_var_size_arg, arg_order, requires_zero, gdim, bdim, smem }
     }
 
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
-        let kernel = Module::new(device, &self.source)?.get_kernel("kernel")?;
+        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name)?;
 
         Ok(CompiledKernel {
             inputs: self.inputs.clone(),
@@ -77,7 +79,7 @@ impl KernelSrc {
 
 impl OpType for KernelSrc {
     fn opname(&self) -> String {
-        "gpu.kernel.source".to_string()
+        format!("gpu.kernel.{}", self.name)
     }
 
     fn inputs(&self) -> Vec<TType> {

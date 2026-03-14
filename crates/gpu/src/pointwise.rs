@@ -91,7 +91,7 @@ impl IRTransform for LowerPointwise {
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {
             if let Some(pntwise) = op.data().downcast::<FusedPointwise>() {
-                let src = unsafe { pntwise.ir.lower()? };
+                let src = unsafe { pntwise.ir.lower(format!("kernel{}", op.id().inner()))? };
 
                 for (&i1, &i2) in op.data().inputs().iter().zip(src.inputs.iter()) {
                     if i1 != i2 {

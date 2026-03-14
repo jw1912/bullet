@@ -280,7 +280,7 @@ impl PointwiseIR {
         Ok(false)
     }
 
-    pub fn source_code(&self) -> Result<String, fmt::Error> {
+    pub fn source_code(&self, kernel_name: &str) -> Result<String, fmt::Error> {
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
@@ -305,7 +305,7 @@ impl PointwiseIR {
 
         let mut src = String::new();
 
-        write!(&mut src, "extern \"C\" __global__ void kernel(")?;
+        write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
 
         let varp = self.size.var_power();
         if varp > 0 {
@@ -367,7 +367,7 @@ impl PointwiseIR {
     /// ### Safety
     ///
     /// User must ensure same invariants as KernelSrc hold
-    pub unsafe fn lower(&self) -> Result<KernelSrc, IRError> {
+    pub unsafe fn lower(&self, name: String) -> Result<KernelSrc, IRError> {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
@@ -391,18 +391,19 @@ impl PointwiseIR {
                 arg_order.push((inputs.len(), true));
                 inputs.push(TType::new(size, dtype));
             } else {
-                println!("{}", self.source_code().unwrap());
+                println!("{}", self.source_code(&name).unwrap());
                 return Err("Unused buffer!".into());
             }
         }
 
-        let source = self.source_code().map_err(|e| IRError::from(format!("{e:?}")))?;
+        let source = self.source_code(&name).map_err(|e| IRError::from(format!("{e:?}")))?;
         let total = self.size;
 
         unsafe {
             Ok(KernelSrc::new(
                 inputs,
                 outputs,
+                name,
                 source,
                 self.size.var_power() > 0,
                 arg_order,
@@ -445,7 +446,7 @@ mod tests {
         ir.write(input2, tid, value4).unwrap();
 
         let device = Device::<G>::new(0)?;
-        let kernel = unsafe { ir.lower().unwrap() }.compile(device.clone())?;
+        let kernel = unsafe { ir.lower("fmadd".to_string()).unwrap() }.compile(device.clone())?;
         let stream = Stream::new(device)?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);

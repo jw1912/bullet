@@ -17,7 +17,7 @@ impl OpId {
         Self(id)
     }
 
-    pub(super) fn inner(self) -> usize {
+    pub fn inner(self) -> usize {
         self.0
     }
 }

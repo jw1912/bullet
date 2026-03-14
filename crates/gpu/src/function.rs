@@ -90,7 +90,7 @@ impl<G: Gpu> Function<G> {
             // insert kernels
             let data = op.data();
             if let Some(KernelSrc {
-                source, requires_var_size_arg, arg_order, gdim, bdim, smem, requires_zero, ..
+                name, source, requires_var_size_arg, arg_order, gdim, bdim, smem, requires_zero, ..
             }) = data.downcast().cloned()
             {
                 let mut args = Vec::new();
@@ -112,7 +112,7 @@ impl<G: Gpu> Function<G> {
 
                 let func = Module::new(device.clone(), source.clone())
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?
-                    .get_kernel("kernel")
+                    .get_kernel(name)
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });

@@ -37,7 +37,7 @@ fn build_ranger_op(size: usize, alpha: f32) -> Result<KernelSrc, IRError> {
     pntwise.write(w, pntwise.tid(), new_w)?;
     pntwise.write(s, pntwise.tid(), new_w)?;
 
-    unsafe { pntwise.lower() }
+    unsafe { pntwise.lower("ranger".to_string()) }
 }
 
 #[derive(Clone, Debug)]
