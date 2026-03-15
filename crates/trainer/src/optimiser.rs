@@ -7,6 +7,7 @@ pub mod utils;
 
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
+use bullet_compiler::tensor::TValue;
 use bullet_gpu::{
     buffer::{Buffer, SyncOnValue},
     kernel::CompiledKernel,
@@ -15,7 +16,33 @@ use bullet_gpu::{
 
 use crate::model::{Model, TensorMap};
 
-type OptimiserUpdateResult<'a, G> = Result<Vec<SyncOnValue<G, &'a CompiledKernel<G>>>, <G as Gpu>::Error>;
+pub struct OptimiserUpdateSync<'a, G: Gpu> {
+    kernels: Vec<SyncOnValue<G, &'a CompiledKernel<G>>>,
+    copies: Vec<SyncOnValue<G, &'a TValue>>,
+}
+
+impl<'a, G: Gpu> Default for OptimiserUpdateSync<'a, G> {
+    fn default() -> Self {
+        Self { kernels: Vec::new(), copies: Vec::new() }
+    }
+}
+
+impl<'a, G: Gpu> OptimiserUpdateSync<'a, G> {
+    pub fn push_kernel(&mut self, val: SyncOnValue<G, &'a CompiledKernel<G>>) {
+        self.kernels.push(val);
+    }
+
+    pub fn push_copy(&mut self, val: SyncOnValue<G, &'a TValue>) {
+        self.copies.push(val);
+    }
+
+    pub fn extend_by(&mut self, mut other: Self) {
+        self.kernels.append(&mut other.kernels);
+        self.copies.append(&mut other.copies);
+    }
+}
+
+type OptimiserUpdateResult<'a, G> = Result<OptimiserUpdateSync<'a, G>, <G as Gpu>::Error>;
 
 pub trait OptimiserState<G: Gpu>: Sized {
     type Params: Clone + Debug + Default;
@@ -81,37 +108,31 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
         learning_rate: Arc<Buffer<G>>,
         gradients: &TensorMap<G>,
     ) -> OptimiserUpdateResult<'a, G> {
-        let mut blocks = Vec::new();
+        let mut sync = OptimiserUpdateSync::default();
 
         for additional in &mut self.pre_update {
-            for sync in additional.apply_update(&self.model)? {
-                blocks.push(sync);
-            }
+            sync.extend_by(additional.apply_update(&self.model)?);
         }
 
         for (id, single) in &mut self.state {
             let weight = self.model.weights().get(id).unwrap();
 
             if let Some(grads) = gradients.get(id) {
-                for sync in single.update(
+                sync.extend_by(single.update(
                     stream,
                     weight.clone(),
                     grads.clone(),
                     gradient_factor.clone(),
                     learning_rate.clone(),
-                )? {
-                    blocks.push(sync);
-                }
+                )?);
             }
         }
 
         for additional in &mut self.post_update {
-            for sync in additional.apply_update(&self.model)? {
-                blocks.push(sync);
-            }
+            sync.extend_by(additional.apply_update(&self.model)?);
         }
 
-        Ok(blocks)
+        Ok(sync)
     }
 
     pub fn reset_state(&mut self) -> Result<(), G::Error> {

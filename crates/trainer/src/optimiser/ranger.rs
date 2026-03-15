@@ -11,7 +11,7 @@ use bullet_gpu::{
     runtime::{Gpu, Stream},
 };
 
-use crate::optimiser::OptimiserUpdateResult;
+use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{
     OptimiserState, WrapOptimiser,
@@ -82,13 +82,13 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
         gradient_factor: Arc<Buffer<G>>,
         learning_rate: Arc<Buffer<G>>,
     ) -> OptimiserUpdateResult<'a, G> {
-        let mut blocks = Vec::new();
+        let mut blocks = OptimiserUpdateSync::default();
 
         self.step += 1;
-        blocks.extend(self.inner.update(stream, weights.clone(), grads, gradient_factor, learning_rate)?);
+        blocks.extend_by(self.inner.update(stream, weights.clone(), grads, gradient_factor, learning_rate)?);
 
         if self.step.is_multiple_of(self.k) {
-            blocks.push(self.op.execute(stream.clone(), Vec::new(), vec![weights, self.slow_params.clone()])?);
+            blocks.push_kernel(self.op.execute(stream.clone(), Vec::new(), vec![weights, self.slow_params.clone()])?);
         }
 
         Ok(blocks)

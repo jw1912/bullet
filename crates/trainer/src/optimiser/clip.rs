@@ -11,6 +11,8 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
+use crate::optimiser::OptimiserUpdateSync;
+
 use super::{OptimiserState, OptimiserUpdateResult, utils::Placement};
 
 fn build_clip_op(size: usize, min: f32, max: f32) -> Result<KernelSrc, IRError> {
@@ -73,14 +75,14 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightClipping<G, S> {
         gradient_factor: Arc<Buffer<G>>,
         learning_rate: Arc<Buffer<G>>,
     ) -> OptimiserUpdateResult<'a, G> {
-        let mut blocks = Vec::new();
+        let mut blocks = OptimiserUpdateSync::default();
 
         if self.placement == Placement::Before {
-            blocks.push(self.op.execute(stream.clone(), Vec::new(), vec![weights.clone()])?);
-            blocks.extend(self.inner.update(stream, weights, grads, gradient_factor, learning_rate)?);
+            blocks.push_kernel(self.op.execute(stream.clone(), Vec::new(), vec![weights.clone()])?);
+            blocks.extend_by(self.inner.update(stream, weights, grads, gradient_factor, learning_rate)?);
         } else {
-            blocks.extend(self.inner.update(stream, weights.clone(), grads, gradient_factor, learning_rate)?);
-            blocks.push(self.op.execute(stream.clone(), Vec::new(), vec![weights])?);
+            blocks.extend_by(self.inner.update(stream, weights.clone(), grads, gradient_factor, learning_rate)?);
+            blocks.push_kernel(self.op.execute(stream.clone(), Vec::new(), vec![weights])?);
         }
 
         Ok(blocks)

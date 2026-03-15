@@ -11,7 +11,7 @@ use bullet_gpu::{
     runtime::{Dim3, Gpu, Stream},
 };
 
-use crate::optimiser::OptimiserUpdateResult;
+use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{OptimiserState, utils};
 
@@ -172,13 +172,15 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
         gradient_factor: Arc<Buffer<G>>,
         learning_rate: Arc<Buffer<G>>,
     ) -> OptimiserUpdateResult<'a, G> {
-        self.op
-            .execute(
-                stream.clone(),
-                vec![gradient_factor, learning_rate, grads],
-                vec![weights, self.momentum.clone(), self.velocity.clone()],
-            )
-            .map(|x| vec![x])
+        let mut sync = OptimiserUpdateSync::default();
+
+        sync.push_kernel(self.op.execute(
+            stream.clone(),
+            vec![gradient_factor, learning_rate, grads],
+            vec![weights, self.momentum.clone(), self.velocity.clone()],
+        )?);
+
+        Ok(sync)
     }
 
     fn reset(&mut self) -> Result<(), G::Error> {

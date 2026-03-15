@@ -1,18 +1,19 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::File,
     io::{BufRead, BufReader, Write},
+    rc::Rc,
     sync::Arc,
 };
 
-use bullet_compiler::tensor::{DType, DValue, IRTrace, TValue};
+use bullet_compiler::tensor::{DType, DValue, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    runtime::{Gpu, Stream},
+    runtime::{Dim3, Gpu, Stream},
 };
 
-use crate::optimiser::OptimiserUpdateResult;
+use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{OptimiserState, utils};
 
@@ -31,9 +32,121 @@ impl Default for RAdamParams {
     }
 }
 
+const OP: &str = "\
+__device__ __forceinline__ void radamOp(
+    const float grad,
+    const float rate,
+    const int denom,
+    float* p,
+    float* m,
+    float* v
+) {
+    p[0] *= 1.0F - static_cast<float>(DECAY) * rate;
+
+    m[0] = static_cast<float>(BETA1) * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
+    v[0] = static_cast<float>(BETA2) * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
+
+    float val = m[0];
+    if (denom) val /= sqrt(v[0]) + EPSILON;
+    p[0] -= rate * val;
+
+    p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
+}";
+
+const DECL: &str = "
+extern \"C\" __global__ void radam(
+    const float* adj_ptr,
+    const float* rate_ptr,
+    const float* step_size_ptr,
+    const int* denom_ptr,
+    const float* gradients,
+    float* network,
+    float* momentum,
+    float* velocity
+)";
+
 impl RAdamParams {
-    pub fn build(&self, _size: usize) -> Result<KernelSrc, IRTrace> {
-        unimplemented!()
+    pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
+        let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
+
+        let op = OP
+            .replace("DECAY", &self.decay.to_string())
+            .replace("BETA1", &self.beta1.to_string())
+            .replace("BETA2", &self.beta2.to_string())
+            .replace("WMIN", &min.to_string())
+            .replace("WMAX", &max.to_string())
+            .replace("EPSILON", "0.00000001F");
+
+        let body = if size.is_multiple_of(4) {
+            format!(
+                "
+                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+                if (tid < {})
+                {{
+                    const float adj = adj_ptr[0];
+                    const float rate = rate_ptr[0] * step_size_ptr[0];
+                    const int denom = denom_ptr[0];
+                    float4 p = ((float4 *)network)[tid];
+                    float4 m = ((float4 *)momentum)[tid];
+                    float4 v = ((float4 *)velocity)[tid];
+                    const float4 g = ((const float4 *)gradients)[tid];
+
+                    radamOp(adj * g.x, rate, denom, &p.x, &m.x, &v.x);
+                    radamOp(adj * g.y, rate, denom, &p.y, &m.y, &v.y);
+                    radamOp(adj * g.z, rate, denom, &p.z, &m.z, &v.z);
+                    radamOp(adj * g.w, rate, denom, &p.w, &m.w, &v.w);
+
+                    ((float4 *)network)[tid] = p;
+                    ((float4 *)momentum)[tid] = m;
+                    ((float4 *)velocity)[tid] = v;
+                }}",
+                size / 4,
+            )
+        } else {
+            format!(
+                "
+                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+                if (tid < {size})
+                {{
+                    const float adj = adj_ptr[0];
+                    const float rate = rate_ptr[0] * step_size_ptr[0];
+                    const int denom = denom_ptr[0];
+                    float p = network[tid];
+                    float m = momentum[tid];
+                    float v = velocity[tid];
+                    const float g = gradients[tid];
+
+                    radamOp(adj * g, rate, denom, &p, &m, &v);
+
+                    network[tid] = p;
+                    momentum[tid] = m;
+                    velocity[tid] = v;
+                }}"
+            )
+        };
+
+        let ty = TType::new(size, DType::F32);
+        let sty = TType::new(1, DType::F32);
+
+        let total_threads = if size.is_multiple_of(4) { size / 4 } else { size };
+        let src = unsafe {
+            KernelSrc::new(
+                vec![sty, sty, sty, TType::new(1, DType::I32), ty],
+                vec![ty; 3],
+                "radam".to_string(),
+                format!("{op}{DECL}{{{body}}}"),
+                false,
+                vec![(0, true), (1, true), (2, true), (3, true), (4, true), (0, false), (1, false), (2, false)],
+                HashSet::new(),
+                Rc::new(move |_| Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 }),
+                Rc::new(|_| 256),
+                Rc::new(|_| 0),
+            )
+        };
+
+        Ok(src)
     }
 }
 
@@ -45,6 +158,8 @@ pub struct RAdam<G: Gpu> {
     step: usize,
     step_size: Arc<Buffer<G>>,
     denom: Arc<Buffer<G>>,
+    cpu_step_size: TValue,
+    cpu_denom: TValue,
 }
 
 impl<G: Gpu> OptimiserState<G> for RAdam<G> {
@@ -60,7 +175,9 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
             params: default_params,
             step: 0,
             step_size: Buffer::from_host(stream, &TValue::zeros(DType::F32, 1))?.value().0,
-            denom: Buffer::from_host(stream, &TValue::zeros(DType::F32, 1))?.value().0,
+            denom: Buffer::from_host(stream, &TValue::zeros(DType::I32, 1))?.value().0,
+            cpu_step_size: TValue::F32(vec![0.0]),
+            cpu_denom: TValue::I32(vec![0]),
         })
     }
 
@@ -95,15 +212,23 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
             1.0 / denom
         };
 
-        let denom = f32::from(n_sma > params.n_sma_threshold);
+        let denom = i32::from(n_sma > params.n_sma_threshold);
 
-        let mut blocks = Vec::new();
+        self.cpu_step_size.write(0, DValue::F32(step_size));
+        self.cpu_denom.write(0, DValue::I32(denom));
 
-        let scalars = [(DValue::F32(step_size), self.step_size.clone()), (DValue::F32(denom), self.denom.clone())];
+        let mut sync = OptimiserUpdateSync::default();
 
-        unimplemented!();
+        sync.push_copy(self.step_size.copy_from_host(stream, &self.cpu_step_size)?);
+        sync.push_copy(self.denom.copy_from_host(stream, &self.cpu_denom)?);
 
-        Ok(blocks)
+        sync.push_kernel(self.op.execute(
+            stream.clone(),
+            vec![gradient_factor, learning_rate, self.step_size.clone(), self.denom.clone(), grads],
+            vec![weights, self.momentum.clone(), self.velocity.clone()],
+        )?);
+
+        Ok(sync)
     }
 
     fn reset(&mut self) -> Result<(), G::Error> {
