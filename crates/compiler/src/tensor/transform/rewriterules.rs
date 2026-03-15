@@ -4,7 +4,10 @@ use crate::{
     ir::Op,
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
-        operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, ScalarConstant, UnaryOp},
+        operation::{
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, ScalarConstant,
+            SliceAcrossDimension, UnaryOp, autograd::AutogradOp,
+        },
         transform::IRTransform,
     },
 };
@@ -200,6 +203,125 @@ rewriterule! {
             let x = x.id();
             let new_scalar = ir.add_scalar(new_value, scalar1.1);
             ir.replace_operation(op.id(), [new_scalar, x], new_op)?;
+            return Ok(true);
+        }
+    }
+}
+
+rewriterule! {
+    rulename ConcatMatmulToAddSlicedMatmuls on ir
+    rewrites op (matmul = [Matmul]
+        (matrix)
+        (add = [CABinaryOp] (lhs = [PadAcrossDimension] (a)) (rhs = [PadAcrossDimension] (b))))
+    {
+        if add.op() == CABinary::Add
+            && ir.get_node(op.inputs()[1])?.children() == 1
+            && matmul.lhs.col_mjr
+            && matmul.rhs.col_mjr
+            && matmul.batch == 1.into()
+            && lhs.inner() == 1.into()
+            && rhs.inner() == 1.into()
+        {
+            let dtype = a.ty().dtype();
+            let matrix = matrix.id();
+            let a = a.id();
+            let b = b.id();
+            let lhs = *lhs;
+            let rhs = *rhs;
+
+            let lhs_slice = SliceAcrossDimension::new(
+                dtype,
+                [matmul.lhs.cols, matmul.lhs.rows],
+                0,
+                lhs.before(),
+                lhs.before() + lhs.dimen(),
+            );
+            let lhs_matrix = ir.add_op([matrix], lhs_slice)?[0];
+
+            let rhs_slice = SliceAcrossDimension::new(
+                dtype,
+                [matmul.lhs.cols, matmul.lhs.rows],
+                0,
+                rhs.before(),
+                rhs.before() + rhs.dimen(),
+            );
+            let rhs_matrix = ir.add_op([matrix], rhs_slice)?[0];
+
+            let lm = MatrixLayout { cols: lhs.dimen().into(), ..matmul.lhs };
+            let rm = MatrixLayout { rows: lhs.dimen().into(), ..matmul.rhs };
+            let new_op = Matmul::new(dtype, 1, lm, rm);
+            let new_lhs = ir.add_op([lhs_matrix, a], new_op)?[0];
+
+            let lm = MatrixLayout { cols: rhs.dimen().into(), ..matmul.lhs };
+            let rm = MatrixLayout { rows: rhs.dimen().into(), ..matmul.rhs };
+            let new_op = Matmul::new(dtype, 1, lm, rm);
+            let new_rhs = ir.add_op([rhs_matrix, b], new_op)?[0];
+
+            let ty = ir.get_node(new_rhs)?.ty();
+            let add = CABinaryOp::new(ty, CABinary::Add);
+            ir.replace_operation(op.id(), [new_lhs, new_rhs], add)?;
+            return Ok(true);
+        }
+    }
+}
+
+rewriterule! {
+    rulename AutogradConcatMatmulToAddSlicedMatmuls on ir
+    rewrites op (matmul = [AutogradOp]
+        (matrix)
+        (add = [AutogradOp] (lhs = [AutogradOp] (a)) (rhs = [AutogradOp] (b))))
+    {
+        if let Some(matmul) = matmul.downcast::<Matmul>()
+            && let Some(add) = add.downcast::<CABinaryOp>()
+            && let Some(lhs) = lhs.downcast::<PadAcrossDimension>()
+            && let Some(rhs) = rhs.downcast::<PadAcrossDimension>()
+            && add.op() == CABinary::Add
+            && ir.get_node(op.inputs()[1])?.children() == 1
+            && !ir.is_output(op.inputs()[1])
+            && matmul.lhs.col_mjr
+            && matmul.rhs.col_mjr
+            && matmul.batch == 1.into()
+            && lhs.inner() == 1.into()
+            && rhs.inner() == 1.into()
+        {
+            let dtype = a.ty().dtype();
+            let matrix = matrix.id();
+            let a = a.id();
+            let b = b.id();
+            let lhs = *lhs;
+            let rhs = *rhs;
+
+            let lhs_slice = SliceAcrossDimension::new(
+                dtype,
+                [matmul.lhs.cols, matmul.lhs.rows],
+                0,
+                lhs.before(),
+                lhs.before() + lhs.dimen(),
+            ).map(AutogradOp::new)?;
+            let lhs_matrix = ir.add_op([matrix], lhs_slice)?[0];
+
+            let rhs_slice = SliceAcrossDimension::new(
+                dtype,
+                [matmul.lhs.cols, matmul.lhs.rows],
+                0,
+                rhs.before(),
+                rhs.before() + rhs.dimen(),
+            ).map(AutogradOp::new)?;
+            let rhs_matrix = ir.add_op([matrix], rhs_slice)?[0];
+
+            let lm = MatrixLayout { cols: lhs.dimen().into(), ..matmul.lhs };
+            let rm = MatrixLayout { rows: lhs.dimen().into(), ..matmul.rhs };
+            let new_op = Matmul::new(dtype, 1, lm, rm).map(AutogradOp::new)?;
+            let new_lhs = ir.add_op([lhs_matrix, a], new_op)?[0];
+
+            let lm = MatrixLayout { cols: rhs.dimen().into(), ..matmul.lhs };
+            let rm = MatrixLayout { rows: rhs.dimen().into(), ..matmul.rhs };
+            let new_op = Matmul::new(dtype, 1, lm, rm).map(AutogradOp::new)?;
+            let new_rhs = ir.add_op([rhs_matrix, b], new_op)?[0];
+
+            let ty = ir.get_node(new_rhs)?.ty();
+            let add = AutogradOp::new(CABinaryOp::new(ty, CABinary::Add))?;
+            ir.replace_operation(op.id(), [new_lhs, new_rhs], add)?;
             return Ok(true);
         }
     }

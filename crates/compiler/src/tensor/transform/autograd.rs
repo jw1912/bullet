@@ -46,6 +46,28 @@ impl TakeGradient {
 
 impl IRTransform for TakeGradient {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        let mut registered = HashSet::new();
+
+        for out in ir.get_op(self.root)?.outputs().to_vec() {
+            if !ir.is_output(out) {
+                registered.insert(out);
+                ir.register_output(out);
+            }
+        }
+
+        for &out_grd in &self.output_grads {
+            if !ir.is_output(out_grd) {
+                registered.insert(out_grd);
+                ir.register_output(out_grd);
+            }
+        }
+
+        ir.optimise()?;
+
+        for out_grd in registered {
+            ir.unregister_output(out_grd);
+        }
+
         let ops = ir.get_dependent_ops_set(self.root)?;
 
         let root_outputs = ir.get_op(self.root)?.outputs().to_vec();

@@ -10,7 +10,7 @@ use bullet_compiler::tensor::{
 
 use super::PointwiseIR;
 
-pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
+pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> {
     let ir = sub.internal_graph();
 
     let mut size = None;
@@ -245,7 +245,7 @@ pub fn generate(sub: &SubGraph) -> Result<Option<PointwiseIR>, IRTrace> {
 
     pntwise.eliminate_common_subexprs()?;
 
-    Ok(Some(pntwise))
+    Ok(Some((pntwise, p2size > 0)))
 }
 
 #[cfg(any(feature = "cuda", feature = "rocm"))]
@@ -270,7 +270,7 @@ mod tests {
         let ir = builder.build([x, y]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node(), x.node()], vec![x.node(), y.node()])?;
-        unsafe { super::generate(&sub)?.unwrap().lower("axby".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub)?.unwrap().0.lower("axby".to_string()).map_err(IRTrace::from) }
     }
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
@@ -328,7 +328,7 @@ mod tests {
         let ir = builder.build([concat]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node()], vec![concat.node()])?;
-        unsafe { super::generate(&sub)?.unwrap().lower("concat".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub)?.unwrap().0.lower("concat".to_string()).map_err(IRTrace::from) }
     }
 
     fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
@@ -365,7 +365,7 @@ mod tests {
         let ir = builder.build([slice]);
 
         let sub = SubGraph::new(ir, vec![input.node()], vec![slice.node()])?;
-        unsafe { super::generate(&sub)?.unwrap().lower("slice".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub)?.unwrap().0.lower("slice".to_string()).map_err(IRTrace::from) }
     }
 
     fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {

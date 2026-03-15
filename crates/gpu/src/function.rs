@@ -5,7 +5,7 @@ use bullet_compiler::{
     rewriterule,
     tensor::{
         DType, IRTrace, Size, TType, TensorIR,
-        operation::{Matmul, MatrixLayout, ReduceAcrossDimension, Reduction},
+        operation::{CABinary, CABinaryOp, Matmul, MatrixLayout, ReduceAcrossDimension, Reduction},
         transform::rewriterules::RewritePass,
     },
 };
@@ -60,6 +60,7 @@ pub struct Function<G: Gpu> {
 impl<G: Gpu> Function<G> {
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         ir.transform(RewritePass(ReduceToMatmul))?;
+        ir.transform(RewritePass(MatmulToBroadcastMul))?;
         ir.transform(LowerPointwise)?;
 
         let mut maps = HashMap::new();
@@ -276,6 +277,7 @@ impl<G: Gpu> Function<G> {
     }
 }
 
+// I don't want to write reduction kernels right now so scam it with matmul
 rewriterule! {
     rulename ReduceToMatmul on ir
     rewrites op (output = [ReduceAcrossDimension] (input))
@@ -296,6 +298,28 @@ rewriterule! {
             };
 
             ir.replace_operation(op.id(), [new_scalar, input], new_op)?;
+            return Ok(true);
+        }
+    }
+}
+
+// Rewrite Mx1 @ 1xN to broadcast and pointwise multiplication
+rewriterule! {
+    rulename MatmulToBroadcastMul on ir
+    rewrites op (output = [Matmul] (lhs) (rhs))
+    {
+        if output.lhs.cols == Size::constant(1) {
+            let m = output.lhs.rows;
+            let n = output.rhs.cols;
+
+            let lhs = lhs.id();
+            let rhs = rhs.id();
+            let lhs = ir.add_broadcast(lhs, [m], 0, n)?;
+            let rhs = ir.add_broadcast(rhs, [n, 1.into()], 1, m)?;
+            let ty = ir.get_node(lhs)?.ty();
+            let new_op = CABinaryOp::new(ty, CABinary::Mul);
+
+            ir.replace_operation(op.id(), [lhs, rhs], new_op)?;
             return Ok(true);
         }
     }

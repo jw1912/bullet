@@ -20,12 +20,13 @@ pub use ir::PointwiseIR;
 pub struct FusedPointwise {
     sub: SubGraph,
     ir: PointwiseIR,
+    vectorised: bool,
 }
 
 impl FusedPointwise {
     pub fn new(sub: SubGraph) -> Result<Option<Self>, IRTrace> {
         let maybe_ir = generate::generate(&sub)?;
-        Ok(maybe_ir.map(|ir| Self { sub, ir }))
+        Ok(maybe_ir.map(|(ir, vectorised)| Self { sub, ir, vectorised }))
     }
 
     pub fn from_op(op: TensorOp, inputs: &[NodeId]) -> Result<Option<(Self, Vec<NodeId>)>, IRTrace> {
@@ -38,7 +39,7 @@ impl OpType for FusedPointwise {
     fn opname(&self) -> String {
         let src = format!("{:?}", format!("{}", self.sub.internal_graph()));
         let src = src.strip_prefix("\"irgraph").unwrap().strip_suffix('"').unwrap().replace("\\n", "\\l");
-        format!("Fused Kernel\\n{src}\\l")
+        format!("{}Fused Kernel\\n{src}\\l", if self.vectorised { "Vectorised " } else { "" })
     }
 
     fn inputs(&self) -> Vec<TType> {
