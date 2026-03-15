@@ -81,7 +81,6 @@ impl IRTransform for LowerPointwise {
             }
         }
 
-        let t = std::time::Instant::now();
         let mut cache = BTreeMap::new();
         let mut failed = BTreeSet::new();
         let mut costs = ir
@@ -93,8 +92,6 @@ impl IRTransform for LowerPointwise {
                     .map(|pntwise| (op.id(), pntwise.ir.estimate_memory_cost().unwrap()))
             })
             .collect::<BTreeMap<_, _>>();
-
-        let mut tt = 0;
 
         loop {
             let mut candidates = BTreeSet::new();
@@ -114,7 +111,6 @@ impl IRTransform for LowerPointwise {
                     // dependency then `op_j` is dependent on `op_i` we can only fuse `op_i`
                     // and `op_j` if there does not exist an in between op that is dependent
                     // on `op_i` and is depended upon by `op_j`
-                    let ti = std::time::Instant::now();
                     if ir.is_immediate_dependent_op(op_i, op_j)? {
                         let (subgraph, inputs, outputs) = fuse_subgraphs(ir, op_i, op_j)?;
                         if let Some(pntwise) = FusedPointwise::new(subgraph.clone())? {
@@ -136,7 +132,6 @@ impl IRTransform for LowerPointwise {
                             }
                         }
                     }
-                    tt += ti.elapsed().as_micros();
 
                     failed.insert((op_i, op_j));
                 }
@@ -177,9 +172,6 @@ impl IRTransform for LowerPointwise {
                 cache.remove(&argmin);
             }
         }
-
-        println!("{}", cache.len());
-        println!("{:.2}s vs {tt} micros", t.elapsed().as_secs_f32());
 
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {
