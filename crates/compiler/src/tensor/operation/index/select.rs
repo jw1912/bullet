@@ -40,6 +40,14 @@ impl Select {
 
         true
     }
+
+    pub fn input_size(&self) -> Size {
+        self.batch * self.inner
+    }
+
+    pub fn output_size(&self) -> Size {
+        self.batch * (self.inner / self.divisor)
+    }
 }
 
 impl OpType for Select {
@@ -49,11 +57,11 @@ impl OpType for Select {
     }
 
     fn inputs(&self) -> Vec<TType> {
-        vec![TType::new(self.batch * self.inner, self.dtype), TType::new(self.batch, DType::I32)]
+        vec![TType::new(self.input_size(), self.dtype), TType::new(self.batch, DType::I32)]
     }
 
     fn outputs(&self) -> Vec<TType> {
-        vec![TType::new(self.batch * (self.inner / self.divisor), self.dtype)]
+        vec![TType::new(self.output_size(), self.dtype)]
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
@@ -126,6 +134,14 @@ impl SelectPad {
             output[oidx..(subdim + oidx)].copy_from_slice(&input[iidx..(subdim + iidx)]);
         }
     }
+
+    pub fn input_size(&self) -> Size {
+        self.batch * (self.inner / self.divisor)
+    }
+
+    pub fn output_size(&self) -> Size {
+        self.batch * self.inner
+    }
 }
 
 impl OpType for SelectPad {
@@ -135,11 +151,11 @@ impl OpType for SelectPad {
     }
 
     fn inputs(&self) -> Vec<TType> {
-        vec![TType::new(self.batch * (self.inner / self.divisor), self.dtype), TType::new(self.batch, DType::I32)]
+        vec![TType::new(self.input_size(), self.dtype), TType::new(self.batch, DType::I32)]
     }
 
     fn outputs(&self) -> Vec<TType> {
-        vec![TType::new(self.batch * self.inner, self.dtype)]
+        vec![TType::new(self.output_size(), self.dtype)]
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {

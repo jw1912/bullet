@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, SliceAcrossDimension,
-        SparseMatmul, SparseMatmulBwd, SubGraph, Unary, UnaryOp,
+        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, Select, SelectPad,
+        SliceAcrossDimension, SparseMatmul, SparseMatmulBwd, SubGraph, Unary, UnaryOp,
     },
 };
 
@@ -65,6 +65,18 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
             }
 
             (slice.output_size(), 1)
+        } else if let Some(select) = data.downcast::<Select>() {
+            if !(ir.is_input(op.inputs()[0])? && ir.is_input(op.inputs()[1])?) {
+                return Ok(None);
+            }
+
+            (select.output_size(), 1)
+        } else if let Some(select_pad) = data.downcast::<SelectPad>() {
+            if !(ir.is_input(op.inputs()[0])? && ir.is_input(op.inputs()[1])?) {
+                return Ok(None);
+            }
+
+            (select_pad.output_size(), 1)
         } else {
             return Ok(None);
         };
@@ -229,6 +241,53 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
             idx = pntwise.binary(idx, idx_inner, CABinary::Add)?;
 
             let output = pntwise.read(buf, idx, p2size)?;
+            mapping.insert(op.outputs()[0], output);
+        } else if let Some(select) = data.downcast::<Select>() {
+            assert_eq!(p2size, 0);
+            let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
+            let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
+
+            let sub_size = (select.inner / select.divisor) as i32;
+            let sub_size = pntwise.add_const(DValue::I32(sub_size), p2size);
+            let inner = pntwise.add_const(DValue::I32(select.inner as i32), p2size);
+
+            let tid = pntwise.tid();
+            let batch_idx = pntwise.div(tid, sub_size)?;
+            let elem_idx = pntwise.rem(tid, sub_size)?;
+            let bucket = pntwise.read(indices, batch_idx, p2size)?;
+
+            let mut idx = pntwise.binary(batch_idx, inner, CABinary::Mul)?;
+            let bucket_offset = pntwise.binary(bucket, sub_size, CABinary::Mul)?;
+            idx = pntwise.binary(idx, bucket_offset, CABinary::Add)?;
+            idx = pntwise.binary(idx, elem_idx, CABinary::Add)?;
+
+            let output = pntwise.read(values, idx, p2size)?;
+            mapping.insert(op.outputs()[0], output);
+        } else if let Some(select_pad) = data.downcast::<SelectPad>() {
+            assert_eq!(p2size, 0);
+            let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
+            let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
+
+            let sub_size = (select_pad.inner / select_pad.divisor) as i32;
+            let sub_size = pntwise.add_const(DValue::I32(sub_size), p2size);
+            let inner = pntwise.add_const(DValue::I32(select_pad.inner as i32), p2size);
+
+            let tid = pntwise.tid();
+            let batch_idx = pntwise.div(tid, inner)?;
+            let inner_idx = pntwise.rem(tid, inner)?;
+            let bucket_idx = pntwise.div(inner_idx, sub_size)?;
+            let elem_idx = pntwise.rem(inner_idx, sub_size)?;
+
+            let bucket_target = pntwise.read(indices, batch_idx, p2size)?;
+            let neg_one = pntwise.add_const(DValue::I32(-1), p2size);
+            let bucket_neg = pntwise.binary(bucket_target, neg_one, CABinary::Mul)?;
+            let target_zero = pntwise.binary(bucket_idx, bucket_neg, CABinary::Add)?;
+            let cond = pntwise.unary(target_zero, Unary::IsZero)?;
+
+            let mut idx = pntwise.binary(batch_idx, sub_size, CABinary::Mul)?;
+            idx = pntwise.binary(idx, elem_idx, CABinary::Add)?;
+
+            let output = pntwise.conditional_read(values, idx, cond, DValue::zero(select_pad.dtype), p2size)?;
             mapping.insert(op.outputs()[0], output);
         } else {
             unreachable!();
