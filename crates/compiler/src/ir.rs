@@ -271,22 +271,50 @@ impl<T: TypeSystem> IR<T> {
         Ok(set)
     }
 
+    /// Equivalent to `self.get_dependent_ops_set(id)?.contains(&target)` but faster
+    pub fn is_dependent_op(&self, id: OpId, target: OpId) -> Result<bool, IRError> {
+        if id == target {
+            return Ok(true);
+        }
+
+        for parent in self.op(id)?.inputs() {
+            let parent_op = self.parent_op(*parent)?;
+
+            if self.is_dependent_op(parent_op, target)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     /// Returns false if there is another operation that is dependent on
     /// `parent` that must be computed before being able to compute `child`
     pub fn is_immediate_dependent_op(&self, parent: OpId, child: OpId) -> Result<bool, IRError> {
+        let inputs = self.op(child)?.inputs();
+
+        // check immediate dependency first to short circuit
         let mut is_dependent = false;
-
-        for parent_node in self.op(child)?.inputs() {
-            let parent_op = self.parent_op(*parent_node)?;
-
-            if parent_op == parent {
+        for parent_node in inputs {
+            if self.parent_op(*parent_node)? == parent {
                 is_dependent = true;
-            } else if self.get_dependent_ops_set(parent_op)?.contains(&parent) {
+                break;
+            }
+        }
+
+        if !is_dependent {
+            return Ok(false);
+        }
+
+        // n.b. expensive!
+        for parent_node in inputs {
+            let parent_op = self.parent_op(*parent_node)?;
+            if parent_op != parent && self.is_dependent_op(parent_op, parent)? {
                 return Ok(false);
             }
         }
 
-        Ok(is_dependent)
+        Ok(true)
     }
 }
 

@@ -3,12 +3,12 @@ mod ir;
 mod operations;
 mod write;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use bullet_compiler::{
-    ir::{NodeId, Op},
+    ir::{NodeId, OpId},
     tensor::{
-        IRTrace, OpType, TType, TValue, Tensor, TensorIR, TensorOp,
+        IRTrace, OpType, TType, TValue, TensorIR, TensorOp,
         operation::{ScalarConstant, SubGraph},
         transform::{IRTransform, eliminate::EliminateUnusedOperations, inline::InlineSubgraphs, modify::AddOperation},
     },
@@ -81,42 +81,45 @@ impl IRTransform for LowerPointwise {
             }
         }
 
-        // perform fusions of the FusedPointwise where possible
-        let mut failed = HashSet::new();
-        let mut costs = HashMap::new();
+        let t = std::time::Instant::now();
+        let mut cache = BTreeMap::new();
+        let mut failed = BTreeSet::new();
+        let mut costs = ir
+            .operations()
+            .into_iter()
+            .filter_map(|op| {
+                op.data()
+                    .downcast::<FusedPointwise>()
+                    .map(|pntwise| (op.id(), pntwise.ir.estimate_memory_cost().unwrap()))
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let mut tt = 0;
 
         loop {
-            let mut candidates = HashMap::new();
+            let mut candidates = BTreeSet::new();
 
-            let ops = ir.ordered_operations()?;
-            let ops = ops
-                .into_iter()
-                .filter(|op| {
-                    if let Some(pntwise) = op.data().downcast::<FusedPointwise>() {
-                        costs.insert(op.id(), pntwise.ir.estimate_memory_cost().unwrap());
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            for (i, op_i) in ops.iter().enumerate() {
-                'inner: for op_j in ops.iter().skip(i + 1) {
-                    if failed.contains(&(op_i.id(), op_j.id())) {
+            for (i, &op_i) in costs.keys().enumerate() {
+                'inner: for &op_j in costs.keys().skip(i + 1) {
+                    if failed.contains(&(op_i, op_j)) {
                         continue;
+                    }
+
+                    if cache.contains_key(&(op_i, op_j)) {
+                        candidates.insert((op_i, op_j));
+                        continue 'inner;
                     }
 
                     // `op_i` comes before `op_j` in topo ordering so know that if there is a
                     // dependency then `op_j` is dependent on `op_i` we can only fuse `op_i`
                     // and `op_j` if there does not exist an in between op that is dependent
                     // on `op_i` and is depended upon by `op_j`
-                    if ir.is_immediate_dependent_op(op_i.id(), op_j.id())? {
+                    let ti = std::time::Instant::now();
+                    if ir.is_immediate_dependent_op(op_i, op_j)? {
                         let (subgraph, inputs, outputs) = fuse_subgraphs(ir, op_i, op_j)?;
                         if let Some(pntwise) = FusedPointwise::new(subgraph.clone())? {
                             let new_cost = pntwise.ir.estimate_memory_cost()?;
-                            let old_cost =
-                                costs.get(&op_i.id()).unwrap().dominator_sum(*costs.get(&op_j.id()).unwrap());
+                            let old_cost = costs.get(&op_i).unwrap().dominator_sum(*costs.get(&op_j).unwrap());
 
                             if new_cost.is_le(old_cost) {
                                 let saving = if new_cost.var_power() != old_cost.var_power() {
@@ -126,35 +129,39 @@ impl IRTransform for LowerPointwise {
                                 } else {
                                     None
                                 };
-                                candidates.insert((op_i.id(), op_j.id()), (pntwise, inputs, outputs, new_cost, saving));
+
+                                cache.insert((op_i, op_j), (pntwise, inputs, outputs, new_cost, saving));
+                                candidates.insert((op_i, op_j));
                                 continue 'inner;
                             }
                         }
                     }
+                    tt += ti.elapsed().as_micros();
 
-                    failed.insert((op_i.id(), op_j.id()));
+                    failed.insert((op_i, op_j));
                 }
             }
 
             if candidates.is_empty() {
                 break;
             } else {
-                let first = candidates.iter().next().unwrap();
-                let mut max_saving = first.1.4;
-                let mut argmin = *first.0;
+                let mut argmin = *candidates.iter().next().unwrap();
+                let mut max_saving = cache.get(&argmin).unwrap().4;
 
-                for (arg, (_, _, _, _, saving)) in &candidates {
+                for arg in candidates {
+                    let (_, _, _, _, saving) = cache.get(&arg).unwrap();
+
                     if match (max_saving, saving) {
                         (Some(x), Some(y)) => x.is_le(*y),
                         (None, Some(_)) => true,
                         (_, None) => false,
                     } {
                         max_saving = *saving;
-                        argmin = *arg;
+                        argmin = arg;
                     }
                 }
 
-                let (pntwise, inputs, outputs, cost, _) = candidates.get(&argmin).cloned().unwrap();
+                let (pntwise, inputs, outputs, cost, _) = cache.get(&argmin).cloned().unwrap();
                 let new_outputs = ir.add_op(inputs, Ok::<_, IRTrace>(pntwise))?;
                 costs.insert(ir.get_parent_op(new_outputs[0])?, cost);
 
@@ -164,8 +171,15 @@ impl IRTransform for LowerPointwise {
 
                 ir.remove_op(argmin.1)?;
                 ir.remove_op(argmin.0)?;
+
+                costs.remove(&argmin.0);
+                costs.remove(&argmin.1);
+                cache.remove(&argmin);
             }
         }
+
+        println!("{}", cache.len());
+        println!("{:.2}s vs {tt} micros", t.elapsed().as_secs_f32());
 
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {
@@ -193,17 +207,16 @@ impl IRTransform for LowerPointwise {
     }
 }
 
-fn fuse_subgraphs(
-    ir: &TensorIR,
-    op_i: &Op<Tensor>,
-    op_j: &Op<Tensor>,
-) -> Result<(SubGraph, Vec<NodeId>, Vec<NodeId>), IRTrace> {
+fn fuse_subgraphs(ir: &TensorIR, op_i: OpId, op_j: OpId) -> Result<(SubGraph, Vec<NodeId>, Vec<NodeId>), IRTrace> {
+    let op_i = ir.get_op(op_i)?;
+    let op_j = ir.get_op(op_j)?;
+
     let sub_i = &op_i.data().downcast::<FusedPointwise>().unwrap().sub;
     let sub_j = &op_j.data().downcast::<FusedPointwise>().unwrap().sub;
 
     let mut new_sub = TensorIR::default();
 
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
     let mut inputs_i = Vec::new();
     for &input in op_i.inputs() {
         let new_input = new_sub.add_input(ir.get_node(input)?.ty());
@@ -213,7 +226,7 @@ fn fuse_subgraphs(
 
     let mut total_outputs = Vec::new();
 
-    let op_j_set = op_j.inputs().iter().cloned().collect::<HashSet<_>>();
+    let op_j_set = op_j.inputs().iter().cloned().collect::<BTreeSet<_>>();
 
     let outputs_i = new_sub.add_op(inputs_i, Ok::<_, IRTrace>(sub_i.clone()))?;
     for (&out, &new_out) in op_i.outputs().iter().zip(outputs_i.iter()) {
