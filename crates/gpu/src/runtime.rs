@@ -4,6 +4,8 @@ mod bindings;
 #[cfg(feature = "cuda")]
 pub mod cuda;
 pub mod mock;
+#[cfg(feature = "rocm")]
+pub mod rocm;
 
 use std::{
     ffi::{CString, c_void},
@@ -195,6 +197,7 @@ pub struct Module<G: Gpu> {
 
 impl<G: Gpu> Drop for Module<G> {
     fn drop(&mut self) {
+        let _ = self.device.set();
         unsafe { G::module_destroy(self.module).unwrap() }
     }
 }
@@ -203,10 +206,9 @@ impl<G: Gpu> Module<G> {
     /// Compiles the source code and loads the resulting module
     /// onto the device
     pub fn new(device: Arc<Device<G>>, source_code: impl Into<String>) -> Result<Arc<Self>, G::Error> {
-        let src = CString::new(source_code.into()).map_err(|e| format!("{e:?}"))?;
-
         device.set()?;
 
+        let src = CString::new(source_code.into()).map_err(|e| format!("{e:?}"))?;
         let code = unsafe { G::program_compile(&src, 0, std::ptr::null())? };
         let module = unsafe { G::module_create(code.as_ptr().cast())? };
 
@@ -215,6 +217,8 @@ impl<G: Gpu> Module<G> {
 
     /// Get kernel with given name from module
     pub fn get_kernel(self: Arc<Self>, name: impl Into<String>) -> Result<Kernel<G>, G::Error> {
+        self.device.set()?;
+
         let name = CString::new(name.into()).map_err(|e| format!("{e:?}"))?;
         let kernel = unsafe { G::module_get_kernel(self.module, &name)? };
 
