@@ -487,11 +487,11 @@ impl<'a> ModelNode<'a> {
 
         let dtype = self.ty().dtype();
         let batch = if batched { Size::variable() } else { 1.into() };
-        let inner = self.nt.shape.size().into();
-        let divisor = indices.shape().size().into();
+        let inner = self.nt.shape.size();
+        let divisor = indices.shape().size();
 
         let op = Select { dtype, batch, inner, divisor };
-        let rows = (inner / divisor).evaluate_constant().unwrap();
+        let rows = inner / divisor;
         let node = self.builder.add_op([self, indices], op)[0];
         Self { node, nt: NodeType { shape: Shape::new(rows, 1), batched, sparse: None }, ..self }
     }
