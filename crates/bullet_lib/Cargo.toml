@@ -21,6 +21,7 @@ viriformat = "2.0.1"
 
 [features]
 cuda = ["bullet-gpu/cuda", "bullet-trainer/cuda"]
+hip = ["bullet-gpu/rocm", "bullet-trainer/rocm"]
 
 [[example]]
 name = "simple"
