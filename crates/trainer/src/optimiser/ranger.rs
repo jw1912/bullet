@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::IRError,
@@ -109,7 +109,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
         Ok(())
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
+    fn load_from_checkpoint(map: &mut BTreeMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
         let slow_params = utils::load_weights_from_file(&format!("{path}/slow.bin"));
 
         for (id, par) in slow_params {
@@ -122,7 +122,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
         S::load_from_checkpoint(&mut map, path)
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error> {
+    fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error> {
         let stream = map.iter().next().unwrap().1.slow_params.creator();
         let slow_params: Vec<_> = map.iter().map(|(id, single)| (id, &single.slow_params)).collect();
         utils::write_weights_to_file::<G>(&stream, &slow_params, &format!("{path}/slow.bin"))?;

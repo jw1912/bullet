@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     rc::Rc,
 };
 
@@ -28,7 +28,7 @@ impl IRTransform for LowerForward {
     }
 }
 
-type GradientMap = HashMap<NodeId, Option<NodeId>>;
+type GradientMap = BTreeMap<NodeId, Option<NodeId>>;
 
 #[derive(Debug, Default)]
 pub struct TakeGradient {
@@ -46,7 +46,7 @@ impl TakeGradient {
 
 impl IRTransform for TakeGradient {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
-        let mut registered = HashSet::new();
+        let mut registered = BTreeSet::new();
 
         for out in ir.get_op(self.root)?.outputs().to_vec() {
             if !ir.is_output(out) {
@@ -72,7 +72,7 @@ impl IRTransform for TakeGradient {
 
         let root_outputs = ir.get_op(self.root)?.outputs().to_vec();
         let root_grads = self.output_grads.clone().into_iter().map(Option::Some);
-        let mut grads: HashMap<_, _> = root_outputs.into_iter().zip(root_grads).collect();
+        let mut grads: BTreeMap<_, _> = root_outputs.into_iter().zip(root_grads).collect();
 
         for &op in &ops {
             for &input in ir.get_op(op)?.inputs() {
@@ -99,9 +99,9 @@ impl IRTransform for TakeGradient {
 
                 // handle not all inputs having gradient and
                 // multiple inputs having the same gradient
-                let mut igrad_map: HashMap<_, _> = operation.inputs().iter().map(|&inp| (inp, Vec::new())).collect();
+                let mut igrad_map: BTreeMap<_, _> = operation.inputs().iter().map(|&inp| (inp, Vec::new())).collect();
                 let mut unique_igrads = Vec::new();
-                let mut present_igrads = HashSet::new();
+                let mut present_igrads = BTreeSet::new();
                 for (&inp, igrad) in operation.inputs().iter().zip(igrads.iter()) {
                     if let Some(ig) = igrad {
                         igrad_map.get_mut(&inp).unwrap().push(ig.node());
@@ -121,7 +121,7 @@ impl IRTransform for TakeGradient {
                 let new_grads = ir.add_op([operation.inputs(), &op_ograds].concat(), Ok::<_, IRTrace>(subgraph))?;
 
                 // accumulate gradients in actual graph
-                let subgraph_map: HashMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
+                let subgraph_map: BTreeMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
                 for (input, new_grad_subgraph) in igrad_map {
                     let old_grad = grads.get_mut(&input).unwrap();
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use bullet_compiler::{
     ir::NodeId,
@@ -51,7 +51,7 @@ enum Inst<G: Gpu> {
 }
 
 pub struct Function<G: Gpu> {
-    maps: HashMap<NodeId, (usize, bool, TType)>,
+    maps: BTreeMap<NodeId, (usize, bool, TType)>,
     insts: Box<[Inst<G>]>,
     num_ptrs: usize,
     blas: Option<Blas<G>>,
@@ -66,13 +66,13 @@ impl<G: Gpu> Function<G> {
         ir.transform(FusePointwise)?;
         ir.transform(CodegenPointwise)?;
 
-        let mut maps = HashMap::new();
+        let mut maps = BTreeMap::new();
         let mut num_ptrs = 0;
         let mut insts = Vec::new();
         let mut requires_blas = false;
 
-        let mut times_seen = HashMap::new();
-        let mut indices = HashMap::new();
+        let mut times_seen = BTreeMap::new();
+        let mut indices = BTreeMap::new();
 
         for op in ir.ordered_operations()? {
             // allocate output buffers
@@ -168,13 +168,13 @@ impl<G: Gpu> Function<G> {
     pub fn execute(
         &self,
         stream: Arc<Stream<G>>,
-        inputs: &HashMap<NodeId, Arc<Buffer<G>>>,
+        inputs: &BTreeMap<NodeId, Arc<Buffer<G>>>,
     ) -> Result<SyncOnValue<G, &Self>, G::Error> {
         let mut sync = SyncOnDrop::new(stream.clone());
 
         let mut ptrs = vec![G::DevicePtr::default(); self.num_ptrs];
 
-        let mut mutmap = HashMap::new();
+        let mut mutmap = BTreeMap::new();
         let mut var_size = None;
 
         for (name, buf) in inputs {

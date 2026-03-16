@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
@@ -96,15 +96,15 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
     let p2size = p2size as u8;
 
     let mut pntwise = PointwiseIR::new(size / p2actual)?;
-    let mut mapping = HashMap::new();
+    let mut mapping = BTreeMap::new();
 
-    let inp_buf_map: HashMap<_, _> =
+    let inp_buf_map: BTreeMap<_, _> =
         sub.internal_inputs().iter().map(|&i| (i, pntwise.add_buf(ir.get_node(i).unwrap().ty()))).collect();
 
-    let out_buf_map: HashMap<_, _> =
+    let out_buf_map: BTreeMap<_, _> =
         sub.internal_outputs().iter().map(|&o| (o, pntwise.add_buf(ir.get_node(o).unwrap().ty()))).collect();
 
-    let get_val = |node, pntw: &mut PointwiseIR, map: &HashMap<_, _>| {
+    let get_val = |node, pntw: &mut PointwiseIR, map: &BTreeMap<_, _>| {
         if ir.is_input(node)? {
             let buf = *inp_buf_map.get(&node).unwrap();
             pntw.read(buf, pntw.tid(), p2size).map(Option::Some).map_err(IRTrace::from)
@@ -113,7 +113,7 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
         }
     };
 
-    let mut handled_writes = HashSet::new();
+    let mut handled_writes = BTreeSet::new();
 
     for op in ir.ordered_operations()? {
         let data = op.data();

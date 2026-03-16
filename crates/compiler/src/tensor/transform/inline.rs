@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::tensor::{
     IRTrace, TensorIR,
@@ -16,7 +16,7 @@ impl IRTransform for InlineSubgraphs {
 
             for op in ir.operations() {
                 if let Some(subgraph) = op.data().downcast::<SubGraph>() {
-                    let mut map = HashMap::new();
+                    let mut map = BTreeMap::new();
 
                     for (&inp, &int_inp) in op.inputs().iter().zip(subgraph.internal_inputs()) {
                         let new_inp = ir.add_op([inp], Ok::<_, IRTrace>(CopyOp(ir.get_node(inp)?.ty())))?[0];

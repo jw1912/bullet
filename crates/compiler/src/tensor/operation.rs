@@ -5,7 +5,7 @@ mod linear;
 mod pointwise;
 mod subgraph;
 
-use std::{any::Any, collections::HashSet, fmt::Debug, rc::Rc};
+use std::{any::Any, collections::BTreeSet, fmt::Debug, rc::Rc};
 
 pub use constant::{Constant, ScalarConstant};
 pub use index::{
@@ -49,7 +49,7 @@ pub trait OpType: Any + Debug + 'static {
         false
     }
 
-    fn commutating_groups(&self) -> Vec<HashSet<usize>> {
+    fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
         Vec::new()
     }
 }

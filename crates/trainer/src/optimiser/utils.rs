@@ -13,7 +13,7 @@ pub enum Placement {
     After,
 }
 
-/// Write a set of labelled weights from a `HashMap` into a file.
+/// Write a set of labelled weights from a `BTreeMap` into a file.
 pub fn write_weights_to_file<G: Gpu>(
     stream: &Arc<Stream<G>>,
     map: &[(impl AsRef<str>, &Arc<Buffer<G>>)],
@@ -35,7 +35,7 @@ pub fn write_weights_to_file<G: Gpu>(
     Ok(())
 }
 
-/// Loads a set of labelled weights from a file into a `HashMap`.
+/// Loads a set of labelled weights from a file into a `BTreeMap`.
 pub fn load_weights_from_file(path: &str) -> Vec<(String, Vec<f32>)> {
     use std::{fs::File, io::Read};
 

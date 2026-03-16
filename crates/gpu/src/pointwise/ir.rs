@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::BTreeSet,
     fmt::{self, Write},
     rc::Rc,
 };
@@ -35,9 +35,9 @@ pub struct PointwiseIR {
     tid: NodeId,
     var: NodeId,
     bufs: Vec<NodeId>,
-    read_from: HashSet<NodeId>,
-    written_to: HashSet<NodeId>,
-    needs_zero: HashSet<NodeId>,
+    read_from: BTreeSet<NodeId>,
+    written_to: BTreeSet<NodeId>,
+    needs_zero: BTreeSet<NodeId>,
 }
 
 impl PointwiseIR {
@@ -58,9 +58,9 @@ impl PointwiseIR {
             var,
             size,
             bufs: Vec::new(),
-            read_from: HashSet::new(),
-            written_to: HashSet::new(),
-            needs_zero: HashSet::new(),
+            read_from: BTreeSet::new(),
+            written_to: BTreeSet::new(),
+            needs_zero: BTreeSet::new(),
         })
     }
 
@@ -373,7 +373,7 @@ impl PointwiseIR {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
-        let mut requires_zero = HashSet::new();
+        let mut requires_zero = BTreeSet::new();
 
         for &buf in &self.bufs {
             let rf = self.read_from.contains(&buf);

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::tensor::TValue;
 use bullet_gpu::{
@@ -21,7 +21,7 @@ pub trait DataLoader: Send + Sync + 'static {
 
 pub struct PreparedBatchHost {
     pub batch_size: usize,
-    pub inputs: HashMap<String, TValue>,
+    pub inputs: BTreeMap<String, TValue>,
 }
 
 impl PreparedBatchHost {
@@ -30,7 +30,7 @@ impl PreparedBatchHost {
             .inputs
             .iter()
             .map(|(id, value)| Buffer::from_host(stream, value).map(|tensor| (id, tensor)))
-            .collect::<Result<HashMap<_, _>, _>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let res = on_device.into_iter().map(|(id, value)| (id.clone(), value.value().0)).collect();
 

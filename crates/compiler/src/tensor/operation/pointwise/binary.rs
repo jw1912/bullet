@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use crate::tensor::{DValue, OpType, TType, TValue, operation::TensorOp};
 
@@ -91,7 +91,7 @@ impl OpType for CABinaryOp {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
 
-    fn commutating_groups(&self) -> Vec<HashSet<usize>> {
+    fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
         vec![[0, 1].into()]
     }
 }

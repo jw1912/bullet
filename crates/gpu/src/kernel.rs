@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ffi::c_void, fmt, rc::Rc, sync::Arc};
+use std::{collections::BTreeSet, ffi::c_void, fmt, rc::Rc, sync::Arc};
 
 use bullet_compiler::tensor::{OpType, TType};
 
@@ -15,7 +15,7 @@ pub struct KernelSrc {
     pub(crate) source: String,
     pub(crate) requires_var_size_arg: bool,
     pub(crate) arg_order: Vec<(usize, bool)>,
-    pub(crate) requires_zero: HashSet<usize>,
+    pub(crate) requires_zero: BTreeSet<usize>,
     pub(crate) gdim: Rc<dyn Fn(usize) -> Dim3>,
     pub(crate) bdim: Rc<dyn Fn(usize) -> u32>,
     pub(crate) smem: Rc<dyn Fn(usize) -> u32>,
@@ -42,7 +42,7 @@ impl KernelSrc {
         source: String,
         requires_var_size_arg: bool,
         arg_order: Vec<(usize, bool)>,
-        requires_zero: HashSet<usize>,
+        requires_zero: BTreeSet<usize>,
         gdim: Rc<dyn Fn(usize) -> Dim3>,
         bdim: Rc<dyn Fn(usize) -> u32>,
         smem: Rc<dyn Fn(usize) -> u32>,
@@ -50,11 +50,11 @@ impl KernelSrc {
         assert_eq!(arg_order.len(), inputs.len() + outputs.len());
         assert_eq!(
             inputs.len(),
-            arg_order.iter().filter_map(|(idx, input)| input.then_some(*idx)).collect::<HashSet<_>>().len()
+            arg_order.iter().filter_map(|(idx, input)| input.then_some(*idx)).collect::<BTreeSet<_>>().len()
         );
         assert_eq!(
             outputs.len(),
-            arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<HashSet<_>>().len()
+            arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<BTreeSet<_>>().len()
         );
 
         Self { inputs, outputs, name, source, requires_var_size_arg, arg_order, requires_zero, gdim, bdim, smem }
@@ -97,7 +97,7 @@ pub struct CompiledKernel<G: Gpu> {
     pub(crate) kernel: Kernel<G>,
     pub(crate) requires_var_size_arg: bool,
     pub(crate) arg_order: Vec<(usize, bool)>,
-    pub(crate) requires_zero: HashSet<usize>,
+    pub(crate) requires_zero: BTreeSet<usize>,
     pub(crate) gdim: Rc<dyn Fn(usize) -> Dim3>,
     pub(crate) bdim: Rc<dyn Fn(usize) -> u32>,
     pub(crate) smem: Rc<dyn Fn(usize) -> u32>,
@@ -122,7 +122,7 @@ impl<G: Gpu> CompiledKernel<G> {
         kernel: Kernel<G>,
         requires_var_size_arg: bool,
         arg_order: Vec<(usize, bool)>,
-        requires_zero: HashSet<usize>,
+        requires_zero: BTreeSet<usize>,
         gdim: Rc<dyn Fn(usize) -> Dim3>,
         bdim: Rc<dyn Fn(usize) -> u32>,
         smem: Rc<dyn Fn(usize) -> u32>,
@@ -130,11 +130,11 @@ impl<G: Gpu> CompiledKernel<G> {
         assert_eq!(arg_order.len(), inputs.len() + outputs.len());
         assert_eq!(
             inputs.len(),
-            arg_order.iter().filter_map(|(idx, input)| input.then_some(*idx)).collect::<HashSet<_>>().len()
+            arg_order.iter().filter_map(|(idx, input)| input.then_some(*idx)).collect::<BTreeSet<_>>().len()
         );
         assert_eq!(
             outputs.len(),
-            arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<HashSet<_>>().len()
+            arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<BTreeSet<_>>().len()
         );
 
         Self { inputs, outputs, kernel, requires_var_size_arg, arg_order, requires_zero, gdim, bdim, smem }
@@ -153,7 +153,7 @@ impl<G: Gpu> CompiledKernel<G> {
         let outputs =
             outputs.iter().map(|o| o.clone().acquire(stream.clone())).collect::<Result<Vec<BufferGuard<G>>, _>>()?;
 
-        let mut vars = HashSet::new();
+        let mut vars = BTreeSet::new();
 
         if inputs.len() != self.inputs.len() || outputs.len() != self.outputs.len() {
             return Err("Mismatched number of inputs/outputs!".to_string().into());

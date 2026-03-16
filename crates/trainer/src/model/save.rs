@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     io::{self, Write},
     rc::Rc,
 };
@@ -16,7 +16,7 @@ pub struct ShapedTValue {
 }
 
 pub struct ModelWeights {
-    stores: HashMap<String, ShapedTValue>,
+    stores: BTreeMap<String, ShapedTValue>,
 }
 
 impl<G: Gpu> From<&Model<G>> for ModelWeights {

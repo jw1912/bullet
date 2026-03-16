@@ -5,7 +5,7 @@ pub mod utils;
 
 pub use builder::{ModelBuilder, ModelNode};
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::NodeId,
@@ -17,7 +17,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
-pub type TensorMap<G> = HashMap<String, Arc<Buffer<G>>>;
+pub type TensorMap<G> = BTreeMap<String, Arc<Buffer<G>>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shape {
@@ -46,13 +46,13 @@ impl Shape {
 pub struct Model<G: Gpu> {
     stream: Arc<Stream<G>>,
     weights: TensorMap<G>,
-    shapes: HashMap<String, (Shape, Option<usize>)>,
+    shapes: BTreeMap<String, (Shape, Option<usize>)>,
     forward: Function<G>,
-    fwd_map: HashMap<String, NodeId>,
+    fwd_map: BTreeMap<String, NodeId>,
     backward: Function<G>,
-    bwd_map: HashMap<String, NodeId>,
-    fwd_output_types: HashMap<String, TType>,
-    bwd_output_types: HashMap<String, TType>,
+    bwd_map: BTreeMap<String, NodeId>,
+    fwd_output_types: BTreeMap<String, TType>,
+    bwd_output_types: BTreeMap<String, TType>,
 }
 
 impl<G: Gpu> Model<G> {
@@ -193,7 +193,7 @@ impl<G: Gpu> Model<G> {
 }
 
 fn collect_map<'a, G: Gpu + 'a>(x: impl AsRef<[(&'a str, &'a TensorMap<G>)]>) -> TensorMap<G> {
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
 
     for (pre, submap) in x.as_ref() {
         for (name, value) in submap.iter() {

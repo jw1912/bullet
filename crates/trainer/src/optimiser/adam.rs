@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     rc::Rc,
     sync::Arc,
 };
@@ -128,7 +128,7 @@ impl AdamWParams {
                 format!("{op}{DECL}{{{body}}}"),
                 false,
                 vec![(0, true), (1, true), (2, true), (0, false), (1, false), (2, false)],
-                HashSet::new(),
+                BTreeSet::new(),
                 Rc::new(move |_| Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 }),
                 Rc::new(|_| 256),
                 Rc::new(|_| 0),
@@ -191,7 +191,7 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
         Ok(())
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error> {
+    fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error> {
         let stream = map.iter().next().unwrap().1.momentum.creator();
 
         let momentum: Vec<_> = map.iter().map(|(id, single)| (id, &single.momentum)).collect();
@@ -200,7 +200,7 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
         utils::write_weights_to_file::<G>(&stream, &velocity, &format!("{path}/velocity.bin"))
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
+    fn load_from_checkpoint(map: &mut BTreeMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
         let paths = [format!("{path}/momentum.bin"), format!("{path}/velocity.bin")];
         let mut momentum = utils::load_weights_from_file(&paths[0]);
         let mut velocity = utils::load_weights_from_file(&paths[1]);

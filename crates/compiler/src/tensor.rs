@@ -6,7 +6,7 @@ mod ttype;
 
 use std::{
     cell::RefCell,
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     rc::Rc,
 };
@@ -37,7 +37,7 @@ impl TypeSystem for Tensor {
 #[derive(Clone, Debug, Default)]
 pub struct TensorIR {
     ir: IR<Tensor>,
-    outputs: HashSet<NodeId>,
+    outputs: BTreeSet<NodeId>,
 }
 
 impl TensorIR {
@@ -51,12 +51,12 @@ impl TensorIR {
 
     pub fn evaluate(
         &self,
-        inputs: impl Into<HashMap<NodeId, TValue>>,
-    ) -> Result<Option<HashMap<NodeId, TValue>>, IRTrace> {
-        let mut values: HashMap<_, _> =
+        inputs: impl Into<BTreeMap<NodeId, TValue>>,
+    ) -> Result<Option<BTreeMap<NodeId, TValue>>, IRTrace> {
+        let mut values: BTreeMap<_, _> =
             inputs.into().into_iter().map(|(id, tensor)| (id, RefCell::new(tensor))).collect();
 
-        let mut vars = HashSet::new();
+        let mut vars = BTreeSet::new();
 
         for (id, tensor) in &values {
             let op = self.get_op(self.get_parent_op(*id)?)?;
@@ -380,7 +380,7 @@ impl fmt::Display for TensorIR {
             x.map_err(|_| fmt::Error)
         }
 
-        let mut names = HashMap::new();
+        let mut names = BTreeMap::new();
         let mut get_name = |node| {
             if let Some(&id) = names.get(&node) {
                 id

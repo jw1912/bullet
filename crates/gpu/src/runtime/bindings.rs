@@ -29,7 +29,7 @@ pub struct GemmConfig {
 pub trait GpuBindings: 'static {
     type Err: fmt::Debug + Eq + From<String>;
     type Dev: Copy;
-    type Ptr: Copy + Default + Eq + Hash;
+    type Ptr: Copy + Default + Eq + Hash + Ord;
     type Ctx: Copy;
     type Stream: Copy;
     type BlasHandle: Copy;

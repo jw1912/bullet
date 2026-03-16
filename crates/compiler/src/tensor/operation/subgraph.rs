@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::tensor::{IRTrace, NodeId, OpType, TType, TValue, TensorIR, TensorOp};
 
@@ -11,11 +11,11 @@ pub struct SubGraph {
 
 impl SubGraph {
     pub fn new(graph: TensorIR, inputs: Vec<NodeId>, outputs: Vec<NodeId>) -> Result<Self, IRTrace> {
-        if inputs.len() != inputs.iter().collect::<HashSet<_>>().len() {
+        if inputs.len() != inputs.iter().collect::<BTreeSet<_>>().len() {
             return Err("Duplicate inputs to subgraph!".into());
         }
 
-        if outputs.len() != outputs.iter().collect::<HashSet<_>>().len() {
+        if outputs.len() != outputs.iter().collect::<BTreeSet<_>>().len() {
             return Err("Duplicate outputs of subgraph!".into());
         }
 
@@ -57,7 +57,7 @@ impl SubGraph {
             return Err("Mismatched inputs length in SubGraph::from_op!".into());
         }
 
-        let mut seen = HashMap::new();
+        let mut seen = BTreeMap::new();
         let mut sub_inputs = Vec::new();
         let mut op_inputs = Vec::new();
         let mut filtered = Vec::new();
@@ -99,7 +99,7 @@ impl OpType for SubGraph {
 
     fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
         let inputs = inputs.iter().cloned().cloned();
-        let inputs: HashMap<NodeId, TValue> = self.inputs.iter().cloned().zip(inputs).collect();
+        let inputs: BTreeMap<NodeId, TValue> = self.inputs.iter().cloned().zip(inputs).collect();
 
         let Some(outs) = self.graph.evaluate(inputs).unwrap() else { return false };
 

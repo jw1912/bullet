@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     ops::{Add, Div, Mul, Neg, Sub},
     sync::{
         Arc, Mutex, MutexGuard,
@@ -65,18 +65,18 @@ impl From<NodeType> for bullet_compiler::tensor::Shape {
 #[derive(Default)]
 pub struct ModelBuilder {
     ir: IRBuilder,
-    init: Mutex<HashMap<NodeId, InitSettings>>,
-    inputs: Mutex<HashMap<NodeId, InputDesc>>,
+    init: Mutex<BTreeMap<NodeId, InitSettings>>,
+    inputs: Mutex<BTreeMap<NodeId, InputDesc>>,
     no_grad: AtomicBool,
-    frozen: Mutex<HashSet<NodeId>>,
+    frozen: Mutex<BTreeSet<NodeId>>,
 }
 
 impl ModelBuilder {
-    fn init(&self) -> MutexGuard<'_, HashMap<NodeId, InitSettings>> {
+    fn init(&self) -> MutexGuard<'_, BTreeMap<NodeId, InitSettings>> {
         self.init.try_lock().unwrap()
     }
 
-    fn inputs(&self) -> MutexGuard<'_, HashMap<NodeId, InputDesc>> {
+    fn inputs(&self) -> MutexGuard<'_, BTreeMap<NodeId, InputDesc>> {
         self.inputs.try_lock().unwrap()
     }
 
@@ -178,14 +178,14 @@ impl ModelBuilder {
         let (transform, grads) = TakeGradient::new(op, [grad]);
         bwd.transform(transform).unwrap();
 
-        let mut fwd_map = HashMap::new();
-        let mut bwd_map = HashMap::new();
-        let mut shapes = HashMap::new();
-        let mut weights = HashMap::new();
+        let mut fwd_map = BTreeMap::new();
+        let mut bwd_map = BTreeMap::new();
+        let mut shapes = BTreeMap::new();
+        let mut weights = BTreeMap::new();
         let stream = device.clone().new_stream().unwrap();
 
         let frozen = self.frozen.try_lock().unwrap().clone();
-        let mut names = HashSet::new();
+        let mut names = BTreeSet::new();
 
         for (id, (name, shape, sparse)) in self.inputs().clone() {
             assert!(names.insert(name.clone()));

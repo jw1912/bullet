@@ -5,7 +5,7 @@ pub mod radam;
 pub mod ranger;
 pub mod utils;
 
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use bullet_compiler::tensor::TValue;
 use bullet_gpu::{
@@ -60,16 +60,16 @@ pub trait OptimiserState<G: Gpu>: Sized {
 
     fn reset(&mut self) -> Result<(), G::Error>;
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error>;
+    fn load_from_checkpoint(map: &mut BTreeMap<String, &mut Self>, path: &str) -> Result<(), G::Error>;
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error>;
+    fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error>;
 
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error>;
 }
 
 pub struct Optimiser<G: Gpu, S: OptimiserState<G>> {
     pub model: Model<G>,
-    pub state: HashMap<String, S>,
+    pub state: BTreeMap<String, S>,
     pre_update: Vec<Box<dyn AdditionalUpdate<G>>>,
     post_update: Vec<Box<dyn AdditionalUpdate<G>>>,
 }
@@ -80,7 +80,7 @@ pub trait AdditionalUpdate<G: Gpu>: 'static {
 
 impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
     pub fn new(model: Model<G>, params: S::Params) -> Result<Self, G::Error> {
-        let mut state = HashMap::new();
+        let mut state = BTreeMap::new();
         let stream = model.stream();
 
         for (id, value) in model.weights() {
@@ -207,12 +207,12 @@ where
         self.optimiser.set_params(params.into())
     }
 
-    fn load_from_checkpoint(map: &mut HashMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
+    fn load_from_checkpoint(map: &mut BTreeMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.optimiser)).collect();
         O::load_from_checkpoint(&mut map, path)
     }
 
-    fn write_to_checkpoint(map: &HashMap<String, &Self>, path: &str) -> Result<(), G::Error> {
+    fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error> {
         let map = map.iter().map(|(id, single)| (id.clone(), &single.optimiser)).collect();
         O::write_to_checkpoint(&map, path)
     }
