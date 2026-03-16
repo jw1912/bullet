@@ -147,7 +147,7 @@ impl SelectPad {
 impl OpType for SelectPad {
     fn opname(&self) -> String {
         let Self { batch, inner, divisor, .. } = *self;
-        format!("select<{batch:?}x{inner:?}, {divisor:?}>")
+        format!("selectpad<{batch:?}x{inner:?}, {divisor:?}>")
     }
 
     fn inputs(&self) -> Vec<TType> {

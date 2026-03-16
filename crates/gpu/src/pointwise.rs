@@ -39,7 +39,7 @@ impl OpType for FusedPointwise {
     fn opname(&self) -> String {
         let src = format!("{:?}", format!("{}", self.sub.internal_graph()));
         let src = src.strip_prefix("\"irgraph").unwrap().strip_suffix('"').unwrap().replace("\\n", "\\l");
-        format!("{}Fused Kernel\\n{src}\\l", if self.vectorised { "Vectorised " } else { "" })
+        format!("{}Kernel\\n{src}\\l", if self.vectorised { "Vectorised " } else { "" })
     }
 
     fn inputs(&self) -> Vec<TType> {
@@ -96,8 +96,14 @@ impl IRTransform for LowerPointwise {
         loop {
             let mut candidates = BTreeSet::new();
 
-            for (i, &op_i) in costs.keys().enumerate() {
-                'inner: for &op_j in costs.keys().skip(i + 1) {
+            let ops = ir
+                .ordered_operations()?
+                .into_iter()
+                .filter_map(|op| op.data().downcast::<FusedPointwise>().map(|_| op.id()))
+                .collect::<Vec<_>>();
+
+            for (i, &op_i) in ops.iter().enumerate() {
+                'inner: for &op_j in ops.iter().skip(i + 1) {
                     if failed.contains(&(op_i, op_j)) {
                         continue;
                     }
