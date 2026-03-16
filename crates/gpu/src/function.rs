@@ -6,7 +6,7 @@ use bullet_compiler::{
     tensor::{
         DType, IRTrace, Size, TType, TensorIR,
         operation::{CABinary, CABinaryOp, Matmul, MatrixLayout, ReduceAcrossDimension, Reduction},
-        transform::rewriterules::RewritePass,
+        transform::{eliminate::EliminateCommonSubExpressions, rewriterules::RewritePass},
     },
 };
 
@@ -59,11 +59,13 @@ pub struct Function<G: Gpu> {
 
 impl<G: Gpu> Function<G> {
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
-        ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
         ir.transform(DuplicateScalars)?;
         ir.transform(LowerPointwise)?;
         ir.transform(FusePointwise)?;
+        ir.transform(RewritePass(ReduceToMatmul))?;
+        ir.transform(EliminateCommonSubExpressions)?;
+        ir.transform(LowerPointwise)?;
         ir.transform(CodegenPointwise)?;
 
         let mut maps = BTreeMap::new();
