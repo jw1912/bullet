@@ -6,7 +6,7 @@ use crate::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, ScalarConstant,
-            SliceAcrossDimension, UnaryOp, autograd::AutogradOp,
+            SliceAcrossDimension, SparseMatmulBwdMulti, UnaryOp, autograd::AutogradOp,
         },
         transform::IRTransform,
     },
@@ -324,6 +324,42 @@ rewriterule! {
             ir.replace_operation(op.id(), [new_lhs, new_rhs], add)?;
             return Ok(true);
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CombineSparseMatmulBwds;
+impl RewriteRule for CombineSparseMatmulBwds {
+    fn apply(&self, ir: &mut TensorIR, op: Op<Tensor>) -> Result<bool, IRTrace> {
+        if let Some(add) = op.data().downcast::<CABinaryOp>() {
+            let i1 = op.inputs()[0];
+            let i2 = op.inputs()[1];
+
+            let op1 = ir.get_op(ir.get_parent_op(i1)?)?;
+            let op2 = ir.get_op(ir.get_parent_op(i2)?)?;
+
+            if let Some(bwd1) = op1.data().downcast::<SparseMatmulBwdMulti>()
+                && let Some(bwd2) = op2.data().downcast::<SparseMatmulBwdMulti>()
+                && add.op() == CABinary::Add
+                && bwd1.dtype() == bwd2.dtype()
+                && bwd1.batch() == bwd2.batch()
+                && bwd1.rows() == bwd2.rows()
+                && bwd1.cols() == bwd2.cols()
+                && ir.get_node(i1)?.children() == 1
+                && ir.get_node(i2)?.children() == 1
+            {
+                let mut new_op = bwd1.clone();
+                for bwd in bwd2.inner() {
+                    new_op.push(*bwd)?;
+                }
+
+                let new_inputs = [op1.inputs(), op2.inputs()].concat();
+                ir.replace_operation(op.id(), new_inputs, new_op)?;
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }
 

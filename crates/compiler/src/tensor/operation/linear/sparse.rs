@@ -178,6 +178,22 @@ impl SparseMatmulBwdMulti {
         self.0.push(next);
         Ok(())
     }
+
+    pub fn dtype(&self) -> DType {
+        self.0[0].0.dtype
+    }
+
+    pub fn batch(&self) -> Size {
+        self.0[0].0.batch
+    }
+
+    pub fn rows(&self) -> usize {
+        self.0[0].0.rows
+    }
+
+    pub fn cols(&self) -> usize {
+        self.0[0].0.cols
+    }
 }
 
 impl OpType for SparseMatmulBwdMulti {
@@ -191,12 +207,24 @@ impl OpType for SparseMatmulBwdMulti {
     }
 
     fn outputs(&self) -> Vec<TType> {
-        self.0.iter().flat_map(|x| x.outputs()).collect()
+        self.0[0].outputs()
     }
 
-    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
-        for ((bwd, inps), out) in self.0.iter().zip(inputs.chunks_exact(2)).zip(outputs) {
-            bwd.evaluate(inps.to_vec(), vec![out]);
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
+        let out = &mut outputs[0];
+        for i in 0..out.size() {
+            out.write(i, DValue::zero(out.dtype()));
+        }
+
+        for (bwd, inps) in self.0.iter().zip(inputs.chunks_exact(2)) {
+            let mut this_out = TValue::zeros(out.dtype(), out.size());
+            if !bwd.evaluate(inps.to_vec(), vec![&mut this_out]) {
+                return false;
+            }
+
+            for i in 0..out.size() {
+                out.write(i, CABinary::Add.evaluate(out.read(i), this_out.read(i)).unwrap());
+            }
         }
 
         true
@@ -234,7 +262,8 @@ mod tests {
         // [0, 3]   [1, 1, 0]   [3, 3,  6]
         // [1, 4] @ [1, 1, 2] = [5, 5,  8]
         // [2, 5]               [7, 7, 10]
-        let matmul = SparseMatmulBwd(SparseMatmul::new(DType::F32, Size::variable(), 3, 3, 4));
+        let matmul =
+            SparseMatmulBwdMulti::new(SparseMatmulBwd(SparseMatmul::new(DType::F32, Size::variable(), 3, 3, 4)));
         matmul.evaluate(vec![&lhs, &rhs], vec![&mut outputs]);
         assert_eq!(outputs, TValue::F32(vec![3.0, 5.0, 7.0, 3.0, 5.0, 7.0, 6.0, 8.0, 10.0]));
     }

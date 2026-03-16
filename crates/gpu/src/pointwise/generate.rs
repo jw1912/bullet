@@ -4,7 +4,7 @@ use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
         BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, Select, SelectPad,
-        SliceAcrossDimension, SparseMatmul, SparseMatmulBwd, SubGraph, Unary, UnaryOp,
+        SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary, UnaryOp,
     },
 };
 
@@ -47,12 +47,18 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
             }
 
             (matmul.batch() * matmul.rows(), matmul.rows())
-        } else if let Some(bwd) = data.downcast::<SparseMatmulBwd>() {
-            if !(ir.is_input(op.inputs()[1])? && ir.is_output(op.outputs()[0])) {
+        } else if let Some(bwd) = data.downcast::<SparseMatmulBwdMulti>() {
+            if !ir.is_output(op.outputs()[0]) {
                 return Ok(None);
             }
 
-            (bwd.0.batch() * bwd.0.rows(), 1)
+            for &input in op.inputs().iter().skip(1).step_by(2) {
+                if !ir.is_input(input)? {
+                    return Ok(None);
+                }
+            }
+
+            (bwd.batch() * bwd.rows(), 1)
         } else if let Some(pad) = data.downcast::<PadAcrossDimension>() {
             if !ir.is_input(op.inputs()[0])? {
                 return Ok(None);
@@ -167,14 +173,16 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
             let output = pntwise.sparse_matmul(weights, indices, p2size, *matmul)?;
             mapping.insert(op.outputs()[0], output);
-        } else if let Some(bwd) = data.downcast::<SparseMatmulBwd>() {
+        } else if let Some(bwd) = data.downcast::<SparseMatmulBwdMulti>() {
             let out = op.outputs()[0];
-
             let weights = *out_buf_map.get(&out).unwrap();
-            let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
-            let Some(gradients) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
 
-            pntwise.sparse_matmul_bwd(weights, indices, gradients, bwd.0)?;
+            for (this_bwd, inputs) in bwd.inner().iter().zip(op.inputs().chunks_exact(2)) {
+                let indices = *inp_buf_map.get(&inputs[1]).unwrap();
+                let Some(gradients) = get_val(inputs[0], &mut pntwise, &mapping)? else { return Ok(None) };
+                pntwise.sparse_matmul_bwd(weights, indices, gradients, this_bwd.0)?;
+            }
+
             handled_writes.insert(out);
         } else if let Some(pad) = data.downcast::<PadAcrossDimension>() {
             assert_eq!(p2size, 0);

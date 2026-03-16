@@ -4,7 +4,10 @@ use crate::{
     ir::Op,
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
-        operation::{BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, UnaryOp},
+        operation::{
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, SparseMatmulBwd,
+            SparseMatmulBwdMulti, UnaryOp,
+        },
         transform::modify::AddOperation,
     },
 };
@@ -153,4 +156,10 @@ foldrule! {
     given {
         binary.op() == CABinary::Mul && (scalar.0 == 0.0.into() || scalar.0 == 0.into())
     }
+}
+
+foldrule! {
+    rulename FoldSparseMatmulBwdToMulti on ir
+    rewrites (bwd = [SparseMatmulBwd] (a) (b))
+    into [SparseMatmulBwdMulti::new(*bwd)] (a) (b)
 }

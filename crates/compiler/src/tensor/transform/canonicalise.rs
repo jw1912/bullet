@@ -32,6 +32,7 @@ impl CanonicalisePass {
             .add_fold(FoldVarSizeScalarConst)
             .add_fold(FoldConstIdentities)
             .add_fold(FoldMulByZero)
+            .add_fold(FoldSparseMatmulBwdToMulti)
             .add_rewrite(BroadcastUnaryIntoUnaryBroadcast)
             .add_rewrite(BroadcastBinaryIntoBinaryBroadcast)
             .add_rewrite(ScalarBroadcastBinaryIntoBinaryBroadcast)
@@ -40,6 +41,7 @@ impl CanonicalisePass {
             .add_rewrite(FactoriseDistributive)
             .add_rewrite(ConcatMatmulToAddSlicedMatmuls)
             .add_rewrite(AutogradConcatMatmulToAddSlicedMatmuls)
+            .add_rewrite(CombineSparseMatmulBwds)
     }
 
     pub fn add_cleanup(mut self, cleanup: impl IRTransform) -> Self {
