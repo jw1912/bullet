@@ -14,17 +14,24 @@ use crate::runtime::{Gpu, Stream};
 pub struct SyncOnDrop<G: Gpu> {
     stream: Arc<Stream<G>>,
     guards: Vec<BufferGuard<G>>,
+    synced: bool,
 }
 
 impl<G: Gpu> Drop for SyncOnDrop<G> {
     fn drop(&mut self) {
-        self.stream.sync().unwrap();
+        if !self.synced {
+            self.stream.sync().unwrap();
+        }
     }
 }
 
 impl<G: Gpu> SyncOnDrop<G> {
     pub fn new(stream: Arc<Stream<G>>) -> Self {
-        Self { stream, guards: Vec::new() }
+        Self { stream, guards: Vec::new(), synced: false }
+    }
+
+    pub fn sync(self) -> Result<(), G::Error> {
+        self.stream.sync()
     }
 
     pub fn stream(&self) -> Arc<Stream<G>> {
@@ -59,8 +66,9 @@ impl<G: Gpu, T> SyncOnValue<G, T> {
 
     /// Consume self, which causes a stream sync, and return
     /// stored value
-    pub fn value(self) -> T {
-        self.value
+    pub fn value(self) -> Result<T, G::Error> {
+        self.sync.sync()?;
+        Ok(self.value)
     }
 
     /// Get a reference to the stored value
@@ -296,8 +304,8 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = Stream::new(device.clone())?;
 
-        let buf = Buffer::from_host(&stream, &host_src)?.value().0;
-        let host_dst = buf.to_host(&stream)?.value();
+        let buf = Buffer::from_host(&stream, &host_src)?.value()?.0;
+        let host_dst = buf.to_host(&stream)?.value()?;
 
         assert_eq!(host_src, host_dst);
 

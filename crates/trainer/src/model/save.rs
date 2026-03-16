@@ -26,7 +26,7 @@ impl<G: Gpu> From<&Model<G>> for ModelWeights {
                 .weights()
                 .iter()
                 .map(|(id, value)| {
-                    let values = value.clone().to_host(&value.creator()).unwrap().value();
+                    let values = value.clone().to_host(&value.creator()).unwrap().value().unwrap();
                     let shape = model.shapes.get(&format!("weights/{id}")).unwrap().0;
                     (id.clone(), ShapedTValue { values, shape })
                 })

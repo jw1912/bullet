@@ -40,6 +40,18 @@ impl<'a, G: Gpu> OptimiserUpdateSync<'a, G> {
         self.kernels.append(&mut other.kernels);
         self.copies.append(&mut other.copies);
     }
+
+    pub fn sync(self) -> Result<(), G::Error> {
+        for kernel in self.kernels {
+            kernel.value()?;
+        }
+
+        for copy in self.copies {
+            copy.value()?;
+        }
+
+        Ok(())
+    }
 }
 
 type OptimiserUpdateResult<'a, G> = Result<OptimiserUpdateSync<'a, G>, <G as Gpu>::Error>;

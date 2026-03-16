@@ -453,14 +453,12 @@ mod tests {
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
         let values2 = TValue::F32(vec![4.0, 3.0, 2.0, 1.0]);
 
-        let input1_buf = Buffer::from_host(&stream, &values1)?.value().0;
-        let input2_buf = Buffer::from_host(&stream, &values2)?.value().0;
+        let input1_buf = Buffer::from_host(&stream, &values1)?.value()?.0;
+        let input2_buf = Buffer::from_host(&stream, &values2)?.value()?.0;
 
-        let sync = kernel.execute(stream.clone(), vec![input1_buf], vec![input2_buf.clone()])?;
+        kernel.execute(stream.clone(), vec![input1_buf], vec![input2_buf.clone()])?.value()?;
 
-        drop(sync);
-
-        let actual = input2_buf.to_host(&stream)?.value();
+        let actual = input2_buf.to_host(&stream)?.value()?;
 
         assert_eq!(actual, TValue::F32(vec![6.0, 7.0, 8.0, 9.0]));
 

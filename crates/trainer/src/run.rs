@@ -73,8 +73,16 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let outputs =
         trainer.optimiser.model.make_backward_output_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
     let gradients = trainer.optimiser.model.make_gradient_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
-    let tlr = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?.value().0;
-    let tgf = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?.value().0;
+    let tlr = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0]))
+        .map_err(TrainerError::Unexpected)?
+        .value()
+        .map_err(TrainerError::Unexpected)?
+        .0;
+    let tgf = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0]))
+        .map_err(TrainerError::Unexpected)?
+        .value()
+        .map_err(TrainerError::Unexpected)?
+        .0;
 
     let mut next_batch_size = first_batch.batch_size;
     let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
@@ -119,8 +127,8 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
 
         let compute_block1 = unsafe { compute_block1.detach_value() };
 
-        drop(lrdrop);
-        drop(gfdrop);
+        lrdrop.value().map_err(TrainerError::Unexpected)?;
+        gfdrop.value().map_err(TrainerError::Unexpected)?;
 
         let compute_block2 = trainer
             .optimiser
@@ -135,12 +143,16 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
             batch_queued = false;
         }
 
-        drop(compute_block1);
-        drop(compute_block2);
+        compute_block1.sync().map_err(TrainerError::Unexpected)?;
+        compute_block2.sync().map_err(TrainerError::Unexpected)?;
 
         let loss = outputs.get("outputs/loss").expect("`Trainer` must have a \"loss\" output!");
-        let TValue::F32(loss) =
-            loss.clone().to_host(&copy_stream).map(SyncOnValue::value).map_err(TrainerError::Unexpected)?
+        let TValue::F32(loss) = loss
+            .clone()
+            .to_host(&copy_stream)
+            .map(SyncOnValue::value)
+            .map_err(TrainerError::Unexpected)?
+            .map_err(TrainerError::Unexpected)?
         else {
             panic!()
         };

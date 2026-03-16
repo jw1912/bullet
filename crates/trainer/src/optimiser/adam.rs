@@ -158,8 +158,8 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
         let op = default_params.build(size).unwrap().compile(stream.device())?;
 
         Ok(Self {
-            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
-            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
+            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value()?.0,
+            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value()?.0,
             op,
         })
     }

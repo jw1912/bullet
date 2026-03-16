@@ -24,7 +24,7 @@ pub fn write_weights_to_file<G: Gpu>(
     let mut buf = Vec::new();
 
     for (id, weights) in map {
-        let this_buf = (*weights).clone().to_host(stream)?.value();
+        let this_buf = (*weights).clone().to_host(stream)?.value()?;
         let byte_buf = write_to_byte_buffer(&this_buf, id.as_ref()).unwrap();
         buf.extend_from_slice(&byte_buf);
     }

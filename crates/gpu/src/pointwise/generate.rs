@@ -352,23 +352,18 @@ mod tests {
         let bval = TValue::F32(vec![4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0]);
         let xval = TValue::F32([4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0].repeat(4));
 
-        let aval_buf = Buffer::from_host(&stream, &aval)?.value().0;
-        let bval_buf = Buffer::from_host(&stream, &bval)?.value().0;
-        let xval_buf = Buffer::from_host(&stream, &xval)?.value().0;
+        let aval_buf = Buffer::from_host(&stream, &aval)?.value()?.0;
+        let bval_buf = Buffer::from_host(&stream, &bval)?.value()?.0;
+        let xval_buf = Buffer::from_host(&stream, &xval)?.value()?.0;
 
-        let x2val_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value();
-        let yval_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value();
+        let x2val_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value()?;
+        let yval_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value()?;
 
-        let sync = axby.execute(
-            stream.clone(),
-            vec![aval_buf, bval_buf, xval_buf],
-            vec![x2val_buf.clone(), yval_buf.clone()],
-        )?;
+        axby.execute(stream.clone(), vec![aval_buf, bval_buf, xval_buf], vec![x2val_buf.clone(), yval_buf.clone()])?
+            .value()?;
 
-        drop(sync);
-
-        let actualx = x2val_buf.to_host(&stream)?.value();
-        let actualy = yval_buf.to_host(&stream)?.value();
+        let actualx = x2val_buf.to_host(&stream)?.value()?;
+        let actualy = yval_buf.to_host(&stream)?.value()?;
 
         assert_eq!(actualx, xval);
         #[rustfmt::skip]
@@ -409,16 +404,14 @@ mod tests {
         let aval = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
         let bval = TValue::F32(vec![4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0]);
 
-        let aval_buf = Buffer::from_host(&stream, &aval)?.value().0;
-        let bval_buf = Buffer::from_host(&stream, &bval)?.value().0;
+        let aval_buf = Buffer::from_host(&stream, &aval)?.value()?.0;
+        let bval_buf = Buffer::from_host(&stream, &bval)?.value()?.0;
 
-        let concat_buf = Buffer::zeroed(&stream, DType::F32, 16)?.value();
+        let concat_buf = Buffer::zeroed(&stream, DType::F32, 16)?.value()?;
 
-        let sync = concat.execute(stream.clone(), vec![aval_buf, bval_buf], vec![concat_buf.clone()])?;
+        concat.execute(stream.clone(), vec![aval_buf, bval_buf], vec![concat_buf.clone()])?.value()?;
 
-        drop(sync);
-
-        assert_eq!(concat_buf.to_host(&stream)?.value(), TValue::F32(expected.into()));
+        assert_eq!(concat_buf.to_host(&stream)?.value()?, TValue::F32(expected.into()));
 
         Ok(())
     }
@@ -444,13 +437,11 @@ mod tests {
         let slice = src.compile(device)?;
 
         let input = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
-        let input_buf = Buffer::from_host(&stream, &input)?.value().0;
-        let slice_buf = Buffer::zeroed(&stream, DType::F32, 4)?.value();
-        let sync = slice.execute(stream.clone(), vec![input_buf], vec![slice_buf.clone()])?;
+        let input_buf = Buffer::from_host(&stream, &input)?.value()?.0;
+        let slice_buf = Buffer::zeroed(&stream, DType::F32, 4)?.value()?;
+        slice.execute(stream.clone(), vec![input_buf], vec![slice_buf.clone()])?.value()?;
 
-        drop(sync);
-
-        assert_eq!(slice_buf.to_host(&stream)?.value(), TValue::F32(expected.into()));
+        assert_eq!(slice_buf.to_host(&stream)?.value()?, TValue::F32(expected.into()));
 
         Ok(())
     }

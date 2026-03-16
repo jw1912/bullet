@@ -69,7 +69,10 @@ impl<G: Gpu> Model<G> {
     }
 
     pub fn get_weights(&self, id: impl Into<String>) -> Option<TValue> {
-        self.weights.get(&id.into()).cloned().map(|tensor| tensor.clone().to_host(&tensor.creator()).unwrap().value())
+        self.weights
+            .get(&id.into())
+            .cloned()
+            .map(|tensor| tensor.clone().to_host(&tensor.creator()).unwrap().value().unwrap())
     }
 
     pub fn set_weights(&self, id: impl Into<String>, new_value: &TValue) -> bool {
@@ -114,8 +117,10 @@ impl<G: Gpu> Model<G> {
             .iter()
             .map(|(id, weight)| {
                 Buffer::from_host(stream, &TValue::zeros(weight.dtype(), weight.size()))
-                    .map(|buf| (id.clone(), buf.value().0))
+                    .map(|buf| buf.value().map(|v| (id.clone(), v.0)))
             })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .collect()
     }
 
@@ -124,8 +129,11 @@ impl<G: Gpu> Model<G> {
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate_constant().expect("`Model` only supports constant-size outputs!");
-                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf.value().0))
+                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size))
+                    .map(|buf| buf.value().map(|v| (id.clone(), v.0)))
             })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .collect()
     }
 
@@ -138,8 +146,11 @@ impl<G: Gpu> Model<G> {
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate(batch_size);
-                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf.value().0))
+                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size))
+                    .map(|buf| buf.value().map(|v| (id.clone(), v.0)))
             })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .collect()
     }
 
@@ -153,7 +164,7 @@ impl<G: Gpu> Model<G> {
                 unimplemented!("Non f32 writing!");
             }
 
-            let this_buf = value.clone().to_host(&self.stream)?.value();
+            let this_buf = value.clone().to_host(&self.stream)?.value()?;
             let byte_buf = utils::write_to_byte_buffer(&this_buf, &id).unwrap();
             buf.extend_from_slice(&byte_buf);
         }

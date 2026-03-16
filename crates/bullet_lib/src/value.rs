@@ -199,10 +199,10 @@ where
         let stream = model.stream();
         let inputs = host_data.to_device_blocking(&stream).unwrap();
         let outputs = model.make_forward_output_tensors(&stream, 1).unwrap();
-        drop(model.forward(&stream, &inputs, &outputs).unwrap());
+        model.forward(&stream, &inputs, &outputs).unwrap().value().unwrap();
 
         let output = outputs.get("outputs/output").unwrap().clone();
-        let TValue::F32(output) = output.to_host(&stream).unwrap().value() else { panic!() };
+        let TValue::F32(output) = output.to_host(&stream).unwrap().value().unwrap() else { panic!() };
         output
     }
 

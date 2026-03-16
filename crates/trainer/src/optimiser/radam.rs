@@ -169,13 +169,13 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
         let op = default_params.build(size).unwrap().compile(stream.device())?;
 
         Ok(Self {
-            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
-            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value().0,
+            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value()?.0,
+            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value()?.0,
             op,
             params: default_params,
             step: 0,
-            step_size: Buffer::from_host(stream, &TValue::zeros(DType::F32, 1))?.value().0,
-            denom: Buffer::from_host(stream, &TValue::zeros(DType::I32, 1))?.value().0,
+            step_size: Buffer::from_host(stream, &TValue::zeros(DType::F32, 1))?.value()?.0,
+            denom: Buffer::from_host(stream, &TValue::zeros(DType::I32, 1))?.value()?.0,
             cpu_step_size: TValue::F32(vec![0.0]),
             cpu_denom: TValue::I32(vec![0]),
         })

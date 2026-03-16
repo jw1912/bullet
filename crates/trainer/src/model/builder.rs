@@ -207,7 +207,7 @@ impl ModelBuilder {
                 let tensor = Buffer::from_host(&stream, &init);
                 let name = name.strip_prefix("weights/").unwrap().to_string();
 
-                weights.insert(name.clone(), tensor.unwrap().value().0);
+                weights.insert(name.clone(), tensor.unwrap().value().unwrap().0);
                 let gid = grads.borrow().get(&id).unwrap().unwrap();
 
                 if !frozen.contains(&id) {

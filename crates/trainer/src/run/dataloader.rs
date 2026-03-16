@@ -32,7 +32,10 @@ impl PreparedBatchHost {
             .map(|(id, value)| Buffer::from_host(stream, value).map(|tensor| (id, tensor)))
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-        let res = on_device.into_iter().map(|(id, value)| (id.clone(), value.value().0)).collect();
+        let res = on_device
+            .into_iter()
+            .map(|(id, value)| value.value().map(|v| (id.clone(), v.0)))
+            .collect::<Result<_, _>>()?;
 
         stream.sync()?;
 
