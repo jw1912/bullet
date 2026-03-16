@@ -1,4 +1,7 @@
-use crate::tensor::{DType, DValue, OpType, Size, TType, TValue, TensorOp, operation::CABinary};
+use crate::{
+    ir::IRError,
+    tensor::{DType, DValue, OpType, Size, TType, TValue, TensorOp, operation::CABinary},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SparseMatmul {
@@ -142,6 +145,58 @@ impl OpType for SparseMatmulBwd {
                     }
                 }
             }
+        }
+
+        true
+    }
+
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SparseMatmulBwdMulti(Vec<SparseMatmulBwd>);
+
+impl SparseMatmulBwdMulti {
+    pub fn new(bwd: SparseMatmulBwd) -> Self {
+        Self(vec![bwd])
+    }
+
+    pub fn inner(&self) -> &[SparseMatmulBwd] {
+        &self.0
+    }
+
+    pub fn push(&mut self, next: SparseMatmulBwd) -> Result<(), IRError> {
+        let SparseMatmul { dtype, batch, rows, cols, .. } = self.0[0].0;
+        let inner = next.0;
+
+        if inner.dtype != dtype || inner.batch != batch || inner.rows != rows || inner.cols != cols {
+            return Err("Mismatched SparseMatmulBwd!".into());
+        }
+
+        self.0.push(next);
+        Ok(())
+    }
+}
+
+impl OpType for SparseMatmulBwdMulti {
+    fn opname(&self) -> String {
+        let SparseMatmul { batch, rows, cols, .. } = self.0[0].0;
+        format!("sparse.matmul.bwd.multi<{batch:?}, {rows:?}x{cols:?}>")
+    }
+
+    fn inputs(&self) -> Vec<TType> {
+        self.0.iter().flat_map(|x| x.inputs()).collect()
+    }
+
+    fn outputs(&self) -> Vec<TType> {
+        self.0.iter().flat_map(|x| x.outputs()).collect()
+    }
+
+    fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
+        for ((bwd, inps), out) in self.0.iter().zip(inputs.chunks_exact(2)).zip(outputs) {
+            bwd.evaluate(inps.to_vec(), vec![out]);
         }
 
         true

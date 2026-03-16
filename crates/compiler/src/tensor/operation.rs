@@ -17,7 +17,7 @@ pub use index::{
 pub use linear::{
     matmul::{Matmul, MatrixLayout},
     reduce::{ReduceAcrossDimension, Reduction},
-    sparse::{SparseMatmul, SparseMatmulBwd},
+    sparse::{SparseMatmul, SparseMatmulBwd, SparseMatmulBwdMulti},
 };
 pub use pointwise::{
     binary::{CABinary, CABinaryOp},

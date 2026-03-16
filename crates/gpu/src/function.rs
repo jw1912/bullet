@@ -13,7 +13,7 @@ use bullet_compiler::{
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    pointwise::LowerPointwise,
+    pointwise::transforms::{CodegenPointwise, DuplicateScalars, FusePointwise, LowerPointwise},
     runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
@@ -61,7 +61,10 @@ impl<G: Gpu> Function<G> {
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
+        ir.transform(DuplicateScalars)?;
         ir.transform(LowerPointwise)?;
+        ir.transform(FusePointwise)?;
+        ir.transform(CodegenPointwise)?;
 
         let mut maps = HashMap::new();
         let mut num_ptrs = 0;
