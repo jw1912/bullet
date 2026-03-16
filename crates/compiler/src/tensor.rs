@@ -314,6 +314,10 @@ impl TensorIR {
         self.ir.get_dependent_ops_set(op).map_err(|e| e.into())
     }
 
+    pub fn is_dependent_op(&self, id: OpId, target: OpId) -> Result<bool, IRTrace> {
+        self.ir.is_dependent_op(id, target).map_err(|e| e.into())
+    }
+
     pub fn is_immediate_dependent_op(&self, parent: OpId, child: OpId) -> Result<bool, IRTrace> {
         self.ir.is_immediate_dependent_op(parent, child).map_err(|e| e.into())
     }

@@ -141,7 +141,7 @@ impl PointwiseIR {
         };
 
         let PType::Variable { ty: cmp_ty, p2size } = self.ir.node(val)?.ty() else {
-            return Err("Only scalar integers allowed as indices!".into());
+            return Err("Mismatched types!".into());
         };
 
         if cmp_ty != buf_ty {
@@ -152,6 +152,30 @@ impl PointwiseIR {
 
         self.written_to.insert(buf);
         self.ir.add_op([buf, idx, val], PointwiseOp::Write(io)).map(|_| ())
+    }
+
+    pub fn atomic_add(&mut self, buf: NodeId, idx: NodeId, val: NodeId) -> Result<(), IRError> {
+        let PType::Pointer(buf_ty) = self.ir.node(buf)?.ty() else {
+            return Err("Only buffers allowed as input here!".into());
+        };
+
+        let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(idx)?.ty() else {
+            return Err("Only scalar integers allowed as indices!".into());
+        };
+
+        let PType::Variable { ty: cmp_ty, p2size } = self.ir.node(val)?.ty() else {
+            return Err("Mismatched types!".into());
+        };
+
+        if cmp_ty != buf_ty {
+            return Err("Mismatched buffer and value types!".into());
+        }
+
+        let io = MemIO { buf_ty, p2size };
+
+        self.written_to.insert(buf);
+        self.needs_zero.insert(buf);
+        self.ir.add_op([buf, idx, val], PointwiseOp::AtomicAdd(io)).map(|_| ())
     }
 
     pub fn broadcast(&mut self, node: NodeId, p2size: u8) -> Result<NodeId, IRError> {

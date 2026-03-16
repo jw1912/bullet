@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ScalarConstant, Select, SelectPad,
-        SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary, UnaryOp,
+        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ReduceAcrossDimension, ScalarConstant,
+        Select, SelectPad, SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary, UnaryOp,
     },
 };
 
@@ -83,6 +83,12 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
             }
 
             (select_pad.output_size(), 1)
+        } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
+            if !(ir.is_output(op.outputs()[0]) && reduce.inner().is_multiple_of(32.into())) {
+                return Ok(None);
+            }
+
+            (reduce.input_size(), 1)
         } else {
             return Ok(None);
         };
@@ -297,6 +303,25 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
 
             let output = pntwise.conditional_read(values, idx, cond, DValue::zero(select_pad.dtype), p2size)?;
             mapping.insert(op.outputs()[0], output);
+        } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
+            let out = op.outputs()[0];
+            let Some(value) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
+            let dest = *out_buf_map.get(&out).unwrap();
+
+            let tid = pntwise.tid();
+            let dimen = pntwise.eval_size(reduce.dimen());
+            let inner = pntwise.eval_size(reduce.inner());
+
+            let inner_idx = pntwise.rem(tid, inner)?;
+            let outer_stride = pntwise.binary(inner, dimen, CABinary::Mul)?;
+            let outer_idx = pntwise.div(tid, outer_stride)?;
+
+            let mut idx = pntwise.binary(inner, outer_idx, CABinary::Mul)?;
+            idx = pntwise.binary(idx, inner_idx, CABinary::Add)?;
+
+            pntwise.atomic_add(dest, idx, value)?;
+
+            handled_writes.insert(out);
         } else {
             unreachable!();
         };
