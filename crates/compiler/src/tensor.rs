@@ -28,7 +28,6 @@ pub use ttype::{DType, DValue, Shape, Size, TType, TValue};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Tensor;
-
 impl TypeSystem for Tensor {
     type Type = TType;
     type OpData = TensorOp;
