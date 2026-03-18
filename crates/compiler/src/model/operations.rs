@@ -1,4 +1,8 @@
-use crate::{ir::{IRError, NodeId}, model::{Layout, MType, ModelOperation}, tensor::{DType, TType, TensorIR}};
+use crate::{
+    ir::{IRError, NodeId},
+    model::{Layout, MType, ModelOperation},
+    tensor::{DType, TType, TensorIR},
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Input(MType);

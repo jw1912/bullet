@@ -3,7 +3,10 @@ pub mod operations;
 
 use std::{collections::BTreeSet, fmt, rc::Rc};
 
-use crate::{ir::{IR, IRError, NodeId, Operation, TypeSystem}, tensor::{DType, TensorIR}};
+use crate::{
+    ir::{IR, IRError, NodeId, Operation, TypeSystem},
+    tensor::{DType, TensorIR},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layout {
