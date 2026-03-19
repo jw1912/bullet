@@ -55,6 +55,7 @@ pub struct Function<G: Gpu> {
     insts: Box<[Inst<G>]>,
     num_ptrs: usize,
     blas: Option<Blas<G>>,
+    max_num_args: usize,
 }
 
 impl<G: Gpu> Function<G> {
@@ -75,6 +76,8 @@ impl<G: Gpu> Function<G> {
 
         let mut times_seen = BTreeMap::new();
         let mut indices = BTreeMap::new();
+
+        let mut max_num_args = 0;
 
         for op in ir.ordered_operations()? {
             // allocate output buffers
@@ -129,6 +132,7 @@ impl<G: Gpu> Function<G> {
                     .get_kernel(name)
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
+                max_num_args = max_num_args.max(args.len());
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });
             } else if let Some(cfg) = data.downcast::<Matmul>().cloned() {
                 if cfg.dtype != DType::F32 {
@@ -164,7 +168,7 @@ impl<G: Gpu> Function<G> {
         }
 
         let blas = requires_blas.then(|| Blas::new(device).unwrap());
-        Ok(Self { maps, insts: insts.into_boxed_slice(), num_ptrs, blas })
+        Ok(Self { maps, insts: insts.into_boxed_slice(), num_ptrs, blas, max_num_args })
     }
 
     pub fn execute(
@@ -224,7 +228,7 @@ impl<G: Gpu> Function<G> {
         }
 
         let var = var_size.unwrap_or(1);
-        let mut sizes = Vec::new();
+        let mut sizes = vec![0; self.max_num_args];
 
         unsafe {
             for inst in &self.insts {
@@ -241,15 +245,14 @@ impl<G: Gpu> Function<G> {
                         stream.memset(ptrs[idx], bytes, 0)?;
                     }
                     Inst::LaunchKernel { func, args, gdim, bdim, smem } => {
-                        sizes.clear();
-                        sizes.reserve(args.len());
                         let mut args: Vec<_> = args
                             .iter()
-                            .map(|arg| match arg {
+                            .enumerate()
+                            .map(|(i, arg)| match arg {
                                 Arg::Pointer { idx } => ptrs.as_ptr().add(*idx).cast_mut().cast(),
                                 Arg::Size(size) => {
-                                    sizes.push(size.evaluate(var) as i32);
-                                    (sizes.last().unwrap() as *const i32).cast_mut().cast()
+                                    sizes[i] = size.evaluate(var) as i32;
+                                    (&sizes[i] as *const i32).cast_mut().cast()
                                 }
                             })
                             .collect();
