@@ -5,15 +5,22 @@ use bullet_compiler::{
     rewriterule,
     tensor::{
         DType, IRTrace, Size, TType, TensorIR,
-        operation::{CABinary, CABinaryOp, Matmul, MatrixLayout, ReduceAcrossDimension, Reduction},
-        transform::{eliminate::EliminateCommonSubExpressions, rewriterules::RewritePass},
+        operation::{
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+            ReduceAcrossDimension, Reduction, ScalarConstant, SliceAcrossDimension,
+        },
+        transform::{
+            IRTransform,
+            eliminate::{EliminateCommonSubExpressions, EliminateUnusedOperations},
+            rewriterules::RewritePass,
+        },
     },
 };
 
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    pointwise::transforms::{CodegenPointwise, DuplicateScalars, FusePointwise, LowerPointwise},
+    pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
     runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
@@ -61,7 +68,7 @@ pub struct Function<G: Gpu> {
 impl<G: Gpu> Function<G> {
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
-        ir.transform(DuplicateScalars)?;
+        ir.transform(DuplicateScalarsAndIndexing)?;
         ir.transform(LowerPointwise)?;
         ir.transform(FusePointwise)?;
         ir.transform(RewritePass(ReduceToMatmul))?;
@@ -283,6 +290,37 @@ impl<G: Gpu> Function<G> {
         }
 
         Ok(SyncOnValue::new(sync, self))
+    }
+}
+
+/// Separate out all `ScalarConst`s, as otherwise we end up
+/// materialising them in kernel A and passing to kernel B,
+/// rather than handling internally for each
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DuplicateScalarsAndIndexing;
+impl IRTransform for DuplicateScalarsAndIndexing {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        for op in ir.operations() {
+            for &input in op.inputs() {
+                let grandparents = ir.get_op(ir.get_parent_op(input)?)?.inputs().to_vec();
+
+                if let Some(&ScalarConstant(value, size)) = ir.parent_op(input)? {
+                    let new_scalar = ir.add_scalar(value, size);
+                    ir.ir_mut().replace_single_input(op.id(), new_scalar, input)?;
+                } else if let Some(broadcast) = ir.parent_op::<BroadcastAcrossDimension>(input)? {
+                    let broadcast = ir.add_op(grandparents, Ok::<_, IRTrace>(*broadcast))?[0];
+                    ir.ir_mut().replace_single_input(op.id(), broadcast, input)?;
+                } else if let Some(slice) = ir.parent_op::<SliceAcrossDimension>(input)? {
+                    let slice = ir.add_op(grandparents, Ok::<_, IRTrace>(*slice))?[0];
+                    ir.ir_mut().replace_single_input(op.id(), slice, input)?;
+                } else if let Some(pad) = ir.parent_op::<PadAcrossDimension>(input)? {
+                    let pad = ir.add_op(grandparents, Ok::<_, IRTrace>(*pad))?[0];
+                    ir.ir_mut().replace_single_input(op.id(), pad, input)?;
+                }
+            }
+        }
+
+        ir.transform(EliminateUnusedOperations)
     }
 }
 

@@ -4,32 +4,12 @@ use bullet_compiler::{
     ir::{NodeId, OpId},
     tensor::{
         IRTrace, TensorIR, TensorOp,
-        operation::{ScalarConstant, SubGraph},
-        transform::{IRTransform, eliminate::EliminateUnusedOperations, inline::InlineSubgraphs, modify::AddOperation},
+        operation::SubGraph,
+        transform::{IRTransform, inline::InlineSubgraphs, modify::AddOperation},
     },
 };
 
 use crate::pointwise::FusedPointwise;
-
-/// Separate out all `ScalarConst`s, as otherwise we end up
-/// materialising them in kernel A and passing to kernel B,
-/// rather than handling internally for each
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct DuplicateScalars;
-impl IRTransform for DuplicateScalars {
-    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
-        for op in ir.operations() {
-            for &input in op.inputs() {
-                if let Some(&ScalarConstant(value, size)) = ir.parent_op(input)? {
-                    let new_scalar = ir.add_scalar(value, size);
-                    ir.ir_mut().replace_single_input(op.id(), new_scalar, input)?;
-                }
-            }
-        }
-
-        ir.transform(EliminateUnusedOperations)
-    }
-}
 
 /// Lower individual ops to FusedPointwise
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
