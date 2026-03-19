@@ -242,6 +242,7 @@ impl<G: Gpu> Function<G> {
                     }
                     Inst::LaunchKernel { func, args, gdim, bdim, smem } => {
                         sizes.clear();
+                        sizes.reserve(args.len());
                         let mut args: Vec<_> = args
                             .iter()
                             .map(|arg| match arg {

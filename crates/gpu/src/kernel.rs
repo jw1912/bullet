@@ -185,10 +185,10 @@ impl<G: Gpu> CompiledKernel<G> {
             args.push((&size as *const i32).cast_mut().cast());
         }
 
-        let mut ptrs = Vec::new();
-        for &(index, is_input) in &self.arg_order {
-            ptrs.push(if is_input { inputs[index].ptr() } else { outputs[index].ptr() });
-            args.push((ptrs.last().unwrap() as *const G::DevicePtr).cast_mut().cast());
+        let mut ptrs = vec![Default::default(); self.arg_order.len()];
+        for (i, &(index, is_input)) in self.arg_order.iter().enumerate() {
+            ptrs[i] = if is_input { inputs[index].ptr() } else { outputs[index].ptr() };
+            args.push((&ptrs[i] as *const G::DevicePtr).cast_mut().cast());
         }
 
         unsafe {
