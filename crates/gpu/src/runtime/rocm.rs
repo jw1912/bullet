@@ -65,7 +65,7 @@ impl GpuBindings for ROCm {
 
     unsafe fn stream_create() -> Result<hipStream, ROCmError> {
         let mut stream = MaybeUninit::uninit();
-        error::runtime(hipStreamCreate(stream.as_mut_ptr(), 0))?;
+        error::runtime(hipStreamCreate(stream.as_mut_ptr()))?;
         Ok(stream.assume_init())
     }
 
@@ -315,7 +315,7 @@ mod raw {
 
         // Device
         pub fn hipSetDevice(device: c_int) -> hipError;
-        pub fn hipStreamCreate(stream: *mut hipStream, flags: c_uint) -> hipError;
+        pub fn hipStreamCreate(stream: *mut hipStream) -> hipError;
         pub fn hipStreamDestroy(stream: hipStream) -> hipError;
         pub fn hipStreamSynchronize(stream: hipStream) -> hipError;
 
