@@ -1,9 +1,6 @@
 //! Minimal wrapper around the CUDA runtime
 
-use std::{
-    ffi::{CStr, c_char, c_int, c_uint, c_void},
-    mem::MaybeUninit,
-};
+use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::runtime::bindings::GemmConfig;
 
@@ -64,9 +61,9 @@ impl GpuBindings for ROCm {
     }
 
     unsafe fn stream_create() -> Result<hipStream, ROCmError> {
-        let mut stream = MaybeUninit::uninit();
-        error::runtime(hipStreamCreate(stream.as_mut_ptr()))?;
-        Ok(stream.assume_init())
+        let mut stream = hipStream::default();
+        error::runtime(hipStreamCreate(&mut stream))?;
+        Ok(stream)
     }
 
     unsafe fn stream_destroy(stream: hipStream) -> ROCmResult {
@@ -78,9 +75,9 @@ impl GpuBindings for ROCm {
     }
 
     unsafe fn stream_malloc(stream: hipStream, bytes: usize) -> Result<*mut c_void, ROCmError> {
-        let mut dev_ptr = MaybeUninit::uninit();
-        error::runtime(hipMallocAsync(dev_ptr.as_mut_ptr(), bytes, stream))?;
-        Ok(dev_ptr.assume_init())
+        let mut dev_ptr = std::ptr::null_mut();
+        error::runtime(hipMallocAsync(&mut dev_ptr, bytes, stream))?;
+        Ok(dev_ptr)
     }
 
     unsafe fn stream_free(stream: hipStream, dev_ptr: *mut c_void) -> ROCmResult {
@@ -127,9 +124,9 @@ impl GpuBindings for ROCm {
     }
 
     unsafe fn module_create(code: *const c_void) -> Result<hipModule, ROCmError> {
-        let mut module = MaybeUninit::uninit();
-        error::runtime(hipModuleLoadData(module.as_mut_ptr(), code))?;
-        Ok(module.assume_init())
+        let mut module = hipModule::default();
+        error::runtime(hipModuleLoadData(&mut module, code))?;
+        Ok(module)
     }
 
     unsafe fn module_destroy(module: hipModule) -> ROCmResult {
@@ -137,9 +134,9 @@ impl GpuBindings for ROCm {
     }
 
     unsafe fn module_get_kernel(module: hipModule, kernel_name: &CStr) -> Result<hipFunction, ROCmError> {
-        let mut func = MaybeUninit::uninit();
-        error::runtime(hipModuleGetFunction(func.as_mut_ptr(), module, kernel_name.as_ptr()))?;
-        Ok(func.assume_init())
+        let mut func = hipFunction::default();
+        error::runtime(hipModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
+        Ok(func)
     }
 
     unsafe fn program_compile(
@@ -170,9 +167,9 @@ impl GpuBindings for ROCm {
     }
 
     unsafe fn blas_create() -> Result<hipblasHandle, ROCmError> {
-        let mut handle = MaybeUninit::uninit();
-        error::blas(hipblasCreate(handle.as_mut_ptr()))?;
-        Ok(handle.assume_init())
+        let mut handle = hipblasHandle::default();
+        error::blas(hipblasCreate(&mut handle))?;
+        Ok(handle)
     }
 
     unsafe fn blas_destroy(handle: hipblasHandle) -> ROCmResult {
@@ -240,7 +237,7 @@ impl GpuBindings for ROCm {
 }
 
 mod error {
-    use std::{ffi::CStr, mem::MaybeUninit};
+    use std::ffi::CStr;
 
     use super::{ROCmError, ROCmResult, raw::*};
 
@@ -249,13 +246,13 @@ mod error {
             Ok(())
         } else {
             unsafe {
-                let mut name = MaybeUninit::uninit();
-                hipGetErrorName(value, name.as_mut_ptr());
-                let name = CStr::from_ptr(name.assume_init()).to_str().unwrap();
+                let mut name = std::ptr::null();
+                hipGetErrorName(value, &mut name);
+                let name = CStr::from_ptr(name).to_str().unwrap();
 
-                let mut desc = MaybeUninit::uninit();
-                hipGetErrorString(value, desc.as_mut_ptr());
-                let desc = CStr::from_ptr(desc.assume_init()).to_str().unwrap();
+                let mut desc = std::ptr::null();
+                hipGetErrorString(value, &mut desc);
+                let desc = CStr::from_ptr(desc).to_str().unwrap();
 
                 Err(ROCmError::Driver(format!("{name}: {desc}")))
             }

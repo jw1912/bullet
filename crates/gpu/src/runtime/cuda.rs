@@ -1,9 +1,6 @@
 //! Minimal wrapper around the CUDA runtime
 
-use std::{
-    ffi::{CStr, c_char, c_int, c_uint, c_void},
-    mem::MaybeUninit,
-};
+use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::runtime::bindings::GemmConfig;
 
@@ -48,15 +45,15 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn device_get(ordinal: c_int) -> Result<CUdevice, CudaError> {
-        let mut device = MaybeUninit::uninit();
-        error::driver(cuDeviceGet(device.as_mut_ptr(), ordinal))?;
-        Ok(device.assume_init())
+        let mut device = CUdevice::default();
+        error::driver(cuDeviceGet(&mut device, ordinal))?;
+        Ok(device)
     }
 
     unsafe fn context_create(device: CUdevice) -> Result<CUcontext, CudaError> {
-        let mut ctx = MaybeUninit::uninit();
-        error::driver(cuDevicePrimaryCtxRetain(ctx.as_mut_ptr(), device))?;
-        Ok(ctx.assume_init())
+        let mut ctx = CUcontext::default();
+        error::driver(cuDevicePrimaryCtxRetain(&mut ctx, device))?;
+        Ok(ctx)
     }
 
     unsafe fn context_destroy(device: CUdevice) -> Result<(), Self::Err> {
@@ -64,9 +61,9 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn context_set(ctx: CUcontext) -> CudaResult {
-        let mut curr = MaybeUninit::uninit();
-        error::driver(cuCtxGetCurrent(curr.as_mut_ptr()))?;
-        let curr = curr.assume_init();
+        let mut curr = CUcontext::default();
+        error::driver(cuCtxGetCurrent(&mut curr))?;
+        let curr = curr;
 
         if curr.is_null() || curr != ctx {
             error::driver(cuCtxSetCurrent(ctx))?;
@@ -76,9 +73,9 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn stream_create() -> Result<CUstream, CudaError> {
-        let mut stream = MaybeUninit::uninit();
-        error::driver(cuStreamCreate(stream.as_mut_ptr(), 0))?;
-        Ok(stream.assume_init())
+        let mut stream = CUstream::default();
+        error::driver(cuStreamCreate(&mut stream, 0))?;
+        Ok(stream)
     }
 
     unsafe fn stream_destroy(stream: CUstream) -> CudaResult {
@@ -90,9 +87,9 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn stream_malloc(stream: CUstream, bytes: usize) -> Result<CUdeviceptr, CudaError> {
-        let mut dev_ptr = MaybeUninit::uninit();
-        error::driver(cuMemAllocAsync(dev_ptr.as_mut_ptr(), bytes, stream))?;
-        Ok(dev_ptr.assume_init())
+        let mut dev_ptr = CUdeviceptr::default();
+        error::driver(cuMemAllocAsync(&mut dev_ptr, bytes, stream))?;
+        Ok(dev_ptr)
     }
 
     unsafe fn stream_free(stream: CUstream, dev_ptr: CUdeviceptr) -> CudaResult {
@@ -139,9 +136,9 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn module_create(code: *const c_void) -> Result<CUmodule, CudaError> {
-        let mut module = MaybeUninit::uninit();
-        error::driver(cuModuleLoadData(module.as_mut_ptr(), code))?;
-        Ok(module.assume_init())
+        let mut module = CUmodule::default();
+        error::driver(cuModuleLoadData(&mut module, code))?;
+        Ok(module)
     }
 
     unsafe fn module_destroy(module: CUmodule) -> CudaResult {
@@ -149,9 +146,9 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn module_get_kernel(module: CUmodule, kernel_name: &CStr) -> Result<CUfunction, CudaError> {
-        let mut func = MaybeUninit::uninit();
-        error::driver(cuModuleGetFunction(func.as_mut_ptr(), module, kernel_name.as_ptr()))?;
-        Ok(func.assume_init())
+        let mut func = CUfunction::default();
+        error::driver(cuModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
+        Ok(func)
     }
 
     unsafe fn program_compile(
@@ -182,9 +179,9 @@ impl GpuBindings for Cuda {
     }
 
     unsafe fn blas_create() -> Result<cublasHandle, CudaError> {
-        let mut handle = MaybeUninit::uninit();
-        error::blas(cublasCreate_v2(handle.as_mut_ptr()))?;
-        Ok(handle.assume_init())
+        let mut handle = cublasHandle::default();
+        error::blas(cublasCreate_v2(&mut handle))?;
+        Ok(handle)
     }
 
     unsafe fn blas_destroy(handle: cublasHandle) -> CudaResult {
@@ -252,7 +249,7 @@ impl GpuBindings for Cuda {
 }
 
 mod error {
-    use std::{ffi::CStr, mem::MaybeUninit};
+    use std::ffi::CStr;
 
     use super::{CudaError, CudaResult, raw::*};
 
@@ -261,13 +258,13 @@ mod error {
             Ok(())
         } else {
             unsafe {
-                let mut name = MaybeUninit::uninit();
-                cuGetErrorName(value, name.as_mut_ptr());
-                let name = CStr::from_ptr(name.assume_init()).to_str().unwrap();
+                let mut name = std::ptr::null();
+                cuGetErrorName(value, &mut name);
+                let name = CStr::from_ptr(name).to_str().unwrap();
 
-                let mut desc = MaybeUninit::uninit();
-                cuGetErrorString(value, desc.as_mut_ptr());
-                let desc = CStr::from_ptr(desc.assume_init()).to_str().unwrap();
+                let mut desc = std::ptr::null();
+                cuGetErrorString(value, &mut desc);
+                let desc = CStr::from_ptr(desc).to_str().unwrap();
 
                 Err(CudaError::Driver(format!("{name}: {desc}")))
             }
