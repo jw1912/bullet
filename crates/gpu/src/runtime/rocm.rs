@@ -74,6 +74,18 @@ impl GpuBindings for ROCm {
         error::runtime(hipFree(dev_ptr))
     }
 
+    unsafe fn context_memcpy_d2h(dst: *mut c_void, src: *mut c_void, bytes: usize) -> ROCmResult {
+        error::runtime(hipMemcpyDtoH(dst, src, bytes))
+    }
+
+    unsafe fn context_memcpy_h2d(dst: *mut c_void, src: *const c_void, bytes: usize) -> ROCmResult {
+        error::runtime(hipMemcpyHtoD(dst, src, bytes))
+    }
+
+    unsafe fn context_memset(dev_ptr: *mut c_void, bytes: usize, value: u8) -> ROCmResult {
+        error::runtime(hipMemsetD8(dev_ptr, value, bytes))
+    }
+
     unsafe fn stream_create() -> Result<hipStream, ROCmError> {
         let mut stream = hipStream::default();
         error::runtime(hipStreamCreate(&mut stream))?;
@@ -327,13 +339,17 @@ mod raw {
         // Device
         pub fn hipSetDevice(device: c_int) -> hipError;
         pub fn hipDeviceSynchronize() -> hipError;
-        pub fn hipMalloc(dptr: *mut *mut c_void, bytesize: usize) -> hipError;
-        pub fn hipFree(dptr: *mut c_void) -> hipError;
+
         pub fn hipStreamCreate(stream: *mut hipStream) -> hipError;
         pub fn hipStreamDestroy(stream: hipStream) -> hipError;
         pub fn hipStreamSynchronize(stream: hipStream) -> hipError;
 
         // Memory
+        pub fn hipMalloc(dptr: *mut *mut c_void, bytesize: usize) -> hipError;
+        pub fn hipFree(dptr: *mut c_void) -> hipError;
+        pub fn hipMemsetD8(dstDevice: *mut c_void, uc: c_uchar, N: usize) -> hipError;
+        pub fn hipMemcpyHtoD(dstDevice: *mut c_void, srcHost: *const c_void, ByteCount: usize) -> hipError;
+        pub fn hipMemcpyDtoH(dstHost: *mut c_void, srcDevice: *mut c_void, ByteCount: usize) -> hipError;
         pub fn hipMallocAsync(dptr: *mut *mut c_void, bytesize: usize, hStream: hipStream) -> hipError;
         pub fn hipFreeAsync(dptr: *mut c_void, hStream: hipStream) -> hipError;
         pub fn hipMemsetD8Async(dstDevice: *mut c_void, uc: c_uchar, N: usize, hStream: hipStream) -> hipError;
