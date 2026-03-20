@@ -42,6 +42,18 @@ impl GpuBindings for MockGpu {
         Err("This is a mock runtime! It can't actually do anything!".into())
     }
 
+    unsafe fn context_sync() -> Result<(), Self::Err> {
+        Err("This is a mock runtime! It can't actually do anything!".into())
+    }
+
+    unsafe fn context_free(dev_ptr: Self::Ptr) -> Result<(), Self::Err> {
+        Err("This is a mock runtime! It can't actually do anything!".into())
+    }
+
+    unsafe fn context_malloc(bytes: usize) -> Result<Self::Ptr, Self::Err> {
+        Err("This is a mock runtime! It can't actually do anything!".into())
+    }
+
     unsafe fn stream_create() -> MockResult {
         Err("This is a mock runtime! It can't actually do anything!".into())
     }

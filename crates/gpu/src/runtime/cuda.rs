@@ -56,7 +56,7 @@ impl GpuBindings for Cuda {
         Ok(ctx)
     }
 
-    unsafe fn context_destroy(device: CUdevice) -> Result<(), Self::Err> {
+    unsafe fn context_destroy(device: CUdevice) -> CudaResult{
         error::driver(cuDevicePrimaryCtxRelease_v2(device))
     }
 
@@ -70,6 +70,20 @@ impl GpuBindings for Cuda {
         }
 
         Ok(())
+    }
+
+    unsafe fn context_sync() -> CudaResult {
+        error::driver(cuCtxSynchronize())
+    }
+
+    unsafe fn context_malloc(bytes: usize) -> Result<CUdeviceptr, CudaError> {
+        let mut dev_ptr = CUdeviceptr::default();
+        error::driver(cuMemAlloc_v2(&mut dev_ptr, bytes))?;
+        Ok(dev_ptr)
+    }
+
+    unsafe fn context_free(dev_ptr: CUdeviceptr) -> CudaResult {
+        error::driver(cuMemFree_v2(dev_ptr))
     }
 
     unsafe fn stream_create() -> Result<CUstream, CudaError> {
@@ -334,11 +348,14 @@ mod raw {
         pub fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
         pub fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult;
         pub fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult;
+        pub fn cuCtxSynchronize() -> CUresult;
         pub fn cuStreamCreate(stream: *mut CUstream, flags: c_uint) -> CUresult;
         pub fn cuStreamDestroy(stream: CUstream) -> CUresult;
         pub fn cuStreamSynchronize(stream: CUstream) -> CUresult;
 
         // Memory
+        pub fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
+        pub fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult;
         pub fn cuMemAllocAsync(dptr: *mut CUdeviceptr, bytesize: usize, hStream: CUstream) -> CUresult;
         pub fn cuMemFreeAsync(dptr: CUdeviceptr, hStream: CUstream) -> CUresult;
         pub fn cuMemsetD8Async(dstDevice: CUdeviceptr, uc: c_uchar, N: usize, hStream: CUstream) -> CUresult;

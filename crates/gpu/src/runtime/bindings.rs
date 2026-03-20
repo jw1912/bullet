@@ -46,6 +46,12 @@ pub trait GpuBindings: 'static {
 
     unsafe fn context_set(ctx: Self::Ctx) -> Result<(), Self::Err>;
 
+    unsafe fn context_sync() -> Result<(), Self::Err>;
+
+    unsafe fn context_malloc(bytes: usize) -> Result<Self::Ptr, Self::Err>;
+
+    unsafe fn context_free(dev_ptr: Self::Ptr) -> Result<(), Self::Err>;
+
     unsafe fn stream_create() -> Result<Self::Stream, Self::Err>;
 
     unsafe fn stream_destroy(stream: Self::Stream) -> Result<(), Self::Err>;

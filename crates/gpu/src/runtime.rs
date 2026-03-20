@@ -70,9 +70,36 @@ impl<G: Gpu> Device<G> {
         unsafe { G::context_set(self.context) }
     }
 
+    /// Block the current thread until all queued device work
+    /// has finished executing
+    pub fn sync(&self) -> Result<(), G::Error> {
+        self.set()?;
+        unsafe { G::context_sync() }
+    }
+
     /// Create a new stream on this device
     pub fn new_stream(self: Arc<Self>) -> Result<Arc<Stream<G>>, G::Error> {
         Stream::new(self.clone())
+    }
+
+    /// Alocate `bytes` amount of memory on this device, **blocking
+    /// the entire device until done**
+    pub fn malloc(&self, bytes: usize) -> Result<G::DevicePtr, G::Error> {
+        self.set()?;
+        let ptr = unsafe { G::context_malloc(bytes)? };
+        self.sync()?;
+        Ok(ptr)
+    }
+
+    /// Free the given device pointer, **potentially blocking the
+    /// entire device until done**
+    ///
+    /// ### Safety
+    ///
+    /// User must ensure `ptr` is pointing to a valid device allocation
+    pub unsafe fn free(&self, ptr: G::DevicePtr) -> Result<(), G::Error> {
+        self.set()?;
+        unsafe { G::context_free(ptr) }
     }
 }
 
@@ -351,11 +378,12 @@ mod tests {
         let stream = Stream::new(device.clone())?;
 
         unsafe {
-            let dev_ptr = stream.malloc(16)?;
+            let dev_ptr = device.malloc(16)?;
             stream.sync()?;
             stream.memcpy_h2d(host_src.as_ptr().cast(), dev_ptr, 16)?;
             stream.memcpy_d2h(dev_ptr, host_dst.as_mut_ptr().cast(), 16)?;
             stream.sync()?;
+            device.free(dev_ptr)?;
         }
 
         assert_eq!(host_dst, host_src);

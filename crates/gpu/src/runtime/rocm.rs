@@ -52,12 +52,26 @@ impl GpuBindings for ROCm {
         Ok(device)
     }
 
-    unsafe fn context_destroy(_device: c_int) -> Result<(), Self::Err> {
+    unsafe fn context_destroy(_device: c_int) -> ROCmResult {
         Ok(())
     }
 
     unsafe fn context_set(ctx: c_int) -> ROCmResult {
         error::runtime(hipSetDevice(ctx))
+    }
+
+    unsafe fn context_sync() -> ROCmResult {
+        error::runtime(hipDeviceSynchronize())
+    }
+
+    unsafe fn context_malloc(bytes: usize) -> Result<*mut c_void, ROCmError> {
+        let mut dev_ptr = std::ptr::null_mut();
+        error::runtime(hipMalloc(&mut dev_ptr, bytes))?;
+        Ok(dev_ptr)
+    }
+
+    unsafe fn context_free(dev_ptr: *mut c_void) -> ROCmResult {
+        error::runtime(hipFree(dev_ptr))
     }
 
     unsafe fn stream_create() -> Result<hipStream, ROCmError> {
@@ -312,6 +326,9 @@ mod raw {
 
         // Device
         pub fn hipSetDevice(device: c_int) -> hipError;
+        pub fn hipDeviceSynchronize() -> hipError;
+        pub fn hipMalloc(dptr: *mut *mut c_void, bytesize: usize) -> hipError;
+        pub fn hipFree(dptr: *mut c_void) -> hipError;
         pub fn hipStreamCreate(stream: *mut hipStream) -> hipError;
         pub fn hipStreamDestroy(stream: hipStream) -> hipError;
         pub fn hipStreamSynchronize(stream: hipStream) -> hipError;
