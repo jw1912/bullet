@@ -56,7 +56,7 @@ impl GpuBindings for Cuda {
         Ok(ctx)
     }
 
-    unsafe fn context_destroy(device: CUdevice) -> CudaResult{
+    unsafe fn context_destroy(device: CUdevice) -> CudaResult {
         error::driver(cuDevicePrimaryCtxRelease_v2(device))
     }
 
