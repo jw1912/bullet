@@ -86,6 +86,18 @@ impl GpuBindings for Cuda {
         error::driver(cuMemFree_v2(dev_ptr))
     }
 
+    unsafe fn context_memset(dev_ptr: CUdeviceptr, bytes: usize, value: u8) -> CudaResult {
+        error::driver(cuMemsetD8_v2(dev_ptr, value, bytes))
+    }
+
+    unsafe fn context_memcpy_d2h(dst: *mut c_void, src: CUdeviceptr, bytes: usize) -> CudaResult {
+        error::driver(cuMemcpyDtoH_v2(dst, src, bytes))
+    }
+
+    unsafe fn context_memcpy_h2d(dst: CUdeviceptr, src: *const c_void, bytes: usize) -> CudaResult {
+        error::driver(cuMemcpyHtoD_v2(dst, src, bytes))
+    }
+
     unsafe fn stream_create() -> Result<CUstream, CudaError> {
         let mut stream = CUstream::default();
         error::driver(cuStreamCreate(&mut stream, 0))?;
@@ -110,7 +122,7 @@ impl GpuBindings for Cuda {
         error::driver(cuMemFreeAsync(dev_ptr, stream))
     }
 
-    unsafe fn stream_memset(stream: CUstream, dev_ptr: CUdeviceptr, bytes: usize, value: u8) -> Result<(), CudaError> {
+    unsafe fn stream_memset(stream: CUstream, dev_ptr: CUdeviceptr, bytes: usize, value: u8) -> CudaResult {
         error::driver(cuMemsetD8Async(dev_ptr, value, bytes, stream))
     }
 
@@ -356,6 +368,9 @@ mod raw {
         // Memory
         pub fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
         pub fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult;
+        pub fn cuMemsetD8_v2(dstDevice: CUdeviceptr, uc: c_uchar, N: usize) -> CUresult;
+        pub fn cuMemcpyHtoD_v2(dstDevice: CUdeviceptr, srcHost: *const c_void, ByteCount: usize) -> CUresult;
+        pub fn cuMemcpyDtoH_v2(dstHost: *mut c_void, srcDevice: CUdeviceptr, ByteCount: usize) -> CUresult;
         pub fn cuMemAllocAsync(dptr: *mut CUdeviceptr, bytesize: usize, hStream: CUstream) -> CUresult;
         pub fn cuMemFreeAsync(dptr: CUdeviceptr, hStream: CUstream) -> CUresult;
         pub fn cuMemsetD8Async(dstDevice: CUdeviceptr, uc: c_uchar, N: usize, hStream: CUstream) -> CUresult;

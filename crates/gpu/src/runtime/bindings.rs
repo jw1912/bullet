@@ -52,6 +52,12 @@ pub trait GpuBindings: 'static {
 
     unsafe fn context_free(dev_ptr: Self::Ptr) -> Result<(), Self::Err>;
 
+    unsafe fn context_memset(dev_ptr: Self::Ptr, bytes: usize, value: u8) -> Result<(), Self::Err>;
+
+    unsafe fn context_memcpy_d2h(dst: *mut c_void, src: Self::Ptr, bytes: usize) -> Result<(), Self::Err>;
+
+    unsafe fn context_memcpy_h2d(dst: Self::Ptr, src: *const c_void, bytes: usize) -> Result<(), Self::Err>;
+
     unsafe fn stream_create() -> Result<Self::Stream, Self::Err>;
 
     unsafe fn stream_destroy(stream: Self::Stream) -> Result<(), Self::Err>;

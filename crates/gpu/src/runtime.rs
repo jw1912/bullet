@@ -85,7 +85,7 @@ impl<G: Gpu> Device<G> {
     /// Alocate `bytes` amount of memory on this device, **blocking
     /// the entire device until done**
     pub fn malloc(&self, bytes: usize) -> Result<G::DevicePtr, G::Error> {
-        self.set()?;
+        self.sync()?;
         let ptr = unsafe { G::context_malloc(bytes)? };
         self.sync()?;
         Ok(ptr)
@@ -98,8 +98,41 @@ impl<G: Gpu> Device<G> {
     ///
     /// User must ensure `ptr` is pointing to a valid device allocation
     pub unsafe fn free(&self, ptr: G::DevicePtr) -> Result<(), G::Error> {
-        self.set()?;
-        unsafe { G::context_free(ptr) }
+        self.sync()?;
+        unsafe { G::context_free(ptr)? }
+        self.sync()
+    }
+
+    /// Memset the given number of `bytes` starting at `ptr` to `value`
+    ///
+    /// ### Safety
+    /// User must ensure `ptr` is pointing to a valid device allocation of size at least `bytes`
+    pub unsafe fn memset(&self, ptr: G::DevicePtr, bytes: usize, value: u8) -> Result<(), G::Error> {
+        self.sync()?;
+        unsafe { G::context_memset(ptr, bytes, value)? }
+        self.sync()
+    }
+
+    /// Memcpy the given number of `bytes` starting at `src` to `dst`
+    ///
+    /// ### Safety
+    /// User must ensure `src` is a valid device pointer and `dst` is a valid host pointer,
+    /// both at least of size `bytes`
+    pub unsafe fn memcpy_d2h(&self, src: G::DevicePtr, dst: *mut c_void, bytes: usize) -> Result<(), G::Error> {
+        self.sync()?;
+        unsafe { G::context_memcpy_d2h(dst, src, bytes)? }
+        self.sync()
+    }
+
+    /// Memcpy the given number of `bytes` starting at `src` to `dst`
+    ///
+    /// ### Safety
+    /// User must ensure `src` is a valid host pointer and `dst` is a valid device pointer,
+    /// both at least of size `bytes`
+    pub unsafe fn memcpy_h2d(&self, src: *const c_void, dst: G::DevicePtr, bytes: usize) -> Result<(), G::Error> {
+        self.sync()?;
+        unsafe { G::context_memcpy_h2d(dst, src, bytes)? }
+        self.sync()
     }
 }
 
