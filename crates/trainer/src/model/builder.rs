@@ -182,7 +182,6 @@ impl ModelBuilder {
         let mut bwd_map = BTreeMap::new();
         let mut shapes = BTreeMap::new();
         let mut weights = BTreeMap::new();
-        let stream = device.clone().new_stream().unwrap();
 
         let frozen = self.frozen.try_lock().unwrap().clone();
         let mut names = BTreeSet::new();
@@ -204,10 +203,10 @@ impl ModelBuilder {
                     InitSettings::Normal { mean, stdev } => rng::vec_f32(shape.size(), *mean, *stdev, true),
                 };
                 let init = TValue::F32(init);
-                let tensor = Buffer::from_host(&stream, &init);
+                let tensor = Buffer::from_host(&device, &init).unwrap();
                 let name = name.strip_prefix("weights/").unwrap().to_string();
 
-                weights.insert(name.clone(), tensor.unwrap().value().unwrap().0);
+                weights.insert(name.clone(), tensor);
                 let gid = grads.borrow().get(&id).unwrap().unwrap();
 
                 if !frozen.contains(&id) {
@@ -232,7 +231,7 @@ impl ModelBuilder {
             bwd_map,
             fwd_output_types: [("outputs/output".to_string(), fwd_ty)].into(),
             bwd_output_types: [("outputs/loss".to_string(), bwd_ty)].into(),
-            stream,
+            device,
         }
     }
 }

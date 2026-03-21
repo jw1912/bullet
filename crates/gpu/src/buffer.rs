@@ -7,7 +7,7 @@ use std::{
 
 use bullet_compiler::tensor::{DType, TValue};
 
-use crate::runtime::{Gpu, Stream};
+use crate::runtime::{Device, Gpu, Stream};
 
 /// Keeps buffer ownership alive on a given stream until
 /// dropped, at which point it syncs the stream
@@ -113,14 +113,19 @@ pub struct Buffer<G: Gpu> {
     ptr: G::DevicePtr,
     dtype: DType,
     size: usize,
-    creator: Arc<Stream<G>>,
+    device: Arc<Device<G>>,
+    creator: Option<Arc<Stream<G>>>,
     owner: Mutex<Option<(Arc<Stream<G>>, usize)>>,
 }
 
 impl<G: Gpu> Drop for Buffer<G> {
     fn drop(&mut self) {
         unsafe {
-            self.creator.free(self.ptr).unwrap();
+            if let Some(stream) = &self.creator {
+                stream.free(self.ptr).unwrap();
+            } else {
+                self.device.free(self.ptr).unwrap();
+            }
         }
     }
 }
@@ -133,7 +138,7 @@ impl<G: Gpu> Buffer<G> {
     ///
     /// The user must ensure that the memory is initialised before it
     /// is ever read
-    pub unsafe fn uninit(
+    pub unsafe fn uninit_async(
         stream: &Arc<Stream<G>>,
         dtype: DType,
         size: usize,
@@ -144,7 +149,15 @@ impl<G: Gpu> Buffer<G> {
 
         let ptr = stream.malloc(dtype.bytes() * size)?;
 
-        let buf = Arc::new(Self { ptr, dtype, size, creator: stream.clone(), owner: Mutex::new(None) });
+        let buf = Arc::new(Self {
+            ptr,
+            dtype,
+            size,
+            device: stream.device(),
+            creator: Some(stream.clone()),
+            owner: Mutex::new(None),
+        });
+
         let mut sync = SyncOnDrop::new(stream.clone());
         sync.attach(buf.clone().acquire(stream.clone())?)?;
 
@@ -152,12 +165,41 @@ impl<G: Gpu> Buffer<G> {
     }
 
     /// New zeroed buffer on the device with given size and dtype
-    pub fn zeroed(stream: &Arc<Stream<G>>, dtype: DType, size: usize) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
+    pub fn zeroed_async(
+        stream: &Arc<Stream<G>>,
+        dtype: DType,
+        size: usize,
+    ) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
         unsafe {
-            let sync = Self::uninit(stream, dtype, size)?;
+            let sync = Self::uninit_async(stream, dtype, size)?;
             let aqcuired = sync.value_ref().clone().acquire(stream.clone())?;
             stream.memset(aqcuired.ptr(), aqcuired.bytes(), 0)?;
             Ok(sync)
+        }
+    }
+
+    /// New uninitialised buffer on the device with given size and dtype
+    ///
+    /// ### Safety
+    ///
+    /// The user must ensure that the memory is initialised before it
+    /// is ever read
+    pub unsafe fn uninit(device: &Arc<Device<G>>, dtype: DType, size: usize) -> Result<Arc<Self>, G::Error> {
+        if size == 0 {
+            return Err("Attempted to allocated 0-size device memory!".to_string().into());
+        }
+
+        let ptr = device.malloc(dtype.bytes() * size)?;
+
+        Ok(Arc::new(Self { ptr, dtype, size, device: device.clone(), creator: None, owner: Mutex::new(None) }))
+    }
+
+    /// New zeroed buffer on the device with given size and dtype
+    pub fn zeroed(device: &Arc<Device<G>>, dtype: DType, size: usize) -> Result<Arc<Self>, G::Error> {
+        unsafe {
+            let buf = Self::uninit(device, dtype, size)?;
+            device.memset(buf.ptr, buf.bytes(), 0)?;
+            Ok(buf)
         }
     }
 
@@ -172,6 +214,10 @@ impl<G: Gpu> Buffer<G> {
     /// Size of the buffer in raw bytes
     pub fn bytes(&self) -> usize {
         self.dtype.bytes() * self.size
+    }
+
+    pub fn device(&self) -> Arc<Device<G>> {
+        self.device.clone()
     }
 
     pub fn owner(&self) -> Option<Arc<Stream<G>>> {
@@ -202,7 +248,7 @@ impl<G: Gpu> Buffer<G> {
     }
 
     /// Copy buffer to host on the given stream
-    pub fn to_host(self: &Arc<Self>, stream: &Arc<Stream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
+    pub fn to_host_async(self: &Arc<Self>, stream: &Arc<Stream<G>>) -> Result<SyncOnValue<G, TValue>, G::Error> {
         let guard = self.clone().acquire(stream.clone())?;
         let mut value = TValue::zeros(guard.dtype, guard.size);
 
@@ -216,14 +262,25 @@ impl<G: Gpu> Buffer<G> {
         Ok(SyncOnValue::new(sync, value))
     }
 
+    /// Copy buffer to host
+    pub fn to_host(self: &Arc<Self>) -> Result<TValue, G::Error> {
+        let mut value = TValue::zeros(self.dtype, self.size);
+
+        unsafe {
+            self.device.memcpy_d2h(self.ptr, value.mut_ptr(), self.bytes())?;
+        }
+
+        Ok(value)
+    }
+
     /// Create buffer from host values on the given stream
     #[allow(clippy::type_complexity)]
-    pub fn from_host<'a>(
+    pub fn from_host_async<'a>(
         stream: &Arc<Stream<G>>,
         value: &'a TValue,
     ) -> Result<SyncOnValue<G, (Arc<Self>, &'a TValue)>, G::Error> {
         unsafe {
-            let buf = Self::uninit(stream, value.dtype(), value.size())?;
+            let buf = Self::uninit_async(stream, value.dtype(), value.size())?;
             let guard = &buf.guards()[0];
 
             stream.memcpy_h2d(value.ptr(), guard.ptr(), guard.bytes())?;
@@ -232,7 +289,16 @@ impl<G: Gpu> Buffer<G> {
         }
     }
 
-    pub fn copy_from_host<'a>(
+    /// Create buffer from host values on the given device
+    pub fn from_host(device: &Arc<Device<G>>, value: &TValue) -> Result<Arc<Self>, G::Error> {
+        unsafe {
+            let buf = Self::uninit(device, value.dtype(), value.size())?;
+            device.memcpy_h2d(value.ptr(), buf.ptr, buf.bytes())?;
+            Ok(buf)
+        }
+    }
+
+    pub fn copy_from_host_async<'a>(
         self: &Arc<Self>,
         stream: &Arc<Stream<G>>,
         value: &'a TValue,
@@ -256,8 +322,16 @@ impl<G: Gpu> Buffer<G> {
         }
     }
 
-    pub fn creator(&self) -> Arc<Stream<G>> {
-        self.creator.clone()
+    pub fn copy_from_host(self: &Arc<Self>, value: &TValue) -> Result<(), G::Error> {
+        if self.size() != value.size() {
+            return Err(format!("Mismatched sizes: {} != {}", self.size(), value.size()).into());
+        }
+
+        if self.dtype() != value.dtype() {
+            return Err(format!("Mismatched DType: {:?} != {:?}", self.dtype(), value.dtype()).into());
+        }
+
+        unsafe { self.device.memcpy_h2d(value.ptr(), self.ptr, self.bytes()) }
     }
 }
 
@@ -302,10 +376,9 @@ mod tests {
         let host_src = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
 
         let device = Device::<G>::new(0)?;
-        let stream = Stream::new(device.clone())?;
 
-        let buf = Buffer::from_host(&stream, &host_src)?.value()?.0;
-        let host_dst = buf.to_host(&stream)?.value()?;
+        let buf = Buffer::from_host(&device, &host_src)?;
+        let host_dst = buf.to_host()?;
 
         assert_eq!(host_src, host_dst);
 

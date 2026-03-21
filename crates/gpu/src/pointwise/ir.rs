@@ -448,7 +448,7 @@ mod tests {
 
     use crate::{
         buffer::Buffer,
-        runtime::{Device, Gpu, Stream},
+        runtime::{Device, Gpu},
     };
 
     use super::*;
@@ -472,17 +472,17 @@ mod tests {
 
         let device = Device::<G>::new(0)?;
         let kernel = unsafe { ir.lower("fmadd".to_string()).unwrap() }.compile(device.clone())?;
-        let stream = Stream::new(device)?;
+        let stream = device.new_stream()?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
         let values2 = TValue::F32(vec![4.0, 3.0, 2.0, 1.0]);
 
-        let input1_buf = Buffer::from_host(&stream, &values1)?.value()?.0;
-        let input2_buf = Buffer::from_host(&stream, &values2)?.value()?.0;
+        let input1_buf = Buffer::from_host(&device, &values1)?;
+        let input2_buf = Buffer::from_host(&device, &values2)?;
 
         kernel.execute(stream.clone(), vec![input1_buf], vec![input2_buf.clone()])?.value()?;
 
-        let actual = input2_buf.to_host(&stream)?.value()?;
+        let actual = input2_buf.to_host()?;
 
         assert_eq!(actual, TValue::F32(vec![6.0, 7.0, 8.0, 9.0]));
 

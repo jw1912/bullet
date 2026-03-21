@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use bullet_compiler::tensor::TValue;
 use bullet_gpu::{
     buffer::{Buffer, SyncOnValue},
-    runtime::{Gpu, Stream},
+    runtime::{Device, Gpu, Stream},
 };
 
 use crate::model::TensorMap;
@@ -34,17 +34,17 @@ impl PreparedBatchHost {
 
         for (id, tensor) in tensors {
             let value = self.inputs.get(id).ok_or("Missing input!".into())?;
-            syncs.push(tensor.copy_from_host(stream, value)?);
+            syncs.push(tensor.copy_from_host_async(stream, value)?);
         }
 
         Ok(syncs)
     }
 
-    pub fn to_device_blocking<G: Gpu>(self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
+    pub fn to_device_via_stream<G: Gpu>(self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
         let on_device = self
             .inputs
             .iter()
-            .map(|(id, value)| Buffer::from_host(stream, value).map(|tensor| (id, tensor)))
+            .map(|(id, value)| Buffer::from_host_async(stream, value).map(|tensor| (id, tensor)))
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let res = on_device
@@ -55,5 +55,12 @@ impl PreparedBatchHost {
         stream.sync()?;
 
         Ok(res)
+    }
+
+    pub fn to_device<G: Gpu>(self, device: &Arc<Device<G>>) -> Result<TensorMap<G>, G::Error> {
+        self.inputs
+            .iter()
+            .map(|(id, value)| Buffer::from_host(device, value).map(|tensor| (id.clone(), tensor)))
+            .collect()
     }
 }

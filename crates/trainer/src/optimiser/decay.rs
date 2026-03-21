@@ -63,14 +63,12 @@ pub struct WeightDecay<G: Gpu, S: OptimiserState<G>> {
 impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightDecay<G, S> {
     type Params = WeightDecayParams<S::Params>;
 
-    fn new(stream: &Arc<Stream<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
-        let device = stream.device();
-
+    fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
         Ok(Self {
             op: build_decay_op(size, params.decay).unwrap().compile(device.clone())?,
-            inner: S::new(stream, size, params.inner.clone())?,
+            inner: S::new(device, size, params.inner.clone())?,
             placement: params.placement,
-            device,
+            device: device.clone(),
             size,
         })
     }

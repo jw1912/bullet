@@ -195,14 +195,15 @@ where
         let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);
 
         let model = &self.optimiser.model;
+        let device = model.device();
+        let stream = device.new_stream().unwrap();
 
-        let stream = model.stream();
-        let inputs = host_data.to_device_blocking(&stream).unwrap();
-        let outputs = model.make_forward_output_tensors(&stream, 1).unwrap();
+        let inputs = host_data.to_device(&device).unwrap();
+        let outputs = model.make_forward_output_tensors(1).unwrap();
         model.forward(&stream, &inputs, &outputs).unwrap().value().unwrap();
 
         let output = outputs.get("outputs/output").unwrap().clone();
-        let TValue::F32(output) = output.to_host(&stream).unwrap().value().unwrap() else { panic!() };
+        let TValue::F32(output) = output.to_host().unwrap() else { panic!() };
         output
     }
 

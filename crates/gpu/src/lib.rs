@@ -47,19 +47,18 @@ mod tests {
         let (ir, [a, b, x, y, z, w]) = make_axby().unwrap();
 
         let device = Device::<G>::new(0)?;
-        let stream = device.clone().new_stream()?;
+        let stream = device.new_stream()?;
 
-        let func = Function::new(device, ir).unwrap();
+        let func = Function::new(device.clone(), ir).unwrap();
 
-        let buf_a = Buffer::from_host(&stream, &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?.value()?.0;
-        let buf_b = Buffer::from_host(&stream, &TValue::F32(vec![2.0]))?.value()?.0;
+        let buf_a = Buffer::from_host(&device, &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?;
+        let buf_b = Buffer::from_host(&device, &TValue::F32(vec![2.0]))?;
         let buf_x =
-            Buffer::from_host(&stream, &TValue::F32([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0].repeat(batch_size)))?
-                .value()?
-                .0;
-        let buf_y = Buffer::from_host(&stream, &TValue::F32(vec![10.0; 8 * batch_size]))?.value()?.0;
-        let buf_z = Buffer::from_host(&stream, &TValue::F32(vec![10.0; batch_size]))?.value()?.0;
-        let buf_w = Buffer::from_host(&stream, &TValue::F32(vec![10.0; 8]))?.value()?.0;
+            Buffer::from_host(&device, &TValue::F32([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0].repeat(batch_size)))?;
+
+        let buf_y = Buffer::from_host(&device, &TValue::F32(vec![10.0; 8 * batch_size]))?;
+        let buf_z = Buffer::from_host(&device, &TValue::F32(vec![10.0; batch_size]))?;
+        let buf_w = Buffer::from_host(&device, &TValue::F32(vec![10.0; 8]))?;
 
         func.execute(
             stream.clone(),
@@ -76,18 +75,18 @@ mod tests {
         .value()?;
 
         assert_eq!(
-            buf_y.clone().to_host(&stream)?.value()?,
+            buf_y.clone().to_host()?,
             TValue::F32([10.0, 16.0, 20.0, 22.0, 22.0, 20.0, 16.0, 10.0].repeat(batch_size))
         );
 
         assert_eq!(
-            buf_w.clone().to_host(&stream)?.value()?,
+            buf_w.clone().to_host()?,
             TValue::F32(
                 [10.0, 16.0, 20.0, 22.0, 22.0, 20.0, 16.0, 10.0].iter().map(|x| batch_size as f32 * x).collect()
             )
         );
 
-        assert_eq!(buf_z.clone().to_host(&stream)?.value()?, TValue::F32([136.0].repeat(batch_size)));
+        assert_eq!(buf_z.clone().to_host()?, TValue::F32([136.0].repeat(batch_size)));
 
         assert!(
             func.execute(

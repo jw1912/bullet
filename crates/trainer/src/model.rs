@@ -44,7 +44,7 @@ impl Shape {
 }
 
 pub struct Model<G: Gpu> {
-    stream: Arc<Stream<G>>,
+    device: Arc<Device<G>>,
     weights: TensorMap<G>,
     shapes: BTreeMap<String, (Shape, Option<usize>)>,
     forward: Function<G>,
@@ -56,12 +56,8 @@ pub struct Model<G: Gpu> {
 }
 
 impl<G: Gpu> Model<G> {
-    pub fn stream(&self) -> Arc<Stream<G>> {
-        self.stream.clone()
-    }
-
     pub fn device(&self) -> Arc<Device<G>> {
-        self.stream.device()
+        self.device.clone()
     }
 
     pub fn weights(&self) -> &TensorMap<G> {
@@ -69,18 +65,11 @@ impl<G: Gpu> Model<G> {
     }
 
     pub fn get_weights(&self, id: impl Into<String>) -> Option<TValue> {
-        self.weights
-            .get(&id.into())
-            .cloned()
-            .map(|tensor| tensor.clone().to_host(&tensor.creator()).unwrap().value().unwrap())
+        self.weights.get(&id.into()).cloned().map(|tensor| tensor.clone().to_host().unwrap())
     }
 
     pub fn set_weights(&self, id: impl Into<String>, new_value: &TValue) -> bool {
-        self.weights
-            .get(&id.into())
-            .cloned()
-            .map(|tensor| tensor.copy_from_host(&self.stream, new_value).unwrap())
-            .is_some()
+        self.weights.get(&id.into()).cloned().map(|tensor| tensor.copy_from_host(new_value).unwrap()).is_some()
     }
 
     pub fn forward(
@@ -112,45 +101,33 @@ impl<G: Gpu> Model<G> {
         self.backward.execute(stream.clone(), &map)
     }
 
-    pub fn make_gradient_tensors(&self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
+    pub fn make_gradient_tensors(&self) -> Result<TensorMap<G>, G::Error> {
         self.weights()
             .iter()
             .map(|(id, weight)| {
-                Buffer::from_host(stream, &TValue::zeros(weight.dtype(), weight.size()))
-                    .map(|buf| buf.value().map(|v| (id.clone(), v.0)))
+                Buffer::from_host(&self.device, &TValue::zeros(weight.dtype(), weight.size()))
+                    .map(|buf| (id.clone(), buf))
             })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
             .collect()
     }
 
-    pub fn make_backward_output_tensors(&self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
+    pub fn make_backward_output_tensors(&self) -> Result<TensorMap<G>, G::Error> {
         self.bwd_output_types
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate_constant().expect("`Model` only supports constant-size outputs!");
-                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size))
-                    .map(|buf| buf.value().map(|v| (id.clone(), v.0)))
+                Buffer::from_host(&self.device, &TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf))
             })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
             .collect()
     }
 
-    pub fn make_forward_output_tensors(
-        &self,
-        stream: &Arc<Stream<G>>,
-        batch_size: usize,
-    ) -> Result<TensorMap<G>, G::Error> {
+    pub fn make_forward_output_tensors(&self, batch_size: usize) -> Result<TensorMap<G>, G::Error> {
         self.fwd_output_types
             .iter()
             .map(|(id, ty)| {
                 let size = ty.size().evaluate(batch_size);
-                Buffer::from_host(stream, &TValue::zeros(ty.dtype(), size))
-                    .map(|buf| buf.value().map(|v| (id.clone(), v.0)))
+                Buffer::from_host(&self.device, &TValue::zeros(ty.dtype(), size)).map(|buf| (id.clone(), buf))
             })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
             .collect()
     }
 
@@ -164,7 +141,7 @@ impl<G: Gpu> Model<G> {
                 unimplemented!("Non f32 writing!");
             }
 
-            let this_buf = value.clone().to_host(&self.stream)?.value()?;
+            let this_buf = value.clone().to_host()?;
             let byte_buf = utils::write_to_byte_buffer(&this_buf, &id).unwrap();
             buf.extend_from_slice(&byte_buf);
         }
@@ -194,7 +171,7 @@ impl<G: Gpu> Model<G> {
                 panic!("Invalid buffer size!");
             }
 
-            weights.copy_from_host(&self.stream, &TValue::F32(buffer))?;
+            weights.copy_from_host(&TValue::F32(buffer))?;
 
             offset += bytes_read;
         }

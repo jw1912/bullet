@@ -8,7 +8,7 @@ use bullet_compiler::tensor::{DType, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    runtime::{Dim3, Gpu, Stream},
+    runtime::{Device, Dim3, Gpu, Stream},
 };
 
 use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
@@ -148,18 +148,18 @@ pub struct AdamW<G: Gpu> {
 impl<G: Gpu> OptimiserState<G> for AdamW<G> {
     type Params = AdamWParams;
 
-    fn new(stream: &Arc<Stream<G>>, size: usize, default_params: Self::Params) -> Result<Self, G::Error> {
+    fn new(device: &Arc<Device<G>>, size: usize, default_params: Self::Params) -> Result<Self, G::Error> {
         if default_params.max_weight < default_params.min_weight {
             return Err(
                 format!("Invalid clipping: {} >= {}", default_params.min_weight, default_params.max_weight).into()
             );
         }
 
-        let op = default_params.build(size).unwrap().compile(stream.device())?;
+        let op = default_params.build(size).unwrap().compile(device.clone())?;
 
         Ok(Self {
-            momentum: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value()?.0,
-            velocity: Buffer::from_host(stream, &TValue::zeros(DType::F32, size))?.value()?.0,
+            momentum: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
+            velocity: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
             op,
         })
     }
@@ -184,20 +184,17 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
     }
 
     fn reset(&mut self) -> Result<(), G::Error> {
-        let stream = self.momentum.creator();
         let size = self.momentum.size();
-        self.momentum.copy_from_host(&stream, &TValue::zeros(DType::F32, size))?;
-        self.velocity.copy_from_host(&stream, &TValue::zeros(DType::F32, size))?;
+        self.momentum.copy_from_host(&TValue::zeros(DType::F32, size))?;
+        self.velocity.copy_from_host(&TValue::zeros(DType::F32, size))?;
         Ok(())
     }
 
     fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error> {
-        let stream = map.iter().next().unwrap().1.momentum.creator();
-
         let momentum: Vec<_> = map.iter().map(|(id, single)| (id, &single.momentum)).collect();
         let velocity: Vec<_> = map.iter().map(|(id, single)| (id, &single.velocity)).collect();
-        utils::write_weights_to_file::<G>(&stream, &momentum, &format!("{path}/momentum.bin"))?;
-        utils::write_weights_to_file::<G>(&stream, &velocity, &format!("{path}/velocity.bin"))
+        utils::write_weights_to_file::<G>(&momentum, &format!("{path}/momentum.bin"))?;
+        utils::write_weights_to_file::<G>(&velocity, &format!("{path}/velocity.bin"))
     }
 
     fn load_from_checkpoint(map: &mut BTreeMap<String, &mut Self>, path: &str) -> Result<(), G::Error> {
@@ -212,9 +209,8 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
             assert_eq!(id1, id2);
 
             let single = map.get_mut(&id1).unwrap();
-            let stream = single.momentum.creator();
-            single.momentum.copy_from_host(&stream, &TValue::F32(mom))?;
-            single.velocity.copy_from_host(&stream, &TValue::F32(vel))?;
+            single.momentum.copy_from_host(&TValue::F32(mom))?;
+            single.velocity.copy_from_host(&TValue::F32(vel))?;
         }
 
         Ok(())
@@ -222,7 +218,7 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
 
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         let size = self.momentum.size();
-        let device = self.momentum.creator().device();
+        let device = self.momentum.device();
         self.op = params.build(size).unwrap().compile(device)?;
         Ok(())
     }

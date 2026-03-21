@@ -348,7 +348,7 @@ mod tests {
     use crate::{
         buffer::Buffer,
         kernel::KernelSrc,
-        runtime::{Device, Gpu, Stream},
+        runtime::{Device, Gpu},
     };
 
     fn make_axby() -> Result<KernelSrc, IRTrace> {
@@ -367,28 +367,28 @@ mod tests {
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
-        let stream = Stream::new(device.clone())?;
+        let stream = device.new_stream()?;
 
         let src = make_axby().unwrap();
 
-        let axby = src.compile(device)?;
+        let axby = src.compile(device.clone())?;
 
         let aval = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
         let bval = TValue::F32(vec![4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0]);
         let xval = TValue::F32([4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0].repeat(4));
 
-        let aval_buf = Buffer::from_host(&stream, &aval)?.value()?.0;
-        let bval_buf = Buffer::from_host(&stream, &bval)?.value()?.0;
-        let xval_buf = Buffer::from_host(&stream, &xval)?.value()?.0;
+        let aval_buf = Buffer::from_host(&device, &aval)?;
+        let bval_buf = Buffer::from_host(&device, &bval)?;
+        let xval_buf = Buffer::from_host(&device, &xval)?;
 
-        let x2val_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value()?;
-        let yval_buf = Buffer::zeroed(&stream, xval.dtype(), xval.size())?.value()?;
+        let x2val_buf = Buffer::zeroed(&device, xval.dtype(), xval.size())?;
+        let yval_buf = Buffer::zeroed(&device, xval.dtype(), xval.size())?;
 
         axby.execute(stream.clone(), vec![aval_buf, bval_buf, xval_buf], vec![x2val_buf.clone(), yval_buf.clone()])?
             .value()?;
 
-        let actualx = x2val_buf.to_host(&stream)?.value()?;
-        let actualy = yval_buf.to_host(&stream)?.value()?;
+        let actualx = x2val_buf.to_host()?;
+        let actualy = yval_buf.to_host()?;
 
         assert_eq!(actualx, xval);
         #[rustfmt::skip]
@@ -420,23 +420,23 @@ mod tests {
 
     fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
-        let stream = Stream::new(device.clone())?;
+        let stream = device.new_stream()?;
 
         let src = make_concat(dim).unwrap();
 
-        let concat = src.compile(device)?;
+        let concat = src.compile(device.clone())?;
 
         let aval = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
         let bval = TValue::F32(vec![4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0]);
 
-        let aval_buf = Buffer::from_host(&stream, &aval)?.value()?.0;
-        let bval_buf = Buffer::from_host(&stream, &bval)?.value()?.0;
+        let aval_buf = Buffer::from_host(&device, &aval)?;
+        let bval_buf = Buffer::from_host(&device, &bval)?;
 
-        let concat_buf = Buffer::zeroed(&stream, DType::F32, 16)?.value()?;
+        let concat_buf = Buffer::zeroed(&device, DType::F32, 16)?;
 
         concat.execute(stream.clone(), vec![aval_buf, bval_buf], vec![concat_buf.clone()])?.value()?;
 
-        assert_eq!(concat_buf.to_host(&stream)?.value()?, TValue::F32(expected.into()));
+        assert_eq!(concat_buf.to_host()?, TValue::F32(expected.into()));
 
         Ok(())
     }
@@ -455,18 +455,18 @@ mod tests {
 
     fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
-        let stream = Stream::new(device.clone())?;
+        let stream = device.new_stream()?;
 
         let src = make_slice(dim).unwrap();
 
-        let slice = src.compile(device)?;
+        let slice = src.compile(device.clone())?;
 
         let input = TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
-        let input_buf = Buffer::from_host(&stream, &input)?.value()?.0;
-        let slice_buf = Buffer::zeroed(&stream, DType::F32, 4)?.value()?;
+        let input_buf = Buffer::from_host(&device, &input)?;
+        let slice_buf = Buffer::zeroed(&device, DType::F32, 4)?;
         slice.execute(stream.clone(), vec![input_buf], vec![slice_buf.clone()])?.value()?;
 
-        assert_eq!(slice_buf.to_host(&stream)?.value()?, TValue::F32(expected.into()));
+        assert_eq!(slice_buf.to_host()?, TValue::F32(expected.into()));
 
         Ok(())
     }

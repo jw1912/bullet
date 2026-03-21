@@ -8,7 +8,7 @@ use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
     pointwise::PointwiseIR,
-    runtime::{Gpu, Stream},
+    runtime::{Device, Gpu, Stream},
 };
 
 use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
@@ -64,11 +64,11 @@ pub struct RangerLookahead<G: Gpu, S> {
 impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
     type Params = RangerLookaheadParams<S::Params>;
 
-    fn new(stream: &Arc<Stream<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
+    fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
         Ok(Self {
-            op: build_ranger_op(size, params.alpha).unwrap().compile(stream.device())?,
-            slow_params: Buffer::from_host(stream, &TValue::F32(vec![0.0; size]))?.value()?.0,
-            inner: S::new(stream, size, params.inner.clone())?,
+            op: build_ranger_op(size, params.alpha).unwrap().compile(device.clone())?,
+            slow_params: Buffer::from_host(device, &TValue::F32(vec![0.0; size]))?,
+            inner: S::new(device, size, params.inner.clone())?,
             k: params.k,
             step: 0,
         })
@@ -102,7 +102,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
 
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         self.inner.set_params(params.inner)?;
-        let device = self.slow_params.creator().device();
+        let device = self.slow_params.device();
         self.op = build_ranger_op(self.slow_params.size(), params.alpha).unwrap().compile(device)?;
         self.k = params.k;
         self.step = 0;
@@ -114,8 +114,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
 
         for (id, par) in slow_params {
             let single = map.get_mut(&id).unwrap();
-            let stream = single.slow_params.creator();
-            single.slow_params.copy_from_host(&stream, &TValue::F32(par))?;
+            single.slow_params.copy_from_host(&TValue::F32(par))?;
         }
 
         let mut map = map.iter_mut().map(|(id, single)| (id.clone(), &mut single.inner)).collect();
@@ -123,9 +122,8 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
     }
 
     fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error> {
-        let stream = map.iter().next().unwrap().1.slow_params.creator();
         let slow_params: Vec<_> = map.iter().map(|(id, single)| (id, &single.slow_params)).collect();
-        utils::write_weights_to_file::<G>(&stream, &slow_params, &format!("{path}/slow.bin"))?;
+        utils::write_weights_to_file::<G>(&slow_params, &format!("{path}/slow.bin"))?;
 
         let map = map.iter().map(|(id, single)| (id.clone(), &single.inner)).collect();
         S::write_to_checkpoint(&map, path)

@@ -78,7 +78,7 @@ impl<G: Gpu> Device<G> {
     }
 
     /// Create a new stream on this device
-    pub fn new_stream(self: Arc<Self>) -> Result<Arc<Stream<G>>, G::Error> {
+    pub fn new_stream(self: &Arc<Self>) -> Result<Arc<Stream<G>>, G::Error> {
         Stream::new(self.clone())
     }
 
@@ -408,7 +408,7 @@ mod tests {
         let mut host_dst = [0.0, 0.0, 0.0, 0.0];
 
         let device = Device::<G>::new(0)?;
-        let stream = Stream::new(device.clone())?;
+        let stream = device.new_stream()?;
 
         unsafe {
             let dev_ptr = device.malloc(16)?;
@@ -426,9 +426,9 @@ mod tests {
 
     fn multiple_device_instances<G: Gpu>() -> Result<(), G::Error> {
         let a = Device::<G>::new(0)?;
-        let sa = Stream::new(a.clone())?;
+        let sa = a.new_stream()?;
         let b = Device::<G>::new(0)?;
-        let sb = Stream::new(b.clone())?;
+        let sb = b.new_stream()?;
 
         drop(sa);
         drop(a);
@@ -443,7 +443,7 @@ mod tests {
         let mut host_dst = [0.0, 0.0, 0.0, 0.0];
 
         let device = Device::<G>::new(0)?;
-        let stream = Stream::new(device.clone())?;
+        let stream = device.new_stream()?;
 
         let add_one_kernel = "
             extern \"C\" __global__ void kernel(const int size, const float* src, float* dst) {

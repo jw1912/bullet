@@ -11,7 +11,7 @@ use bullet_compiler::tensor::TValue;
 use bullet_gpu::{
     buffer::{Buffer, SyncOnValue},
     kernel::CompiledKernel,
-    runtime::{Gpu, Stream},
+    runtime::{Device, Gpu, Stream},
 };
 
 use crate::model::{Model, TensorMap};
@@ -59,7 +59,7 @@ type OptimiserUpdateResult<'a, G> = Result<OptimiserUpdateSync<'a, G>, <G as Gpu
 pub trait OptimiserState<G: Gpu>: Sized {
     type Params: Clone + Debug + Default;
 
-    fn new(strean: &Arc<Stream<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error>;
+    fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error>;
 
     fn update<'a>(
         &'a mut self,
@@ -93,11 +93,11 @@ pub trait AdditionalUpdate<G: Gpu>: 'static {
 impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
     pub fn new(model: Model<G>, params: S::Params) -> Result<Self, G::Error> {
         let mut state = BTreeMap::new();
-        let stream = model.stream();
+        let device = model.device();
 
         for (id, value) in model.weights() {
             let size = value.size();
-            let single = S::new(&stream, size, params.clone())?;
+            let single = S::new(&device, size, params.clone())?;
             let old = state.insert(id.clone(), single);
             assert!(old.is_none());
         }
@@ -196,8 +196,8 @@ where
 {
     type Params = P;
 
-    fn new(stream: &Arc<Stream<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
-        Ok(Self { optimiser: O::new(stream, size, params.into())?, phantom_data: PhantomData })
+    fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
+        Ok(Self { optimiser: O::new(device, size, params.into())?, phantom_data: PhantomData })
     }
 
     fn update<'a>(

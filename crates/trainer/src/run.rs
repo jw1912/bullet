@@ -67,32 +67,26 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let first_batch =
         receiver.recv().map_err(|_| TrainerError::DataLoadingError(DataLoadingError::NoBatchesReceived))?;
 
-    let copy_stream = trainer.optimiser.model.device().new_stream().map_err(TrainerError::Unexpected)?;
-    let compute_stream = trainer.optimiser.model.device().new_stream().map_err(TrainerError::Unexpected)?;
+    let model = &trainer.optimiser.model;
+    let device = model.device();
 
-    let outputs =
-        trainer.optimiser.model.make_backward_output_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
-    let gradients = trainer.optimiser.model.make_gradient_tensors(&copy_stream).map_err(TrainerError::Unexpected)?;
-    let tlr = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0]))
-        .map_err(TrainerError::Unexpected)?
-        .value()
-        .map_err(TrainerError::Unexpected)?
-        .0;
-    let tgf = Buffer::from_host(&copy_stream, &TValue::F32(vec![0.0]))
-        .map_err(TrainerError::Unexpected)?
-        .value()
-        .map_err(TrainerError::Unexpected)?
-        .0;
+    let copy_stream = device.new_stream().map_err(TrainerError::Unexpected)?;
+    let compute_stream = device.new_stream().map_err(TrainerError::Unexpected)?;
+
+    let outputs = model.make_backward_output_tensors().map_err(TrainerError::Unexpected)?;
+    let gradients = model.make_gradient_tensors().map_err(TrainerError::Unexpected)?;
+    let tlr = Buffer::from_host(&device, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
+    let tgf = Buffer::from_host(&device, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
 
     let mut next_batch_size = first_batch.batch_size;
-    let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
+    let mut batch_on_device = first_batch.to_device(&device).map_err(TrainerError::Unexpected)?;
 
     let mut next_on_device = cfg!(feature = "rocm").then(|| {
         batch_on_device
             .iter()
             .map(|(id, tensor)| {
-                let buf = Buffer::zeroed(&copy_stream, tensor.dtype(), tensor.size());
-                (id.clone(), buf.unwrap().value().unwrap())
+                let buf = Buffer::zeroed(&device, tensor.dtype(), tensor.size());
+                (id.clone(), buf.unwrap())
             })
             .collect()
     });
@@ -115,9 +109,9 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let this_batch_size = next_batch_size;
 
         let lrdrop = TValue::F32(vec![lrate]);
-        let lrdrop = tlr.copy_from_host(&copy_stream, &lrdrop).map_err(TrainerError::Unexpected)?;
+        let lrdrop = tlr.copy_from_host_async(&copy_stream, &lrdrop).map_err(TrainerError::Unexpected)?;
         let gfdrop = TValue::F32(vec![1.0 / this_batch_size as f32]);
-        let gfdrop = tgf.copy_from_host(&copy_stream, &gfdrop).map_err(TrainerError::Unexpected)?;
+        let gfdrop = tgf.copy_from_host_async(&copy_stream, &gfdrop).map_err(TrainerError::Unexpected)?;
 
         if curr_batch == 0 {
             if lrate < prev_lr {
@@ -152,7 +146,8 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
                 std::mem::swap(&mut batch_on_device, next);
             } else {
                 drop(batch_on_device);
-                batch_on_device = next_batch_host.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
+                batch_on_device =
+                    next_batch_host.to_device_via_stream(&copy_stream).map_err(TrainerError::Unexpected)?;
             }
         } else {
             batch_queued = false;
@@ -164,7 +159,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let loss = outputs.get("outputs/loss").expect("`Trainer` must have a \"loss\" output!");
         let TValue::F32(loss) = loss
             .clone()
-            .to_host(&copy_stream)
+            .to_host_async(&copy_stream)
             .map(SyncOnValue::value)
             .map_err(TrainerError::Unexpected)?
             .map_err(TrainerError::Unexpected)?
