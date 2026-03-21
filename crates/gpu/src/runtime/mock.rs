@@ -2,7 +2,7 @@ use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::runtime::{
     Dim3,
-    bindings::{GemmConfig, GpuBindings},
+    bindings::{DeviceProps, GemmConfig, GpuBindings},
 };
 
 /// Used to type check code without requiring CUDA/ROCm
@@ -27,6 +27,10 @@ impl GpuBindings for MockGpu {
     }
 
     unsafe fn device_get(ordinal: c_int) -> MockResult {
+        Err("This is a mock runtime! It can't actually do anything!".into())
+    }
+
+    unsafe fn device_props(device: Self::Dev) -> Result<DeviceProps, Self::Err> {
         Err("This is a mock runtime! It can't actually do anything!".into())
     }
 

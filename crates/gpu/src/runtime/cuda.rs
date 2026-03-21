@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::runtime::bindings::GemmConfig;
+use crate::runtime::bindings::{DeviceProps, GemmConfig};
 
 use super::bindings::{Dim3, GpuBindings};
 
@@ -48,6 +48,31 @@ impl GpuBindings for Cuda {
         let mut device = CUdevice::default();
         error::driver(cuDeviceGet(&mut device, ordinal))?;
         Ok(device)
+    }
+
+    unsafe fn device_props(device: CUdevice) -> Result<DeviceProps, CudaError> {
+        let mut warp_size = 0;
+        error::driver(cuDeviceGetAttribute(&mut warp_size, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device))?;
+        if warp_size != 32 {
+            return Err("Warp size on NVIDIA GPU not 32!?!?".to_string().into());
+        }
+
+        let mut bytes = vec![0u8; 256];
+        error::driver(cuDeviceGetName(bytes.as_mut_ptr().cast(), 256, device))?;
+        let cname = CStr::from_bytes_until_nul(&bytes).unwrap();
+
+        let mut mem_pools = 0;
+        error::driver(cuDeviceGetAttribute(&mut mem_pools, CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED, device))?;
+
+        let mut mjr = 0;
+        error::driver(cuDeviceGetAttribute(&mut mjr, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device))?;
+
+        Ok(DeviceProps {
+            warp_size: 32,
+            name: cname.to_str().unwrap().to_string(),
+            stream_mem_alloc: mem_pools > 0,
+            vec_atomics: mjr >= 9,
+        })
     }
 
     unsafe fn context_create(device: CUdevice) -> Result<CUcontext, CudaError> {
@@ -347,6 +372,11 @@ mod raw {
     pub type CUdeviceptr = c_ulonglong;
     pub type CUfunction = *mut Opaque;
     pub type CUmodule = *mut Opaque;
+    pub type CUdevice_attribute = c_uint;
+
+    pub const CU_DEVICE_ATTRIBUTE_WARP_SIZE: u32 = 10;
+    pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR: u32 = 75;
+    pub const CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED: u32 = 115;
 
     unsafe extern "C" {
         // Errors
@@ -358,6 +388,8 @@ mod raw {
         pub fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult;
         pub fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult;
         pub fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
+        pub fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attribute, dev: CUdevice) -> CUresult;
+        pub fn cuDeviceGetName(name: *mut c_char, len: c_int, dev: CUdevice) -> CUresult;
         pub fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult;
         pub fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult;
         pub fn cuCtxSynchronize() -> CUresult;

@@ -8,9 +8,11 @@ use bullet_compiler::tensor::{
     },
 };
 
+use crate::runtime::DeviceProps;
+
 use super::PointwiseIR;
 
-pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> {
+pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(PointwiseIR, bool)>, IRTrace> {
     let ir = sub.internal_graph();
 
     let mut size = None;
@@ -84,7 +86,8 @@ pub fn generate(sub: &SubGraph) -> Result<Option<(PointwiseIR, bool)>, IRTrace> 
 
             (select_pad.output_size(), 1)
         } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
-            if !(ir.is_output(op.outputs()[0]) && reduce.inner().is_multiple_of(32.into())) {
+            let warp_size = usize::from(props.warp_size());
+            if !(ir.is_output(op.outputs()[0]) && reduce.inner().is_multiple_of(warp_size.into())) {
                 return Ok(None);
             }
 

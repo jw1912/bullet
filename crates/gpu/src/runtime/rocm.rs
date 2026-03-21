@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::runtime::bindings::GemmConfig;
+use crate::runtime::bindings::{DeviceProps, GemmConfig};
 
 use super::bindings::{Dim3, GpuBindings};
 
@@ -46,6 +46,22 @@ impl GpuBindings for ROCm {
 
     unsafe fn device_get(ordinal: c_int) -> Result<c_int, ROCmError> {
         Ok(ordinal)
+    }
+
+    unsafe fn device_props(device: c_int) -> Result<DeviceProps, ROCmError> {
+        let mut warp_size = 0;
+        error::runtime(hipDeviceGetAttribute(&mut warp_size, hipDeviceAttributeWarpSize, device))?;
+
+        if warp_size % 32 != 0 {
+            return Err("Warp size not a multiple of 32!".to_string().into());
+        }
+
+        Ok(DeviceProps {
+            name: "ROCm Device".to_string(),
+            warp_size: warp_size as u8,
+            stream_mem_alloc: false,
+            vec_atomics: false,
+        })
     }
 
     unsafe fn context_create(device: c_int) -> Result<c_int, ROCmError> {
@@ -330,6 +346,9 @@ mod raw {
     pub type hipStream = *mut Opaque;
     pub type hipFunction = *mut Opaque;
     pub type hipModule = *mut Opaque;
+    pub type hipDeviceAttribute = u32;
+
+    pub const hipDeviceAttributeWarpSize: u32 = 89;
 
     unsafe extern "C" {
         // Errors
@@ -339,7 +358,7 @@ mod raw {
         // Device
         pub fn hipSetDevice(device: c_int) -> hipError;
         pub fn hipDeviceSynchronize() -> hipError;
-
+        pub fn hipDeviceGetAttribute(pi: *mut c_int, attr: hipDeviceAttribute, deviceId: c_int) -> hipError;
         pub fn hipStreamCreate(stream: *mut hipStream) -> hipError;
         pub fn hipStreamDestroy(stream: hipStream) -> hipError;
         pub fn hipStreamSynchronize(stream: hipStream) -> hipError;

@@ -26,8 +26,12 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     mut batch_callback: impl FnMut(&mut Trainer<G, O, S>, usize, usize, f32),
     mut superbatch_callback: impl FnMut(&mut Trainer<G, O, S>, usize),
 ) -> Result<(), TrainerError<G>> {
+    let model = &trainer.optimiser.model;
+    let device = model.device();
+    let props = device.props();
+
     logger::clear_colours();
-    println!("{}", logger::ansi("Beginning Training", "34;1"));
+    println!("{}", logger::ansi(format!("Training on {}", props.name()), "34;1"));
 
     let timer = Instant::now();
     let lr = schedule.lr_schedule;
@@ -71,9 +75,6 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let first_batch =
         receiver.recv().map_err(|_| TrainerError::DataLoadingError(DataLoadingError::NoBatchesReceived))?;
 
-    let model = &trainer.optimiser.model;
-    let device = model.device();
-
     let copy_stream = device.new_stream().map_err(TrainerError::Unexpected)?;
     let compute_stream = device.new_stream().map_err(TrainerError::Unexpected)?;
 
@@ -85,7 +86,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let mut next_batch_size = first_batch.batch_size;
     let mut batch_on_device = first_batch.to_device(&device).map_err(TrainerError::Unexpected)?;
 
-    let mut next_on_device = cfg!(feature = "rocm").then(|| {
+    let mut next_on_device = (!props.stream_mem_alloc()).then(|| {
         batch_on_device
             .iter()
             .map(|(id, tensor)| {

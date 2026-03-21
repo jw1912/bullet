@@ -67,13 +67,14 @@ pub struct Function<G: Gpu> {
 
 impl<G: Gpu> Function<G> {
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
+        let props = device.props().clone();
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
         ir.transform(DuplicateScalarsAndIndexing)?;
-        ir.transform(LowerPointwise)?;
-        ir.transform(FusePointwise)?;
+        ir.transform(LowerPointwise(props.clone()))?;
+        ir.transform(FusePointwise(props.clone()))?;
         ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(EliminateCommonSubExpressions)?;
-        ir.transform(LowerPointwise)?;
+        ir.transform(LowerPointwise(props))?;
         ir.transform(CodegenPointwise)?;
 
         let mut maps = BTreeMap::new();

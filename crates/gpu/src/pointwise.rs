@@ -1,7 +1,7 @@
 mod generate;
 mod ir;
 mod operations;
-pub mod transforms;
+pub(crate) mod transforms;
 mod write;
 
 use bullet_compiler::{
@@ -11,6 +11,8 @@ use bullet_compiler::{
 
 pub use ir::PointwiseIR;
 
+use crate::runtime::DeviceProps;
+
 #[derive(Clone, Debug)]
 pub struct FusedPointwise {
     sub: SubGraph,
@@ -19,14 +21,14 @@ pub struct FusedPointwise {
 }
 
 impl FusedPointwise {
-    pub fn new(sub: SubGraph) -> Result<Option<Self>, IRTrace> {
-        let maybe_ir = generate::generate(&sub)?;
+    fn new(sub: SubGraph, props: &DeviceProps) -> Result<Option<Self>, IRTrace> {
+        let maybe_ir = generate::generate(&sub, props)?;
         Ok(maybe_ir.map(|(ir, vectorised)| Self { sub, ir, vectorised }))
     }
 
-    pub fn from_op(op: TensorOp, inputs: &[NodeId]) -> Result<Option<(Self, Vec<NodeId>)>, IRTrace> {
+    fn from_op(op: TensorOp, inputs: &[NodeId], props: &DeviceProps) -> Result<Option<(Self, Vec<NodeId>)>, IRTrace> {
         let (graph, inputs) = SubGraph::from_op(op, inputs)?;
-        Ok(Self::new(graph)?.map(|x| (x, inputs)))
+        Ok(Self::new(graph, props)?.map(|x| (x, inputs)))
     }
 }
 

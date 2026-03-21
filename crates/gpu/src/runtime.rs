@@ -17,7 +17,7 @@ use std::{
     },
 };
 
-pub use bindings::{Dim3, GemmConfig};
+pub use bindings::{DeviceProps, Dim3, GemmConfig};
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<Err = Self::Error, Ptr = Self::DevicePtr> {
@@ -35,6 +35,7 @@ pub struct Device<G: Gpu> {
     ordinal: i32,
     context: G::Ctx,
     device: G::Dev,
+    props: DeviceProps,
 }
 
 unsafe impl<G: Gpu> Send for Device<G> {}
@@ -56,12 +57,17 @@ impl<G: Gpu> Device<G> {
 
         let device = unsafe { G::device_get(ordinal)? };
         let context = unsafe { G::context_create(device)? };
+        let props = unsafe { G::device_props(device)? };
 
-        Ok(Arc::new(Self { ordinal, context, device }))
+        Ok(Arc::new(Self { ordinal, context, device, props }))
     }
 
     pub fn ordinal(&self) -> i32 {
         self.ordinal
+    }
+
+    pub fn props(&self) -> &DeviceProps {
+        &self.props
     }
 
     /// Set this device as currently active for this thread,

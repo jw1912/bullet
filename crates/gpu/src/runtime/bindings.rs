@@ -23,6 +23,32 @@ pub struct GemmConfig {
     pub beta: f32,
 }
 
+#[derive(Clone, Debug)]
+pub struct DeviceProps {
+    pub(super) name: String,
+    pub(super) warp_size: u8,
+    pub(super) stream_mem_alloc: bool,
+    pub(super) vec_atomics: bool,
+}
+
+impl DeviceProps {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn warp_size(&self) -> u8 {
+        self.warp_size
+    }
+
+    pub fn stream_mem_alloc(&self) -> bool {
+        self.stream_mem_alloc
+    }
+
+    pub fn vec_atomics(&self) -> bool {
+        self.vec_atomics
+    }
+}
+
 /// This is a private trait, so nobody outside the crate can access these methods
 /// and instead must go through the `Device` and `Stream` structs
 #[allow(clippy::missing_safety_doc)]
@@ -39,6 +65,8 @@ pub trait GpuBindings: 'static {
     unsafe fn driver_init() -> Result<(), Self::Err>;
 
     unsafe fn device_get(ordinal: c_int) -> Result<Self::Dev, Self::Err>;
+
+    unsafe fn device_props(device: Self::Dev) -> Result<DeviceProps, Self::Err>;
 
     unsafe fn context_create(device: Self::Dev) -> Result<Self::Ctx, Self::Err>;
 

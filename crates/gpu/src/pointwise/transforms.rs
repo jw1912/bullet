@@ -9,15 +9,15 @@ use bullet_compiler::{
     },
 };
 
-use crate::pointwise::FusedPointwise;
+use crate::{pointwise::FusedPointwise, runtime::DeviceProps};
 
 /// Lower individual ops to FusedPointwise
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct LowerPointwise;
+#[derive(Clone, Debug)]
+pub struct LowerPointwise(pub(crate) DeviceProps);
 impl IRTransform for LowerPointwise {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         for op in ir.operations() {
-            if let Some((pntwise, inputs)) = FusedPointwise::from_op(op.data().clone(), op.inputs()).unwrap() {
+            if let Some((pntwise, inputs)) = FusedPointwise::from_op(op.data().clone(), op.inputs(), &self.0).unwrap() {
                 let add = AddOperation::new(inputs, Ok(TensorOp::new(pntwise)));
                 ir.replace_op(op.id(), add)?;
             }
@@ -28,8 +28,8 @@ impl IRTransform for LowerPointwise {
 }
 
 /// Fuse pointwise operations greedily
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct FusePointwise;
+#[derive(Clone, Debug)]
+pub struct FusePointwise(pub(crate) DeviceProps);
 impl IRTransform for FusePointwise {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         let mut cache = BTreeMap::new();
@@ -70,7 +70,7 @@ impl IRTransform for FusePointwise {
                     // on `op_i` and is depended upon by `op_j`
                     if ir.is_immediate_dependent_op(op_i, op_j)? || !ir.is_dependent_op(op_j, op_i)? {
                         let (subgraph, inputs, outputs) = fuse_subgraphs(ir, op_i, op_j)?;
-                        if let Some(pntwise) = FusedPointwise::new(subgraph.clone())? {
+                        if let Some(pntwise) = FusedPointwise::new(subgraph.clone(), &self.0)? {
                             let new_cost = pntwise.ir.estimate_memory_cost()?;
                             let old_cost = costs.get(&op_i).unwrap().dominator_sum(*costs.get(&op_j).unwrap());
 
