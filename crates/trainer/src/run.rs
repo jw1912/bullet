@@ -40,6 +40,10 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let mut superbatch = steps.start_superbatch;
 
         dataloader.map_batches(steps.batch_size, |batch| {
+            if batch.batch_size != steps.batch_size {
+                panic!("Dataloader returned a batch with incorrect batch size!");
+            }
+
             sender.send(batch).unwrap();
 
             batch_no += 1;
