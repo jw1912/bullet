@@ -87,6 +87,16 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let mut next_batch_size = first_batch.batch_size;
     let mut batch_on_device = first_batch.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
 
+    let mut next_on_device = cfg!(feature = "rocm").then(|| {
+        batch_on_device
+            .iter()
+            .map(|(id, tensor)| {
+                let buf = Buffer::zeroed(&copy_stream, tensor.dtype(), tensor.size());
+                (id.clone(), buf.unwrap().value().unwrap())
+            })
+            .collect()
+    });
+
     let mut batch_queued = true;
 
     while batch_queued {
@@ -136,9 +146,14 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
             .map_err(TrainerError::OptimiserUpdateError)?;
 
         if let Ok(next_batch_host) = receiver.recv() {
-            drop(batch_on_device);
             next_batch_size = next_batch_host.batch_size;
-            batch_on_device = next_batch_host.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
+            if let Some(next) = &mut next_on_device {
+                drop(next_batch_host.copy_to_device_async(&copy_stream, next).map_err(TrainerError::Unexpected)?);
+                std::mem::swap(&mut batch_on_device, next);
+            } else {
+                drop(batch_on_device);
+                batch_on_device = next_batch_host.to_device_blocking(&copy_stream).map_err(TrainerError::Unexpected)?;
+            }
         } else {
             batch_queued = false;
         }
