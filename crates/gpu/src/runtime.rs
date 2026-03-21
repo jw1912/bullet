@@ -456,11 +456,8 @@ mod tests {
         let kernel = module.get_kernel("kernel")?;
 
         unsafe {
-            let dev_src = stream.malloc(16)?;
-            stream.sync()?;
-
-            let dev_dst = stream.malloc(16)?;
-            stream.sync()?;
+            let dev_src = device.malloc(16)?;
+            let dev_dst = device.malloc(16)?;
 
             stream.memcpy_h2d(host_src.as_ptr().cast(), dev_src, 16)?;
 
@@ -475,6 +472,9 @@ mod tests {
 
             stream.memcpy_d2h(dev_dst, host_dst.as_mut_ptr().cast(), 16)?;
             stream.sync()?;
+
+            device.free(dev_src)?;
+            device.free(dev_dst)?;
         }
 
         for (d, s) in host_dst.into_iter().zip(host_src) {
