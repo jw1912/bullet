@@ -95,6 +95,8 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
 
         let mut buf = unsafe { zeroed_boxed_slice::<T>(cap) };
 
+        let mut incomplete_buf = Vec::new();
+
         'dataloading: loop {
             let mut loader_files = vec![];
             for file in file_paths.iter() {
@@ -123,11 +125,36 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
                     assert_eq!(count % size_of::<T>(), 0);
                     let len = count / size_of::<T>();
 
-                    for batch in buf[..len].chunks(batch_size) {
-                        let should_break = f(batch);
+                    let remainder = if !incomplete_buf.is_empty() {
+                        let remainder = batch_size - incomplete_buf.len();
 
-                        if should_break {
-                            break 'dataloading;
+                        if buf.len() >= remainder {
+                            incomplete_buf.extend_from_slice(&buf[..remainder]);
+                            let should_break = f(&incomplete_buf);
+                            incomplete_buf.clear();
+
+                            if should_break {
+                                break 'dataloading;
+                            }
+                        } else {
+                            incomplete_buf.extend_from_slice(&buf);
+                        }
+
+                        remainder
+                    } else {
+                        0
+                    };
+
+                    if buf.len() >= remainder {
+                        let chunks = buf[remainder..len].chunks_exact(batch_size);
+                        incomplete_buf.extend_from_slice(chunks.remainder());
+
+                        for batch in chunks {
+                            let should_break = f(batch);
+
+                            if should_break {
+                                break 'dataloading;
+                            }
                         }
                     }
                 }
