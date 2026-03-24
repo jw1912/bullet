@@ -274,8 +274,21 @@ impl<G: Gpu> Module<G> {
     pub fn new(device: Arc<Device<G>>, source_code: impl Into<String>) -> Result<Arc<Self>, G::Error> {
         device.set()?;
 
+        let mut options = Vec::new();
+        if let Some(arch) = device.props().arch() {
+            let s = format!("--gpu-architecture={arch}");
+            options.push(CString::new(s).unwrap())
+        }
+
+        let mut options_ptrs = Vec::new();
+        for opt in &options {
+            options_ptrs.push(opt.as_ptr());
+        }
+
+        let opt_ptr_ptr = if options_ptrs.is_empty() { std::ptr::null() } else { options_ptrs.as_ptr() };
+
         let src = CString::new(source_code.into()).map_err(|e| format!("{e:?}"))?;
-        let code = unsafe { G::program_compile(&src, 0, std::ptr::null())? };
+        let code = unsafe { G::program_compile(&src, options_ptrs.len() as i32, opt_ptr_ptr)? };
         let module = unsafe { G::module_create(code.as_ptr().cast())? };
 
         Ok(Arc::new(Self { device, module }))

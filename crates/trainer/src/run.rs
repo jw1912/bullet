@@ -31,7 +31,10 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let props = device.props();
 
     logger::clear_colours();
-    println!("{}", logger::ansi(format!("Training on {}", props.name()), "34;1"));
+    println!(
+        "{}",
+        logger::ansi(format!("Training on {} ({})", props.name(), props.arch().unwrap_or("unknown")), "34;1")
+    );
 
     let timer = Instant::now();
     let lr = schedule.lr_schedule;

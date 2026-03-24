@@ -4,7 +4,9 @@ pub mod operations;
 use std::{collections::BTreeSet, fmt, rc::Rc};
 
 use crate::{
-    ir::{IR, IRError, NodeId, Operation, TypeSystem}, model::operations::Input, tensor::{DType, TensorIR}
+    ir::{IR, IRError, NodeId, Operation, TypeSystem},
+    model::operations::Input,
+    tensor::{DType, TensorIR},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

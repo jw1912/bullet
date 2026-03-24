@@ -61,6 +61,7 @@ impl GpuBindings for ROCm {
             warp_size: warp_size as u8,
             stream_mem_alloc: false,
             vec_atomics: false,
+            arch: None,
         })
     }
 

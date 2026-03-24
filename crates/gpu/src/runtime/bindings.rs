@@ -29,6 +29,7 @@ pub struct DeviceProps {
     pub(super) warp_size: u8,
     pub(super) stream_mem_alloc: bool,
     pub(super) vec_atomics: bool,
+    pub(super) arch: Option<String>,
 }
 
 impl DeviceProps {
@@ -46,6 +47,10 @@ impl DeviceProps {
 
     pub fn vec_atomics(&self) -> bool {
         self.vec_atomics
+    }
+
+    pub fn arch(&self) -> Option<&str> {
+        self.arch.as_deref()
     }
 }
 

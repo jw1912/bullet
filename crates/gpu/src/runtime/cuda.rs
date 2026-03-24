@@ -67,11 +67,15 @@ impl GpuBindings for Cuda {
         let mut mjr = 0;
         error::driver(cuDeviceGetAttribute(&mut mjr, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device))?;
 
+        let mut mnr = 0;
+        error::driver(cuDeviceGetAttribute(&mut mnr, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device))?;
+
         Ok(DeviceProps {
             warp_size: 32,
             name: cname.to_str().unwrap().to_string(),
             stream_mem_alloc: mem_pools > 0,
             vec_atomics: mjr >= 9,
+            arch: Some(format!("sm_{mjr}{mnr}")),
         })
     }
 
@@ -376,6 +380,7 @@ mod raw {
 
     pub const CU_DEVICE_ATTRIBUTE_WARP_SIZE: u32 = 10;
     pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR: u32 = 75;
+    pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR: u32 = 76;
     pub const CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED: u32 = 115;
 
     unsafe extern "C" {
