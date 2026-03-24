@@ -194,6 +194,10 @@ impl<G: Gpu> Stream<G> {
 
     /// Queue allocating `bytes` amount of memory on this stream
     pub fn malloc(&self, bytes: usize) -> Result<G::DevicePtr, G::Error> {
+        if !self.device.props.stream_mem_alloc {
+            return Err("Stream-Ordered Memory Allocator not supported!".to_string().into());
+        }
+
         self.device.set()?;
         unsafe { G::stream_malloc(self.inner, bytes) }
     }
@@ -204,6 +208,10 @@ impl<G: Gpu> Stream<G> {
     ///
     /// User must ensure `ptr` is pointing to a valid device allocation
     pub unsafe fn free(&self, ptr: G::DevicePtr) -> Result<(), G::Error> {
+        if !self.device.props.stream_mem_alloc {
+            return Err("Stream-Ordered Memory Allocator not supported!".to_string().into());
+        }
+
         self.device.set()?;
         unsafe { G::stream_free(self.inner, ptr) }
     }
