@@ -52,13 +52,9 @@ impl GpuBindings for ROCm {
         let mut warp_size = 0;
         error::runtime(hipDeviceGetAttribute(&mut warp_size, hipDeviceAttributeWarpSize, device))?;
 
-        if warp_size % 32 != 0 {
-            println!("Warp size ({warp_size}) not a multiple of 32!");
-        }
-
         Ok(DeviceProps {
             name: "ROCm Device".to_string(),
-            warp_size: warp_size as u8,
+            warp_size: (warp_size % 32 == 0).then_some(warp_size as u8),
             stream_mem_alloc: false,
             vec_atomics: false,
             arch: None,

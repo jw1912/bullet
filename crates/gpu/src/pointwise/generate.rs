@@ -86,12 +86,14 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 
             (select_pad.output_size(), 1)
         } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
-            let warp_size = usize::from(props.warp_size());
-            if !(ir.is_output(op.outputs()[0]) && reduce.inner().is_multiple_of(warp_size.into())) {
+            if let Some(warp_size) = props.warp_size()
+                && ir.is_output(op.outputs()[0])
+                && reduce.inner().is_multiple_of(usize::from(warp_size).into())
+            {
+                (reduce.input_size(), 1)
+            } else {
                 return Ok(None);
             }
-
-            (reduce.input_size(), 1)
         } else {
             return Ok(None);
         };

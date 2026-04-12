@@ -26,7 +26,7 @@ pub struct GemmConfig {
 #[derive(Clone, Debug)]
 pub struct DeviceProps {
     pub(super) name: String,
-    pub(super) warp_size: u8,
+    pub(super) warp_size: Option<u8>,
     pub(super) stream_mem_alloc: bool,
     pub(super) vec_atomics: bool,
     pub(super) arch: Option<String>,
@@ -37,7 +37,7 @@ impl DeviceProps {
         &self.name
     }
 
-    pub fn warp_size(&self) -> u8 {
+    pub fn warp_size(&self) -> Option<u8> {
         self.warp_size
     }
 

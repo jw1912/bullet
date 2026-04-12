@@ -71,7 +71,7 @@ impl GpuBindings for Cuda {
         error::driver(cuDeviceGetAttribute(&mut mnr, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device))?;
 
         Ok(DeviceProps {
-            warp_size: 32,
+            warp_size: Some(32),
             name: cname.to_str().unwrap().to_string(),
             stream_mem_alloc: mem_pools > 0,
             vec_atomics: mjr >= 9,
