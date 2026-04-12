@@ -215,7 +215,6 @@ rewriterule! {
         (add = [CABinaryOp] (lhs = [PadAcrossDimension] (a)) (rhs = [PadAcrossDimension] (b))))
     {
         if add.op() == CABinary::Add
-            && ir.get_node(op.inputs()[1])?.children() == 1
             && matmul.lhs.col_mjr
             && matmul.rhs.col_mjr
             && matmul.batch == 1.into()
@@ -276,7 +275,6 @@ rewriterule! {
             && let Some(lhs) = lhs.downcast::<PadAcrossDimension>()
             && let Some(rhs) = rhs.downcast::<PadAcrossDimension>()
             && add.op() == CABinary::Add
-            && ir.get_node(op.inputs()[1])?.children() == 1
             && !ir.is_output(op.inputs()[1])
             && matmul.lhs.col_mjr
             && matmul.rhs.col_mjr
