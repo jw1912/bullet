@@ -81,6 +81,8 @@ fn main() {
 
     trainer.run(&schedule, &settings, &data_loader);
 
+    println!("Expected loss: 0.005297");
+
     let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
     println!("Eval: {eval:.3}cp");
 }
