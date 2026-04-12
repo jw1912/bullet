@@ -42,7 +42,7 @@ where
         assert_eq!(batch_size, steps.batch_size);
 
         let mut batch_no = 0;
-        let mut superbatch = 1;
+        let mut superbatch = steps.start_superbatch;
 
         dataloader.load_and_map_batches(start_batch, batch_size, |batch| {
             let blend = wdl.blend(batch_no, superbatch, steps.end_superbatch);
