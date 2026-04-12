@@ -471,8 +471,6 @@ impl IRTransform for CodegenReduction {
                     .replace("INNER", &dimen.to_string())
                     .replace("OUTER", &outer_str);
 
-                println!("{src}");
-
                 let outer = reduction.outer();
                 let new = unsafe {
                     KernelSrc::new(
