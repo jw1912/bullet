@@ -146,7 +146,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
 
             let opstr = |x| match op {
                 Unary::Sgn => {
-                    format!("{x} == {ty}(0) ? {ty}(0) : x > {ty}(0) ? {ty}(1) : {ty}(-1)")
+                    format!("{x} == {ty}(0) ? {ty}(0) : {x} > {ty}(0) ? {ty}(1) : {ty}(-1)")
                 }
                 Unary::Reciprocal => format!("1.0F / {x}"),
                 Unary::IsPositive => format!("{x} > static_cast<{ty}>(0)"),
