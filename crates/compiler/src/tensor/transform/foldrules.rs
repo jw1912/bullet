@@ -5,7 +5,8 @@ use crate::{
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd, SparseMatmulBwdMulti, UnaryOp
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd,
+            SparseMatmulBwdMulti, UnaryOp,
         },
         transform::modify::AddOperation,
     },
