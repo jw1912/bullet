@@ -4,7 +4,7 @@ use bullet_compiler::{
     ir::NodeId,
     rewriterule,
     tensor::{
-        DType, IRTrace, Size, TType, TensorIR,
+        DType, IRTrace, OpType, Size, TType, TensorIR, TensorOp,
         operation::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
             ReduceAcrossDimension, Reduction, ScalarConstant, SliceAcrossDimension,
@@ -12,6 +12,7 @@ use bullet_compiler::{
         transform::{
             IRTransform,
             eliminate::{EliminateCommonSubExpressions, EliminateUnusedOperations},
+            modify::AddOperation,
             rewriterules::RewritePass,
         },
     },
@@ -100,6 +101,7 @@ impl<G: Gpu> Function<G> {
         ir.transform(EliminateCommonSubExpressions)?;
         ir.transform(LowerPointwise(props))?;
         ir.transform(CodegenPointwise)?;
+        ir.transform(CodegenReduction)?;
 
         let mut maps = BTreeMap::new();
         let mut num_ptrs = 0;
@@ -422,5 +424,78 @@ rewriterule! {
             ir.replace_operation(op.id(), [lhs, rhs], new_op)?;
             return Ok(true);
         }
+    }
+}
+
+static REDUCTION_SRC: &str = "
+extern \"C\" __global__ void kernel(int size, const float* input, float* output) {
+    const int tid = threadIdx.x + blockDim.x * blockIdx.x;
+
+    if (tid < (OUTER)) {
+        float reduction = input[INNER * tid];
+
+        for (int i = 1; i < INNER; i++) {
+            reduction = FUNC(reduction, input[INNER * tid + i]);
+        }
+
+        output[tid] = reduction;
+    }
+}";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodegenReduction;
+
+impl IRTransform for CodegenReduction {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        for op in ir.operations() {
+            if let Some(reduction) = op.data().downcast::<ReduceAcrossDimension>()
+                && reduction.reduction() != Reduction::Sum
+                && reduction.inner() == 1.into()
+                && let Some(dimen) = reduction.dimen().evaluate_constant()
+            {
+                let outer = reduction.outer();
+                let mut outer_str = format!("{}", outer.factor());
+                for _ in 0..outer.var_power() {
+                    outer_str += " * size";
+                }
+
+                let src = REDUCTION_SRC
+                    .replace(
+                        "FUNC",
+                        match reduction.reduction() {
+                            Reduction::Max => "max",
+                            Reduction::Min => "min",
+                            _ => unimplemented!(),
+                        },
+                    )
+                    .replace("INNER", &dimen.to_string())
+                    .replace("OUTER", &outer_str);
+
+                println!("{src}");
+
+                let outer = reduction.outer();
+                let new = unsafe {
+                    KernelSrc::new(
+                        reduction.inputs(),
+                        reduction.outputs(),
+                        "kernel".to_string(),
+                        src,
+                        true,
+                        vec![(0, true), (0, false)],
+                        Default::default(),
+                        Rc::new(move |s| {
+                            let x = outer.evaluate(s).div_ceil(256) as u32;
+                            Dim3 { x, y: 1, z: 1 }
+                        }),
+                        Rc::new(|_| 256),
+                        Rc::new(|_| 0),
+                    )
+                };
+
+                ir.replace_op(op.id(), AddOperation::new(op.inputs(), Ok::<_, IRTrace>(TensorOp(Rc::new(new)))))?;
+            }
+        }
+
+        Ok(())
     }
 }

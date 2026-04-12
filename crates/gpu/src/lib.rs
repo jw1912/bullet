@@ -31,7 +31,7 @@ mod tests {
         let x = builder.add_input(size * 8, DType::F32);
 
         let y = ((a.broadcast([8], 0, size)? * x)? + b.broadcast([1], 0, size * 8)?)?;
-        let z = y.reduce_sum([size, 8.into()], 1)?;
+        let z = y.reduce_max([size, 8.into()], 1)?;
         let w = y.reduce_sum([size, 8.into()], 0)?;
 
         let mut ir = builder.build([y, z, w]);
@@ -87,7 +87,7 @@ mod tests {
             )
         );
 
-        assert_eq!(buf_z.clone().to_host()?, TValue::F32([136.0].repeat(batch_size)));
+        assert_eq!(buf_z.clone().to_host()?, TValue::F32([22.0].repeat(batch_size)));
 
         assert!(
             func.execute(
