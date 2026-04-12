@@ -49,7 +49,8 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let func = Function::new(device.clone(), ir).unwrap();
+        let mut func = Function::new(device.clone(), ir).unwrap();
+        func.prealloc(batch_size).unwrap();
 
         let buf_a = Buffer::from_host(&device, &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?;
         let buf_b = Buffer::from_host(&device, &TValue::F32(vec![2.0]))?;

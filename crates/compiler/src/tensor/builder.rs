@@ -145,6 +145,19 @@ impl<'a> TNode<'a> {
         let op = SliceAcrossDimension::new(self.ty().dtype(), shape, dim, start, end)?;
         self.builder.add_op([self], op).map(|x| x[0])
     }
+
+    pub fn softmax(self, inner_size: usize) -> Result<Self, IRTrace> {
+        let batch_size = self.ty().size() / inner_size;
+
+        let max =
+            self.reduce_max([batch_size, inner_size.into()], 1)?.broadcast([batch_size, 1.into()], 1, inner_size)?;
+
+        let exps = (self - max)?.exp()?;
+        let denom =
+            exps.reduce_sum([batch_size, inner_size.into()], 1)?.broadcast([batch_size, 1.into()], 1, inner_size)?;
+
+        exps / denom
+    }
 }
 
 macro_rules! binary_impl {
