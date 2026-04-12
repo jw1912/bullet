@@ -71,7 +71,7 @@ where
         None
     }
 
-    fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, batch_size: usize, mut f: F) {
+    fn map_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
         let file_paths = self.file_paths.clone();
         let buffer_size = self.buffer_size;
         let threads = self.threads;
@@ -177,32 +177,12 @@ where
             }
         });
 
-        let (batch_sender, batch_reciever) = mpsc::sync_channel::<Vec<ChessBoard>>(16);
-        let (batch_msg_sender, batch_msg_receiver) = mpsc::sync_channel::<bool>(1);
-
-        std::thread::spawn(move || {
-            'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
-                for batch in shuffle_buffer.chunks(batch_size) {
-                    if batch_msg_receiver.try_recv().unwrap_or(false) || batch_sender.send(batch.to_vec()).is_err() {
-                        buffer_msg_sender.send(true).unwrap();
-                        break 'dataloading;
-                    }
-                }
-            }
-        });
-
-        'dataloading: while let Ok(inputs) = batch_reciever.recv() {
-            for batch in inputs.chunks(batch_size) {
-                let should_break = f(batch);
-
-                if should_break {
-                    batch_msg_sender.send(true).unwrap();
-                    break 'dataloading;
-                }
+        'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
+            if f(&shuffle_buffer) {
+                buffer_msg_sender.send(true).unwrap();
+                break 'dataloading;
             }
         }
-
-        drop(batch_reciever);
     }
 }
 

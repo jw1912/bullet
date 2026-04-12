@@ -131,53 +131,6 @@ impl<G: Gpu> Drop for Buffer<G> {
 }
 
 impl<G: Gpu> Buffer<G> {
-    /// New uninitialised buffer on the device, allocated by `stream`,
-    /// with given size and dtype
-    ///
-    /// ### Safety
-    ///
-    /// The user must ensure that the memory is initialised before it
-    /// is ever read
-    pub unsafe fn uninit_async(
-        stream: &Arc<Stream<G>>,
-        dtype: DType,
-        size: usize,
-    ) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
-        if size == 0 {
-            return Err("Attempted to allocated 0-size device memory!".to_string().into());
-        }
-
-        let ptr = stream.malloc(dtype.bytes() * size)?;
-
-        let buf = Arc::new(Self {
-            ptr,
-            dtype,
-            size,
-            device: stream.device(),
-            creator: Some(stream.clone()),
-            owner: Mutex::new(None),
-        });
-
-        let mut sync = SyncOnDrop::new(stream.clone());
-        sync.attach(buf.clone().acquire(stream.clone())?)?;
-
-        Ok(SyncOnValue::new(sync, buf))
-    }
-
-    /// New zeroed buffer on the device with given size and dtype
-    pub fn zeroed_async(
-        stream: &Arc<Stream<G>>,
-        dtype: DType,
-        size: usize,
-    ) -> Result<SyncOnValue<G, Arc<Self>>, G::Error> {
-        unsafe {
-            let sync = Self::uninit_async(stream, dtype, size)?;
-            let aqcuired = sync.value_ref().clone().acquire(stream.clone())?;
-            stream.memset(aqcuired.ptr(), aqcuired.bytes(), 0)?;
-            Ok(sync)
-        }
-    }
-
     /// New uninitialised buffer on the device with given size and dtype
     ///
     /// ### Safety
@@ -271,22 +224,6 @@ impl<G: Gpu> Buffer<G> {
         }
 
         Ok(value)
-    }
-
-    /// Create buffer from host values on the given stream
-    #[allow(clippy::type_complexity)]
-    pub fn from_host_async<'a>(
-        stream: &Arc<Stream<G>>,
-        value: &'a TValue,
-    ) -> Result<SyncOnValue<G, (Arc<Self>, &'a TValue)>, G::Error> {
-        unsafe {
-            let buf = Self::uninit_async(stream, value.dtype(), value.size())?;
-            let guard = &buf.guards()[0];
-
-            stream.memcpy_h2d(value.ptr(), guard.ptr(), guard.bytes())?;
-
-            Ok(buf.attach_value(value))
-        }
     }
 
     /// Create buffer from host values on the given device

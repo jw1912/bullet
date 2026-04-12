@@ -7,7 +7,7 @@ use std::{
 use crate::{
     ir::{NodeId, OpId},
     tensor::{
-        IRBuilder, IRNode, IRTrace, TensorIR, TensorOp,
+        IRBuilder, IRTrace, TNode, TensorIR, TensorOp,
         operation::{CABinary, SubGraph, autograd::AutogradOp},
         transform::{IRTransform, modify::AddOperation},
     },
@@ -115,8 +115,8 @@ impl IRTransform for TakeGradient {
                 let backward = builder.build(&unique_igrads);
 
                 // add backwards subgraph to TensorIR
-                let subgraph_inputs = [inputs, ograds].concat().iter().map(IRNode::node).collect();
-                let subgraph_outputs: Vec<_> = unique_igrads.iter().map(IRNode::node).collect();
+                let subgraph_inputs = [inputs, ograds].concat().iter().map(TNode::node).collect();
+                let subgraph_outputs: Vec<_> = unique_igrads.iter().map(TNode::node).collect();
                 let subgraph = SubGraph::new(backward, subgraph_inputs, subgraph_outputs.clone())?;
                 let new_grads = ir.add_op([operation.inputs(), &op_ograds].concat(), Ok::<_, IRTrace>(subgraph))?;
 

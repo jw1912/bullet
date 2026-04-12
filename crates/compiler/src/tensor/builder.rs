@@ -14,27 +14,27 @@ pub struct IRBuilder {
 }
 
 impl IRBuilder {
-    fn new_node<'a>(&'a self, node: NodeId) -> IRNode<'a> {
-        IRNode::new(self, node)
+    fn new_node<'a>(&'a self, node: NodeId) -> TNode<'a> {
+        TNode::new(self, node)
     }
 
-    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[IRNode<'a>]>, op: impl OpType) -> Result<Vec<IRNode<'a>>, IRTrace> {
-        let ids = inputs.as_ref().iter().map(IRNode::node).collect::<Vec<_>>();
+    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[TNode<'a>]>, op: impl OpType) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let ids = inputs.as_ref().iter().map(TNode::node).collect::<Vec<_>>();
         let outs = self.ir.borrow_mut().add_op(ids, Ok::<_, IRTrace>(op)).unwrap();
         Ok(outs.into_iter().map(|out| self.new_node(out)).collect())
     }
 
-    pub fn add_input<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> IRNode<'a> {
+    pub fn add_input<'a>(&'a self, size: impl Into<Size>, dtype: DType) -> TNode<'a> {
         let node = self.ir.borrow_mut().add_input(TType::new(size, dtype));
         self.new_node(node)
     }
 
-    pub fn constant<'a>(&'a self, value: TValue) -> IRNode<'a> {
+    pub fn constant<'a>(&'a self, value: TValue) -> TNode<'a> {
         let node = self.ir.borrow_mut().add_const(value);
         self.new_node(node)
     }
 
-    pub fn scalar<'a>(&'a self, value: impl Into<DValue>, size: impl Into<Size>) -> IRNode<'a> {
+    pub fn scalar<'a>(&'a self, value: impl Into<DValue>, size: impl Into<Size>) -> TNode<'a> {
         let node = self.ir.borrow_mut().add_scalar(value, size);
         self.new_node(node)
     }
@@ -43,7 +43,7 @@ impl IRBuilder {
         println!("{}", self.ir.borrow().ir())
     }
 
-    pub fn build<'a>(&'a self, returns: impl AsRef<[IRNode<'a>]>) -> TensorIR {
+    pub fn build<'a>(&'a self, returns: impl AsRef<[TNode<'a>]>) -> TensorIR {
         let mut ir = self.ir.borrow().clone();
 
         for ret in returns.as_ref() {
@@ -55,12 +55,12 @@ impl IRBuilder {
 }
 
 #[derive(Clone, Copy)]
-pub struct IRNode<'a> {
+pub struct TNode<'a> {
     builder: &'a IRBuilder,
     node: NodeId,
 }
 
-impl<'a> IRNode<'a> {
+impl<'a> TNode<'a> {
     pub fn new(builder: &'a IRBuilder, node: NodeId) -> Self {
         Self { builder, node }
     }
@@ -149,10 +149,10 @@ impl<'a> IRNode<'a> {
 
 macro_rules! binary_impl {
     ($stdop:ident, $fnname:ident, $mapop:ident) => {
-        impl<'a> std::ops::$stdop<IRNode<'a>> for IRNode<'a> {
-            type Output = Result<IRNode<'a>, IRTrace>;
+        impl<'a> std::ops::$stdop<TNode<'a>> for TNode<'a> {
+            type Output = Result<TNode<'a>, IRTrace>;
 
-            fn $fnname(self, rhs: IRNode<'a>) -> Self::Output {
+            fn $fnname(self, rhs: TNode<'a>) -> Self::Output {
                 self.binary(rhs, CABinary::$mapop)
             }
         }
@@ -164,7 +164,7 @@ binary_impl!(Add, add, Add);
 
 macro_rules! unary_impl {
     ($fnname:ident, $mapop:ident) => {
-        impl<'a> IRNode<'a> {
+        impl<'a> TNode<'a> {
             pub fn $fnname(self) -> Result<Self, IRTrace> {
                 self.unary(Unary::$mapop)
             }
@@ -185,8 +185,8 @@ unary_impl!(abs, Abs);
 
 macro_rules! binary_const_impl {
     ($stdop:ident, $fnname:ident, $mapop:ident, $t:ty) => {
-        impl<'a> std::ops::$stdop<$t> for IRNode<'a> {
-            type Output = Result<IRNode<'a>, IRTrace>;
+        impl<'a> std::ops::$stdop<$t> for TNode<'a> {
+            type Output = Result<TNode<'a>, IRTrace>;
 
             fn $fnname(self, rhs: $t) -> Self::Output {
                 let scalar = self.builder.scalar(rhs, self.ty().size());
@@ -194,10 +194,10 @@ macro_rules! binary_const_impl {
             }
         }
 
-        impl<'a> std::ops::$stdop<IRNode<'a>> for $t {
-            type Output = Result<IRNode<'a>, IRTrace>;
+        impl<'a> std::ops::$stdop<TNode<'a>> for $t {
+            type Output = Result<TNode<'a>, IRTrace>;
 
-            fn $fnname(self, rhs: IRNode<'a>) -> Self::Output {
+            fn $fnname(self, rhs: TNode<'a>) -> Self::Output {
                 let lhs = rhs.builder.scalar(self, rhs.ty().size());
                 lhs.binary(rhs, CABinary::$mapop)
             }
@@ -210,7 +210,7 @@ binary_const_impl!(Add, add, Add, f32);
 binary_const_impl!(Mul, mul, Mul, i32);
 binary_const_impl!(Add, add, Add, i32);
 
-impl std::ops::Neg for IRNode<'_> {
+impl std::ops::Neg for TNode<'_> {
     type Output = Result<Self, IRTrace>;
 
     fn neg(self) -> Self::Output {
@@ -221,7 +221,7 @@ impl std::ops::Neg for IRNode<'_> {
     }
 }
 
-impl<T> std::ops::Sub<T> for IRNode<'_>
+impl<T> std::ops::Sub<T> for TNode<'_>
 where
     Self: std::ops::Add<T, Output = Result<Self, IRTrace>>,
     T: std::ops::Neg<Output = T>,
@@ -233,7 +233,7 @@ where
     }
 }
 
-impl std::ops::Sub<Self> for IRNode<'_> {
+impl std::ops::Sub<Self> for TNode<'_> {
     type Output = Result<Self, IRTrace>;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -241,24 +241,24 @@ impl std::ops::Sub<Self> for IRNode<'_> {
     }
 }
 
-impl<'a> std::ops::Sub<IRNode<'a>> for i32 {
-    type Output = Result<IRNode<'a>, IRTrace>;
+impl<'a> std::ops::Sub<TNode<'a>> for i32 {
+    type Output = Result<TNode<'a>, IRTrace>;
 
-    fn sub(self, rhs: IRNode<'a>) -> Self::Output {
+    fn sub(self, rhs: TNode<'a>) -> Self::Output {
         self + (-rhs)?
     }
 }
 
-impl<'a> std::ops::Sub<IRNode<'a>> for f32 {
-    type Output = Result<IRNode<'a>, IRTrace>;
+impl<'a> std::ops::Sub<TNode<'a>> for f32 {
+    type Output = Result<TNode<'a>, IRTrace>;
 
-    fn sub(self, rhs: IRNode<'a>) -> Self::Output {
+    fn sub(self, rhs: TNode<'a>) -> Self::Output {
         self + (-rhs)?
     }
 }
 
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl std::ops::Div<Self> for IRNode<'_> {
+impl std::ops::Div<Self> for TNode<'_> {
     type Output = Result<Self, IRTrace>;
 
     fn div(self, rhs: Self) -> Self::Output {
@@ -270,15 +270,15 @@ impl std::ops::Div<Self> for IRNode<'_> {
 }
 
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a> std::ops::Div<IRNode<'a>> for f32 {
-    type Output = Result<IRNode<'a>, IRTrace>;
+impl<'a> std::ops::Div<TNode<'a>> for f32 {
+    type Output = Result<TNode<'a>, IRTrace>;
 
-    fn div(self, rhs: IRNode<'a>) -> Self::Output {
+    fn div(self, rhs: TNode<'a>) -> Self::Output {
         self * rhs.unary(Unary::Reciprocal)?
     }
 }
 
-impl std::ops::Div<f32> for IRNode<'_> {
+impl std::ops::Div<f32> for TNode<'_> {
     type Output = Result<Self, IRTrace>;
 
     fn div(self, rhs: f32) -> Self::Output {

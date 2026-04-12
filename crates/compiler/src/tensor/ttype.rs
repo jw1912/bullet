@@ -308,6 +308,13 @@ impl DValue {
         }
     }
 
+    pub fn neg_one(dtype: DType) -> Self {
+        match dtype {
+            DType::F32 => (-1.0).into(),
+            DType::I32 => (-1).into(),
+        }
+    }
+
     pub fn dtype(&self) -> DType {
         match *self {
             Self::F32(_) => DType::F32,

@@ -1,13 +1,13 @@
 use std::{fmt, rc::Rc};
 
-use crate::tensor::{DType, DValue, IRNode, IRTrace, Size, TType, operation::Unary};
+use crate::tensor::{DType, DValue, IRTrace, Size, TNode, TType, operation::Unary};
 
 use super::{Autograd, AutogradOp};
 
 pub trait DiffableFromOutput: fmt::Debug + PartialEq + 'static {
-    fn forward<'a>(&self, input: IRNode<'a>) -> Result<IRNode<'a>, IRTrace>;
+    fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace>;
 
-    fn backward<'a>(&self, output: IRNode<'a>) -> Result<IRNode<'a>, IRTrace>;
+    fn backward<'a>(&self, output: TNode<'a>) -> Result<TNode<'a>, IRTrace>;
 }
 
 #[derive(Debug, PartialEq)]
@@ -22,16 +22,16 @@ impl<T: DiffableFromOutput> Autograd for DiffableFromOutputOp<T> {
         vec![TType::new(self.2, self.1)]
     }
 
-    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Result<Vec<IRNode<'a>>, IRTrace> {
+    fn forward<'a>(&self, inputs: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let [input] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
         self.0.forward(input).map(|x| vec![x])
     }
 
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         let [input] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
         let [grad] = output_grads[..] else { return Err("Invalid number of output grads!".into()) };
 
@@ -51,13 +51,13 @@ impl<T: DiffableFromOutput> Autograd for DiffableFromOutputOp<T> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReLU;
 impl DiffableFromOutput for ReLU {
-    fn forward<'a>(&self, input: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let zero = DValue::zero(input.ty().dtype());
         let zero = input.builder().scalar(zero, input.ty().size());
         input.max(zero)
     }
 
-    fn backward<'a>(&self, output: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn backward<'a>(&self, output: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         output.unary(Unary::IsPositive)
     }
 }
@@ -65,13 +65,13 @@ impl DiffableFromOutput for ReLU {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CReLU;
 impl DiffableFromOutput for CReLU {
-    fn forward<'a>(&self, input: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let one = DValue::one(input.ty().dtype());
         let one = input.builder().scalar(one, input.ty().size());
         ReLU.forward(input)?.min(one)
     }
 
-    fn backward<'a>(&self, output: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn backward<'a>(&self, output: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let one = DValue::one(output.ty().dtype());
         let one = output.builder().scalar(one, output.ty().size());
         ReLU.backward(output)? * (one - output)?.unary(Unary::IsPositive)?
@@ -81,12 +81,12 @@ impl DiffableFromOutput for CReLU {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SCReLU;
 impl DiffableFromOutput for SCReLU {
-    fn forward<'a>(&self, input: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let crelu = CReLU.forward(input)?;
         crelu * crelu
     }
 
-    fn backward<'a>(&self, output: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn backward<'a>(&self, output: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let half = (CReLU.backward(output)? * output.sqrt()?)?;
         half + half
     }
@@ -95,13 +95,13 @@ impl DiffableFromOutput for SCReLU {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Sigmoid;
 impl DiffableFromOutput for Sigmoid {
-    fn forward<'a>(&self, input: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let one = DValue::one(input.ty().dtype());
         let one = input.builder().scalar(one, input.ty().size());
         (one + (-input)?.exp()?)?.unary(Unary::Reciprocal)
     }
 
-    fn backward<'a>(&self, output: IRNode<'a>) -> Result<IRNode<'a>, IRTrace> {
+    fn backward<'a>(&self, output: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
         let one = DValue::one(output.ty().dtype());
         let one = output.builder().scalar(one, output.ty().size());
         output * (one - output)?

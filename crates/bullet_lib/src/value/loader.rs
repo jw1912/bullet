@@ -56,7 +56,7 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
         None
     }
 
-    fn map_batches<F: FnMut(&[T]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F);
+    fn map_chunks<F: FnMut(&[T]) -> bool>(&self, start_position: usize, f: F);
 }
 
 pub(crate) type B<I> = fn(&<I as SparseInputType>::RequiredDataType, f32) -> f32;
@@ -100,9 +100,46 @@ where
         &self,
         start_batch: usize,
         batch_size: usize,
-        f: F,
+        mut f: F,
     ) {
-        self.loader.map_batches(start_batch, batch_size, f);
+        let mut incomplete_buf = Vec::new();
+
+        self.loader.map_chunks(start_batch * batch_size, |chunk| {
+            let remainder = if !incomplete_buf.is_empty() {
+                let remainder = batch_size - incomplete_buf.len();
+
+                if chunk.len() >= remainder {
+                    incomplete_buf.extend_from_slice(&chunk[..remainder]);
+                    let should_break = f(&incomplete_buf);
+                    incomplete_buf.clear();
+
+                    if should_break {
+                        return true;
+                    }
+                } else {
+                    incomplete_buf.extend_from_slice(chunk);
+                }
+
+                remainder
+            } else {
+                0
+            };
+
+            if chunk.len() >= remainder {
+                let chunks = chunk[remainder..chunk.len()].chunks_exact(batch_size);
+                incomplete_buf.extend_from_slice(chunks.remainder());
+
+                for batch in chunks {
+                    let should_break = f(batch);
+
+                    if should_break {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        });
     }
 
     pub fn prepare(&self, data: &[I::RequiredDataType], threads: usize, blend: f32) -> PreparedData<I, O> {

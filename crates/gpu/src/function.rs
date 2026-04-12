@@ -36,7 +36,7 @@ enum Inst<G: Gpu> {
         ty: TType,
     },
     Free {
-        idx: usize,
+        _idx: usize,
     },
     Zero {
         idx: usize,
@@ -58,14 +58,38 @@ enum Inst<G: Gpu> {
 }
 
 pub struct Function<G: Gpu> {
+    device: Arc<Device<G>>,
     maps: BTreeMap<NodeId, (usize, bool, TType)>,
     insts: Box<[Inst<G>]>,
     num_ptrs: usize,
     blas: Option<Blas<G>>,
     max_num_args: usize,
+    prealloc_size: usize,
+    preallocs: BTreeMap<usize, G::DevicePtr>,
+}
+
+impl<G: Gpu> Drop for Function<G> {
+    fn drop(&mut self) {
+        let _ = self.dealloc_preallocs();
+    }
 }
 
 impl<G: Gpu> Function<G> {
+    pub fn dealloc_preallocs(&mut self) -> Result<(), G::Error> {
+        if self.prealloc_size == 0 {
+            return Ok(());
+        }
+
+        for &ptr in self.preallocs.values() {
+            unsafe { self.device.free(ptr)? };
+        }
+
+        self.prealloc_size = 0;
+        self.preallocs = BTreeMap::default();
+
+        Ok(())
+    }
+
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         let props = device.props().clone();
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
@@ -169,14 +193,42 @@ impl<G: Gpu> Function<G> {
 
                     if ir.get_node(input)?.children() == *times_seen {
                         let idx = *indices.get(&input).unwrap();
-                        insts.push(Inst::Free { idx });
+                        insts.push(Inst::Free { _idx: idx });
                     }
                 }
             }
         }
 
-        let blas = requires_blas.then(|| Blas::new(device).unwrap());
-        Ok(Self { maps, insts: insts.into_boxed_slice(), num_ptrs, blas, max_num_args })
+        let blas = requires_blas.then(|| Blas::new(device.clone()).unwrap());
+        Ok(Self {
+            device,
+            maps,
+            insts: insts.into_boxed_slice(),
+            num_ptrs,
+            blas,
+            max_num_args,
+            prealloc_size: 0,
+            preallocs: Default::default(),
+        })
+    }
+
+    pub fn prealloc(&mut self, var_size: usize) -> Result<(), G::Error> {
+        if var_size == self.prealloc_size {
+            return Ok(());
+        }
+
+        self.dealloc_preallocs()?;
+
+        for inst in &self.insts {
+            if let &Inst::Malloc { idx, ty } = inst {
+                let bytes = ty.dtype().bytes() * ty.size().evaluate(var_size);
+                self.preallocs.insert(idx, self.device.malloc(bytes)?);
+            }
+        }
+
+        self.prealloc_size = var_size;
+
+        Ok(())
     }
 
     pub fn execute(
@@ -238,20 +290,20 @@ impl<G: Gpu> Function<G> {
         let var = var_size.unwrap_or(1);
         let mut sizes = vec![0; self.max_num_args];
 
+        assert_ne!(var, 0, "Variable size = 0!");
+        assert!(self.prealloc_size >= var);
+
         unsafe {
             for inst in &self.insts {
                 match inst {
-                    &Inst::Malloc { idx, ty } => {
-                        let bytes = ty.size().evaluate(var) * ty.dtype().bytes();
-                        ptrs[idx] = stream.malloc(bytes)?;
-                    }
-                    &Inst::Free { idx } => {
-                        stream.free(ptrs[idx])?;
+                    &Inst::Malloc { idx, .. } => {
+                        ptrs[idx] = *self.preallocs.get(&idx).unwrap();
                     }
                     &Inst::Zero { idx, ty } => {
                         let bytes = ty.size().evaluate(var) * ty.dtype().bytes();
                         stream.memset(ptrs[idx], bytes, 0)?;
                     }
+                    Inst::Free { .. } => {}
                     Inst::LaunchKernel { func, args, gdim, bdim, smem } => {
                         let mut args: Vec<_> = args
                             .iter()

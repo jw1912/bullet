@@ -190,6 +190,8 @@ where
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
+        self.0.optimiser.model.set_fwd_batch_size(1).unwrap();
+
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
         let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);

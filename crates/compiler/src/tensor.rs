@@ -11,7 +11,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem};
+use crate::{
+    ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem},
+    tensor::operation::{ReduceAcrossDimension, Reduction},
+};
 
 use operation::{
     BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ScalarConstant, Unary, UnaryOp,
@@ -22,7 +25,7 @@ use transform::{
     modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
 };
 
-pub use builder::{IRBuilder, IRNode};
+pub use builder::{IRBuilder, TNode};
 pub use operation::{OpType, TensorOp};
 pub use ttype::{DType, DValue, Shape, Size, TType, TValue};
 
@@ -255,6 +258,18 @@ impl TensorIR {
         let dtype = self.get_node(input)?.ty().dtype();
         let broadcast = BroadcastAcrossDimension::new(dtype, shape.into(), dim, repeats.into());
         self.add_op([input], broadcast).map(|x| x[0])
+    }
+
+    pub fn add_reduction(
+        &mut self,
+        input: NodeId,
+        shape: impl Into<Shape>,
+        dim: usize,
+        reduction: Reduction,
+    ) -> Result<NodeId, IRTrace> {
+        let dtype = self.get_node(input)?.ty().dtype();
+        let reduce = ReduceAcrossDimension::new(dtype, shape.into(), dim, reduction);
+        self.add_op([input], reduce).map(|x| x[0])
     }
 
     pub fn add_unary(&mut self, node: NodeId, op: Unary) -> Result<NodeId, IRTrace> {

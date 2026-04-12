@@ -1,5 +1,5 @@
 use crate::tensor::{
-    DValue, IRNode, IRTrace,
+    DValue, IRTrace, TNode,
     operation::{CABinary, CABinaryOp, Unary, UnaryOp},
 };
 
@@ -8,9 +8,9 @@ use super::AutogradOnCoreOp;
 impl AutogradOnCoreOp for CABinaryOp {
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         let [lhs, rhs] = inputs[..] else { panic!() };
         let [grad] = output_grads[..] else { panic!() };
 
@@ -38,9 +38,9 @@ impl AutogradOnCoreOp for CABinaryOp {
 impl AutogradOnCoreOp for UnaryOp {
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         let grad = output_grads[0];
         let input = inputs[0];
 

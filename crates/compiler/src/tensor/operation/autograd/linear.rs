@@ -1,5 +1,5 @@
 use crate::tensor::{
-    IRNode, IRTrace,
+    IRTrace, TNode,
     operation::{Matmul, MatrixLayout, SparseMatmul},
 };
 
@@ -8,9 +8,9 @@ use super::AutogradOnCoreOp;
 impl AutogradOnCoreOp for Matmul {
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         let Matmul { dtype, batch, lhs, rhs } = *self;
         let grad = MatrixLayout { col_mjr: true, rows: lhs.rows, cols: rhs.cols };
 
@@ -43,9 +43,9 @@ impl AutogradOnCoreOp for Matmul {
 impl AutogradOnCoreOp for SparseMatmul {
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         let grad = output_grads[0];
         let op = self.invert();
         grad.builder().add_op([grad, inputs[1]], op).map(|x| vec![Some(x[0])])

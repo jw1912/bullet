@@ -7,7 +7,7 @@ mod reduce;
 
 use std::{fmt, rc::Rc};
 
-use crate::tensor::{IRBuilder, IRNode, IRTrace, OpType, TType, TValue, TensorOp, operation::SubGraph};
+use crate::tensor::{IRBuilder, IRTrace, OpType, TNode, TType, TValue, TensorOp, operation::SubGraph};
 
 pub use dfo::{CReLU, DiffableFromOutput, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid};
 pub use qat::FauxQuantise;
@@ -17,13 +17,13 @@ pub trait Autograd: std::any::Any + fmt::Debug + 'static {
 
     fn inputs(&self) -> Vec<TType>;
 
-    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Result<Vec<IRNode<'a>>, IRTrace>;
+    fn forward<'a>(&self, inputs: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace>;
 
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace>;
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace>;
 
     fn equals(&self, other: &Rc<dyn Autograd>) -> bool;
 }
@@ -31,9 +31,9 @@ pub trait Autograd: std::any::Any + fmt::Debug + 'static {
 pub trait AutogradOnCoreOp: Clone + OpType + PartialEq {
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace>;
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace>;
 }
 
 impl<T: AutogradOnCoreOp> Autograd for T {
@@ -45,15 +45,15 @@ impl<T: AutogradOnCoreOp> Autograd for T {
         <T as OpType>::inputs(self)
     }
 
-    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Result<Vec<IRNode<'a>>, IRTrace> {
+    fn forward<'a>(&self, inputs: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         inputs[0].builder().add_op(inputs, self.clone())
     }
 
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         <T as AutogradOnCoreOp>::backward(self, inputs, output_grads)
     }
 
@@ -89,8 +89,8 @@ impl AutogradOp {
         let inputs = op_inputs.iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
         let outputs = op.forward(inputs.clone())?;
         let forward = builder.build(&outputs);
-        let inputs = inputs.iter().map(IRNode::node).collect();
-        let outputs = outputs.iter().map(IRNode::node).collect();
+        let inputs = inputs.iter().map(TNode::node).collect();
+        let outputs = outputs.iter().map(TNode::node).collect();
         let forward = SubGraph::new(forward, inputs, outputs)?;
 
         Ok(Self { op: Rc::new(op), forward })

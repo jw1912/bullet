@@ -83,6 +83,14 @@ impl<G: Gpu> Model<G> {
         self.forward.execute(stream.clone(), &map)
     }
 
+    pub fn set_fwd_batch_size(&mut self, batch_size: usize) -> Result<(), G::Error> {
+        self.forward.prealloc(batch_size)
+    }
+
+    pub fn set_bwd_batch_size(&mut self, batch_size: usize) -> Result<(), G::Error> {
+        self.backward.prealloc(batch_size)
+    }
+
     pub fn backward(
         &self,
         stream: &Arc<Stream<G>>,

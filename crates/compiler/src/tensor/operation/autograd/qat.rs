@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::tensor::{
-    DValue, IRNode, IRTrace, TType,
+    DValue, IRTrace, TNode, TType,
     operation::{
         Unary,
         autograd::{Autograd, AutogradOp},
@@ -20,7 +20,7 @@ impl Autograd for FauxQuantise {
         vec![TType::new(self.0.size(), self.0.dtype())]
     }
 
-    fn forward<'a>(&self, inputs: Vec<IRNode<'a>>) -> Result<Vec<IRNode<'a>>, IRTrace> {
+    fn forward<'a>(&self, inputs: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let [input] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
 
         let op = if self.2 { Unary::Round } else { Unary::Truncate };
@@ -30,9 +30,9 @@ impl Autograd for FauxQuantise {
 
     fn backward<'a>(
         &self,
-        inputs: Vec<IRNode<'a>>,
-        output_grads: Vec<IRNode<'a>>,
-    ) -> Result<Vec<Option<IRNode<'a>>>, IRTrace> {
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
         if inputs.len() != 1 {
             return Err("Invalid number of inputs!".into());
         }

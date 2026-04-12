@@ -10,7 +10,7 @@ use std::{
 use bullet_compiler::{
     ir::NodeId,
     tensor::{
-        DType, DValue, IRBuilder, IRNode, Size, TType, TValue,
+        DType, DValue, IRBuilder, Size, TNode, TType, TValue,
         operation::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
             ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
@@ -101,7 +101,7 @@ impl ModelBuilder {
             self.ir.add_op(inputs, op).unwrap()
         };
 
-        outputs.iter().map(IRNode::node).collect()
+        outputs.iter().map(TNode::node).collect()
     }
 
     pub fn scalar<'a>(&'a self, value: f32) -> ModelNode<'a> {
@@ -261,8 +261,8 @@ pub struct ModelNode<'a> {
 }
 
 impl<'a> ModelNode<'a> {
-    pub fn detach(&self) -> IRNode<'a> {
-        IRNode::new(&self.builder.ir, self.node)
+    pub fn detach(&self) -> TNode<'a> {
+        TNode::new(&self.builder.ir, self.node)
     }
 
     pub fn ty(&self) -> TType {

@@ -26,6 +26,8 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     mut batch_callback: impl FnMut(&mut Trainer<G, O, S>, usize, usize, f32),
     mut superbatch_callback: impl FnMut(&mut Trainer<G, O, S>, usize),
 ) -> Result<(), TrainerError<G>> {
+    trainer.optimiser.model.set_bwd_batch_size(schedule.steps.batch_size).map_err(TrainerError::Unexpected)?;
+
     let model = &trainer.optimiser.model;
     let device = model.device();
     let props = device.props();
@@ -89,15 +91,13 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let mut next_batch_size = first_batch.batch_size;
     let mut batch_on_device = first_batch.to_device(&device).map_err(TrainerError::Unexpected)?;
 
-    let mut next_on_device = (!props.stream_mem_alloc()).then(|| {
-        batch_on_device
-            .iter()
-            .map(|(id, tensor)| {
-                let buf = Buffer::zeroed(&device, tensor.dtype(), tensor.size());
-                (id.clone(), buf.unwrap())
-            })
-            .collect()
-    });
+    let mut next_on_device = batch_on_device
+        .iter()
+        .map(|(id, tensor)| {
+            let buf = Buffer::zeroed(&device, tensor.dtype(), tensor.size());
+            (id.clone(), buf.unwrap())
+        })
+        .collect();
 
     let mut batch_queued = true;
 
@@ -149,14 +149,12 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
 
         if let Ok(next_batch_host) = receiver.recv() {
             next_batch_size = next_batch_host.batch_size;
-            if let Some(next) = &mut next_on_device {
-                drop(next_batch_host.copy_to_device_async(&copy_stream, next).map_err(TrainerError::Unexpected)?);
-                std::mem::swap(&mut batch_on_device, next);
-            } else {
-                drop(batch_on_device);
-                batch_on_device =
-                    next_batch_host.to_device_via_stream(&copy_stream).map_err(TrainerError::Unexpected)?;
-            }
+            drop(
+                next_batch_host
+                    .copy_to_device_async(&copy_stream, &next_on_device)
+                    .map_err(TrainerError::Unexpected)?,
+            );
+            std::mem::swap(&mut batch_on_device, &mut next_on_device);
         } else {
             batch_queued = false;
         }

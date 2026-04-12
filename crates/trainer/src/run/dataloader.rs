@@ -40,23 +40,6 @@ impl PreparedBatchHost {
         Ok(syncs)
     }
 
-    pub fn to_device_via_stream<G: Gpu>(self, stream: &Arc<Stream<G>>) -> Result<TensorMap<G>, G::Error> {
-        let on_device = self
-            .inputs
-            .iter()
-            .map(|(id, value)| Buffer::from_host_async(stream, value).map(|tensor| (id, tensor)))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-
-        let res = on_device
-            .into_iter()
-            .map(|(id, value)| value.value().map(|v| (id.clone(), v.0)))
-            .collect::<Result<_, _>>()?;
-
-        stream.sync()?;
-
-        Ok(res)
-    }
-
     pub fn to_device<G: Gpu>(self, device: &Arc<Device<G>>) -> Result<TensorMap<G>, G::Error> {
         self.inputs
             .iter()

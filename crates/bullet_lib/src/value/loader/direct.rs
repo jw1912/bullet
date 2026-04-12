@@ -58,27 +58,28 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
         Some(file_size / data_size)
     }
 
-    fn map_batches<F: FnMut(&[T]) -> bool>(&self, start_batch: usize, batch_size: usize, mut f: F) {
+    fn map_chunks<F: FnMut(&[T]) -> bool>(&self, mut start_position: usize, mut f: F) {
         let buffer_size_mb = 256;
         let buffer_size = buffer_size_mb * 1024 * 1024;
-        let data_size = size_of::<T>();
-        let batches_per_load = buffer_size / data_size / batch_size;
-        let cap = batch_size * batches_per_load;
-
         let data_size = std::mem::size_of::<T>() as u64;
+        let cap = buffer_size / data_size as usize;
 
-        let total_positions = <Self as DataLoader<T>>::count_positions(self).unwrap();
-        let start_position = (start_batch * batch_size) as u64 % total_positions;
+        let mut positions_per_epoch = 0;
+        self.map_file_sizes(|_, this_size| positions_per_epoch += this_size / data_size);
+        start_position %= positions_per_epoch as usize;
 
         let mut start_file_idx = 0;
         let mut net_positions = 0;
         for file in self.file_paths.iter() {
-            let this_positions = std::fs::metadata(file).unwrap().len() / data_size;
+            let this_size = std::fs::metadata(file).unwrap().len();
+            let this_positions = this_size / data_size;
 
-            if start_position < net_positions + this_positions {
+            net_positions += this_positions;
+
+            if start_position < net_positions as usize {
+                net_positions -= this_positions;
                 break;
             } else {
-                net_positions += this_positions;
                 start_file_idx += 1;
             }
         }
@@ -86,11 +87,9 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
         let mut file_paths = self.file_paths.clone();
         file_paths.rotate_left(start_file_idx);
 
-        let mut to_skip = (start_position - net_positions) as usize * batch_size;
+        let mut to_skip = start_position - net_positions as usize;
 
         let mut buf = unsafe { zeroed_boxed_slice::<T>(cap) };
-
-        let mut incomplete_buf = Vec::new();
 
         'dataloading: loop {
             let mut loader_files = vec![];
@@ -120,37 +119,8 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataL
                     assert_eq!(count % size_of::<T>(), 0);
                     let len = count / size_of::<T>();
 
-                    let remainder = if !incomplete_buf.is_empty() {
-                        let remainder = batch_size - incomplete_buf.len();
-
-                        if buf.len() >= remainder {
-                            incomplete_buf.extend_from_slice(&buf[..remainder]);
-                            let should_break = f(&incomplete_buf);
-                            incomplete_buf.clear();
-
-                            if should_break {
-                                break 'dataloading;
-                            }
-                        } else {
-                            incomplete_buf.extend_from_slice(&buf);
-                        }
-
-                        remainder
-                    } else {
-                        0
-                    };
-
-                    if buf.len() >= remainder {
-                        let chunks = buf[remainder..len].chunks_exact(batch_size);
-                        incomplete_buf.extend_from_slice(chunks.remainder());
-
-                        for batch in chunks {
-                            let should_break = f(batch);
-
-                            if should_break {
-                                break 'dataloading;
-                            }
-                        }
+                    if f(&buf[..len]) {
+                        break 'dataloading;
                     }
                 }
             }
