@@ -12,11 +12,11 @@ use bullet_compiler::{
     tensor::{
         DType, DValue, IRBuilder, Size, TNode, TType, TValue,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, Power,
-            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, PassThrough,
+            Power, ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
             autograd::{
                 Autograd, AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, ReLU, SCReLU,
-                Sigmoid,
+                Sigmoid, SoftmaxCrossEntropyLoss,
             },
         },
         transform::{
@@ -461,6 +461,30 @@ impl<'a> ModelNode<'a> {
         let op = FauxQuantise(self.ty(), value.into(), round);
         let node = self.builder.add_op([self], op)[0];
         Self { node, ..self }
+    }
+
+    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
+        assert_eq!(self.is_batched(), targets.is_batched());
+
+        let op = SoftmaxCrossEntropyLoss {
+            batch_size: if self.is_batched() { Size::variable() } else { 1.into() },
+            axis_size: self.shape().size(),
+        };
+        let node = self.builder.add_op([self, targets], op)[0];
+        Self { node, ..self }
+    }
+
+    pub fn clip_pass_through_grad(self, min: f32, max: f32) -> Self {
+        let op = PassThrough(
+            self.ty(),
+            Box::new(move |x| {
+                let size = x.ty().size();
+                let min = x.builder().scalar(min, size);
+                let max = x.builder().scalar(max, size);
+                x.max(min)?.min(max)
+            }),
+        );
+        Self { node: self.builder.add_op([self], op)[0], ..self }
     }
 
     pub fn pad(self, before: usize, after: usize, value: f32) -> Self {

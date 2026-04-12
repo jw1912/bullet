@@ -22,6 +22,7 @@ pub use linear::{
 pub use pointwise::{
     binary::{CABinary, CABinaryOp, Power},
     copy::CopyOp,
+    passthrough::PassThrough,
     unary::{Unary, UnaryOp},
 };
 pub use subgraph::SubGraph;
