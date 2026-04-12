@@ -12,7 +12,7 @@ use bullet_compiler::{
     tensor::{
         DType, DValue, IRBuilder, Size, TNode, TType, TValue,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, Power,
             ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
             autograd::{
                 Autograd, AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, ReLU, SCReLU,
@@ -330,7 +330,7 @@ impl<'a> ModelNode<'a> {
         Self { node, ..self }
     }
 
-    pub fn binary(mut self, mut rhs: Self, binary: CABinary) -> Self {
+    fn broadcast_to_same(mut self, mut rhs: Self) -> (Self, Self) {
         if self.nt.shape.size() != rhs.nt.shape.size() {
             if self.nt.shape == Shape::new(1, 1) && !self.nt.batched {
                 self = self.broadcast_scalar(rhs.nt.shape);
@@ -346,6 +346,12 @@ impl<'a> ModelNode<'a> {
             (true, false) => rhs = rhs.broadcast_across_batch(),
             _ => {}
         }
+
+        (self, rhs)
+    }
+
+    pub fn binary(mut self, mut rhs: Self, binary: CABinary) -> Self {
+        (self, rhs) = self.broadcast_to_same(rhs);
 
         let op = CABinaryOp::new(self.ty(), binary);
         let node = self.builder.add_op([self, rhs], op)[0];
@@ -439,8 +445,11 @@ impl<'a> ModelNode<'a> {
         self.unary(Unary::Abs)
     }
 
-    pub fn abs_pow(self, power: f32) -> Self {
-        (power * self.abs().unary(Unary::Log)).exp()
+    pub fn abs_pow(mut self, power: f32) -> Self {
+        let mut power = self.builder.scalar(power);
+        (self, power) = self.broadcast_to_same(power);
+        let node = self.builder.add_op([self, power], Power(self.ty().size()))[0];
+        Self { node, ..self }
     }
 
     pub fn squared_error(self, other: Self) -> Self {

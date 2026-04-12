@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::tensor::{
     DType, DValue, IRTrace, NodeId, OpType, Shape, Size, TType, TValue, TensorIR,
     operation::{
-        BroadcastAcrossDimension, CABinary, CopyOp, PadAcrossDimension, ReduceAcrossDimension, Reduction,
+        BroadcastAcrossDimension, CABinary, CopyOp, PadAcrossDimension, Power, ReduceAcrossDimension, Reduction,
         SliceAcrossDimension, Unary,
     },
 };
@@ -104,7 +104,7 @@ impl<'a> TNode<'a> {
     }
 
     pub fn pow(self, other: Self) -> Result<Self, IRTrace> {
-        (other * self.log()?)?.exp()
+        self.builder().add_op([self, other], Power(self.ty().size())).map(|x| x[0])
     }
 
     pub fn sqrt(self) -> Result<Self, IRTrace> {

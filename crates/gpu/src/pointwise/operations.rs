@@ -38,6 +38,9 @@ pub enum PointwiseOp {
         p2size: u8,
         op: CABinary,
     },
+    Power {
+        p2size: u8,
+    },
     Constant {
         value: DValue,
         p2size: u8,
@@ -95,6 +98,7 @@ impl Operation<PType> for PointwiseOp {
             }
             Self::Unary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
             Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }; 2],
+            Self::Power { p2size } => vec![PType::Variable { ty: DType::F32, p2size }; 2],
             Self::ThreadId => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Constant { .. } | Self::Buffer { .. } | Self::VarSize => Vec::new(),
             Self::Div | Self::Rem => vec![PType::Variable { ty: DType::I32, p2size: 0 }; 2],
@@ -128,6 +132,7 @@ impl Operation<PType> for PointwiseOp {
                 vec![PType::Variable { ty, p2size }]
             }
             Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
+            Self::Power { p2size } => vec![PType::Variable { ty: DType::F32, p2size }],
             Self::Constant { value, p2size } => vec![PType::Variable { ty: value.dtype(), p2size }],
             Self::ThreadId | Self::VarSize => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Div | Self::Rem | Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],

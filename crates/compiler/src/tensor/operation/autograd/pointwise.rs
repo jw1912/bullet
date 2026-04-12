@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::tensor::{
     DValue, IRTrace, TNode, TType,
     operation::{
-        CABinary, CABinaryOp, Unary, UnaryOp,
+        CABinary, CABinaryOp, Power, Unary, UnaryOp,
         autograd::{Autograd, AutogradOp},
     },
 };
@@ -75,6 +75,19 @@ impl AutogradOnCoreOp for UnaryOp {
             grad * g
         }
         .map(|x| vec![Some(x)])
+    }
+}
+
+impl AutogradOnCoreOp for Power {
+    fn backward<'a>(
+        &self,
+        inputs: Vec<TNode<'a>>,
+        output_grads: Vec<TNode<'a>>,
+    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
+        let grad = output_grads[0];
+        let base_grad = (inputs[1] * inputs[0].pow((inputs[1] - 1.0)?)?)?;
+        let powf_grad = (inputs[0].log()? * inputs[0].pow(inputs[1])?)?;
+        Ok(vec![Some((grad * base_grad)?), Some((grad * powf_grad)?)])
     }
 }
 

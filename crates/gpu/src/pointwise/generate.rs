@@ -3,8 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, ReduceAcrossDimension, ScalarConstant,
-        Select, SelectPad, SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary, UnaryOp,
+        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, Power, ReduceAcrossDimension,
+        ScalarConstant, Select, SelectPad, SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary,
+        UnaryOp,
     },
 };
 
@@ -39,6 +40,8 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             (broadcast.output_size(), factor)
         } else if let Some(binary) = data.downcast::<CABinaryOp>() {
             let size = binary.ty().size();
+            (size, size.factor())
+        } else if let Some(&Power(size)) = data.downcast::<Power>() {
             (size, size.factor())
         } else if let Some(unary) = data.downcast::<UnaryOp>() {
             let size = unary.output_type().size();
@@ -172,6 +175,13 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let Some(rhs) = get_val(op.inputs()[1], &mut pntwise, &mapping)? else { return Ok(None) };
 
             let output = pntwise.binary(lhs, rhs, binary.op())?;
+            mapping.insert(out, output);
+        } else if data.downcast::<Power>().is_some() {
+            let out = op.outputs()[0];
+            let Some(lhs) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
+            let Some(rhs) = get_val(op.inputs()[1], &mut pntwise, &mapping)? else { return Ok(None) };
+
+            let output = pntwise.powf(lhs, rhs)?;
             mapping.insert(out, output);
         } else if let Some(unary) = data.downcast::<UnaryOp>() {
             let out = op.outputs()[0];

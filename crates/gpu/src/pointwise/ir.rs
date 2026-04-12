@@ -210,6 +210,22 @@ impl PointwiseIR {
         self.ir.add_op([lhs, rhs], PointwiseOp::Binary { ty, p2size, op }).map(|x| x[0])
     }
 
+    pub fn powf(&mut self, lhs: NodeId, rhs: NodeId) -> Result<NodeId, IRError> {
+        let PType::Variable { ty: DType::F32, p2size } = self.ir.node(lhs)?.ty() else {
+            return Err("Only variables allowed in unary ops!".into());
+        };
+
+        let PType::Variable { ty: DType::F32, p2size: p2size2 } = self.ir.node(rhs)?.ty() else {
+            return Err("Only variables allowed in unary ops!".into());
+        };
+
+        if p2size != p2size2 {
+            return Err("Mismatched types!".into());
+        }
+
+        self.ir.add_op([lhs, rhs], PointwiseOp::Power { p2size }).map(|x| x[0])
+    }
+
     pub fn div(&mut self, lhs: NodeId, rhs: NodeId) -> Result<NodeId, IRError> {
         let PType::Variable { ty: DType::I32, p2size: 0 } = self.ir.node(lhs)?.ty() else {
             return Err("Only scalar integer variables allowed in div!".into());
@@ -376,6 +392,7 @@ impl PointwiseIR {
                 }
                 P::Unary { .. }
                 | P::Binary { .. }
+                | P::Power { .. }
                 | P::ThreadId
                 | P::Constant { .. }
                 | P::Buffer { .. }

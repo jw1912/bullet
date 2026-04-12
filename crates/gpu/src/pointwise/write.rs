@@ -141,6 +141,23 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 }
             }
         }
+        PointwiseOp::Power { p2size } => {
+            let chars = ['x', 'y', 'z', 'w'];
+            let formula = |x, y| format!("powf({x}, {y});");
+            match p2size {
+                0 => Some(format!("const float OUT1 = {}", formula("IN1".into(), "IN2".into()))),
+                3.. => None,
+                x => {
+                    let sz = 2u32.pow(p2size as u32);
+                    let mut s = format!("float{sz} OUT1;");
+                    for c in chars.iter().take(2usize.pow(x as u32)) {
+                        let ln = formula(format!("IN1.{c}"), format!("IN2.{c}"));
+                        s += &format!("OUT1.{c} = {ln}")
+                    }
+                    Some(s)
+                }
+            }
+        }
         PointwiseOp::Unary { ty, p2size, op } => {
             let ty = tystr(ty);
 

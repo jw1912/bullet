@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::tensor::{DValue, OpType, TType, TValue, operation::TensorOp};
+use crate::tensor::{DType, DValue, OpType, Size, TType, TValue, operation::TensorOp};
 
 /// Commutative & associative binary operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +93,48 @@ impl OpType for CABinaryOp {
 
     fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
         vec![[0, 1].into()]
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Power(pub Size);
+
+impl OpType for Power {
+    fn opname(&self) -> String {
+        "binary.pow".to_string()
+    }
+
+    fn inputs(&self) -> Vec<TType> {
+        vec![TType::new(self.0, DType::F32), TType::new(self.0, DType::F32)]
+    }
+
+    fn outputs(&self) -> Vec<TType> {
+        vec![TType::new(self.0, DType::F32)]
+    }
+
+    fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
+        assert_eq!(inputs.len(), 2);
+        assert_eq!(outputs.len(), 1);
+
+        let size = inputs[0].size();
+        assert_eq!(size, inputs[1].size());
+        assert_eq!(size, outputs[0].size());
+
+        for idx in 0..size {
+            let base = inputs[0].read(idx).f32().unwrap();
+            let powf = inputs[1].read(idx).f32().unwrap();
+            outputs[0].write(idx, DValue::F32(base.powf(powf)));
+        }
+
+        true
+    }
+
+    fn equals(&self, other: &TensorOp) -> bool {
+        if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
+        Vec::new()
     }
 }
 
