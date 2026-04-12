@@ -5,8 +5,7 @@ use crate::{
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, ScalarConstant, SparseMatmulBwd,
-            SparseMatmulBwdMulti, UnaryOp,
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd, SparseMatmulBwdMulti, UnaryOp
         },
         transform::modify::AddOperation,
     },
@@ -162,4 +161,13 @@ foldrule! {
     rulename FoldSparseMatmulBwdToMulti on ir
     rewrites (bwd = [SparseMatmulBwd] (a) (b))
     into [SparseMatmulBwdMulti::new(*bwd)] (a) (b)
+}
+
+foldrule! {
+    rulename FoldPowBy1 on ir
+    rewrites (_b = [Power] (a) (scalar = [ScalarConstant]))
+    into [CopyOp(a.ty())] (a)
+    given {
+        scalar.0 == 1.0.into()
+    }
 }
