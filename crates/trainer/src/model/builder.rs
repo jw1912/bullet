@@ -162,7 +162,7 @@ impl ModelBuilder {
         assert_eq!(loss.nt.shape, Shape::new(1, 1));
 
         if loss.nt.batched {
-            loss = loss.reduce_sum_across_batch();
+            loss = loss.reduce_sum_batch();
         }
 
         let mut fwd = self.ir.build([output.detach()]);
@@ -307,13 +307,34 @@ impl<'a> ModelNode<'a> {
         Self { node, nt: NodeType { batched: true, ..self.nt }, ..self }
     }
 
+    #[deprecated(note = "Use `reduce_sum_batch` instead!")]
     pub fn reduce_sum_across_batch(self) -> Self {
+        self.reduce_sum_batch()
+    }
+
+    pub fn reduce_sum_batch(self) -> Self {
         assert!(self.nt.batched);
         let dtype = self.ty().dtype();
         let shape = [Size::variable(), self.nt.shape.size().into()];
         let op = ReduceAcrossDimension::new(dtype, shape, 0, Reduction::Sum);
         let node = self.builder.add_op([self], op.unwrap())[0];
         Self { node, nt: NodeType { batched: false, ..self.nt }, ..self }
+    }
+
+    pub fn reduce_sum_rows(self) -> Self {
+        let dtype = self.ty().dtype();
+        let cols = self.nt.shape.cols;
+        let op = ReduceAcrossDimension::new(dtype, self.nt, 1 + usize::from(self.is_batched()), Reduction::Sum);
+        let node = self.builder.add_op([self], op.unwrap())[0];
+        Self { node, nt: NodeType { shape: Shape { rows: 1, cols }, ..self.nt }, ..self }
+    }
+
+    pub fn reduce_sum_cols(self) -> Self {
+        let dtype = self.ty().dtype();
+        let rows = self.nt.shape.rows;
+        let op = ReduceAcrossDimension::new(dtype, self.nt, usize::from(self.is_batched()), Reduction::Sum);
+        let node = self.builder.add_op([self], op.unwrap())[0];
+        Self { node, nt: NodeType { shape: Shape { rows, cols: 1 }, ..self.nt }, ..self }
     }
 
     fn broadcast_scalar(self, shape: Shape) -> Self {
