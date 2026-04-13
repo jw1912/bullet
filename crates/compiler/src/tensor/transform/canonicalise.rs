@@ -26,6 +26,7 @@ impl CanonicalisePass {
             .add_cleanup(EliminateCopies)
             .add_cleanup(EliminateUnusedOperations)
             .add_cleanup(EliminateCommonSubExpressions)
+            .add_cleanup(EliminateCopies)
             .add_fold(EvalScalarConstUnary)
             .add_fold(EvalScalarConstBinary)
             .add_fold(FoldFixedSizeScalarConst)
