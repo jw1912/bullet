@@ -252,7 +252,7 @@ impl<T: TypeSystem> IR<T> {
     pub fn replace_single_input(&mut self, op: OpId, new: NodeId, old: NodeId) -> Result<(), IRError> {
         let count = self.op_mut(op)?.swap_input_with(new, old);
         self.node_mut(new)?.children += count;
-        self.node_mut(old)?.children = 0;
+        self.node_mut(old)?.children -= count;
         Ok(())
     }
 
@@ -320,7 +320,7 @@ impl<T: TypeSystem> IR<T> {
 
 impl<T: TypeSystem> fmt::Display for IR<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let op_ids = self.topo_order_ops().unwrap();
+        let op_ids = self.topo_order_ops().unwrap_or_default();
 
         let get_label = |id, op| {
             let outputs = self.op(op).unwrap().outputs();
