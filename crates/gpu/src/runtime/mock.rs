@@ -11,7 +11,8 @@ pub struct MockGpu;
 
 type MockResult = Result<(), String>;
 
-static MSG: &str = "This is a mock runtime! It can't actually do anything! You need to enable either the `cuda` or `rocm` features!";
+static MSG: &str =
+    "This is a mock runtime! It can't actually do anything! You need to enable either the `cuda` or `rocm` features!";
 
 #[allow(unused)]
 impl GpuBindings for MockGpu {
