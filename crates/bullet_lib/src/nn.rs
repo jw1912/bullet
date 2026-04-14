@@ -8,10 +8,10 @@ pub use bullet_trainer::model::{
 #[cfg(feature = "cuda")]
 pub type ExecutionContext = bullet_gpu::runtime::cuda::Cuda;
 
-#[cfg(feature = "hip")]
+#[cfg(feature = "rocm")]
 pub type ExecutionContext = bullet_gpu::runtime::rocm::ROCm;
 
-#[cfg(not(any(feature = "cuda", feature = "hip")))]
+#[cfg(not(any(feature = "cuda", feature = "rocm")))]
 pub type ExecutionContext = bullet_gpu::runtime::mock::MockGpu;
 
 pub type Model = TrainerModel<ExecutionContext>;

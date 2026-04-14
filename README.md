@@ -9,8 +9,7 @@ due to its best-in-class performance, chess-specific tooling and ease of use.
 
 ### Usage for NNUE/Value Network Training
 
-Before attempting to use, check out the [docs](docs/0-contents.md).
-They contain all the main information about building bullet, managing training data and the network output format.
+Before attempting to use, check out the [docs](docs/0-contents.md) which contain the main information about building bullet, managing training data and the network output format.
 
 Most people simply clone the repo and edit one of the [examples](/examples) to their taste.
 If you want to create your own example file to ease pulling from upstream, you need to add the example to [`bullet_lib`'s `Cargo.toml`](crates/bullet_lib/Cargo.toml).
