@@ -41,7 +41,7 @@ impl ChessBucketsMirroredFactorised {
 }
 
 pub trait SparseInputType: Clone + Send + Sync + 'static {
-    type RequiredDataType: Send + Sync;
+    type RequiredDataType: Copy + Send + Sync;
 
     /// The total number of inputs
     fn num_inputs(&self) -> usize;

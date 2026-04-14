@@ -48,7 +48,7 @@ where
         None
     }
 
-    fn map_batches<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, batch_size: usize, mut f: F) {
+    fn map_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
         let mut shuffle_buffer = Vec::new();
         shuffle_buffer.reserve_exact(self.buffer_size);
 
@@ -131,17 +131,11 @@ where
         });
 
         'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
-            for batch in shuffle_buffer.chunks(batch_size) {
-                let should_break = f(batch);
-
-                if should_break {
-                    buffer_msg_sender.send(true).unwrap();
-                    break 'dataloading;
-                }
+            if f(&shuffle_buffer) {
+                buffer_msg_sender.send(true).unwrap();
+                break 'dataloading;
             }
         }
-
-        drop(buffer_receiver);
     }
 }
 

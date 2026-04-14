@@ -56,7 +56,7 @@ fn main() {
             let skip_neuron = out.slice_rows(15, 16);
 
             out = out.slice_rows(0, 15);
-            out = out.concat(out.abs_pow(2.0)).crelu();
+            out = out.concat(out * out).crelu();
 
             out = l2.forward(out).select(buckets).screlu();
             out = l3.forward(out).select(buckets);
@@ -80,6 +80,8 @@ fn main() {
     let data_loader = DirectSequentialDataLoader::new(&["examples/tests/batch.bf"]);
 
     trainer.run(&schedule, &settings, &data_loader);
+
+    println!("Expected loss: 0.005297");
 
     let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
     println!("Eval: {eval:.3}cp");

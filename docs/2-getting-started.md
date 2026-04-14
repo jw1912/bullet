@@ -8,14 +8,14 @@ Install Rust via [rustup](https://www.rust-lang.org/tools/install) (this is the 
 
 You can use `bullet` as a crate:
 ```toml
-bullet = { git = "https://github.com/jw1912/bullet" }
+bullet = { git = "https://github.com/jw1912/bullet", package = "bullet_lib" }
 ```
-or by editing and running one of the [examples](https://github.com/jw1912/bullet/tree/main/examples):
+or by editing and running one of the [examples](../examples):
 ```
 cargo r -r --example <example name>
 ```
 
-A basic inference example is included in [examples/simple](https://github.com/jw1912/bullet/tree/main/examples/simple.rs), and if you've never
+A basic inference example is included in [examples/simple](../examples/simple.rs), and if you've never
 trained an NNUE before it is recommended to start with an architecture and training schedule similar to it.
 
 ### Utilities
@@ -32,32 +32,21 @@ This does **not** require CUDA or HIP.
 
 ### Backends
 
-#### General
-Building `bullet` requires a C++ compiler (which will be invoked by `nvcc` or `hipcc`).
-- On Windows, this should be `cl.exe` (requires Visual Studio to be installed)
-- On Linux, it is recommended to use `clang`
-    - You may need to specify the environment variable `CXX` or `HOST_CXX` with the compiler name
-
 #### CUDA
-The default backend when compiling `bullet_lib`.
-- You **should not** enable or disable any features to use this backend
-- Install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
-- Recommended CUDA version >=12.2 (lower versions can work)
-- The `CUDA_PATH` environment variable must be set to the CUDA install location (should contain the `bin`, `lib` and `include` directories)
-- The system `PATH` should contain `%CUDA_PATH%\bin` (or equivalent for Linux)
 
-#### HIP
+For users with NVIDIA GPUs.
+
+- Enable the `cuda` feature
+- Install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
+    - Recommended to use as recent a version as possible
+    - If the toolkit version is too old you should receive a relatively clear error, either at compile time via a linker error or at runtime
+- The `CUDA_PATH` environment variable must be set to the CUDA install location (should contain the `bin`, `lib` and `include` directories)
+
+#### ROCm
+
 For users with AMD GPUs.
-- Enable the `hip` feature and disable default features (e.g. `cargo r -r --example <example name> --features hip --no-default-features`)
+
+- Enable the `rocm` feature
 - Install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html)
 - The `HIP_PATH` environment variable must be set to the HIP install location (should contain the `bin`, `lib` and `include` directories)
-- The system `PATH` should contain `%HIP_PATH%\bin` (or equivalent for Linux)
-- On Linux, you will need to specify the `GCN_ARCH_NAME` environment variable, which you should be able to find using `rocminfo`.
-
-#### CPU
-- For users with no GPU AMD/NVIDIA only - **do not use CPU backend if you have a GPU** it will be so much slower
-- Enable the `cpu` feature and disable default features (e.g. `cargo r -r --example <example name> --features cpu --no-default-features`)
-- Add to `ValueTrainerBuilder` the number of threads to use with `.use_threads(<num threads>)`
-- Be conscious of how many threads you are using in total
-    - Most likely only need 1/2 threads in `LocalSettings`
-    - Binpack dataloaders may require more threads
+- You will probably need to specify the `GCN_ARCH_NAME` environment variable - which you should be able to find using `rocminfo` on Linux, or `hipinfo` on Windows

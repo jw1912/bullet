@@ -6,7 +6,7 @@ use wdl::WdlScheduler;
 pub mod lr;
 pub mod wdl;
 
-pub use acyclib::trainer::{logger::ansi, schedule::TrainingSteps};
+pub use bullet_trainer::run::{logger::ansi, schedule::TrainingSteps};
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {
@@ -24,7 +24,7 @@ impl<LR: LrScheduler, WDL: WdlScheduler> TrainingSchedule<LR, WDL> {
     }
 
     pub fn should_save(&self, superbatch: usize) -> bool {
-        superbatch % self.save_rate == 0 || superbatch == self.steps.end_superbatch
+        superbatch.is_multiple_of(self.save_rate) || superbatch == self.steps.end_superbatch
     }
 
     pub fn lr(&self, batch: usize, superbatch: usize) -> f32 {

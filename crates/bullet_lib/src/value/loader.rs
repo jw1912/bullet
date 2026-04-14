@@ -11,7 +11,6 @@ pub use sfbinpack::SfBinpackLoader;
 pub use text::InMemoryTextLoader;
 pub use viribinpack::ViriBinpackLoader;
 
-use acyclib::device::tensor::Shape;
 use bulletformat::BulletFormat;
 
 use crate::game::{inputs::SparseInputType, outputs::OutputBuckets};
@@ -57,7 +56,7 @@ pub trait DataLoader<T>: Clone + Send + Sync + 'static {
         None
     }
 
-    fn map_batches<F: FnMut(&[T]) -> bool>(&self, start_batch: usize, batch_size: usize, f: F);
+    fn map_chunks<F: FnMut(&[T]) -> bool>(&self, start_position: usize, f: F);
 }
 
 pub(crate) type B<I> = fn(&<I as SparseInputType>::RequiredDataType, f32) -> f32;
@@ -101,9 +100,46 @@ where
         &self,
         start_batch: usize,
         batch_size: usize,
-        f: F,
+        mut f: F,
     ) {
-        self.loader.map_batches(start_batch, batch_size, f);
+        let mut incomplete_buf = Vec::new();
+
+        self.loader.map_chunks(start_batch * batch_size, |chunk| {
+            let remainder = if !incomplete_buf.is_empty() {
+                let remainder = batch_size - incomplete_buf.len();
+
+                if chunk.len() >= remainder {
+                    incomplete_buf.extend_from_slice(&chunk[..remainder]);
+                    let should_break = f(&incomplete_buf);
+                    incomplete_buf.clear();
+
+                    if should_break {
+                        return true;
+                    }
+                } else {
+                    incomplete_buf.extend_from_slice(chunk);
+                }
+
+                remainder
+            } else {
+                0
+            };
+
+            if chunk.len() >= remainder {
+                let chunks = chunk[remainder..chunk.len()].chunks_exact(batch_size);
+                incomplete_buf.extend_from_slice(chunks.remainder());
+
+                for batch in chunks {
+                    let should_break = f(batch);
+
+                    if should_break {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        });
     }
 
     pub fn prepare(&self, data: &[I::RequiredDataType], threads: usize, blend: f32) -> PreparedData<I, O> {
@@ -122,28 +158,16 @@ where
     }
 }
 
-pub(crate) struct DenseInput {
-    pub value: Vec<f32>,
-    pub shape: Shape,
-}
-
-#[derive(Clone)]
-pub(crate) struct SparseInput {
-    pub value: Vec<i32>,
-    pub max_active: usize,
-    pub shape: Shape,
-}
-
 /// A batch of data, in the correct format for the GPU.
 pub struct PreparedData<I: SparseInputType, O> {
     pub(crate) input_getter: I,
     pub(crate) output_getter: O,
     pub(crate) batch_size: usize,
-    pub(crate) stm: SparseInput,
-    pub(crate) nstm: SparseInput,
-    pub(crate) buckets: SparseInput,
-    pub(crate) targets: DenseInput,
-    pub(crate) weights: DenseInput,
+    pub(crate) stm: Vec<i32>,
+    pub(crate) nstm: Vec<i32>,
+    pub(crate) buckets: Vec<i32>,
+    pub(crate) targets: Vec<f32>,
+    pub(crate) weights: Vec<f32>,
 }
 
 impl<I, O> PreparedData<I, O>
@@ -177,22 +201,22 @@ where
             input_getter,
             output_getter,
             batch_size,
-            stm: SparseInput { max_active, value: vec![0; sparse_size], shape: Shape::new(input_size, 1) },
-            nstm: SparseInput { max_active, value: vec![0; sparse_size], shape: Shape::new(input_size, 1) },
-            buckets: SparseInput { max_active: 1, value: vec![0; batch_size], shape: Shape::new(O::BUCKETS, 1) },
-            targets: DenseInput { value: vec![0.0; output_size * batch_size], shape: Shape::new(output_size, 1) },
-            weights: DenseInput { value: vec![0.0; batch_size], shape: Shape::new(1, 1) },
+            stm: vec![0; sparse_size],
+            nstm: vec![0; sparse_size],
+            buckets: vec![0; batch_size],
+            targets: vec![0.0; output_size * batch_size],
+            weights: vec![0.0; batch_size],
         };
 
         let sparse_chunk_size = max_active * chunk_size;
 
         std::thread::scope(|s| {
             data.chunks(chunk_size)
-                .zip(prep.stm.value.chunks_mut(sparse_chunk_size))
-                .zip(prep.nstm.value.chunks_mut(sparse_chunk_size))
-                .zip(prep.buckets.value.chunks_mut(chunk_size))
-                .zip(prep.targets.value.chunks_mut(output_size * chunk_size))
-                .zip(prep.weights.value.chunks_mut(chunk_size))
+                .zip(prep.stm.chunks_mut(sparse_chunk_size))
+                .zip(prep.nstm.chunks_mut(sparse_chunk_size))
+                .zip(prep.buckets.chunks_mut(chunk_size))
+                .zip(prep.targets.chunks_mut(output_size * chunk_size))
+                .zip(prep.weights.chunks_mut(chunk_size))
                 .for_each(
                     |(((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk), weights_chunk)| {
                         let inp = &prep.input_getter;
