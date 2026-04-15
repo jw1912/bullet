@@ -119,6 +119,8 @@ pub trait GpuBindings: 'static {
 
     unsafe fn kernel_load(func: Self::Kernel) -> Result<(), Self::Err>;
 
+    unsafe fn kernel_destroy(kernel: Self::Kernel) -> Result<(), Self::Err>;
+
     unsafe fn kernel_launch(
         func: Self::Kernel,
         stream: Self::Stream,

@@ -40,6 +40,12 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=cublas");
     }
 
+    if cfg!(feature = "metal") {
+        // Metal framework linking is handled by the `metal` crate dependency.
+        // MetalPerformanceShaders is linked here for BLAS (GEMM) operations.
+        println!("cargo:rustc-link-lib=framework=MetalPerformanceShaders");
+    }
+
     if cfg!(feature = "rocm") {
         let hip_path = get_var_path("HIP_PATH");
 

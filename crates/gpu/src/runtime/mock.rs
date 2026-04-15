@@ -155,6 +155,10 @@ impl GpuBindings for MockGpu {
         Ok(())
     }
 
+    unsafe fn kernel_destroy(_kernel: ()) -> MockResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: (),
         stream: (),

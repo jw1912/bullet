@@ -61,6 +61,16 @@ impl KernelSrc {
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
         let kernel = Module::new(device, &self.source)?.get_kernel(&self.name)?;
 
+        // Register kernel argument types for Metal backend
+        #[cfg(feature = "metal")]
+        {
+            use crate::runtime::metal::{KernelArgType, register_kernel_args};
+            let arg_types = self.arg_order.iter().map(|_| KernelArgType::Buffer).collect();
+            // Safety: When metal feature is enabled, G::Kernel is u64
+            let kernel_id: u64 = unsafe { std::mem::transmute_copy(&kernel.id()) };
+            register_kernel_args(kernel_id, arg_types);
+        }
+
         Ok(CompiledKernel {
             inputs: self.inputs.clone(),
             outputs: self.outputs.clone(),

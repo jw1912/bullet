@@ -32,6 +32,7 @@ impl Default for AdamWParams {
     }
 }
 
+#[cfg(not(feature = "metal"))]
 const OP: &str = "\
 __device__ __forceinline__ void adamOp(
     const float grad,
@@ -51,6 +52,7 @@ __device__ __forceinline__ void adamOp(
     p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
 }";
 
+#[cfg(not(feature = "metal"))]
 const DECL: &str = "
 extern \"C\" __global__ void adamw(
     const float* adj_ptr,
@@ -59,6 +61,41 @@ extern \"C\" __global__ void adamw(
     float* network,
     float* momentum,
     float* velocity
+)";
+
+#[cfg(feature = "metal")]
+const OP: &str = "\
+#include <metal_stdlib>
+using namespace metal;
+
+inline void adamOp(
+    const float grad,
+    const float rate,
+    thread float* p,
+    thread float* m,
+    thread float* v
+) {
+    p[0] *= 1.0f - float(DECAY) * rate;
+
+    m[0] = float(BETA1) * m[0] + (1.0f - float(BETA1)) * grad;
+    v[0] = float(BETA2) * v[0] + (1.0f - float(BETA2)) * grad * grad;
+
+    float val = m[0] / (sqrt(v[0]) + float(EPSILON));
+    p[0] -= rate * val;
+
+    p[0] = min(max(p[0], float(WMIN)), float(WMAX));
+}";
+
+#[cfg(feature = "metal")]
+const DECL: &str = "
+kernel void adamw(
+    const device float* adj_ptr [[buffer(0)]],
+    const device float* rate_ptr [[buffer(1)]],
+    const device float* gradients [[buffer(2)]],
+    device float* network [[buffer(3)]],
+    device float* momentum [[buffer(4)]],
+    device float* velocity [[buffer(5)]],
+    uint metal_tid [[thread_position_in_grid]]
 )";
 
 impl AdamWParams {
@@ -71,7 +108,59 @@ impl AdamWParams {
             .replace("WMAX", &format!("{:.E}", self.max_weight))
             .replace("EPSILON", "0.00000001F");
 
-        let body = if size.is_multiple_of(4) {
+        let body = if cfg!(feature = "metal") {
+            if size.is_multiple_of(4) {
+                format!(
+                    "
+                    const uint tid = metal_tid;
+
+                    if (tid < {})
+                    {{
+                        const float adj = adj_ptr[0];
+                        const float rate = rate_ptr[0];
+                        float4 p_vec = ((device float4 *)network)[tid];
+                        float4 m_vec = ((device float4 *)momentum)[tid];
+                        float4 v_vec = ((device float4 *)velocity)[tid];
+                        const float4 g = ((const device float4 *)gradients)[tid];
+
+                        float px = p_vec.x, py = p_vec.y, pz = p_vec.z, pw = p_vec.w;
+                        float mx = m_vec.x, my = m_vec.y, mz = m_vec.z, mw = m_vec.w;
+                        float vx = v_vec.x, vy = v_vec.y, vz = v_vec.z, vw = v_vec.w;
+
+                        adamOp(adj * g.x, rate, &px, &mx, &vx);
+                        adamOp(adj * g.y, rate, &py, &my, &vy);
+                        adamOp(adj * g.z, rate, &pz, &mz, &vz);
+                        adamOp(adj * g.w, rate, &pw, &mw, &vw);
+
+                        ((device float4 *)network)[tid] = float4(px, py, pz, pw);
+                        ((device float4 *)momentum)[tid] = float4(mx, my, mz, mw);
+                        ((device float4 *)velocity)[tid] = float4(vx, vy, vz, vw);
+                    }}",
+                    size / 4,
+                )
+            } else {
+                format!(
+                    "
+                    const uint tid = metal_tid;
+
+                    if (tid < {size})
+                    {{
+                        const float adj = adj_ptr[0];
+                        const float rate = rate_ptr[0];
+                        float p = network[tid];
+                        float m = momentum[tid];
+                        float v = velocity[tid];
+                        const float g = gradients[tid];
+
+                        adamOp(adj * g, rate, &p, &m, &v);
+
+                        network[tid] = p;
+                        momentum[tid] = m;
+                        velocity[tid] = v;
+                    }}"
+                )
+            }
+        } else if size.is_multiple_of(4) {
             format!(
                 "
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;

@@ -167,6 +167,10 @@ impl GpuBindings for Cuda {
         error::driver(cuFuncLoad(kernel))
     }
 
+    unsafe fn kernel_destroy(_kernel: CUfunction) -> CudaResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: CUfunction,
         stream: CUstream,

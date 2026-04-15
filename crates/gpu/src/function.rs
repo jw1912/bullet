@@ -131,6 +131,16 @@ impl<G: Gpu> Function<G> {
                     .get_kernel(name)
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
+                // Register kernel argument types for Metal backend
+                #[cfg(feature = "metal")]
+                {
+                    use crate::runtime::metal::{KernelArgType, register_kernel_args};
+                    let arg_types: Vec<_> = args.iter().map(|_| KernelArgType::Buffer).collect();
+                    // Safety: When metal feature is enabled, G::Kernel is u64
+                    let kernel_id: u64 = unsafe { std::mem::transmute_copy(&func.id()) };
+                    register_kernel_args(kernel_id, arg_types);
+                }
+
                 max_num_args = max_num_args.max(args.len());
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });
             } else if let Some(cfg) = data.downcast::<Matmul>().cloned() {
@@ -359,11 +369,28 @@ rewriterule! {
     }
 }
 
+#[cfg(not(feature = "metal"))]
 static REDUCTION_SRC: &str = "
 extern \"C\" __global__ void kernel(const float* input, float* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
     if (tid < OUTER) {
+        float reduction = input[INNER * tid];
+
+        for (int i = 1; i < INNER; i++) {
+            reduction = FUNC(reduction, input[INNER * tid + i]);
+        }
+
+        output[tid] = reduction;
+    }
+}";
+
+#[cfg(feature = "metal")]
+static REDUCTION_SRC: &str = "
+#include <metal_stdlib>
+using namespace metal;
+kernel void reduce_kernel(constant int& size [[buffer(0)]], device const float* input [[buffer(1)]], device float* output [[buffer(2)]], uint tid [[thread_position_in_grid]]) {
+    if (tid < (OUTER)) {
         float reduction = input[INNER * tid];
 
         for (int i = 1; i < INNER; i++) {
@@ -403,7 +430,7 @@ impl IRTransform for CodegenReduction {
                     KernelSrc::new(
                         reduction.inputs(),
                         reduction.outputs(),
-                        "kernel".to_string(),
+                        if cfg!(feature = "metal") { "reduce_kernel" } else { "kernel" }.to_string(),
                         src,
                         vec![(0, true), (0, false)],
                         Default::default(),

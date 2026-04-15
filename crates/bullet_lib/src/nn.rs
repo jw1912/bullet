@@ -6,7 +6,10 @@ pub type ExecutionContext = bullet_gpu::runtime::cuda::Cuda;
 #[cfg(all(feature = "rocm", not(feature = "cuda")))]
 pub type ExecutionContext = bullet_gpu::runtime::rocm::ROCm;
 
-#[cfg(not(any(feature = "cuda", feature = "rocm")))]
+#[cfg(feature = "metal")]
+pub type ExecutionContext = bullet_gpu::runtime::metal::Metal;
+
+#[cfg(not(any(feature = "cuda", feature = "rocm", feature = "metal")))]
 pub type ExecutionContext = bullet_gpu::runtime::mock::MockGpu;
 
 pub mod optimiser {

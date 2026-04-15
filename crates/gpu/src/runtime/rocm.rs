@@ -139,6 +139,10 @@ impl GpuBindings for ROCm {
         Ok(())
     }
 
+    unsafe fn kernel_destroy(_kernel: hipFunction) -> ROCmResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: hipFunction,
         stream: hipStream,

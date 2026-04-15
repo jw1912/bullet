@@ -31,6 +31,7 @@ impl Default for RAdamParams {
     }
 }
 
+#[cfg(not(feature = "metal"))]
 const OP: &str = "\
 __device__ __forceinline__ void radamOp(
     const float grad,
@@ -52,6 +53,7 @@ __device__ __forceinline__ void radamOp(
     p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
 }";
 
+#[cfg(not(feature = "metal"))]
 const DECL: &str = "
 extern \"C\" __global__ void radam(
     const float* adj_ptr,
@@ -62,6 +64,45 @@ extern \"C\" __global__ void radam(
     float* network,
     float* momentum,
     float* velocity
+)";
+
+#[cfg(feature = "metal")]
+const OP: &str = "\
+#include <metal_stdlib>
+using namespace metal;
+
+inline void radamOp(
+    const float grad,
+    const float rate,
+    const int denom,
+    thread float* p,
+    thread float* m,
+    thread float* v
+) {
+    p[0] *= 1.0f - float(DECAY) * rate;
+
+    m[0] = float(BETA1) * m[0] + (1.0f - float(BETA1)) * grad;
+    v[0] = float(BETA2) * v[0] + (1.0f - float(BETA2)) * grad * grad;
+
+    float val = m[0];
+    if (denom) val /= sqrt(v[0]) + EPSILON;
+    p[0] -= rate * val;
+
+    p[0] = min(max(p[0], float(WMIN)), float(WMAX));
+}";
+
+#[cfg(feature = "metal")]
+const DECL: &str = "
+kernel void radam(
+    const device float* adj_ptr [[buffer(0)]],
+    const device float* rate_ptr [[buffer(1)]],
+    const device float* step_size_ptr [[buffer(2)]],
+    const device int* denom_ptr [[buffer(3)]],
+    const device float* gradients [[buffer(4)]],
+    device float* network [[buffer(5)]],
+    device float* momentum [[buffer(6)]],
+    device float* velocity [[buffer(7)]],
+    uint metal_tid [[thread_position_in_grid]]
 )";
 
 impl RAdamParams {
@@ -76,7 +117,61 @@ impl RAdamParams {
             .replace("WMAX", &format!("{max:.E}"))
             .replace("EPSILON", "0.00000001F");
 
-        let body = if size.is_multiple_of(4) {
+        let body = if cfg!(feature = "metal") {
+            if size.is_multiple_of(4) {
+                format!(
+                    "
+                    const uint tid = metal_tid;
+
+                    if (tid < {})
+                    {{
+                        const float adj = adj_ptr[0];
+                        const float rate = rate_ptr[0] * step_size_ptr[0];
+                        const int denom = denom_ptr[0];
+                        float4 p_vec = ((device float4 *)network)[tid];
+                        float4 m_vec = ((device float4 *)momentum)[tid];
+                        float4 v_vec = ((device float4 *)velocity)[tid];
+                        const float4 g = ((const device float4 *)gradients)[tid];
+
+                        float px = p_vec.x, py = p_vec.y, pz = p_vec.z, pw = p_vec.w;
+                        float mx = m_vec.x, my = m_vec.y, mz = m_vec.z, mw = m_vec.w;
+                        float vx = v_vec.x, vy = v_vec.y, vz = v_vec.z, vw = v_vec.w;
+
+                        radamOp(adj * g.x, rate, denom, &px, &mx, &vx);
+                        radamOp(adj * g.y, rate, denom, &py, &my, &vy);
+                        radamOp(adj * g.z, rate, denom, &pz, &mz, &vz);
+                        radamOp(adj * g.w, rate, denom, &pw, &mw, &vw);
+
+                        ((device float4 *)network)[tid] = float4(px, py, pz, pw);
+                        ((device float4 *)momentum)[tid] = float4(mx, my, mz, mw);
+                        ((device float4 *)velocity)[tid] = float4(vx, vy, vz, vw);
+                    }}",
+                    size / 4,
+                )
+            } else {
+                format!(
+                    "
+                    const uint tid = metal_tid;
+
+                    if (tid < {size})
+                    {{
+                        const float adj = adj_ptr[0];
+                        const float rate = rate_ptr[0] * step_size_ptr[0];
+                        const int denom = denom_ptr[0];
+                        float p = network[tid];
+                        float m = momentum[tid];
+                        float v = velocity[tid];
+                        const float g = gradients[tid];
+
+                        radamOp(adj * g, rate, denom, &p, &m, &v);
+
+                        network[tid] = p;
+                        momentum[tid] = m;
+                        velocity[tid] = v;
+                    }}"
+                )
+            }
+        } else if size.is_multiple_of(4) {
             format!(
                 "
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
