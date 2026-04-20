@@ -1,8 +1,13 @@
 use std::{fs::File, sync::mpsc, thread};
 
-use sfbinpack::{
-    CompressedTrainingDataEntryReader, TrainingDataEntry,
-    chess::{color::Color, piecetype::PieceType},
+use sfbinpack::CompressedTrainingDataEntryReader;
+pub use sfbinpack::{
+    TrainingDataEntry,
+    chess::{
+        color::Color,
+        r#move::{Move, MoveType},
+        piecetype::PieceType,
+    },
 };
 
 use crate::game::formats::bulletformat::ChessBoard;

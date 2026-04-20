@@ -9,11 +9,15 @@
 
 ## Builtin Data Loaders
 
+You can easily write a dataloader for your own format if you wish, but bullet already contains loaders for the most common formats.
+
 ### Binpacks
 
 Stockfish, Monty and Viridithas format "binpacks" can be loaded using `SfBinpackLoader`, `MontyBinpackLoader` and `ViriBinpackLoader` respectively.
-Binpacks stores entire games contiguously to achieve great compression and hence need a filter function to be passed 
+Binpacks stores entire games contiguously to achieve great compression and hence need a filter function to be passed to remove e.g. noisy positions.
 
+I would recommend using Viriformat binpacks as they are the most commonly used amongst people who generate their own data (and thus there are reference
+implementations in many programming languages, as well as many utilites available).
 
 ### ChessBoard aka "bulletformat"
 
