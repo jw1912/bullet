@@ -467,9 +467,10 @@ impl<'a> ModelNode<'a> {
     }
 
     pub fn abs_pow(mut self, power: f32) -> Self {
+        let abs = self.abs();
         let mut power = self.builder.scalar(power);
         (self, power) = self.broadcast_to_same(power);
-        let node = self.builder.add_op([self, power], Power(self.ty().size()))[0];
+        let node = self.builder.add_op([abs, power], Power(self.ty().size()))[0];
         Self { node, ..self }
     }
 
