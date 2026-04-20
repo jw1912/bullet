@@ -10,4 +10,5 @@ pub mod formats {
     pub use bulletformat;
     pub use montyformat;
     pub use sfbinpack;
+    pub use viriformat;
 }
