@@ -479,6 +479,10 @@ impl<'a> ModelNode<'a> {
         diff * diff
     }
 
+    pub fn power_error(self, targets: Self, power: f32) -> Self {
+        (self - targets).abs_pow(power)
+    }
+
     pub fn faux_quantise(self, value: f32, round: bool) -> Self {
         let op = FauxQuantise(self.ty(), value.into(), round);
         let node = self.builder.add_op([self], op)[0];
