@@ -467,15 +467,20 @@ impl<'a> ModelNode<'a> {
     }
 
     pub fn abs_pow(mut self, power: f32) -> Self {
+        let abs = self.abs();
         let mut power = self.builder.scalar(power);
         (self, power) = self.broadcast_to_same(power);
-        let node = self.builder.add_op([self, power], Power(self.ty().size()))[0];
+        let node = self.builder.add_op([abs, power], Power(self.ty().size()))[0];
         Self { node, ..self }
     }
 
     pub fn squared_error(self, other: Self) -> Self {
         let diff = self - other;
         diff * diff
+    }
+
+    pub fn power_error(self, targets: Self, power: f32) -> Self {
+        (self - targets).abs_pow(power)
     }
 
     pub fn faux_quantise(self, value: f32, round: bool) -> Self {
