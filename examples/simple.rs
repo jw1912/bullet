@@ -6,14 +6,8 @@ There's potentially a lot of elo available by adjusting the wdl
 and lr schedulers, depending on your dataset.
 */
 use bullet_lib::{
-    game::{
-        formats::sfbinpack::{
-            TrainingDataEntry,
-            chess::{r#move::MoveType, piecetype::PieceType},
-        },
-        inputs,
-    },
-    nn::optimiser,
+    game::inputs::Chess768,
+    nn::optimiser::AdamW,
     trainer::{
         save::SavedFormat,
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
@@ -33,9 +27,9 @@ fn main() {
         .dual_perspective()
         // standard optimiser used in NNUE
         // the default AdamW params include clipping to range [-1.98, 1.98]
-        .optimiser(optimiser::AdamW)
+        .optimiser(AdamW)
         // basic piece-square chessboard inputs
-        .inputs(inputs::Chess768)
+        .inputs(Chess768)
         // chosen such that inference may be efficiently implemented in-engine
         .save_format(&[
             SavedFormat::id("l0w").round().quantise::<i16>(QA),
@@ -77,8 +71,25 @@ fn main() {
 
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
+    // loading from a Viriformat binpack
+    let _data_loader_viri = {
+        use loader::viribinpack::{Filter, ViriBinpackLoader, ViriFilter};
+
+        let file_path = "data/run_2024-06-05_12-12-45_1500000g-4t-tb6-classical-n5000.binpack";
+        let buffer_size_mb = 1024;
+        let threads = 4;
+
+        // The `viriformat` crate exposes a useful `Filter` of its own, but you can also
+        // use a custom function like for SF binpacks with `ViriFilter::custom(function)`
+        let filter = ViriFilter::Builtin(Filter::default());
+
+        ViriBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
+    };
+
     // loading from a SF binpack
-    let _data_loader = {
+    let _data_loader_sf = {
+        use loader::sfbinpack::{MoveType, PieceType, SfBinpackLoader, TrainingDataEntry};
+
         let file_path = "data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack";
         let buffer_size_mb = 1024;
         let threads = 4;
@@ -90,7 +101,7 @@ fn main() {
                 && entry.pos.piece_at(entry.mv.to()).piece_type() == PieceType::None
         }
 
-        loader::SfBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
+        SfBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
     };
 
     // loading directly from a `BulletFormat` file
@@ -98,6 +109,8 @@ fn main() {
 
     trainer.run(&schedule, &settings, &data_loader);
 }
+
+// ============ EXAMPLE INFERENCE STARTS HERE ============
 
 /*
 This is how you would load the network in rust.
