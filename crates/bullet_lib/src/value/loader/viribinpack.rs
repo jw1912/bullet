@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::BufReader,
+    io::{BufReader, Cursor},
     sync::mpsc::{self, SyncSender},
 };
 
@@ -68,18 +68,33 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
 
         let file_paths = self.file_paths.clone();
         let buffer_size = self.buffer_size;
+        let threads = self.threads;
+        let filter = self.filter.clone();
 
-        let (sender, receiver) = mpsc::sync_channel::<Game>(256);
+        let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(256);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
+            let mut games = Vec::new();
+
             'dataloading: loop {
                 for file_path in &file_paths {
                     let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
 
-                    while let Ok(game) = Game::deserialise_from(&mut reader, Vec::new()) {
-                        if msg_receiver.try_recv().unwrap_or(false) || sender.send(game).is_err() {
-                            break 'dataloading;
+                    loop {
+                        let mut buf = Vec::new();
+                        if Game::deserialise_fast_into_buffer(&mut reader, &mut buf).is_err() {
+                            break;
+                        }
+
+                        games.push(buf);
+
+                        if games.len().is_multiple_of(8192 * threads) {
+                            if msg_receiver.try_recv().unwrap_or(false) || sender.send(games).is_err() {
+                                break 'dataloading;
+                            }
+
+                            games = Vec::new();
                         }
                     }
                 }
@@ -89,23 +104,14 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
         let (game_sender, game_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(4 * self.threads);
         let (game_msg_sender, game_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
-        let threads = self.threads;
-        let filter = self.filter.clone();
-
         std::thread::spawn(move || {
-            let mut reusable = Vec::new();
-            'dataloading: while let Ok(game) = receiver.recv() {
+            'dataloading: while let Ok(games) = receiver.recv() {
                 if game_msg_receiver.try_recv().unwrap_or(false) {
                     msg_sender.send(true).unwrap();
                     break 'dataloading;
                 }
 
-                reusable.push(game);
-
-                if reusable.len() % (8192 * threads) == 0 {
-                    convert_buffer(threads, &game_sender, &reusable, &filter);
-                    reusable.clear();
-                }
+                convert_buffer(threads, &game_sender, &games, &filter);
             }
         });
 
@@ -152,7 +158,7 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
     }
 }
 
-fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Game], filter: &ViriFilter) {
+fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Vec<u8>], filter: &ViriFilter) {
     let chunk_size = games.len().div_ceil(threads);
 
     std::thread::scope(|s| {
@@ -161,8 +167,11 @@ fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &
             s.spawn(move || {
                 let mut buffer = Vec::new();
 
-                for game in chunk {
-                    parse_into_buffer(game, &mut buffer, filter);
+                let mut reusable = Vec::new();
+                for game_bytes in chunk {
+                    let game = Game::deserialise_from(&mut Cursor::new(game_bytes), reusable).unwrap();
+                    parse_into_buffer(&game, &mut buffer, filter);
+                    reusable = game.moves;
                 }
 
                 this_sender.send(buffer)
