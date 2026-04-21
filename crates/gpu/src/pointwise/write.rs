@@ -228,7 +228,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                     let m = rows / 2;
                     Some(format!(
                         "\
-                        {ty}2 OUT1 = make_{ty}2(0, 0, 0, 0);
+                        {ty}2 OUT1 = make_{ty}2(0, 0);
                         int UNIQ1 = IN3 / {m};
                         int UNIQ2 = IN3 % {m};
 

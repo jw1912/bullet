@@ -27,7 +27,7 @@ fn build_ranger_op(size: usize, alpha: f32) -> Result<KernelSrc, IRError> {
     let old_w = pntwise.read(w, pntwise.tid(), 0)?;
     let old_s = pntwise.read(s, pntwise.tid(), 0)?;
 
-    let wweight = pntwise.add_const((1.0 - alpha).into(), 0);
+    let wweight = pntwise.add_const(alpha.into(), 0);
     let lhs = pntwise.binary(wweight, old_w, CABinary::Mul)?;
 
     let sweight = pntwise.add_const((1.0 - alpha).into(), 0);

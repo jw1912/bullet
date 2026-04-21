@@ -155,8 +155,8 @@ pub struct Stream<G: Gpu> {
 
 impl<G: Gpu> Drop for Stream<G> {
     fn drop(&mut self) {
-        self.sync().unwrap();
-        unsafe { G::stream_destroy(self.inner).unwrap() };
+        let _ = self.sync();
+        let _ = unsafe { G::stream_destroy(self.inner) };
     }
 }
 
@@ -272,7 +272,7 @@ pub struct Module<G: Gpu> {
 impl<G: Gpu> Drop for Module<G> {
     fn drop(&mut self) {
         let _ = self.device.set();
-        unsafe { G::module_destroy(self.module).unwrap() }
+        let _ = unsafe { G::module_destroy(self.module) };
     }
 }
 
