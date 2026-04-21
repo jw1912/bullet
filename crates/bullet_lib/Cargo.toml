@@ -15,7 +15,6 @@ bullet-gpu = { workspace = true }
 bullet-trainer = { workspace = true }
 bulletformat = "1.8.0"
 montyformat = "0.9.2"
-parking_lot = "0.12.4"
 sfbinpack = "0.6.0"
 viriformat = "2.0.1"
 

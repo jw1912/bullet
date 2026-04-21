@@ -11,7 +11,7 @@ impl AutogradOnCoreOp for ReduceAcrossDimension {
         _inputs: Vec<TNode<'a>>,
         output_grads: Vec<TNode<'a>>,
     ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
-        let op = self.invert().unwrap().expect("Reduction backprop only implemented for Sum!");
+        let op = self.invert()?.ok_or::<IRTrace>("Reduction backprop only implemented for Sum!".into())?;
         output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![Some(x[0])])
     }
 }

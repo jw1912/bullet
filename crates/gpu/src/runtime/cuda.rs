@@ -220,17 +220,22 @@ impl GpuBindings for Cuda {
             std::ptr::null(),
             std::ptr::null(),
         ))?;
-        error::nvrtc(nvrtcCompileProgram(prog, num_options, options))?;
 
-        let mut size = 0usize;
-        error::nvrtc(nvrtcGetPTXSize(prog, &mut size))?;
+        let code = (|| {
+            error::nvrtc(nvrtcCompileProgram(prog, num_options, options))?;
 
-        let mut ptx = vec![0; size];
-        error::nvrtc(nvrtcGetPTX(prog, ptx.as_mut_ptr()))?;
+            let mut size = 0usize;
+            error::nvrtc(nvrtcGetPTXSize(prog, &mut size))?;
+
+            let mut ptx = vec![0; size];
+            error::nvrtc(nvrtcGetPTX(prog, ptx.as_mut_ptr()))?;
+
+            Ok(ptx)
+        })();
 
         error::nvrtc(nvrtcDestroyProgram(&mut prog))?;
 
-        Ok(ptx)
+        code
     }
 
     unsafe fn blas_create() -> Result<cublasHandle, CudaError> {
