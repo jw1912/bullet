@@ -19,6 +19,12 @@ fn get_var_path(name: &str) -> PathBuf {
 }
 
 fn main() {
+    // WSL special case puts e.g. libcuda in this directory to interface
+    // with the actual windows driver
+    if PathBuf::from("/usr/lib/wsl/lib/").exists() {
+        println!("cargo:rustc-link-search=native=/usr/lib/wsl/lib/");
+    }
+
     if cfg!(feature = "cuda") {
         let cuda_path = get_var_path("CUDA_PATH");
 
