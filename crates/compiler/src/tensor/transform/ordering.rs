@@ -73,7 +73,7 @@ impl IRTransform for OrderCommutativeInputs {
                     nodes.push(NodeScore::new(ir, id)?);
                 }
 
-                if op.data().0.inputs().iter().collect::<HashSet<_>>().len() > 1 {
+                if group.iter().map(|&x| op.data().inputs()[x]).collect::<HashSet<_>>().len() > 1 {
                     return Err("Inputs within commutating group have differing types!".into());
                 }
 

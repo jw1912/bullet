@@ -194,15 +194,19 @@ impl GpuBindings for ROCm {
         ))?;
         error::nvrtc(hiprtcCompileProgram(prog, num_options, options))?;
 
-        let mut size = 0usize;
-        error::nvrtc(hiprtcGetCodeSize(prog, &mut size))?;
+        let code = (|| {
+            let mut size = 0usize;
+            error::nvrtc(hiprtcGetCodeSize(prog, &mut size))?;
 
-        let mut ptx = vec![0; size];
-        error::nvrtc(hiprtcGetCode(prog, ptx.as_mut_ptr()))?;
+            let mut ptx = vec![0; size];
+            error::nvrtc(hiprtcGetCode(prog, ptx.as_mut_ptr()))?;
+
+            Ok(ptx)
+        })();
 
         error::nvrtc(hiprtcDestroyProgram(&mut prog))?;
 
-        Ok(ptx)
+        code
     }
 
     unsafe fn blas_create() -> Result<hipblasHandle, ROCmError> {

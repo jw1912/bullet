@@ -392,6 +392,14 @@ impl fmt::Debug for IRTrace {
     }
 }
 
+impl fmt::Display for IRTrace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for IRTrace {}
+
 impl fmt::Display for TensorIR {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn map<T>(x: Result<T, IRTrace>) -> Result<T, fmt::Error> {
