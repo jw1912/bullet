@@ -12,6 +12,7 @@ members = [
     "crates/bullet_lib",
     "crates/compiler",
     "crates/gpu",
+    "crates/nn",
     "crates/trainer",
     "crates/utils",
 ]
