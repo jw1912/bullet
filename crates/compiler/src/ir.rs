@@ -273,14 +273,22 @@ impl<T: TypeSystem> IR<T> {
 
     /// Equivalent to `self.get_dependent_ops_set(id)?.contains(&target)` but faster
     pub fn is_dependent_op(&self, id: OpId, target: OpId) -> Result<bool, IRError> {
+        self.is_dependent_op_inner(id, target, &mut BTreeSet::new())
+    }
+
+    fn is_dependent_op_inner(&self, id: OpId, target: OpId, visited: &mut BTreeSet<OpId>) -> Result<bool, IRError> {
         if id == target {
             return Ok(true);
+        }
+
+        if !visited.insert(id) {
+            return Ok(false);
         }
 
         for parent in self.op(id)?.inputs() {
             let parent_op = self.parent_op(*parent)?;
 
-            if self.is_dependent_op(parent_op, target)? {
+            if self.is_dependent_op_inner(parent_op, target, visited)? {
                 return Ok(true);
             }
         }
