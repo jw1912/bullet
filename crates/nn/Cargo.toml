@@ -11,3 +11,7 @@ edition = { workspace = true }
 [dependencies]
 bullet-compiler = { workspace = true }
 bullet-gpu = { workspace = true }
+
+[[example]]
+name = "advanced"
+path = "../../examples/advanced.rs"

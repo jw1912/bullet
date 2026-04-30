@@ -1,3 +1,4 @@
+pub mod games;
 pub mod train;
 
 pub use bullet_compiler as compiler;
