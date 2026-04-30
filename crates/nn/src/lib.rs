@@ -1,5 +1,4 @@
 pub mod dataloader;
-pub mod trainer;
 
 pub use bullet_compiler as compiler;
 pub use bullet_gpu as gpu;
