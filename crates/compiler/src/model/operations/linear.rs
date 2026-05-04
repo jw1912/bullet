@@ -175,3 +175,47 @@ impl ModelOperation for Matmul {
         unimplemented!()
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct SparseMatmul {
+    pub(crate) dtype: DType,
+    pub(crate) batch: bool,
+    pub(crate) rows: usize,
+    pub(crate) cols: usize,
+    pub(crate) nnz: usize,
+}
+
+impl ModelOperation for SparseMatmul {
+    fn opname(&self) -> String {
+        let SparseMatmul { batch, rows, cols, nnz, .. } = *self;
+        format!("sparse.matmul<{batch:?}, {rows:?}x{cols:?}, {nnz}>")
+    }
+
+    fn inputs(&self) -> Vec<MType> {
+        let SparseMatmul { batch, rows, cols, nnz, dtype } = *self;
+        vec![
+            MType { batch: false, rows, cols, layout: Layout::Dense(dtype) },
+            MType { batch, rows: cols, cols: 1, layout: Layout::Sparse(nnz) },
+        ]
+    }
+
+    fn output(&self) -> MType {
+        let SparseMatmul { batch, rows, dtype, .. } = *self;
+        MType { batch, rows, cols: 1, layout: Layout::Dense(dtype) }
+    }
+
+    fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
+        let SparseMatmul { batch, rows, cols, nnz, dtype} = *self;
+        let op = operation::SparseMatmul::new(dtype, if batch { batch_size } else { 1 }, rows, cols, nnz);
+        lower.add_op(inputs, Ok::<_, IRTrace>(op)).map(|x| x[0])
+    }
+
+    fn gradient(
+        &self,
+        _ir: &mut ModelIR,
+        _inputs: Vec<NodeId>,
+        _output_grad: NodeId,
+    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
+        unimplemented!()
+    }
+}

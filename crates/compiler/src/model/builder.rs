@@ -135,21 +135,25 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self, rhs], PointwiseBinary(self.ty(), binary)), ..self }
     }
 
-    /*pub fn sparse_matmul(self, sparse: Self) -> Self {
-        let Some(nnz) = sparse.nt.sparse else { panic!("Node is not sparse!") };
-        assert!(self.nt.sparse.is_none());
-        assert!(!self.nt.batched);
-        assert_eq!(self.nt.shape.cols, sparse.nt.shape.rows);
-        assert_eq!(sparse.nt.shape.cols, 1);
+    pub fn sparse_matmul(self, sparse: Self) -> Self {
+        let dsty = self.ty();
+        let spty = sparse.ty();
 
-        let dtype = self.ty().dtype();
-        let batch = if sparse.nt.batched { Size::variable() } else { 1.into() };
-        let shape = Shape::new(self.nt.shape.rows, 1);
-        let matmul = SparseMatmul::new(dtype, batch, self.nt.shape.rows, self.nt.shape.cols, nnz);
-        let node = self.builder.add_op([self, sparse], matmul)[0];
+        let Layout::Dense(dtype) = dsty.layout else { panic!("Node is not dense!") };
+        let Layout::Sparse(nnz) = spty.layout else { panic!("Node is not sparse!") };
+        assert_eq!(dsty.cols, spty.rows);
+        assert_eq!(spty.cols, 1);
 
-        Self { node, nt: NodeType { batched: sparse.nt.batched, shape, ..self.nt }, ..self }
-    }*/
+        let matmul = SparseMatmul {
+            dtype,
+            batch: spty.batch,
+            rows: dsty.rows,
+            cols: dsty.cols,
+            nnz,
+        };
+
+        Self { node: self.builder.add_op([self, sparse], matmul), ..self }
+    }
 
     pub fn matmul(self, other: Self) -> Self {
         let lty = self.ty();
