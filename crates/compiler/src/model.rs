@@ -70,13 +70,6 @@ pub trait ModelOperation: 'static + fmt::Debug {
     fn output(&self) -> MType;
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace>;
-
-    fn gradient(
-        &self,
-        ir: &mut ModelIR,
-        inputs: Vec<NodeId>,
-        output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace>;
 }
 
 #[derive(Clone, Debug)]

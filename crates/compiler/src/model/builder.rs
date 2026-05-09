@@ -279,7 +279,7 @@ impl<'a> ModelNode<'a> {
             _ => {}
         }
 
-        let op = Select::new(dtype, sty.rows, ity.rows, batched);
+        let op = SelectRows::new(dtype, sty.rows, ity.rows, batched);
         Self { node: self.builder.add_op([self, indices], op), ..self }
     }
 

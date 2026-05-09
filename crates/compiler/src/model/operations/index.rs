@@ -1,9 +1,9 @@
 use crate::{
     ir::NodeId,
-    model::{Layout, MType, ModelIR, ModelOperation},
+    model::{Layout, MType, ModelOperation},
     tensor::{
         DType, DValue, IRTrace, TensorIR,
-        operation::{self, CABinary, PadAcrossDimension, SliceAcrossDimension},
+        operation::{CABinary, PadAcrossDimension, Select, SliceAcrossDimension},
     },
 };
 
@@ -22,7 +22,8 @@ impl Slice {
 
 impl ModelOperation for Slice {
     fn opname(&self) -> String {
-        "Slice".to_string()
+        let Slice(_, start, end, rows) = *self;
+        format!("Pad<{start}, {end}, {rows}>")
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -42,57 +43,6 @@ impl ModelOperation for Slice {
         let shape = [if self.0.batch { batch_size } else { 1 }, self.0.cols, self.0.rows];
         let slice = SliceAcrossDimension::new(dtype, shape, 1 + usize::from(self.3), self.1, self.2);
         lower.add_op(inputs, slice).map(|x| x[0])
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Select(DType, usize, usize, bool);
-
-impl Select {
-    pub fn new(dtype: DType, rows: usize, divisor: usize, batch: bool) -> Self {
-        assert!(rows.is_multiple_of(divisor));
-        Self(dtype, rows, divisor, batch)
-    }
-}
-
-impl ModelOperation for Select {
-    fn opname(&self) -> String {
-        "Select".to_string()
-    }
-
-    fn inputs(&self) -> Vec<MType> {
-        vec![
-            MType { rows: self.1, cols: 1, batch: self.3, layout: Layout::Dense(self.0) },
-            MType { rows: self.2, cols: 1, batch: self.3, layout: Layout::Sparse(1) },
-        ]
-    }
-
-    fn output(&self) -> MType {
-        MType { rows: self.1 / self.2, cols: 1, batch: self.3, layout: Layout::Dense(self.0) }
-    }
-
-    fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
-        let batch = if self.3 { batch_size } else { 1 }.into();
-        let select = operation::Select { dtype: self.0, batch, inner: self.1, divisor: self.2 };
-        lower.add_op(inputs, Ok::<_, IRTrace>(select)).map(|x| x[0])
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
     }
 }
 
@@ -129,13 +79,37 @@ impl ModelOperation for Concat {
         let p2 = lower.add_op(&inputs[1..], pad2)?[0];
         lower.add_binary(p1, p2, CABinary::Add)
     }
+}
 
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
+#[derive(Clone, Copy, Debug)]
+pub struct SelectRows(DType, usize, usize, bool);
+
+impl SelectRows {
+    pub fn new(dtype: DType, rows: usize, divisor: usize, batch: bool) -> Self {
+        assert!(rows.is_multiple_of(divisor));
+        Self(dtype, rows, divisor, batch)
+    }
+}
+
+impl ModelOperation for SelectRows {
+    fn opname(&self) -> String {
+        "Select".to_string()
+    }
+
+    fn inputs(&self) -> Vec<MType> {
+        vec![
+            MType { rows: self.1, cols: 1, batch: self.3, layout: Layout::Dense(self.0) },
+            MType { rows: self.2, cols: 1, batch: self.3, layout: Layout::Sparse(1) },
+        ]
+    }
+
+    fn output(&self) -> MType {
+        MType { rows: self.1 / self.2, cols: 1, batch: self.3, layout: Layout::Dense(self.0) }
+    }
+
+    fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
+        let batch = if self.3 { batch_size } else { 1 }.into();
+        let select = Select { dtype: self.0, batch, inner: self.1, divisor: self.2 };
+        lower.add_op(inputs, Ok::<_, IRTrace>(select)).map(|x| x[0])
     }
 }

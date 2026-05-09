@@ -1,6 +1,6 @@
 use crate::{
     ir::NodeId,
-    model::{MType, ModelIR, ModelOperation},
+    model::{MType, ModelOperation},
     tensor::{
         DValue, IRTrace, TensorIR,
         operation::{CABinary, Unary},
@@ -25,15 +25,6 @@ impl ModelOperation for PointwiseUnary {
     fn lower(&self, _batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         lower.add_unary(inputs[0], self.1)
     }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -53,15 +44,6 @@ impl ModelOperation for PointwiseBinary {
 
     fn lower(&self, _batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         lower.add_binary(inputs[0], inputs[1], self.1)
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
     }
 }
 
@@ -84,18 +66,6 @@ impl ModelOperation for ReLU {
         let ttype = self.0.ttype(batch_size);
         let zero = lower.add_scalar(DValue::zero(ttype.dtype()), ttype.size());
         lower.add_binary(inputs[0], zero, CABinary::Max)
-    }
-
-    fn gradient(
-        &self,
-        ir: &mut ModelIR,
-        inputs: Vec<NodeId>,
-        output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        let output = ir.add_op([inputs[0]], *self)?;
-        let derivative = ir.add_op([output], PointwiseUnary(self.0, Unary::IsPositive))?;
-        let grad = ir.add_op([derivative, output_grad], PointwiseBinary(self.0, CABinary::Mul))?;
-        Ok(vec![Some(grad)])
     }
 }
 
@@ -121,15 +91,6 @@ impl ModelOperation for CReLU {
         let relu = lower.add_binary(inputs[0], zero, CABinary::Max)?;
         lower.add_binary(relu, one, CABinary::Min)
     }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -150,15 +111,6 @@ impl ModelOperation for SCReLU {
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         let crelu = CReLU(self.0).lower(batch_size, lower, inputs)?;
         lower.add_binary(crelu, crelu, CABinary::Mul)
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
     }
 }
 
@@ -185,15 +137,6 @@ impl ModelOperation for Sigmoid {
         let denom = lower.add_binary(one, neg, CABinary::Add)?;
         lower.add_unary(denom, Unary::Reciprocal)
     }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -209,7 +152,7 @@ impl Reshape {
 
 impl ModelOperation for Reshape {
     fn opname(&self) -> String {
-        "Reshape".into()
+        format!("Reshape<{}, {}>", self.1.rows, self.1.cols)
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -222,15 +165,6 @@ impl ModelOperation for Reshape {
 
     fn lower(&self, _batch_size: usize, _lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         Ok(inputs[0])
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        Ok(vec![Some(output_grad)])
     }
 }
 
@@ -258,14 +192,5 @@ impl ModelOperation for FauxQuantise {
         let mul = lower.add_binary(scalar, input, CABinary::Mul)?;
         let int = lower.add_unary(mul, op)?;
         lower.add_binary(int, denom, CABinary::Mul)
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        Ok(vec![Some(output_grad)])
     }
 }

@@ -258,17 +258,27 @@ impl<T: TypeSystem> IR<T> {
 
     /// Finds all operations that are required to complete before this one can be performed
     pub fn get_dependent_ops_set(&self, id: OpId) -> Result<BTreeSet<OpId>, IRError> {
-        let mut set: BTreeSet<_> = [id].into();
+        let mut set = BTreeSet::new();
+        self.get_dependent_ops_set_inner(id, &mut set, &mut BTreeSet::default())?;
+        Ok(set)
+    }
 
-        for parent in self.op(id)?.inputs() {
-            let parent_op = self.parent_op(*parent)?;
+    fn get_dependent_ops_set_inner(
+        &self,
+        id: OpId,
+        set: &mut BTreeSet<OpId>,
+        visited: &mut BTreeSet<OpId>,
+    ) -> Result<(), IRError> {
+        if visited.insert(id) {
+            set.insert(id);
 
-            for op in self.get_dependent_ops_set(parent_op)? {
-                set.insert(op);
+            for parent in self.op(id)?.inputs() {
+                let parent_op = self.parent_op(*parent)?;
+                self.get_dependent_ops_set_inner(parent_op, set, visited)?;
             }
         }
 
-        Ok(set)
+        Ok(())
     }
 
     /// Equivalent to `self.get_dependent_ops_set(id)?.contains(&target)` but faster
@@ -281,15 +291,13 @@ impl<T: TypeSystem> IR<T> {
             return Ok(true);
         }
 
-        if !visited.insert(id) {
-            return Ok(false);
-        }
+        if visited.insert(id) {
+            for parent in self.op(id)?.inputs() {
+                let parent_op = self.parent_op(*parent)?;
 
-        for parent in self.op(id)?.inputs() {
-            let parent_op = self.parent_op(*parent)?;
-
-            if self.is_dependent_op_inner(parent_op, target, visited)? {
-                return Ok(true);
+                if self.is_dependent_op_inner(parent_op, target, visited)? {
+                    return Ok(true);
+                }
             }
         }
 

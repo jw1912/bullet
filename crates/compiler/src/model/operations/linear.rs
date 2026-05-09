@@ -1,6 +1,6 @@
 use crate::{
     ir::NodeId,
-    model::{Layout, MType, ModelIR, ModelOperation},
+    model::{Layout, MType, ModelOperation},
     tensor::{
         DType, IRTrace, TensorIR,
         operation::{self, MatrixLayout, Reduction},
@@ -53,15 +53,6 @@ impl ModelOperation for Broadcast {
             }
         }
     }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -100,15 +91,6 @@ impl ModelOperation for Reduce {
                 Dim::Rows => lower.add_reduction(input, [ty.cols, ty.rows], 1, self.2),
             }
         }
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
     }
 }
 
@@ -165,15 +147,6 @@ impl ModelOperation for Matmul {
 
         lower.add_op(inputs, matmul).map(|x| x[0])
     }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -208,14 +181,5 @@ impl ModelOperation for SparseMatmul {
         let SparseMatmul { batch, rows, cols, nnz, dtype } = *self;
         let op = operation::SparseMatmul::new(dtype, if batch { batch_size } else { 1 }, rows, cols, nnz);
         lower.add_op(inputs, Ok::<_, IRTrace>(op)).map(|x| x[0])
-    }
-
-    fn gradient(
-        &self,
-        _ir: &mut ModelIR,
-        _inputs: Vec<NodeId>,
-        _output_grad: NodeId,
-    ) -> Result<Vec<Option<NodeId>>, IRTrace> {
-        unimplemented!()
     }
 }
