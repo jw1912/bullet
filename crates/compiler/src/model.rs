@@ -10,7 +10,7 @@ use crate::{
     tensor::{DType, IRTrace, TType, TensorIR},
 };
 
-pub use builder::{ModelNode, ModelBuilder, Shape};
+pub use builder::{ModelBuilder, ModelNode, Shape};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layout {

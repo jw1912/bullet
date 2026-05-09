@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     ir::NodeId,
-    model::{Layout, MType, ModelOperation, ModelIR, operations::*},
+    model::{Layout, MType, ModelIR, ModelOperation, operations::*},
     tensor::{
         DType, DValue, TValue,
         operation::{CABinary, Reduction, Unary},
@@ -164,13 +164,7 @@ impl<'a> ModelNode<'a> {
         assert_eq!(dsty.cols, spty.rows);
         assert_eq!(spty.cols, 1);
 
-        let matmul = SparseMatmul {
-            dtype,
-            batch: spty.batch,
-            rows: dsty.rows,
-            cols: dsty.cols,
-            nnz,
-        };
+        let matmul = SparseMatmul { dtype, batch: spty.batch, rows: dsty.rows, cols: dsty.cols, nnz };
 
         Self { node: self.builder.add_op([self, sparse], matmul), ..self }
     }

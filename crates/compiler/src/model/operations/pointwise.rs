@@ -1,6 +1,6 @@
 use crate::{
     ir::NodeId,
-    model::{MType, ModelOperation, ModelIR},
+    model::{MType, ModelIR, ModelOperation},
     tensor::{
         DValue, IRTrace, TensorIR,
         operation::{CABinary, Unary},

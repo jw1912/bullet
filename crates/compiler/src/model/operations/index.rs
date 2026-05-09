@@ -1,7 +1,10 @@
 use crate::{
     ir::NodeId,
     model::{Layout, MType, ModelIR, ModelOperation},
-    tensor::{DType, DValue, IRTrace, TensorIR, operation::{self, CABinary, PadAcrossDimension, SliceAcrossDimension}},
+    tensor::{
+        DType, DValue, IRTrace, TensorIR,
+        operation::{self, CABinary, PadAcrossDimension, SliceAcrossDimension},
+    },
 };
 
 #[derive(Clone, Copy, Debug)]

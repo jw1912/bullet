@@ -1,6 +1,6 @@
 use crate::{
     ir::NodeId,
-    model::{Layout, MType, ModelOperation, ModelIR},
+    model::{Layout, MType, ModelIR, ModelOperation},
     tensor::{IRTrace, TValue, TensorIR},
 };
 
