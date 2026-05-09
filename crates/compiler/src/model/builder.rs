@@ -252,7 +252,6 @@ impl<'a> ModelNode<'a> {
         assert_eq!(sty.cols, rty.cols);
         assert_eq!(sty.cols, 1);
         assert_eq!(sty.batch, rty.batch);
-        println!("{sty:?}, {rty:?}");
 
         let op = Concat::new(dtype, sty.rows, rty.rows, sty.batch);
         Self { node: self.builder.add_op([self, rhs], op), ..self }
