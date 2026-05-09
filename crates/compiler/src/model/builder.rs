@@ -28,20 +28,13 @@ impl Shape {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum InitSettings {
-    Zeroed,
-    Normal { mean: f32, stdev: f32 },
-    Uniform { mean: f32, stdev: f32 },
-}
-
 #[derive(Default)]
 pub struct ModelBuilder {
     ir: Mutex<ModelIR>,
 }
 
 impl ModelBuilder {
-    fn ir(&self) -> MutexGuard<ModelIR> {
+    fn ir(&'_ self) -> MutexGuard<'_, ModelIR> {
         self.ir.try_lock().unwrap()
     }
 
@@ -71,6 +64,33 @@ impl ModelBuilder {
 
     pub fn new_weights<'a>(&'a self, shape: Shape) -> ModelNode<'a> {
         ModelNode { builder: self, node: self.ir().add_input(false, shape.rows, shape.cols, Layout::Dense(DType::F32)) }
+    }
+
+    pub fn new_affine(&self, id: &str, input_size: usize, output_size: usize) -> Affine<'_> {
+        self.new_affine_custom(id, input_size, output_size, 1)
+    }
+
+    pub fn new_affine_custom(&self, _id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine<'_> {
+        let weights = self.new_weights(Shape::new(output_size, input_size));
+        let bias = self.new_weights(Shape::new(output_size, bias_cols));
+
+        Affine { weights, bias }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Affine<'a> {
+    pub weights: ModelNode<'a>,
+    pub bias: ModelNode<'a>,
+}
+
+impl<'a> Affine<'a> {
+    pub fn forward(self, input: ModelNode<'a>) -> ModelNode<'a> {
+        self.weights.matmul(input) + self.bias
+    }
+
+    pub fn init_with_effective_input_size(&self, _size: usize) {
+        todo!()
     }
 }
 
@@ -178,7 +198,7 @@ impl<'a> ModelNode<'a> {
         }
 
         let matmul =
-            Matmul { lbatch: lty.batch, rbatch: rty.batch, m: lty.rows, n: lty.cols, k: rty.rows, dtype: ldtype };
+            Matmul { lbatch: lty.batch, rbatch: rty.batch, m: lty.rows, n: lty.cols, k: rty.cols, dtype: ldtype };
         Self { node: self.builder.add_op([self, other], matmul), ..self }
     }
 
@@ -228,8 +248,20 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], op), ..self }
     }
 
-    pub fn concat(self, _rhs: Self) -> Self {
-        unimplemented!()
+    pub fn concat(self, rhs: Self) -> Self {
+        let sty = self.ty();
+        let rty = rhs.ty();
+
+        let Layout::Dense(dtype) = sty.layout else { panic!() };
+
+        assert_eq!(sty.layout, rty.layout);
+        assert_eq!(sty.cols, rty.cols);
+        assert_eq!(sty.cols, 1);
+        assert_eq!(sty.batch, rty.batch);
+        println!("{sty:?}, {rty:?}");
+
+        let op = Concat::new(dtype, sty.rows, rty.rows, sty.batch);
+        Self { node: self.builder.add_op([self, rhs], op), ..self }
     }
 
     pub fn pairwise_mul(self) -> Self {
@@ -243,6 +275,7 @@ impl<'a> ModelNode<'a> {
 
         assert_eq!(ity.layout, Layout::Sparse(1));
         assert_eq!(sty.cols, 1);
+        assert_eq!(ity.cols, 1);
 
         let Layout::Dense(dtype) = sty.layout else { panic!() };
 
@@ -253,13 +286,8 @@ impl<'a> ModelNode<'a> {
             _ => {}
         }
 
-        let inner = self.nt.shape.size();
-        let divisor = indices.shape().size();
-
-        let op = Select { dtype, batch, inner, divisor };
-        let rows = inner / divisor;
-        let node = self.builder.add_op([self, indices], op)[0];
-        Self { builder: self.builder, node }
+        let op = Select::new(dtype, sty.rows, ity.rows, batched);
+        Self { node: self.builder.add_op([self, indices], op), ..self }
     }
 
     pub fn slice_rows(self, start: usize, end: usize) -> Self {

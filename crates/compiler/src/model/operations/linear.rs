@@ -18,7 +18,7 @@ pub enum Dim {
 pub struct Broadcast(pub MType, pub Dim, pub Option<usize>);
 impl ModelOperation for Broadcast {
     fn opname(&self) -> String {
-        let reps = self.2.map(|r| format!("x{r}")).unwrap_or_default();
+        let reps = self.2.map(|r| format!(", {r}")).unwrap_or_default();
         format!("Broadcast<{:?}{reps}>", self.1)
     }
 
@@ -188,7 +188,7 @@ pub struct SparseMatmul {
 impl ModelOperation for SparseMatmul {
     fn opname(&self) -> String {
         let SparseMatmul { batch, rows, cols, nnz, .. } = *self;
-        format!("sparse.matmul<{batch:?}, {rows:?}x{cols:?}, {nnz}>")
+        format!("Sparse.Matmul<{batch:?}, {rows:?}x{cols:?}, {nnz}>")
     }
 
     fn inputs(&self) -> Vec<MType> {

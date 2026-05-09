@@ -11,7 +11,7 @@ use crate::{
 pub struct PointwiseUnary(pub MType, pub Unary);
 impl ModelOperation for PointwiseUnary {
     fn opname(&self) -> String {
-        format!("pointwise.unary.{:?}", self.1).to_lowercase()
+        format!("Unary.{:?}", self.1)
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -40,11 +40,11 @@ impl ModelOperation for PointwiseUnary {
 pub struct PointwiseBinary(pub MType, pub CABinary);
 impl ModelOperation for PointwiseBinary {
     fn opname(&self) -> String {
-        format!("pointwise.binary.{:?}", self.1).to_lowercase()
+        format!("Binary.{:?}", self.1)
     }
 
     fn inputs(&self) -> Vec<MType> {
-        vec![self.0]
+        vec![self.0, self.0]
     }
 
     fn output(&self) -> MType {
@@ -69,7 +69,7 @@ impl ModelOperation for PointwiseBinary {
 pub struct ReLU(pub MType);
 impl ModelOperation for ReLU {
     fn opname(&self) -> String {
-        "pointwise.relu".into()
+        "ReLU".into()
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -103,7 +103,7 @@ impl ModelOperation for ReLU {
 pub struct CReLU(pub MType);
 impl ModelOperation for CReLU {
     fn opname(&self) -> String {
-        "pointwise.crelu".into()
+        "CReLU".into()
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -136,7 +136,7 @@ impl ModelOperation for CReLU {
 pub struct SCReLU(pub MType);
 impl ModelOperation for SCReLU {
     fn opname(&self) -> String {
-        "pointwise.crelu".into()
+        "SCReLU".into()
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -166,7 +166,7 @@ impl ModelOperation for SCReLU {
 pub struct Sigmoid(pub MType);
 impl ModelOperation for Sigmoid {
     fn opname(&self) -> String {
-        "pointwise.crelu".into()
+        "Sigmoid".into()
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -209,7 +209,7 @@ impl Reshape {
 
 impl ModelOperation for Reshape {
     fn opname(&self) -> String {
-        "pointwise.reshape".into()
+        "Reshape".into()
     }
 
     fn inputs(&self) -> Vec<MType> {
@@ -239,7 +239,7 @@ pub struct FauxQuantise(pub MType, pub DValue, pub bool);
 
 impl ModelOperation for FauxQuantise {
     fn opname(&self) -> String {
-        "faux-quantise".to_string()
+        "FauxQuantise".to_string()
     }
 
     fn inputs(&self) -> Vec<MType> {

@@ -32,7 +32,7 @@ impl fmt::Display for MType {
         let batch = if batch { "Bx" } else { "" };
         match layout {
             Layout::Dense(dtype) => write!(f, "{dtype:?}[{batch}{rows}x{cols}]"),
-            Layout::Sparse(nnz) => write!(f, "sparse<{batch}{rows}x{cols}, {nnz}>"),
+            Layout::Sparse(nnz) => write!(f, "Sparse<{batch}{rows}x{cols}, {nnz}>"),
         }
     }
 }
@@ -58,7 +58,7 @@ impl MType {
     }
 
     pub fn is_dense(&self) -> bool {
-        if let Layout::Dense(_) = self.layout { true } else { false }
+        matches!(self.layout, Layout::Dense(_))
     }
 }
 
