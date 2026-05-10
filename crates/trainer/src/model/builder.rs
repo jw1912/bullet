@@ -10,12 +10,12 @@ use std::{
 use bullet_compiler::{
     ir::NodeId,
     tensor::{
-        DType, DValue, IRBuilder, Size, TNode, TType, TValue,
+        DType, DValue, IRBuilder, OpType, Size, TNode, TType, TValue,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, PassThrough,
-            Power, ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, Power,
+            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
             autograd::{
-                Autograd, AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, ReLU, SCReLU,
+                AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, PassThrough, ReLU, SCReLU,
                 Sigmoid, SoftmaxCrossEntropyLoss,
             },
         },
@@ -91,17 +91,9 @@ impl ModelBuilder {
         ret
     }
 
-    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ModelNode<'a>]>, op: impl Autograd) -> Vec<NodeId> {
+    pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ModelNode<'a>]>, op: impl OpType) -> Vec<NodeId> {
         let inputs = inputs.as_ref().iter().map(ModelNode::detach).collect::<Vec<_>>();
-        let op = AutogradOp::new(op).unwrap();
-
-        let outputs = if self.is_no_grad() {
-            self.ir.add_op(inputs, op.into_forward()).unwrap()
-        } else {
-            self.ir.add_op(inputs, op).unwrap()
-        };
-
-        outputs.iter().map(TNode::node).collect()
+        self.ir.add_op(inputs, op).unwrap().iter().map(TNode::node).collect()
     }
 
     pub fn scalar<'a>(&'a self, value: f32) -> ModelNode<'a> {
@@ -207,7 +199,7 @@ impl ModelBuilder {
                 let name = name.strip_prefix("weights/").unwrap().to_string();
 
                 weights.insert(name.clone(), tensor);
-                let gid = grads.borrow().get(&id).unwrap().unwrap();
+                let gid = *grads.borrow().get(&id).unwrap();
 
                 if !frozen.contains(&id) {
                     bwd.register_output(gid);
@@ -438,7 +430,7 @@ impl<'a> ModelNode<'a> {
 
     fn dfo(self, op: impl DiffableFromOutput) -> Self {
         let op = DiffableFromOutputOp(op, self.ty().dtype(), self.ty().size());
-        let node = self.builder.add_op([self], op)[0];
+        let node = self.builder.add_op([self], AutogradOp::new(op).unwrap())[0];
         Self { node, ..self }
     }
 
@@ -485,7 +477,7 @@ impl<'a> ModelNode<'a> {
 
     pub fn faux_quantise(self, value: f32, round: bool) -> Self {
         let op = FauxQuantise(self.ty(), value.into(), round);
-        let node = self.builder.add_op([self], op)[0];
+        let node = self.builder.add_op([self], AutogradOp::new(op).unwrap())[0];
         Self { node, ..self }
     }
 
@@ -496,7 +488,7 @@ impl<'a> ModelNode<'a> {
             batch_size: if self.is_batched() { Size::variable() } else { 1.into() },
             axis_size: self.shape().size(),
         };
-        let node = self.builder.add_op([self, targets], op)[0];
+        let node = self.builder.add_op([self, targets], AutogradOp::new(op).unwrap())[0];
         Self { node, ..self }
     }
 
@@ -510,7 +502,7 @@ impl<'a> ModelNode<'a> {
                 x.max(min)?.min(max)
             }),
         );
-        Self { node: self.builder.add_op([self], op)[0], ..self }
+        Self { node: self.builder.add_op([self], AutogradOp::new(op).unwrap())[0], ..self }
     }
 
     pub fn pad(self, before: usize, after: usize, value: f32) -> Self {

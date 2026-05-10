@@ -31,15 +31,11 @@ impl Autograd for SoftmaxCrossEntropyLoss {
         (-(target * input.softmax(self.axis_size)?.log()?)?).map(|x| vec![x])
     }
 
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let [input, target] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
         let [grad] = output_grads[..] else { return Err("Invalid number of output grads!".into()) };
         let igrad = ((input.softmax(self.axis_size)? - target)? * grad)?;
-        Ok(vec![Some(igrad), None])
+        Ok(vec![igrad, target.zeros_like()])
     }
 
     fn equals(&self, other: &Rc<dyn Autograd>) -> bool {

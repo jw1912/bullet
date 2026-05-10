@@ -24,12 +24,8 @@ impl Autograd for PassThrough {
         self.1(inputs[0]).map(|x| vec![x])
     }
 
-    fn backward<'a>(
-        &self,
-        _inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
-        Ok(vec![Some(output_grads[0])])
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Ok(output_grads)
     }
 
     fn equals(&self, _other: &Rc<dyn Autograd>) -> bool {

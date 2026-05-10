@@ -1,6 +1,6 @@
 use crate::{
     ir::IRError,
-    tensor::{DType, DValue, OpType, Size, TType, TValue, TensorOp, operation::CABinary},
+    tensor::{DType, DValue, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp, operation::CABinary},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,6 +94,12 @@ impl OpType for SparseMatmul {
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let grad = output_grads[0];
+        let op = self.invert();
+        grad.builder().add_op([grad, inputs[1]], op).map(|x| vec![x[0]])
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,6 +158,10 @@ impl OpType for SparseMatmulBwd {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Err("Cannot call `backward` on `SparseMatmulBwd`!".into())
     }
 }
 
@@ -232,6 +242,10 @@ impl OpType for SparseMatmulBwdMulti {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Err("Cannot call `backward` on `SparseMatmulBwdMulti`!".into())
     }
 }
 

@@ -42,7 +42,7 @@ impl CanonicalisePass {
             .add_rewrite(CombineMulXAddMulX)
             .add_rewrite(FactoriseDistributive)
             .add_rewrite(ConcatMatmulToAddSlicedMatmuls)
-            .add_rewrite(AutogradConcatMatmulToAddSlicedMatmuls)
+            //.add_rewrite(AutogradConcatMatmulToAddSlicedMatmuls)
             .add_rewrite(CombineSparseMatmulBwds)
     }
 

@@ -1,4 +1,4 @@
-use crate::tensor::{DValue, OpType, Size, TType, TValue, TensorOp};
+use crate::tensor::{DValue, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Constant(pub TValue);
@@ -34,6 +34,10 @@ impl OpType for Constant {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Ok(Vec::new())
     }
 }
 
@@ -80,5 +84,9 @@ impl OpType for ScalarConstant {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Ok(Vec::new())
     }
 }

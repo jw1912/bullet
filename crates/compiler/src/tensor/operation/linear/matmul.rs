@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{
     ir::IRError,
-    tensor::{DType, DValue, OpType, Size, TType, TValue, TensorOp, operation::CABinary},
+    tensor::{DType, DValue, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp, operation::CABinary},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -110,6 +110,35 @@ impl OpType for Matmul {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let Matmul { dtype, batch, lhs, rhs } = *self;
+        let grad = MatrixLayout { col_mjr: true, rows: lhs.rows, cols: rhs.cols };
+
+        let lhs_node = inputs[0];
+        let rhs_node = inputs[1];
+        let grad_node = output_grads[0];
+
+        let builder = grad_node.builder();
+
+        let lhs_grad = if lhs.col_mjr {
+            let op = Matmul::new(dtype, batch, grad, rhs.transpose())?;
+            builder.add_op([grad_node, rhs_node], op)?[0]
+        } else {
+            let op = Matmul::new(dtype, batch, rhs, grad.transpose())?;
+            builder.add_op([rhs_node, grad_node], op)?[0]
+        };
+
+        let rhs_grad = if rhs.col_mjr {
+            let op = Matmul::new(dtype, batch, lhs.transpose(), grad)?;
+            builder.add_op([lhs_node, grad_node], op)?[0]
+        } else {
+            let op = Matmul::new(dtype, batch, grad.transpose(), lhs)?;
+            builder.add_op([grad_node, lhs_node], op)?[0]
+        };
+
+        Ok(vec![lhs_grad, rhs_grad])
     }
 }
 

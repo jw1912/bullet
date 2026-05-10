@@ -13,8 +13,6 @@ use crate::{
     tensor::{DType, IRTrace, TType, TensorIR},
 };
 
-pub use builder::{ModelBuilder, ModelNode, Shape};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layout {
     Sparse(usize),

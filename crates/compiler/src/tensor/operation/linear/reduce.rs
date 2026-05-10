@@ -2,7 +2,9 @@ use std::{cmp::Ordering, ops::Add};
 
 use crate::{
     ir::IRError,
-    tensor::{DType, OpType, Shape, Size, TType, TValue, TensorOp, operation::BroadcastAcrossDimension},
+    tensor::{
+        DType, IRTrace, OpType, Shape, Size, TNode, TType, TValue, TensorOp, operation::BroadcastAcrossDimension,
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,6 +157,11 @@ impl OpType for ReduceAcrossDimension {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let op = self.invert()?.ok_or::<IRTrace>("Reduction backprop only implemented for Sum!".into())?;
+        output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![x[0]])
     }
 }
 

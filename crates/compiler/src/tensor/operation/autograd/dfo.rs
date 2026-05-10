@@ -27,18 +27,14 @@ impl<T: DiffableFromOutput> Autograd for DiffableFromOutputOp<T> {
         self.0.forward(input).map(|x| vec![x])
     }
 
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let [input] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
         let [grad] = output_grads[..] else { return Err("Invalid number of output grads!".into()) };
 
         let output = self.0.forward(input)?;
 
         match self.0.backward(output) {
-            Ok(x) => Ok(vec![Some((grad * x)?)]),
+            Ok(x) => Ok(vec![(grad * x)?]),
             Err(e) => Err(e),
         }
     }

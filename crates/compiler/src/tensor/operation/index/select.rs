@@ -1,4 +1,4 @@
-use crate::tensor::{DType, OpType, Size, TType, TValue, TensorOp};
+use crate::tensor::{DType, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Select {
@@ -88,6 +88,12 @@ impl OpType for Select {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let Select { dtype, batch, inner, divisor } = *self;
+        let op = SelectPad { dtype, batch, inner, divisor };
+        output_grads[0].builder().add_op([output_grads[0], inputs[1]], op)
     }
 }
 
@@ -182,6 +188,12 @@ impl OpType for SelectPad {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let SelectPad { dtype, batch, inner, divisor } = *self;
+        let op = Select { dtype, batch, inner, divisor };
+        output_grads[0].builder().add_op([output_grads[0], inputs[1]], op)
     }
 }
 

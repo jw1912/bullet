@@ -1,6 +1,6 @@
 use crate::{
     ir::IRError,
-    tensor::{DType, DValue, OpType, TType, TValue, TensorOp},
+    tensor::{DType, DValue, IRTrace, OpType, TNode, TType, TValue, TensorOp},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -136,6 +136,38 @@ impl OpType for UnaryOp {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let grad = output_grads[0];
+        let input = inputs[0];
+
+        let g = match self.op() {
+            Unary::Abs => input.sgn(),
+            Unary::Cos => -input.sin()?,
+            Unary::Sin => input.cos(),
+            Unary::Exp => input.exp(),
+            Unary::Reciprocal => {
+                let x = input.unary(Unary::Reciprocal)?;
+                -(x * x)?
+            }
+            Unary::Log => input.unary(Unary::Reciprocal),
+            Unary::Sgn | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
+                let zero = DValue::zero(input.ty().dtype());
+                Ok(input.builder().scalar(zero, input.ty().size()))
+            }
+            Unary::Cast(_) => Ok(grad),
+            Unary::Sinh | Unary::Cosh | Unary::Tanh | Unary::Tan | Unary::Truncate | Unary::Round | Unary::Sqrt => {
+                unimplemented!()
+            }
+        }?;
+
+        if let Unary::Cast(_) = self.op() {
+            grad.unary(Unary::Cast(self.input_type().dtype()))
+        } else {
+            grad * g
+        }
+        .map(|x| vec![x])
     }
 }
 
