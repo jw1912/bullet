@@ -11,13 +11,11 @@ use std::{
     rc::Rc,
 };
 
-use crate::{
-    ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem},
-    tensor::operation::{ReduceAcrossDimension, Reduction},
-};
+use crate::ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem};
 
 use operation::{
-    BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ScalarConstant, Unary, UnaryOp,
+    BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ReduceAcrossDimension, Reduction,
+    ScalarConstant, Unary, UnaryOp,
 };
 use transform::{
     CanonicalisePass, IRTransform,
