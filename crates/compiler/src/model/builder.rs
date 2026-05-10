@@ -133,14 +133,52 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], broadcast), ..self }
     }
 
+    #[deprecated(note = "Use `reduce_sum_batch` instead!")]
     pub fn reduce_sum_across_batch(self) -> Self {
+        self.reduce_sum_batch()
+    }
+
+    pub fn reduce_sum_batch(self) -> Self {
         let reduce = Reduce(self.ty(), Dim::Batch, Reduction::Sum);
+        Self { node: self.builder.add_op([self], reduce), ..self }
+    }
+
+    pub fn reduce_sum_rows(self) -> Self {
+        let reduce = Reduce(self.ty(), Dim::Rows, Reduction::Sum);
+        Self { node: self.builder.add_op([self], reduce), ..self }
+    }
+
+    pub fn reduce_sum_cols(self) -> Self {
+        let reduce = Reduce(self.ty(), Dim::Cols, Reduction::Sum);
         Self { node: self.builder.add_op([self], reduce), ..self }
     }
 
     fn broadcast_scalar(self, rows: usize, cols: usize) -> Self {
         let broadcast = Broadcast(self.ty(), Dim::Rows, Some(rows * cols));
         Self { node: self.builder.add_op([self], broadcast), ..self }.reshape((rows, cols))
+    }
+
+    fn broadcast_to_same(mut self, mut rhs: Self) -> (Self, Self) {
+        let sty = self.ty();
+        let rty = rhs.ty();
+
+        if sty.single_size() != rty.single_size() {
+            if sty.rows == 1 && sty.cols == 1 && !sty.batch {
+                self = self.broadcast_scalar(rty.rows, rty.cols);
+            }
+
+            if rty.rows == 1 && rty.cols == 1 && !rty.batch {
+                rhs = rhs.broadcast_scalar(sty.rows, sty.cols);
+            }
+        }
+
+        match (sty.batch, rty.batch) {
+            (false, true) => self = self.broadcast_across_batch(),
+            (true, false) => rhs = rhs.broadcast_across_batch(),
+            _ => {}
+        }
+
+        (self, rhs)
     }
 
     pub fn unary(self, unary: Unary) -> Self {
@@ -243,13 +281,29 @@ impl<'a> ModelNode<'a> {
         self.unary(Unary::Abs)
     }
 
-    pub fn abs_pow(self, power: f32) -> Self {
-        (power * self.abs().unary(Unary::Log)).exp()
+    pub fn abs_pow(mut self, power: f32) -> Self {
+        let mut power = self.builder.scalar(power);
+        (self, power) = self.broadcast_to_same(power);
+        Self { node: self.builder.add_op([self, power], AbsPower(self.ty())), ..self }
     }
 
     pub fn squared_error(self, other: Self) -> Self {
         let diff = self - other;
         diff * diff
+    }
+
+    pub fn power_error(self, targets: Self, power: f32) -> Self {
+        (self - targets).abs_pow(power)
+    }
+
+    pub fn softmax_crossentropy_loss(self, targets: Self) -> Self {
+        let op = SoftmaxCrossEntropy(self.ty());
+        Self { node: self.builder.add_op([self, targets], op), ..self }
+    }
+
+    pub fn clip_pass_through_grad(self, min: f32, max: f32) -> Self {
+        let op = ClipPassThroughGrad(self.ty(), min, max);
+        Self { node: self.builder.add_op([self], op), ..self }
     }
 
     pub fn faux_quantise(self, value: f32, round: bool) -> Self {
