@@ -7,8 +7,6 @@ pub mod modify;
 pub mod ordering;
 pub mod rewriterules;
 
-pub use canonicalise::CanonicalisePass;
-
 use crate::tensor::{IRTrace, TensorIR};
 
 pub trait IRTransform: std::fmt::Debug + 'static {
@@ -17,7 +15,8 @@ pub trait IRTransform: std::fmt::Debug + 'static {
 
 #[cfg(test)]
 mod tests {
-    use crate::tensor::{transform::CanonicalisePass, *};
+    use super::canonicalise::CanonicalisePass;
+    use crate::tensor::*;
 
     #[test]
     fn constant_fold_all() -> Result<(), IRTrace> {
