@@ -96,6 +96,11 @@ impl<T: TypeSystem> IR<T> {
         topo::topo_order(edges_rev).ok_or("Cycle found!".into()).map(|x| x.into_iter().map(OpId::from_inner).collect())
     }
 
+    pub fn ordered_operations(&self) -> Result<Vec<Op<T>>, IRError> {
+        let ids = self.topo_order_ops()?;
+        ids.into_iter().map(|id| self.op(id).cloned()).collect()
+    }
+
     /// Returns an error if any graph invariants are broken, otherwise returns `Ok(())`
     pub fn check_valid(&self) -> Result<(), IRError> {
         let mut registered_outputs = BTreeSet::new();

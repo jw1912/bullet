@@ -1,8 +1,11 @@
-mod builder;
-mod lower;
-mod operations;
+pub mod builder;
+pub mod operations;
 
-use std::{collections::BTreeSet, fmt, rc::Rc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    rc::Rc,
+};
 
 use crate::{
     ir::{IR, IRError, NodeId, Operation, TypeSystem},
@@ -152,5 +155,23 @@ impl ModelIR {
         }
 
         Ok(node)
+    }
+
+    pub fn lower(&self, batch_size: usize) -> Result<TensorIR, IRTrace> {
+        let mut ir = TensorIR::default();
+
+        let mut map = BTreeMap::default();
+
+        for op in self.ir.ordered_operations()? {
+            let tinputs = op.inputs().iter().map(|node| *map.get(node).unwrap()).collect::<Vec<_>>();
+            let toutput = op.data().0.lower(batch_size, &mut ir, tinputs)?;
+            map.insert(op.outputs()[0], toutput);
+        }
+
+        for output in &self.outputs {
+            ir.register_output(*map.get(output).unwrap());
+        }
+
+        Ok(ir)
     }
 }

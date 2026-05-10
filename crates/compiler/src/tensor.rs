@@ -128,8 +128,7 @@ impl TensorIR {
     }
 
     pub fn ordered_operations(&self) -> Result<Vec<Op<Tensor>>, IRTrace> {
-        let ids = self.ir.topo_order_ops()?;
-        ids.into_iter().map(|id| self.ir.op(id).map_err(IRTrace::Root).cloned()).collect()
+        self.ir.ordered_operations().map_err(IRTrace::Root)
     }
 
     pub fn operations(&self) -> Vec<Op<Tensor>> {

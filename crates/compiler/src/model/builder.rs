@@ -28,6 +28,12 @@ impl Shape {
     }
 }
 
+impl From<(usize, usize)> for Shape {
+    fn from((rows, cols): (usize, usize)) -> Self {
+        Shape { rows, cols }
+    }
+}
+
 #[derive(Default)]
 pub struct ModelBuilder {
     ir: Mutex<ModelIR>,
@@ -36,6 +42,10 @@ pub struct ModelBuilder {
 impl ModelBuilder {
     fn ir(&'_ self) -> MutexGuard<'_, ModelIR> {
         self.ir.try_lock().unwrap()
+    }
+
+    pub fn inner(&self) -> ModelIR {
+        self.ir().clone()
     }
 
     pub fn add_op<'a>(&'a self, inputs: impl AsRef<[ModelNode<'a>]>, op: impl ModelOperation) -> NodeId {
@@ -48,21 +58,25 @@ impl ModelBuilder {
         ModelNode { builder: self, node: self.add_op([], Constant::new(value, 1, 1)) }
     }
 
-    pub fn new_dense_input<'a>(&'a self, shape: Shape) -> ModelNode<'a> {
+    pub fn new_dense_input<'a>(&'a self, shape: impl Into<Shape>) -> ModelNode<'a> {
+        let shape = shape.into();
         ModelNode { builder: self, node: self.ir().add_input(true, shape.rows, shape.cols, Layout::Dense(DType::F32)) }
     }
 
-    pub fn new_sparse_input<'a>(&'a self, shape: Shape, nnz: usize) -> ModelNode<'a> {
+    pub fn new_sparse_input<'a>(&'a self, shape: impl Into<Shape>, nnz: usize) -> ModelNode<'a> {
+        let shape = shape.into();
         ModelNode { builder: self, node: self.ir().add_input(true, shape.rows, shape.cols, Layout::Sparse(nnz)) }
     }
 
-    pub fn new_constant<'a>(&'a self, shape: Shape, vals: &[f32]) -> ModelNode<'a> {
+    pub fn new_constant<'a>(&'a self, shape: impl Into<Shape>, vals: &[f32]) -> ModelNode<'a> {
+        let shape = shape.into();
         assert_eq!(shape.size(), vals.len());
         let value = TValue::F32(vals.to_vec());
         ModelNode { builder: self, node: self.add_op([], Constant::new(value, shape.rows, shape.cols)) }
     }
 
-    pub fn new_weights<'a>(&'a self, shape: Shape) -> ModelNode<'a> {
+    pub fn new_weights<'a>(&'a self, shape: impl Into<Shape>) -> ModelNode<'a> {
+        let shape = shape.into();
         ModelNode { builder: self, node: self.ir().add_input(false, shape.rows, shape.cols, Layout::Dense(DType::F32)) }
     }
 
@@ -71,8 +85,8 @@ impl ModelBuilder {
     }
 
     pub fn new_affine_custom(&self, _id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine<'_> {
-        let weights = self.new_weights(Shape::new(output_size, input_size));
-        let bias = self.new_weights(Shape::new(output_size, bias_cols));
+        let weights = self.new_weights((output_size, input_size));
+        let bias = self.new_weights((output_size, bias_cols));
 
         Affine { weights, bias }
     }
@@ -109,7 +123,8 @@ impl<'a> ModelNode<'a> {
         self.builder.ir().ir.node(self.node).unwrap().ty()
     }
 
-    pub fn reshape(self, shape: Shape) -> Self {
+    pub fn reshape(self, shape: impl Into<Shape>) -> Self {
+        let shape = shape.into();
         Self { node: self.builder.add_op([self], Reshape::new(self.ty(), shape.rows, shape.cols)), ..self }
     }
 
@@ -125,7 +140,7 @@ impl<'a> ModelNode<'a> {
 
     fn broadcast_scalar(self, rows: usize, cols: usize) -> Self {
         let broadcast = Broadcast(self.ty(), Dim::Rows, Some(rows * cols));
-        Self { node: self.builder.add_op([self], broadcast), ..self }.reshape(Shape { rows, cols })
+        Self { node: self.builder.add_op([self], broadcast), ..self }.reshape((rows, cols))
     }
 
     pub fn unary(self, unary: Unary) -> Self {
