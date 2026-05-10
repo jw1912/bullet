@@ -8,7 +8,7 @@ use crate::{
     ir::{NodeId, OpId},
     tensor::{
         DValue, IRBuilder, IRTrace, TNode, TensorIR, TensorOp,
-        operation::{CABinary, SubGraph, autograd::AutogradOp},
+        operation::{CABinary, SubGraph, autograd::CustomAutogradOp},
         transform::{IRTransform, modify::AddOperation},
     },
 };
@@ -19,7 +19,7 @@ pub struct LowerForward;
 impl IRTransform for LowerForward {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         for op in ir.operations() {
-            if let Some(AutogradOp { forward, .. }) = op.data().downcast().cloned() {
+            if let Some(CustomAutogradOp { forward, .. }) = op.data().downcast().cloned() {
                 ir.replace_op(op.id(), AddOperation::new(op.inputs().to_vec(), Ok(TensorOp::new(forward))))?;
             }
         }

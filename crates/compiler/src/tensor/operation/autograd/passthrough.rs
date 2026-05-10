@@ -1,6 +1,9 @@
-use std::{fmt, rc::Rc};
+use std::fmt;
 
-use crate::tensor::{IRTrace, TNode, TType, operation::autograd::Autograd};
+use crate::tensor::{
+    IRTrace, TNode, TType,
+    operation::autograd::{CustomAutograd, CustomAutogradOp},
+};
 
 #[allow(clippy::type_complexity)]
 pub struct PassThrough(pub TType, pub Box<dyn for<'a> Fn(TNode<'a>) -> Result<TNode<'a>, IRTrace>>);
@@ -11,7 +14,7 @@ impl fmt::Debug for PassThrough {
     }
 }
 
-impl Autograd for PassThrough {
+impl CustomAutograd for PassThrough {
     fn opname(&self) -> String {
         "pass-through".to_string()
     }
@@ -28,7 +31,7 @@ impl Autograd for PassThrough {
         Ok(output_grads)
     }
 
-    fn equals(&self, _other: &Rc<dyn Autograd>) -> bool {
+    fn equals(&self, _other: &CustomAutogradOp) -> bool {
         false
     }
 }

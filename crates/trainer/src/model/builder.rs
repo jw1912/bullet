@@ -15,8 +15,8 @@ use bullet_compiler::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, Power,
             ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
             autograd::{
-                AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, PassThrough, ReLU, SCReLU,
-                Sigmoid, SoftmaxCrossEntropyLoss,
+                CReLU, CustomAutogradOp, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, PassThrough, ReLU,
+                SCReLU, Sigmoid, SoftmaxCrossEntropyLoss,
             },
         },
         transform::{
@@ -430,7 +430,7 @@ impl<'a> ModelNode<'a> {
 
     fn dfo(self, op: impl DiffableFromOutput) -> Self {
         let op = DiffableFromOutputOp(op, self.ty().dtype(), self.ty().size());
-        let node = self.builder.add_op([self], AutogradOp::new(op).unwrap())[0];
+        let node = self.builder.add_op([self], CustomAutogradOp::new(op).unwrap())[0];
         Self { node, ..self }
     }
 
@@ -477,7 +477,7 @@ impl<'a> ModelNode<'a> {
 
     pub fn faux_quantise(self, value: f32, round: bool) -> Self {
         let op = FauxQuantise(self.ty(), value.into(), round);
-        let node = self.builder.add_op([self], AutogradOp::new(op).unwrap())[0];
+        let node = self.builder.add_op([self], CustomAutogradOp::new(op).unwrap())[0];
         Self { node, ..self }
     }
 
@@ -488,7 +488,7 @@ impl<'a> ModelNode<'a> {
             batch_size: if self.is_batched() { Size::variable() } else { 1.into() },
             axis_size: self.shape().size(),
         };
-        let node = self.builder.add_op([self, targets], AutogradOp::new(op).unwrap())[0];
+        let node = self.builder.add_op([self, targets], CustomAutogradOp::new(op).unwrap())[0];
         Self { node, ..self }
     }
 
@@ -502,7 +502,7 @@ impl<'a> ModelNode<'a> {
                 x.max(min)?.min(max)
             }),
         );
-        Self { node: self.builder.add_op([self], AutogradOp::new(op).unwrap())[0], ..self }
+        Self { node: self.builder.add_op([self], CustomAutogradOp::new(op).unwrap())[0], ..self }
     }
 
     pub fn pad(self, before: usize, after: usize, value: f32) -> Self {

@@ -1,17 +1,15 @@
-use std::rc::Rc;
-
 use crate::tensor::{
     DValue, IRTrace, TNode, TType,
     operation::{
         Unary,
-        autograd::{Autograd, AutogradOp},
+        autograd::{CustomAutograd, CustomAutogradOp},
     },
 };
 
 #[derive(Debug, PartialEq)]
 pub struct FauxQuantise(pub TType, pub DValue, pub bool);
 
-impl Autograd for FauxQuantise {
+impl CustomAutograd for FauxQuantise {
     fn opname(&self) -> String {
         format!("diffable-from-output.{:?}", self.0).to_lowercase()
     }
@@ -40,7 +38,7 @@ impl Autograd for FauxQuantise {
         Ok(output_grads)
     }
 
-    fn equals(&self, other: &Rc<dyn Autograd>) -> bool {
-        if let Some(other) = AutogradOp::downcast_rc(other) { self == other } else { false }
+    fn equals(&self, other: &CustomAutogradOp) -> bool {
+        if let Some(other) = other.downcast() { self == other } else { false }
     }
 }
