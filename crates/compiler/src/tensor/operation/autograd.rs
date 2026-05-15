@@ -9,7 +9,7 @@ use std::{fmt, rc::Rc};
 
 use crate::tensor::{IRBuilder, IRTrace, OpType, TNode, TType, TValue, TensorOp, operation::SubGraph};
 
-pub use dfo::{CReLU, DiffableFromOutput, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid};
+pub use dfo::{CReLU, DiffableFromOutput, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid, SqrReLU};
 pub use pointwise::FauxQuantise;
 pub use softmax::SoftmaxCrossEntropyLoss;
 

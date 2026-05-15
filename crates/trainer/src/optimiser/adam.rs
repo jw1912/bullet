@@ -62,11 +62,11 @@ extern \"C\" __global__ void adamw(
 impl AdamWParams {
     pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
         let op = OP
-            .replace("DECAY", &self.decay.to_string())
-            .replace("BETA1", &self.beta1.to_string())
-            .replace("BETA2", &self.beta2.to_string())
-            .replace("WMIN", &self.min_weight.to_string())
-            .replace("WMAX", &self.max_weight.to_string())
+            .replace("DECAY", &format!("{:.E}", self.decay))
+            .replace("BETA1", &format!("{:.E}", self.beta1))
+            .replace("BETA2", &format!("{:.E}", self.beta2))
+            .replace("WMIN", &format!("{:.E}", self.min_weight))
+            .replace("WMAX", &format!("{:.E}", self.max_weight))
             .replace("EPSILON", "0.00000001F");
 
         let body = if size.is_multiple_of(4) {

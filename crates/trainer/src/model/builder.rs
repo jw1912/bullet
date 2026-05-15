@@ -16,7 +16,7 @@ use bullet_compiler::{
             Power, ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
             autograd::{
                 Autograd, AutogradOp, CReLU, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, ReLU, SCReLU,
-                Sigmoid, SoftmaxCrossEntropyLoss,
+                Sigmoid, SoftmaxCrossEntropyLoss, SqrReLU,
             },
         },
         transform::{
@@ -452,6 +452,10 @@ impl<'a> ModelNode<'a> {
 
     pub fn screlu(self) -> Self {
         self.dfo(SCReLU)
+    }
+
+    pub fn sqrrelu(self) -> Self {
+        self.dfo(SqrReLU)
     }
 
     pub fn sigmoid(self) -> Self {

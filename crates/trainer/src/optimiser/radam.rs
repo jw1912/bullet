@@ -70,11 +70,11 @@ impl RAdamParams {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
         let op = OP
-            .replace("DECAY", &self.decay.to_string())
-            .replace("BETA1", &self.beta1.to_string())
-            .replace("BETA2", &self.beta2.to_string())
-            .replace("WMIN", &min.to_string())
-            .replace("WMAX", &max.to_string())
+            .replace("DECAY", &format!("{:.E}", self.decay))
+            .replace("BETA1", &format!("{:.E}", self.beta1))
+            .replace("BETA2", &format!("{:.E}", self.beta2))
+            .replace("WMIN", &format!("{min:.E}"))
+            .replace("WMAX", &format!("{max:.E}"))
             .replace("EPSILON", "0.00000001F");
 
         let body = if size.is_multiple_of(4) {
