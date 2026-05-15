@@ -13,11 +13,7 @@ use bullet_compiler::{
         DType, DValue, IRBuilder, OpType, Size, TNode, TType, TValue,
         operation::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, Power,
-            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp,
-            autograd::{
-                CReLU, CustomAutogradOp, DiffableFromOutput, DiffableFromOutputOp, FauxQuantise, PassThrough, ReLU,
-                SCReLU, Sigmoid, SoftmaxCrossEntropyLoss,
-            },
+            ReduceAcrossDimension, Reduction, Select, SliceAcrossDimension, SparseMatmul, Unary, UnaryOp, autograd::*,
         },
         transform::{
             autograd::{LowerForward, TakeGradient},
@@ -444,6 +440,10 @@ impl<'a> ModelNode<'a> {
 
     pub fn screlu(self) -> Self {
         self.dfo(SCReLU)
+    }
+
+    pub fn sqrrelu(self) -> Self {
+        self.dfo(SqrReLU)
     }
 
     pub fn sigmoid(self) -> Self {

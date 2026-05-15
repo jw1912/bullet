@@ -89,6 +89,20 @@ impl DiffableFromOutput for SCReLU {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SqrReLU;
+impl DiffableFromOutput for SqrReLU {
+    fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
+        let relu = ReLU.forward(input)?;
+        relu * relu
+    }
+
+    fn backward<'a>(&self, output: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
+        let half = (ReLU.backward(output)? * output.sqrt()?)?;
+        half + half
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Sigmoid;
 impl DiffableFromOutput for Sigmoid {
     fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace> {
