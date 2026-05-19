@@ -18,7 +18,7 @@ use crate::{
 
 type ValueTrainerInner<Opt, Inp, Out> = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;
 
-pub(super) fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
+pub fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
     use std::io::Write;
 
     let mut writer = std::io::BufWriter::new(std::fs::File::create(path).expect("Opening log file failed!"));
@@ -27,7 +27,7 @@ pub(super) fn write_losses(path: &str, error_record: &[(usize, usize, f32)]) {
     }
 }
 
-pub(super) fn save_to_checkpoint<Opt, Inp, Out>(trainer: &ValueTrainerInner<Opt, Inp, Out>, path: &str)
+pub fn save_to_checkpoint<Opt, Inp, Out>(trainer: &ValueTrainerInner<Opt, Inp, Out>, path: &str)
 where
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
@@ -51,7 +51,7 @@ where
     }
 }
 
-pub(super) fn save_unquantised<Opt, Inp, Out>(trainer: &ValueTrainerInner<Opt, Inp, Out>, path: &str) -> io::Result<()>
+pub fn save_unquantised<Opt, Inp, Out>(trainer: &ValueTrainerInner<Opt, Inp, Out>, path: &str) -> io::Result<()>
 where
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
@@ -75,7 +75,7 @@ where
     Ok(())
 }
 
-pub(super) fn save_quantised<Opt, Inp, Out>(trainer: &ValueTrainerInner<Opt, Inp, Out>, path: &str) -> io::Result<()>
+pub fn save_quantised<Opt, Inp, Out>(trainer: &ValueTrainerInner<Opt, Inp, Out>, path: &str) -> io::Result<()>
 where
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
