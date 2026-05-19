@@ -135,11 +135,11 @@ where
 
         let output_size = if self.wdl_output { 3 } else { 1 };
         let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
-        let (out, loss) = f(inputs, nnz, targets, &builder);
+        let (out, mut loss) = f(inputs, nnz, targets, &builder);
 
         if self.weight_getter.is_some() {
             let entry_weights = builder.new_dense_input("entry_weights", Shape::new(1, 1));
-            let _ = entry_weights * loss;
+            loss = entry_weights * loss;
         }
 
         let model = builder.build(Device::<ExecutionContext>::new(0).unwrap(), loss, out);
