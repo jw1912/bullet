@@ -1,9 +1,6 @@
 use bullet_trainer::model::Model as TrainerModel;
 
-pub use bullet_trainer::model::{
-    Shape,
-    builder::{Affine, InitSettings, ModelBuilder, ModelNode},
-};
+pub use bullet_compiler::model::{Affine, InitSettings, ModelBuilder, ModelNode, Shape};
 
 #[cfg(feature = "cuda")]
 pub type ExecutionContext = bullet_gpu::runtime::cuda::Cuda;

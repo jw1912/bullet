@@ -1,4 +1,4 @@
-pub mod builder;
+mod builder;
 pub mod operations;
 
 use std::{
@@ -9,9 +9,10 @@ use std::{
 
 use crate::{
     ir::{IR, IRError, NodeId, Operation, TypeSystem},
-    model::operations::Input,
     tensor::{DType, IRTrace, TType, TValue, TensorIR},
 };
+
+pub use builder::{Affine, ModelBuilder, ModelNode, Shape};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layout {
@@ -124,7 +125,7 @@ pub struct ModelIR {
 impl ModelIR {
     pub fn add_weight(&mut self, name: impl Into<String>, rows: usize, cols: usize, init: InitSettings) -> NodeId {
         let ty = MType { batch: false, rows, cols, layout: Layout::Dense(DType::F32) };
-        let node = self.ir.add_op([], Input(ty).into()).unwrap()[0];
+        let node = self.ir.add_op([], operations::Input(ty).into()).unwrap()[0];
         self.weights.insert(node, (name.into(), init));
 
         if !self.stop_grad {
@@ -143,7 +144,7 @@ impl ModelIR {
         layout: Layout,
     ) -> NodeId {
         let ty = MType { batch, rows, cols, layout };
-        let node = self.ir.add_op([], Input(ty).into()).unwrap()[0];
+        let node = self.ir.add_op([], operations::Input(ty).into()).unwrap()[0];
         self.inputs.insert(node, name.into());
         node
     }
