@@ -26,6 +26,14 @@ impl Shape {
     pub fn size(&self) -> usize {
         self.rows * self.cols
     }
+
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
 }
 
 impl From<(usize, usize)> for Shape {
@@ -149,6 +157,11 @@ impl<'a> ModelNode<'a> {
 
     pub fn ty(&self) -> MType {
         self.builder.ir().ir.node(self.node).unwrap().ty()
+    }
+
+    pub fn shape(&self) -> Shape {
+        let ty = self.ty();
+        Shape::new(ty.rows, ty.cols)
     }
 
     pub fn reshape(self, shape: impl Into<Shape>) -> Self {
