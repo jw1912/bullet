@@ -155,7 +155,7 @@ impl ModelIR {
         Ok(node)
     }
 
-    pub fn lower(&self, batch_size: usize) -> Result<TensorIR, IRTrace> {
+    pub fn lower(&self, batch_size: usize) -> Result<(TensorIR, BTreeMap<NodeId, NodeId>), IRTrace> {
         let mut ir = TensorIR::default();
 
         let mut map = BTreeMap::default();
@@ -170,6 +170,6 @@ impl ModelIR {
             ir.register_output(*map.get(output).unwrap());
         }
 
-        Ok(ir)
+        Ok((ir, map))
     }
 }

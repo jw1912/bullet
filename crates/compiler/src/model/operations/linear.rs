@@ -82,7 +82,7 @@ impl ModelOperation for Reduce {
             match self.1 {
                 Dim::Batch => lower.add_reduction(input, [batch_size, ty.single_size()], 0, self.2),
                 Dim::Cols => lower.add_reduction(input, [batch_size, ty.cols, ty.rows], 1, self.2),
-                Dim::Rows => lower.add_reduction(input, [batch_size * ty.cols, ty.rows], 2, self.2),
+                Dim::Rows => lower.add_reduction(input, [batch_size * ty.cols, ty.rows], 1, self.2),
             }
         } else {
             match self.1 {
