@@ -4,7 +4,7 @@ use crate::{
     ir::{NodeId, OpId},
     tensor::{
         IRTrace, TValue, TensorIR, TensorOp,
-        operation::{Constant, ScalarConstant},
+        operation::{Constant, CopyOp, ScalarConstant},
         transform::{IRTransform, eliminate::*, foldrules::*, ordering::*, rewriterules::*},
     },
 };
@@ -42,7 +42,6 @@ impl CanonicalisePass {
             .add_rewrite(CombineMulXAddMulX)
             .add_rewrite(FactoriseDistributive)
             .add_rewrite(ConcatMatmulToAddSlicedMatmuls)
-            //.add_rewrite(AutogradConcatMatmulToAddSlicedMatmuls)
             .add_rewrite(CombineSparseMatmulBwds)
     }
 
@@ -98,7 +97,7 @@ impl CanonicalisePass {
     }
 
     fn try_evaluate(ir: &TensorIR, inputs: &[NodeId], op: &TensorOp) -> Result<Option<Vec<Constant>>, IRTrace> {
-        if !inputs.is_empty() {
+        if !(inputs.is_empty() || (op.downcast::<CopyOp>().is_some() && ir.is_output(inputs[0]))) {
             let mut consts = Vec::new();
 
             for &input in inputs {
