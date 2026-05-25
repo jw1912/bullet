@@ -10,7 +10,7 @@ use std::{
 use crate::{
     ir::{IR, IRError, NodeId, Operation, TypeSystem},
     model::operations::Input,
-    tensor::{DType, IRTrace, TType, TensorIR},
+    tensor::{DType, IRTrace, TType, TValue, TensorIR},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,21 +103,29 @@ impl TypeSystem for Model {
     type OpData = ModelOp;
 }
 
+#[derive(Clone, Debug)]
+pub enum InitSettings {
+    Zeroed,
+    Normal { mean: f32, stdev: f32 },
+    Uniform { mean: f32, stdev: f32 },
+    Custom(TValue),
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ModelIR {
     ir: IR<Model>,
-    weights: BTreeSet<NodeId>,
-    inputs: BTreeSet<NodeId>,
-    outputs: BTreeSet<NodeId>,
+    weights: BTreeMap<NodeId, (String, InitSettings)>,
+    inputs: BTreeMap<NodeId, String>,
+    outputs: BTreeMap<NodeId, String>,
     requires_grad: BTreeSet<NodeId>,
-    pub stop_grad: bool,
+    stop_grad: bool,
 }
 
 impl ModelIR {
-    pub fn add_weight(&mut self, rows: usize, cols: usize) -> NodeId {
+    pub fn add_weight(&mut self, name: impl Into<String>, rows: usize, cols: usize, init: InitSettings) -> NodeId {
         let ty = MType { batch: false, rows, cols, layout: Layout::Dense(DType::F32) };
         let node = self.ir.add_op([], Input(ty).into()).unwrap()[0];
-        self.weights.insert(node);
+        self.weights.insert(node, (name.into(), init));
 
         if !self.stop_grad {
             self.requires_grad.insert(node);
@@ -126,20 +134,27 @@ impl ModelIR {
         node
     }
 
-    pub fn add_input(&mut self, batch: bool, rows: usize, cols: usize, layout: Layout) -> NodeId {
+    pub fn add_input(
+        &mut self,
+        name: impl Into<String>,
+        batch: bool,
+        rows: usize,
+        cols: usize,
+        layout: Layout,
+    ) -> NodeId {
         let ty = MType { batch, rows, cols, layout };
         let node = self.ir.add_op([], Input(ty).into()).unwrap()[0];
-        self.inputs.insert(node);
+        self.inputs.insert(node, name.into());
         node
     }
 
-    pub fn register_output(&mut self, node: NodeId) -> Result<(), IRError> {
-        if self.weights.contains(&node) || self.inputs.contains(&node) {
+    pub fn register_output(&mut self, node: NodeId, name: impl Into<String>) -> Result<(), IRError> {
+        if self.weights.contains_key(&node) || self.inputs.contains_key(&node) {
             return Err("Cannot register a weight/input as an output!".into());
         }
 
         self.ir.node(node)?;
-        self.outputs.insert(node);
+        self.outputs.insert(node, name.into());
 
         Ok(())
     }
@@ -166,7 +181,7 @@ impl ModelIR {
             map.insert(op.outputs()[0], toutput);
         }
 
-        for output in &self.outputs {
+        for output in self.outputs.keys() {
             ir.register_output(*map.get(output).unwrap());
         }
 

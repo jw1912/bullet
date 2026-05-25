@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     ir::NodeId,
-    model::{Layout, MType, ModelIR, ModelOperation, operations::*},
+    model::{InitSettings, Layout, MType, ModelIR, ModelOperation, operations::*},
     tensor::{
         DType, DValue, TValue,
         operation::{CABinary, Reduction, Unary},
@@ -58,14 +58,22 @@ impl ModelBuilder {
         ModelNode { builder: self, node: self.add_op([], Constant::new(value, 1, 1)) }
     }
 
-    pub fn new_dense_input<'a>(&'a self, shape: impl Into<Shape>) -> ModelNode<'a> {
+    pub fn new_dense_input<'a>(&'a self, name: impl Into<String>, shape: impl Into<Shape>) -> ModelNode<'a> {
         let shape = shape.into();
-        ModelNode { builder: self, node: self.ir().add_input(true, shape.rows, shape.cols, Layout::Dense(DType::F32)) }
+        ModelNode {
+            builder: self,
+            node: self.ir().add_input(name, true, shape.rows, shape.cols, Layout::Dense(DType::F32)),
+        }
     }
 
-    pub fn new_sparse_input<'a>(&'a self, shape: impl Into<Shape>, nnz: usize) -> ModelNode<'a> {
+    pub fn new_sparse_input<'a>(
+        &'a self,
+        name: impl Into<String>,
+        shape: impl Into<Shape>,
+        nnz: usize,
+    ) -> ModelNode<'a> {
         let shape = shape.into();
-        ModelNode { builder: self, node: self.ir().add_input(true, shape.rows, shape.cols, Layout::Sparse(nnz)) }
+        ModelNode { builder: self, node: self.ir().add_input(name, true, shape.rows, shape.cols, Layout::Sparse(nnz)) }
     }
 
     pub fn new_constant<'a>(&'a self, shape: impl Into<Shape>, vals: &[f32]) -> ModelNode<'a> {
@@ -75,20 +83,39 @@ impl ModelBuilder {
         ModelNode { builder: self, node: self.add_op([], Constant::new(value, shape.rows, shape.cols)) }
     }
 
-    pub fn new_weights<'a>(&'a self, shape: impl Into<Shape>) -> ModelNode<'a> {
+    pub fn new_weights<'a>(
+        &'a self,
+        name: impl Into<String>,
+        shape: impl Into<Shape>,
+        init: InitSettings,
+    ) -> ModelNode<'a> {
         let shape = shape.into();
-        ModelNode { builder: self, node: self.ir().add_input(false, shape.rows, shape.cols, Layout::Dense(DType::F32)) }
+        ModelNode { builder: self, node: self.ir().add_weight(name, shape.rows, shape.cols, init) }
     }
 
     pub fn new_affine(&self, id: &str, input_size: usize, output_size: usize) -> Affine<'_> {
         self.new_affine_custom(id, input_size, output_size, 1)
     }
 
-    pub fn new_affine_custom(&self, _id: &str, input_size: usize, output_size: usize, bias_cols: usize) -> Affine<'_> {
-        let weights = self.new_weights((output_size, input_size));
-        let bias = self.new_weights((output_size, bias_cols));
-
+    pub fn new_affine_custom(
+        &self,
+        id: impl AsRef<str>,
+        input_size: usize,
+        output_size: usize,
+        bias_cols: usize,
+    ) -> Affine<'_> {
+        let init = InitSettings::Normal { mean: 0.0, stdev: (2.0 / (input_size as f32 * bias_cols as f32)).sqrt() };
+        let weights = self.new_weights(format!("{}w", id.as_ref()), (output_size, input_size), init);
+        let bias = self.new_weights(format!("{}b", id.as_ref()), (output_size, bias_cols), InitSettings::Zeroed);
         Affine { weights, bias }
+    }
+
+    pub fn with_no_grad<T>(&self, mut f: impl FnMut() -> T) -> T {
+        let value = self.ir().stop_grad;
+        self.ir().stop_grad = true;
+        let out = f();
+        self.ir().stop_grad = value;
+        out
     }
 }
 
@@ -103,8 +130,9 @@ impl<'a> Affine<'a> {
         self.weights.matmul(input) + self.bias
     }
 
-    pub fn init_with_effective_input_size(&self, _size: usize) {
-        todo!()
+    pub fn init_with_effective_input_size(&self, size: usize) {
+        self.weights.builder.ir().weights.get_mut(&self.weights.node).unwrap().1 =
+            InitSettings::Normal { mean: 0.0, stdev: (2.0 / size as f32).sqrt() };
     }
 }
 
@@ -151,6 +179,18 @@ impl<'a> ModelNode<'a> {
     pub fn reduce_sum_cols(self) -> Self {
         let reduce = Reduce(self.ty(), Dim::Cols, Reduction::Sum);
         Self { node: self.builder.add_op([self], reduce), ..self }
+    }
+
+    pub fn scalar_like(self, value: impl Into<DValue>) -> Self {
+        let ty = self.ty();
+        let value = match value.into() {
+            DValue::F32(val) => TValue::F32(vec![val; ty.single_size()]),
+            DValue::I32(val) => TValue::I32(vec![val; ty.single_size()]),
+        };
+        let node = self.builder.add_op([], Constant::new(value, ty.rows, ty.cols));
+        let scalar = ModelNode { node, ..self };
+
+        if ty.batch { scalar.broadcast_across_batch() } else { scalar }
     }
 
     fn broadcast_scalar(self, rows: usize, cols: usize) -> Self {
