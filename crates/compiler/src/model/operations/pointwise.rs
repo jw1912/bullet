@@ -137,7 +137,8 @@ impl ModelOperation for Sigmoid {
         let one = lower.add_scalar(DValue::one(ttype.dtype()), ttype.size());
         let neg_one = lower.add_scalar(DValue::neg_one(ttype.dtype()), ttype.size());
         let neg = lower.add_binary(inputs[0], neg_one, CABinary::Mul)?;
-        let denom = lower.add_binary(one, neg, CABinary::Add)?;
+        let exp = lower.add_unary(neg, Unary::Exp)?;
+        let denom = lower.add_binary(one, exp, CABinary::Add)?;
         lower.add_unary(denom, Unary::Reciprocal)
     }
 }
