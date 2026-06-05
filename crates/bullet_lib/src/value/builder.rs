@@ -1,8 +1,12 @@
 use std::marker::PhantomData;
 
-use bullet_compiler::model::builder::{ModelBuilder, ModelNode, Shape};
+use bullet_compiler::model::{ModelBuilder, ModelNode, Shape};
 use bullet_gpu::runtime::Device;
-use bullet_trainer::{Trainer, model::save::SavedFormat, optimiser::Optimiser};
+use bullet_trainer::{
+    Trainer,
+    model::{Model, save::SavedFormat},
+    optimiser::Optimiser,
+};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
@@ -139,7 +143,9 @@ where
             loss = entry_weights * loss;
         }
 
-        let model = builder.build(Device::<ExecutionContext>::new(0).unwrap(), loss, out);
+        loss = loss.reduce_sum_batch();
+
+        let model = Model::new(&builder.ir(), Device::<ExecutionContext>::new(0).unwrap(), loss.node(), [out.node()]);
 
         ValueTrainer(Trainer {
             optimiser: Optimiser::new(model, Default::default()).unwrap(),

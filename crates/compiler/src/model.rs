@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ir::{IR, IRError, NodeId, Operation, TypeSystem},
+    ir::{IR, IRError, Node, NodeId, Operation, TypeSystem},
     tensor::{DType, IRTrace, TType, TValue, TensorIR},
 };
 
@@ -40,6 +40,10 @@ impl fmt::Display for MType {
 }
 
 impl MType {
+    pub fn new(batch: bool, rows: usize, cols: usize, layout: Layout) -> Self {
+        Self { batch, rows, cols, layout }
+    }
+
     pub fn ttype(&self, batch_size: usize) -> TType {
         let MType { batch, rows, cols, layout } = *self;
 
@@ -57,6 +61,18 @@ impl MType {
 
     pub fn single_size(&self) -> usize {
         self.rows * self.cols
+    }
+
+    pub fn shape(&self) -> Shape {
+        Shape::new(self.rows, self.cols)
+    }
+
+    pub fn is_batched(&self) -> bool {
+        self.batch
+    }
+
+    pub fn layout(&self) -> Layout {
+        self.layout
     }
 
     pub fn is_dense(&self) -> bool {
@@ -123,6 +139,26 @@ pub struct ModelIR {
 }
 
 impl ModelIR {
+    pub fn inner(&self) -> &IR<Model> {
+        &self.ir
+    }
+
+    pub fn node(&self, node: NodeId) -> &Node<Model> {
+        self.ir.node(node).unwrap()
+    }
+
+    pub fn weights(&self) -> &BTreeMap<NodeId, (String, InitSettings)> {
+        &self.weights
+    }
+
+    pub fn inputs(&self) -> &BTreeMap<NodeId, String> {
+        &self.inputs
+    }
+
+    pub fn outputs(&self) -> &BTreeMap<NodeId, String> {
+        &self.outputs
+    }
+
     pub fn add_weight(&mut self, name: impl Into<String>, rows: usize, cols: usize, init: InitSettings) -> NodeId {
         let ty = MType { batch: false, rows, cols, layout: Layout::Dense(DType::F32) };
         let node = self.ir.add_op([], operations::Input(ty).into()).unwrap()[0];
@@ -180,10 +216,6 @@ impl ModelIR {
             let tinputs = op.inputs().iter().map(|node| *map.get(node).unwrap()).collect::<Vec<_>>();
             let toutput = op.data().0.lower(batch_size, &mut ir, tinputs)?;
             map.insert(op.outputs()[0], toutput);
-        }
-
-        for output in self.outputs.keys() {
-            ir.register_output(*map.get(output).unwrap());
         }
 
         Ok((ir, map))

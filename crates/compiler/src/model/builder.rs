@@ -48,7 +48,7 @@ pub struct ModelBuilder {
 }
 
 impl ModelBuilder {
-    fn ir(&'_ self) -> MutexGuard<'_, ModelIR> {
+    pub fn ir(&'_ self) -> MutexGuard<'_, ModelIR> {
         self.ir.try_lock().unwrap()
     }
 
@@ -124,6 +124,10 @@ impl ModelBuilder {
         let out = f();
         self.ir().stop_grad = value;
         out
+    }
+
+    pub fn register_output(&self, node: ModelNode<'_>, name: impl Into<String>) {
+        self.ir().register_output(node.node(), name).unwrap();
     }
 }
 

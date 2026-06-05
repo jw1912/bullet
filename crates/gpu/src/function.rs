@@ -245,6 +245,12 @@ impl<G: Gpu> Function<G> {
         let mut mutmap = BTreeMap::new();
         let mut var_size = None;
 
+        for id in self.maps.keys() {
+            if !inputs.contains_key(id) {
+                return Err(format!("Input missing: {id:?}!").into());
+            }
+        }
+
         for (name, buf) in inputs {
             let (idx, is_mut, ty) = *self.maps.get(name).ok_or("Input not in function!".into())?;
             let size = ty.size();
@@ -293,7 +299,7 @@ impl<G: Gpu> Function<G> {
         let mut sizes = vec![0; self.max_num_args];
 
         assert_ne!(var, 0, "Variable size = 0!");
-        assert!(self.prealloc_size >= var);
+        assert!(self.prealloc_size >= var, "{var} > {}", self.prealloc_size);
 
         unsafe {
             for inst in &self.insts {

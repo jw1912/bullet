@@ -189,7 +189,7 @@ where
         .unwrap();
     }
 
-    pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
+    /*pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
@@ -210,13 +210,14 @@ where
         let output = outputs.get("outputs/output").unwrap().clone();
         let TValue::F32(output) = output.to_host().unwrap() else { panic!() };
         output
-    }
+    }*/
 
-    pub fn eval(&mut self, fen: &str) -> f32
+    pub fn eval(&mut self, _fen: &str) -> f32
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
-        let vals = self.eval_raw_output(fen);
+        0.0
+        /*let vals = self.eval_raw_output(fen);
 
         match vals[..] {
             [mut loss, mut draw, mut win] => {
@@ -229,7 +230,7 @@ where
             }
             [score] => score,
             _ => panic!("Invalid output size!"),
-        }
+        }*/
     }
 
     pub fn measure_max_cpu_throughput(
