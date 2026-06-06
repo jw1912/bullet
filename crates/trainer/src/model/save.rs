@@ -24,12 +24,12 @@ impl<G: Gpu> From<&Model<G>> for ModelWeights {
         Self {
             stores: model
                 .definition
-                .ir
+                .ir()
                 .weights()
                 .iter()
                 .map(|(&id, (name, _))| {
                     let values = model.weights.get(name).unwrap().clone().to_host().unwrap();
-                    let shape = model.definition.ir.node(id).ty().shape();
+                    let shape = model.definition.ir().node(id).ty().shape();
                     (name.clone(), ShapedTValue { values, shape })
                 })
                 .collect(),
@@ -38,8 +38,8 @@ impl<G: Gpu> From<&Model<G>> for ModelWeights {
 }
 
 impl ModelWeights {
-    pub fn get(&self, id: &str) -> ShapedTValue {
-        self.stores.get(id).cloned().unwrap()
+    pub fn get(&self, id: &str) -> &ShapedTValue {
+        self.stores.get(id).unwrap()
     }
 }
 
@@ -69,7 +69,7 @@ impl SavedFormat {
     pub fn id(id: &str) -> Self {
         let id = id.to_string();
         Self { id: Some(id.clone()), ..Self::empty() }.transform(move |store, _| {
-            let TValue::F32(v) = store.get(&id).values else { panic!() };
+            let TValue::F32(v) = store.get(&id).values.clone() else { panic!() };
             v
         })
     }
@@ -105,14 +105,6 @@ impl SavedFormat {
     pub fn transform(mut self, f: impl Fn(&ModelWeights, Vec<f32>) -> Vec<f32> + 'static) -> Self {
         assert!(self.custom.is_none());
         self.transforms.push(Rc::new(f));
-        self
-    }
-
-    #[deprecated(note = "Use `.transform(|store, mut values| { ... })` instead!")]
-    pub fn add_transform(mut self, f: impl Fn(&ModelWeights, &str, Vec<f32>) -> Vec<f32> + 'static) -> Self {
-        assert!(self.custom.is_none());
-        let id = self.get_id().unwrap();
-        self.transforms.push(Rc::new(move |store, vals| f(store, &id, vals)));
         self
     }
 

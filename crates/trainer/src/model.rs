@@ -1,87 +1,23 @@
+pub mod definition;
 pub mod rng;
 pub mod save;
 pub mod utils;
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::NodeId,
     model::{InitSettings, Layout, MType, ModelIR},
-    tensor::{
-        DType, TValue,
-        transform::{
-            autograd::{LowerForward, TakeGradient},
-            canonicalise::CanonicalisePass,
-            inline::InlineSubgraphs,
-        },
-    },
+    tensor::{DType, TValue},
 };
 use bullet_gpu::{
     buffer::Buffer,
-    function::Function,
     runtime::{Device, Gpu},
 };
 
+use definition::ModelDefinition;
+
 pub type TensorMap<G> = BTreeMap<String, Arc<Buffer<G>>>;
-
-pub struct ModelDefinition {
-    ir: ModelIR,
-    loss: NodeId,
-    outputs: Vec<NodeId>,
-}
-
-impl ModelDefinition {
-    pub fn ir(&self) -> &ModelIR {
-        &self.ir
-    }
-
-    pub fn loss(&self) -> NodeId {
-        self.loss
-    }
-
-    pub fn outputs(&self) -> &[NodeId] {
-        &self.outputs
-    }
-
-    pub fn compile_backward<G: Gpu>(
-        &self,
-        frozen: &BTreeSet<NodeId>,
-        batch_size: usize,
-        device: Arc<Device<G>>,
-    ) -> (Function<G>, BTreeMap<NodeId, NodeId>, BTreeMap<NodeId, NodeId>) {
-        let (mut bwd, map) = self.ir.lower(batch_size).unwrap();
-
-        let loss = *map.get(&self.loss).unwrap();
-        bwd.register_output(loss);
-        bwd.optimise().unwrap();
-        bwd.transform(CanonicalisePass::peephole_activations()).unwrap();
-
-        let grad = bwd.add_const(TValue::F32(vec![1.0]));
-        let op = bwd.get_parent_op(loss).unwrap();
-        let (transform, grads) = TakeGradient::new(op, [grad]);
-        bwd.transform(transform).unwrap();
-
-        let mut gmap = BTreeMap::default();
-
-        for &id in self.ir.weights().keys() {
-            if !frozen.contains(&id) {
-                let wid = *map.get(&id).unwrap();
-                let gid = *grads.borrow().get(&wid).unwrap();
-                bwd.register_output(gid);
-                gmap.insert(id, gid);
-            }
-        }
-
-        bwd.transform(LowerForward).unwrap();
-        bwd.transform(InlineSubgraphs).unwrap();
-        bwd.optimise().unwrap();
-
-        (Function::new(device, bwd).unwrap(), map, gmap)
-    }
-}
 
 pub struct Model<G: Gpu> {
     device: Arc<Device<G>>,
@@ -113,7 +49,7 @@ impl<G: Gpu> Model<G> {
 
         assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
 
-        Model { weights, device, definition: ModelDefinition { ir: ir.clone(), loss, outputs: outputs.into() } }
+        Model { weights, device, definition: ModelDefinition::new(ir.clone(), loss, outputs.into()) }
     }
 
     pub fn device(&self) -> Arc<Device<G>> {

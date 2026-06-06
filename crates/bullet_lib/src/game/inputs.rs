@@ -2,43 +2,13 @@ mod adapter;
 mod ataxx147;
 mod chess768;
 mod chess_buckets;
-mod chess_buckets_mk;
 mod factorised;
-
-#[allow(deprecated)]
-mod legacy;
 
 pub use adapter::MarlinFormatAdapter;
 pub use ataxx147::{Ataxx98, Ataxx147};
 pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};
 pub use chess768::Chess768;
 pub use factorised::{Factorised, Factorises};
-
-#[allow(deprecated)]
-pub use chess_buckets_mk::*;
-
-#[allow(deprecated)]
-pub use legacy::InputType;
-
-#[deprecated(note = "See `examples/progression/3_input_buckets.rs` for a faster alternative to this.")]
-pub type ChessBucketsFactorised = Factorised<ChessBuckets, Chess768>;
-
-#[allow(deprecated)]
-impl ChessBucketsFactorised {
-    pub fn new(buckets: [usize; 64]) -> Self {
-        Self::from_parts(ChessBuckets::new(buckets), Chess768)
-    }
-}
-
-#[deprecated(note = "See `examples/progression/3_input_buckets.rs` for a faster alternative to this.")]
-pub type ChessBucketsMirroredFactorised = Factorised<ChessBucketsMirrored, Chess768>;
-
-#[allow(deprecated)]
-impl ChessBucketsMirroredFactorised {
-    pub fn new(buckets: [usize; 32]) -> Self {
-        Self::from_parts(ChessBucketsMirrored::new(buckets), Chess768)
-    }
-}
 
 pub trait SparseInputType: Clone + Send + Sync + 'static {
     type RequiredDataType: Copy + Send + Sync;
