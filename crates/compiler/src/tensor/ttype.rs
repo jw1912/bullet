@@ -32,8 +32,14 @@ impl TType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Size(NonZeroUsize);
+
+impl fmt::Debug for Size {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0.get())
+    }
+}
 
 impl From<usize> for Size {
     fn from(value: usize) -> Self {

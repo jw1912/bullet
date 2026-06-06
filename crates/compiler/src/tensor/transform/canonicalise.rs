@@ -45,6 +45,20 @@ impl CanonicalisePass {
             .add_rewrite(CombineSparseMatmulBwds)
     }
 
+    pub fn peephole_activations() -> Self {
+        Self::default()
+            .add_cleanup(OrderCommutativeInputs)
+            .add_cleanup(EliminateCopies)
+            .add_cleanup(EliminateUnusedOperations)
+            .add_cleanup(EliminateCommonSubExpressions)
+            .add_cleanup(EliminateCopies)
+            .add_fold(PeepholeReLU)
+            .add_fold(PeepholeCReLU)
+            .add_fold(PeepholeSCReLU)
+            .add_fold(PeepholeSqrReLU)
+            .add_fold(PeepholeSigmoid)
+    }
+
     pub fn add_cleanup(mut self, cleanup: impl IRTransform) -> Self {
         self.cleanups.push(Rc::new(cleanup));
         self

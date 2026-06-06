@@ -14,6 +14,7 @@ use bullet_compiler::{
         DType, TValue,
         transform::{
             autograd::{LowerForward, TakeGradient},
+            canonicalise::CanonicalisePass,
             inline::InlineSubgraphs,
         },
     },
@@ -56,6 +57,7 @@ impl ModelDefinition {
         let loss = *map.get(&self.loss).unwrap();
         bwd.register_output(loss);
         bwd.optimise().unwrap();
+        bwd.transform(CanonicalisePass::peephole_activations()).unwrap();
 
         let grad = bwd.add_const(TValue::F32(vec![1.0]));
         let op = bwd.get_parent_op(loss).unwrap();
