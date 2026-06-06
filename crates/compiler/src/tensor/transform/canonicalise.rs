@@ -114,11 +114,7 @@ impl CanonicalisePass {
 
             let mut tensors = Vec::new();
             for &ty in &op.0.outputs() {
-                if let Some(size) = ty.size().evaluate_constant() {
-                    tensors.push(TValue::zeros(ty.dtype(), size));
-                } else {
-                    return Ok(None);
-                }
+                tensors.push(TValue::zeros(ty.dtype(), ty.size().get()));
             }
 
             op.0.evaluate(consts.iter().collect(), tensors.iter_mut().collect());
@@ -163,7 +159,7 @@ mod tests {
     fn test_complex() -> Result<(), IRTrace> {
         let mut ir = TensorIR::default();
 
-        let size = Size::variable();
+        let size = Size::from(32);
 
         let a = ir.add_scalar(1, 1);
         let ba = BroadcastAcrossDimension::new(DType::I32, [1], 0, size);

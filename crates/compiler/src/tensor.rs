@@ -52,32 +52,19 @@ impl TensorIR {
         let mut values: BTreeMap<_, _> =
             inputs.into().into_iter().map(|(id, tensor)| (id, RefCell::new(tensor))).collect();
 
-        let mut vars = BTreeSet::new();
-
         for (id, tensor) in &values {
             let op = self.get_op(self.get_parent_op(*id)?)?;
             if !op.data().is_input() {
                 return Err("Seeded non-leaf node!".into());
             }
 
-            let concrete_size = tensor.borrow().size();
-            let size = self.get_node(*id)?.ty().size();
-
-            if let Some(var) = size.get_var_size(concrete_size) {
-                vars.insert(var);
-            }
+            assert_eq!(tensor.borrow().size(), self.get_node(*id)?.ty().size().get());
         }
-
-        let var = match vars.len() {
-            0 => 1,
-            1 => *vars.iter().next().unwrap(),
-            _ => return Err(format!("Mismatching batch sizes in inputs: {vars:?}").into()),
-        };
 
         for op in self.ordered_operations()? {
             for &output in op.outputs() {
                 let ty = self.get_node(output)?.ty();
-                let size = ty.size().evaluate(var);
+                let size = ty.size().get();
                 let tensor = TValue::zeros(ty.dtype(), size);
                 let is_prev = values.contains_key(&output);
 

@@ -46,7 +46,7 @@ impl OpType for CopyOp {
 
 #[cfg(test)]
 mod tests {
-    use crate::tensor::{DType, Size};
+    use crate::tensor::DType;
 
     use super::*;
 
@@ -55,7 +55,7 @@ mod tests {
         let a = TValue::F32(vec![1.0; 4]);
         let mut b = TValue::F32(vec![0.0; 4]);
 
-        CopyOp(TType::new(Size::variable(), DType::F32)).evaluate(vec![&a], vec![&mut b]);
+        CopyOp(TType::new(4, DType::F32)).evaluate(vec![&a], vec![&mut b]);
 
         assert_eq!(b, TValue::F32(vec![1.0; 4]));
     }

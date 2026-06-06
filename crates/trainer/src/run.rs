@@ -68,7 +68,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
 
     let defn = model.definition();
     let (mut backwards, map, gmap) = defn.compile_backward(&Default::default(), steps.batch_size, device.clone());
-    backwards.prealloc(steps.batch_size).map_err(TrainerError::Unexpected)?;
+    backwards.prealloc().map_err(TrainerError::Unexpected)?;
 
     let mut tensor_map = BTreeMap::new();
 

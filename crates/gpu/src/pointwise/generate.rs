@@ -25,27 +25,23 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
         let (new_size, align) = if op.data().is_input() {
             continue;
         } else if let Some(scalar) = data.downcast::<ScalarConstant>() {
-            (scalar.1, scalar.1.factor())
+            (scalar.1, scalar.1)
         } else if let Some(broadcast) = data.downcast::<BroadcastAcrossDimension>() {
             if !ir.is_input(op.inputs()[0])? {
                 return Ok(None);
             }
 
-            let factor = if broadcast.inner() == Size::constant(1) {
-                broadcast.repeats().factor()
-            } else {
-                broadcast.inner().factor()
-            };
+            let factor = if broadcast.inner().get() == 1 { broadcast.repeats() } else { broadcast.inner() };
 
             (broadcast.output_size(), factor)
         } else if let Some(binary) = data.downcast::<CABinaryOp>() {
             let size = binary.ty().size();
-            (size, size.factor())
+            (size, size)
         } else if let Some(&Power(size)) = data.downcast::<Power>() {
-            (size, size.factor())
+            (size, size)
         } else if let Some(unary) = data.downcast::<UnaryOp>() {
             let size = unary.output_type().size();
-            (size, size.factor())
+            (size, size)
         } else if let Some(matmul) = data.downcast::<SparseMatmul>() {
             if !(ir.is_input(op.inputs()[0])? && ir.is_input(op.inputs()[1])?) {
                 return Ok(None);
@@ -63,37 +59,37 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
                 }
             }
 
-            (bwd.batch() * bwd.rows(), 1)
+            (bwd.batch() * bwd.rows(), Size::from(1))
         } else if let Some(pad) = data.downcast::<PadAcrossDimension>() {
             if !ir.is_input(op.inputs()[0])? {
                 return Ok(None);
             }
 
-            (pad.output_size(), 1)
+            (pad.output_size(), Size::from(1))
         } else if let Some(slice) = data.downcast::<SliceAcrossDimension>() {
             if !ir.is_input(op.inputs()[0])? {
                 return Ok(None);
             }
 
-            (slice.output_size(), 1)
+            (slice.output_size(), Size::from(1))
         } else if let Some(select) = data.downcast::<Select>() {
             if !(ir.is_input(op.inputs()[0])? && ir.is_input(op.inputs()[1])?) {
                 return Ok(None);
             }
 
-            (select.output_size(), 1)
+            (select.output_size(), Size::from(1))
         } else if let Some(select_pad) = data.downcast::<SelectPad>() {
             if !(ir.is_input(op.inputs()[0])? && ir.is_input(op.inputs()[1])?) {
                 return Ok(None);
             }
 
-            (select_pad.output_size(), 1)
+            (select_pad.output_size(), Size::from(1))
         } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
             if let Some(warp_size) = props.warp_size()
                 && ir.is_output(op.outputs()[0])
                 && reduce.inner().is_multiple_of(usize::from(warp_size).into())
             {
-                (reduce.input_size(), 1)
+                (reduce.input_size(), Size::from(1))
             } else {
                 return Ok(None);
             }
@@ -101,7 +97,7 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             return Ok(None);
         };
 
-        p2size = p2size.min(align.trailing_zeros());
+        p2size = p2size.min(align.get().trailing_zeros());
         if let Some(size) = size {
             if size != new_size {
                 return Ok(None);
@@ -115,7 +111,7 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
     let p2actual = 2usize.pow(p2size);
     let p2size = p2size as u8;
 
-    let mut pntwise = PointwiseIR::new(size / p2actual)?;
+    let mut pntwise = PointwiseIR::new(size / p2actual.into())?;
     let mut mapping = BTreeMap::new();
 
     let inp_buf_map: BTreeMap<_, _> =
@@ -152,15 +148,19 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             // multiple of 2^N times, we can read the scalar and broadcast it
             // into the appropriate p2 size to avoid killing the vectorization
             // on the rest of the kernel
-            if p2size > 0 && broadcast.inner() == Size::constant(1) {
-                let repeats = pntwise.eval_size(broadcast.repeats() / p2actual);
+            if p2size > 0 && broadcast.inner().get() == 1 {
+                let repeats = broadcast.repeats().get() / p2actual;
+                let repeats = pntwise.add_const(DValue::I32(repeats.try_into().unwrap()), 0);
                 let idx = pntwise.div(tid, repeats)?;
                 let scalar = pntwise.read(buf, idx, 0)?;
                 let output = pntwise.broadcast(scalar, p2size)?;
                 mapping.insert(out, output);
             } else {
-                let repeats = pntwise.eval_size(broadcast.repeats());
-                let inner = pntwise.eval_size(broadcast.inner() / p2actual);
+                let repeats = broadcast.repeats().get();
+                let inner = broadcast.inner().get() / p2actual;
+
+                let repeats = pntwise.add_const(DValue::I32(repeats.try_into().unwrap()), 0);
+                let inner = pntwise.add_const(DValue::I32(inner.try_into().unwrap()), 0);
                 let oidx_denom = pntwise.binary(repeats, inner, CABinary::Mul)?;
                 let oidx = pntwise.div(tid, oidx_denom)?;
                 let iidx = pntwise.rem(tid, inner)?;
@@ -211,9 +211,10 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 
             let before = i32::try_from(pad.before()).unwrap();
             let after = i32::try_from(pad.after()).unwrap();
-            let dimen = i32::try_from(pad.dimen()).unwrap();
-            let inner = pntwise.eval_size(pad.inner());
+            let dimen = i32::try_from(pad.dimen().get()).unwrap();
+            let inner = i32::try_from(pad.inner().get()).unwrap();
 
+            let inner = pntwise.add_const(DValue::I32(inner), 0);
             let bda = pntwise.add_const(DValue::I32(before + dimen + after), 0);
             let stride = pntwise.binary(inner, bda, CABinary::Mul)?;
 
@@ -247,7 +248,8 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             assert_eq!(p2size, 0);
             let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
 
-            let inner = pntwise.eval_size(slice.inner());
+            let inner = i32::try_from(slice.inner().get()).unwrap();
+            let inner = pntwise.add_const(DValue::I32(inner), 0);
             let slicelen = i32::try_from(slice.end() - slice.start()).unwrap();
             let slicelen = pntwise.add_const(DValue::I32(slicelen), 0);
             let stride = pntwise.binary(inner, slicelen, CABinary::Mul)?;
@@ -258,7 +260,7 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let idx_slice = pntwise.div(idx_non_outer, inner)?;
             let idx_inner = pntwise.rem(idx_non_outer, inner)?;
 
-            let dimen = i32::try_from(slice.dimen()).unwrap();
+            let dimen = i32::try_from(slice.dimen().get()).unwrap();
             let dimen = pntwise.add_const(DValue::I32(dimen), 0);
             let start = i32::try_from(slice.start()).unwrap();
             let start = pntwise.add_const(DValue::I32(start), 0);
@@ -276,9 +278,10 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
 
-            let sub_size = (select.inner / select.divisor) as i32;
+            let sub_size = i32::try_from((select.inner / select.divisor).get()).unwrap();
             let sub_size = pntwise.add_const(DValue::I32(sub_size), p2size);
-            let inner = pntwise.add_const(DValue::I32(select.inner as i32), p2size);
+            let inner = i32::try_from(select.inner.get()).unwrap();
+            let inner = pntwise.add_const(DValue::I32(inner), p2size);
 
             let tid = pntwise.tid();
             let batch_idx = pntwise.div(tid, sub_size)?;
@@ -297,9 +300,10 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
 
-            let sub_size = (select_pad.inner / select_pad.divisor) as i32;
+            let sub_size = i32::try_from((select_pad.inner / select_pad.divisor).get()).unwrap();
             let sub_size = pntwise.add_const(DValue::I32(sub_size), p2size);
-            let inner = pntwise.add_const(DValue::I32(select_pad.inner as i32), p2size);
+            let inner = i32::try_from(select_pad.inner.get()).unwrap();
+            let inner = pntwise.add_const(DValue::I32(inner), p2size);
 
             let tid = pntwise.tid();
             let batch_idx = pntwise.div(tid, inner)?;
@@ -324,8 +328,8 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let dest = *out_buf_map.get(&out).unwrap();
 
             let tid = pntwise.tid();
-            let dimen = pntwise.eval_size(reduce.dimen());
-            let inner = pntwise.eval_size(reduce.inner());
+            let dimen = pntwise.add_const(DValue::I32(reduce.dimen().get().try_into().unwrap()), 0);
+            let inner = pntwise.add_const(DValue::I32(reduce.inner().get().try_into().unwrap()), 0);
 
             let inner_idx = pntwise.rem(tid, inner)?;
             let outer_stride = pntwise.binary(inner, dimen, CABinary::Mul)?;
@@ -358,7 +362,7 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 #[cfg(test)]
 mod tests {
-    use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, Size, TValue, operation::SubGraph};
+    use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, TValue, operation::SubGraph};
 
     use crate::{
         buffer::Buffer,
@@ -366,8 +370,7 @@ mod tests {
         runtime::{Device, DeviceProps, Gpu},
     };
 
-    fn make_axby(props: &DeviceProps) -> Result<KernelSrc, IRTrace> {
-        let size = Size::variable() * 4;
+    fn make_axby(props: &DeviceProps, size: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
         let a = builder.add_input(8, DType::F32);
@@ -384,7 +387,7 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let src = make_axby(device.props()).unwrap();
+        let src = make_axby(device.props(), 4).unwrap();
 
         let axby = src.compile(device.clone())?;
 

@@ -174,13 +174,13 @@ impl OpType for Power {
 
 #[cfg(test)]
 mod tests {
-    use crate::tensor::{DType, Size};
+    use crate::tensor::DType;
 
     use super::*;
 
     #[test]
     fn evaluate_ca() {
-        let ty = TType::new(Size::variable(), DType::F32);
+        let ty = TType::new(4, DType::F32);
 
         let binary = CABinaryOp::new(ty, CABinary::Add);
 

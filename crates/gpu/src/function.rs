@@ -1,10 +1,14 @@
-use std::{collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use bullet_compiler::{
     ir::NodeId,
     rewriterule,
     tensor::{
-        DType, IRTrace, OpType, Size, TType, TensorIR, TensorOp,
+        DType, IRTrace, OpType, TType, TensorIR, TensorOp,
         operation::{
             BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
             ReduceAcrossDimension, Reduction, ScalarConstant, SliceAcrossDimension,
@@ -25,48 +29,21 @@ use crate::{
     runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
-#[derive(Debug)]
-enum Arg {
-    Pointer { idx: usize },
-    Size(Size),
-}
-
 enum Inst<G: Gpu> {
-    Malloc {
-        idx: usize,
-        ty: TType,
-    },
-    Free {
-        _idx: usize,
-    },
-    Zero {
-        idx: usize,
-        ty: TType,
-    },
-    LaunchKernel {
-        func: Kernel<G>,
-        args: Vec<Arg>,
-        gdim: Rc<dyn Fn(usize) -> Dim3>,
-        bdim: Rc<dyn Fn(usize) -> u32>,
-        smem: Rc<dyn Fn(usize) -> u32>,
-    },
-    Matmul {
-        cfg: Matmul,
-        a: usize,
-        b: usize,
-        c: usize,
-    },
+    Malloc { idx: usize, ty: TType },
+    Free { _idx: usize },
+    Zero { idx: usize, ty: TType },
+    LaunchKernel { func: Kernel<G>, args: Vec<usize>, gdim: Dim3, bdim: u32, smem: u32 },
+    Matmul { cfg: Matmul, a: usize, b: usize, c: usize },
 }
 
 pub struct Function<G: Gpu> {
     device: Arc<Device<G>>,
     maps: BTreeMap<NodeId, (usize, bool, TType)>,
     insts: Box<[Inst<G>]>,
-    num_ptrs: usize,
     blas: Option<Blas<G>>,
-    max_num_args: usize,
-    prealloc_size: usize,
-    preallocs: BTreeMap<usize, G::DevicePtr>,
+    allocated: bool,
+    pointers: Mutex<Vec<G::DevicePtr>>,
 }
 
 impl<G: Gpu> Drop for Function<G> {
@@ -77,16 +54,18 @@ impl<G: Gpu> Drop for Function<G> {
 
 impl<G: Gpu> Function<G> {
     pub fn dealloc_preallocs(&mut self) -> Result<(), G::Error> {
-        if self.prealloc_size == 0 {
+        if !self.allocated {
             return Ok(());
         }
 
-        for &ptr in self.preallocs.values() {
-            unsafe { self.device.free(ptr)? };
+        let ptrs = self.pointers.lock().unwrap();
+        for inst in &self.insts {
+            if let &Inst::Malloc { idx, .. } = inst {
+                unsafe { self.device.free(ptrs[idx])? };
+            }
         }
 
-        self.prealloc_size = 0;
-        self.preallocs = BTreeMap::default();
+        self.allocated = false;
 
         Ok(())
     }
@@ -132,27 +111,13 @@ impl<G: Gpu> Function<G> {
 
             // insert kernels
             let data = op.data();
-            if let Some(KernelSrc {
-                name,
-                source,
-                requires_var_size_arg,
-                arg_order,
-                gdim,
-                bdim,
-                smem,
-                requires_zero,
-                ..
-            }) = data.downcast().cloned()
+            if let Some(KernelSrc { name, source, arg_order, gdim, bdim, smem, requires_zero, .. }) =
+                data.downcast().cloned()
             {
                 let mut args = Vec::new();
-
-                if requires_var_size_arg {
-                    args.push(Arg::Size(Size::variable()));
-                }
-
                 for (index, is_input) in arg_order {
                     let node_id = if is_input { op.inputs()[index] } else { op.outputs()[index] };
-                    args.push(Arg::Pointer { idx: *indices.get(&node_id).unwrap() });
+                    args.push(*indices.get(&node_id).unwrap());
                 }
 
                 for output in requires_zero {
@@ -206,29 +171,26 @@ impl<G: Gpu> Function<G> {
             device,
             maps,
             insts: insts.into_boxed_slice(),
-            num_ptrs,
             blas,
-            max_num_args,
-            prealloc_size: 0,
-            preallocs: Default::default(),
+            allocated: false,
+            pointers: Mutex::new(vec![G::DevicePtr::default(); num_ptrs]),
         })
     }
 
-    pub fn prealloc(&mut self, var_size: usize) -> Result<(), G::Error> {
-        if var_size == self.prealloc_size {
+    pub fn prealloc(&mut self) -> Result<(), G::Error> {
+        if self.allocated {
             return Ok(());
         }
 
-        self.dealloc_preallocs()?;
-
+        let mut ptrs = self.pointers.lock().unwrap();
         for inst in &self.insts {
             if let &Inst::Malloc { idx, ty } = inst {
-                let bytes = ty.dtype().bytes() * ty.size().evaluate(var_size);
-                self.preallocs.insert(idx, self.device.malloc(bytes)?);
+                let bytes = ty.dtype().bytes() * ty.size().get();
+                ptrs[idx] = self.device.malloc(bytes)?;
             }
         }
 
-        self.prealloc_size = var_size;
+        self.allocated = true;
 
         Ok(())
     }
@@ -240,10 +202,9 @@ impl<G: Gpu> Function<G> {
     ) -> Result<SyncOnValue<G, &Self>, G::Error> {
         let mut sync = SyncOnDrop::new(stream.clone());
 
-        let mut ptrs = vec![G::DevicePtr::default(); self.num_ptrs];
+        let mut ptrs = self.pointers.lock().unwrap();
 
         let mut mutmap = BTreeMap::new();
-        let mut var_size = None;
 
         for id in self.maps.keys() {
             if !inputs.contains_key(id) {
@@ -253,34 +214,13 @@ impl<G: Gpu> Function<G> {
 
         for (name, buf) in inputs {
             let (idx, is_mut, ty) = *self.maps.get(name).ok_or("Input not in function!".into())?;
-            let size = ty.size();
 
             if buf.dtype() != ty.dtype() {
                 return Err("Mismatched dtypes!".to_string().into());
             }
 
-            if let Some(new_var) = size.get_var_size(buf.size()) {
-                if size.evaluate(new_var) != buf.size() {
-                    return Err("Mismatched sizes!".to_string().into());
-                }
-
-                match var_size {
-                    None => var_size = Some(new_var),
-                    Some(old_var) => {
-                        if old_var != new_var {
-                            return Err("Mismatched var sizes!".to_string().into());
-                        }
-                    }
-                }
-            } else {
-                match size.evaluate_constant() {
-                    None => return Err("Invalid var size!".to_string().into()),
-                    Some(len) => {
-                        if len != buf.size() {
-                            return Err("Mismatched sizes!".to_string().into());
-                        }
-                    }
-                }
+            if buf.size() != ty.size().get() {
+                return Err("Mismatched sizes!".to_string().into());
             }
 
             let guard = buf.clone().acquire(stream.clone())?;
@@ -295,54 +235,41 @@ impl<G: Gpu> Function<G> {
             }
         }
 
-        let var = var_size.unwrap_or(1);
-        let mut sizes = vec![0; self.max_num_args];
-
-        assert_ne!(var, 0, "Variable size = 0!");
-        assert!(self.prealloc_size >= var, "{var} > {}", self.prealloc_size);
+        if !self.allocated {
+            return Err("Must allocate buffers for function before execution!".to_string().into());
+        }
 
         unsafe {
             for inst in &self.insts {
+                stream.sync()?;
                 match inst {
-                    &Inst::Malloc { idx, .. } => {
-                        ptrs[idx] = *self.preallocs.get(&idx).unwrap();
-                    }
                     &Inst::Zero { idx, ty } => {
-                        let bytes = ty.size().evaluate(var) * ty.dtype().bytes();
+                        let bytes = ty.size().get() * ty.dtype().bytes();
                         stream.memset(ptrs[idx], bytes, 0)?;
                     }
-                    Inst::Free { .. } => {}
+                    Inst::Malloc { .. } | Inst::Free { .. } => {}
                     Inst::LaunchKernel { func, args, gdim, bdim, smem } => {
-                        let mut args: Vec<_> = args
-                            .iter()
-                            .enumerate()
-                            .map(|(i, arg)| match arg {
-                                Arg::Pointer { idx } => ptrs.as_ptr().add(*idx).cast_mut().cast(),
-                                Arg::Size(size) => {
-                                    sizes[i] = size.evaluate(var) as i32;
-                                    (&sizes[i] as *const i32).cast_mut().cast()
-                                }
-                            })
-                            .collect();
+                        let mut args: Vec<_> =
+                            args.iter().map(|&arg| ptrs.as_ptr().add(arg).cast_mut().cast()).collect();
 
-                        func.launch(&stream, gdim(var), bdim(var), args.as_mut_ptr(), smem(var))?;
+                        func.launch(&stream, *gdim, *bdim, args.as_mut_ptr(), *smem)?;
                     }
                     &Inst::Matmul { cfg, a, b, c } => {
                         let handle = self.blas.as_ref().unwrap();
                         let config = GemmConfig {
                             row_mjr_a: !cfg.lhs.col_mjr,
                             row_mjr_b: !cfg.rhs.col_mjr,
-                            m: cfg.lhs.rows.evaluate(var).try_into().unwrap(),
-                            n: cfg.rhs.cols.evaluate(var).try_into().unwrap(),
-                            k: cfg.lhs.cols.evaluate(var).try_into().unwrap(),
+                            m: cfg.lhs.rows.get().try_into().unwrap(),
+                            n: cfg.rhs.cols.get().try_into().unwrap(),
+                            k: cfg.lhs.cols.get().try_into().unwrap(),
                             alpha: 1.0,
                             beta: 0.0,
                         };
 
-                        if let Some(1) = cfg.batch.evaluate_constant() {
+                        let batch = cfg.batch.get();
+                        if batch == 1 {
                             handle.gemm(stream.as_ref(), config, ptrs[a], ptrs[b], ptrs[c])?;
                         } else {
-                            let batch = cfg.batch.evaluate(var);
                             handle.batched_gemm(stream.as_ref(), batch, config, ptrs[a], ptrs[b], ptrs[c])?;
                         }
                     }
@@ -393,7 +320,7 @@ rewriterule! {
         if output.dtype() == DType::F32 && output.reduction() == Reduction::Sum {
             let input = input.id();
 
-            let (new_scalar, new_op) = if let Some(1) = output.inner().evaluate_constant() {
+            let (new_scalar, new_op) = if output.inner().get() == 1 {
                 let new_scalar = ir.add_scalar(1.0, output.dimen());
                 let lhs = MatrixLayout { rows: 1.into(), cols: output.dimen(), col_mjr: true };
                 let rhs = MatrixLayout { rows: output.dimen(), cols: output.outer(), col_mjr: true };
@@ -416,7 +343,7 @@ rewriterule! {
     rulename MatmulToBroadcastMul on ir
     rewrites op (output = [Matmul] (lhs) (rhs))
     {
-        if output.lhs.cols == Size::constant(1) {
+        if output.lhs.cols.get() == 1 {
             let m = output.lhs.rows;
             let n = output.rhs.cols;
 
@@ -434,10 +361,10 @@ rewriterule! {
 }
 
 static REDUCTION_SRC: &str = "
-extern \"C\" __global__ void kernel(int size, const float* input, float* output) {
+extern \"C\" __global__ void kernel(const float* input, float* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
-    if (tid < (OUTER)) {
+    if (tid < OUTER) {
         float reduction = input[INNER * tid];
 
         for (int i = 1; i < INNER; i++) {
@@ -457,13 +384,9 @@ impl IRTransform for CodegenReduction {
             if let Some(reduction) = op.data().downcast::<ReduceAcrossDimension>()
                 && reduction.reduction() != Reduction::Sum
                 && reduction.inner() == 1.into()
-                && let Some(dimen) = reduction.dimen().evaluate_constant()
             {
-                let outer = reduction.outer();
-                let mut outer_str = format!("{}", outer.factor());
-                for _ in 0..outer.var_power() {
-                    outer_str += " * size";
-                }
+                let outer = reduction.outer().get();
+                let dimen = reduction.dimen().get();
 
                 let src = REDUCTION_SRC
                     .replace(
@@ -475,24 +398,19 @@ impl IRTransform for CodegenReduction {
                         },
                     )
                     .replace("INNER", &dimen.to_string())
-                    .replace("OUTER", &outer_str);
+                    .replace("OUTER", &outer.to_string());
 
-                let outer = reduction.outer();
                 let new = unsafe {
                     KernelSrc::new(
                         reduction.inputs(),
                         reduction.outputs(),
                         "kernel".to_string(),
                         src,
-                        true,
                         vec![(0, true), (0, false)],
                         Default::default(),
-                        Rc::new(move |s| {
-                            let x = outer.evaluate(s).div_ceil(256) as u32;
-                            Dim3 { x, y: 1, z: 1 }
-                        }),
-                        Rc::new(|_| 256),
-                        Rc::new(|_| 0),
+                        Dim3 { x: outer.div_ceil(256).try_into().unwrap(), y: 1, z: 1 },
+                        256,
+                        0,
                     )
                 };
 

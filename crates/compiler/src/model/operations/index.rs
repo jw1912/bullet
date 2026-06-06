@@ -109,7 +109,7 @@ impl ModelOperation for SelectRows {
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         let batch = if self.3 { batch_size } else { 1 }.into();
-        let select = Select { dtype: self.0, batch, inner: self.1, divisor: self.2 };
+        let select = Select { dtype: self.0, batch, inner: self.1.into(), divisor: self.2.into() };
         lower.add_op(inputs, Ok::<_, IRTrace>(select)).map(|x| x[0])
     }
 }

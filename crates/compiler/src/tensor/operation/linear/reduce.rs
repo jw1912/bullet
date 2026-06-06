@@ -97,14 +97,12 @@ impl ReduceAcrossDimension {
     where
         T: Add<T, Output = T> + Copy + Default + PartialOrd,
     {
-        let size = input.len();
-        let var = self.input_size().get_var_size(size).unwrap_or(1);
+        let outer = self.outer.get();
+        let dimen = self.dimen.get();
+        let inner = self.inner.get();
 
-        let outer = self.outer.evaluate(var);
-        let dimen = self.dimen.evaluate(var);
-        let inner = self.inner.evaluate(var);
-
-        assert_eq!(output.len() * dimen, input.len());
+        assert_eq!(input.len(), outer * dimen * inner);
+        assert_eq!(output.len(), outer * inner);
 
         let outer_stride = dimen * inner;
 

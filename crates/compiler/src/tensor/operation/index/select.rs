@@ -4,37 +4,21 @@ use crate::tensor::{DType, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp
 pub struct Select {
     pub dtype: DType,
     pub batch: Size,
-    pub inner: usize,
-    pub divisor: usize,
+    pub inner: Size,
+    pub divisor: Size,
 }
 
 impl Select {
     pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], indices: &[i32], output: &mut [T]) -> bool {
-        let subdim = self.inner / self.divisor;
-        let input_size = self.batch * self.inner;
-        let output_size = self.batch * subdim;
+        let subdim = (self.inner / self.divisor).get();
 
-        let var = match (input_size.get_var_size(input.len()), output_size.get_var_size(output.len())) {
-            (None, None) => 1,
-            (Some(x), Some(y)) => {
-                assert_eq!(x, y);
-                x
-            }
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-        };
-
-        assert_eq!(input_size.evaluate(var), input.len());
-        assert_eq!(output_size.evaluate(var), output.len());
-
-        let batch = self.batch.evaluate(var);
-        assert_eq!(input.len(), batch * self.inner);
-        assert_eq!(output.len(), batch * subdim);
-        assert_eq!(indices.len(), batch);
+        assert_eq!(input.len(), (self.batch * self.inner).get());
+        assert_eq!(output.len(), (self.batch * subdim).get());
+        assert_eq!(indices.len(), self.batch.get());
 
         for (o, index) in indices.iter().map(|&x| x as usize).enumerate() {
             let oidx = subdim * o;
-            let iidx = self.inner * o + subdim * index;
+            let iidx = self.inner.get() * o + subdim * index;
             output[oidx..(subdim + oidx)].copy_from_slice(&input[iidx..(subdim + iidx)]);
         }
 
@@ -101,42 +85,26 @@ impl OpType for Select {
 pub struct SelectPad {
     pub dtype: DType,
     pub batch: Size,
-    pub inner: usize,
-    pub divisor: usize,
+    pub inner: Size,
+    pub divisor: Size,
 }
 
 impl SelectPad {
     pub fn apply<T: Copy + Default + std::fmt::Debug>(&self, input: &[T], indices: &[i32], output: &mut [T]) {
-        let subdim = self.inner / self.divisor;
-        let input_size = self.batch * subdim;
-        let output_size = self.batch * self.inner;
+        let subdim = (self.inner / self.divisor).get();
+        let inner = self.inner.get();
 
-        let var = match (input_size.get_var_size(input.len()), output_size.get_var_size(output.len())) {
-            (None, None) => 1,
-            (Some(x), Some(y)) => {
-                assert_eq!(x, y);
-                x
-            }
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-        };
-
-        assert_eq!(input_size.evaluate(var), input.len());
-        assert_eq!(output_size.evaluate(var), output.len());
-
-        let batch = self.batch.evaluate(var);
-
-        assert_eq!(input.len(), batch * subdim);
-        assert_eq!(output.len(), batch * self.inner);
-        assert_eq!(indices.len(), batch);
+        assert_eq!(input.len(), (self.batch * subdim).get());
+        assert_eq!(output.len(), (self.batch * self.inner).get());
+        assert_eq!(indices.len(), self.batch.get());
 
         for (o, index) in indices.iter().map(|&x| x as usize).enumerate() {
-            for i in 0..self.inner {
-                output[self.inner * o + i] = T::default()
+            for i in 0..inner {
+                output[inner * o + i] = T::default()
             }
 
             let iidx = subdim * o;
-            let oidx = self.inner * o + subdim * index;
+            let oidx = inner * o + subdim * index;
             output[oidx..(subdim + oidx)].copy_from_slice(&input[iidx..(subdim + iidx)]);
         }
     }
@@ -203,7 +171,7 @@ mod tests {
 
     #[test]
     fn evaluate() {
-        let select = Select { dtype: DType::I32, batch: 2.into(), inner: 4, divisor: 2 };
+        let select = Select { dtype: DType::I32, batch: 2.into(), inner: 4.into(), divisor: 2.into() };
 
         let input = TValue::I32([0, 1, 2, 3, 4, 5, 6, 7].to_vec());
         let indices = TValue::I32([0, 1].into());
@@ -218,7 +186,7 @@ mod tests {
 
     #[test]
     fn evaluate_pad() {
-        let select = SelectPad { dtype: DType::I32, batch: 2.into(), inner: 4, divisor: 2 };
+        let select = SelectPad { dtype: DType::I32, batch: 2.into(), inner: 4.into(), divisor: 2.into() };
 
         let input = TValue::I32([0, 1, 2, 3].to_vec());
         let indices = TValue::I32([0, 1].into());
@@ -234,9 +202,9 @@ mod tests {
     #[test]
     fn evaluate_inverses() {
         let dtype = DType::I32;
-        let batch = Size::variable();
-        let inner = 16;
-        let divisor = 4;
+        let batch = Size::from(16);
+        let inner = Size::from(16);
+        let divisor = Size::from(4);
 
         let pad = SelectPad { dtype, batch, inner, divisor };
         let select = Select { dtype, batch, inner, divisor };

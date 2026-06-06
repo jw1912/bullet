@@ -64,28 +64,12 @@ impl BroadcastAcrossDimension {
     }
 
     pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], output: &mut [T]) {
-        let size = input.len();
-
-        let var = match (self.input_size().get_var_size(size), self.output_size().get_var_size(output.len())) {
-            (None, None) => 1,
-            (Some(x), Some(y)) => {
-                assert_eq!(x, y);
-                x
-            }
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-        };
-
-        assert_eq!(self.input_size().evaluate(var), size);
-        assert_eq!(self.output_size().evaluate(var), output.len());
-
-        let outer = self.outer.evaluate(var);
-        let inner = self.inner.evaluate(var);
-        let repeats = self.repeats.evaluate(var);
+        let inner = self.inner.get();
+        let repeats = self.repeats.get();
 
         assert_eq!(output.len(), input.len() * repeats);
 
-        for i in 0..outer {
+        for i in 0..self.outer.get() {
             for j in 0..inner {
                 let ld = inner * i;
                 for r in 0..repeats {

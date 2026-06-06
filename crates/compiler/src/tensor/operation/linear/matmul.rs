@@ -64,26 +64,10 @@ impl OpType for Matmul {
         let r = inputs[1];
         let o = &mut outputs[0];
 
-        let l_var_size = (self.batch * self.lhs.rows * self.lhs.cols).get_var_size(l.size());
-        let r_var_size = (self.batch * self.rhs.rows * self.rhs.cols).get_var_size(r.size());
-
-        let var_size = match (l_var_size, r_var_size) {
-            (None, None) => 1,
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-            (Some(x), Some(y)) => {
-                if x == y {
-                    x
-                } else {
-                    panic!()
-                }
-            }
-        };
-
-        let b = self.batch.evaluate(var_size);
-        let m = self.lhs.rows.evaluate(var_size);
-        let n = self.lhs.cols.evaluate(var_size);
-        let k = self.rhs.cols.evaluate(var_size);
+        let b = self.batch.get();
+        let m = self.lhs.rows.get();
+        let n = self.lhs.cols.get();
+        let k = self.rhs.cols.get();
 
         assert_eq!(b * m * n, l.size());
         assert_eq!(b * n * k, r.size());
@@ -151,13 +135,12 @@ mod tests {
         let lhs = TValue::I32(vec![0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5]);
         let rhs = TValue::I32(vec![5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0]);
         let mut outputs = TValue::I32(vec![0; 8]);
-        let var = Size::variable();
 
         // [0, 2, 4]   [5, 2]   [20, 2]
         // [1, 3, 5] @ [4, 1] = [32, 5]
         //             [3, 0]
-        let mut lhs_layout = MatrixLayout { rows: var * 2, cols: var * 3, col_mjr: true };
-        let mut rhs_layout = MatrixLayout { rows: var * 3, cols: var * 2, col_mjr: true };
+        let mut lhs_layout = MatrixLayout { rows: 2.into(), cols: 3.into(), col_mjr: true };
+        let mut rhs_layout = MatrixLayout { rows: 3.into(), cols: 2.into(), col_mjr: true };
         let matmul = Matmul::new(DType::I32, 2, lhs_layout, rhs_layout).unwrap();
         matmul.evaluate(vec![&lhs, &rhs], vec![&mut outputs]);
         assert_eq!(outputs, TValue::I32(vec![20, 32, 2, 5, 20, 32, 2, 5]));

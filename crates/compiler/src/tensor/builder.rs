@@ -157,7 +157,7 @@ impl<'a> TNode<'a> {
     }
 
     pub fn softmax(self, inner_size: usize) -> Result<Self, IRTrace> {
-        let batch_size = self.ty().size() / inner_size;
+        let batch_size = self.ty().size() / inner_size.into();
 
         let max =
             self.reduce_max([batch_size, inner_size.into()], 1)?.broadcast([batch_size, 1.into()], 1, inner_size)?;

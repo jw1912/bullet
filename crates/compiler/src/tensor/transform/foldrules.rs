@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[cfg(test)]
-use crate::tensor::{Size, TValue};
+use crate::tensor::TValue;
 
 /// A fold rule is a special case for the simplest form of rewrite, that being an
 /// entirely local transform on an operation, changing only the operation itself
@@ -130,7 +130,7 @@ foldrule! {
     into [ScalarConstant(input.0, broadcast.output_size())]
     testcase var_size_scalar_const {
         let a = ir.add_scalar(1, 1);
-        ir.add_broadcast(a, [1], 0, Size::variable())?
+        ir.add_broadcast(a, [1], 0, 128)?
     }
 }
 
