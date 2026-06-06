@@ -241,7 +241,6 @@ impl<G: Gpu> Function<G> {
 
         unsafe {
             for inst in &self.insts {
-                stream.sync()?;
                 match inst {
                     &Inst::Zero { idx, ty } => {
                         let bytes = ty.size().get() * ty.dtype().bytes();
