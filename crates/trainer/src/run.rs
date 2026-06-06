@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
 use bullet_compiler::{model::Layout, tensor::TValue};
 use bullet_gpu::{
     buffer::{Buffer, SyncOnValue},
+    function::Function,
     runtime::Gpu,
 };
 
@@ -67,7 +68,10 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     });
 
     let defn = model.definition();
-    let (mut backwards, map, gmap) = defn.compile_backward(&Default::default(), steps.batch_size, device.clone());
+    let (func, gmap) =
+        defn.lower_backward(&Default::default(), steps.batch_size).map_err(TrainerError::CompilingBackwards)?;
+    let map = func.map;
+    let mut backwards = Function::new(device.clone(), func.ir).map_err(TrainerError::CompilingBackwards)?;
     backwards.prealloc().map_err(TrainerError::Unexpected)?;
 
     let mut tensor_map = BTreeMap::new();
