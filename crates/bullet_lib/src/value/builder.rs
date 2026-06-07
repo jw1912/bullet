@@ -148,7 +148,7 @@ where
         let model = Model::new(
             builder.ir().clone(),
             Device::<ExecutionContext>::new(0).unwrap(),
-            loss.node(),
+            Some(loss.node()),
             [(out.node(), "output".into())],
         );
 

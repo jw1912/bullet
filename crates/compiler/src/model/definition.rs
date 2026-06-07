@@ -14,18 +14,28 @@ use crate::{
 };
 
 pub struct ModelFunctionDefinition {
-    pub ir: TensorIR,
-    pub map: BTreeMap<NodeId, NodeId>,
+    ir: TensorIR,
+    map: BTreeMap<NodeId, NodeId>,
+}
+
+impl ModelFunctionDefinition {
+    pub fn ir(&self) -> &TensorIR {
+        &self.ir
+    }
+
+    pub fn map(&self) -> &BTreeMap<NodeId, NodeId> {
+        &self.map
+    }
 }
 
 pub struct ModelDefinition {
     ir: ModelIR,
-    loss: NodeId,
+    loss: Option<NodeId>,
     outputs: Vec<(NodeId, String)>,
 }
 
 impl ModelDefinition {
-    pub fn new(ir: ModelIR, loss: NodeId, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
+    pub fn new(ir: ModelIR, loss: Option<NodeId>, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
         Self { ir, loss, outputs: outputs.into() }
     }
 
@@ -33,7 +43,7 @@ impl ModelDefinition {
         &self.ir
     }
 
-    pub fn loss(&self) -> NodeId {
+    pub fn loss(&self) -> Option<NodeId> {
         self.loss
     }
 
@@ -60,7 +70,8 @@ impl ModelDefinition {
     ) -> Result<(ModelFunctionDefinition, BTreeMap<NodeId, NodeId>), IRTrace> {
         let (mut bwd, map) = self.ir.lower(batch_size)?;
 
-        let loss = *map.get(&self.loss).unwrap();
+        let loss = self.loss.ok_or("Loss node not defined!")?;
+        let loss = *map.get(&loss).unwrap();
         bwd.register_output(loss);
         bwd.optimise()?;
         bwd.transform(CanonicalisePass::peephole_activations())?;
