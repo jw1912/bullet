@@ -23,6 +23,10 @@ cuda = ["bullet-gpu/cuda", "bullet-trainer/cuda"]
 rocm = ["bullet-gpu/rocm", "bullet-trainer/rocm"]
 
 [[example]]
+name = "debugging"
+path = "../../examples/debugging.rs"
+
+[[example]]
 name = "simple"
 path = "../../examples/simple.rs"
 

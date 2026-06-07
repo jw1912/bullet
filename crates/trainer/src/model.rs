@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::NodeId,
-    model::{InitSettings, Layout, MType, ModelDefinition, ModelFunctionDefinition, ModelIR},
+    model::{InitSettings, Layout, MType, ModelDefinition, ModelIR},
     tensor::{DType, TValue},
 };
 use bullet_gpu::{
@@ -32,7 +32,12 @@ pub struct Model<G: Gpu> {
 }
 
 impl<G: Gpu> Model<G> {
-    pub fn new(ir: ModelIR, device: Arc<Device<G>>, loss: NodeId, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
+    pub fn new(
+        ir: ModelIR,
+        device: Arc<Device<G>>,
+        loss: Option<NodeId>,
+        outputs: impl Into<Vec<(NodeId, String)>>,
+    ) -> Self {
         let mut weights = BTreeMap::new();
 
         for (&id, (name, init)) in ir.weights() {
@@ -53,34 +58,36 @@ impl<G: Gpu> Model<G> {
             weights.insert(name.clone(), tensor);
         }
 
-        assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
+        if let Some(loss) = loss {
+            assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
+        }
 
         let definition = ModelDefinition::new(ir.clone(), loss, outputs);
-        let ModelFunctionDefinition { ir: fwd_ir, map } = definition.lower_forward(1).unwrap();
+        let forward = definition.lower_forward(1).unwrap();
 
         let mut bufs = BTreeMap::new();
         for (id, (name, _)) in ir.weights() {
-            let tid = *map.get(id).unwrap();
+            let tid = *forward.map().get(id).unwrap();
             bufs.insert(tid, weights.get(name).unwrap().clone());
         }
 
         let mut inputs = BTreeMap::new();
         for (id, name) in ir.inputs() {
-            let tid = *map.get(id).unwrap();
+            let tid = *forward.map().get(id).unwrap();
             inputs.insert(name.clone(), tid);
         }
 
         let mut outputs = BTreeMap::new();
         for (id, name) in definition.outputs() {
-            let tid = *map.get(id).unwrap();
-            let ty = fwd_ir.get_node(tid).unwrap().ty();
+            let tid = *forward.map().get(id).unwrap();
+            let ty = forward.ir().get_node(tid).unwrap().ty();
             let buf = Buffer::zeroed(&device, ty.dtype(), ty.size().get()).unwrap();
 
             outputs.insert(name.clone(), buf.clone());
             bufs.insert(tid, buf);
         }
 
-        let func = Function::new(device.clone(), fwd_ir).unwrap();
+        let func = Function::new(device.clone(), forward.ir().clone()).unwrap();
 
         Model { weights, definition, evaluate: EvalutateModel { func, bufs, inputs, outputs }, device }
     }
