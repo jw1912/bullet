@@ -51,13 +51,21 @@ impl<T: TypeSystem> Op<T> {
         let expected = data.inputs();
         let actual = inputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>();
         if expected != actual {
-            return Err(format!("In operation \"{}\"\nExpected input types {expected:?}\nGot {actual:?}", data.opname()).into());
+            return Err(format!(
+                "In operation \"{}\"\nExpected input types {expected:?}\nGot {actual:?}",
+                data.opname()
+            )
+            .into());
         }
 
         let expected = data.outputs();
         let actual = outputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>();
         if expected != actual {
-            return Err(format!("In operation \"{}\"\nExpected output types {expected:?}\nGot {actual:?}", data.opname()).into());
+            return Err(format!(
+                "In operation \"{}\"\nExpected output types {expected:?}\nGot {actual:?}",
+                data.opname()
+            )
+            .into());
         }
 
         Ok(())

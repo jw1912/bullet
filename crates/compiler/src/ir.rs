@@ -5,7 +5,8 @@ mod operation;
 mod topo;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, btree_map::Values}, error, fmt
+    collections::{BTreeMap, BTreeSet, btree_map::Values},
+    error, fmt,
 };
 
 pub use node::{Node, NodeId};
@@ -30,13 +31,13 @@ pub struct IRError(String);
 
 impl fmt::Debug for IRError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f ,"IRError: {}", self.0)
+        write!(f, "IRError: {}", self.0)
     }
 }
 
 impl fmt::Display for IRError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f ,"{self:?}")
+        write!(f, "{self:?}")
     }
 }
 
