@@ -1,4 +1,3 @@
-pub mod definition;
 pub mod rng;
 pub mod save;
 pub mod utils;
@@ -7,26 +6,38 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::NodeId,
-    model::{InitSettings, Layout, MType, ModelIR},
+    model::{InitSettings, Layout, MType, ModelDefinition, ModelFunctionDefinition, ModelIR},
     tensor::{DType, TValue},
 };
 use bullet_gpu::{
     buffer::Buffer,
+    function::Function,
     runtime::{Device, Gpu},
 };
 
-use definition::ModelDefinition;
-
 pub type TensorMap<G> = BTreeMap<String, Arc<Buffer<G>>>;
+
+struct EvalutateModel<G: Gpu> {
+    func: Function<G>,
+    bufs: BTreeMap<NodeId, Arc<Buffer<G>>>,
+    inputs: BTreeMap<String, NodeId>,
+    outputs: BTreeMap<String, Arc<Buffer<G>>>,
+}
 
 pub struct Model<G: Gpu> {
     device: Arc<Device<G>>,
     weights: TensorMap<G>,
     definition: ModelDefinition,
+    evaluate: EvalutateModel<G>,
 }
 
 impl<G: Gpu> Model<G> {
-    pub fn new(ir: &ModelIR, device: Arc<Device<G>>, loss: NodeId, outputs: impl Into<Vec<NodeId>>) -> Self {
+    pub fn new(
+        mut ir: ModelIR,
+        device: Arc<Device<G>>,
+        loss: NodeId,
+        outputs: impl Into<Vec<(NodeId, String)>>,
+    ) -> Self {
         let mut weights = BTreeMap::new();
 
         for (&id, (name, init)) in ir.weights() {
@@ -49,7 +60,55 @@ impl<G: Gpu> Model<G> {
 
         assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
 
-        Model { weights, device, definition: ModelDefinition::new(ir.clone(), loss, outputs.into()) }
+        for (id, name) in outputs.into() {
+            ir.register_output(id, name).unwrap();
+        }
+
+        let definition = ModelDefinition::new(ir.clone(), loss);
+        let ModelFunctionDefinition { ir: fwd_ir, map } = definition.lower_forward(1).unwrap();
+
+        let mut bufs = BTreeMap::new();
+        for (id, (name, _)) in ir.weights() {
+            let tid = *map.get(id).unwrap();
+            bufs.insert(tid, weights.get(name).unwrap().clone());
+        }
+
+        let mut inputs = BTreeMap::new();
+        for (id, name) in ir.inputs() {
+            let tid = *map.get(id).unwrap();
+            inputs.insert(name.clone(), tid);
+        }
+
+        let mut outputs = BTreeMap::new();
+        for (id, name) in ir.outputs() {
+            let tid = *map.get(id).unwrap();
+            let ty = fwd_ir.get_node(tid).unwrap().ty();
+            let buf = Buffer::zeroed(&device, ty.dtype(), ty.size().get()).unwrap();
+
+            outputs.insert(name.clone(), buf.clone());
+            bufs.insert(tid, buf);
+        }
+
+        Model {
+            weights,
+            definition,
+            evaluate: EvalutateModel { func: Function::new(device.clone(), fwd_ir).unwrap(), bufs, inputs, outputs },
+            device,
+        }
+    }
+
+    pub fn evaluate(&mut self, inputs: &TensorMap<G>) -> &TensorMap<G> {
+        self.evaluate.func.prealloc().unwrap();
+
+        for (input, buf) in inputs {
+            if let Some(id) = self.evaluate.inputs.get(input) {
+                self.evaluate.bufs.insert(*id, buf.clone());
+            }
+        }
+
+        let stream = self.device.new_stream().unwrap();
+        self.evaluate.func.execute(stream, &self.evaluate.bufs).unwrap().value().unwrap();
+        &self.evaluate.outputs
     }
 
     pub fn device(&self) -> Arc<Device<G>> {

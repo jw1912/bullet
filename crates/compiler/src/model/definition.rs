@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use bullet_compiler::{
+use crate::{
     ir::NodeId,
     model::ModelIR,
     tensor::{
@@ -21,12 +21,11 @@ pub struct ModelFunctionDefinition {
 pub struct ModelDefinition {
     ir: ModelIR,
     loss: NodeId,
-    outputs: Vec<NodeId>,
 }
 
 impl ModelDefinition {
-    pub fn new(ir: ModelIR, loss: NodeId, outputs: impl Into<Vec<NodeId>>) -> Self {
-        Self { ir, loss, outputs: outputs.into() }
+    pub fn new(ir: ModelIR, loss: NodeId) -> Self {
+        Self { ir, loss }
     }
 
     pub fn ir(&self) -> &ModelIR {
@@ -37,14 +36,10 @@ impl ModelDefinition {
         self.loss
     }
 
-    pub fn outputs(&self) -> &[NodeId] {
-        &self.outputs
-    }
-
     pub fn lower_forward(&self, batch_size: usize) -> Result<ModelFunctionDefinition, IRTrace> {
         let (mut fwd, map) = self.ir.lower(batch_size)?;
 
-        for output in &self.outputs {
+        for output in self.ir.outputs().keys() {
             fwd.register_output(*map.get(output).unwrap());
         }
 

@@ -1,4 +1,5 @@
 mod builder;
+mod definition;
 pub mod operations;
 
 use std::{
@@ -13,6 +14,7 @@ use crate::{
 };
 
 pub use builder::{Affine, ModelBuilder, ModelNode, Shape};
+pub use definition::{ModelDefinition, ModelFunctionDefinition};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layout {

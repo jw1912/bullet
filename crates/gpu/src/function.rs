@@ -213,24 +213,24 @@ impl<G: Gpu> Function<G> {
         }
 
         for (name, buf) in inputs {
-            let (idx, is_mut, ty) = *self.maps.get(name).ok_or("Input not in function!".into())?;
+            if let Some((idx, is_mut, ty)) = self.maps.get(name).cloned() {
+                if buf.dtype() != ty.dtype() {
+                    return Err("Mismatched dtypes!".to_string().into());
+                }
 
-            if buf.dtype() != ty.dtype() {
-                return Err("Mismatched dtypes!".to_string().into());
-            }
+                if buf.size() != ty.size().get() {
+                    return Err("Mismatched sizes!".to_string().into());
+                }
 
-            if buf.size() != ty.size().get() {
-                return Err("Mismatched sizes!".to_string().into());
-            }
+                let guard = buf.clone().acquire(stream.clone())?;
+                let ptr = guard.ptr();
+                sync.attach(guard)?;
+                ptrs[idx] = ptr;
 
-            let guard = buf.clone().acquire(stream.clone())?;
-            let ptr = guard.ptr();
-            sync.attach(guard)?;
-            ptrs[idx] = ptr;
-
-            if let Some(is_alr_mut) = mutmap.insert(ptr, is_mut) {
-                if is_mut || is_alr_mut {
-                    return Err("Cannot alias pointers!".to_string().into());
+                if let Some(is_alr_mut) = mutmap.insert(ptr, is_mut) {
+                    if is_mut || is_alr_mut {
+                        return Err("Cannot alias pointers!".to_string().into());
+                    }
                 }
             }
         }

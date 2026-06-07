@@ -145,7 +145,12 @@ where
 
         loss = loss.reduce_sum_batch();
 
-        let model = Model::new(&builder.ir(), Device::<ExecutionContext>::new(0).unwrap(), loss.node(), [out.node()]);
+        let model = Model::new(
+            builder.ir().clone(),
+            Device::<ExecutionContext>::new(0).unwrap(),
+            loss.node(),
+            [(out.node(), "output".into())],
+        );
 
         ValueTrainer(Trainer {
             optimiser: Optimiser::new(model, Default::default()).unwrap(),
