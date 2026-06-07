@@ -70,8 +70,8 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let defn = model.definition();
     let (func, gmap) =
         defn.lower_backward(&Default::default(), steps.batch_size).map_err(TrainerError::CompilingBackwards)?;
-    let map = func.map;
-    let mut backwards = Function::new(device.clone(), func.ir).map_err(TrainerError::CompilingBackwards)?;
+    let map = func.map();
+    let mut backwards = Function::new(device.clone(), func.ir().clone()).map_err(TrainerError::CompilingBackwards)?;
     backwards.prealloc().map_err(TrainerError::Unexpected)?;
 
     let mut tensor_map = BTreeMap::new();
@@ -97,7 +97,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     let tlr = Buffer::from_host(&device, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
     let loss = Buffer::from_host(&device, &TValue::F32(vec![0.0])).map_err(TrainerError::Unexpected)?;
 
-    tensor_map.insert(*map.get(&defn.loss()).unwrap(), loss.clone());
+    tensor_map.insert(*map.get(&defn.loss().unwrap()).unwrap(), loss.clone());
 
     let first_batch =
         receiver.recv().map_err(|_| TrainerError::DataLoadingError(DataLoadingError::NoBatchesReceived))?;
