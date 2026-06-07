@@ -135,7 +135,6 @@ pub struct ModelIR {
     ir: IR<Model>,
     weights: BTreeMap<NodeId, (String, InitSettings)>,
     inputs: BTreeMap<NodeId, String>,
-    outputs: BTreeMap<NodeId, String>,
     requires_grad: BTreeSet<NodeId>,
     stop_grad: bool,
 }
@@ -155,10 +154,6 @@ impl ModelIR {
 
     pub fn inputs(&self) -> &BTreeMap<NodeId, String> {
         &self.inputs
-    }
-
-    pub fn outputs(&self) -> &BTreeMap<NodeId, String> {
-        &self.outputs
     }
 
     pub fn add_weight(&mut self, name: impl Into<String>, rows: usize, cols: usize, init: InitSettings) -> NodeId {
@@ -185,17 +180,6 @@ impl ModelIR {
         let node = self.ir.add_op([], operations::Input(ty).into()).unwrap()[0];
         self.inputs.insert(node, name.into());
         node
-    }
-
-    pub fn register_output(&mut self, node: NodeId, name: impl Into<String>) -> Result<(), IRError> {
-        if self.weights.contains_key(&node) || self.inputs.contains_key(&node) {
-            return Err("Cannot register a weight/input as an output!".into());
-        }
-
-        self.ir.node(node)?;
-        self.outputs.insert(node, name.into());
-
-        Ok(())
     }
 
     pub fn add_op(&mut self, inputs: impl AsRef<[NodeId]>, op: impl ModelOperation) -> Result<NodeId, IRError> {

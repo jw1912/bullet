@@ -32,12 +32,7 @@ pub struct Model<G: Gpu> {
 }
 
 impl<G: Gpu> Model<G> {
-    pub fn new(
-        mut ir: ModelIR,
-        device: Arc<Device<G>>,
-        loss: NodeId,
-        outputs: impl Into<Vec<(NodeId, String)>>,
-    ) -> Self {
+    pub fn new(ir: ModelIR, device: Arc<Device<G>>, loss: NodeId, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
         let mut weights = BTreeMap::new();
 
         for (&id, (name, init)) in ir.weights() {
@@ -60,11 +55,7 @@ impl<G: Gpu> Model<G> {
 
         assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
 
-        for (id, name) in outputs.into() {
-            ir.register_output(id, name).unwrap();
-        }
-
-        let definition = ModelDefinition::new(ir.clone(), loss);
+        let definition = ModelDefinition::new(ir.clone(), loss, outputs);
         let ModelFunctionDefinition { ir: fwd_ir, map } = definition.lower_forward(1).unwrap();
 
         let mut bufs = BTreeMap::new();
@@ -80,7 +71,7 @@ impl<G: Gpu> Model<G> {
         }
 
         let mut outputs = BTreeMap::new();
-        for (id, name) in ir.outputs() {
+        for (id, name) in definition.outputs() {
             let tid = *map.get(id).unwrap();
             let ty = fwd_ir.get_node(tid).unwrap().ty();
             let buf = Buffer::zeroed(&device, ty.dtype(), ty.size().get()).unwrap();
@@ -89,12 +80,9 @@ impl<G: Gpu> Model<G> {
             bufs.insert(tid, buf);
         }
 
-        Model {
-            weights,
-            definition,
-            evaluate: EvalutateModel { func: Function::new(device.clone(), fwd_ir).unwrap(), bufs, inputs, outputs },
-            device,
-        }
+        let func = Function::new(device.clone(), fwd_ir).unwrap();
+
+        Model { weights, definition, evaluate: EvalutateModel { func, bufs, inputs, outputs }, device }
     }
 
     pub fn evaluate(&mut self, inputs: &TensorMap<G>) -> &TensorMap<G> {

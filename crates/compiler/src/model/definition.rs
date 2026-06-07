@@ -21,11 +21,12 @@ pub struct ModelFunctionDefinition {
 pub struct ModelDefinition {
     ir: ModelIR,
     loss: NodeId,
+    outputs: Vec<(NodeId, String)>,
 }
 
 impl ModelDefinition {
-    pub fn new(ir: ModelIR, loss: NodeId) -> Self {
-        Self { ir, loss }
+    pub fn new(ir: ModelIR, loss: NodeId, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
+        Self { ir, loss, outputs: outputs.into() }
     }
 
     pub fn ir(&self) -> &ModelIR {
@@ -36,10 +37,14 @@ impl ModelDefinition {
         self.loss
     }
 
+    pub fn outputs(&self) -> &[(NodeId, String)] {
+        &self.outputs
+    }
+
     pub fn lower_forward(&self, batch_size: usize) -> Result<ModelFunctionDefinition, IRTrace> {
         let (mut fwd, map) = self.ir.lower(batch_size)?;
 
-        for output in self.ir.outputs().keys() {
+        for (output, _) in &self.outputs {
             fwd.register_output(*map.get(output).unwrap());
         }
 

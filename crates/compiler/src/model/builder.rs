@@ -125,10 +125,6 @@ impl ModelBuilder {
         self.ir().stop_grad = value;
         out
     }
-
-    pub fn register_output(&self, node: ModelNode<'_>, name: impl Into<String>) {
-        self.ir().register_output(node.node(), name).unwrap();
-    }
 }
 
 #[derive(Clone, Copy)]
