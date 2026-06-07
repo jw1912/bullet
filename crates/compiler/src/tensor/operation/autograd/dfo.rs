@@ -1,8 +1,8 @@
-use std::{fmt, rc::Rc};
+use std::fmt;
 
 use crate::tensor::{DType, DValue, IRTrace, Size, TNode, TType, operation::Unary};
 
-use super::{Autograd, AutogradOp};
+use super::{CustomAutograd, CustomAutogradOp};
 
 pub trait DiffableFromOutput: fmt::Debug + PartialEq + 'static {
     fn forward<'a>(&self, input: TNode<'a>) -> Result<TNode<'a>, IRTrace>;
@@ -13,7 +13,7 @@ pub trait DiffableFromOutput: fmt::Debug + PartialEq + 'static {
 #[derive(Debug, PartialEq)]
 pub struct DiffableFromOutputOp<T: DiffableFromOutput>(pub T, pub DType, pub Size);
 
-impl<T: DiffableFromOutput> Autograd for DiffableFromOutputOp<T> {
+impl<T: DiffableFromOutput> CustomAutograd for DiffableFromOutputOp<T> {
     fn opname(&self) -> String {
         format!("diffable-from-output.{:?}", self.0).to_lowercase()
     }
@@ -27,24 +27,20 @@ impl<T: DiffableFromOutput> Autograd for DiffableFromOutputOp<T> {
         self.0.forward(input).map(|x| vec![x])
     }
 
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let [input] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
         let [grad] = output_grads[..] else { return Err("Invalid number of output grads!".into()) };
 
         let output = self.0.forward(input)?;
 
         match self.0.backward(output) {
-            Ok(x) => Ok(vec![Some((grad * x)?)]),
+            Ok(x) => Ok(vec![(grad * x)?]),
             Err(e) => Err(e),
         }
     }
 
-    fn equals(&self, other: &Rc<dyn Autograd>) -> bool {
-        if let Some(other) = AutogradOp::downcast_rc(other) { self == other } else { false }
+    fn equals(&self, other: &CustomAutogradOp) -> bool {
+        if let Some(other) = other.downcast() { self == other } else { false }
     }
 }
 

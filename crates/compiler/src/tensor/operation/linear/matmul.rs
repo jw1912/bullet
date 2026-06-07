@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{
     ir::IRError,
-    tensor::{DType, DValue, OpType, Size, TType, TValue, TensorOp, operation::CABinary},
+    tensor::{DType, DValue, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp, operation::CABinary},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -64,26 +64,10 @@ impl OpType for Matmul {
         let r = inputs[1];
         let o = &mut outputs[0];
 
-        let l_var_size = (self.batch * self.lhs.rows * self.lhs.cols).get_var_size(l.size());
-        let r_var_size = (self.batch * self.rhs.rows * self.rhs.cols).get_var_size(r.size());
-
-        let var_size = match (l_var_size, r_var_size) {
-            (None, None) => 1,
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-            (Some(x), Some(y)) => {
-                if x == y {
-                    x
-                } else {
-                    panic!()
-                }
-            }
-        };
-
-        let b = self.batch.evaluate(var_size);
-        let m = self.lhs.rows.evaluate(var_size);
-        let n = self.lhs.cols.evaluate(var_size);
-        let k = self.rhs.cols.evaluate(var_size);
+        let b = self.batch.get();
+        let m = self.lhs.rows.get();
+        let n = self.lhs.cols.get();
+        let k = self.rhs.cols.get();
 
         assert_eq!(b * m * n, l.size());
         assert_eq!(b * n * k, r.size());
@@ -111,6 +95,35 @@ impl OpType for Matmul {
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let Matmul { dtype, batch, lhs, rhs } = *self;
+        let grad = MatrixLayout { col_mjr: true, rows: lhs.rows, cols: rhs.cols };
+
+        let lhs_node = inputs[0];
+        let rhs_node = inputs[1];
+        let grad_node = output_grads[0];
+
+        let builder = grad_node.builder();
+
+        let lhs_grad = if lhs.col_mjr {
+            let op = Matmul::new(dtype, batch, grad, rhs.transpose())?;
+            builder.add_op([grad_node, rhs_node], op)?[0]
+        } else {
+            let op = Matmul::new(dtype, batch, rhs, grad.transpose())?;
+            builder.add_op([rhs_node, grad_node], op)?[0]
+        };
+
+        let rhs_grad = if rhs.col_mjr {
+            let op = Matmul::new(dtype, batch, lhs.transpose(), grad)?;
+            builder.add_op([lhs_node, grad_node], op)?[0]
+        } else {
+            let op = Matmul::new(dtype, batch, grad.transpose(), lhs)?;
+            builder.add_op([grad_node, lhs_node], op)?[0]
+        };
+
+        Ok(vec![lhs_grad, rhs_grad])
+    }
 }
 
 #[cfg(test)]
@@ -122,13 +135,12 @@ mod tests {
         let lhs = TValue::I32(vec![0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5]);
         let rhs = TValue::I32(vec![5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0]);
         let mut outputs = TValue::I32(vec![0; 8]);
-        let var = Size::variable();
 
         // [0, 2, 4]   [5, 2]   [20, 2]
         // [1, 3, 5] @ [4, 1] = [32, 5]
         //             [3, 0]
-        let mut lhs_layout = MatrixLayout { rows: var * 2, cols: var * 3, col_mjr: true };
-        let mut rhs_layout = MatrixLayout { rows: var * 3, cols: var * 2, col_mjr: true };
+        let mut lhs_layout = MatrixLayout { rows: 2.into(), cols: 3.into(), col_mjr: true };
+        let mut rhs_layout = MatrixLayout { rows: 3.into(), cols: 2.into(), col_mjr: true };
         let matmul = Matmul::new(DType::I32, 2, lhs_layout, rhs_layout).unwrap();
         matmul.evaluate(vec![&lhs, &rhs], vec![&mut outputs]);
         assert_eq!(outputs, TValue::I32(vec![20, 32, 2, 5, 20, 32, 2, 5]));

@@ -1,15 +1,16 @@
 use std::marker::PhantomData;
 
+use bullet_compiler::model::{ModelBuilder, ModelNode, Shape};
 use bullet_gpu::runtime::Device;
 use bullet_trainer::{
     Trainer,
-    model::{Shape, save::SavedFormat},
+    model::{Model, save::SavedFormat},
     optimiser::Optimiser,
 };
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{ExecutionContext, ModelBuilder, ModelNode, optimiser::OptimiserType},
+    nn::{ExecutionContext, optimiser::OptimiserType},
     value::ValueTrainerState,
 };
 
@@ -134,15 +135,22 @@ where
         let builder = ModelBuilder::default();
 
         let output_size = if self.wdl_output { 3 } else { 1 };
-        let targets = builder.new_dense_input("targets", Shape::new(output_size, 1));
+        let targets = builder.new_dense_input("targets", (output_size, 1));
         let (out, mut loss) = f(inputs, nnz, targets, &builder);
 
         if self.weight_getter.is_some() {
-            let entry_weights = builder.new_dense_input("entry_weights", Shape::new(1, 1));
+            let entry_weights = builder.new_dense_input("entry_weights", (1, 1));
             loss = entry_weights * loss;
         }
 
-        let model = builder.build(Device::<ExecutionContext>::new(0).unwrap(), loss, out);
+        loss = loss.reduce_sum_batch();
+
+        let model = Model::new(
+            builder.ir().clone(),
+            Device::<ExecutionContext>::new(0).unwrap(),
+            loss.node(),
+            [(out.node(), "output".into())],
+        );
 
         ValueTrainer(Trainer {
             optimiser: Optimiser::new(model, Default::default()).unwrap(),
@@ -283,7 +291,7 @@ where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>) -> Nbn<'a>,
     {
         self.build_internal(|inputs, nnz, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
             f(builder, stm)
         })
     }
@@ -299,8 +307,8 @@ where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
         self.build_internal(|inputs, nnz, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let ntm = builder.new_sparse_input("nstm", Shape::new(inputs, 1), nnz);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
+            let ntm = builder.new_sparse_input("nstm", (inputs, 1), nnz);
             f(builder, stm, ntm)
         })
     }
@@ -317,8 +325,8 @@ where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
         self.build_internal(|inputs, nnz, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let buckets = builder.new_sparse_input("buckets", Shape::new(Out::BUCKETS, 1), 1);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
+            let buckets = builder.new_sparse_input("buckets", (Out::BUCKETS, 1), 1);
             f(builder, stm, buckets)
         })
     }
@@ -335,9 +343,9 @@ where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
         self.build_internal(|inputs, nnz, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let ntm = builder.new_sparse_input("nstm", Shape::new(inputs, 1), nnz);
-            let buckets = builder.new_sparse_input("buckets", Shape::new(Out::BUCKETS, 1), 1);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
+            let ntm = builder.new_sparse_input("nstm", (inputs, 1), nnz);
+            let buckets = builder.new_sparse_input("buckets", (Out::BUCKETS, 1), 1);
             f(builder, stm, ntm, buckets)
         })
     }
@@ -354,7 +362,7 @@ where
     {
         assert!(self.loss_fn.is_none(), "Can't specify loss function separately!");
         self.build_custom_internal(|inputs, nnz, targets, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
             f(builder, stm, targets)
         })
     }
@@ -371,8 +379,8 @@ where
     {
         assert!(self.loss_fn.is_none(), "Can't specify loss function separately!");
         self.build_custom_internal(|inputs, nnz, targets, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let ntm = builder.new_sparse_input("nstm", Shape::new(inputs, 1), nnz);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
+            let ntm = builder.new_sparse_input("nstm", (inputs, 1), nnz);
             f(builder, (stm, ntm), targets)
         })
     }
@@ -390,8 +398,8 @@ where
     {
         assert!(self.loss_fn.is_none(), "Can't specify loss function separately!");
         self.build_custom_internal(|inputs, nnz, targets, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let buckets = builder.new_sparse_input("buckets", Shape::new(Out::BUCKETS, 1), 1);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
+            let buckets = builder.new_sparse_input("buckets", (Out::BUCKETS, 1), 1);
             f(builder, (stm, buckets), targets)
         })
     }
@@ -409,9 +417,9 @@ where
     {
         assert!(self.loss_fn.is_none(), "Can't specify loss function separately!");
         self.build_custom_internal(|inputs, nnz, targets, builder| {
-            let stm = builder.new_sparse_input("stm", Shape::new(inputs, 1), nnz);
-            let ntm = builder.new_sparse_input("nstm", Shape::new(inputs, 1), nnz);
-            let buckets = builder.new_sparse_input("buckets", Shape::new(Out::BUCKETS, 1), 1);
+            let stm = builder.new_sparse_input("stm", (inputs, 1), nnz);
+            let ntm = builder.new_sparse_input("nstm", (inputs, 1), nnz);
+            let buckets = builder.new_sparse_input("buckets", (Out::BUCKETS, 1), 1);
             f(builder, (stm, ntm, buckets), targets)
         })
     }

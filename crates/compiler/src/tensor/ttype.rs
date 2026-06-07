@@ -2,7 +2,7 @@ use std::{
     ffi::c_void,
     fmt,
     num::NonZeroUsize,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Div, Index, Mul, Sub},
 };
 
 /// Type of a tensor
@@ -33,83 +33,27 @@ impl TType {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Size {
-    var_power: u32,
-    factor: NonZeroUsize,
+pub struct Size(NonZeroUsize);
+
+impl fmt::Debug for Size {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0.get())
+    }
 }
 
 impl From<usize> for Size {
     fn from(value: usize) -> Self {
-        Self::constant(value)
-    }
-}
-
-impl fmt::Debug for Size {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (self.var_power, self.factor.get()) {
-            (0, x) => write!(f, "{x}"),
-            (1, 1) => write!(f, "B"),
-            (1, x) => write!(f, "{x}B"),
-            (x, 1) => write!(f, "B^{x}"),
-            (x, y) => write!(f, "{y}B^{x}"),
-        }
+        Self(value.try_into().unwrap())
     }
 }
 
 impl Size {
-    pub const fn variable() -> Self {
-        Self { var_power: 1, factor: NonZeroUsize::new(1).unwrap() }
-    }
-
-    pub const fn constant(size: usize) -> Self {
-        Self { var_power: 0, factor: NonZeroUsize::new(size).unwrap() }
+    pub const fn get(&self) -> usize {
+        self.0.get()
     }
 
     pub const fn is_multiple_of(&self, size: Size) -> bool {
-        self.var_power >= size.var_power && self.factor.get().is_multiple_of(size.factor.get())
-    }
-
-    pub fn is_le(&self, rhs: Self) -> bool {
-        self.var_power <= rhs.var_power && self.factor <= rhs.factor
-    }
-
-    pub fn is_lt(&self, rhs: Self) -> bool {
-        self.var_power < rhs.var_power || (self.var_power == rhs.var_power && self.factor < rhs.factor)
-    }
-
-    pub fn evaluate(&self, var_size: usize) -> usize {
-        self.factor.get() * var_size.pow(self.var_power)
-    }
-
-    pub fn evaluate_constant(&self) -> Option<usize> {
-        if self.var_power == 0 { Some(self.factor.get()) } else { None }
-    }
-
-    pub fn get_var_size(&self, size: usize) -> Option<usize> {
-        if self.var_power == 0 {
-            return None;
-        }
-
-        let expected = ((size / self.factor.get()) as f64).powf(1.0 / f64::from(self.var_power)) as usize;
-        (self.evaluate(expected) == size).then_some(expected)
-    }
-
-    pub fn factor(&self) -> usize {
-        self.factor.get()
-    }
-
-    pub fn var_power(&self) -> u32 {
-        self.var_power
-    }
-
-    pub fn dominator_sum(self, rhs: Self) -> Self {
-        if self.var_power > rhs.var_power {
-            self
-        } else if self.var_power < rhs.var_power {
-            rhs
-        } else {
-            self + rhs
-        }
+        self.0.get().is_multiple_of(size.0.get())
     }
 }
 
@@ -117,9 +61,23 @@ impl Add<Size> for Size {
     type Output = Size;
 
     fn add(self, rhs: Size) -> Self::Output {
-        assert_eq!(self.var_power, rhs.var_power, "Can only add with the same power of batch size!");
-        let factor = NonZeroUsize::new(self.factor.get() + rhs.factor.get()).unwrap();
-        Self { var_power: self.var_power, factor }
+        Self(self.0.checked_add(rhs.0.get()).unwrap())
+    }
+}
+
+impl Add<usize> for Size {
+    type Output = Size;
+
+    fn add(self, rhs: usize) -> Self::Output {
+        Self(self.0.checked_add(rhs).unwrap())
+    }
+}
+
+impl Add<Size> for usize {
+    type Output = Size;
+
+    fn add(self, rhs: Size) -> Self::Output {
+        Size(rhs.0.checked_add(self).unwrap())
     }
 }
 
@@ -127,31 +85,59 @@ impl Sub<Size> for Size {
     type Output = Size;
 
     fn sub(self, rhs: Size) -> Self::Output {
-        assert_eq!(self.var_power, rhs.var_power, "Can only sub with the same power of batch size!");
-        assert!(self.factor.get() > rhs.factor.get(), "Cannot have non-positive size!");
-        let factor = NonZeroUsize::new(self.factor.get() - rhs.factor.get()).unwrap();
-        Self { var_power: self.var_power, factor }
+        assert!(self.0 > rhs.0, "{self:?} <= {rhs:?}");
+        Self((self.0.get() - rhs.0.get()).try_into().unwrap())
     }
 }
 
-impl<T: Into<Size>> Mul<T> for Size {
+impl Sub<usize> for Size {
     type Output = Size;
 
-    fn mul(self, rhs: T) -> Self::Output {
-        let rhs = rhs.into();
-        let factor = NonZeroUsize::new(self.factor.get() * rhs.factor.get()).unwrap();
-        Self { var_power: self.var_power + rhs.var_power, factor }
+    fn sub(self, rhs: usize) -> Self::Output {
+        assert!(self.0.get() > rhs, "{self:?} <= {rhs:?}");
+        Self((self.0.get() - rhs).try_into().unwrap())
     }
 }
 
-impl<T: Into<Size>> Div<T> for Size {
+impl Sub<Size> for usize {
     type Output = Size;
 
-    fn div(self, rhs: T) -> Self::Output {
-        let rhs = rhs.into();
-        assert!(self.is_multiple_of(rhs), "Cannot divide by non-factor size!");
-        let factor = NonZeroUsize::new(self.factor.get() / rhs.factor.get()).unwrap();
-        Self { var_power: self.var_power - rhs.var_power, factor }
+    fn sub(self, rhs: Size) -> Self::Output {
+        assert!(self > rhs.0.get(), "{self:?} <= {rhs:?}");
+        Size((self - rhs.0.get()).try_into().unwrap())
+    }
+}
+
+impl Mul<Size> for Size {
+    type Output = Size;
+
+    fn mul(self, rhs: Size) -> Self::Output {
+        Self(self.0.checked_mul(rhs.0).unwrap())
+    }
+}
+
+impl Mul<usize> for Size {
+    type Output = Size;
+
+    fn mul(self, rhs: usize) -> Self::Output {
+        self * Size::from(rhs)
+    }
+}
+
+impl Mul<Size> for usize {
+    type Output = Size;
+
+    fn mul(self, rhs: Size) -> Self::Output {
+        Size::from(self) * rhs
+    }
+}
+
+impl Div<Size> for Size {
+    type Output = Size;
+
+    fn div(self, rhs: Size) -> Self::Output {
+        assert!(self.is_multiple_of(rhs), "{self:?} % {rhs:?} != 0");
+        Self((self.0.get() / rhs.0.get()).try_into().unwrap())
     }
 }
 
@@ -185,7 +171,7 @@ impl<T: Into<Shape>> std::ops::Add<T> for Shape {
     }
 }
 
-impl std::ops::Add<Shape> for Size {
+impl Add<Shape> for Size {
     type Output = Shape;
 
     fn add(self, rhs: Shape) -> Shape {
@@ -195,18 +181,7 @@ impl std::ops::Add<Shape> for Size {
     }
 }
 
-impl<T: AsRef<[usize]>> std::ops::Add<T> for Size {
-    type Output = Shape;
-
-    fn add(self, rhs: T) -> Shape {
-        let mut shape = Shape(vec![self]);
-        let v: Vec<_> = rhs.as_ref().iter().map(|&x| x.into()).collect();
-        shape.0.extend_from_slice(&v);
-        shape
-    }
-}
-
-impl std::ops::Add<Shape> for usize {
+impl Add<Shape> for usize {
     type Output = Shape;
 
     fn add(self, rhs: Shape) -> Shape {
@@ -216,7 +191,7 @@ impl std::ops::Add<Shape> for usize {
     }
 }
 
-impl std::ops::Index<usize> for Shape {
+impl Index<usize> for Shape {
     type Output = Size;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -224,8 +199,8 @@ impl std::ops::Index<usize> for Shape {
     }
 }
 
-impl std::fmt::Debug for Shape {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Shape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.0[0])?;
 
         for x in self.0.iter().skip(1) {
@@ -238,7 +213,8 @@ impl std::fmt::Debug for Shape {
 
 impl Shape {
     pub fn size(&self) -> Size {
-        self.0.iter().fold(Size::constant(1), |x, &y| x * y)
+        let size = self.0.iter().fold(1usize, |x, &y| x * y.0.get());
+        Size(NonZeroUsize::new(size).unwrap())
     }
 
     pub fn inner(&self) -> &[Size] {

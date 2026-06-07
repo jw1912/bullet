@@ -193,21 +193,14 @@ where
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
-        self.0.optimiser.model.set_fwd_batch_size(1).unwrap();
-
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
-
         let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);
 
-        let model = &self.optimiser.model;
-        let device = model.device();
-        let stream = device.new_stream().unwrap();
+        let model = &mut self.optimiser.model;
+        let device_data = host_data.to_device(&model.device()).unwrap();
+        let outputs = model.evaluate(&device_data);
 
-        let inputs = host_data.to_device(&device).unwrap();
-        let outputs = model.make_forward_output_tensors(1).unwrap();
-        model.forward(&stream, &inputs, &outputs).unwrap().value().unwrap();
-
-        let output = outputs.get("outputs/output").unwrap().clone();
+        let output = outputs.get("output").unwrap().clone();
         let TValue::F32(output) = output.to_host().unwrap() else { panic!() };
         output
     }

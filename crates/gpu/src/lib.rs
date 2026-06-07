@@ -11,7 +11,7 @@ pub mod runtime;
 mod tests {
     use bullet_compiler::{
         ir::NodeId,
-        tensor::{DType, IRBuilder, IRTrace, Size, TValue, TensorIR},
+        tensor::{DType, IRBuilder, IRTrace, TValue, TensorIR},
     };
 
     use crate::{
@@ -20,9 +20,7 @@ mod tests {
         runtime::{Device, Gpu},
     };
 
-    fn make_axby() -> Result<(TensorIR, [NodeId; 6]), IRTrace> {
-        let size = Size::variable();
-
+    fn make_axby(size: usize) -> Result<(TensorIR, [NodeId; 6]), IRTrace> {
         let builder = IRBuilder::default();
 
         let a = builder.add_input(8, DType::F32);
@@ -31,8 +29,8 @@ mod tests {
         let x = builder.add_input(size * 8, DType::F32);
 
         let y = ((a.broadcast([8], 0, size)? * x)? + b.broadcast([1], 0, size * 8)?)?;
-        let z = y.reduce_max([size, 8.into()], 1)?;
-        let w = y.reduce_sum([size, 8.into()], 0)?;
+        let z = y.reduce_max([size, 8], 1)?;
+        let w = y.reduce_sum([size, 8], 0)?;
 
         let mut ir = builder.build([y, z, w]);
 
@@ -44,13 +42,13 @@ mod tests {
     fn axby<G: Gpu>() -> Result<(), G::Error> {
         let batch_size = 256;
 
-        let (ir, [a, b, x, y, z, w]) = make_axby().unwrap();
+        let (ir, [a, b, x, y, z, w]) = make_axby(batch_size).unwrap();
 
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
         let mut func = Function::new(device.clone(), ir).unwrap();
-        func.prealloc(batch_size).unwrap();
+        func.prealloc().unwrap();
 
         let buf_a = Buffer::from_host(&device, &TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]))?;
         let buf_b = Buffer::from_host(&device, &TValue::F32(vec![2.0]))?;

@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeSet,
     fmt::{self, Write},
-    rc::Rc,
 };
 
 use bullet_compiler::{
@@ -33,7 +32,6 @@ pub struct PointwiseIR {
     ir: IR<Pointwise>,
     size: Size,
     tid: NodeId,
-    var: NodeId,
     bufs: Vec<NodeId>,
     read_from: BTreeSet<NodeId>,
     written_to: BTreeSet<NodeId>,
@@ -44,18 +42,13 @@ impl PointwiseIR {
     pub fn new(size: Size) -> Result<Self, IRError> {
         let mut ir = IR::default();
 
-        let [var] = ir.add_op([], PointwiseOp::VarSize)?[..] else {
-            return Err("Invalid number outputs!".into());
-        };
-
-        let [tid] = ir.add_op([var], PointwiseOp::ThreadId)?[..] else {
+        let [tid] = ir.add_op([], PointwiseOp::ThreadId)?[..] else {
             return Err("Invalid number outputs!".into());
         };
 
         Ok(Self {
             ir,
             tid,
-            var,
             size,
             bufs: Vec::new(),
             read_from: BTreeSet::new(),
@@ -66,14 +59,6 @@ impl PointwiseIR {
 
     pub fn tid(&self) -> NodeId {
         self.tid
-    }
-
-    pub fn var(&self) -> NodeId {
-        self.var
-    }
-
-    pub fn eval_size(&mut self, size: Size) -> NodeId {
-        self.ir.add_op([self.var], PointwiseOp::EvalSize(size)).unwrap()[0]
     }
 
     pub fn add_buf(&mut self, ty: TType) -> NodeId {
@@ -265,7 +250,13 @@ impl PointwiseIR {
             return Err("Only integer pointer allowed!".into());
         };
 
-        let op = PointwiseOp::SpMM { nnz: matmul.nnz(), rows: matmul.rows(), cols: matmul.cols(), ty, p2size };
+        let op = PointwiseOp::SpMM {
+            nnz: matmul.nnz().get(),
+            rows: matmul.rows().get(),
+            cols: matmul.cols().get(),
+            ty,
+            p2size,
+        };
 
         self.read_from.insert(weights);
         self.read_from.insert(indices);
@@ -287,7 +278,8 @@ impl PointwiseIR {
             return Err("Only integer pointer allowed!".into());
         };
 
-        let op = PointwiseOp::SpMMT { nnz: matmul.nnz(), rows: matmul.rows(), cols: matmul.cols(), ty };
+        let op =
+            PointwiseOp::SpMMT { nnz: matmul.nnz().get(), rows: matmul.rows().get(), cols: matmul.cols().get(), ty };
 
         self.needs_zero.insert(weights);
         self.read_from.insert(indices);
@@ -327,8 +319,7 @@ impl PointwiseIR {
         for op_id in self.ir.topo_order_ops().unwrap() {
             let op = self.ir.op(op_id).unwrap();
 
-            if let PointwiseOp::VarSize | PointwiseOp::Buffer { .. } = op.data() {
-            } else {
+            if !matches!(op.data(), PointwiseOp::Buffer { .. }) {
                 let mut src = code_str(*op.data(), self.size).unwrap();
 
                 for (i, &id) in op.inputs().iter().enumerate() {
@@ -349,13 +340,8 @@ impl PointwiseIR {
 
         write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
 
-        let varp = self.size.var_power();
-        if varp > 0 {
-            write!(&mut src, "const int {}", name(self.var))?;
-        }
-
         for (i, &input) in self.bufs.iter().enumerate() {
-            let comma = if i > 0 || varp > 0 { ", " } else { "" };
+            let comma = if i > 0 { ", " } else { "" };
             let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
             write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
         }
@@ -396,10 +382,8 @@ impl PointwiseIR {
                 | P::ThreadId
                 | P::Constant { .. }
                 | P::Buffer { .. }
-                | P::VarSize
                 | P::Div
                 | P::Rem
-                | P::EvalSize(_)
                 | P::Broadcast(_, _) => {}
             }
         }
@@ -439,7 +423,7 @@ impl PointwiseIR {
         }
 
         let source = self.source_code(&name).map_err(|e| IRError::from(format!("{e:?}")))?;
-        let total = self.size;
+        let total = self.size.get();
 
         unsafe {
             Ok(KernelSrc::new(
@@ -447,12 +431,11 @@ impl PointwiseIR {
                 outputs,
                 name,
                 source,
-                self.size.var_power() > 0,
                 arg_order,
                 requires_zero,
-                Rc::new(move |s| Dim3 { x: total.evaluate(s).div_ceil(256) as u32, y: 1, z: 1 }),
-                Rc::new(|_| 256),
-                Rc::new(|_| 0),
+                Dim3 { x: total.div_ceil(256).try_into().unwrap(), y: 1, z: 1 },
+                256,
+                0,
             ))
         }
     }
@@ -471,9 +454,9 @@ mod tests {
     use super::*;
 
     fn fmadd<G: Gpu>() -> Result<(), G::Error> {
-        let ty = TType::new(Size::variable(), DType::F32);
+        let ty = TType::new(4, DType::F32);
 
-        let mut ir = PointwiseIR::new(Size::variable()).unwrap();
+        let mut ir = PointwiseIR::new(4.into()).unwrap();
         let input1 = ir.add_buf(ty);
         let input2 = ir.add_buf(ty);
 

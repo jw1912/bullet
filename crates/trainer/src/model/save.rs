@@ -4,10 +4,10 @@ use std::{
     rc::Rc,
 };
 
-use bullet_compiler::tensor::TValue;
+use bullet_compiler::{model::Shape, tensor::TValue};
 use bullet_gpu::runtime::Gpu;
 
-use crate::model::{Model, Shape};
+use super::Model;
 
 #[derive(Clone)]
 pub struct ShapedTValue {
@@ -23,12 +23,14 @@ impl<G: Gpu> From<&Model<G>> for ModelWeights {
     fn from(model: &Model<G>) -> Self {
         Self {
             stores: model
+                .definition
+                .ir()
                 .weights()
                 .iter()
-                .map(|(id, value)| {
-                    let values = value.clone().to_host().unwrap();
-                    let shape = model.shapes.get(&format!("weights/{id}")).unwrap().0;
-                    (id.clone(), ShapedTValue { values, shape })
+                .map(|(&id, (name, _))| {
+                    let values = model.weights.get(name).unwrap().clone().to_host().unwrap();
+                    let shape = model.definition.ir().node(id).ty().shape();
+                    (name.clone(), ShapedTValue { values, shape })
                 })
                 .collect(),
         }
@@ -36,8 +38,8 @@ impl<G: Gpu> From<&Model<G>> for ModelWeights {
 }
 
 impl ModelWeights {
-    pub fn get(&self, id: &str) -> ShapedTValue {
-        self.stores.get(id).cloned().unwrap()
+    pub fn get(&self, id: &str) -> &ShapedTValue {
+        self.stores.get(id).unwrap()
     }
 }
 
@@ -67,7 +69,7 @@ impl SavedFormat {
     pub fn id(id: &str) -> Self {
         let id = id.to_string();
         Self { id: Some(id.clone()), ..Self::empty() }.transform(move |store, _| {
-            let TValue::F32(v) = store.get(&id).values else { panic!() };
+            let TValue::F32(v) = store.get(&id).values.clone() else { panic!() };
             v
         })
     }
@@ -106,14 +108,6 @@ impl SavedFormat {
         self
     }
 
-    #[deprecated(note = "Use `.transform(|store, mut values| { ... })` instead!")]
-    pub fn add_transform(mut self, f: impl Fn(&ModelWeights, &str, Vec<f32>) -> Vec<f32> + 'static) -> Self {
-        assert!(self.custom.is_none());
-        let id = self.get_id().unwrap();
-        self.transforms.push(Rc::new(move |store, vals| f(store, &id, vals)));
-        self
-    }
-
     pub fn write_to_byte_buffer(&self, graph: &ModelWeights) -> io::Result<Vec<u8>> {
         match &self.custom {
             Some(bytes) => Ok(bytes.clone()),
@@ -132,8 +126,8 @@ impl SavedFormat {
     pub(crate) fn transpose_impl(shape: Shape, weights: &[f32]) -> Vec<f32> {
         assert_eq!(shape.size(), weights.len());
 
-        let rows = shape.rows;
-        let cols = shape.cols;
+        let rows = shape.rows();
+        let cols = shape.cols();
         let mut new_buf = vec![0.0; shape.size()];
 
         for i in 0..rows {

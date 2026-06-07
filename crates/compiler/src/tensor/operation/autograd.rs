@@ -1,8 +1,6 @@
-mod broadcast;
 mod dfo;
-mod linear;
-mod pointwise;
-mod reduce;
+mod passthrough;
+mod qat;
 mod softmax;
 
 use std::{fmt, rc::Rc};
@@ -10,80 +8,43 @@ use std::{fmt, rc::Rc};
 use crate::tensor::{IRBuilder, IRTrace, OpType, TNode, TType, TValue, TensorOp, operation::SubGraph};
 
 pub use dfo::{CReLU, DiffableFromOutput, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid, SqrReLU};
-pub use pointwise::FauxQuantise;
+pub use passthrough::PassThrough;
+pub use qat::FauxQuantise;
 pub use softmax::SoftmaxCrossEntropyLoss;
 
-pub trait Autograd: std::any::Any + fmt::Debug + 'static {
+pub trait CustomAutograd: std::any::Any + fmt::Debug + 'static {
     fn opname(&self) -> String;
 
     fn inputs(&self) -> Vec<TType>;
 
     fn forward<'a>(&self, inputs: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace>;
 
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace>;
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace>;
 
-    fn equals(&self, other: &Rc<dyn Autograd>) -> bool;
-}
-
-pub trait AutogradOnCoreOp: Clone + OpType + PartialEq {
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace>;
-}
-
-impl<T: AutogradOnCoreOp> Autograd for T {
-    fn opname(&self) -> String {
-        <T as OpType>::opname(self)
-    }
-
-    fn inputs(&self) -> Vec<TType> {
-        <T as OpType>::inputs(self)
-    }
-
-    fn forward<'a>(&self, inputs: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
-        inputs[0].builder().add_op(inputs, self.clone())
-    }
-
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
-        <T as AutogradOnCoreOp>::backward(self, inputs, output_grads)
-    }
-
-    fn equals(&self, other: &Rc<dyn Autograd>) -> bool {
-        if let Some(other) = AutogradOp::downcast_rc(other) { self == other } else { false }
-    }
+    fn equals(&self, other: &CustomAutogradOp) -> bool;
 }
 
 #[derive(Clone, Debug)]
-pub struct AutogradOp {
-    pub(crate) op: Rc<dyn Autograd>,
+pub struct CustomAutogradOp {
+    pub(crate) op: Rc<dyn CustomAutograd>,
     pub(crate) forward: SubGraph,
 }
 
-impl AutogradOp {
+impl CustomAutogradOp {
     pub fn into_forward(self) -> SubGraph {
         self.forward
     }
 
-    pub fn downcast_rc<T: Autograd>(input: &Rc<dyn Autograd>) -> Option<&T> {
+    pub fn downcast_rc<T: CustomAutograd>(input: &Rc<dyn CustomAutograd>) -> Option<&T> {
         let op: &dyn std::any::Any = input.as_ref();
         op.downcast_ref::<T>()
     }
 
-    pub fn downcast<T: Autograd>(&self) -> Option<&T> {
+    pub fn downcast<T: CustomAutograd>(&self) -> Option<&T> {
         Self::downcast_rc::<T>(&self.op)
     }
 
-    pub fn new(op: impl Autograd + 'static) -> Result<Self, IRTrace> {
+    pub fn new(op: impl CustomAutograd + 'static) -> Result<Self, IRTrace> {
         let op_inputs = op.inputs();
 
         let builder = IRBuilder::default();
@@ -98,7 +59,7 @@ impl AutogradOp {
     }
 }
 
-impl OpType for AutogradOp {
+impl OpType for CustomAutogradOp {
     fn opname(&self) -> String {
         format!("autograd.{}", self.op.opname())
     }
@@ -112,10 +73,14 @@ impl OpType for AutogradOp {
     }
 
     fn equals(&self, other: &TensorOp) -> bool {
-        if let Some(AutogradOp { op, .. }) = other.downcast() { self.op.equals(op) } else { false }
+        if let Some(op) = other.downcast::<CustomAutogradOp>() { self.op.equals(op) } else { false }
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
         self.forward.evaluate(inputs, outputs)
+    }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        self.op.backward(inputs, output_grads)
     }
 }

@@ -2,7 +2,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
     io::{BufRead, BufReader, Write},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -137,12 +136,11 @@ impl RAdamParams {
                 vec![ty; 3],
                 "radam".to_string(),
                 format!("{op}{DECL}{{{body}}}"),
-                false,
                 vec![(0, true), (1, true), (2, true), (3, true), (4, true), (0, false), (1, false), (2, false)],
                 BTreeSet::new(),
-                Rc::new(move |_| Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 }),
-                Rc::new(|_| 256),
-                Rc::new(|_| 0),
+                Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 },
+                256,
+                0,
             )
         };
 

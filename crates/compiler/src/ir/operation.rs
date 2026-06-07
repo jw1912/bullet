@@ -48,12 +48,24 @@ impl<T: TypeSystem> Op<T> {
     where
         T: 'a,
     {
-        if data.inputs() != inputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>() {
-            return Err("Operation inputs don't match expected!".into());
+        let expected = data.inputs();
+        let actual = inputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>();
+        if expected != actual {
+            return Err(format!(
+                "In operation \"{}\"\nExpected input types {expected:?}\nGot {actual:?}",
+                data.opname()
+            )
+            .into());
         }
 
-        if data.outputs() != outputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>() {
-            return Err("Operation outputs don't match expected!".into());
+        let expected = data.outputs();
+        let actual = outputs.as_ref().iter().map(|&i| i.ty()).collect::<Vec<_>>();
+        if expected != actual {
+            return Err(format!(
+                "In operation \"{}\"\nExpected output types {expected:?}\nGot {actual:?}",
+                data.opname()
+            )
+            .into());
         }
 
         Ok(())

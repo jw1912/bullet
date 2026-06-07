@@ -167,13 +167,13 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
 
     pub fn write_to_checkpoint(&self, path: &str) -> Result<(), G::Error> {
         let mut file = std::fs::File::create(format!("{path}/weights.bin")).unwrap();
-        self.model.write_to(&mut file)?;
+        self.model.write_weights_into(&mut file)?;
         let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
         S::write_to_checkpoint(&map, path)
     }
 
     pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), G::Error> {
-        self.model.load_from(std::fs::File::open(path).unwrap())
+        self.model.load_weights_from(std::fs::File::open(path).unwrap())
     }
 
     pub fn load_from_checkpoint(&mut self, path: &str) -> Result<(), G::Error> {

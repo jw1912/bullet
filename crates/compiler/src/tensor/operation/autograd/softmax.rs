@@ -1,8 +1,6 @@
-use std::rc::Rc;
-
 use crate::tensor::{
     DType, IRTrace, Size, TNode, TType,
-    operation::autograd::{Autograd, AutogradOp},
+    operation::autograd::{CustomAutograd, CustomAutogradOp},
 };
 
 #[derive(Debug, PartialEq)]
@@ -17,7 +15,7 @@ impl SoftmaxCrossEntropyLoss {
     }
 }
 
-impl Autograd for SoftmaxCrossEntropyLoss {
+impl CustomAutograd for SoftmaxCrossEntropyLoss {
     fn opname(&self) -> String {
         "softmax-cross-entropy-loss".into()
     }
@@ -31,18 +29,14 @@ impl Autograd for SoftmaxCrossEntropyLoss {
         (-(target * input.softmax(self.axis_size)?.log()?)?).map(|x| vec![x])
     }
 
-    fn backward<'a>(
-        &self,
-        inputs: Vec<TNode<'a>>,
-        output_grads: Vec<TNode<'a>>,
-    ) -> Result<Vec<Option<TNode<'a>>>, IRTrace> {
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let [input, target] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
         let [grad] = output_grads[..] else { return Err("Invalid number of output grads!".into()) };
         let igrad = ((input.softmax(self.axis_size)? - target)? * grad)?;
-        Ok(vec![Some(igrad), None])
+        Ok(vec![igrad, target.zeros_like()])
     }
 
-    fn equals(&self, other: &Rc<dyn Autograd>) -> bool {
-        if let Some(other) = AutogradOp::downcast_rc(other) { self == other } else { false }
+    fn equals(&self, other: &CustomAutogradOp) -> bool {
+        if let Some(other) = other.downcast() { self == other } else { false }
     }
 }

@@ -1,12 +1,12 @@
 use crate::tensor::{
-    DType, DValue, IRError, OpType, Shape, Size, TType, TValue, TensorOp, operation::PadAcrossDimension,
+    DType, DValue, IRError, IRTrace, OpType, Shape, Size, TNode, TType, TValue, TensorOp, operation::PadAcrossDimension,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SliceAcrossDimension {
     dtype: DType,
     outer: Size,
-    dimen: usize,
+    dimen: Size,
     inner: Size,
     start: usize,
     end: usize,
@@ -21,7 +21,7 @@ impl SliceAcrossDimension {
         self.outer
     }
 
-    pub fn dimen(&self) -> usize {
+    pub fn dimen(&self) -> Size {
         self.dimen
     }
 
@@ -45,9 +45,9 @@ impl SliceAcrossDimension {
             return Err(format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into());
         }
 
-        let dimen = shape[dim].evaluate_constant().ok_or("Slice does not support variable size slice dim!")?;
+        let dimen = shape[dim];
 
-        if end <= start || end > dimen {
+        if end <= start || end > dimen.get() {
             return Err("Invalid slice params!".into());
         }
 
@@ -60,7 +60,7 @@ impl SliceAcrossDimension {
 
     pub fn invert(&self) -> Result<PadAcrossDimension, IRError> {
         let shape = [self.outer, (self.end - self.start).into(), self.inner];
-        PadAcrossDimension::new(shape, 1, self.start, self.dimen - self.end, DValue::zero(self.dtype))
+        PadAcrossDimension::new(shape, 1, self.start, self.dimen.get() - self.end, DValue::zero(self.dtype))
     }
 
     pub fn input_size(&self) -> Size {
@@ -72,24 +72,11 @@ impl SliceAcrossDimension {
     }
 
     pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], output: &mut [T]) {
-        let size = input.len();
+        let outer = self.outer.get();
+        let inner = self.inner.get();
+        let dimen = self.dimen.get();
 
-        let var = match (self.input_size().get_var_size(size), self.output_size().get_var_size(output.len())) {
-            (None, None) => 1,
-            (Some(x), Some(y)) => {
-                assert_eq!(x, y);
-                x
-            }
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-        };
-
-        assert_eq!(self.input_size().evaluate(var), size);
-        assert_eq!(self.output_size().evaluate(var), output.len());
-
-        let outer = self.outer.evaluate(var);
-        let inner = self.inner.evaluate(var);
-
+        assert_eq!(input.len(), outer * inner * dimen);
         assert_eq!(output.len(), outer * (self.end - self.start) * inner);
 
         let odimen = self.end - self.start;
@@ -97,7 +84,7 @@ impl SliceAcrossDimension {
         for o in 0..outer {
             for d in 0..odimen {
                 let oidx = inner * odimen * o + inner * d;
-                let iidx = inner * self.dimen * o + inner * (d + self.start);
+                let iidx = inner * dimen * o + inner * (d + self.start);
                 output[oidx..(inner + oidx)].copy_from_slice(&input[iidx..(inner + iidx)]);
             }
         }
@@ -107,7 +94,7 @@ impl SliceAcrossDimension {
 impl OpType for SliceAcrossDimension {
     fn opname(&self) -> String {
         let Self { outer, dimen, inner, start, end, .. } = *self;
-        format!("slice<{outer:?}x{dimen}x{inner:?}, {start}, {end}>")
+        format!("slice<{outer:?}x{dimen:?}x{inner:?}, {start}, {end}>")
     }
 
     fn inputs(&self) -> Vec<TType> {
@@ -140,6 +127,11 @@ impl OpType for SliceAcrossDimension {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let op = self.invert().unwrap();
+        output_grads[0].builder().add_op([output_grads[0]], op)
     }
 }
 

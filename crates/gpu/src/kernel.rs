@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, ffi::c_void, fmt, rc::Rc, sync::Arc};
+use std::{collections::BTreeSet, ffi::c_void, fmt, sync::Arc};
 
 use bullet_compiler::tensor::{OpType, TType};
 
@@ -13,12 +13,11 @@ pub struct KernelSrc {
     pub(crate) outputs: Vec<TType>,
     pub(crate) name: String,
     pub(crate) source: String,
-    pub(crate) requires_var_size_arg: bool,
     pub(crate) arg_order: Vec<(usize, bool)>,
     pub(crate) requires_zero: BTreeSet<usize>,
-    pub(crate) gdim: Rc<dyn Fn(usize) -> Dim3>,
-    pub(crate) bdim: Rc<dyn Fn(usize) -> u32>,
-    pub(crate) smem: Rc<dyn Fn(usize) -> u32>,
+    pub(crate) gdim: Dim3,
+    pub(crate) bdim: u32,
+    pub(crate) smem: u32,
 }
 
 impl fmt::Debug for KernelSrc {
@@ -40,12 +39,11 @@ impl KernelSrc {
         outputs: Vec<TType>,
         name: String,
         source: String,
-        requires_var_size_arg: bool,
         arg_order: Vec<(usize, bool)>,
         requires_zero: BTreeSet<usize>,
-        gdim: Rc<dyn Fn(usize) -> Dim3>,
-        bdim: Rc<dyn Fn(usize) -> u32>,
-        smem: Rc<dyn Fn(usize) -> u32>,
+        gdim: Dim3,
+        bdim: u32,
+        smem: u32,
     ) -> Self {
         assert_eq!(arg_order.len(), inputs.len() + outputs.len());
         assert_eq!(
@@ -57,7 +55,7 @@ impl KernelSrc {
             arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<BTreeSet<_>>().len()
         );
 
-        Self { inputs, outputs, name, source, requires_var_size_arg, arg_order, requires_zero, gdim, bdim, smem }
+        Self { inputs, outputs, name, source, arg_order, requires_zero, gdim, bdim, smem }
     }
 
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
@@ -67,12 +65,11 @@ impl KernelSrc {
             inputs: self.inputs.clone(),
             outputs: self.outputs.clone(),
             kernel,
-            requires_var_size_arg: self.requires_var_size_arg,
             arg_order: self.arg_order.clone(),
             requires_zero: self.requires_zero.clone(),
-            gdim: self.gdim.clone(),
-            bdim: self.bdim.clone(),
-            smem: self.smem.clone(),
+            gdim: self.gdim,
+            bdim: self.bdim,
+            smem: self.smem,
         })
     }
 }
@@ -95,12 +92,11 @@ pub struct CompiledKernel<G: Gpu> {
     pub(crate) inputs: Vec<TType>,
     pub(crate) outputs: Vec<TType>,
     pub(crate) kernel: Kernel<G>,
-    pub(crate) requires_var_size_arg: bool,
     pub(crate) arg_order: Vec<(usize, bool)>,
     pub(crate) requires_zero: BTreeSet<usize>,
-    pub(crate) gdim: Rc<dyn Fn(usize) -> Dim3>,
-    pub(crate) bdim: Rc<dyn Fn(usize) -> u32>,
-    pub(crate) smem: Rc<dyn Fn(usize) -> u32>,
+    pub(crate) gdim: Dim3,
+    pub(crate) bdim: u32,
+    pub(crate) smem: u32,
 }
 
 impl<G: Gpu> fmt::Debug for CompiledKernel<G> {
@@ -120,12 +116,11 @@ impl<G: Gpu> CompiledKernel<G> {
         inputs: Vec<TType>,
         outputs: Vec<TType>,
         kernel: Kernel<G>,
-        requires_var_size_arg: bool,
         arg_order: Vec<(usize, bool)>,
         requires_zero: BTreeSet<usize>,
-        gdim: Rc<dyn Fn(usize) -> Dim3>,
-        bdim: Rc<dyn Fn(usize) -> u32>,
-        smem: Rc<dyn Fn(usize) -> u32>,
+        gdim: Dim3,
+        bdim: u32,
+        smem: u32,
     ) -> Self {
         assert_eq!(arg_order.len(), inputs.len() + outputs.len());
         assert_eq!(
@@ -137,7 +132,7 @@ impl<G: Gpu> CompiledKernel<G> {
             arg_order.iter().filter_map(|(idx, input)| (!input).then_some(*idx)).collect::<BTreeSet<_>>().len()
         );
 
-        Self { inputs, outputs, kernel, requires_var_size_arg, arg_order, requires_zero, gdim, bdim, smem }
+        Self { inputs, outputs, kernel, arg_order, requires_zero, gdim, bdim, smem }
     }
 
     pub fn execute(
@@ -153,8 +148,6 @@ impl<G: Gpu> CompiledKernel<G> {
         let outputs =
             outputs.iter().map(|o| o.clone().acquire(stream.clone())).collect::<Result<Vec<BufferGuard<G>>, _>>()?;
 
-        let mut vars = BTreeSet::new();
-
         if inputs.len() != self.inputs.len() || outputs.len() != self.outputs.len() {
             return Err("Mismatched number of inputs/outputs!".to_string().into());
         }
@@ -164,26 +157,12 @@ impl<G: Gpu> CompiledKernel<G> {
                 return Err("Mismatched dtypes!".to_string().into());
             }
 
-            let concrete_size = buf.size();
-            if let Some(var) = ttype.size().get_var_size(concrete_size) {
-                vars.insert(var);
-            } else if ttype.size().evaluate_constant().unwrap() != concrete_size {
+            if buf.size() != ttype.size().get() {
                 return Err("Mismatched sizes!".to_string().into());
             }
         }
 
-        let var = match vars.len() {
-            0 => 1,
-            1 => *vars.iter().next().unwrap(),
-            _ => return Err(format!("Mismatching batch sizes in inputs: {vars:?}").into()),
-        };
-
         let mut args: Vec<*mut c_void> = Vec::new();
-
-        let size = var as i32;
-        if self.requires_var_size_arg {
-            args.push((&size as *const i32).cast_mut().cast());
-        }
 
         let mut ptrs = vec![Default::default(); self.arg_order.len()];
         for (i, &(index, is_input)) in self.arg_order.iter().enumerate() {
@@ -196,13 +175,7 @@ impl<G: Gpu> CompiledKernel<G> {
                 unimplemented!();
             }
 
-            self.kernel.launch(
-                &stream,
-                (self.gdim)(var),
-                (self.bdim)(var),
-                args.as_ptr().cast_mut().cast(),
-                (self.smem)(var),
-            )?;
+            self.kernel.launch(&stream, self.gdim, self.bdim, args.as_ptr().cast_mut().cast(), self.smem)?;
         }
 
         for i in inputs {
