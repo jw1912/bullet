@@ -306,14 +306,15 @@ impl<G: Gpu> Module<G> {
     pub fn get_kernel(self: Arc<Self>, name: impl Into<String>) -> Result<Kernel<G>, G::Error> {
         self.device.set()?;
 
-        let name = CString::new(name.into()).map_err(|e| format!("{e:?}"))?;
-        let kernel = unsafe { G::module_get_kernel(self.module, &name)? };
+        let name = name.into();
+        let cname = CString::new(name.clone()).map_err(|e| format!("{e:?}"))?;
+        let kernel = unsafe { G::module_get_kernel(self.module, &cname)? };
 
         unsafe {
             G::kernel_load(kernel)?;
         }
 
-        Ok(Kernel { kernel, module: self.clone() })
+        Ok(Kernel { name, kernel, module: self.clone() })
     }
 
     /// Get device that this module is on
@@ -323,6 +324,7 @@ impl<G: Gpu> Module<G> {
 }
 
 pub struct Kernel<G: Gpu> {
+    name: String,
     kernel: G::Kernel,
     module: Arc<Module<G>>,
 }
@@ -360,6 +362,11 @@ impl<G: Gpu> Kernel<G> {
 
         stream.device.set()?;
         unsafe { G::kernel_launch(self.kernel, stream.inner, grid_dim, block_dim, args, smem) }
+    }
+
+    // Get the name of the kernel
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Get the device that this kernel is on

@@ -1,7 +1,7 @@
 use crate::{
     ir::IRError,
     tensor::{
-        DType, OpType, Shape, Size, TType, TValue, TensorOp,
+        DType, IRTrace, OpType, Shape, Size, TNode, TType, TValue, TensorOp,
         operation::{ReduceAcrossDimension, Reduction},
     },
 };
@@ -64,28 +64,12 @@ impl BroadcastAcrossDimension {
     }
 
     pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], output: &mut [T]) {
-        let size = input.len();
-
-        let var = match (self.input_size().get_var_size(size), self.output_size().get_var_size(output.len())) {
-            (None, None) => 1,
-            (Some(x), Some(y)) => {
-                assert_eq!(x, y);
-                x
-            }
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-        };
-
-        assert_eq!(self.input_size().evaluate(var), size);
-        assert_eq!(self.output_size().evaluate(var), output.len());
-
-        let outer = self.outer.evaluate(var);
-        let inner = self.inner.evaluate(var);
-        let repeats = self.repeats.evaluate(var);
+        let inner = self.inner.get();
+        let repeats = self.repeats.get();
 
         assert_eq!(output.len(), input.len() * repeats);
 
-        for i in 0..outer {
+        for i in 0..self.outer.get() {
             for j in 0..inner {
                 let ld = inner * i;
                 for r in 0..repeats {
@@ -132,6 +116,11 @@ impl OpType for BroadcastAcrossDimension {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let op = self.invert().unwrap();
+        output_grads[0].builder().add_op([output_grads[0]], op)
     }
 }
 

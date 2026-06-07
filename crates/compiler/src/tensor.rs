@@ -11,19 +11,13 @@ use std::{
     rc::Rc,
 };
 
-use crate::{
-    ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem},
-    tensor::operation::{ReduceAcrossDimension, Reduction},
-};
+use crate::ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem};
 
 use operation::{
-    BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ScalarConstant, Unary, UnaryOp,
+    BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ReduceAcrossDimension, Reduction,
+    ScalarConstant, Unary, UnaryOp,
 };
-use transform::{
-    CanonicalisePass, IRTransform,
-    eliminate::{EliminateCopies, EliminateUnusedOperations},
-    modify::{AddOperation, RemoveOperation, ReplaceInput, ReplaceOperation, SwapOutputs},
-};
+use transform::{IRTransform, canonicalise, eliminate, modify};
 
 pub use builder::{IRBuilder, TNode};
 pub use operation::{OpType, TensorOp};
@@ -58,32 +52,19 @@ impl TensorIR {
         let mut values: BTreeMap<_, _> =
             inputs.into().into_iter().map(|(id, tensor)| (id, RefCell::new(tensor))).collect();
 
-        let mut vars = BTreeSet::new();
-
         for (id, tensor) in &values {
             let op = self.get_op(self.get_parent_op(*id)?)?;
             if !op.data().is_input() {
                 return Err("Seeded non-leaf node!".into());
             }
 
-            let concrete_size = tensor.borrow().size();
-            let size = self.get_node(*id)?.ty().size();
-
-            if let Some(var) = size.get_var_size(concrete_size) {
-                vars.insert(var);
-            }
+            assert_eq!(tensor.borrow().size(), self.get_node(*id)?.ty().size().get());
         }
-
-        let var = match vars.len() {
-            0 => 1,
-            1 => *vars.iter().next().unwrap(),
-            _ => return Err(format!("Mismatching batch sizes in inputs: {vars:?}").into()),
-        };
 
         for op in self.ordered_operations()? {
             for &output in op.outputs() {
                 let ty = self.get_node(output)?.ty();
-                let size = ty.size().evaluate(var);
+                let size = ty.size().get();
                 let tensor = TValue::zeros(ty.dtype(), size);
                 let is_prev = values.contains_key(&output);
 
@@ -128,8 +109,7 @@ impl TensorIR {
     }
 
     pub fn ordered_operations(&self) -> Result<Vec<Op<Tensor>>, IRTrace> {
-        let ids = self.ir.topo_order_ops()?;
-        ids.into_iter().map(|id| self.ir.op(id).map_err(IRTrace::Root).cloned()).collect()
+        self.ir.ordered_operations().map_err(IRTrace::Root)
     }
 
     pub fn operations(&self) -> Vec<Op<Tensor>> {
@@ -215,7 +195,7 @@ impl TensorIR {
         op: Result<TensorOp, IRTrace>,
     ) -> Result<Vec<NodeId>, IRTrace> {
         let inputs = inputs.as_ref().to_vec();
-        let transform = AddOperation::new(inputs, op);
+        let transform = modify::AddOperation::new(inputs, op);
         self.transform(transform.clone()).map(|_| transform.outputs())
     }
 
@@ -292,25 +272,25 @@ impl TensorIR {
     }
 
     pub fn eliminate_dead_ops(&mut self) -> Result<(), IRTrace> {
-        self.transform(EliminateCopies)?;
-        self.transform(EliminateUnusedOperations)
+        self.transform(eliminate::EliminateCopies)?;
+        self.transform(eliminate::EliminateUnusedOperations)
     }
 
     pub fn swap_outputs(&mut self, id1: NodeId, id2: NodeId) -> Result<(), IRTrace> {
-        self.transform(SwapOutputs(id1, id2))
+        self.transform(modify::SwapOutputs(id1, id2))
     }
 
     pub fn remove_op(&mut self, id: OpId) -> Result<(), IRTrace> {
-        self.transform(RemoveOperation(id))
+        self.transform(modify::RemoveOperation(id))
     }
 
     pub fn replace_input(&mut self, new: NodeId, old: NodeId) -> Result<(), IRTrace> {
-        self.transform(ReplaceInput { new, old })
+        self.transform(modify::ReplaceInput { new, old })
     }
 
-    pub fn replace_op(&mut self, op: OpId, new: AddOperation) -> Result<OpId, IRTrace> {
+    pub fn replace_op(&mut self, op: OpId, new: modify::AddOperation) -> Result<OpId, IRTrace> {
         let first_output = self.get_op(op)?.outputs()[0];
-        self.transform(ReplaceOperation(op, new))?;
+        self.transform(modify::ReplaceOperation(op, new))?;
         self.get_parent_op(first_output)
     }
 
@@ -320,7 +300,7 @@ impl TensorIR {
         new_inputs: impl Into<Vec<NodeId>>,
         new_op: impl OpType,
     ) -> Result<OpId, IRTrace> {
-        let add = AddOperation::new(new_inputs.into(), Ok(TensorOp::new(new_op)));
+        let add = modify::AddOperation::new(new_inputs.into(), Ok(TensorOp::new(new_op)));
         self.replace_op(op, add)
     }
 
@@ -337,7 +317,7 @@ impl TensorIR {
     }
 
     pub fn optimise(&mut self) -> Result<(), IRTrace> {
-        self.transform(CanonicalisePass::all())
+        self.transform(canonicalise::CanonicalisePass::all())
     }
 }
 

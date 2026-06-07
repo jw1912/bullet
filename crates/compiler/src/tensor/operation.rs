@@ -22,14 +22,13 @@ pub use linear::{
 pub use pointwise::{
     binary::{CABinary, CABinaryOp, Power},
     copy::CopyOp,
-    passthrough::PassThrough,
     unary::{Unary, UnaryOp},
 };
 pub use subgraph::SubGraph;
 
 use crate::{
     ir::Operation,
-    tensor::{TType, TValue},
+    tensor::{IRTrace, TNode, TType, TValue},
 };
 
 pub trait OpType: Any + Debug + 'static {
@@ -52,6 +51,10 @@ pub trait OpType: Any + Debug + 'static {
 
     fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
         Vec::new()
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Err(format!("Gradient not implemented for {}", self.opname()).into())
     }
 }
 
@@ -121,5 +124,9 @@ impl OpType for Input {
 
     fn equals(&self, _: &TensorOp) -> bool {
         false
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Ok(Vec::new())
     }
 }

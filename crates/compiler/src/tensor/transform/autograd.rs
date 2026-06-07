@@ -1,14 +1,14 @@
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     rc::Rc,
 };
 
 use crate::{
     ir::{NodeId, OpId},
     tensor::{
-        IRBuilder, IRTrace, TNode, TensorIR, TensorOp,
-        operation::{CABinary, SubGraph, autograd::AutogradOp},
+        DValue, IRBuilder, IRTrace, TNode, TensorIR, TensorOp,
+        operation::{CABinary, SubGraph, autograd::CustomAutogradOp},
         transform::{IRTransform, modify::AddOperation},
     },
 };
@@ -19,7 +19,7 @@ pub struct LowerForward;
 impl IRTransform for LowerForward {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         for op in ir.operations() {
-            if let Some(AutogradOp { forward, .. }) = op.data().downcast().cloned() {
+            if let Some(CustomAutogradOp { forward, .. }) = op.data().downcast().cloned() {
                 ir.replace_op(op.id(), AddOperation::new(op.inputs().to_vec(), Ok(TensorOp::new(forward))))?;
             }
         }
@@ -28,7 +28,7 @@ impl IRTransform for LowerForward {
     }
 }
 
-type GradientMap = BTreeMap<NodeId, Option<NodeId>>;
+type GradientMap = BTreeMap<NodeId, NodeId>;
 
 #[derive(Debug, Default)]
 pub struct TakeGradient {
@@ -71,68 +71,66 @@ impl IRTransform for TakeGradient {
         let ops = ir.get_dependent_ops_set(self.root)?;
 
         let root_outputs = ir.get_op(self.root)?.outputs().to_vec();
-        let root_grads = self.output_grads.clone().into_iter().map(Option::Some);
-        let mut grads: BTreeMap<_, _> = root_outputs.into_iter().zip(root_grads).collect();
+        let mut grads: BTreeMap<_, _> = root_outputs.into_iter().zip(self.output_grads.clone()).collect();
 
         for &op in &ops {
-            for &input in ir.get_op(op)?.inputs() {
-                grads.insert(input, None);
+            let op_inputs = ir.get_op(op)?.inputs().to_vec();
+            for input in op_inputs {
+                if let Entry::Vacant(e) = grads.entry(input) {
+                    let ty = ir.get_node(input)?.ty();
+                    let zero = DValue::zero(ty.dtype());
+                    let zeros = ir.add_scalar(zero, ty.size());
+                    e.insert(zeros);
+                }
             }
         }
 
         for operation in ir.ordered_operations()?.iter().rev().filter(|operation| ops.contains(&operation.id())) {
-            if let Some(AutogradOp { op, .. }) = operation.data().downcast() {
-                let op_ograds = operation.outputs().iter().map(|i| grads.get(i).unwrap().unwrap()).collect::<Vec<_>>();
+            let op = operation.data();
+            let op_ograds = operation.outputs().iter().map(|i| *grads.get(i).unwrap()).collect::<Vec<_>>();
 
-                // create backwards subgraph
-                let builder = IRBuilder::default();
-                let inputs = op.inputs().iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
-                let ograds = op_ograds
-                    .iter()
-                    .map(|&i| {
-                        let ty = ir.get_node(i).unwrap().ty();
-                        builder.add_input(ty.size(), ty.dtype())
-                    })
-                    .collect::<Vec<_>>();
+            // create backwards subgraph
+            let builder = IRBuilder::default();
+            let inputs = op.inputs().iter().map(|i| builder.add_input(i.size(), i.dtype())).collect::<Vec<_>>();
+            let ograds = op_ograds
+                .iter()
+                .map(|&i| {
+                    let ty = ir.get_node(i).unwrap().ty();
+                    builder.add_input(ty.size(), ty.dtype())
+                })
+                .collect::<Vec<_>>();
 
-                let igrads = op.backward(inputs.clone(), ograds.clone())?;
+            let igrads = op.0.backward(inputs.clone(), ograds.clone())?;
 
-                // handle not all inputs having gradient and
-                // multiple inputs having the same gradient
-                let mut igrad_map: BTreeMap<_, _> = operation.inputs().iter().map(|&inp| (inp, Vec::new())).collect();
-                let mut unique_igrads = Vec::new();
-                let mut present_igrads = BTreeSet::new();
-                for (&inp, igrad) in operation.inputs().iter().zip(igrads.iter()) {
-                    if let Some(ig) = igrad {
-                        igrad_map.get_mut(&inp).unwrap().push(ig.node());
+            // handle not all inputs having gradient and
+            // multiple inputs having the same gradient
+            let mut igrad_map: BTreeMap<_, _> = operation.inputs().iter().map(|&inp| (inp, Vec::new())).collect();
+            let mut unique_igrads = Vec::new();
+            let mut present_igrads = BTreeSet::new();
+            for (&inp, igrad) in operation.inputs().iter().zip(igrads.iter()) {
+                igrad_map.get_mut(&inp).unwrap().push(igrad.node());
 
-                        if present_igrads.insert(ig.node()) {
-                            unique_igrads.push(*ig);
-                        }
-                    }
+                if present_igrads.insert(igrad.node()) {
+                    unique_igrads.push(*igrad);
                 }
+            }
 
-                let backward = builder.build(&unique_igrads);
+            let backward = builder.build(&unique_igrads);
 
-                // add backwards subgraph to TensorIR
-                let subgraph_inputs = [inputs, ograds].concat().iter().map(TNode::node).collect();
-                let subgraph_outputs: Vec<_> = unique_igrads.iter().map(TNode::node).collect();
-                let subgraph = SubGraph::new(backward, subgraph_inputs, subgraph_outputs.clone())?;
-                let new_grads = ir.add_op([operation.inputs(), &op_ograds].concat(), Ok::<_, IRTrace>(subgraph))?;
+            // add backwards subgraph to TensorIR
+            let subgraph_inputs = [inputs, ograds].concat().iter().map(TNode::node).collect();
+            let subgraph_outputs: Vec<_> = unique_igrads.iter().map(TNode::node).collect();
+            let subgraph = SubGraph::new(backward, subgraph_inputs, subgraph_outputs.clone())?;
+            let new_grads = ir.add_op([operation.inputs(), &op_ograds].concat(), Ok::<_, IRTrace>(subgraph))?;
 
-                // accumulate gradients in actual graph
-                let subgraph_map: BTreeMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
-                for (input, new_grad_subgraph) in igrad_map {
-                    let old_grad = grads.get_mut(&input).unwrap();
+            // accumulate gradients in actual graph
+            let subgraph_map: BTreeMap<_, _> = subgraph_outputs.iter().zip(new_grads).collect();
+            for (input, new_grad_subgraph) in igrad_map {
+                let old_grad = grads.get_mut(&input).unwrap();
 
-                    for subgraph_index in new_grad_subgraph {
-                        let new_grad = *subgraph_map.get(&subgraph_index).unwrap();
-
-                        match old_grad {
-                            Some(old_grad) => *old_grad = ir.add_binary(*old_grad, new_grad, CABinary::Add)?,
-                            None => *old_grad = Some(new_grad),
-                        }
-                    }
+                for subgraph_index in new_grad_subgraph {
+                    let new_grad = *subgraph_map.get(&subgraph_index).unwrap();
+                    *old_grad = ir.add_binary(*old_grad, new_grad, CABinary::Add)?;
                 }
             }
         }
@@ -163,14 +161,14 @@ mod tests {
         let b = ir.add_input(ttype);
         let x = ir.add_input(ttype);
 
-        let z = ir.add_op([a, x], AutogradOp::new(CABinaryOp::new(ttype, CABinary::Mul)))?[0];
-        let y = ir.add_op([z, b], AutogradOp::new(CABinaryOp::new(ttype, CABinary::Add)))?[0];
+        let z = ir.add_op([a, x], Ok::<_, IRTrace>(CABinaryOp::new(ttype, CABinary::Mul)))?[0];
+        let y = ir.add_op([z, b], Ok::<_, IRTrace>(CABinaryOp::new(ttype, CABinary::Add)))?[0];
 
         let grad = ir.add_const(TValue::F32(vec![1.0]));
 
         let (transform, grads) = TakeGradient::new(ir.get_parent_op(y)?, [grad]);
         ir.transform(transform)?;
-        let dydx = grads.borrow().get(&x).unwrap().unwrap();
+        let dydx = *grads.borrow().get(&x).unwrap();
         ir.register_output(dydx);
 
         ir.transform(LowerForward)?;
@@ -194,7 +192,7 @@ mod tests {
 
         let x = ir.add_input(ttype);
 
-        let y = ir.add_op([x, x], AutogradOp::new(CABinaryOp::new(ttype, CABinary::Mul)))?[0];
+        let y = ir.add_op([x, x], Ok::<_, IRTrace>(CABinaryOp::new(ttype, CABinary::Mul)))?[0];
 
         let grad = ir.add_const(TValue::F32(vec![1.0]));
 
@@ -203,7 +201,7 @@ mod tests {
         ir.transform(LowerForward)?;
         ir.transform(InlineSubgraphs)?;
 
-        let dydx = grads.borrow().get(&x).unwrap().unwrap();
+        let dydx = *grads.borrow().get(&x).unwrap();
         ir.register_output(dydx);
 
         ir.optimise()?;

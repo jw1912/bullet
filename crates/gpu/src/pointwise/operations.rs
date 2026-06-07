@@ -46,10 +46,8 @@ pub enum PointwiseOp {
         p2size: u8,
     },
     ThreadId,
-    VarSize,
     Div,
     Rem,
-    EvalSize(Size),
     Broadcast(DType, NonZeroU8),
     SpMM {
         nnz: usize,
@@ -99,10 +97,8 @@ impl Operation<PType> for PointwiseOp {
             Self::Unary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
             Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }; 2],
             Self::Power { p2size } => vec![PType::Variable { ty: DType::F32, p2size }; 2],
-            Self::ThreadId => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
-            Self::Constant { .. } | Self::Buffer { .. } | Self::VarSize => Vec::new(),
+            Self::Constant { .. } | Self::Buffer { .. } | Self::ThreadId => Vec::new(),
             Self::Div | Self::Rem => vec![PType::Variable { ty: DType::I32, p2size: 0 }; 2],
-            Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Broadcast(ty, _) => vec![PType::Variable { ty, p2size: 0 }],
             Self::SpMM { ty, .. } => {
                 vec![PType::Pointer(ty), PType::Pointer(DType::I32), PType::Variable { ty: DType::I32, p2size: 0 }]
@@ -134,8 +130,8 @@ impl Operation<PType> for PointwiseOp {
             Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
             Self::Power { p2size } => vec![PType::Variable { ty: DType::F32, p2size }],
             Self::Constant { value, p2size } => vec![PType::Variable { ty: value.dtype(), p2size }],
-            Self::ThreadId | Self::VarSize => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
-            Self::Div | Self::Rem | Self::EvalSize(_) => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
+            Self::ThreadId => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
+            Self::Div | Self::Rem => vec![PType::Variable { ty: DType::I32, p2size: 0 }],
             Self::Broadcast(ty, p2size) => vec![PType::Variable { ty, p2size: p2size.get() }],
             Self::SpMM { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
         }

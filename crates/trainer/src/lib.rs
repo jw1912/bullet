@@ -2,6 +2,7 @@ pub mod model;
 pub mod optimiser;
 pub mod run;
 
+use bullet_compiler::tensor::IRTrace;
 use bullet_gpu::runtime::Gpu;
 use optimiser::{Optimiser, OptimiserState};
 use run::{
@@ -17,6 +18,7 @@ pub enum TrainerError<G: Gpu> {
     GradientCalculationError(G::Error),
     OptimiserUpdateError(G::Error),
     Unexpected(G::Error),
+    CompilingBackwards(IRTrace),
     IoError,
 }
 

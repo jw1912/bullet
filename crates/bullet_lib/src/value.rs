@@ -1,7 +1,7 @@
 pub(crate) mod builder;
-mod dataloader;
+pub mod dataloader;
 pub mod loader;
-mod save;
+pub mod save;
 
 use std::cell::RefCell;
 
@@ -21,13 +21,10 @@ use crate::{
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
     },
-    value::{
-        dataloader::ValueDataLoader,
-        loader::{DefaultDataLoader, LoadableDataType},
-    },
 };
 
-use crate::value::loader::PreparedData;
+use dataloader::ValueDataLoader;
+use loader::{DefaultDataLoader, LoadableDataType, PreparedData};
 
 /// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<
@@ -72,6 +69,21 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
     saved_format: Vec<SavedFormat>,
     use_win_rate_model: bool,
     wdl: bool,
+}
+
+impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> ValueTrainerState<I, O> {
+    pub fn make_dataloader<D>(&self, dataloader: D, scale: f32) -> DefaultDataLoader<I, O, D> {
+        DefaultDataLoader::new(
+            self.input_getter.clone(),
+            self.output_getter,
+            self.blend_getter,
+            self.weight_getter,
+            self.use_win_rate_model,
+            self.wdl,
+            scale,
+            dataloader,
+        )
+    }
 }
 
 impl<Inp: SparseInputType, Out> ValueTrainerState<Inp, Out>
@@ -128,16 +140,7 @@ where
             )
         }
 
-        let dataloader = DefaultDataLoader::new(
-            self.state.input_getter.clone(),
-            self.state.output_getter,
-            self.state.blend_getter,
-            self.state.weight_getter,
-            self.state.use_win_rate_model,
-            self.state.wdl,
-            schedule.eval_scale,
-            dataloader.clone(),
-        );
+        let dataloader = self.state.make_dataloader(dataloader.clone(), schedule.eval_scale);
 
         let _ = std::fs::create_dir(settings.output_directory);
 
@@ -190,21 +193,14 @@ where
     where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
-        self.0.optimiser.model.set_fwd_batch_size(1).unwrap();
-
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
-
         let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);
 
-        let model = &self.optimiser.model;
-        let device = model.device();
-        let stream = device.new_stream().unwrap();
+        let model = &mut self.optimiser.model;
+        let device_data = host_data.to_device(&model.device()).unwrap();
+        let outputs = model.evaluate(&device_data);
 
-        let inputs = host_data.to_device(&device).unwrap();
-        let outputs = model.make_forward_output_tensors(1).unwrap();
-        model.forward(&stream, &inputs, &outputs).unwrap().value().unwrap();
-
-        let output = outputs.get("outputs/output").unwrap().clone();
+        let output = outputs.get("output").unwrap().clone();
         let TValue::F32(output) = output.to_host().unwrap() else { panic!() };
         output
     }
@@ -238,17 +234,7 @@ where
         let steps = schedule.steps;
         let threads = settings.threads;
         let wdl = schedule.wdl_scheduler.clone();
-        let dataloader = DefaultDataLoader::new(
-            self.state.input_getter.clone(),
-            self.state.output_getter,
-            self.state.blend_getter,
-            self.state.weight_getter,
-            self.state.use_win_rate_model,
-            self.state.wdl,
-            schedule.eval_scale,
-            dataloader.clone(),
-        );
-
+        let dataloader = self.state.make_dataloader(dataloader.clone(), schedule.eval_scale);
         let dataloader = ValueDataLoader { steps, threads, dataloader, wdl };
 
         self.0.measure_max_cpu_throughput(dataloader, steps).unwrap()

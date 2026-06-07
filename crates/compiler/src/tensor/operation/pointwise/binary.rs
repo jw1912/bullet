@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use crate::tensor::{DType, DValue, OpType, Size, TType, TValue, operation::TensorOp};
+use crate::tensor::{
+    DType, DValue, IRTrace, OpType, Size, TNode, TType, TValue,
+    operation::{TensorOp, Unary},
+};
 
 /// Commutative & associative binary operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,6 +97,30 @@ impl OpType for CABinaryOp {
     fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
         vec![[0, 1].into()]
     }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let [lhs, rhs] = inputs[..] else { panic!() };
+        let [grad] = output_grads[..] else { panic!() };
+
+        let (glhs, grhs) = match self.op() {
+            CABinary::Add => (grad, grad),
+            CABinary::Mul => ((grad * rhs)?, (grad * lhs)?),
+            CABinary::Max => {
+                let diff = (lhs - rhs)?;
+                let lgrad = diff.unary(Unary::IsPositive)?;
+                let rgrad = (-diff)?.unary(Unary::IsPositive)?;
+                ((grad * lgrad)?, (grad * rgrad)?)
+            }
+            CABinary::Min => {
+                let diff = (lhs - rhs)?;
+                let lgrad = (-diff)?.unary(Unary::IsPositive)?;
+                let rgrad = diff.unary(Unary::IsPositive)?;
+                ((grad * lgrad)?, (grad * rgrad)?)
+            }
+        };
+
+        Ok(vec![glhs, grhs])
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -136,17 +163,24 @@ impl OpType for Power {
     fn commutating_groups(&self) -> Vec<BTreeSet<usize>> {
         Vec::new()
     }
+
+    fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let grad = output_grads[0];
+        let base_grad = (inputs[1] * inputs[0].pow((inputs[1] - 1.0)?)?)?;
+        let powf_grad = (inputs[0].log()? * inputs[0].pow(inputs[1])?)?;
+        Ok(vec![(grad * base_grad)?, (grad * powf_grad)?])
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::tensor::{DType, Size};
+    use crate::tensor::DType;
 
     use super::*;
 
     #[test]
     fn evaluate_ca() {
-        let ty = TType::new(Size::variable(), DType::F32);
+        let ty = TType::new(4, DType::F32);
 
         let binary = CABinaryOp::new(ty, CABinary::Add);
 

@@ -65,10 +65,6 @@ impl<'a> TNode<'a> {
         Self { builder, node }
     }
 
-    pub fn copy(self) -> Result<Self, IRTrace> {
-        self.builder.add_op([self], CopyOp(self.ty())).map(|x| x[0])
-    }
-
     pub fn builder(self) -> &'a IRBuilder {
         self.builder
     }
@@ -79,6 +75,20 @@ impl<'a> TNode<'a> {
 
     pub fn ty(&self) -> TType {
         self.builder.ir.borrow().get_node(self.node).unwrap().ty()
+    }
+
+    pub fn zeros_like(self) -> Self {
+        let ty = self.ty();
+        self.builder.scalar(DValue::zero(ty.dtype()), ty.size())
+    }
+
+    pub fn ones_like(self) -> Self {
+        let ty = self.ty();
+        self.builder.scalar(DValue::one(ty.dtype()), ty.size())
+    }
+
+    pub fn copy(self) -> Result<Self, IRTrace> {
+        self.builder.add_op([self], CopyOp(self.ty())).map(|x| x[0])
     }
 
     pub fn broadcast(self, shape: impl Into<Shape>, dim: usize, repeats: impl Into<Size>) -> Result<Self, IRTrace> {
@@ -147,7 +157,7 @@ impl<'a> TNode<'a> {
     }
 
     pub fn softmax(self, inner_size: usize) -> Result<Self, IRTrace> {
-        let batch_size = self.ty().size() / inner_size;
+        let batch_size = self.ty().size() / inner_size.into();
 
         let max =
             self.reduce_max([batch_size, inner_size.into()], 1)?.broadcast([batch_size, 1.into()], 1, inner_size)?;

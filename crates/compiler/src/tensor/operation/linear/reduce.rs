@@ -2,7 +2,9 @@ use std::{cmp::Ordering, ops::Add};
 
 use crate::{
     ir::IRError,
-    tensor::{DType, OpType, Shape, Size, TType, TValue, TensorOp, operation::BroadcastAcrossDimension},
+    tensor::{
+        DType, IRTrace, OpType, Shape, Size, TNode, TType, TValue, TensorOp, operation::BroadcastAcrossDimension,
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,14 +97,12 @@ impl ReduceAcrossDimension {
     where
         T: Add<T, Output = T> + Copy + Default + PartialOrd,
     {
-        let size = input.len();
-        let var = self.input_size().get_var_size(size).unwrap_or(1);
+        let outer = self.outer.get();
+        let dimen = self.dimen.get();
+        let inner = self.inner.get();
 
-        let outer = self.outer.evaluate(var);
-        let dimen = self.dimen.evaluate(var);
-        let inner = self.inner.evaluate(var);
-
-        assert_eq!(output.len() * dimen, input.len());
+        assert_eq!(input.len(), outer * dimen * inner);
+        assert_eq!(output.len(), outer * inner);
 
         let outer_stride = dimen * inner;
 
@@ -155,6 +155,11 @@ impl OpType for ReduceAcrossDimension {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let op = self.invert()?.ok_or::<IRTrace>("Reduction backprop only implemented for Sum!".into())?;
+        output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![x[0]])
     }
 }
 

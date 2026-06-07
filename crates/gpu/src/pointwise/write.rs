@@ -14,7 +14,7 @@ pub fn tystr(dtype: DType) -> &'static str {
 
 pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
     match op {
-        PointwiseOp::Buffer { .. } | PointwiseOp::VarSize => None,
+        PointwiseOp::Buffer { .. } => None,
         PointwiseOp::Div => Some("const int OUT1 = IN1 / IN2;".into()),
         PointwiseOp::Rem => Some("const int OUT1 = IN1 % IN2;".into()),
         PointwiseOp::Read(io) => {
@@ -31,7 +31,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
         PointwiseOp::ConditionalRead(io, value) => {
             let ty = tystr(io.buf_ty);
             let vl = match value {
-                DValue::F32(x) => x.to_string(),
+                DValue::F32(x) => format!("{x:E}"),
                 DValue::I32(x) => x.to_string(),
             };
 
@@ -74,7 +74,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
         PointwiseOp::Constant { value, p2size } => {
             let ty = tystr(value.dtype());
             let vl = match value {
-                DValue::F32(x) => x.to_string(),
+                DValue::F32(x) => format!("{x:E}"),
                 DValue::I32(x) => x.to_string(),
             };
 
@@ -85,28 +85,14 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 3.. => None,
             }
         }
-        PointwiseOp::EvalSize(size) => {
-            let mut size_str = format!("{}", size.factor());
-            for _ in 0..size.var_power() {
-                size_str += " * IN1";
-            }
-
-            Some(format!("const int OUT1 = {size_str};"))
-        }
-        PointwiseOp::ThreadId => {
-            let mut size_str = format!("{}", size.factor());
-            for _ in 0..size.var_power() {
-                size_str += " * IN1";
-            }
-
-            Some(format!(
-                "\
+        PointwiseOp::ThreadId => Some(format!(
+            "\
                 const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;\n\
                 const int OUT1 = idx_in_grid * blockDim.x + threadIdx.x;\n\
-                if (OUT1 >= ({size_str})) return;\
-            "
-            ))
-        }
+                if (OUT1 >= ({})) return;\
+            ",
+            size.get()
+        )),
         PointwiseOp::Broadcast(ty, p2size) => {
             let ty = tystr(ty);
             match p2size.get() {

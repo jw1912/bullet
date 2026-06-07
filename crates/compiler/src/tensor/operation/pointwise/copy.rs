@@ -1,4 +1,4 @@
-use crate::tensor::{OpType, TType, TValue, TensorOp};
+use crate::tensor::{IRTrace, OpType, TNode, TType, TValue, TensorOp};
 
 /// Internal copy operation used for a few special cases. For example:
 ///
@@ -38,11 +38,15 @@ impl OpType for CopyOp {
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
     }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Ok(vec![output_grads[0]])
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::tensor::{DType, Size};
+    use crate::tensor::DType;
 
     use super::*;
 
@@ -51,7 +55,7 @@ mod tests {
         let a = TValue::F32(vec![1.0; 4]);
         let mut b = TValue::F32(vec![0.0; 4]);
 
-        CopyOp(TType::new(Size::variable(), DType::F32)).evaluate(vec![&a], vec![&mut b]);
+        CopyOp(TType::new(4, DType::F32)).evaluate(vec![&a], vec![&mut b]);
 
         assert_eq!(b, TValue::F32(vec![1.0; 4]));
     }

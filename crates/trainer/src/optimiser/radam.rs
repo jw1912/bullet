@@ -2,7 +2,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
     io::{BufRead, BufReader, Write},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -70,11 +69,11 @@ impl RAdamParams {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
         let op = OP
-            .replace("DECAY", &self.decay.to_string())
-            .replace("BETA1", &self.beta1.to_string())
-            .replace("BETA2", &self.beta2.to_string())
-            .replace("WMIN", &min.to_string())
-            .replace("WMAX", &max.to_string())
+            .replace("DECAY", &format!("{:.E}", self.decay))
+            .replace("BETA1", &format!("{:.E}", self.beta1))
+            .replace("BETA2", &format!("{:.E}", self.beta2))
+            .replace("WMIN", &format!("{min:.E}"))
+            .replace("WMAX", &format!("{max:.E}"))
             .replace("EPSILON", "0.00000001F");
 
         let body = if size.is_multiple_of(4) {
@@ -137,12 +136,11 @@ impl RAdamParams {
                 vec![ty; 3],
                 "radam".to_string(),
                 format!("{op}{DECL}{{{body}}}"),
-                false,
                 vec![(0, true), (1, true), (2, true), (3, true), (4, true), (0, false), (1, false), (2, false)],
                 BTreeSet::new(),
-                Rc::new(move |_| Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 }),
-                Rc::new(|_| 256),
-                Rc::new(|_| 0),
+                Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 },
+                256,
+                0,
             )
         };
 

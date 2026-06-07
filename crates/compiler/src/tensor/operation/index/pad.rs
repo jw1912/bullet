@@ -1,12 +1,12 @@
 use crate::{
     ir::IRError,
-    tensor::{DValue, OpType, Shape, Size, TType, TValue, TensorOp, operation::SliceAcrossDimension},
+    tensor::{DValue, IRTrace, OpType, Shape, Size, TNode, TType, TValue, TensorOp, operation::SliceAcrossDimension},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PadAcrossDimension {
     outer: Size,
-    dimen: usize,
+    dimen: Size,
     inner: Size,
     before: usize,
     after: usize,
@@ -18,7 +18,7 @@ impl PadAcrossDimension {
         self.outer
     }
 
-    pub fn dimen(&self) -> usize {
+    pub fn dimen(&self) -> Size {
         self.dimen
     }
 
@@ -52,8 +52,7 @@ impl PadAcrossDimension {
             return Err(format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into());
         }
 
-        let dimen = shape[dim].evaluate_constant().ok_or("Slice does not support variable size slice dim!")?;
-
+        let dimen = shape[dim];
         let shape = shape.inner();
         let outer = shape[..dim].iter().cloned().reduce(|a, b| a * b).unwrap_or(1.into());
         let inner = shape[(dim + 1)..].iter().cloned().reduce(|a, b| a * b).unwrap_or(1.into());
@@ -62,8 +61,8 @@ impl PadAcrossDimension {
     }
 
     pub fn invert(&self) -> Result<SliceAcrossDimension, IRError> {
-        let shape = [self.outer, (self.before + self.dimen + self.after).into(), self.inner];
-        SliceAcrossDimension::new(self.value.dtype(), shape, 1, self.before, self.before + self.dimen)
+        let shape = [self.outer, self.before + self.dimen + self.after, self.inner];
+        SliceAcrossDimension::new(self.value.dtype(), shape, 1, self.before, self.before + self.dimen.get())
     }
 
     pub fn input_size(&self) -> Size {
@@ -75,27 +74,13 @@ impl PadAcrossDimension {
     }
 
     pub fn apply<T: Copy + std::fmt::Debug>(&self, input: &[T], output: &mut [T], value: T) {
-        let size = input.len();
+        let outer = self.outer.get();
+        let inner = self.inner.get();
+        let dimen = self.dimen.get();
+        let middle = self.before + dimen + self.after;
 
-        let var = match (self.input_size().get_var_size(size), self.output_size().get_var_size(output.len())) {
-            (None, None) => 1,
-            (Some(x), Some(y)) => {
-                assert_eq!(x, y);
-                x
-            }
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-        };
-
-        assert_eq!(self.input_size().evaluate(var), size);
-        assert_eq!(self.output_size().evaluate(var), output.len());
-
-        let outer = self.outer.evaluate(var);
-        let inner = self.inner.evaluate(var);
-
-        assert_eq!(output.len(), input.len() + (self.before + self.after) * outer * inner);
-
-        let middle = self.before + self.dimen + self.after;
+        assert_eq!(input.len(), outer * inner * dimen);
+        assert_eq!(output.len(), middle * outer * inner);
 
         for o in 0..outer {
             for i in 0..inner {
@@ -105,12 +90,12 @@ impl PadAcrossDimension {
                     output[base + inner * b + i] = value;
                 }
 
-                for d in 0..self.dimen {
-                    output[base + inner * (self.before + d) + i] = input[inner * (self.dimen * o + d) + i];
+                for d in 0..dimen {
+                    output[base + inner * (self.before + d) + i] = input[inner * (dimen * o + d) + i];
                 }
 
                 for a in 0..self.after {
-                    output[base + inner * (self.before + self.dimen + a) + i] = value;
+                    output[base + inner * (self.before + dimen + a) + i] = value;
                 }
             }
         }
@@ -153,6 +138,11 @@ impl OpType for PadAcrossDimension {
 
     fn equals(&self, other: &TensorOp) -> bool {
         if let Some(other) = other.downcast::<Self>() { self == other } else { false }
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        let op = self.invert().unwrap();
+        output_grads[0].builder().add_op([output_grads[0]], op)
     }
 }
 

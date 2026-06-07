@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::tensor::{IRTrace, NodeId, OpType, TType, TValue, TensorIR, TensorOp};
+use crate::tensor::{IRTrace, NodeId, OpType, TNode, TType, TValue, TensorIR, TensorOp};
 
 #[derive(Clone, Debug)]
 pub struct SubGraph {
@@ -112,5 +112,9 @@ impl OpType for SubGraph {
 
     fn equals(&self, _other: &TensorOp) -> bool {
         false
+    }
+
+    fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
+        Err("Cannot call `backward` on arbitrary subgraph!".into())
     }
 }
