@@ -5,8 +5,7 @@ mod operation;
 mod topo;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, btree_map::Values},
-    fmt,
+    collections::{BTreeMap, BTreeSet, btree_map::Values}, error, fmt
 };
 
 pub use node::{Node, NodeId};
@@ -26,8 +25,22 @@ pub trait TypeSystem: Copy + fmt::Debug {
 }
 
 /// Simple string error type tied to the IR
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct IRError(String);
+
+impl fmt::Debug for IRError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f ,"IRError: {}", self.0)
+    }
+}
+
+impl fmt::Display for IRError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f ,"{self:?}")
+    }
+}
+
+impl error::Error for IRError {}
 
 impl<T: Into<String>> From<T> for IRError {
     fn from(value: T) -> Self {

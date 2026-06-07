@@ -289,12 +289,8 @@ impl<'a> ModelNode<'a> {
             Layout::Dense(dtype) => dtype,
         };
 
-        if ldtype != rdtype {
-            panic!("Mismatched DTypes!");
-        }
-
-        if lty.cols != rty.rows {
-            panic!("Mismatched shapes: {} != {}", lty.cols, rty.rows);
+        if ldtype != rdtype || lty.cols != rty.rows {
+            panic!("Matmul: {lty} @ {rty} is not possible!");
         }
 
         let matmul =

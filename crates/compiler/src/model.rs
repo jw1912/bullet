@@ -22,7 +22,7 @@ pub enum Layout {
     Dense(DType),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MType {
     batch: bool,
     rows: usize,
@@ -35,9 +35,15 @@ impl fmt::Display for MType {
         let MType { batch, rows, cols, layout } = *self;
         let batch = if batch { "Bx" } else { "" };
         match layout {
-            Layout::Dense(dtype) => write!(f, "{dtype:?}[{batch}{rows}x{cols}]"),
+            Layout::Dense(dtype) => write!(f, "{dtype:?}<{batch}{rows}x{cols}>"),
             Layout::Sparse(nnz) => write!(f, "Sparse<{batch}{rows}x{cols}, {nnz}>"),
         }
+    }
+}
+
+impl fmt::Debug for MType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
     }
 }
 
