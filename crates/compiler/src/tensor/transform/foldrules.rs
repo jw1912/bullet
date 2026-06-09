@@ -5,8 +5,8 @@ use crate::{
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd,
-            SparseMatmulBwdMulti, Unary, UnaryOp,
+            CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd, SparseMatmulBwdMulti,
+            Unary, UnaryOp,
             autograd::{CReLU, CustomAutogradOp, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid, SqrReLU},
         },
         transform::modify::AddOperation,
@@ -102,19 +102,7 @@ macro_rules! foldrule {
 }
 
 foldrule! {
-    rulename EvalScalarConstUnary on ir
-    rewrites (unary = [UnaryOp] (scalar = [ScalarConstant]))
-    into [ScalarConstant(unary.op().evaluate(scalar.0).unwrap(), scalar.1)]
-}
-
-foldrule! {
-    rulename EvalScalarConstBinary on ir
-    rewrites (binary = [CABinaryOp] (lhs = [ScalarConstant]) (rhs = [ScalarConstant]))
-    into [ScalarConstant(binary.op().evaluate(lhs.0, rhs.0).unwrap(), lhs.1)]
-}
-
-foldrule! {
-    rulename FoldFixedSizeScalarConst on ir
+    rulename FoldConstToScalarConst on ir
     rewrites (constant = [Constant])
     into [ScalarConstant(scalar, constant.0.size().into())]
     given {
@@ -122,16 +110,6 @@ foldrule! {
     }
     testcase fixed_size_scalar_const {
         ir.add_const(TValue::I32(vec![1; 16]))
-    }
-}
-
-foldrule! {
-    rulename FoldVarSizeScalarConst on ir
-    rewrites (broadcast = [BroadcastAcrossDimension] (input = [ScalarConstant]))
-    into [ScalarConstant(input.0, broadcast.output_size())]
-    testcase var_size_scalar_const {
-        let a = ir.add_scalar(1, 1);
-        ir.add_broadcast(a, [1], 0, 128)?
     }
 }
 

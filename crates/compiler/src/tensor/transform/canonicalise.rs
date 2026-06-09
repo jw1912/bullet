@@ -27,10 +27,7 @@ impl CanonicalisePass {
             .add_cleanup(EliminateUnusedOperations)
             .add_cleanup(EliminateCommonSubExpressions)
             .add_cleanup(EliminateCopies)
-            .add_fold(EvalScalarConstUnary)
-            .add_fold(EvalScalarConstBinary)
-            .add_fold(FoldFixedSizeScalarConst)
-            .add_fold(FoldVarSizeScalarConst)
+            .add_fold(FoldConstToScalarConst)
             .add_fold(FoldConstIdentities)
             .add_fold(FoldMulByZero)
             .add_fold(FoldSparseMatmulBwdToMulti)
@@ -121,7 +118,7 @@ impl CanonicalisePass {
 
                 if let Some(Constant(value)) = parent.data().downcast().cloned() {
                     consts.push(value);
-                } else if let Some(Some(scalar)) = parent.data().downcast().map(ScalarConstant::to_tensor) {
+                } else if let Some(scalar) = parent.data().downcast().map(ScalarConstant::to_tensor) {
                     consts.push(scalar);
                 } else {
                     return Ok(None);

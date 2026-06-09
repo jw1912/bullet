@@ -49,10 +49,10 @@ impl ScalarConstant {
         TType::new(self.1, self.0.dtype())
     }
 
-    pub fn to_tensor(&self) -> Option<TValue> {
+    pub fn to_tensor(&self) -> TValue {
         match self.0 {
-            DValue::F32(x) => Some(TValue::F32(vec![x; self.1.get()])),
-            DValue::I32(x) => Some(TValue::I32(vec![x; self.1.get()])),
+            DValue::F32(x) => TValue::F32(vec![x; self.1.get()]),
+            DValue::I32(x) => TValue::I32(vec![x; self.1.get()]),
         }
     }
 }

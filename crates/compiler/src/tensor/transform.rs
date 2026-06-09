@@ -22,10 +22,10 @@ mod tests {
     fn constant_fold_all() -> Result<(), IRTrace> {
         let builder = IRBuilder::default();
 
-        let inputs = builder.constant(TValue::F32(vec![1.0; 8]));
-        let target = builder.constant(TValue::F32(vec![1.0]));
+        let inputs = builder.scalar(1.0, 8);
+        let target = builder.scalar(1.0, 1);
 
-        let weights = builder.constant(TValue::F32(vec![1.0; 8]));
+        let weights = builder.constant(TValue::F32((0..8).map(|i| i as f32).collect()));
         let bias = builder.constant(TValue::F32(vec![1.0]));
 
         let prediction = ((weights * inputs)?.reduce_sum([8], 0)? + bias)?;
