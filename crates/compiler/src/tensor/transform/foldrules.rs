@@ -175,6 +175,24 @@ foldrule! {
 }
 
 foldrule! {
+    rulename FoldPowBy2 on ir
+    rewrites (_b = [Power] (a) (scalar = [ScalarConstant]))
+    into [CABinaryOp::new(a.ty(), CABinary::Mul)] (a) (a)
+    given {
+        scalar.0 == 2.0.into() || scalar.0 == 2.into()
+    }
+}
+
+foldrule! {
+    rulename FoldAbsSquared on ir
+    rewrites (_c = [CABinaryOp] (a = [UnaryOp] (i1)) (b = [UnaryOp] (i2)))
+    into [CABinaryOp::new(i1.ty(), CABinary::Mul)] (i1) (i1)
+    given {
+        a.op() == Unary::Abs && b.op() == Unary::Abs && i1.id() == i2.id()
+    }
+}
+
+foldrule! {
     rulename PeepholeReLU on ir
     rewrites (relu = [CABinaryOp] (scalar = [ScalarConstant]) (input))
     into [{

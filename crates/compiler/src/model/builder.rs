@@ -318,6 +318,10 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], SCReLU(self.ty())), ..self }
     }
 
+    pub fn sqrrelu(self) -> Self {
+        Self { node: self.builder.add_op([self], SqrReLU(self.ty())), ..self }
+    }
+
     pub fn sigmoid(self) -> Self {
         Self { node: self.builder.add_op([self], Sigmoid(self.ty())), ..self }
     }

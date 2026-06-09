@@ -35,6 +35,8 @@ impl CanonicalisePass {
             .add_fold(FoldMulByZero)
             .add_fold(FoldSparseMatmulBwdToMulti)
             .add_fold(FoldPowBy1)
+            .add_fold(FoldPowBy2)
+            .add_fold(FoldAbsSquared)
             .add_rewrite(BroadcastUnaryIntoUnaryBroadcast)
             .add_rewrite(BroadcastBinaryIntoBinaryBroadcast)
             .add_rewrite(ScalarBroadcastBinaryIntoBinaryBroadcast)

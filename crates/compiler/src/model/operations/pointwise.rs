@@ -118,6 +118,27 @@ impl ModelOperation for SCReLU {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct SqrReLU(pub MType);
+impl ModelOperation for SqrReLU {
+    fn opname(&self) -> String {
+        "SqrReLU".into()
+    }
+
+    fn inputs(&self) -> Vec<MType> {
+        vec![self.0]
+    }
+
+    fn output(&self) -> MType {
+        self.0
+    }
+
+    fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
+        let relu = ReLU(self.0).lower(batch_size, lower, inputs)?;
+        lower.add_binary(relu, relu, CABinary::Mul)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Sigmoid(pub MType);
 impl ModelOperation for Sigmoid {
     fn opname(&self) -> String {
@@ -243,7 +264,7 @@ impl ModelOperation for AbsPower {
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         let abs = lower.add_unary(inputs[0], Unary::Abs)?;
-        lower.add_op([abs], Ok::<_, IRTrace>(Power(self.0.ttype(batch_size).size()))).map(|x| x[0])
+        lower.add_op([abs, inputs[1]], Ok::<_, IRTrace>(Power(self.0.ttype(batch_size).size()))).map(|x| x[0])
     }
 }
 
