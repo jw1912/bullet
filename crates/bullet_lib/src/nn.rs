@@ -5,7 +5,7 @@ pub use bullet_compiler::model::{Affine, InitSettings, ModelBuilder, ModelNode, 
 #[cfg(feature = "cuda")]
 pub type ExecutionContext = bullet_gpu::runtime::cuda::Cuda;
 
-#[cfg(feature = "rocm")]
+#[cfg(all(feature = "rocm", not(feature = "cuda")))]
 pub type ExecutionContext = bullet_gpu::runtime::rocm::ROCm;
 
 #[cfg(not(any(feature = "cuda", feature = "rocm")))]
