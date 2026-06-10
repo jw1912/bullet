@@ -166,6 +166,7 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
     }
 
     pub fn write_to_checkpoint(&self, path: &str) -> Result<(), G::Error> {
+        crate::run::install_backtrace_panic_hook();
         let mut file = std::fs::File::create(format!("{path}/weights.bin")).unwrap();
         self.model.write_weights_into(&mut file)?;
         let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
@@ -173,6 +174,7 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
     }
 
     pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), G::Error> {
+        crate::run::install_backtrace_panic_hook();
         self.model.load_weights_from(std::fs::File::open(path).unwrap())
     }
 

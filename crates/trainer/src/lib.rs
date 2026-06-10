@@ -49,6 +49,8 @@ impl<G: Gpu, O: OptimiserState<G>, S> Trainer<G, O, S> {
         dataloader: impl DataLoader,
         steps: TrainingSteps,
     ) -> Result<(), TrainerError<G>> {
+        run::install_backtrace_panic_hook();
+
         let mut batch_no = 0;
         let mut superbatch = steps.start_superbatch;
 

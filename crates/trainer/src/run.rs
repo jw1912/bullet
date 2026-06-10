@@ -2,7 +2,13 @@ pub mod dataloader;
 pub mod logger;
 pub mod schedule;
 
-use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
+use std::{
+    backtrace::Backtrace,
+    collections::BTreeMap,
+    sync::{Once, mpsc},
+    thread,
+    time::Instant,
+};
 
 use bullet_compiler::{model::Layout, tensor::TValue};
 use bullet_gpu::{
@@ -20,6 +26,33 @@ use crate::{
     },
 };
 
+static PANIC_HOOK: Once = Once::new();
+
+/// Installs a process-wide panic hook that prints the panicking thread, the
+/// panic message/location, and a full backtrace to stderr.
+///
+/// Training does most of its work on detached background threads (data loading)
+/// and scoped worker threads (batch preparation). When one of those panics, the
+/// main thread only observes a closed channel and exits without surfacing the
+/// cause, so the process can terminate with no visible error. This hook makes
+/// every panic — on any thread — print a backtrace, and uses
+/// [`Backtrace::force_capture`] so a trace is produced even when `RUST_BACKTRACE`
+/// is unset.
+///
+/// Idempotent: only the first call installs the hook.
+pub fn install_backtrace_panic_hook() {
+    PANIC_HOOK.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            let thread = thread::current();
+            let name = thread.name().unwrap_or("<unnamed>");
+            eprintln!("\n==== panic on thread '{name}' ====");
+            // `info` displays as "panicked at <loc>:\n<message>".
+            eprintln!("{info}");
+            eprintln!("backtrace:\n{}", Backtrace::force_capture());
+        }));
+    });
+}
+
 pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     trainer: &mut Trainer<G, O, S>,
     schedule: TrainingSchedule,
@@ -27,6 +60,8 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     mut batch_callback: impl FnMut(&mut Trainer<G, O, S>, usize, usize, f32),
     mut superbatch_callback: impl FnMut(&mut Trainer<G, O, S>, usize),
 ) -> Result<(), TrainerError<G>> {
+    install_backtrace_panic_hook();
+
     let timer = Instant::now();
 
     let model = &trainer.optimiser.model;
