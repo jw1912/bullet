@@ -64,23 +64,22 @@ fn main() {
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
-            // input layer factoriser
             let l0f = builder.new_weights("l0f", Shape::new(hl_size, 768), InitSettings::Zeroed);
-            let expanded_factoriser = l0f.repeat(NUM_INPUT_BUCKETS);
-
-            // input layer weights
             let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl_size);
             l0.init_with_effective_input_size(32);
-            l0.weights = l0.weights + expanded_factoriser;
+            l0.weights = l0.weights + l0f.repeat(NUM_INPUT_BUCKETS);
 
-            // layerstack weights
             let l1 = builder.new_affine("l1", hl_size, NUM_OUTPUT_BUCKETS * l2);
             let l2 = builder.new_affine("l2", l2, NUM_OUTPUT_BUCKETS * 32);
             let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
 
-            // inference
-            let stm_hidden = l0.forward(stm_inputs).crelu().pairwise_mul();
-            let ntm_hidden = l0.forward(ntm_inputs).crelu().pairwise_mul();
+            // Faster version of
+            // let stm_hidden = l0.forward(stm_inputs).crelu().pairwise_mul();
+            // let ntm_hidden = l0.forward(ntm_inputs).crelu().pairwise_mul();
+            let ft = |input, start, end| l0.slice(start, end).forward(input).crelu();
+            let stm_hidden = ft(stm_inputs, 0, hl_size / 2) * ft(stm_inputs, hl_size / 2, hl_size);
+            let ntm_hidden = ft(ntm_inputs, 0, hl_size / 2) * ft(ntm_inputs, hl_size / 2, hl_size);
+
             let hl1 = stm_hidden.concat(ntm_hidden);
             let hl2 = l1.forward(hl1).select(output_buckets).screlu();
             let hl3 = l2.forward(hl2).select(output_buckets).screlu();

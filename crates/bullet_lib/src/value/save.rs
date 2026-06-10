@@ -5,11 +5,7 @@ use std::{
 
 use crate::{nn::ExecutionContext, value::ValueTrainerState};
 use bullet_compiler::tensor::TValue;
-use bullet_trainer::{
-    Trainer,
-    model::save::{ModelWeights, QuantTarget},
-    optimiser::OptimiserState,
-};
+use bullet_trainer::{Trainer, model::QuantTarget, optimiser::OptimiserState};
 
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
@@ -64,7 +60,8 @@ where
 
     for fmt in &trainer.state.saved_format {
         if let Some(id) = &fmt.get_id() {
-            let Some(TValue::F32(weights)) = trainer.optimiser.model.get_weights(id) else { panic!() };
+            let weights = trainer.optimiser.weights().get(id).unwrap();
+            let TValue::F32(weights) = weights.to_host().unwrap() else { panic!() };
             let quantised = QuantTarget::Float.quantise(false, &weights)?;
             buf.extend_from_slice(&quantised);
         }
@@ -82,24 +79,10 @@ where
     Inp::RequiredDataType: LoadableDataType,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    let weight_store = ModelWeights::from(&trainer.optimiser.model);
+    let weight_store = &*trainer.optimiser.cpu_weights().unwrap();
 
     let mut file = File::create(path).unwrap();
-    let mut buf = Vec::new();
-
-    for fmt in &trainer.state.saved_format {
-        buf.extend_from_slice(&fmt.write_to_byte_buffer(&weight_store)?);
-    }
-
-    let bytes = buf.len() % 64;
-    if bytes > 0 {
-        let chs = [b'b', b'u', b'l', b'l', b'e', b't'];
-
-        for i in 0..64 - bytes {
-            buf.push(chs[i % chs.len()]);
-        }
-    }
-
+    let buf = weight_store.to_quantised_buffer(&trainer.state.saved_format, true)?;
     file.write_all(&buf)?;
 
     Ok(())

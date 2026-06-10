@@ -4,7 +4,7 @@ use bullet_compiler::model::{ModelBuilder, ModelNode, Shape};
 use bullet_gpu::runtime::Device;
 use bullet_trainer::{
     Trainer,
-    model::{Model, save::SavedFormat},
+    model::{ModelDefinition, ModelWeights, SavedFormat},
     optimiser::Optimiser,
 };
 
@@ -32,6 +32,7 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     wdl_output: bool,
     use_win_rate_model: bool,
     print_ir: bool,
+    seed: u64,
 }
 
 impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
@@ -52,6 +53,7 @@ where
             use_win_rate_model: false,
             factorised: Vec::new(),
             print_ir: false,
+            seed: 198273612,
         }
     }
 }
@@ -87,6 +89,11 @@ where
     pub fn loss_fn(mut self, f: LossFn) -> Self {
         assert!(self.loss_fn.is_none(), "Loss function already set!");
         self.loss_fn = Some(f);
+        self
+    }
+
+    pub fn seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
         self
     }
 
@@ -145,25 +152,23 @@ where
 
         loss = loss.reduce_sum_batch();
 
-        let model = Model::new(
-            builder.ir().clone(),
-            Device::<ExecutionContext>::new(0).unwrap(),
-            Some(loss.node()),
-            [(out.node(), "output".into())],
-        );
+        let definition = ModelDefinition::new(builder.ir().clone(), Some(loss.node()), [(out.node(), "output".into())]);
+        let weights = ModelWeights::new(definition.ir(), self.seed);
+        let device = Device::<ExecutionContext>::new(0).unwrap();
 
-        ValueTrainer(Trainer {
-            optimiser: Optimiser::new(model, Default::default()).unwrap(),
-            state: ValueTrainerState {
-                input_getter: input_getter.clone(),
-                output_getter: buckets,
-                blend_getter: self.blend_getter,
-                weight_getter: self.weight_getter,
-                use_win_rate_model: self.use_win_rate_model,
-                wdl: self.wdl_output,
-                saved_format,
-            },
-        })
+        let optimiser = Optimiser::new(definition, weights, device, Default::default()).unwrap();
+
+        let state = ValueTrainerState {
+            input_getter: input_getter.clone(),
+            output_getter: buckets,
+            blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
+            use_win_rate_model: self.use_win_rate_model,
+            wdl: self.wdl_output,
+            saved_format,
+        };
+
+        ValueTrainer(Trainer::new(optimiser, state))
     }
 
     fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
@@ -246,6 +251,7 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
+            seed: self.seed,
         }
     }
 }
@@ -274,6 +280,7 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
+            seed: self.seed,
         }
     }
 }

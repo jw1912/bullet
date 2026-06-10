@@ -131,7 +131,7 @@ impl IRTransform for CodegenPointwise {
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {
             if let Some(pntwise) = op.data().downcast::<FusedPointwise>() {
-                let src = unsafe { pntwise.ir.lower(format!("kernel{}", op.id().inner()))? };
+                let src = unsafe { pntwise.ir.lower(format!("kernel{}", pntwise.id()))? };
 
                 for (&i1, &i2) in op.data().inputs().iter().zip(src.inputs.iter()) {
                     if i1 != i2 {
@@ -179,7 +179,7 @@ fn fuse_subgraphs(ir: &TensorIR, op_i: OpId, op_j: OpId) -> Result<(SubGraph, Ve
     for (&out, &new_out) in op_i.outputs().iter().zip(outputs_i.iter()) {
         map.insert(out, new_out);
 
-        if !op_j_set.contains(&out) || ir.get_node(out)?.children() > 1 {
+        if !op_j_set.contains(&out) || ir.is_output(out) || ir.get_node(out)?.children() > 1 {
             total_outputs.push(out);
             new_sub.register_output(new_out);
         }

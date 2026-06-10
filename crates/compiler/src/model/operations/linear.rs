@@ -179,7 +179,7 @@ impl ModelOperation for SparseMatmul {
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         let SparseMatmul { batch, rows, cols, nnz, dtype } = *self;
-        let op = operation::SparseMatmul::new(dtype, if batch { batch_size } else { 1 }, rows, cols, nnz);
-        lower.add_op(inputs, Ok::<_, IRTrace>(op)).map(|x| x[0])
+        let op = operation::SparseMatmul::new(dtype, if batch { batch_size } else { 1 }, rows, cols, rows, 0, nnz);
+        lower.add_op(inputs, op).map(|x| x[0])
     }
 }

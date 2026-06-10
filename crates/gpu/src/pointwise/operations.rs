@@ -53,6 +53,8 @@ pub enum PointwiseOp {
         nnz: usize,
         rows: usize,
         cols: usize,
+        stride: usize,
+        offset: usize,
         ty: DType,
         p2size: u8,
     },
@@ -60,6 +62,8 @@ pub enum PointwiseOp {
         nnz: usize,
         rows: usize,
         cols: usize,
+        stride: usize,
+        offset: usize,
         ty: DType,
     },
 }

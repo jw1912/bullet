@@ -1,5 +1,3 @@
-use bullet_trainer::model::Model as TrainerModel;
-
 pub use bullet_compiler::model::{Affine, InitSettings, ModelBuilder, ModelNode, Shape};
 
 #[cfg(feature = "cuda")]
@@ -10,8 +8,6 @@ pub type ExecutionContext = bullet_gpu::runtime::rocm::ROCm;
 
 #[cfg(not(any(feature = "cuda", feature = "rocm")))]
 pub type ExecutionContext = bullet_gpu::runtime::mock::MockGpu;
-
-pub type Model = TrainerModel<ExecutionContext>;
 
 pub mod optimiser {
     use super::ExecutionContext;

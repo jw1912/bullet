@@ -254,6 +254,8 @@ impl PointwiseIR {
             nnz: matmul.nnz().get(),
             rows: matmul.rows().get(),
             cols: matmul.cols().get(),
+            stride: matmul.stride().get(),
+            offset: matmul.offset(),
             ty,
             p2size,
         };
@@ -278,8 +280,14 @@ impl PointwiseIR {
             return Err("Only integer pointer allowed!".into());
         };
 
-        let op =
-            PointwiseOp::SpMMT { nnz: matmul.nnz().get(), rows: matmul.rows().get(), cols: matmul.cols().get(), ty };
+        let op = PointwiseOp::SpMMT {
+            nnz: matmul.nnz().get(),
+            rows: matmul.rows().get(),
+            cols: matmul.cols().get(),
+            stride: matmul.stride().get(),
+            offset: matmul.offset(),
+            ty,
+        };
 
         self.needs_zero.insert(weights);
         self.read_from.insert(indices);

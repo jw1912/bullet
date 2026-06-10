@@ -9,7 +9,7 @@ pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     Trainer,
-    model::save::SavedFormat,
+    model::SavedFormat,
     optimiser::OptimiserState,
     run::{self, dataloader::PreparedBatchHost, logger},
 };
@@ -196,9 +196,8 @@ where
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
         let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);
 
-        let model = &mut self.optimiser.model;
-        let device_data = host_data.to_device(&model.device()).unwrap();
-        let outputs = model.evaluate(&device_data);
+        let device_data = host_data.to_device(&self.optimiser.device()).unwrap();
+        let outputs = self.evaluate(&device_data).unwrap();
 
         let output = outputs.get("output").unwrap().clone();
         let TValue::F32(output) = output.to_host().unwrap() else { panic!() };
