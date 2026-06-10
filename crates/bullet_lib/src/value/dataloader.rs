@@ -36,6 +36,8 @@ where
         batch_size: usize,
         mut f: F,
     ) -> Result<(), DataLoadingError> {
+        bullet_trainer::run::install_backtrace_panic_hook();
+
         let ValueDataLoader { dataloader, steps, threads, wdl } = self;
         let start_batch = steps.batches_per_superbatch * (steps.start_superbatch - 1);
 
