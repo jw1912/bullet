@@ -47,8 +47,9 @@ fn main() {
             let l2 = builder.new_affine("l2", 30, num_output_buckets * 32);
             let l3 = builder.new_affine("l3", 32, num_output_buckets);
 
-            let stm_subnet = l0.forward(stm_inputs).crelu().pairwise_mul();
-            let ntm_subnet = l0.forward(ntm_inputs).crelu().pairwise_mul();
+            let ft = |input, start, end| l0.slice(start, end).forward(input).crelu();
+            let stm_subnet = ft(stm_inputs, 0, hl_size / 2) * ft(stm_inputs, hl_size / 2, hl_size);
+            let ntm_subnet = ft(ntm_inputs, 0, hl_size / 2) * ft(ntm_inputs, hl_size / 2, hl_size);
             let mut out = stm_subnet.concat(ntm_subnet);
 
             out = l1.forward(out).select(buckets);
@@ -76,6 +77,9 @@ fn main() {
     let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 512 };
 
     let data_loader = DirectSequentialDataLoader::new(&["examples/tests/batch.bf"]);
+
+    let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
+    println!("Eval: {eval:.3}cp");
 
     trainer.run(&schedule, &settings, &data_loader);
 

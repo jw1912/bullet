@@ -179,7 +179,7 @@ fn fuse_subgraphs(ir: &TensorIR, op_i: OpId, op_j: OpId) -> Result<(SubGraph, Ve
     for (&out, &new_out) in op_i.outputs().iter().zip(outputs_i.iter()) {
         map.insert(out, new_out);
 
-        if !op_j_set.contains(&out) || ir.get_node(out)?.children() > 1 {
+        if !op_j_set.contains(&out) || ir.is_output(out) || ir.get_node(out)?.children() > 1 {
             total_outputs.push(out);
             new_sub.register_output(new_out);
         }
