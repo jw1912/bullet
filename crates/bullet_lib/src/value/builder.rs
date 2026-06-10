@@ -4,7 +4,7 @@ use bullet_compiler::model::{ModelBuilder, ModelNode, Shape};
 use bullet_gpu::runtime::Device;
 use bullet_trainer::{
     Trainer,
-    model::{Model, save::SavedFormat},
+    model::{ModelDefinition, ModelWeights, SavedFormat},
     optimiser::Optimiser,
 };
 
@@ -152,26 +152,23 @@ where
 
         loss = loss.reduce_sum_batch();
 
-        let model = Model::new(
-            builder.ir().clone(),
-            Device::<ExecutionContext>::new(0).unwrap(),
-            Some(loss.node()),
-            [(out.node(), "output".into())],
-            self.seed,
-        );
+        let definition = ModelDefinition::new(builder.ir().clone(), Some(loss.node()), [(out.node(), "output".into())]);
+        let weights = ModelWeights::new(definition.ir(), self.seed);
+        let device = Device::<ExecutionContext>::new(0).unwrap();
 
-        ValueTrainer(Trainer {
-            optimiser: Optimiser::new(model, Default::default()).unwrap(),
-            state: ValueTrainerState {
-                input_getter: input_getter.clone(),
-                output_getter: buckets,
-                blend_getter: self.blend_getter,
-                weight_getter: self.weight_getter,
-                use_win_rate_model: self.use_win_rate_model,
-                wdl: self.wdl_output,
-                saved_format,
-            },
-        })
+        let optimiser = Optimiser::new(definition, weights, device, Default::default()).unwrap();
+
+        let state = ValueTrainerState {
+            input_getter: input_getter.clone(),
+            output_getter: buckets,
+            blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
+            use_win_rate_model: self.use_win_rate_model,
+            wdl: self.wdl_output,
+            saved_format,
+        };
+
+        ValueTrainer(Trainer::new(optimiser, state))
     }
 
     fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>

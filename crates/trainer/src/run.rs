@@ -29,8 +29,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
 ) -> Result<(), TrainerError<G>> {
     let timer = Instant::now();
 
-    let model = &trainer.optimiser.model;
-    let device = model.device();
+    let device = trainer.optimiser.device();
     let props = device.props();
 
     logger::clear_colours();
@@ -67,7 +66,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         })
     });
 
-    let defn = model.definition();
+    let defn = trainer.optimiser.definition();
     let (func, gmap) =
         defn.lower_backward(&Default::default(), steps.batch_size).map_err(TrainerError::CompilingBackwards)?;
     let map = func.map();
@@ -86,7 +85,7 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let size = ty.shape().size();
         let grad = Buffer::zeroed(&device, dtype, size).map_err(TrainerError::Unexpected)?;
 
-        tensor_map.insert(tid, model.weights().get(name).unwrap().clone());
+        tensor_map.insert(tid, trainer.optimiser.weights().get(name).unwrap().clone());
         tensor_map.insert(gid, grad.clone());
 
         gradients.insert(name.clone(), grad);
