@@ -32,6 +32,7 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     wdl_output: bool,
     use_win_rate_model: bool,
     print_ir: bool,
+    seed: u64,
 }
 
 impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
@@ -52,6 +53,7 @@ where
             use_win_rate_model: false,
             factorised: Vec::new(),
             print_ir: false,
+            seed: 198273612,
         }
     }
 }
@@ -87,6 +89,11 @@ where
     pub fn loss_fn(mut self, f: LossFn) -> Self {
         assert!(self.loss_fn.is_none(), "Loss function already set!");
         self.loss_fn = Some(f);
+        self
+    }
+
+    pub fn seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
         self
     }
 
@@ -150,6 +157,7 @@ where
             Device::<ExecutionContext>::new(0).unwrap(),
             Some(loss.node()),
             [(out.node(), "output".into())],
+            self.seed,
         );
 
         ValueTrainer(Trainer {
@@ -246,6 +254,7 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
+            seed: self.seed,
         }
     }
 }
@@ -274,6 +283,7 @@ where
             wdl_output: self.wdl_output,
             use_win_rate_model: self.use_win_rate_model,
             print_ir: self.print_ir,
+            seed: self.seed,
         }
     }
 }

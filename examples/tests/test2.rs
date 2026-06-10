@@ -64,8 +64,6 @@ fn main() {
             out + skip_neuron
         });
 
-    trainer.optimiser.load_weights_from_file("examples/tests/checkpoints/test2.wgts").unwrap();
-
     let schedule = TrainingSchedule {
         net_id: "test2".to_string(),
         eval_scale: 400.0,
@@ -81,7 +79,7 @@ fn main() {
 
     trainer.run(&schedule, &settings, &data_loader);
 
-    println!("Expected loss: 0.005297");
+    println!("Expected loss: 0.028731");
 
     let eval = 400.0 * trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | 0 | 0.0");
     println!("Eval: {eval:.3}cp");

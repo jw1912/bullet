@@ -15,6 +15,8 @@ use bullet_gpu::{
     runtime::{Device, Gpu},
 };
 
+use rand_xoshiro::{Xoroshiro128Plus, rand_core::SeedableRng};
+
 pub type TensorMap<G> = BTreeMap<String, Arc<Buffer<G>>>;
 
 struct EvalutateModel<G: Gpu> {
@@ -37,8 +39,11 @@ impl<G: Gpu> Model<G> {
         device: Arc<Device<G>>,
         loss: Option<NodeId>,
         outputs: impl Into<Vec<(NodeId, String)>>,
+        rng_seed: u64,
     ) -> Self {
         let mut weights = BTreeMap::new();
+
+        let mut rng = Xoroshiro128Plus::seed_from_u64(rng_seed);
 
         for (&id, (name, init)) in ir.weights() {
             let node = ir.node(id);
@@ -48,8 +53,8 @@ impl<G: Gpu> Model<G> {
 
             let init = match init {
                 InitSettings::Zeroed => vec![0.0; size],
-                InitSettings::Uniform { mean, stdev } => rng::vec_f32(size, *mean, *stdev, false),
-                InitSettings::Normal { mean, stdev } => rng::vec_f32(size, *mean, *stdev, true),
+                InitSettings::Uniform { mean, stdev } => rng::vec_f32(&mut rng, size, *mean, *stdev, false),
+                InitSettings::Normal { mean, stdev } => rng::vec_f32(&mut rng, size, *mean, *stdev, true),
                 InitSettings::Custom(value) => value.f32().to_vec(),
             };
 
