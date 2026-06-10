@@ -195,35 +195,40 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 3.. => None,
             }
         }
-        PointwiseOp::SpMM { nnz, rows, cols, ty, p2size } => {
+        PointwiseOp::SpMM { nnz, rows, cols, stride, offset, ty, p2size } => {
             let ty = tystr(ty);
             match p2size {
                 0 => Some(format!(
                     "\
                     {ty} OUT1 = 0;
                     int UNIQ1 = IN3 / {rows};
-                    int UNIQ2 = IN3 % {rows};
+                    int UNIQ2 = {offset} + IN3 % {rows};
 
                     for (int i = 0; i < {nnz}; i++) {{
                         const int j = IN2[{nnz} * UNIQ1 + i];
                         if (j < 0 || j >= {cols}) break;
-                        OUT1 += IN1[j * {rows} + UNIQ2];
+                        OUT1 += IN1[j * {stride} + UNIQ2];
                     }}"
                 )),
                 1 => {
+                    assert_eq!(rows % 2, 0);
+                    assert_eq!(offset % 2, 0);
+                    assert_eq!(stride % 2, 0);
                     let m = rows / 2;
+                    let o = offset / 2;
+                    let s = stride / 2;
                     Some(format!(
                         "\
                         {ty}2 OUT1 = make_{ty}2(0, 0);
                         int UNIQ1 = IN3 / {m};
-                        int UNIQ2 = IN3 % {m};
+                        int UNIQ2 = {o} + IN3 % {m};
 
                         for (int i = 0; i < {nnz}; i++) {{
                             const int j = IN2[{nnz} * UNIQ1 + i];
 
                             if (j < 0 || j >= {cols}) break;
 
-                            const {ty}2 a = reinterpret_cast<{ty}2*>(IN1)[j * {m} + UNIQ2];
+                            const {ty}2 a = reinterpret_cast<{ty}2*>(IN1)[j * {s} + UNIQ2];
 
                             OUT1.x += a.x;
                             OUT1.y += a.y;
@@ -231,19 +236,24 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                     ))
                 }
                 2 => {
+                    assert_eq!(rows % 4, 0);
+                    assert_eq!(offset % 4, 0);
+                    assert_eq!(stride % 4, 0);
                     let m = rows / 4;
+                    let o = offset / 4;
+                    let s = stride / 4;
                     Some(format!(
                         "\
                         {ty}4 OUT1 = make_{ty}4(0, 0, 0, 0);
                         int UNIQ1 = IN3 / {m};
-                        int UNIQ2 = IN3 % {m};
+                        int UNIQ2 = {o} + IN3 % {m};
 
                         for (int i = 0; i < {nnz}; i++) {{
                             const int j = IN2[{nnz} * UNIQ1 + i];
 
                             if (j < 0 || j >= {cols}) break;
 
-                            const {ty}4 a = reinterpret_cast<{ty}4*>(IN1)[j * {m} + UNIQ2];
+                            const {ty}4 a = reinterpret_cast<{ty}4*>(IN1)[j * {s} + UNIQ2];
 
                             OUT1.x += a.x;
                             OUT1.y += a.y;
@@ -255,16 +265,16 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 3.. => None,
             }
         }
-        PointwiseOp::SpMMT { nnz, rows, cols, .. } => Some(format!(
+        PointwiseOp::SpMMT { nnz, rows, cols, stride, offset, .. } => Some(format!(
             "\
                 if (IN4 != 0) {{
                     int UNIQ1 = IN3 / {rows};
-                    int UNIQ2 = IN3 % {rows};
+                    int UNIQ2 = {offset} + IN3 % {rows};
 
                     for (int i = 0; i < {nnz}; i++) {{
                         const int j = IN2[{nnz} * UNIQ1 + i];
                         if (j < 0 || j >= {cols}) break;
-                        atomicAdd(IN1 + j * {rows} + UNIQ2, IN4);
+                        atomicAdd(IN1 + j * {stride} + UNIQ2, IN4);
                     }}
                 }}"
         )),

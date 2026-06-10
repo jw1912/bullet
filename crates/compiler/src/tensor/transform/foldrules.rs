@@ -5,8 +5,8 @@ use crate::{
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
-            CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd, SparseMatmulBwdMulti,
-            Unary, UnaryOp,
+            CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SliceAcrossDimension, SparseMatmul,
+            SparseMatmulBwd, SparseMatmulBwdMulti, Unary, UnaryOp,
             autograd::{CReLU, CustomAutogradOp, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid, SqrReLU},
         },
         transform::modify::AddOperation,
@@ -249,5 +249,14 @@ foldrule! {
             && exp.op() == Unary::Exp
             && neg.op() == CABinary::Mul
             && neg_one.0 == (-1.0).into()
+    }
+}
+
+foldrule! {
+    rulename FoldSlicedSparseMatmul on ir
+    rewrites (spmm = [SparseMatmul] (sliced = [SliceAcrossDimension] (weights)) (inputs))
+    into [SparseMatmul::new(spmm.dtype(), spmm.batch(), spmm.rows(), spmm.cols(), sliced.dimen(), sliced.start(), spmm.nnz())?] (weights) (inputs)
+    given {
+        spmm.offset() == 0 && spmm.rows() == spmm.stride() && sliced.inner().get() == 1
     }
 }

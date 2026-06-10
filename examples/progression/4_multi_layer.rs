@@ -74,8 +74,8 @@ fn main() {
             let l3 = builder.new_affine("l3", 32, NUM_OUTPUT_BUCKETS);
 
             // Faster version of
-            // let stm_hidden = l0.forward(stm_inputs).crelu().pairwise_mul()
-            // let ntm_hidden = l0.forward(ntm_inputs).crelu().pairwise_mul()
+            // let stm_hidden = l0.forward(stm_inputs).crelu().pairwise_mul();
+            // let ntm_hidden = l0.forward(ntm_inputs).crelu().pairwise_mul();
             let ft = |input, start, end| l0.slice(start, end).forward(input).crelu();
             let stm_hidden = ft(stm_inputs, 0, hl_size / 2) * ft(stm_inputs, hl_size / 2, hl_size);
             let ntm_hidden = ft(ntm_inputs, 0, hl_size / 2) * ft(ntm_inputs, hl_size / 2, hl_size);
