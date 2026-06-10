@@ -131,7 +131,7 @@ impl IRTransform for CodegenPointwise {
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {
             if let Some(pntwise) = op.data().downcast::<FusedPointwise>() {
-                let src = unsafe { pntwise.ir.lower(format!("kernel{}", op.id().inner()))? };
+                let src = unsafe { pntwise.ir.lower(format!("kernel{}", pntwise.id()))? };
 
                 for (&i1, &i2) in op.data().inputs().iter().zip(src.inputs.iter()) {
                     if i1 != i2 {
