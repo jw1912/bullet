@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use super::DataLoader;
+use bullet_trainer::run::reader::DataReader;
 
 #[derive(Clone)]
 pub struct InMemoryTextLoader {
@@ -18,19 +18,11 @@ impl InMemoryTextLoader {
     }
 }
 
-impl<T: FromStr> DataLoader<T> for InMemoryTextLoader
+impl<T: FromStr> DataReader<T> for InMemoryTextLoader
 where
     <T as FromStr>::Err: Debug,
 {
-    fn data_file_paths(&self) -> &[String] {
-        std::slice::from_ref(&self.file_path)
-    }
-
-    fn count_positions(&self) -> Option<u64> {
-        Some(BufReader::new(File::open(&self.file_path).unwrap()).lines().count() as u64)
-    }
-
-    fn map_chunks<F: FnMut(&[T]) -> bool>(&self, _: usize, mut f: F) {
+    fn read_chunks<F: FnMut(&[T]) -> bool>(&self, _: usize, mut f: F) {
         let file = File::open(&self.file_path).unwrap();
         let reader = BufReader::new(file);
         let data = reader.lines().map(|ln| ln.unwrap().parse::<T>().unwrap()).collect::<Vec<_>>();

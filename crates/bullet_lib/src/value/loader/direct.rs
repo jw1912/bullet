@@ -6,7 +6,7 @@ use std::{
     slice,
 };
 
-use super::DataLoader;
+use bullet_trainer::run::reader::DataReader;
 
 /// ### Safety
 /// This indicates that the type can be validly transmuted from
@@ -37,28 +37,8 @@ impl DirectSequentialDataLoader {
     }
 }
 
-impl<T: CanBeDirectlySequentiallyLoaded> DataLoader<T> for DirectSequentialDataLoader {
-    fn data_file_paths(&self) -> &[String] {
-        &self.file_paths
-    }
-
-    fn count_positions(&self) -> Option<u64> {
-        let data_size = std::mem::size_of::<T>() as u64;
-
-        let mut file_size = 0;
-
-        self.map_file_sizes(|file, this_size| {
-            if this_size % data_size != 0 {
-                panic!("File [{file}] does not have a multiple of {data_size} size!");
-            }
-
-            file_size += this_size;
-        });
-
-        Some(file_size / data_size)
-    }
-
-    fn map_chunks<F: FnMut(&[T]) -> bool>(&self, mut start_position: usize, mut f: F) {
+impl<T: CanBeDirectlySequentiallyLoaded> DataReader<T> for DirectSequentialDataLoader {
+    fn read_chunks<F: FnMut(&[T]) -> bool>(&self, mut start_position: usize, mut f: F) {
         let buffer_size_mb = 256;
         let buffer_size = buffer_size_mb * 1024 * 1024;
         let data_size = std::mem::size_of::<T>() as u64;

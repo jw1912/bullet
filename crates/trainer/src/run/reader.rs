@@ -3,7 +3,7 @@ use crate::{
     run::dataloader::{DataLoader, DataLoadingError, PreparedBatchHost},
 };
 
-pub trait DataReader<T> {
+pub trait DataReader<T>: Clone + Send + Sync + 'static {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, f: F);
 }
 
@@ -14,9 +14,15 @@ pub struct ReadMapLoader<R, D> {
     threads: u8,
 }
 
+impl<R, D> ReadMapLoader<R, D> {
+    pub fn new(reader: R, mapper: ModelInputsMapper<D>, start_batch: usize, threads: u8) -> Self {
+        Self { reader, mapper, start_batch, threads }
+    }
+}
+
 impl<R, D> DataLoader for ReadMapLoader<R, D>
 where
-    R: DataReader<D> + Send + Sync + 'static,
+    R: DataReader<D>,
     D: Clone + Send + Sync + 'static,
 {
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(

@@ -34,7 +34,7 @@ fn main() {
             }
 
             let score = 1.0 / (1.0 + f32::from(-datapoint.score).exp());
-            let result = (f32::from(datapoint.result() as u8) - 1.0) / 2.0;
+            let result = f32::from(datapoint.result() as u8) / 2.0;
 
             target[0] = wdl * result + (1.0 - wdl) * score;
         });

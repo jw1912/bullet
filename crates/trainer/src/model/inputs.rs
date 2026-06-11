@@ -143,12 +143,12 @@ pub trait InputType: Clone + Send + Sync {
 #[derive(Clone, Copy)]
 pub struct SparseInput {
     nnz: usize,
-    shape: Shape,
+    _shape: Shape,
 }
 
 impl SparseInput {
     pub fn new(shape: impl Into<Shape>, nnz: usize) -> Self {
-        Self { nnz, shape: shape.into() }
+        Self { nnz, _shape: shape.into() }
     }
 }
 
@@ -177,7 +177,7 @@ impl InputType for SparseInput {
     }
 
     fn slices<'a>(&self, chunk: <Self::Chunks<'a> as Iterator>::Item) -> Self::Chunks<'a> {
-        chunk.chunks_mut(self.shape.size())
+        chunk.chunks_mut(self.nnz)
     }
 
     fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {
