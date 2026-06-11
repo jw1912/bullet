@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use bullet_compiler::{
     ir::NodeId,
-    model::{Layout, MType, ModelIR},
+    model::{Layout, MType, ModelBuilder, ModelIR, ModelNode},
     tensor::{
         DType, IRTrace, TValue, TensorIR,
         transform::{
@@ -12,6 +12,8 @@ use bullet_compiler::{
         },
     },
 };
+
+use crate::model::{ModelInputs, inputs::InputType};
 
 pub struct ModelFunctionDefinition {
     ir: TensorIR,
@@ -35,6 +37,20 @@ pub struct ModelDefinition {
 }
 
 impl ModelDefinition {
+    pub fn make<D, T, F>(inputs: &ModelInputs<D, T>, f: F) -> Self
+    where
+        T: InputType,
+        F: for<'a> FnOnce(&'a ModelBuilder, T::Nodes<'a>) -> (Option<ModelNode<'a>>, Vec<(String, ModelNode<'a>)>),
+    {
+        let builder = ModelBuilder::default();
+
+        let nodes = inputs.make_nodes(&builder);
+        let (loss, outputs) = f(&builder, nodes);
+        let outputs = outputs.into_iter().map(|(name, node)| (node.node(), name)).collect::<Vec<_>>();
+
+        Self::new(builder.inner(), loss.as_ref().map(ModelNode::node), outputs)
+    }
+
     pub fn new(ir: ModelIR, loss: Option<NodeId>, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
         if let Some(loss) = loss {
             assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));

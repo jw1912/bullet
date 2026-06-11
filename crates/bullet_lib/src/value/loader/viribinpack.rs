@@ -6,8 +6,9 @@ use std::{
 
 use crate::game::formats::bulletformat::ChessBoard;
 
-use super::{DataLoader, rng::SimpleRand};
+use super::rng::SimpleRand;
 
+use bullet_trainer::run::reader::DataReader;
 pub use viriformat::{
     chess::{board::Board, chessmove::Move},
     dataformat::{Filter, Game, WDL},
@@ -53,16 +54,8 @@ impl ViriBinpackLoader {
     }
 }
 
-impl DataLoader<ChessBoard> for ViriBinpackLoader {
-    fn data_file_paths(&self) -> &[String] {
-        &self.file_paths
-    }
-
-    fn count_positions(&self) -> Option<u64> {
-        None
-    }
-
-    fn map_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
+impl DataReader<ChessBoard> for ViriBinpackLoader {
+    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
         let mut shuffle_buffer = Vec::new();
         shuffle_buffer.reserve_exact(self.buffer_size);
 

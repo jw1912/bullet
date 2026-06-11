@@ -1,5 +1,6 @@
 use std::{fs::File, sync::mpsc, thread};
 
+use bullet_trainer::run::reader::DataReader;
 use sfbinpack::CompressedTrainingDataEntryReader;
 pub use sfbinpack::{
     TrainingDataEntry,
@@ -12,7 +13,7 @@ pub use sfbinpack::{
 
 use crate::game::formats::bulletformat::ChessBoard;
 
-use super::{DataLoader, rng::SimpleRand};
+use super::rng::SimpleRand;
 
 fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     let mut bbs = [0; 8];
@@ -64,19 +65,11 @@ impl<T: Fn(&TrainingDataEntry) -> bool> SfBinpackLoader<T> {
     }
 }
 
-impl<T> DataLoader<ChessBoard> for SfBinpackLoader<T>
+impl<T> DataReader<ChessBoard> for SfBinpackLoader<T>
 where
     T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
 {
-    fn data_file_paths(&self) -> &[String] {
-        &self.file_paths
-    }
-
-    fn count_positions(&self) -> Option<u64> {
-        None
-    }
-
-    fn map_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
+    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
         let file_paths = self.file_paths.clone();
         let buffer_size = self.buffer_size;
         let threads = self.threads;

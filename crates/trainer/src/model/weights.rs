@@ -6,7 +6,7 @@ use std::{
 };
 
 use bullet_compiler::{
-    model::{InitSettings, ModelIR, Shape},
+    model::{InitSettings, Shape},
     tensor::{DType, TValue},
 };
 use bullet_gpu::{
@@ -16,6 +16,8 @@ use bullet_gpu::{
 
 use rand_distr::{Distribution, Normal, Uniform};
 use rand_xoshiro::{Xoroshiro128Plus, rand_core::SeedableRng};
+
+use crate::model::ModelDefinition;
 
 pub type TensorMap<G> = BTreeMap<String, Arc<Buffer<G>>>;
 
@@ -31,7 +33,8 @@ pub struct ModelWeights {
 }
 
 impl ModelWeights {
-    pub fn zeroed(ir: &ModelIR) -> Self {
+    pub fn zeroed(defn: &ModelDefinition) -> Self {
+        let ir = defn.ir();
         let mut stores = BTreeMap::new();
 
         for (&id, (name, _)) in ir.weights() {
@@ -46,9 +49,9 @@ impl ModelWeights {
         Self { stores }
     }
 
-    pub fn new(ir: &ModelIR, rng_seed: u64) -> Self {
+    pub fn new(defn: &ModelDefinition, rng_seed: u64) -> Self {
+        let ir = defn.ir();
         let mut stores = BTreeMap::new();
-
         let mut rng = Xoroshiro128Plus::seed_from_u64(rng_seed);
 
         for (&id, (name, init)) in ir.weights() {

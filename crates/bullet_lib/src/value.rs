@@ -1,5 +1,4 @@
 pub(crate) mod builder;
-pub mod dataloader;
 pub mod loader;
 pub mod save;
 
@@ -9,9 +8,15 @@ pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     Trainer,
-    model::SavedFormat,
+    model::{ModelInputsBuilder, ModelInputsMapper, SavedFormat},
     optimiser::OptimiserState,
-    run::{self, dataloader::PreparedBatchHost, logger},
+    run::{
+        self,
+        dataloader::PreparedBatchHost,
+        logger,
+        reader::{DataReader, ReadMapLoader},
+        schedule::TrainingSteps,
+    },
 };
 
 use crate::{
@@ -21,10 +26,10 @@ use crate::{
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
     },
+    wdl,
 };
 
-use dataloader::ValueDataLoader;
-use loader::{DefaultDataLoader, LoadableDataType, PreparedData};
+use loader::LoadableDataType;
 
 /// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<
@@ -71,46 +76,108 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
     wdl: bool,
 }
 
-impl<I: SparseInputType, O: OutputBuckets<I::RequiredDataType>> ValueTrainerState<I, O> {
-    pub fn make_dataloader<D>(&self, dataloader: D, scale: f32) -> DefaultDataLoader<I, O, D> {
-        DefaultDataLoader::new(
-            self.input_getter.clone(),
-            self.output_getter,
-            self.blend_getter,
-            self.weight_getter,
-            self.use_win_rate_model,
-            self.wdl,
-            scale,
-            dataloader,
-        )
-    }
-}
-
-impl<Inp: SparseInputType, Out> ValueTrainerState<Inp, Out>
+impl<I, O> ValueTrainerState<I, O>
 where
-    Inp: SparseInputType,
-    Inp::RequiredDataType: LoadableDataType,
-    Out: OutputBuckets<Inp::RequiredDataType>,
+    I: SparseInputType,
+    O: OutputBuckets<I::RequiredDataType>,
+    I::RequiredDataType: LoadableDataType,
 {
-    pub fn prepare(
+    fn make_mapper(
         &self,
-        batch: &[Inp::RequiredDataType],
-        threads: usize,
-        blend: f32,
+        steps: TrainingSteps,
         scale: f32,
-    ) -> PreparedBatchHost {
-        PreparedBatchHost::from(PreparedData::new(
-            self.input_getter.clone(),
-            self.output_getter,
-            self.blend_getter,
-            self.weight_getter,
-            self.use_win_rate_model,
-            self.wdl,
-            batch,
+        wdl: impl WdlScheduler,
+    ) -> ModelInputsMapper<I::RequiredDataType> {
+        assert!(steps.start_superbatch > 0);
+        assert!(steps.batches_per_superbatch > 0);
+        assert!(steps.end_superbatch >= steps.start_superbatch);
+
+        let nnz = self.input_getter.max_active();
+        let num = self.input_getter.num_inputs();
+        let inp = self.input_getter.clone();
+        let out = self.output_getter;
+        let wget = self.weight_getter;
+        let target_wdl = self.wdl;
+        let blend_getter = self.blend_getter;
+        let use_win_rate_model = self.use_win_rate_model;
+        let rscale = 1.0 / scale;
+
+        fn sigmoid(x: f32) -> f32 {
+            1. / (1. + (-x).exp())
+        }
+
+        ModelInputsBuilder::default()
+            .add_sparse_input("stm", (num, 1), nnz)
+            .add_sparse_input("nstm", (num, 1), nnz)
+            .add_sparse_input("buckets", (1, 1), 1)
+            .add_dense_input("targets", (if target_wdl { 3 } else { 1 }, 1))
+            .add_dense_input("entry_weights", (1, 1))
+            .build(move |pos, batch, ((((stm, ntm), buckets), targets), weights)| {
+                let mut cnt = 0;
+                inp.map_features(pos, |our, opp| {
+                    assert!(our < num && opp < num, "Input feature index exceeded input size!");
+                    stm[cnt] = our as i32;
+                    ntm[cnt] = opp as i32;
+                    cnt += 1;
+                });
+
+                for j in cnt..nnz {
+                    stm[j] = -1;
+                    ntm[j] = -1;
+                }
+
+                assert!(cnt <= nnz, "More inputs provided than the specified maximum!");
+
+                buckets[0] = i32::from(out.bucket(pos));
+                weights[0] = wget.map_or(1.0, |w| w(pos));
+
+                if target_wdl {
+                    for target in targets.iter_mut() {
+                        *target = 0.0;
+                    }
+
+                    targets[usize::from(pos.result() as u8)] = 1.0;
+                } else {
+                    let score = f32::from(pos.score());
+                    let score = if use_win_rate_model {
+                        let p = (score - 270.0) / 380.0;
+                        let pm = (-score - 270.0) / 380.0;
+                        0.5 * (1.0 + sigmoid(p) - sigmoid(pm))
+                    } else {
+                        sigmoid(rscale * score)
+                    };
+                    let result = f32::from(pos.result() as u8) / 2.0;
+
+                    let superbatch = 1 + batch / steps.batches_per_superbatch;
+                    let batch = batch % steps.batches_per_superbatch;
+                    let blend = blend_getter(pos, wdl.blend(batch, superbatch, steps.end_superbatch));
+                    assert!(superbatch >= steps.start_superbatch);
+                    assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
+                    targets[0] = blend * result + (1. - blend) * score;
+                }
+            })
+            .mapper()
+            .clone()
+    }
+
+    pub fn make_read_map_loader<D>(
+        &self,
+        steps: TrainingSteps,
+        reader: D,
+        scale: f32,
+        wdl: impl WdlScheduler,
+        threads: u8,
+    ) -> ReadMapLoader<D, I::RequiredDataType>
+    where
+        D: DataReader<I::RequiredDataType>,
+        I::RequiredDataType: LoadableDataType,
+    {
+        ReadMapLoader::new(
+            reader,
+            self.make_mapper(steps, scale, wdl),
+            steps.batches_per_superbatch * (steps.start_superbatch - 1),
             threads,
-            blend,
-            scale,
-        ))
+        )
     }
 }
 
@@ -125,7 +192,7 @@ where
         &mut self,
         schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
         settings: &LocalSettings,
-        dataloader: &impl loader::DataLoader<Inp::RequiredDataType>,
+        dataloader: &impl DataReader<Inp::RequiredDataType>,
     ) {
         logger::clear_colours();
         println!("{}", logger::ansi("Training Preamble", "34;1"));
@@ -140,13 +207,21 @@ where
             )
         }
 
-        let dataloader = self.state.make_dataloader(dataloader.clone(), schedule.eval_scale);
+        let steps = schedule.steps;
+
+        //let dataloader = self.state.make_dataloader(dataloader.clone(), schedule.eval_scale);
+        //let dataloader = ValueDataLoader { steps, threads: settings.threads, dataloader, wdl: schedule.wdl_scheduler.clone() };
+        let dataloader = self.state.make_read_map_loader(
+            steps,
+            dataloader.clone(),
+            schedule.eval_scale,
+            schedule.wdl_scheduler.clone(),
+            settings.threads as u8,
+        );
 
         let _ = std::fs::create_dir(settings.output_directory);
 
         let lr_scheduler = schedule.lr_scheduler.clone();
-
-        let steps = schedule.steps;
 
         let error_record = RefCell::new(Vec::new());
         let mut loss_sum = 0.0;
@@ -158,7 +233,7 @@ where
                 log_rate: 128,
                 lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)),
             },
-            ValueDataLoader { steps, threads: settings.threads, dataloader, wdl: schedule.wdl_scheduler.clone() },
+            dataloader,
             |_, superbatch, curr_batch, error| {
                 loss_sum += error;
                 ticks_since_last += 1.0;
@@ -194,7 +269,10 @@ where
         Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
-        let host_data = self.state.prepare(&[pos], 1, 1.0, 1.0);
+
+        let steps = TrainingSteps { batch_size: 1, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 1 };
+        let mapper = self.state.make_mapper(steps, 1.0, wdl::ConstantWDL { value: 1.0 });
+        let host_data = PreparedBatchHost { inputs: mapper.map(&[pos], 0, 1) };
 
         let device_data = host_data.to_device(&self.optimiser.device()).unwrap();
         let outputs = self.evaluate(&device_data).unwrap();
@@ -228,14 +306,17 @@ where
         &self,
         schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
         settings: &LocalSettings,
-        dataloader: &impl loader::DataLoader<Inp::RequiredDataType>,
+        dataloader: &impl DataReader<Inp::RequiredDataType>,
     ) {
         let steps = schedule.steps;
-        let threads = settings.threads;
-        let wdl = schedule.wdl_scheduler.clone();
-        let dataloader = self.state.make_dataloader(dataloader.clone(), schedule.eval_scale);
-        let dataloader = ValueDataLoader { steps, threads, dataloader, wdl };
+        let dataloader = self.state.make_read_map_loader(
+            steps,
+            dataloader.clone(),
+            schedule.eval_scale,
+            schedule.wdl_scheduler.clone(),
+            settings.threads as u8,
+        );
 
-        self.0.measure_max_cpu_throughput(dataloader, steps).unwrap()
+        run::measure_max_cpu_throughput(dataloader, steps).unwrap()
     }
 }

@@ -3,16 +3,23 @@ pub mod optimiser;
 pub mod run;
 
 use bullet_compiler::tensor::IRTrace;
-use bullet_gpu::runtime::Gpu;
+use bullet_gpu::runtime::{self, Device, Gpu};
 use optimiser::{Optimiser, OptimiserState};
 use run::{
     dataloader::{DataLoader, DataLoadingError},
-    schedule::{TrainingSchedule, TrainingSteps},
+    schedule::TrainingSchedule,
 };
 
-use std::time::Instant;
-
 use crate::model::{ModelEvaluator, TensorMap};
+
+#[cfg(not(any(feature = "cuda", feature = "rocm")))]
+pub type DefaultDevice = Device<runtime::mock::MockGpu>;
+
+#[cfg(feature = "cuda")]
+pub type DefaultDevice = Device<runtime::cuda::Cuda>;
+
+#[cfg(all(feature = "rocm", not(feature = "cuda")))]
+pub type DefaultDevice = Device<runtime::rocm::ROCm>;
 
 #[derive(Debug)]
 pub enum TrainerError<G: Gpu> {
@@ -49,38 +56,6 @@ impl<G: Gpu, O: OptimiserState<G>, S> Trainer<G, O, S> {
         superbatch_callback: impl FnMut(&mut Self, usize),
     ) -> Result<(), TrainerError<G>> {
         run::train_custom(self, schedule, dataloader, batch_callback, superbatch_callback)
-    }
-
-    pub fn measure_max_cpu_throughput(
-        &self,
-        dataloader: impl DataLoader,
-        steps: TrainingSteps,
-    ) -> Result<(), TrainerError<G>> {
-        let mut batch_no = 0;
-        let mut superbatch = steps.start_superbatch;
-
-        let t = Instant::now();
-        let mut total = 0;
-
-        dataloader.map_batches(steps.batch_size, |batch| {
-            batch_no += 1;
-            total += batch.batch_size;
-
-            if batch_no % steps.batches_per_superbatch == 0 {
-                batch_no = 0;
-                superbatch += 1;
-
-                println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
-
-                if superbatch > steps.end_superbatch {
-                    return true;
-                }
-            }
-
-            false
-        })?;
-
-        Ok(())
     }
 
     pub fn evaluate(&mut self, inputs: &TensorMap<G>) -> Result<&TensorMap<G>, G::Error> {

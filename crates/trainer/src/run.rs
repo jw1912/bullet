@@ -1,5 +1,6 @@
 pub mod dataloader;
 pub mod logger;
+pub mod reader;
 pub mod schedule;
 
 use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
@@ -16,9 +17,37 @@ use crate::{
     optimiser::OptimiserState,
     run::{
         dataloader::{DataLoader, PreparedBatchHost},
-        schedule::TrainingSchedule,
+        schedule::{TrainingSchedule, TrainingSteps},
     },
 };
+
+pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSteps) -> Result<(), DataLoadingError> {
+    let mut batch_no = 0;
+    let mut superbatch = steps.start_superbatch;
+
+    let t = Instant::now();
+    let mut total = 0;
+
+    dataloader.map_batches(steps.batch_size, |_| {
+        batch_no += 1;
+        total += steps.batch_size;
+
+        if batch_no % steps.batches_per_superbatch == 0 {
+            batch_no = 0;
+            superbatch += 1;
+
+            println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
+
+            if superbatch > steps.end_superbatch {
+                return true;
+            }
+        }
+
+        false
+    })?;
+
+    Ok(())
+}
 
 pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
     trainer: &mut Trainer<G, O, S>,
@@ -45,10 +74,6 @@ pub fn train_custom<G: Gpu, O: OptimiserState<G>, S>(
         let mut superbatch = steps.start_superbatch;
 
         dataloader.map_batches(steps.batch_size, |batch| {
-            if batch.batch_size != steps.batch_size {
-                panic!("Dataloader returned a batch with incorrect batch size!");
-            }
-
             sender.send(batch).unwrap();
 
             batch_no += 1;
