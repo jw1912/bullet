@@ -1,6 +1,6 @@
 use bullet_compiler::tensor::TValue;
 
-use crate::train::inputs::TrainerInputs;
+use crate::model::ModelInputs;
 
 pub trait DataReader<T> {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, f: F);
@@ -8,7 +8,7 @@ pub trait DataReader<T> {
 
 pub fn map_batches<T: Clone, R>(
     reader: &impl DataReader<T>,
-    inputs: &TrainerInputs<T>,
+    inputs: &ModelInputs<T>,
     start_batch: usize,
     batch_size: usize,
     threads: u8,

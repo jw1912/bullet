@@ -1,31 +1,29 @@
 use std::{iter::Zip, marker::PhantomData, slice::ChunksMut};
 
-use bullet_compiler::tensor::TValue;
+use bullet_compiler::{model::Shape, tensor::TValue};
 
-use crate::Shape;
-
-pub struct TrainerInputsBuilder<T> {
+pub struct ModelInputsBuilder<T> {
     inputs: T,
 }
 
-impl Default for TrainerInputsBuilder<()> {
+impl Default for ModelInputsBuilder<()> {
     fn default() -> Self {
         Self { inputs: () }
     }
 }
 
-impl TrainerInputsBuilder<()> {
-    pub fn add_input<T: InputType>(self, input: T) -> TrainerInputsBuilder<T> {
-        TrainerInputsBuilder { inputs: input }
+impl ModelInputsBuilder<()> {
+    pub fn add_input<T: InputType>(self, input: T) -> ModelInputsBuilder<T> {
+        ModelInputsBuilder { inputs: input }
     }
 }
 
-impl<T: InputType + 'static> TrainerInputsBuilder<T> {
-    pub fn add_input<U: InputType>(self, input: U) -> TrainerInputsBuilder<(T, U)> {
-        TrainerInputsBuilder { inputs: (self.inputs, input) }
+impl<T: InputType + 'static> ModelInputsBuilder<T> {
+    pub fn add_input<U: InputType>(self, input: U) -> ModelInputsBuilder<(T, U)> {
+        ModelInputsBuilder { inputs: (self.inputs, input) }
     }
 
-    pub fn build<P: Send + Sync, F>(self, f: F) -> TrainerInputs<P>
+    pub fn build<P: Send + Sync, F>(self, f: F) -> ModelInputs<P>
     where
         F: for<'a> Fn(&P, usize, T::Slices<'a>) + Send + Sync + 'static,
     {
@@ -55,16 +53,16 @@ impl<T: InputType + 'static> TrainerInputsBuilder<T> {
             vec
         };
 
-        TrainerInputs { func: Box::new(func) }
+        ModelInputs { func: Box::new(func) }
     }
 }
 
-pub struct TrainerInputs<T> {
+pub struct ModelInputs<T> {
     #[allow(clippy::type_complexity)]
     func: Box<dyn Fn(&[T], usize, u8) -> Vec<TValue>>,
 }
 
-impl<T> TrainerInputs<T> {
+impl<T> ModelInputs<T> {
     pub fn prepare(&self, data: &[T], batch_number: usize, threads: u8) -> Vec<TValue> {
         (self.func)(data, batch_number, threads)
     }

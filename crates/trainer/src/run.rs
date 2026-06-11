@@ -1,5 +1,6 @@
 pub mod dataloader;
 pub mod logger;
+pub mod reader;
 pub mod schedule;
 
 use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
