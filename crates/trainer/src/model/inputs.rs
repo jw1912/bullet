@@ -1,6 +1,9 @@
-use std::{collections::BTreeMap, iter::Zip, marker::PhantomData, slice::ChunksMut};
+use std::{collections::BTreeMap, iter::Zip, marker::PhantomData, slice::ChunksMut, sync::Arc};
 
-use bullet_compiler::{model::Shape, tensor::TValue};
+use bullet_compiler::{
+    model::{ModelBuilder, ModelNode, Shape},
+    tensor::TValue,
+};
 
 pub struct ModelInputsBuilder<T> {
     inputs: T,
@@ -14,8 +17,8 @@ impl Default for ModelInputsBuilder<()> {
 }
 
 impl ModelInputsBuilder<()> {
-    fn add_input<T: InputType>(self, name: impl Into<String>, input: T) -> ModelInputsBuilder<T> {
-        ModelInputsBuilder { inputs: input, names: vec![name.into()] }
+    fn add_input<T: InputType>(self, name: String, input: T) -> ModelInputsBuilder<T> {
+        ModelInputsBuilder { inputs: input, names: vec![name] }
     }
 
     pub fn add_dense_input(
@@ -23,7 +26,8 @@ impl ModelInputsBuilder<()> {
         name: impl Into<String>,
         shape: impl Into<Shape>,
     ) -> ModelInputsBuilder<DenseInput<f32>> {
-        self.add_input(name, DenseInput::<f32>::new(shape))
+        let name = name.into();
+        self.add_input(name.clone(), DenseInput::<f32>::new(name, shape))
     }
 
     pub fn add_sparse_input(
@@ -32,7 +36,8 @@ impl ModelInputsBuilder<()> {
         shape: impl Into<Shape>,
         nnz: usize,
     ) -> ModelInputsBuilder<SparseInput> {
-        self.add_input(name, SparseInput::new(shape, nnz))
+        let name = name.into();
+        self.add_input(name.clone(), SparseInput::new(name, shape, nnz))
     }
 }
 
@@ -48,7 +53,8 @@ impl<T: InputType + 'static> ModelInputsBuilder<T> {
         name: impl Into<String>,
         shape: impl Into<Shape>,
     ) -> ModelInputsBuilder<(T, DenseInput<f32>)> {
-        self.add_input(name, DenseInput::<f32>::new(shape))
+        let name = name.into();
+        self.add_input(name.clone(), DenseInput::<f32>::new(name.clone(), shape))
     }
 
     pub fn add_sparse_input(
@@ -57,7 +63,8 @@ impl<T: InputType + 'static> ModelInputsBuilder<T> {
         shape: impl Into<Shape>,
         nnz: usize,
     ) -> ModelInputsBuilder<(T, SparseInput)> {
-        self.add_input(name, SparseInput::new(shape, nnz))
+        let name = name.into();
+        self.add_input(name.clone(), SparseInput::new(name, shape, nnz))
     }
 
     pub fn build<P: Send + Sync, F>(self, f: F) -> ModelInputs<P, T>
@@ -91,7 +98,7 @@ impl<T: InputType + 'static> ModelInputsBuilder<T> {
             names.iter().cloned().zip(vec).collect()
         };
 
-        ModelInputs { inputs: self.inputs, mapper: ModelInputsMapper { func: Box::new(func), names: self.names } }
+        ModelInputs { inputs: self.inputs, mapper: ModelInputsMapper { func: Arc::new(func), names: self.names } }
     }
 }
 
@@ -100,20 +107,30 @@ pub struct ModelInputs<D, T> {
     mapper: ModelInputsMapper<D>,
 }
 
-impl<D, T> ModelInputs<D, T> {
+impl<D, T: InputType> ModelInputs<D, T> {
     pub fn inputs(&self) -> &T {
         &self.inputs
     }
 
-    pub fn into_mapper(self) -> ModelInputsMapper<D> {
-        self.mapper
+    pub fn mapper(&self) -> &ModelInputsMapper<D> {
+        &self.mapper
+    }
+
+    pub fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> T::Nodes<'a> {
+        self.inputs.make_nodes(builder)
     }
 }
 
 pub struct ModelInputsMapper<T> {
     #[allow(clippy::type_complexity)]
-    func: Box<dyn Fn(&[T], usize, u8) -> BTreeMap<String, TValue> + Send + Sync>,
+    func: Arc<dyn Fn(&[T], usize, u8) -> BTreeMap<String, TValue> + Send + Sync>,
     names: Vec<String>,
+}
+
+impl<T> Clone for ModelInputsMapper<T> {
+    fn clone(&self) -> Self {
+        Self { func: self.func.clone(), names: self.names.clone() }
+    }
 }
 
 impl<T> ModelInputsMapper<T> {
@@ -130,6 +147,7 @@ pub trait InputType: Clone + Send + Sync {
     type Buf: Send + Sync;
     type Chunks<'a>: 'a + Iterator<Item = Self::Slices<'a>> + Send + Sync;
     type Slices<'a>: 'a + Send + Sync;
+    type Nodes<'a>: 'a;
 
     fn make_bufs(&self, batch_size: usize) -> Self::Buf;
 
@@ -137,29 +155,33 @@ pub trait InputType: Clone + Send + Sync {
 
     fn slices<'a>(&self, chunk: <Self::Chunks<'a> as Iterator>::Item) -> Self::Chunks<'a>;
 
+    fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a>;
+
     fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct SparseInput {
+    name: String,
+    shape: Shape,
     nnz: usize,
-    _shape: Shape,
 }
 
 impl SparseInput {
-    pub fn new(shape: impl Into<Shape>, nnz: usize) -> Self {
-        Self { nnz, _shape: shape.into() }
+    pub fn new(name: String, shape: impl Into<Shape>, nnz: usize) -> Self {
+        Self { name, shape: shape.into(), nnz }
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct DenseInput<T> {
+    name: String,
     shape: Shape,
     phantom: PhantomData<T>,
 }
 impl<T> DenseInput<T> {
-    pub fn new(shape: impl Into<Shape>) -> Self {
-        Self { shape: shape.into(), phantom: PhantomData }
+    pub fn new(name: String, shape: impl Into<Shape>) -> Self {
+        Self { name, shape: shape.into(), phantom: PhantomData }
     }
 }
 
@@ -167,6 +189,7 @@ impl InputType for SparseInput {
     type Buf = Vec<i32>;
     type Chunks<'a> = ChunksMut<'a, i32>;
     type Slices<'a> = &'a mut [i32];
+    type Nodes<'a> = ModelNode<'a>;
 
     fn make_bufs(&self, batch_size: usize) -> Self::Buf {
         vec![0; self.nnz * batch_size]
@@ -180,6 +203,10 @@ impl InputType for SparseInput {
         chunk.chunks_mut(self.nnz)
     }
 
+    fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a> {
+        builder.new_sparse_input(self.name.clone(), self.shape, self.nnz)
+    }
+
     fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {
         vec.push(TValue::I32(buf));
     }
@@ -189,6 +216,7 @@ impl InputType for DenseInput<f32> {
     type Buf = Vec<f32>;
     type Chunks<'a> = ChunksMut<'a, f32>;
     type Slices<'a> = &'a mut [f32];
+    type Nodes<'a> = ModelNode<'a>;
 
     fn make_bufs(&self, batch_size: usize) -> Self::Buf {
         vec![0.0; self.shape.size() * batch_size]
@@ -202,6 +230,10 @@ impl InputType for DenseInput<f32> {
         chunk.chunks_mut(self.shape.size())
     }
 
+    fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a> {
+        builder.new_dense_input(self.name.clone(), self.shape)
+    }
+
     fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {
         vec.push(TValue::F32(buf));
     }
@@ -211,6 +243,7 @@ impl<T: InputType, U: InputType> InputType for (T, U) {
     type Buf = (T::Buf, U::Buf);
     type Chunks<'a> = Zip<T::Chunks<'a>, U::Chunks<'a>>;
     type Slices<'a> = (T::Slices<'a>, U::Slices<'a>);
+    type Nodes<'a> = (T::Nodes<'a>, U::Nodes<'a>);
 
     fn make_bufs(&self, batch_size: usize) -> Self::Buf {
         (self.0.make_bufs(batch_size), self.1.make_bufs(batch_size))
@@ -222,6 +255,10 @@ impl<T: InputType, U: InputType> InputType for (T, U) {
 
     fn slices<'a>(&self, chunk: <Self::Chunks<'a> as Iterator>::Item) -> Self::Chunks<'a> {
         self.0.slices(chunk.0).zip(self.1.slices(chunk.1))
+    }
+
+    fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a> {
+        (self.0.make_nodes(builder), self.1.make_nodes(builder))
     }
 
     fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {

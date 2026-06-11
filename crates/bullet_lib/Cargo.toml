@@ -23,10 +23,6 @@ cuda = ["bullet-gpu/cuda", "bullet-trainer/cuda"]
 rocm = ["bullet-gpu/rocm", "bullet-trainer/rocm"]
 
 [[example]]
-name = "advanced"
-path = "../../examples/advanced.rs"
-
-[[example]]
 name = "simple"
 path = "../../examples/simple.rs"
 
@@ -41,6 +37,10 @@ path = "../../examples/tests/test2.rs"
 [[example]]
 name = "test3"
 path = "../../examples/tests/test3.rs"
+
+[[example]]
+name = "test4"
+path = "../../examples/tests/test4.rs"
 
 [[example]]
 name = "1_simple"

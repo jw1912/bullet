@@ -156,7 +156,8 @@ where
                     targets[0] = blend * result + (1. - blend) * score;
                 }
             })
-            .into_mapper()
+            .mapper()
+            .clone()
     }
 
     pub fn make_read_map_loader<D>(
@@ -316,6 +317,6 @@ where
             settings.threads as u8,
         );
 
-        self.0.measure_max_cpu_throughput(dataloader, steps).unwrap()
+        run::measure_max_cpu_throughput(dataloader, steps).unwrap()
     }
 }
