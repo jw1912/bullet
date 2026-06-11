@@ -6,11 +6,11 @@ use bullet_trainer::model::ModelInputsBuilder;
 use bulletformat::ChessBoard;
 
 fn main() {
-    let num_inputs = 768;
-    let nnz = 32;
     let wdl = 0.75;
 
     let feats = Chess768;
+    let num_inputs = feats.num_inputs();
+    let nnz = feats.max_active();
 
     let _inputs = ModelInputsBuilder::default()
         .add_sparse_input("stm", (num_inputs, 1), nnz)
@@ -20,14 +20,13 @@ fn main() {
             let mut i = 0;
 
             feats.map_features(datapoint, |sfeat, nfeat| {
-                if sfeat.max(nfeat) >= feats.num_inputs() {
-                    panic!("{sfeat} or {nfeat} >= {}", feats.num_inputs());
-                }
-
+                assert!(sfeat.max(nfeat) < num_inputs);
                 stm[i] = sfeat as i32;
                 ntm[i] = nfeat as i32;
                 i += 1;
             });
+
+            assert!(i <= nnz);
 
             for j in i..nnz {
                 stm[j] = -1;
