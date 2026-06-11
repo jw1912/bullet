@@ -55,7 +55,7 @@ where
         let file_paths = self.file_paths.clone();
         let buffer_size = self.buffer_size;
 
-        let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(256);
+        let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(4);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {

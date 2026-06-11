@@ -83,7 +83,7 @@ where
         let filter = self.filter.clone();
 
         let reader_buffer_size = 16384 * threads;
-        let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<TrainingDataEntry>>(8);
+        let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<TrainingDataEntry>>(4);
         let (reader_msg_sender, reader_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
