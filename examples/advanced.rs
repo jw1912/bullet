@@ -2,7 +2,7 @@ use bullet_lib::{
     game::inputs::{Chess768, SparseInputType},
     value::loader::LoadableDataType,
 };
-use bullet_trainer::model::{DenseInput, ModelInputsBuilder, SparseInput};
+use bullet_trainer::model::ModelInputsBuilder;
 use bulletformat::ChessBoard;
 
 fn main() {
@@ -13,9 +13,9 @@ fn main() {
     let feats = Chess768;
 
     let _inputs = ModelInputsBuilder::default()
-        .add_input("stm", SparseInput::new((num_inputs, 1), nnz))
-        .add_input("ntm", SparseInput::new((num_inputs, 1), nnz))
-        .add_input("target", DenseInput::new((1, 1)))
+        .add_sparse_input("stm", (num_inputs, 1), nnz)
+        .add_sparse_input("ntm", (num_inputs, 1), nnz)
+        .add_dense_input("target", (1, 1))
         .build(move |datapoint: &ChessBoard, _, ((stm, ntm), target)| {
             let mut i = 0;
 

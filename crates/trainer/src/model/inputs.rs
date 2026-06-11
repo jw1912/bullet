@@ -14,16 +14,50 @@ impl Default for ModelInputsBuilder<()> {
 }
 
 impl ModelInputsBuilder<()> {
-    pub fn add_input<T: InputType>(self, name: impl Into<String>, input: T) -> ModelInputsBuilder<T> {
+    fn add_input<T: InputType>(self, name: impl Into<String>, input: T) -> ModelInputsBuilder<T> {
         ModelInputsBuilder { inputs: input, names: vec![name.into()] }
+    }
+
+    pub fn add_dense_input(
+        self,
+        name: impl Into<String>,
+        shape: impl Into<Shape>,
+    ) -> ModelInputsBuilder<DenseInput<f32>> {
+        self.add_input(name, DenseInput::<f32>::new(shape))
+    }
+
+    pub fn add_sparse_input(
+        self,
+        name: impl Into<String>,
+        shape: impl Into<Shape>,
+        nnz: usize,
+    ) -> ModelInputsBuilder<SparseInput> {
+        self.add_input(name, SparseInput::new(shape, nnz))
     }
 }
 
 impl<T: InputType + 'static> ModelInputsBuilder<T> {
-    pub fn add_input<U: InputType>(self, name: impl Into<String>, input: U) -> ModelInputsBuilder<(T, U)> {
+    fn add_input<U: InputType>(self, name: impl Into<String>, input: U) -> ModelInputsBuilder<(T, U)> {
         let mut names = self.names;
         names.push(name.into());
         ModelInputsBuilder { inputs: (self.inputs, input), names }
+    }
+
+    pub fn add_dense_input(
+        self,
+        name: impl Into<String>,
+        shape: impl Into<Shape>,
+    ) -> ModelInputsBuilder<(T, DenseInput<f32>)> {
+        self.add_input(name, DenseInput::<f32>::new(shape))
+    }
+
+    pub fn add_sparse_input(
+        self,
+        name: impl Into<String>,
+        shape: impl Into<Shape>,
+        nnz: usize,
+    ) -> ModelInputsBuilder<(T, SparseInput)> {
+        self.add_input(name, SparseInput::new(shape, nnz))
     }
 
     pub fn build<P: Send + Sync, F>(self, f: F) -> ModelInputs<P, T>
