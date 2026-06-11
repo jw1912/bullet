@@ -68,7 +68,7 @@ fn main() {
         (Some(loss), vec![("output".to_string(), output)])
     });
 
-    let weights = ModelWeights::new(defn.ir(), 198273612);
+    let weights = ModelWeights::new(&defn, 198273612);
     let device = Device::<ExecutionContext>::new(0).unwrap();
     let optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, AdamWParams::default()).unwrap();
     let mut trainer = Trainer::new(optimiser, ());

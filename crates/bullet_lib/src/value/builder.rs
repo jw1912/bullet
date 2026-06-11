@@ -153,7 +153,7 @@ where
         loss = loss.reduce_sum_batch();
 
         let definition = ModelDefinition::new(builder.ir().clone(), Some(loss.node()), [(out.node(), "output".into())]);
-        let weights = ModelWeights::new(definition.ir(), self.seed);
+        let weights = ModelWeights::new(&definition, self.seed);
         let device = Device::<ExecutionContext>::new(0).unwrap();
 
         let optimiser = Optimiser::new(definition, weights, device, Default::default()).unwrap();
