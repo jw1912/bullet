@@ -6,7 +6,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
-use crate::model::TensorMap;
+use crate::TensorMap;
 
 #[derive(Debug)]
 pub enum DataLoadingError {
@@ -20,7 +20,6 @@ pub trait DataLoader: Send + Sync + 'static {
 }
 
 pub struct PreparedBatchHost {
-    pub batch_size: usize,
     pub inputs: BTreeMap<String, TValue>,
 }
 

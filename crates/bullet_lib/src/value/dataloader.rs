@@ -1,4 +1,3 @@
-use bullet_compiler::tensor::TValue;
 use bullet_trainer::run::{
     dataloader::{DataLoader, DataLoadingError, PreparedBatchHost},
     schedule::TrainingSteps,
@@ -7,7 +6,7 @@ use bullet_trainer::run::{
 use crate::{
     game::{inputs::SparseInputType, outputs::OutputBuckets},
     trainer::schedule::wdl::WdlScheduler,
-    value::loader::{self, PreparedData},
+    value::loader,
 };
 
 pub struct ValueDataLoader<I, O, D, W>
@@ -55,25 +54,9 @@ where
                 superbatch += 1;
             }
 
-            f(prepared_data.into())
+            f(prepared_data)
         });
 
         Ok(())
-    }
-}
-
-impl<I: SparseInputType, O> From<PreparedData<I, O>> for PreparedBatchHost {
-    fn from(prepared_data: PreparedData<I, O>) -> Self {
-        PreparedBatchHost {
-            batch_size: prepared_data.batch_size,
-            inputs: [
-                ("stm".to_string(), TValue::I32(prepared_data.stm)),
-                ("nstm".to_string(), TValue::I32(prepared_data.nstm)),
-                ("buckets".to_string(), TValue::I32(prepared_data.buckets)),
-                ("targets".to_string(), TValue::F32(prepared_data.targets)),
-                ("entry_weights".to_string(), TValue::F32(prepared_data.weights)),
-            ]
-            .into(),
-        }
     }
 }

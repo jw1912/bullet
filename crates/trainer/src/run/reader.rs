@@ -1,59 +1,72 @@
-use bullet_compiler::tensor::TValue;
-
-use crate::model::ModelInputsMapper;
+use crate::{
+    model::ModelInputsMapper,
+    run::dataloader::{DataLoader, DataLoadingError, PreparedBatchHost},
+};
 
 pub trait DataReader<T> {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, f: F);
 }
 
-pub fn map_batches<T: Clone, R>(
-    reader: &impl DataReader<T>,
-    mapper: &ModelInputsMapper<T>,
+pub struct ReadMapLoader<R, D> {
+    reader: R,
+    mapper: ModelInputsMapper<D>,
     start_batch: usize,
-    batch_size: usize,
     threads: u8,
-    mut f: impl FnMut(Vec<TValue>) -> bool,
-) {
-    let mut batch = start_batch;
-    let mut incomplete_buf = Vec::new();
+}
 
-    reader.read_chunks(start_batch * batch_size, |chunk| {
-        let remainder = if !incomplete_buf.is_empty() {
-            let remainder = batch_size - incomplete_buf.len();
+impl<R, D> DataLoader for ReadMapLoader<R, D>
+where
+    R: DataReader<D> + Send + Sync + 'static,
+    D: Clone + Send + Sync + 'static,
+{
+    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
+        self,
+        batch_size: usize,
+        mut f: F,
+    ) -> Result<(), DataLoadingError> {
+        let mut batch = self.start_batch;
+        let mut incomplete_buf = Vec::new();
+
+        self.reader.read_chunks(self.start_batch * batch_size, |chunk| {
+            let remainder = if !incomplete_buf.is_empty() {
+                let remainder = batch_size - incomplete_buf.len();
+
+                if chunk.len() >= remainder {
+                    incomplete_buf.extend_from_slice(&chunk[..remainder]);
+                    let prepared = self.mapper.map(&incomplete_buf, batch, self.threads);
+                    batch += 1;
+
+                    if f(PreparedBatchHost { inputs: prepared }) {
+                        return true;
+                    }
+
+                    incomplete_buf.clear();
+                } else {
+                    incomplete_buf.extend_from_slice(chunk);
+                }
+
+                remainder
+            } else {
+                0
+            };
 
             if chunk.len() >= remainder {
-                incomplete_buf.extend_from_slice(&chunk[..remainder]);
-                let prepared = mapper.map(&incomplete_buf, batch, threads);
-                batch += 1;
+                let chunks = chunk[remainder..chunk.len()].chunks_exact(batch_size);
+                incomplete_buf.extend_from_slice(chunks.remainder());
 
-                if f(prepared) {
-                    return true;
-                }
+                for data in chunks {
+                    let prepared = self.mapper.map(data, batch, self.threads);
+                    batch += 1;
 
-                incomplete_buf.clear();
-            } else {
-                incomplete_buf.extend_from_slice(chunk);
-            }
-
-            remainder
-        } else {
-            0
-        };
-
-        if chunk.len() >= remainder {
-            let chunks = chunk[remainder..chunk.len()].chunks_exact(batch_size);
-            incomplete_buf.extend_from_slice(chunks.remainder());
-
-            for data in chunks {
-                let prepared = mapper.map(data, batch, threads);
-                batch += 1;
-
-                if f(prepared) {
-                    return true;
+                    if f(PreparedBatchHost { inputs: prepared }) {
+                        return true;
+                    }
                 }
             }
-        }
 
-        false
-    });
+            false
+        });
+
+        Ok(())
+    }
 }

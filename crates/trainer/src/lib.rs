@@ -62,9 +62,9 @@ impl<G: Gpu, O: OptimiserState<G>, S> Trainer<G, O, S> {
         let t = Instant::now();
         let mut total = 0;
 
-        dataloader.map_batches(steps.batch_size, |batch| {
+        dataloader.map_batches(steps.batch_size, |_| {
             batch_no += 1;
-            total += batch.batch_size;
+            total += steps.batch_size;
 
             if batch_no % steps.batches_per_superbatch == 0 {
                 batch_no = 0;

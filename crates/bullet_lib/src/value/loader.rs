@@ -5,6 +5,8 @@ pub mod sfbinpack;
 mod text;
 pub mod viribinpack;
 
+use bullet_compiler::tensor::TValue;
+use bullet_trainer::run::dataloader::PreparedBatchHost;
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
 pub use sfbinpack::SfBinpackLoader;
@@ -142,10 +144,10 @@ where
         });
     }
 
-    pub fn prepare(&self, data: &[I::RequiredDataType], threads: usize, blend: f32) -> PreparedData<I, O> {
-        PreparedData::new(
-            self.input_getter.clone(),
-            self.output_getter,
+    pub fn prepare(&self, data: &[I::RequiredDataType], threads: usize, blend: f32) -> PreparedBatchHost {
+        prepare(
+            &self.input_getter,
+            &self.output_getter,
             self.blend_getter,
             self.weight_getter,
             self.use_win_rate_model,
@@ -158,122 +160,105 @@ where
     }
 }
 
-/// A batch of data, in the correct format for the GPU.
-pub struct PreparedData<I: SparseInputType, O> {
-    pub(crate) input_getter: I,
-    pub(crate) output_getter: O,
-    pub(crate) batch_size: usize,
-    pub(crate) stm: Vec<i32>,
-    pub(crate) nstm: Vec<i32>,
-    pub(crate) buckets: Vec<i32>,
-    pub(crate) targets: Vec<f32>,
-    pub(crate) weights: Vec<f32>,
-}
-
-impl<I, O> PreparedData<I, O>
+#[allow(clippy::too_many_arguments)]
+pub fn prepare<I, O>(
+    input_getter: &I,
+    output_getter: &O,
+    blend_getter: B<I>,
+    weight_getter: Option<Wgt<I>>,
+    use_win_rate_model: bool,
+    wdl: bool,
+    data: &[I::RequiredDataType],
+    threads: usize,
+    blend: f32,
+    scale: f32,
+) -> PreparedBatchHost
 where
     I: SparseInputType,
     O: OutputBuckets<I::RequiredDataType>,
     I::RequiredDataType: LoadableDataType,
 {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        input_getter: I,
-        output_getter: O,
-        blend_getter: B<I>,
-        weight_getter: Option<Wgt<I>>,
-        use_win_rate_model: bool,
-        wdl: bool,
-        data: &[I::RequiredDataType],
-        threads: usize,
-        blend: f32,
-        scale: f32,
-    ) -> Self {
-        let rscale = 1.0 / scale;
-        let batch_size = data.len();
-        let max_active = input_getter.max_active();
-        let chunk_size = batch_size.div_ceil(threads);
-        let input_size = input_getter.num_inputs();
-        let output_size = if wdl { 3 } else { 1 };
-        let sparse_size = max_active * batch_size;
+    let rscale = 1.0 / scale;
+    let batch_size = data.len();
+    let max_active = input_getter.max_active();
+    let chunk_size = batch_size.div_ceil(threads);
+    let input_size = input_getter.num_inputs();
+    let output_size = if wdl { 3 } else { 1 };
+    let sparse_size = max_active * batch_size;
 
-        let mut prep = Self {
-            input_getter,
-            output_getter,
-            batch_size,
-            stm: vec![0; sparse_size],
-            nstm: vec![0; sparse_size],
-            buckets: vec![0; batch_size],
-            targets: vec![0.0; output_size * batch_size],
-            weights: vec![0.0; batch_size],
-        };
+    let mut stm = vec![0; sparse_size];
+    let mut nstm = vec![0; sparse_size];
+    let mut buckets = vec![0; batch_size];
+    let mut targets = vec![0.0; output_size * batch_size];
+    let mut weights = vec![0.0; batch_size];
 
-        let sparse_chunk_size = max_active * chunk_size;
+    let sparse_chunk_size = max_active * chunk_size;
 
-        std::thread::scope(|s| {
-            data.chunks(chunk_size)
-                .zip(prep.stm.chunks_mut(sparse_chunk_size))
-                .zip(prep.nstm.chunks_mut(sparse_chunk_size))
-                .zip(prep.buckets.chunks_mut(chunk_size))
-                .zip(prep.targets.chunks_mut(output_size * chunk_size))
-                .zip(prep.weights.chunks_mut(chunk_size))
-                .for_each(
-                    |(((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk), weights_chunk)| {
-                        let inp = &prep.input_getter;
-                        let out = &prep.output_getter;
-                        s.spawn(move || {
-                            let chunk_len = data_chunk.len();
+    std::thread::scope(|s| {
+        data.chunks(chunk_size)
+            .zip(stm.chunks_mut(sparse_chunk_size))
+            .zip(nstm.chunks_mut(sparse_chunk_size))
+            .zip(buckets.chunks_mut(chunk_size))
+            .zip(targets.chunks_mut(output_size * chunk_size))
+            .zip(weights.chunks_mut(chunk_size))
+            .for_each(|(((((data_chunk, stm_chunk), nstm_chunk), buckets_chunk), results_chunk), weights_chunk)| {
+                s.spawn(move || {
+                    let chunk_len = data_chunk.len();
 
-                            for i in 0..chunk_len {
-                                let pos = &data_chunk[i];
-                                let mut j = 0;
-                                let sparse_offset = max_active * i;
+                    for i in 0..chunk_len {
+                        let pos = &data_chunk[i];
+                        let mut j = 0;
+                        let sparse_offset = max_active * i;
 
-                                inp.map_features(pos, |our, opp| {
-                                    assert!(
-                                        our < input_size && opp < input_size,
-                                        "Input feature index exceeded input size!"
-                                    );
+                        input_getter.map_features(pos, |our, opp| {
+                            assert!(our < input_size && opp < input_size, "Input feature index exceeded input size!");
 
-                                    stm_chunk[sparse_offset + j] = our as i32;
-                                    nstm_chunk[sparse_offset + j] = opp as i32;
+                            stm_chunk[sparse_offset + j] = our as i32;
+                            nstm_chunk[sparse_offset + j] = opp as i32;
 
-                                    j += 1;
-                                });
-
-                                for j in j..max_active {
-                                    stm_chunk[sparse_offset + j] = -1;
-                                    nstm_chunk[sparse_offset + j] = -1;
-                                }
-
-                                assert!(j <= max_active, "More inputs provided than the specified maximum!");
-
-                                buckets_chunk[i] = i32::from(out.bucket(pos));
-                                weights_chunk[i] = weight_getter.map_or(1.0, |w| w(pos));
-
-                                if wdl {
-                                    results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
-                                } else {
-                                    let score = f32::from(pos.score());
-                                    let score = if use_win_rate_model {
-                                        let p = (score - 270.0) / 380.0;
-                                        let pm = (-score - 270.0) / 380.0;
-                                        0.5 * (1.0 + sigmoid(p) - sigmoid(pm))
-                                    } else {
-                                        sigmoid(rscale * score)
-                                    };
-                                    let result = f32::from(pos.result() as u8) / 2.0;
-                                    let blend = blend_getter(pos, blend);
-                                    assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
-                                    results_chunk[i] = blend * result + (1. - blend) * score;
-                                }
-                            }
+                            j += 1;
                         });
-                    },
-                );
-        });
 
-        prep
+                        for j in j..max_active {
+                            stm_chunk[sparse_offset + j] = -1;
+                            nstm_chunk[sparse_offset + j] = -1;
+                        }
+
+                        assert!(j <= max_active, "More inputs provided than the specified maximum!");
+
+                        buckets_chunk[i] = i32::from(output_getter.bucket(pos));
+                        weights_chunk[i] = weight_getter.map_or(1.0, |w| w(pos));
+
+                        if wdl {
+                            results_chunk[output_size * i + usize::from(pos.result() as u8)] = 1.0;
+                        } else {
+                            let score = f32::from(pos.score());
+                            let score = if use_win_rate_model {
+                                let p = (score - 270.0) / 380.0;
+                                let pm = (-score - 270.0) / 380.0;
+                                0.5 * (1.0 + sigmoid(p) - sigmoid(pm))
+                            } else {
+                                sigmoid(rscale * score)
+                            };
+                            let result = f32::from(pos.result() as u8) / 2.0;
+                            let blend = blend_getter(pos, blend);
+                            assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
+                            results_chunk[i] = blend * result + (1. - blend) * score;
+                        }
+                    }
+                });
+            });
+    });
+
+    PreparedBatchHost {
+        inputs: [
+            ("stm".to_string(), TValue::I32(stm)),
+            ("nstm".to_string(), TValue::I32(nstm)),
+            ("buckets".to_string(), TValue::I32(buckets)),
+            ("targets".to_string(), TValue::F32(targets)),
+            ("entry_weights".to_string(), TValue::F32(weights)),
+        ]
+        .into(),
     }
 }
 

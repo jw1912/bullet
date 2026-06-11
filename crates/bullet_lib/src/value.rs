@@ -21,10 +21,11 @@ use crate::{
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
         settings::LocalSettings,
     },
+    value::loader::prepare,
 };
 
 use dataloader::ValueDataLoader;
-use loader::{DefaultDataLoader, LoadableDataType, PreparedData};
+use loader::{DefaultDataLoader, LoadableDataType};
 
 /// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<
@@ -99,9 +100,9 @@ where
         blend: f32,
         scale: f32,
     ) -> PreparedBatchHost {
-        PreparedBatchHost::from(PreparedData::new(
-            self.input_getter.clone(),
-            self.output_getter,
+        prepare(
+            &self.input_getter,
+            &self.output_getter,
             self.blend_getter,
             self.weight_getter,
             self.use_win_rate_model,
@@ -110,7 +111,7 @@ where
             threads,
             blend,
             scale,
-        ))
+        )
     }
 }
 

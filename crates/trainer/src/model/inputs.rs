@@ -1,4 +1,4 @@
-use std::{iter::Zip, marker::PhantomData, slice::ChunksMut};
+use std::{collections::BTreeMap, iter::Zip, marker::PhantomData, slice::ChunksMut};
 
 use bullet_compiler::{model::Shape, tensor::TValue};
 
@@ -65,6 +65,7 @@ impl<T: InputType + 'static> ModelInputsBuilder<T> {
         F: for<'a> Fn(&P, usize, T::Slices<'a>) + Send + Sync + 'static,
     {
         let inputs = self.inputs.clone();
+        let names = self.names.clone();
 
         let func = move |batch: &[P], batch_number, threads| {
             let f = &f;
@@ -87,7 +88,7 @@ impl<T: InputType + 'static> ModelInputsBuilder<T> {
 
             let mut vec = Vec::new();
             inputs.append_bufs_to_vec(bufs, &mut vec);
-            vec
+            names.iter().cloned().zip(vec).collect()
         };
 
         ModelInputs { inputs: self.inputs, mapper: ModelInputsMapper { func: Box::new(func), names: self.names } }
@@ -111,12 +112,12 @@ impl<D, T> ModelInputs<D, T> {
 
 pub struct ModelInputsMapper<T> {
     #[allow(clippy::type_complexity)]
-    func: Box<dyn Fn(&[T], usize, u8) -> Vec<TValue>>,
+    func: Box<dyn Fn(&[T], usize, u8) -> BTreeMap<String, TValue> + Send + Sync>,
     names: Vec<String>,
 }
 
 impl<T> ModelInputsMapper<T> {
-    pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> Vec<TValue> {
+    pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> BTreeMap<String, TValue> {
         (self.func)(data, batch_number, threads)
     }
 
