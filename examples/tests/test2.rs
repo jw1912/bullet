@@ -69,8 +69,8 @@ fn main() {
         net_id: "test2".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps { batch_size: 16_384, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 10 },
-        wdl_scheduler: wdl::ConstantWDL { value: 0.2 },
-        lr_scheduler: lr::ConstantLR { value: 0.001 },
+        wdl_scheduler: wdl::LinearWDL { start: 0.2, end: 0.0 },
+        lr_scheduler: lr::DropLR { start: 0.001, gamma: 0.1, drop: 5 },
         save_rate: 10,
     };
 
