@@ -62,6 +62,8 @@ impl ModelDefinition {
             fwd.register_output(*map.get(output).unwrap());
         }
 
+        fwd.transform(LowerForward)?;
+        fwd.transform(InlineSubgraphs)?;
         fwd.optimise()?;
 
         Ok(ModelFunctionDefinition { ir: fwd, map })
