@@ -1,6 +1,6 @@
 use bullet_compiler::tensor::TValue;
 
-use crate::model::ModelInputs;
+use crate::model::ModelInputsMapper;
 
 pub trait DataReader<T> {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, f: F);
@@ -8,7 +8,7 @@ pub trait DataReader<T> {
 
 pub fn map_batches<T: Clone, R>(
     reader: &impl DataReader<T>,
-    inputs: &ModelInputs<T>,
+    mapper: &ModelInputsMapper<T>,
     start_batch: usize,
     batch_size: usize,
     threads: u8,
@@ -23,7 +23,7 @@ pub fn map_batches<T: Clone, R>(
 
             if chunk.len() >= remainder {
                 incomplete_buf.extend_from_slice(&chunk[..remainder]);
-                let prepared = inputs.prepare(&incomplete_buf, batch, threads);
+                let prepared = mapper.map(&incomplete_buf, batch, threads);
                 batch += 1;
 
                 if f(prepared) {
@@ -45,7 +45,7 @@ pub fn map_batches<T: Clone, R>(
             incomplete_buf.extend_from_slice(chunks.remainder());
 
             for data in chunks {
-                let prepared = inputs.prepare(data, batch, threads);
+                let prepared = mapper.map(data, batch, threads);
                 batch += 1;
 
                 if f(prepared) {

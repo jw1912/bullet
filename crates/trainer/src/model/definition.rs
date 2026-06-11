@@ -13,6 +13,8 @@ use bullet_compiler::{
     },
 };
 
+use crate::model::ModelInputs;
+
 pub struct ModelFunctionDefinition {
     ir: TensorIR,
     map: BTreeMap<NodeId, NodeId>,
@@ -35,6 +37,10 @@ pub struct ModelDefinition {
 }
 
 impl ModelDefinition {
+    pub fn make<D, T>(_inputs: ModelInputs<D, T>) -> Self {
+        unimplemented!()
+    }
+
     pub fn new(ir: ModelIR, loss: Option<NodeId>, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
         if let Some(loss) = loss {
             assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));

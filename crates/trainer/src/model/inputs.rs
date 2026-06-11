@@ -4,30 +4,33 @@ use bullet_compiler::{model::Shape, tensor::TValue};
 
 pub struct ModelInputsBuilder<T> {
     inputs: T,
+    names: Vec<String>,
 }
 
 impl Default for ModelInputsBuilder<()> {
     fn default() -> Self {
-        Self { inputs: () }
+        Self { inputs: (), names: Vec::new() }
     }
 }
 
 impl ModelInputsBuilder<()> {
-    pub fn add_input<T: InputType>(self, input: T) -> ModelInputsBuilder<T> {
-        ModelInputsBuilder { inputs: input }
+    pub fn add_input<T: InputType>(self, name: impl Into<String>, input: T) -> ModelInputsBuilder<T> {
+        ModelInputsBuilder { inputs: input, names: vec![name.into()] }
     }
 }
 
 impl<T: InputType + 'static> ModelInputsBuilder<T> {
-    pub fn add_input<U: InputType>(self, input: U) -> ModelInputsBuilder<(T, U)> {
-        ModelInputsBuilder { inputs: (self.inputs, input) }
+    pub fn add_input<U: InputType>(self, name: impl Into<String>, input: U) -> ModelInputsBuilder<(T, U)> {
+        let mut names = self.names;
+        names.push(name.into());
+        ModelInputsBuilder { inputs: (self.inputs, input), names }
     }
 
-    pub fn build<P: Send + Sync, F>(self, f: F) -> ModelInputs<P>
+    pub fn build<P: Send + Sync, F>(self, f: F) -> ModelInputs<P, T>
     where
         F: for<'a> Fn(&P, usize, T::Slices<'a>) + Send + Sync + 'static,
     {
-        let inputs = self.inputs;
+        let inputs = self.inputs.clone();
 
         let func = move |batch: &[P], batch_number, threads| {
             let f = &f;
@@ -53,22 +56,42 @@ impl<T: InputType + 'static> ModelInputsBuilder<T> {
             vec
         };
 
-        ModelInputs { func: Box::new(func) }
+        ModelInputs { inputs: self.inputs, mapper: ModelInputsMapper { func: Box::new(func), names: self.names } }
     }
 }
 
-pub struct ModelInputs<T> {
+pub struct ModelInputs<D, T> {
+    inputs: T,
+    mapper: ModelInputsMapper<D>,
+}
+
+impl<D, T> ModelInputs<D, T> {
+    pub fn inputs(&self) -> &T {
+        &self.inputs
+    }
+
+    pub fn into_mapper(self) -> ModelInputsMapper<D> {
+        self.mapper
+    }
+}
+
+pub struct ModelInputsMapper<T> {
     #[allow(clippy::type_complexity)]
     func: Box<dyn Fn(&[T], usize, u8) -> Vec<TValue>>,
+    names: Vec<String>,
 }
 
-impl<T> ModelInputs<T> {
-    pub fn prepare(&self, data: &[T], batch_number: usize, threads: u8) -> Vec<TValue> {
+impl<T> ModelInputsMapper<T> {
+    pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> Vec<TValue> {
         (self.func)(data, batch_number, threads)
+    }
+
+    pub fn names(&self) -> &[String] {
+        &self.names
     }
 }
 
-pub trait InputType: Send + Sync {
+pub trait InputType: Clone + Send + Sync {
     type Buf: Send + Sync;
     type Chunks<'a>: 'a + Iterator<Item = Self::Slices<'a>> + Send + Sync;
     type Slices<'a>: 'a + Send + Sync;
