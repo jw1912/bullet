@@ -14,10 +14,7 @@ jobs:
         - uses: dtolnay/rust-toolchain@stable
           with:
             components: clippy
-        - run: |
-            cargo clippy --workspace
-            CUDA_PATH=. cargo clippy --workspace --features cuda
-            HIP_PATH=. cargo clippy --workspace --features rocm
+        - run: CUDA_PATH=. HIP_PATH=. cargo clippy --workspace --all-targets --features=cuda,rocm -- --deny warnings
 
   test:
     name: test

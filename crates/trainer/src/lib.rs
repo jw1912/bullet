@@ -12,6 +12,8 @@ use run::{
 
 use std::time::Instant;
 
+use crate::model::{ModelEvaluator, TensorMap};
+
 #[derive(Debug)]
 pub enum TrainerError<G: Gpu> {
     DataLoadingError(DataLoadingError),
@@ -31,9 +33,14 @@ impl<G: Gpu> From<DataLoadingError> for TrainerError<G> {
 pub struct Trainer<G: Gpu, O: OptimiserState<G>, S> {
     pub optimiser: Optimiser<G, O>,
     pub state: S,
+    evaluator: Option<ModelEvaluator<G>>,
 }
 
 impl<G: Gpu, O: OptimiserState<G>, S> Trainer<G, O, S> {
+    pub fn new(optimiser: Optimiser<G, O>, state: S) -> Self {
+        Self { optimiser, state, evaluator: None }
+    }
+
     pub fn train_custom(
         &mut self,
         schedule: TrainingSchedule,
@@ -74,5 +81,15 @@ impl<G: Gpu, O: OptimiserState<G>, S> Trainer<G, O, S> {
         })?;
 
         Ok(())
+    }
+
+    pub fn evaluate(&mut self, inputs: &TensorMap<G>) -> Result<&TensorMap<G>, G::Error> {
+        if self.evaluator.is_none() {
+            let mut evaluator = ModelEvaluator::new(self.optimiser.definition(), self.optimiser.device())?;
+            evaluator.load_device_weights(self.optimiser.weights())?;
+            self.evaluator = Some(evaluator);
+        }
+
+        self.evaluator.as_mut().unwrap().evaluate(inputs)
     }
 }

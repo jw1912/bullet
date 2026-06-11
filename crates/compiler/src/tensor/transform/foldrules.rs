@@ -5,8 +5,8 @@ use crate::{
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SparseMatmulBwd,
-            SparseMatmulBwdMulti, Unary, UnaryOp,
+            CABinary, CABinaryOp, Constant, CopyOp, Power, ScalarConstant, SliceAcrossDimension, SparseMatmul,
+            SparseMatmulBwd, SparseMatmulBwdMulti, Unary, UnaryOp,
             autograd::{CReLU, CustomAutogradOp, DiffableFromOutputOp, ReLU, SCReLU, Sigmoid, SqrReLU},
         },
         transform::modify::AddOperation,
@@ -102,19 +102,7 @@ macro_rules! foldrule {
 }
 
 foldrule! {
-    rulename EvalScalarConstUnary on ir
-    rewrites (unary = [UnaryOp] (scalar = [ScalarConstant]))
-    into [ScalarConstant(unary.op().evaluate(scalar.0).unwrap(), scalar.1)]
-}
-
-foldrule! {
-    rulename EvalScalarConstBinary on ir
-    rewrites (binary = [CABinaryOp] (lhs = [ScalarConstant]) (rhs = [ScalarConstant]))
-    into [ScalarConstant(binary.op().evaluate(lhs.0, rhs.0).unwrap(), lhs.1)]
-}
-
-foldrule! {
-    rulename FoldFixedSizeScalarConst on ir
+    rulename FoldConstToScalarConst on ir
     rewrites (constant = [Constant])
     into [ScalarConstant(scalar, constant.0.size().into())]
     given {
@@ -122,16 +110,6 @@ foldrule! {
     }
     testcase fixed_size_scalar_const {
         ir.add_const(TValue::I32(vec![1; 16]))
-    }
-}
-
-foldrule! {
-    rulename FoldVarSizeScalarConst on ir
-    rewrites (broadcast = [BroadcastAcrossDimension] (input = [ScalarConstant]))
-    into [ScalarConstant(input.0, broadcast.output_size())]
-    testcase var_size_scalar_const {
-        let a = ir.add_scalar(1, 1);
-        ir.add_broadcast(a, [1], 0, 128)?
     }
 }
 
@@ -171,6 +149,24 @@ foldrule! {
     into [CopyOp(a.ty())] (a)
     given {
         scalar.0 == 1.0.into()
+    }
+}
+
+foldrule! {
+    rulename FoldPowBy2 on ir
+    rewrites (_b = [Power] (a) (scalar = [ScalarConstant]))
+    into [CABinaryOp::new(a.ty(), CABinary::Mul)] (a) (a)
+    given {
+        scalar.0 == 2.0.into() || scalar.0 == 2.into()
+    }
+}
+
+foldrule! {
+    rulename FoldAbsSquared on ir
+    rewrites (_c = [CABinaryOp] (a = [UnaryOp] (i1)) (b = [UnaryOp] (i2)))
+    into [CABinaryOp::new(i1.ty(), CABinary::Mul)] (i1) (i1)
+    given {
+        a.op() == Unary::Abs && b.op() == Unary::Abs && i1.id() == i2.id()
     }
 }
 
@@ -253,5 +249,14 @@ foldrule! {
             && exp.op() == Unary::Exp
             && neg.op() == CABinary::Mul
             && neg_one.0 == (-1.0).into()
+    }
+}
+
+foldrule! {
+    rulename FoldSlicedSparseMatmul on ir
+    rewrites (spmm = [SparseMatmul] (sliced = [SliceAcrossDimension] (weights)) (inputs))
+    into [SparseMatmul::new(spmm.dtype(), spmm.batch(), spmm.rows(), spmm.cols(), sliced.dimen(), sliced.start(), spmm.nnz())?] (weights) (inputs)
+    given {
+        spmm.offset() == 0 && spmm.rows() == spmm.stride() && sliced.inner().get() == 1
     }
 }

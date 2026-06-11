@@ -71,7 +71,7 @@ impl DataLoader<ChessBoard> for ViriBinpackLoader {
         let threads = self.threads;
         let filter = self.filter.clone();
 
-        let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(256);
+        let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {

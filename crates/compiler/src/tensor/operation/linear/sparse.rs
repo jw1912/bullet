@@ -9,6 +9,8 @@ pub struct SparseMatmul {
     batch: Size,
     rows: Size,
     cols: Size,
+    stride: Size,
+    offset: usize,
     nnz: Size,
 }
 
@@ -18,9 +20,18 @@ impl SparseMatmul {
         batch: impl Into<Size>,
         rows: impl Into<Size>,
         cols: impl Into<Size>,
+        stride: impl Into<Size>,
+        offset: usize,
         nnz: impl Into<Size>,
-    ) -> Self {
-        SparseMatmul { dtype, batch: batch.into(), rows: rows.into(), cols: cols.into(), nnz: nnz.into() }
+    ) -> Result<Self, IRError> {
+        let stride = stride.into();
+        let rows = rows.into();
+
+        if rows.get() + offset > stride.get() {
+            return Err(format!("{} + {offset} > {}", rows.get(), stride.get()).into());
+        }
+
+        Ok(SparseMatmul { dtype, batch: batch.into(), rows, cols: cols.into(), stride, offset, nnz: nnz.into() })
     }
 
     pub fn invert(&self) -> SparseMatmulBwd {
@@ -43,6 +54,14 @@ impl SparseMatmul {
         self.cols
     }
 
+    pub fn stride(&self) -> Size {
+        self.stride
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
     pub fn nnz(&self) -> Size {
         self.nnz
     }
@@ -50,13 +69,13 @@ impl SparseMatmul {
 
 impl OpType for SparseMatmul {
     fn opname(&self) -> String {
-        let SparseMatmul { batch, rows, cols, nnz, .. } = *self;
-        format!("sparse.matmul<{batch:?}, {rows:?}x{cols:?}, {nnz:?}>")
+        let SparseMatmul { batch, rows, cols, nnz, stride, offset, .. } = *self;
+        format!("sparse.matmul<{batch:?}, {rows:?}x{cols:?}, {stride:?}, {offset}, {nnz:?}>")
     }
 
     fn inputs(&self) -> Vec<TType> {
-        let SparseMatmul { dtype, batch, rows, cols, nnz } = *self;
-        vec![TType::new(rows * cols, dtype), TType::new(batch * nnz, DType::I32)]
+        let SparseMatmul { dtype, batch, cols, stride, nnz, .. } = *self;
+        vec![TType::new(stride * cols, dtype), TType::new(batch * nnz, DType::I32)]
     }
 
     fn outputs(&self) -> Vec<TType> {
@@ -65,11 +84,12 @@ impl OpType for SparseMatmul {
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
-        let SparseMatmul { dtype, batch, rows, cols, nnz } = *self;
+        let SparseMatmul { dtype, batch, rows, cols, stride, offset, nnz } = *self;
 
         let batch = batch.get();
         let rows = rows.get();
         let cols = cols.get();
+        let stride = stride.get();
         let nnz = nnz.get();
 
         let d = inputs[0];
@@ -77,7 +97,7 @@ impl OpType for SparseMatmul {
         let o = &mut outputs[0];
 
         assert_eq!(s.size(), batch * nnz);
-        assert_eq!(d.size(), rows * cols);
+        assert_eq!(d.size(), stride * cols);
         assert_eq!(o.size(), batch * rows);
 
         for bi in 0..batch {
@@ -87,7 +107,7 @@ impl OpType for SparseMatmul {
                 for ni in 0..nnz {
                     let DValue::I32(idx) = s.read(nnz * bi + ni) else { panic!() };
                     if idx >= 0 && (idx as usize) < cols {
-                        sum = CABinary::Add.evaluate(sum, d.read(rows * idx as usize + ri)).unwrap();
+                        sum = CABinary::Add.evaluate(sum, d.read(stride * idx as usize + offset + ri)).unwrap();
                     }
                 }
 
@@ -114,8 +134,8 @@ pub struct SparseMatmulBwd(pub SparseMatmul);
 
 impl OpType for SparseMatmulBwd {
     fn opname(&self) -> String {
-        let SparseMatmulBwd(SparseMatmul { batch, rows, cols, nnz, .. }) = *self;
-        format!("sparse.matmul.bwd<{batch:?}, {rows:?}x{cols:?}, {nnz:?}>")
+        let SparseMatmulBwd(SparseMatmul { batch, rows, cols, nnz, stride, offset, .. }) = *self;
+        format!("sparse.matmul.bwd<{batch:?}, {rows:?}x{cols:?}, {stride:?}, {offset}, {nnz:?}>")
     }
 
     fn inputs(&self) -> Vec<TType> {
@@ -124,16 +144,17 @@ impl OpType for SparseMatmulBwd {
     }
 
     fn outputs(&self) -> Vec<TType> {
-        let SparseMatmulBwd(SparseMatmul { dtype, rows, cols, .. }) = *self;
-        vec![TType::new(rows * cols, dtype)]
+        let SparseMatmulBwd(SparseMatmul { dtype, stride, cols, .. }) = *self;
+        vec![TType::new(stride * cols, dtype)]
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
-        let SparseMatmulBwd(SparseMatmul { dtype, batch, rows, cols, nnz }) = *self;
+        let SparseMatmulBwd(SparseMatmul { dtype, batch, stride, rows, cols, offset, nnz }) = *self;
 
         let batch = batch.get();
         let rows = rows.get();
         let cols = cols.get();
+        let stride = stride.get();
         let nnz = nnz.get();
 
         let d = inputs[0];
@@ -141,10 +162,10 @@ impl OpType for SparseMatmulBwd {
         let o = &mut outputs[0];
 
         assert_eq!(s.size(), batch * nnz);
-        assert_eq!(o.size(), rows * cols);
+        assert_eq!(o.size(), stride * cols);
         assert_eq!(d.size(), batch * rows);
 
-        for idx in 0..rows * cols {
+        for idx in 0..stride * cols {
             o.write(idx, DValue::zero(dtype));
         }
 
@@ -154,7 +175,7 @@ impl OpType for SparseMatmulBwd {
                     let DValue::I32(idx) = s.read(nnz * bi + ni) else { panic!() };
                     if idx >= 0 && (idx as usize) < cols {
                         let g = d.read(rows * bi + ri);
-                        let index = rows * idx as usize + ri;
+                        let index = stride * idx as usize + offset + ri;
                         let new_g = CABinary::Add.evaluate(g, o.read(index));
                         o.write(index, new_g.unwrap());
                     }
@@ -271,7 +292,7 @@ mod tests {
         // [0, 2, 4]   [1, 1]   [2, 10]
         // [1, 3, 5] @ [1, 1] = [4, 14]
         //             [0, 2]
-        let matmul = SparseMatmul::new(DType::F32, 2, 2, 3, 4);
+        let matmul = SparseMatmul::new(DType::F32, 2, 2, 3, 2, 0, 4).unwrap();
         matmul.evaluate(vec![&lhs, &rhs], vec![&mut outputs]);
         assert_eq!(outputs, TValue::F32(vec![2.0, 4.0, 10.0, 14.0]));
     }
@@ -285,7 +306,8 @@ mod tests {
         // [0, 3]   [1, 1, 0]   [3, 3,  6]
         // [1, 4] @ [1, 1, 2] = [5, 5,  8]
         // [2, 5]               [7, 7, 10]
-        let matmul = SparseMatmulBwdMulti::new(SparseMatmulBwd(SparseMatmul::new(DType::F32, 2, 3, 3, 4)));
+        let matmul =
+            SparseMatmulBwdMulti::new(SparseMatmulBwd(SparseMatmul::new(DType::F32, 2, 3, 3, 3, 0, 4).unwrap()));
         matmul.evaluate(vec![&lhs, &rhs], vec![&mut outputs]);
         assert_eq!(outputs, TValue::F32(vec![3.0, 5.0, 7.0, 3.0, 5.0, 7.0, 6.0, 8.0, 10.0]));
     }

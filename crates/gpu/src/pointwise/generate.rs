@@ -47,7 +47,14 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
                 return Ok(None);
             }
 
-            (matmul.batch() * matmul.rows(), matmul.rows())
+            let hp2 = matmul
+                .rows()
+                .get()
+                .trailing_zeros()
+                .min(matmul.stride().get().trailing_zeros())
+                .min(matmul.offset().trailing_zeros());
+
+            (matmul.batch() * matmul.rows(), (1 << hp2).into())
         } else if let Some(bwd) = data.downcast::<SparseMatmulBwdMulti>() {
             if !ir.is_output(op.outputs()[0]) {
                 return Ok(None);

@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
+use bullet_compiler::{
     ir::NodeId,
-    model::ModelIR,
+    model::{Layout, MType, ModelIR},
     tensor::{
-        IRTrace, TValue, TensorIR,
+        DType, IRTrace, TValue, TensorIR,
         transform::{
             autograd::{LowerForward, TakeGradient},
             canonicalise::CanonicalisePass,
@@ -36,6 +36,10 @@ pub struct ModelDefinition {
 
 impl ModelDefinition {
     pub fn new(ir: ModelIR, loss: Option<NodeId>, outputs: impl Into<Vec<(NodeId, String)>>) -> Self {
+        if let Some(loss) = loss {
+            assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
+        }
+
         Self { ir, loss, outputs: outputs.into() }
     }
 
@@ -58,6 +62,8 @@ impl ModelDefinition {
             fwd.register_output(*map.get(output).unwrap());
         }
 
+        fwd.transform(LowerForward)?;
+        fwd.transform(InlineSubgraphs)?;
         fwd.optimise()?;
 
         Ok(ModelFunctionDefinition { ir: fwd, map })

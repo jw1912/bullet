@@ -134,6 +134,14 @@ pub struct Affine<'a> {
 }
 
 impl<'a> Affine<'a> {
+    /// Slice affine layer from `inputs -> outputs` to `inputs -> (end - start)`, so we have
+    /// ```#
+    /// affine.slice(start, end).forward(inputs) == affine.forward(inputs).slice_rows(start, end)
+    /// ```
+    pub fn slice(self, start: usize, end: usize) -> Self {
+        Self { weights: self.weights.slice_rows(start, end), bias: self.bias.slice_rows(start, end) }
+    }
+
     pub fn forward(self, input: ModelNode<'a>) -> ModelNode<'a> {
         self.weights.matmul(input) + self.bias
     }
@@ -316,6 +324,10 @@ impl<'a> ModelNode<'a> {
 
     pub fn screlu(self) -> Self {
         Self { node: self.builder.add_op([self], SCReLU(self.ty())), ..self }
+    }
+
+    pub fn sqrrelu(self) -> Self {
+        Self { node: self.builder.add_op([self], SqrReLU(self.ty())), ..self }
     }
 
     pub fn sigmoid(self) -> Self {
