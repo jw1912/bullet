@@ -1,11 +1,12 @@
-use bullet_gpu::runtime::Device;
 use bullet_lib::{
-    game::inputs::{Chess768, SparseInputType},
-    nn::ExecutionContext,
+    game::{
+        formats::bulletformat::ChessBoard,
+        inputs::{Chess768, SparseInputType},
+    },
     value::loader::{DirectSequentialDataLoader, LoadableDataType},
 };
 use bullet_trainer::{
-    Trainer,
+    DefaultDevice, Trainer,
     model::{ModelDefinition, ModelInputsBuilder, ModelWeights},
     optimiser::{
         Optimiser,
@@ -16,7 +17,6 @@ use bullet_trainer::{
         schedule::{TrainingSchedule, TrainingSteps},
     },
 };
-use bulletformat::ChessBoard;
 
 fn main() {
     let wdl = 0.2;
@@ -53,11 +53,9 @@ fn main() {
         });
 
     let defn = ModelDefinition::make(&inputs, |builder, ((stm, ntm), target)| {
-        // weights
         let l0 = builder.new_affine("l0", 768, 32);
         let l1 = builder.new_affine("l1", 2 * 32, 1);
 
-        // inference
         let stm_hidden = l0.forward(stm).screlu();
         let ntm_hidden = l0.forward(ntm).screlu();
         let hidden_layer = stm_hidden.concat(ntm_hidden);
@@ -69,7 +67,7 @@ fn main() {
     });
 
     let weights = ModelWeights::new(&defn, 198273612);
-    let device = Device::<ExecutionContext>::new(0).unwrap();
+    let device = DefaultDevice::new(0).unwrap();
     let optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, AdamWParams::default()).unwrap();
     let mut trainer = Trainer::new(optimiser, ());
 

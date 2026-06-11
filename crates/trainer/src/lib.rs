@@ -3,7 +3,7 @@ pub mod optimiser;
 pub mod run;
 
 use bullet_compiler::tensor::IRTrace;
-use bullet_gpu::runtime::Gpu;
+use bullet_gpu::runtime::{self, Device, Gpu};
 use optimiser::{Optimiser, OptimiserState};
 use run::{
     dataloader::{DataLoader, DataLoadingError},
@@ -11,6 +11,15 @@ use run::{
 };
 
 use crate::model::{ModelEvaluator, TensorMap};
+
+#[cfg(not(any(feature = "cuda", feature = "rocm")))]
+pub type DefaultDevice = Device<runtime::mock::MockGpu>;
+
+#[cfg(feature = "cuda")]
+pub type DefaultDevice = Device<runtime::cuda::Cuda>;
+
+#[cfg(all(feature = "rocm", not(feature = "cuda")))]
+pub type DefaultDevice = Device<runtime::rocm::ROCm>;
 
 #[derive(Debug)]
 pub enum TrainerError<G: Gpu> {
