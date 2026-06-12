@@ -16,7 +16,7 @@ use crate::{
     pointwise::{
         Dialect,
         operations::{MemIO, PType, PointwiseOp},
-        write::tystr,
+        write::{code_str, tystr},
     },
     runtime::Dim3,
 };
@@ -322,7 +322,6 @@ impl PointwiseIR {
     }
 
     fn source_code(&self, kernel_name: &str, dialect: Dialect) -> Result<String, fmt::Error> {
-        use crate::pointwise::write::code_str;
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
