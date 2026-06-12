@@ -282,7 +282,6 @@ impl GpuBindings for ROCm {
             batch_size,
         ))
     }
-
 }
 
 mod error {
