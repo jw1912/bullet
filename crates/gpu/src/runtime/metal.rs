@@ -261,7 +261,7 @@ impl GpuBindings for Metal {
     unsafe fn stream_sync(stream: u64) -> MetalResult {
         // Create an empty command buffer and wait for completion to ensure
         // all prior work on this queue has finished.
-        autoreleasepool(|_| unsafe {
+        autoreleasepool(|_| {
             let command_buffer = {
                 let registry = queue_registry().lock().unwrap();
                 let queue = registry.get(&stream).ok_or_else(|| MetalError::Runtime("Stream not found".into()))?;
