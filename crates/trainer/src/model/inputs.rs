@@ -5,115 +5,53 @@ use bullet_compiler::{
     tensor::TValue,
 };
 
-pub struct ModelInputsBuilder<T> {
+pub struct ModelInputs<T> {
     inputs: T,
     names: Vec<String>,
 }
 
-impl Default for ModelInputsBuilder<()> {
+impl Default for ModelInputs<()> {
     fn default() -> Self {
         Self { inputs: (), names: Vec::new() }
     }
 }
 
-impl ModelInputsBuilder<()> {
-    fn add_input<T: InputType>(self, name: String, input: T) -> ModelInputsBuilder<T> {
-        ModelInputsBuilder { inputs: input, names: vec![name] }
+impl ModelInputs<()> {
+    fn add<T: InputType>(self, name: String, input: T) -> ModelInputs<T> {
+        ModelInputs { inputs: input, names: vec![name] }
     }
 
-    pub fn add_dense_input(
-        self,
-        name: impl Into<String>,
-        shape: impl Into<Shape>,
-    ) -> ModelInputsBuilder<DenseInput<f32>> {
+    pub fn add_dense(self, name: impl Into<String>, shape: impl Into<Shape>) -> ModelInputs<DenseInput<f32>> {
         let name = name.into();
-        self.add_input(name.clone(), DenseInput::<f32>::new(name, shape))
+        self.add(name.clone(), DenseInput::<f32>::new(name, shape))
     }
 
-    pub fn add_sparse_input(
-        self,
-        name: impl Into<String>,
-        shape: impl Into<Shape>,
-        nnz: usize,
-    ) -> ModelInputsBuilder<SparseInput> {
+    pub fn add_sparse(self, name: impl Into<String>, shape: impl Into<Shape>, nnz: usize) -> ModelInputs<SparseInput> {
         let name = name.into();
-        self.add_input(name.clone(), SparseInput::new(name, shape, nnz))
+        self.add(name.clone(), SparseInput::new(name, shape, nnz))
     }
 }
 
-impl<T: InputType + 'static> ModelInputsBuilder<T> {
-    fn add_input<U: InputType>(self, name: impl Into<String>, input: U) -> ModelInputsBuilder<(T, U)> {
+impl<T: InputType + 'static> ModelInputs<T> {
+    fn add<U: InputType>(self, name: impl Into<String>, input: U) -> ModelInputs<(T, U)> {
         let mut names = self.names;
         names.push(name.into());
-        ModelInputsBuilder { inputs: (self.inputs, input), names }
+        ModelInputs { inputs: (self.inputs, input), names }
     }
 
-    pub fn add_dense_input(
-        self,
-        name: impl Into<String>,
-        shape: impl Into<Shape>,
-    ) -> ModelInputsBuilder<(T, DenseInput<f32>)> {
+    pub fn add_dense(self, name: impl Into<String>, shape: impl Into<Shape>) -> ModelInputs<(T, DenseInput<f32>)> {
         let name = name.into();
-        self.add_input(name.clone(), DenseInput::<f32>::new(name.clone(), shape))
+        self.add(name.clone(), DenseInput::<f32>::new(name.clone(), shape))
     }
 
-    pub fn add_sparse_input(
+    pub fn add_sparse(
         self,
         name: impl Into<String>,
         shape: impl Into<Shape>,
         nnz: usize,
-    ) -> ModelInputsBuilder<(T, SparseInput)> {
+    ) -> ModelInputs<(T, SparseInput)> {
         let name = name.into();
-        self.add_input(name.clone(), SparseInput::new(name, shape, nnz))
-    }
-
-    pub fn build<P: Send + Sync, F>(self, f: F) -> ModelInputs<P, T>
-    where
-        F: for<'a> Fn(&P, usize, T::Slices<'a>) + Send + Sync + 'static,
-    {
-        let inputs = self.inputs.clone();
-        let names = self.names.clone();
-
-        let func = move |batch: &[P], batch_number, threads| {
-            let f = &f;
-            let chunk_size = batch.len().div_ceil(usize::from(threads));
-
-            let mut bufs = inputs.make_bufs(batch.len());
-            let chunks = inputs.chunks(&mut bufs, chunk_size);
-
-            std::thread::scope(|s| {
-                let inputs = &inputs;
-
-                for (data, chunk) in batch.chunks(chunk_size).zip(chunks) {
-                    s.spawn(move || {
-                        for (datapoint, slices) in data.iter().zip(inputs.slices(chunk)) {
-                            f(datapoint, batch_number, slices);
-                        }
-                    });
-                }
-            });
-
-            let mut vec = Vec::new();
-            inputs.append_bufs_to_vec(bufs, &mut vec);
-            names.iter().cloned().zip(vec).collect()
-        };
-
-        ModelInputs { inputs: self.inputs, mapper: ModelInputsMapper { func: Arc::new(func), names: self.names } }
-    }
-}
-
-pub struct ModelInputs<D, T> {
-    inputs: T,
-    mapper: ModelInputsMapper<D>,
-}
-
-impl<D, T: InputType> ModelInputs<D, T> {
-    pub fn inputs(&self) -> &T {
-        &self.inputs
-    }
-
-    pub fn mapper(&self) -> &ModelInputsMapper<D> {
-        &self.mapper
+        self.add(name.clone(), SparseInput::new(name, shape, nnz))
     }
 
     pub fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> T::Nodes<'a> {
@@ -133,7 +71,41 @@ impl<T> Clone for ModelInputsMapper<T> {
     }
 }
 
-impl<T> ModelInputsMapper<T> {
+impl<T: Send + Sync> ModelInputsMapper<T> {
+    pub fn build<I: InputType, F>(inputs: &ModelInputs<I>, f: F) -> Self
+    where
+        F: for<'a> Fn(&T, usize, I::Slices<'a>) + Send + Sync + 'static,
+    {
+        let names = inputs.names.clone();
+        let inp = inputs.inputs.clone();
+
+        let func = move |batch: &[T], batch_number, threads| {
+            let f = &f;
+            let chunk_size = batch.len().div_ceil(usize::from(threads));
+
+            let mut bufs = inp.make_bufs(batch.len());
+            let chunks = inp.chunks(&mut bufs, chunk_size);
+
+            std::thread::scope(|s| {
+                let inputs = &inp;
+
+                for (data, chunk) in batch.chunks(chunk_size).zip(chunks) {
+                    s.spawn(move || {
+                        for (datapoint, slices) in data.iter().zip(inputs.slices(chunk)) {
+                            f(datapoint, batch_number, slices);
+                        }
+                    });
+                }
+            });
+
+            let mut vec = Vec::new();
+            inp.append_bufs_to_vec(bufs, &mut vec);
+            names.iter().cloned().zip(vec).collect()
+        };
+
+        ModelInputsMapper { func: Arc::new(func), names: inputs.names.clone() }
+    }
+
     pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> BTreeMap<String, TValue> {
         (self.func)(data, batch_number, threads)
     }
@@ -143,7 +115,7 @@ impl<T> ModelInputsMapper<T> {
     }
 }
 
-pub trait InputType: Clone + Send + Sync {
+pub trait InputType: Clone + Send + Sync + 'static {
     type Buf: Send + Sync;
     type Chunks<'a>: 'a + Iterator<Item = Self::Slices<'a>> + Send + Sync;
     type Slices<'a>: 'a + Send + Sync;

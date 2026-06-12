@@ -6,7 +6,7 @@ use std::{
     slice,
 };
 
-use bullet_trainer::run::reader::DataReader;
+use bullet_trainer::run::DataReader;
 
 /// ### Safety
 /// This indicates that the type can be validly transmuted from

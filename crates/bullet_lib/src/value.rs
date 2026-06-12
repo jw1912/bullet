@@ -7,15 +7,9 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
-    model::{ModelEvaluator, ModelInputsBuilder, ModelInputsMapper, SavedFormat},
+    model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
-    run::{
-        self,
-        dataloader::PreparedBatchHost,
-        logger,
-        reader::{DataReader, ReadMapLoader},
-        schedule::TrainingSteps,
-    },
+    run::{self, DataReader, PreparedBatchHost, ReadMapLoader, TrainingSteps, logger},
 };
 
 use crate::{
@@ -81,58 +75,57 @@ where
             1. / (1. + (-x).exp())
         }
 
-        ModelInputsBuilder::default()
-            .add_sparse_input("stm", (num, 1), nnz)
-            .add_sparse_input("nstm", (num, 1), nnz)
-            .add_sparse_input("buckets", (1, 1), 1)
-            .add_dense_input("targets", (if target_wdl { 3 } else { 1 }, 1))
-            .add_dense_input("entry_weights", (1, 1))
-            .build(move |pos, batch, ((((stm, ntm), buckets), targets), weights)| {
-                let mut cnt = 0;
-                inp.map_features(pos, |our, opp| {
-                    assert!(our < num && opp < num, "Input feature index exceeded input size!");
-                    stm[cnt] = our as i32;
-                    ntm[cnt] = opp as i32;
-                    cnt += 1;
-                });
+        let inputs = ModelInputs::default()
+            .add_sparse("stm", (num, 1), nnz)
+            .add_sparse("nstm", (num, 1), nnz)
+            .add_sparse("buckets", (1, 1), 1)
+            .add_dense("targets", (if target_wdl { 3 } else { 1 }, 1))
+            .add_dense("entry_weights", (1, 1));
 
-                for j in cnt..nnz {
-                    stm[j] = -1;
-                    ntm[j] = -1;
+        ModelInputsMapper::build(&inputs, move |pos, batch, ((((stm, ntm), buckets), targets), weights)| {
+            let mut cnt = 0;
+            inp.map_features(pos, |our, opp| {
+                assert!(our < num && opp < num, "Input feature index exceeded input size!");
+                stm[cnt] = our as i32;
+                ntm[cnt] = opp as i32;
+                cnt += 1;
+            });
+
+            for j in cnt..nnz {
+                stm[j] = -1;
+                ntm[j] = -1;
+            }
+
+            assert!(cnt <= nnz, "More inputs provided than the specified maximum!");
+
+            buckets[0] = i32::from(out.bucket(pos));
+            weights[0] = wget.map_or(1.0, |w| w(pos));
+
+            if target_wdl {
+                for target in targets.iter_mut() {
+                    *target = 0.0;
                 }
 
-                assert!(cnt <= nnz, "More inputs provided than the specified maximum!");
-
-                buckets[0] = i32::from(out.bucket(pos));
-                weights[0] = wget.map_or(1.0, |w| w(pos));
-
-                if target_wdl {
-                    for target in targets.iter_mut() {
-                        *target = 0.0;
-                    }
-
-                    targets[usize::from(pos.result() as u8)] = 1.0;
+                targets[usize::from(pos.result() as u8)] = 1.0;
+            } else {
+                let score = f32::from(pos.score());
+                let score = if use_win_rate_model {
+                    let p = (score - 270.0) / 380.0;
+                    let pm = (-score - 270.0) / 380.0;
+                    0.5 * (1.0 + sigmoid(p) - sigmoid(pm))
                 } else {
-                    let score = f32::from(pos.score());
-                    let score = if use_win_rate_model {
-                        let p = (score - 270.0) / 380.0;
-                        let pm = (-score - 270.0) / 380.0;
-                        0.5 * (1.0 + sigmoid(p) - sigmoid(pm))
-                    } else {
-                        sigmoid(rscale * score)
-                    };
-                    let result = f32::from(pos.result() as u8) / 2.0;
+                    sigmoid(rscale * score)
+                };
+                let result = f32::from(pos.result() as u8) / 2.0;
 
-                    let superbatch = 1 + batch / steps.batches_per_superbatch;
-                    let batch = batch % steps.batches_per_superbatch;
-                    let blend = blend_getter(pos, wdl.blend(batch, superbatch, steps.end_superbatch));
-                    assert!(superbatch >= steps.start_superbatch);
-                    assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
-                    targets[0] = blend * result + (1. - blend) * score;
-                }
-            })
-            .mapper()
-            .clone()
+                let superbatch = 1 + batch / steps.batches_per_superbatch;
+                let batch = batch % steps.batches_per_superbatch;
+                let blend = blend_getter(pos, wdl.blend(batch, superbatch, steps.end_superbatch));
+                assert!(superbatch >= steps.start_superbatch);
+                assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
+                targets[0] = blend * result + (1. - blend) * score;
+            }
+        })
     }
 
     pub fn make_read_map_loader<D>(
@@ -202,11 +195,7 @@ where
 
         run::train(
             &mut self.optimiser,
-            run::schedule::TrainingSchedule {
-                steps,
-                log_rate: 128,
-                lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)),
-            },
+            run::TrainingSchedule { steps, log_rate: 128, lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)) },
             dataloader,
             |_, superbatch, curr_batch, error| {
                 loss_sum += error;
