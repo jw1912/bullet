@@ -21,18 +21,11 @@ unsafe impl FixedSizeData for AtaxxBoard {}
 
 impl AtaxxBoard {
     pub fn map_pieces(&self, mut f: impl FnMut(i32, i32)) {
-        let mut stage = 0;
-
-        while stage < 3 {
-            let mut occ = self.bbs[stage];
+        for (stage, mut occ) in self.bbs.iter().cloned().enumerate() {
             while occ > 0 {
-                let sq = occ.trailing_zeros();
+                f(stage as i32, occ.trailing_zeros() as i32);
                 occ &= occ - 1;
-
-                f(stage as i32, sq as i32)
             }
-
-            stage += 1;
         }
     }
 }
