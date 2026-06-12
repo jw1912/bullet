@@ -37,7 +37,7 @@ pub struct ModelDefinition {
 }
 
 impl ModelDefinition {
-    pub fn make<D, T, F>(inputs: &ModelInputs<D, T>, f: F) -> Self
+    pub fn build<D, T, F>(inputs: &ModelInputs<D, T>, f: F) -> Self
     where
         T: InputType,
         F: for<'a> FnOnce(&'a ModelBuilder, T::Nodes<'a>) -> (Option<ModelNode<'a>>, Vec<(String, ModelNode<'a>)>),
