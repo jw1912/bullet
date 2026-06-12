@@ -311,7 +311,6 @@ impl GpuBindings for Cuda {
             batch_size,
         ))
     }
-
 }
 
 mod error {
