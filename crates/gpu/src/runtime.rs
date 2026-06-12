@@ -10,7 +10,6 @@ pub mod rocm;
 use std::{
     ffi::{CString, c_void},
     fmt,
-    hash::Hash,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -22,7 +21,7 @@ pub use bindings::{DeviceProps, Dim3, GemmConfig};
 /// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<Err = Self::Error, Ptr = Self::DevicePtr> {
     type Error: fmt::Debug + Eq + From<String>;
-    type DevicePtr: Copy + Default + Eq + Hash + Ord;
+    type DevicePtr: Copy + Default + Eq + Ord;
 }
 
 impl<G: bindings::GpuBindings> Gpu for G {
