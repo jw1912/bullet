@@ -6,7 +6,7 @@ use wdl::WdlScheduler;
 pub mod lr;
 pub mod wdl;
 
-pub use bullet_trainer::run::{logger::ansi, schedule::TrainingSteps};
+pub use bullet_trainer::run::{TrainingSteps, logger::ansi};
 
 #[derive(Clone, Debug)]
 pub struct TrainingSchedule<LR: LrScheduler, WDL: WdlScheduler> {

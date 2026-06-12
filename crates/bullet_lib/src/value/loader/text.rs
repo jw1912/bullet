@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use bullet_trainer::run::reader::DataReader;
+use bullet_trainer::run::DataReader;
 
 #[derive(Clone)]
 pub struct InMemoryTextLoader {

@@ -1,7 +1,11 @@
-pub mod dataloader;
+mod dataloader;
 pub mod logger;
-pub mod reader;
-pub mod schedule;
+mod reader;
+mod schedule;
+
+pub use dataloader::{DataLoader, DataLoadingError, PreparedBatchHost};
+pub use reader::{DataReader, ReadMapLoader};
+pub use schedule::{TrainingSchedule, TrainingSteps};
 
 use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
 
@@ -16,9 +20,6 @@ use bullet_gpu::{
 };
 
 use crate::optimiser::{Optimiser, OptimiserState};
-
-use dataloader::{DataLoader, DataLoadingError, PreparedBatchHost};
-use schedule::{TrainingSchedule, TrainingSteps};
 
 #[cfg(not(any(feature = "cuda", feature = "rocm")))]
 pub type DefaultDevice = Device<runtime::mock::MockGpu>;

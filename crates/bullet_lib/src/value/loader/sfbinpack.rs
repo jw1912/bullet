@@ -1,6 +1,6 @@
 use std::{fs::File, sync::mpsc, thread};
 
-use bullet_trainer::run::reader::DataReader;
+use bullet_trainer::run::DataReader;
 use sfbinpack::CompressedTrainingDataEntryReader;
 pub use sfbinpack::{
     TrainingDataEntry,
