@@ -506,15 +506,34 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let add_one_kernel = "
-            extern \"C\" __global__ void kernel(const int size, const float* src, float* dst) {
-                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-                if (tid < size) dst[tid] = src[tid] + 1.0;
-            }
-        ";
+        let (kernel_src, kernel_name, arg_types) = match device.dialect() {
+            Dialect::CudaHip => (
+                "extern \"C\" __global__ void add_one(const int size, const float* src, float* dst) {
+                    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+                    if (tid < size) dst[tid] = src[tid] + 1.0;
+                }",
+                "add_one",
+                vec![],
+            ),
+            Dialect::Msl => (
+                "#include <metal_stdlib>
+                using namespace metal;
+                kernel void add_one(
+                    constant int& size [[buffer(0)]],
+                    device const float* src [[buffer(1)]],
+                    device float* dst [[buffer(2)]],
+                    uint tid [[thread_position_in_grid]]
+                ) {
+                    if (tid < uint(size)) dst[tid] = src[tid] + 1.0;
+                }",
+                "add_one",
+                vec![KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer],
+            ),
+        };
 
-        let module = Module::new(device.clone(), add_one_kernel)?;
-        let kernel = module.get_kernel("kernel")?;
+        let module = Module::new(device.clone(), kernel_src)?;
+        let kernel = module.get_kernel(kernel_name)?;
+        kernel.register_args(&arg_types);
 
         unsafe {
             let dev_src = device.malloc(16)?;
@@ -587,12 +606,7 @@ mod tests {
 
     #[cfg(feature = "metal")]
     mod metal {
-        use std::ffi::c_void;
-
-        use crate::runtime::{
-            Device, Dim3, KernelArgType, Module,
-            metal::{Metal, MetalError},
-        };
+        use crate::runtime::metal::{Metal, MetalError};
 
         #[test]
         fn create_malloc_copy_sync_drop() -> Result<(), MetalError> {
@@ -606,58 +620,7 @@ mod tests {
 
         #[test]
         fn compile_load_execute_kernel() -> Result<(), MetalError> {
-            let host_src = [1.0f32, 2.0, 3.0, 4.0];
-            let mut host_dst = [0.0f32, 0.0, 0.0, 0.0];
-
-            let device = Device::<Metal>::new(0)?;
-            let stream = device.new_stream()?;
-
-            let add_one_kernel = "
-                #include <metal_stdlib>
-                using namespace metal;
-                kernel void kernel_fn(
-                    constant int& size [[buffer(0)]],
-                    device const float* src [[buffer(1)]],
-                    device float* dst [[buffer(2)]],
-                    uint tid [[thread_position_in_grid]]
-                ) {
-                    if (tid < uint(size)) dst[tid] = src[tid] + 1.0;
-                }
-            ";
-
-            let module = Module::new(device.clone(), add_one_kernel)?;
-            let kernel = module.get_kernel("kernel_fn")?;
-
-            // Register arg types for this kernel
-            kernel.register_args(&[KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer]);
-
-            unsafe {
-                let dev_src = device.malloc(16)?;
-                let dev_dst = device.malloc(16)?;
-
-                stream.memcpy_h2d(host_src.as_ptr().cast(), dev_src, 16)?;
-
-                let gdim = Dim3 { x: 1, y: 1, z: 1 };
-                let size = 4i32;
-                let mut args = Vec::new();
-                args.push((&size) as *const i32 as *mut c_void);
-                args.push((&dev_src) as *const u64 as *mut c_void);
-                args.push((&dev_dst) as *const u64 as *mut c_void);
-
-                kernel.launch(&stream, gdim, 4, args.as_mut_ptr(), 0)?;
-
-                stream.sync()?;
-                stream.memcpy_d2h(dev_dst, host_dst.as_mut_ptr().cast(), 16)?;
-
-                device.free(dev_src)?;
-                device.free(dev_dst)?;
-            }
-
-            for (d, s) in host_dst.into_iter().zip(host_src) {
-                assert_eq!(d, s + 1.0);
-            }
-
-            Ok(())
+            super::compile_load_execute_kernel::<Metal>()
         }
     }
 }
