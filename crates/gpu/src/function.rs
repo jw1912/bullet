@@ -26,7 +26,7 @@ use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
     pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
-    runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
+    runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, KernelArgType, Module, Stream},
 };
 
 enum Inst<G: Gpu> {
@@ -131,15 +131,8 @@ impl<G: Gpu> Function<G> {
                     .get_kernel(name)
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
-                // Register kernel argument types for Metal backend
-                #[cfg(feature = "metal")]
-                {
-                    use crate::runtime::metal::{KernelArgType, register_kernel_args};
-                    let arg_types: Vec<_> = args.iter().map(|_| KernelArgType::Buffer).collect();
-                    // Safety: When metal feature is enabled, G::Kernel is u64
-                    let kernel_id: u64 = unsafe { std::mem::transmute_copy(&func.id()) };
-                    register_kernel_args(kernel_id, arg_types);
-                }
+                let arg_types: Vec<_> = args.iter().map(|_| KernelArgType::Buffer).collect();
+                func.register_args(&arg_types);
 
                 max_num_args = max_num_args.max(args.len());
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });
@@ -369,8 +362,7 @@ rewriterule! {
     }
 }
 
-#[cfg(not(feature = "metal"))]
-static REDUCTION_SRC: &str = "
+static REDUCTION_SRC_CUDA: &str = "
 extern \"C\" __global__ void kernel(const float* input, float* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
@@ -385,8 +377,7 @@ extern \"C\" __global__ void kernel(const float* input, float* output) {
     }
 }";
 
-#[cfg(feature = "metal")]
-static REDUCTION_SRC: &str = "
+static REDUCTION_SRC_MSL: &str = "
 #include <metal_stdlib>
 using namespace metal;
 kernel void reduce_kernel(constant int& size [[buffer(0)]], device const float* input [[buffer(1)]], device float* output [[buffer(2)]], uint tid [[thread_position_in_grid]]) {
@@ -414,7 +405,7 @@ impl IRTransform for CodegenReduction {
                 let outer = reduction.outer().get();
                 let dimen = reduction.dimen().get();
 
-                let src = REDUCTION_SRC
+                let src = (if cfg!(feature = "metal") { REDUCTION_SRC_MSL } else { REDUCTION_SRC_CUDA })
                     .replace(
                         "FUNC",
                         match reduction.reduction() {

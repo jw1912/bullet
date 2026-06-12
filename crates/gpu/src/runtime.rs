@@ -5,6 +5,8 @@ mod bindings;
 pub mod cuda;
 #[cfg(feature = "metal")]
 pub mod metal;
+#[cfg(all(feature = "metal", not(target_os = "macos")))]
+compile_error!("the `metal` feature requires macOS (the objc2 backend is Apple-only)");
 pub mod mock;
 #[cfg(feature = "rocm")]
 pub mod rocm;
@@ -18,7 +20,7 @@ use std::{
     },
 };
 
-pub use bindings::{DeviceProps, Dim3, GemmConfig};
+pub use bindings::{DeviceProps, Dim3, GemmConfig, KernelArgType};
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<Err = Self::Error, Ptr = Self::DevicePtr> {
@@ -381,6 +383,13 @@ impl<G: Gpu> Kernel<G> {
         self.kernel
     }
 
+    /// Register the argument types for this kernel.
+    /// No-op for CUDA/ROCm/mock; Metal uses this to record how each argument
+    /// should be bound during kernel launch.
+    pub(crate) fn register_args(&self, args: &[bindings::KernelArgType]) {
+        unsafe { G::register_kernel_args(self.kernel, args) }
+    }
+
     /// Get the device that this kernel is on
     pub fn device(&self) -> Arc<Device<G>> {
         self.module.device()
@@ -575,8 +584,8 @@ mod tests {
         use std::ffi::c_void;
 
         use crate::runtime::{
-            Device, Dim3, Module,
-            metal::{KernelArgType, Metal, MetalError, register_kernel_args},
+            Device, Dim3, KernelArgType, Module,
+            metal::{Metal, MetalError},
         };
 
         #[test]
@@ -614,10 +623,7 @@ mod tests {
             let kernel = module.get_kernel("kernel_fn")?;
 
             // Register arg types for this kernel
-            register_kernel_args(
-                kernel.id(),
-                vec![KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer],
-            );
+            kernel.register_args(&[KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer]);
 
             unsafe {
                 let dev_src = device.malloc(16)?;

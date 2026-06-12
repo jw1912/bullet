@@ -32,8 +32,7 @@ impl Default for AdamWParams {
     }
 }
 
-#[cfg(not(feature = "metal"))]
-const OP: &str = "\
+const OP_CUDA: &str = "\
 __device__ __forceinline__ void adamOp(
     const float grad,
     const float rate,
@@ -52,8 +51,7 @@ __device__ __forceinline__ void adamOp(
     p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
 }";
 
-#[cfg(not(feature = "metal"))]
-const DECL: &str = "
+const DECL_CUDA: &str = "
 extern \"C\" __global__ void adamw(
     const float* adj_ptr,
     const float* rate_ptr,
@@ -63,8 +61,7 @@ extern \"C\" __global__ void adamw(
     float* velocity
 )";
 
-#[cfg(feature = "metal")]
-const OP: &str = "\
+const OP_MSL: &str = "\
 #include <metal_stdlib>
 using namespace metal;
 
@@ -86,8 +83,7 @@ inline void adamOp(
     p[0] = min(max(p[0], float(WMIN)), float(WMAX));
 }";
 
-#[cfg(feature = "metal")]
-const DECL: &str = "
+const DECL_MSL: &str = "
 kernel void adamw(
     const device float* adj_ptr [[buffer(0)]],
     const device float* rate_ptr [[buffer(1)]],
@@ -100,7 +96,9 @@ kernel void adamw(
 
 impl AdamWParams {
     pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
-        let op = OP
+        let (op_src, decl) = if cfg!(feature = "metal") { (OP_MSL, DECL_MSL) } else { (OP_CUDA, DECL_CUDA) };
+
+        let op = op_src
             .replace("DECAY", &format!("{:.E}", self.decay))
             .replace("BETA1", &format!("{:.E}", self.beta1))
             .replace("BETA2", &format!("{:.E}", self.beta2))
@@ -216,7 +214,7 @@ impl AdamWParams {
                 vec![TType::new(1, DType::F32), TType::new(1, DType::F32), ty],
                 vec![ty; 3],
                 "adamw".to_string(),
-                format!("{op}{DECL}{{{body}}}"),
+                format!("{op}{decl}{{{body}}}"),
                 vec![(0, true), (1, true), (2, true), (0, false), (1, false), (2, false)],
                 BTreeSet::new(),
                 Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 },

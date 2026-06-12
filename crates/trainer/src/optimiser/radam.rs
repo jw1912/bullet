@@ -31,8 +31,7 @@ impl Default for RAdamParams {
     }
 }
 
-#[cfg(not(feature = "metal"))]
-const OP: &str = "\
+const OP_CUDA: &str = "\
 __device__ __forceinline__ void radamOp(
     const float grad,
     const float rate,
@@ -53,8 +52,7 @@ __device__ __forceinline__ void radamOp(
     p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
 }";
 
-#[cfg(not(feature = "metal"))]
-const DECL: &str = "
+const DECL_CUDA: &str = "
 extern \"C\" __global__ void radam(
     const float* adj_ptr,
     const float* rate_ptr,
@@ -66,8 +64,7 @@ extern \"C\" __global__ void radam(
     float* velocity
 )";
 
-#[cfg(feature = "metal")]
-const OP: &str = "\
+const OP_MSL: &str = "\
 #include <metal_stdlib>
 using namespace metal;
 
@@ -91,8 +88,7 @@ inline void radamOp(
     p[0] = min(max(p[0], float(WMIN)), float(WMAX));
 }";
 
-#[cfg(feature = "metal")]
-const DECL: &str = "
+const DECL_MSL: &str = "
 kernel void radam(
     const device float* adj_ptr [[buffer(0)]],
     const device float* rate_ptr [[buffer(1)]],
@@ -109,7 +105,9 @@ impl RAdamParams {
     pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
-        let op = OP
+        let (op_src, decl) = if cfg!(feature = "metal") { (OP_MSL, DECL_MSL) } else { (OP_CUDA, DECL_CUDA) };
+
+        let op = op_src
             .replace("DECAY", &format!("{:.E}", self.decay))
             .replace("BETA1", &format!("{:.E}", self.beta1))
             .replace("BETA2", &format!("{:.E}", self.beta2))
@@ -230,7 +228,7 @@ impl RAdamParams {
                 vec![sty, sty, sty, TType::new(1, DType::I32), ty],
                 vec![ty; 3],
                 "radam".to_string(),
-                format!("{op}{DECL}{{{body}}}"),
+                format!("{op}{decl}{{{body}}}"),
                 vec![(0, true), (1, true), (2, true), (3, true), (4, true), (0, false), (1, false), (2, false)],
                 BTreeSet::new(),
                 Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 },

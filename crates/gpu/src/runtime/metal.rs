@@ -25,7 +25,7 @@ use objc2_metal_performance_shaders::{MPSDataType, MPSMatrix, MPSMatrixDescripto
 
 use crate::runtime::bindings::{DeviceProps, GemmConfig};
 
-use super::bindings::{Dim3, GpuBindings};
+use super::bindings::{Dim3, GpuBindings, KernelArgType};
 
 // ---------------------------------------------------------------------------
 // SendMetal — thread-safe wrapper for MTLBuffer
@@ -547,27 +547,19 @@ impl GpuBindings for Metal {
             Ok(())
         })
     }
+
+    unsafe fn register_kernel_args(kernel: u64, args: &[KernelArgType]) {
+        kernel_arg_info().lock().unwrap().insert(kernel, args.to_vec());
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Kernel argument type tracking
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
-pub enum KernelArgType {
-    Scalar,
-    Buffer,
-}
-
 lazy_static_mutex! {
     static kernel_arg_info: HashMap<u64, Vec<KernelArgType>> = HashMap::new();
     static blas_stream_map: HashMap<u64, u64> = HashMap::new();
-}
-
-/// Register the argument types for a compiled kernel.
-/// Called from the MSL codegen path when creating a kernel.
-pub fn register_kernel_args(kernel_id: u64, args: Vec<KernelArgType>) {
-    kernel_arg_info().lock().unwrap().insert(kernel_id, args);
 }
 
 // ---------------------------------------------------------------------------
