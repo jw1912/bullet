@@ -72,6 +72,7 @@ impl<G: Gpu> Function<G> {
 
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         let props = device.props().clone();
+        let dialect = device.dialect();
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
         ir.transform(DuplicateScalarsAndIndexing)?;
         ir.transform(LowerPointwise(props.clone()))?;
@@ -79,8 +80,8 @@ impl<G: Gpu> Function<G> {
         ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(EliminateCommonSubExpressions)?;
         ir.transform(LowerPointwise(props))?;
-        ir.transform(CodegenPointwise)?;
-        ir.transform(CodegenReduction)?;
+        ir.transform(CodegenPointwise { dialect })?;
+        ir.transform(CodegenReduction { dialect })?;
 
         let mut maps = BTreeMap::new();
         let mut num_ptrs = 0;
@@ -393,7 +394,9 @@ kernel void reduce_kernel(constant int& size [[buffer(0)]], device const float* 
 }";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CodegenReduction;
+pub struct CodegenReduction {
+    pub dialect: Dialect,
+}
 
 impl IRTransform for CodegenReduction {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
@@ -405,7 +408,7 @@ impl IRTransform for CodegenReduction {
                 let outer = reduction.outer().get();
                 let dimen = reduction.dimen().get();
 
-                let src = (match Dialect::active() {
+                let src = (match self.dialect {
                     Dialect::CudaHip => REDUCTION_SRC_CUDA,
                     Dialect::Msl => REDUCTION_SRC_MSL,
                 })
@@ -424,7 +427,7 @@ impl IRTransform for CodegenReduction {
                     KernelSrc::new(
                         reduction.inputs(),
                         reduction.outputs(),
-                        match Dialect::active() {
+                        match self.dialect {
                             Dialect::CudaHip => "kernel",
                             Dialect::Msl => "reduce_kernel",
                         }

@@ -9,7 +9,7 @@ use bullet_compiler::{
     },
 };
 
-use crate::{pointwise::FusedPointwise, runtime::DeviceProps};
+use crate::{pointwise::{Dialect, FusedPointwise}, runtime::DeviceProps};
 
 /// Lower individual ops to FusedPointwise
 #[derive(Clone, Debug)]
@@ -124,14 +124,16 @@ impl IRTransform for FusePointwise {
 }
 
 /// Codegen FusedPointwise ops to KernelSrc
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CodegenPointwise;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodegenPointwise {
+    pub dialect: Dialect,
+}
 impl IRTransform for CodegenPointwise {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         // lower fused pointwise to KernelSrc ops
         for op in ir.operations() {
             if let Some(pntwise) = op.data().downcast::<FusedPointwise>() {
-                let src = unsafe { pntwise.ir.lower(format!("kernel{}", pntwise.id()))? };
+                let src = unsafe { pntwise.ir.lower(format!("kernel{}", pntwise.id()), self.dialect)? };
 
                 for (&i1, &i2) in op.data().inputs().iter().zip(src.inputs.iter()) {
                     if i1 != i2 {

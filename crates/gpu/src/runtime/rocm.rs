@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::runtime::bindings::{DeviceProps, GemmConfig};
+use crate::{pointwise::Dialect, runtime::bindings::{DeviceProps, GemmConfig}};
 
 use super::bindings::{Dim3, GpuBindings};
 
@@ -280,6 +280,10 @@ impl GpuBindings for ROCm {
             (config.m * config.n).into(),
             batch_size,
         ))
+    }
+
+    fn dialect() -> Dialect {
+        Dialect::CudaHip
     }
 }
 

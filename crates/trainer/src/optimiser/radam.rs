@@ -103,10 +103,10 @@ kernel void radam(
 )";
 
 impl RAdamParams {
-    pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
+    pub fn build(&self, size: usize, dialect: Dialect) -> Result<KernelSrc, IRTrace> {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
-        let (op_src, decl) = match Dialect::active() {
+        let (op_src, decl) = match dialect {
             Dialect::CudaHip => (OP_CUDA, DECL_CUDA),
             Dialect::Msl => (OP_MSL, DECL_MSL),
         };
@@ -119,7 +119,7 @@ impl RAdamParams {
             .replace("WMAX", &format!("{max:.E}"))
             .replace("EPSILON", "0.00000001F");
 
-        let body = match Dialect::active() {
+        let body = match dialect {
             Dialect::CudaHip => if size.is_multiple_of(4) {
             format!(
                 "
@@ -262,7 +262,7 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
     type Params = RAdamParams;
 
     fn new(device: &Arc<Device<G>>, size: usize, default_params: Self::Params) -> Result<Self, G::Error> {
-        let op = default_params.build(size).unwrap().compile(device.clone())?;
+        let op = default_params.build(size, device.dialect()).unwrap().compile(device.clone())?;
 
         Ok(Self {
             momentum: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
@@ -387,7 +387,7 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
 
         let size = self.momentum.size();
         let device = self.momentum.device();
-        self.op = params.build(size).unwrap().compile(device)?;
+        self.op = params.build(size, device.dialect()).unwrap().compile(device)?;
         Ok(())
     }
 }

@@ -20,6 +20,8 @@ use std::{
     },
 };
 
+use crate::pointwise::Dialect;
+
 pub use bindings::{DeviceProps, Dim3, GemmConfig, KernelArgType};
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
@@ -71,6 +73,10 @@ impl<G: Gpu> Device<G> {
 
     pub fn props(&self) -> &DeviceProps {
         &self.props
+    }
+
+    pub fn dialect(&self) -> Dialect {
+        G::dialect()
     }
 
     /// Set this device as currently active for this thread,

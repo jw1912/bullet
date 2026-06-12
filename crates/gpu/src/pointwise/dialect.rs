@@ -8,18 +8,6 @@ pub enum Dialect {
 }
 
 impl Dialect {
-    /// Return the dialect matching the currently enabled feature
-    pub fn active() -> Self {
-        #[cfg(feature = "metal")]
-        {
-            Self::Msl
-        }
-        #[cfg(not(feature = "metal"))]
-        {
-            Self::CudaHip
-        }
-    }
-
     pub fn reinterpret_cast(&self, ty: &str) -> String {
         match self {
             Dialect::CudaHip => format!("reinterpret_cast<{ty}*>"),

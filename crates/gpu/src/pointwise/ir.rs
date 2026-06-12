@@ -321,9 +321,8 @@ impl PointwiseIR {
         Ok(false)
     }
 
-    pub fn source_code(&self, kernel_name: &str) -> Result<String, fmt::Error> {
+    fn source_code(&self, kernel_name: &str, dialect: Dialect) -> Result<String, fmt::Error> {
         use crate::pointwise::write::code_str;
-        let dialect = Dialect::active();
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
@@ -427,7 +426,7 @@ impl PointwiseIR {
     /// ### Safety
     ///
     /// User must ensure same invariants as KernelSrc hold
-    pub unsafe fn lower(&self, name: String) -> Result<KernelSrc, IRError> {
+    pub unsafe fn lower(&self, name: String, dialect: Dialect) -> Result<KernelSrc, IRError> {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
@@ -455,7 +454,7 @@ impl PointwiseIR {
             }
         }
 
-        let source = self.source_code(&name).map_err(|e| IRError::from(format!("{e:?}")))?;
+        let source = self.source_code(&name, dialect).map_err(|e| IRError::from(format!("{e:?}")))?;
         let total = self.size.get();
 
         unsafe {
@@ -504,7 +503,7 @@ mod tests {
         ir.write(input2, tid, value4).unwrap();
 
         let device = Device::<G>::new(0)?;
-        let kernel = unsafe { ir.lower("fmadd".to_string()).unwrap() }.compile(device.clone())?;
+        let kernel = unsafe { ir.lower("fmadd".to_string(), device.dialect()).unwrap() }.compile(device.clone())?;
         let stream = device.new_stream()?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);

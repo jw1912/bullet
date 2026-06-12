@@ -23,7 +23,7 @@ use objc2_metal::{
 };
 use objc2_metal_performance_shaders::{MPSDataType, MPSMatrix, MPSMatrixDescriptor, MPSMatrixMultiplication};
 
-use crate::runtime::bindings::{DeviceProps, GemmConfig};
+use crate::{pointwise::Dialect, runtime::bindings::{DeviceProps, GemmConfig}};
 
 use super::bindings::{Dim3, GpuBindings, KernelArgType};
 
@@ -550,6 +550,10 @@ impl GpuBindings for Metal {
 
     unsafe fn register_kernel_args(kernel: u64, args: &[KernelArgType]) {
         kernel_arg_info().lock().unwrap().insert(kernel, args.to_vec());
+    }
+
+    fn dialect() -> Dialect {
+        Dialect::Msl
     }
 }
 
