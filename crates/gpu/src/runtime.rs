@@ -380,6 +380,7 @@ impl<G: Gpu> Kernel<G> {
         unsafe { G::kernel_launch(self.kernel, stream.inner, grid_dim, block_dim, args, smem) }
     }
 
+    /// Get the name of the kernel
     pub fn name(&self) -> &str {
         &self.name
     }
