@@ -37,8 +37,6 @@ impl ChessBoard {
 }
 
 fn main() {
-    let wdl = 0.2;
-
     let num_inputs = 768;
     let nnz = 32;
     let inputs = ModelInputs::default()
@@ -48,6 +46,7 @@ fn main() {
 
     let mapper = ModelInputsMapper::build(&inputs, move |pnt: &ChessBoard, _, ((stm, ntm), target)| {
         let mut i = 0;
+
         pnt.map_pieces(|pc, sq| {
             let c = usize::from(pc & 8 > 0);
             let pc = 64 * i32::from(pc & 7);
@@ -63,9 +62,10 @@ fn main() {
             ntm[i] = -1;
         }
 
+        let lambda = 0.2;
         let score = 1.0 / (1.0 + (-f32::from(pnt.score) / 400.0).exp());
         let result = f32::from(pnt.result) / 2.0;
-        target[0] = wdl * result + (1.0 - wdl) * score;
+        target[0] = lambda * result + (1.0 - lambda) * score;
     });
 
     let defn = ModelDefinition::build(&inputs, |builder, ((stm, ntm), target)| {
