@@ -9,6 +9,10 @@ pub struct TrainingSteps {
 }
 
 impl TrainingSteps {
+    pub fn start_batch(&self) -> usize {
+        self.batches_per_superbatch * (self.start_superbatch - 1)
+    }
+
     pub fn display(&self) {
         println!("Batch Size             : {}", ansi(self.batch_size, 31));
         println!("Batches / Superbatch   : {}", ansi(self.batches_per_superbatch, 31));

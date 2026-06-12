@@ -1,9 +1,6 @@
 use bullet_trainer::{
     model::{ModelDefinition, ModelInputs, ModelInputsMapper, ModelWeights},
-    optimiser::{
-        Optimiser,
-        adam::{AdamW, AdamWParams},
-    },
+    optimiser::adam::{AdamW, AdamWParams},
     reader::{FixedSizeData, FixedSizeDataReader, ReadMapLoader},
     run::{DefaultDevice, TrainingSchedule, TrainingSteps, train},
 };
@@ -87,10 +84,10 @@ fn main() {
 
     let weights = ModelWeights::new(&defn, 198273612);
     let device = DefaultDevice::new(0).unwrap();
-    let mut optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, AdamWParams::default()).unwrap();
+    let mut optimiser = AdamW::new(defn, weights, device, AdamWParams::default()).unwrap();
 
     let reader = FixedSizeDataReader::new(&["examples/tests/batch.bf"]);
-    let loader = ReadMapLoader::new(reader, mapper, 0, 4);
+    let loader = ReadMapLoader::new(reader, mapper, 4);
 
     let schedule = TrainingSchedule {
         steps: TrainingSteps { batch_size: 16_384, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 10 },

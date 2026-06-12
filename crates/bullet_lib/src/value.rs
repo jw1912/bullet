@@ -140,12 +140,7 @@ where
     where
         D: DataReader<I::RequiredDataType>,
     {
-        ReadMapLoader::new(
-            reader,
-            self.make_mapper(steps, scale, wdl),
-            steps.batches_per_superbatch * (steps.start_superbatch - 1),
-            threads,
-        )
+        ReadMapLoader::new(reader, self.make_mapper(steps, scale, wdl), threads)
     }
 }
 

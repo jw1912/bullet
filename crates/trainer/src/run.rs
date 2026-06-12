@@ -56,7 +56,7 @@ pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSt
     let mut total = 0;
     let mut sb_timer = Instant::now();
 
-    dataloader.map_batches(steps.batch_size, |_| {
+    dataloader.map_batches(steps.start_batch(), steps.batch_size, |_| {
         batch_no += 1;
         total += steps.batch_size;
 
@@ -106,7 +106,7 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
         let mut batch_no = 0;
         let mut superbatch = steps.start_superbatch;
 
-        dataloader.map_batches(steps.batch_size, |batch| {
+        dataloader.map_batches(steps.start_batch(), steps.batch_size, |batch| {
             sender.send(batch).unwrap();
 
             batch_no += 1;
