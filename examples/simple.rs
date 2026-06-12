@@ -107,7 +107,7 @@ fn main() {
     // loading directly from a `BulletFormat` file
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
-    //trainer.run(&schedule, &settings, &data_loader);
+    trainer.run(&schedule, &settings, &data_loader);
 }
 
 // ============ EXAMPLE INFERENCE STARTS HERE ============
