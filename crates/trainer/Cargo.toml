@@ -17,3 +17,11 @@ rand_distr = "=0.6.0"
 [features]
 cuda = ["bullet-gpu/cuda"]
 rocm = ["bullet-gpu/rocm"]
+
+[[example]]
+name = "ataxx"
+path = "../../examples/ataxx.rs"
+
+[[example]]
+name = "test4"
+path = "../../examples/tests/test4.rs"

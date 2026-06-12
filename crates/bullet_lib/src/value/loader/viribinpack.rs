@@ -8,7 +8,7 @@ use crate::game::formats::bulletformat::ChessBoard;
 
 use super::rng::SimpleRand;
 
-use bullet_trainer::run::DataReader;
+use bullet_trainer::reader::DataReader;
 pub use viriformat::{
     chess::{board::Board, chessmove::Move},
     dataformat::{Filter, Game, WDL},

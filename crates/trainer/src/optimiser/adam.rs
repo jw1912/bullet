@@ -10,7 +10,10 @@ use bullet_gpu::{
     runtime::{Device, Dim3, Gpu, Stream},
 };
 
-use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
+use crate::{
+    model::{ModelDefinition, ModelWeights},
+    optimiser::{Optimiser, OptimiserUpdateResult, OptimiserUpdateSync},
+};
 
 use super::{OptimiserState, utils};
 
@@ -141,6 +144,17 @@ pub struct AdamW<G: Gpu> {
     momentum: Arc<Buffer<G>>,
     velocity: Arc<Buffer<G>>,
     op: CompiledKernel<G>,
+}
+
+impl<G: Gpu> AdamW<G> {
+    pub fn new(
+        definition: ModelDefinition,
+        weights: ModelWeights,
+        device: Arc<Device<G>>,
+        params: AdamWParams,
+    ) -> Result<Optimiser<G, Self>, G::Error> {
+        Optimiser::new(definition, weights, device, params)
+    }
 }
 
 impl<G: Gpu> OptimiserState<G> for AdamW<G> {

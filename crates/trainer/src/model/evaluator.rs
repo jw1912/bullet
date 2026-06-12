@@ -7,7 +7,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
-use crate::model::{ModelDefinition, TensorMap, weights::ModelWeights};
+use crate::model::{ModelDefinition, ModelWeights, TensorMap};
 
 pub struct ModelEvaluator<G: Gpu> {
     stream: Arc<Stream<G>>,

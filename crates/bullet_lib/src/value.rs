@@ -9,7 +9,8 @@ use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
-    run::{self, DataReader, PreparedBatchHost, ReadMapLoader, TrainingSteps, logger},
+    reader::{DataReader, ReadMapLoader},
+    run::{self, PreparedBatchHost, TrainingSteps, logger},
 };
 
 use crate::{
@@ -139,12 +140,7 @@ where
     where
         D: DataReader<I::RequiredDataType>,
     {
-        ReadMapLoader::new(
-            reader,
-            self.make_mapper(steps, scale, wdl),
-            steps.batches_per_superbatch * (steps.start_superbatch - 1),
-            threads,
-        )
+        ReadMapLoader::new(reader, self.make_mapper(steps, scale, wdl), threads)
     }
 }
 

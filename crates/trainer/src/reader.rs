@@ -1,6 +1,10 @@
+mod fixed_size;
+
+pub use fixed_size::{FixedSizeData, FixedSizeDataReader};
+
 use crate::{
     model::ModelInputsMapper,
-    run::dataloader::{DataLoader, DataLoadingError, PreparedBatchHost},
+    run::{DataLoader, DataLoadingError, PreparedBatchHost},
 };
 
 pub trait DataReader<T>: Clone + Send + Sync + 'static {
@@ -10,13 +14,12 @@ pub trait DataReader<T>: Clone + Send + Sync + 'static {
 pub struct ReadMapLoader<R, D> {
     reader: R,
     mapper: ModelInputsMapper<D>,
-    start_batch: usize,
     threads: u8,
 }
 
 impl<R, D> ReadMapLoader<R, D> {
-    pub fn new(reader: R, mapper: ModelInputsMapper<D>, start_batch: usize, threads: u8) -> Self {
-        Self { reader, mapper, start_batch, threads }
+    pub fn new(reader: R, mapper: ModelInputsMapper<D>, threads: u8) -> Self {
+        Self { reader, mapper, threads }
     }
 }
 
@@ -27,13 +30,14 @@ where
 {
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
         self,
+        start_batch: usize,
         batch_size: usize,
         mut f: F,
     ) -> Result<(), DataLoadingError> {
-        let mut batch = self.start_batch;
+        let mut batch = start_batch;
         let mut incomplete_buf = Vec::new();
 
-        self.reader.read_chunks(self.start_batch * batch_size, |chunk| {
+        self.reader.read_chunks(start_batch * batch_size, |chunk| {
             let remainder = if !incomplete_buf.is_empty() {
                 let remainder = batch_size - incomplete_buf.len();
 
