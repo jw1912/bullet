@@ -3,10 +3,7 @@ use std::{
     ffi::{CStr, c_char, c_int, c_uint, c_void},
 };
 
-use crate::{
-    pointwise::Dialect,
-    runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings}},
-};
+use crate::runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings}};
 
 /// Used to type check code without requiring CUDA/ROCm
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -223,7 +220,4 @@ impl GpuBindings for MockGpu {
         Err(MSG.into())
     }
 
-    fn dialect() -> Dialect {
-        Dialect::CudaHip
-    }
 }

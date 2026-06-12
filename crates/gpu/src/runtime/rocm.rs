@@ -58,6 +58,7 @@ impl GpuBindings for ROCm {
             stream_mem_alloc: false,
             vec_atomics: false,
             arch: None,
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -282,9 +283,6 @@ impl GpuBindings for ROCm {
         ))
     }
 
-    fn dialect() -> Dialect {
-        Dialect::CudaHip
-    }
 }
 
 mod error {

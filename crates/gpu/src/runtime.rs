@@ -76,7 +76,7 @@ impl<G: Gpu> Device<G> {
     }
 
     pub fn dialect(&self) -> Dialect {
-        G::dialect()
+        self.props.dialect()
     }
 
     /// Set this device as currently active for this thread,

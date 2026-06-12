@@ -76,6 +76,7 @@ impl GpuBindings for Cuda {
             stream_mem_alloc: mem_pools > 0,
             vec_atomics: mjr >= 9,
             arch: Some(format!("sm_{mjr}{mnr}")),
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -311,9 +312,6 @@ impl GpuBindings for Cuda {
         ))
     }
 
-    fn dialect() -> Dialect {
-        Dialect::CudaHip
-    }
 }
 
 mod error {

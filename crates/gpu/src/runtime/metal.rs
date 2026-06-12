@@ -171,6 +171,7 @@ impl GpuBindings for Metal {
             stream_mem_alloc: false,
             vec_atomics: true,
             arch: None,
+            dialect: Dialect::Msl,
         })
     }
 
@@ -550,10 +551,6 @@ impl GpuBindings for Metal {
 
     unsafe fn register_kernel_args(kernel: u64, args: &[KernelArgType]) {
         kernel_arg_info().lock().unwrap().insert(kernel, args.to_vec());
-    }
-
-    fn dialect() -> Dialect {
-        Dialect::Msl
     }
 }
 

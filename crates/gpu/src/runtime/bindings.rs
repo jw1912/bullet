@@ -31,6 +31,7 @@ pub struct DeviceProps {
     pub(super) stream_mem_alloc: bool,
     pub(super) vec_atomics: bool,
     pub(super) arch: Option<String>,
+    pub(super) dialect: Dialect,
 }
 
 impl DeviceProps {
@@ -52,6 +53,10 @@ impl DeviceProps {
 
     pub fn arch(&self) -> Option<&str> {
         self.arch.as_deref()
+    }
+
+    pub fn dialect(&self) -> Dialect {
+        self.dialect
     }
 }
 
@@ -180,8 +185,6 @@ pub trait GpuBindings: 'static {
     /// The default no-op is used by CUDA/ROCm/mock; Metal overrides this to
     /// store arg types in a registry for use during kernel launch.
     unsafe fn register_kernel_args(_kernel: Self::Kernel, _args: &[KernelArgType]) {}
-
-    fn dialect() -> Dialect;
 }
 
 const _C_INT_IS_I32: () = assert!(std::mem::size_of::<i32>() == std::mem::size_of::<c_int>());
