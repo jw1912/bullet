@@ -550,8 +550,8 @@ mod tests {
 
             kernel.launch(&stream, gdim, 4, args.as_mut_ptr(), 0)?;
 
-            stream.memcpy_d2h(dev_dst, host_dst.as_mut_ptr().cast(), 16)?;
             stream.sync()?;
+            stream.memcpy_d2h(dev_dst, host_dst.as_mut_ptr().cast(), 16)?;
 
             device.free(dev_src)?;
             device.free(dev_dst)?;
