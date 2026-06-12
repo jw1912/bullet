@@ -1,10 +1,8 @@
 mod dataloader;
 pub mod logger;
-mod reader;
 mod schedule;
 
 pub use dataloader::{DataLoader, DataLoadingError, PreparedBatchHost};
-pub use reader::{DataReader, ReadMapLoader};
 pub use schedule::{TrainingSchedule, TrainingSteps};
 
 use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};

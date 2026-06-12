@@ -1,48 +1,73 @@
-use bullet_lib::{
-    game::inputs::{Chess768, SparseInputType},
-    value::loader::{DirectSequentialDataLoader, LoadableDataType},
-};
 use bullet_trainer::{
     model::{ModelDefinition, ModelInputs, ModelInputsMapper, ModelWeights},
     optimiser::{
         Optimiser,
         adam::{AdamW, AdamWParams},
     },
-    run::{DefaultDevice, ReadMapLoader, TrainingSchedule, TrainingSteps, train},
+    reader::{FixedSizeData, FixedSizeDataReader, ReadMapLoader},
+    run::{DefaultDevice, TrainingSchedule, TrainingSteps, train},
 };
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ChessBoard {
+    pub occ: u64,
+    pub pcs: [u8; 16],
+    pub score: i16,
+    pub result: u8,
+    pub ksq: u8,
+    pub opp_ksq: u8,
+    pub extra: [u8; 3],
+}
+
+unsafe impl FixedSizeData for ChessBoard {}
+
+impl ChessBoard {
+    pub fn map_pieces(&self, mut f: impl FnMut(u8, u8)) {
+        let mut occ = self.occ;
+        let mut idx = 0;
+
+        while occ > 0 {
+            let square = occ.trailing_zeros() as u8;
+            let piece = (self.pcs[idx / 2] >> (4 * (idx % 2))) & 0b1111;
+
+            occ &= occ - 1;
+            idx += 1;
+
+            f(piece, square)
+        }
+    }
+}
 
 fn main() {
     let wdl = 0.2;
 
-    let feats = Chess768;
-    let num_inputs = feats.num_inputs();
-    let nnz = feats.max_active();
-
+    let num_inputs = 768;
+    let nnz = 32;
     let inputs = ModelInputs::default()
         .add_sparse("stm", (num_inputs, 1), nnz)
         .add_sparse("ntm", (num_inputs, 1), nnz)
         .add_dense("target", (1, 1));
 
-    let mapper = ModelInputsMapper::build(&inputs, move |pnt, _, ((stm, ntm), target)| {
+    let mapper = ModelInputsMapper::build(&inputs, move |pnt: &ChessBoard, _, ((stm, ntm), target)| {
         let mut i = 0;
+        pnt.map_pieces(|pc, sq| {
+            let c = usize::from(pc & 8 > 0);
+            let pc = 64 * i32::from(pc & 7);
+            let sq = i32::from(sq);
 
-        feats.map_features(pnt, |sfeat, nfeat| {
-            assert!(sfeat.max(nfeat) < num_inputs);
-            stm[i] = sfeat as i32;
-            ntm[i] = nfeat as i32;
+            stm[i] = [0, 384][c] + pc + sq;
+            ntm[i] = [384, 0][c] + pc + (sq ^ 56);
             i += 1;
         });
 
-        assert!(i <= nnz);
-
-        for j in i..nnz {
-            stm[j] = -1;
-            ntm[j] = -1;
+        if i < nnz {
+            stm[i] = -1;
+            ntm[i] = -1;
         }
 
         let score = 1.0 / (1.0 + (-f32::from(pnt.score) / 400.0).exp());
-        let result = f32::from(pnt.result() as u8) / 2.0;
-
+        let result = f32::from(pnt.result) / 2.0;
         target[0] = wdl * result + (1.0 - wdl) * score;
     });
 
@@ -64,7 +89,7 @@ fn main() {
     let device = DefaultDevice::new(0).unwrap();
     let mut optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, AdamWParams::default()).unwrap();
 
-    let reader = DirectSequentialDataLoader::new(&["examples/tests/batch.bf"]);
+    let reader = FixedSizeDataReader::new(&["examples/tests/batch.bf"]);
     let loader = ReadMapLoader::new(reader, mapper, 0, 4);
 
     let schedule = TrainingSchedule {

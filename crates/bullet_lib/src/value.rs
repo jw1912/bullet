@@ -9,7 +9,8 @@ use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
-    run::{self, DataReader, PreparedBatchHost, ReadMapLoader, TrainingSteps, logger},
+    reader::{DataReader, ReadMapLoader},
+    run::{self, PreparedBatchHost, TrainingSteps, logger},
 };
 
 use crate::{

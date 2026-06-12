@@ -1,33 +1,112 @@
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
+    marker::PhantomData,
     mem::MaybeUninit,
     path::PathBuf,
     slice,
 };
 
-use bullet_trainer::reader::DataReader;
+use crate::{
+    model::ModelInputsMapper,
+    run::{DataLoader, DataLoadingError, PreparedBatchHost},
+};
 
-/// ### Safety
-/// This indicates that the type can be validly transmuted from
-/// *any* sequence of bytes of the same size as the struct.
-pub unsafe trait CanBeDirectlySequentiallyLoaded: Copy + 'static {}
-
-#[derive(Clone)]
-pub struct DirectSequentialDataLoader {
-    file_paths: Vec<String>,
+pub trait DataReader<T>: Clone + Send + Sync + 'static {
+    fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, f: F);
 }
 
-impl DirectSequentialDataLoader {
+pub struct ReadMapLoader<R, D> {
+    reader: R,
+    mapper: ModelInputsMapper<D>,
+    start_batch: usize,
+    threads: u8,
+}
+
+impl<R, D> ReadMapLoader<R, D> {
+    pub fn new(reader: R, mapper: ModelInputsMapper<D>, start_batch: usize, threads: u8) -> Self {
+        Self { reader, mapper, start_batch, threads }
+    }
+}
+
+impl<R, D> DataLoader for ReadMapLoader<R, D>
+where
+    R: DataReader<D>,
+    D: Clone + Send + Sync + 'static,
+{
+    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
+        self,
+        batch_size: usize,
+        mut f: F,
+    ) -> Result<(), DataLoadingError> {
+        let mut batch = self.start_batch;
+        let mut incomplete_buf = Vec::new();
+
+        self.reader.read_chunks(self.start_batch * batch_size, |chunk| {
+            let remainder = if !incomplete_buf.is_empty() {
+                let remainder = batch_size - incomplete_buf.len();
+
+                if chunk.len() >= remainder {
+                    incomplete_buf.extend_from_slice(&chunk[..remainder]);
+                    let prepared = self.mapper.map(&incomplete_buf, batch, self.threads);
+                    batch += 1;
+
+                    if f(PreparedBatchHost { inputs: prepared }) {
+                        return true;
+                    }
+
+                    incomplete_buf.clear();
+                } else {
+                    incomplete_buf.extend_from_slice(chunk);
+                }
+
+                remainder
+            } else {
+                0
+            };
+
+            if chunk.len() >= remainder {
+                let chunks = chunk[remainder..chunk.len()].chunks_exact(batch_size);
+                incomplete_buf.extend_from_slice(chunks.remainder());
+
+                for data in chunks {
+                    let prepared = self.mapper.map(data, batch, self.threads);
+                    batch += 1;
+
+                    if f(PreparedBatchHost { inputs: prepared }) {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        });
+
+        Ok(())
+    }
+}
+
+/// ## Safety
+/// Type must be `repr(C)`, have no padding or uninitialised
+/// bytes, valid as any bit pattern and of fixed size.
+pub unsafe trait FixedSizeData: Copy + Send + Sync + 'static {}
+
+#[derive(Clone)]
+pub struct FixedSizeDataReader<T: FixedSizeData> {
+    file_paths: Vec<String>,
+    phantom: PhantomData<T>,
+}
+
+impl<T: FixedSizeData> FixedSizeDataReader<T> {
     pub fn new(file_paths: &[&str]) -> Self {
         let file_paths = file_paths.iter().map(|path| path.to_string()).collect::<Vec<_>>();
 
         for path in &file_paths {
-            let path_buf: PathBuf = path.parse().unwrap();
+            let path_buf = path.parse::<PathBuf>().unwrap();
             assert!(path_buf.exists(), "File not found: {path}");
         }
 
-        Self { file_paths }
+        Self { file_paths, phantom: PhantomData }
     }
 
     pub fn map_file_sizes<F: FnMut(&str, u64)>(&self, mut f: F) {
@@ -37,7 +116,7 @@ impl DirectSequentialDataLoader {
     }
 }
 
-impl<T: CanBeDirectlySequentiallyLoaded> DataReader<T> for DirectSequentialDataLoader {
+impl<T: FixedSizeData> DataReader<T> for FixedSizeDataReader<T> {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, mut start_position: usize, mut f: F) {
         let buffer_size_mb = 256;
         let buffer_size = buffer_size_mb * 1024 * 1024;
@@ -108,13 +187,14 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataReader<T> for DirectSequentialDataL
     }
 }
 
-unsafe fn zeroed_boxed_slice<T: CanBeDirectlySequentiallyLoaded>(cap: usize) -> Box<[T]> {
+unsafe fn zeroed_boxed_slice<T: FixedSizeData>(cap: usize) -> Box<[T]> {
     let mut buf = Box::<[T]>::new_uninit_slice(cap);
 
     // safe as `T` can be any bit pattern, including 0s
     let zeroed = unsafe {
         let mut t: MaybeUninit<T> = MaybeUninit::uninit();
-        let tslice: &mut [MaybeUninit<u8>] = slice::from_raw_parts_mut(t.as_mut_ptr().cast(), size_of::<T>());
+        let ptr = t.as_mut_ptr().cast();
+        let tslice: &mut [MaybeUninit<u8>] = slice::from_raw_parts_mut(ptr, size_of::<T>());
 
         for elem in tslice {
             elem.write(0);
