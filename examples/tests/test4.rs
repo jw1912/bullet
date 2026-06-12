@@ -53,7 +53,7 @@ fn main() {
             target[0] = wdl * result + (1.0 - wdl) * score;
         });
 
-    let defn = ModelDefinition::make(&inputs, |builder, ((stm, ntm), target)| {
+    let defn = ModelDefinition::build(&inputs, |builder, ((stm, ntm), target)| {
         let l0 = builder.new_affine("l0", 768, 32);
         let l1 = builder.new_affine("l1", 2 * 32, 1);
 
