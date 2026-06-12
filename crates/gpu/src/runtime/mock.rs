@@ -1,4 +1,7 @@
-use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use std::{
+    alloc::{Layout, alloc_zeroed, dealloc, handle_alloc_error},
+    ffi::{CStr, c_char, c_int, c_uint, c_void},
+};
 
 use crate::runtime::{
     Dim3,
@@ -14,11 +17,17 @@ type MockResult = Result<(), String>;
 static MSG: &str =
     "This is a mock runtime! It can't actually do anything! You need to enable either the `cuda` or `rocm` features!";
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MockPtr {
+    ptr: *mut u8,
+    bytes: usize,
+}
+
 #[allow(unused)]
 impl GpuBindings for MockGpu {
     type Err = String;
     type Dev = ();
-    type Ptr = ();
+    type Ptr = MockPtr;
     type Ctx = ();
     type Stream = ();
     type BlasHandle = ();
@@ -26,87 +35,124 @@ impl GpuBindings for MockGpu {
     type Module = ();
 
     unsafe fn driver_init() -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn device_get(ordinal: c_int) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn device_props(device: Self::Dev) -> Result<DeviceProps, Self::Err> {
-        Err(MSG.into())
+        Ok(DeviceProps {
+            name: "MockGPU".into(),
+            warp_size: Some(32),
+            stream_mem_alloc: false,
+            vec_atomics: false,
+            arch: None,
+        })
     }
 
     unsafe fn context_create(device: ()) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn context_destroy(device: ()) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn context_set(ctx: ()) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
-    unsafe fn context_sync() -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn context_sync() -> MockResult {
+        Ok(())
     }
 
-    unsafe fn context_malloc(bytes: usize) -> Result<Self::Ptr, Self::Err> {
-        Err(MSG.into())
+    unsafe fn context_malloc(bytes: usize) -> Result<MockPtr, String> {
+        let layout = Layout::array::<u8>(bytes).unwrap();
+        let ptr = unsafe { alloc_zeroed(layout) };
+        if ptr.is_null() {
+            handle_alloc_error(layout);
+        }
+        Ok(MockPtr { ptr, bytes })
     }
 
-    unsafe fn context_free(dev_ptr: Self::Ptr) -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn context_free(dev_ptr: MockPtr) -> MockResult {
+        let layout = Layout::array::<u8>(dev_ptr.bytes).unwrap();
+        unsafe { dealloc(dev_ptr.ptr, layout) };
+        Ok(())
     }
 
-    unsafe fn context_memset(dev_ptr: Self::Ptr, bytes: usize, value: u8) -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn context_memset(dev_ptr: MockPtr, bytes: usize, value: u8) -> MockResult {
+        assert!(bytes <= dev_ptr.bytes);
+
+        for entry in unsafe { std::slice::from_raw_parts_mut(dev_ptr.ptr, bytes) } {
+            *entry = value;
+        }
+
+        Ok(())
     }
 
-    unsafe fn context_memcpy_d2h(dst: *mut c_void, src: Self::Ptr, bytes: usize) -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn context_memcpy_d2h(dst: *mut c_void, src: MockPtr, bytes: usize) -> MockResult {
+        assert!(bytes <= src.bytes);
+
+        let dst = unsafe { std::slice::from_raw_parts_mut(dst.cast::<u8>(), bytes) };
+        let src = unsafe { std::slice::from_raw_parts(src.ptr, bytes) };
+
+        for (i, j) in dst.iter_mut().zip(src) {
+            *i = *j;
+        }
+
+        Ok(())
     }
 
-    unsafe fn context_memcpy_h2d(dst: Self::Ptr, src: *const c_void, bytes: usize) -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn context_memcpy_h2d(dst: MockPtr, src: *const c_void, bytes: usize) -> MockResult {
+        assert!(bytes <= dst.bytes);
+
+        let dst = unsafe { std::slice::from_raw_parts_mut(dst.ptr, bytes) };
+        let src = unsafe { std::slice::from_raw_parts(src.cast::<u8>(), bytes) };
+
+        for (i, j) in dst.iter_mut().zip(src) {
+            *i = *j;
+        }
+
+        Ok(())
     }
 
     unsafe fn stream_create() -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn stream_destroy(stream: ()) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn stream_sync(stream: ()) -> MockResult {
+        Ok(())
+    }
+
+    unsafe fn stream_malloc(stream: (), bytes: usize) -> Result<MockPtr, String> {
         Err(MSG.into())
     }
 
-    unsafe fn stream_malloc(stream: (), bytes: usize) -> MockResult {
+    unsafe fn stream_free(stream: (), dev_ptr: MockPtr) -> MockResult {
         Err(MSG.into())
     }
 
-    unsafe fn stream_free(stream: (), dev_ptr: ()) -> MockResult {
-        Err(MSG.into())
+    unsafe fn stream_memset(stream: (), dev_ptr: MockPtr, bytes: usize, value: u8) -> MockResult {
+        unsafe { Self::context_memset(dev_ptr, bytes, value) }
     }
 
-    unsafe fn stream_memset(stream: (), dev_ptr: (), bytes: usize, value: u8) -> MockResult {
-        Err(MSG.into())
+    unsafe fn stream_memcpy_d2h(stream: (), dst: *mut c_void, src: MockPtr, bytes: usize) -> MockResult {
+        unsafe { Self::context_memcpy_d2h(dst, src, bytes) }
     }
 
-    unsafe fn stream_memcpy_d2h(stream: (), dst: *mut c_void, src: (), bytes: usize) -> MockResult {
-        Err(MSG.into())
-    }
-
-    unsafe fn stream_memcpy_h2d(stream: (), dst: (), src: *const c_void, bytes: usize) -> MockResult {
-        Err(MSG.into())
+    unsafe fn stream_memcpy_h2d(stream: (), dst: MockPtr, src: *const c_void, bytes: usize) -> MockResult {
+        unsafe { Self::context_memcpy_h2d(dst, src, bytes) }
     }
 
     unsafe fn kernel_load(kernel: ()) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn kernel_launch(
@@ -121,15 +167,15 @@ impl GpuBindings for MockGpu {
     }
 
     unsafe fn module_create(code: *const c_void) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn module_destroy(module: ()) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn module_get_kernel(module: (), kernel_name: &CStr) -> MockResult {
-        Err(MSG.into())
+        Ok(())
     }
 
     unsafe fn program_compile(
@@ -137,28 +183,28 @@ impl GpuBindings for MockGpu {
         num_options: c_int,
         options: *const *const c_char,
     ) -> Result<Vec<c_char>, String> {
-        Err(MSG.into())
+        Ok(Vec::new())
     }
 
     unsafe fn blas_create() -> Result<Self::BlasHandle, Self::Err> {
-        Err(MSG.into())
+        Ok(())
     }
 
-    unsafe fn blas_destroy(handle: Self::BlasHandle) -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn blas_destroy(handle: Self::BlasHandle) -> MockResult {
+        Ok(())
     }
 
-    unsafe fn blas_set_stream(handle: Self::BlasHandle, stream: Self::Stream) -> Result<(), Self::Err> {
-        Err(MSG.into())
+    unsafe fn blas_set_stream(handle: Self::BlasHandle, stream: Self::Stream) -> MockResult {
+        Ok(())
     }
 
     unsafe fn blas_gemm(
         handle: Self::BlasHandle,
         config: GemmConfig,
-        a: Self::Ptr,
-        b: Self::Ptr,
-        c: Self::Ptr,
-    ) -> Result<(), Self::Err> {
+        a: MockPtr,
+        b: MockPtr,
+        c: MockPtr,
+    ) -> MockResult {
         Err(MSG.into())
     }
 
@@ -166,10 +212,10 @@ impl GpuBindings for MockGpu {
         handle: Self::BlasHandle,
         batch_size: c_int,
         config: GemmConfig,
-        a: Self::Ptr,
-        b: Self::Ptr,
-        c: Self::Ptr,
-    ) -> Result<(), Self::Err> {
+        a: MockPtr,
+        b: MockPtr,
+        c: MockPtr,
+    ) -> MockResult {
         Err(MSG.into())
     }
 }

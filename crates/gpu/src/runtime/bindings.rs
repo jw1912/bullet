@@ -1,7 +1,6 @@
 use std::{
     ffi::{CStr, c_char, c_int, c_uint, c_void},
     fmt,
-    hash::Hash,
 };
 
 /// Kernel grid or block dimensions
@@ -60,7 +59,7 @@ impl DeviceProps {
 pub trait GpuBindings: 'static {
     type Err: fmt::Debug + Eq + From<String>;
     type Dev: Copy;
-    type Ptr: Copy + Default + Eq + Hash + Ord;
+    type Ptr: Copy + Default + Eq + Ord;
     type Ctx: Copy;
     type Stream: Copy;
     type BlasHandle: Copy;
