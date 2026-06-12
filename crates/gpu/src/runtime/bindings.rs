@@ -180,7 +180,6 @@ pub trait GpuBindings: 'static {
         b: Self::Ptr,
         c: Self::Ptr,
     ) -> Result<(), Self::Err>;
-
 }
 
 const _C_INT_IS_I32: () = assert!(std::mem::size_of::<i32>() == std::mem::size_of::<c_int>());

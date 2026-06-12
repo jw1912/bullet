@@ -219,5 +219,4 @@ impl GpuBindings for MockGpu {
     ) -> MockResult {
         Err(MSG.into())
     }
-
 }
