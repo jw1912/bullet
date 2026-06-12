@@ -506,17 +506,12 @@ mod tests {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let (kernel_src, kernel_name, arg_types) = match device.dialect() {
-            Dialect::CudaHip => (
-                "extern \"C\" __global__ void add_one(const int size, const float* src, float* dst) {
+        let kernel_src = match device.dialect() {
+            Dialect::CudaHip => "extern \"C\" __global__ void add_one(const int size, const float* src, float* dst) {
                     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
                     if (tid < size) dst[tid] = src[tid] + 1.0;
                 }",
-                "add_one",
-                vec![],
-            ),
-            Dialect::Msl => (
-                "#include <metal_stdlib>
+            Dialect::Msl => "#include <metal_stdlib>
                 using namespace metal;
                 kernel void add_one(
                     constant int& size [[buffer(0)]],
@@ -526,14 +521,11 @@ mod tests {
                 ) {
                     if (tid < uint(size)) dst[tid] = src[tid] + 1.0;
                 }",
-                "add_one",
-                vec![KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer],
-            ),
         };
 
         let module = Module::new(device.clone(), kernel_src)?;
-        let kernel = module.get_kernel(kernel_name)?;
-        kernel.register_args(&arg_types);
+        let kernel = module.get_kernel("add_one")?;
+        kernel.register_args(&[KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer]);
 
         unsafe {
             let dev_src = device.malloc(16)?;
