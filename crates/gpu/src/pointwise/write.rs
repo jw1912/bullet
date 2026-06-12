@@ -3,30 +3,7 @@ use bullet_compiler::tensor::{
     operation::{CABinary, Unary},
 };
 
-use crate::pointwise::operations::PointwiseOp;
-
-/// GPU kernel language dialect
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Dialect {
-    /// CUDA C / HIP C (used by NVIDIA and AMD)
-    CudaHip,
-    /// Metal Shading Language (used by Apple Silicon)
-    Msl,
-}
-
-impl Dialect {
-    /// Return the dialect matching the currently enabled feature
-    pub fn active() -> Self {
-        #[cfg(feature = "metal")]
-        {
-            Self::Msl
-        }
-        #[cfg(not(feature = "metal"))]
-        {
-            Self::CudaHip
-        }
-    }
-}
+use crate::pointwise::{dialect::Dialect, operations::PointwiseOp};
 
 pub fn tystr(dtype: DType) -> &'static str {
     match dtype {
@@ -35,38 +12,7 @@ pub fn tystr(dtype: DType) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
-pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
-    code_str_dialect(op, size, Dialect::active())
-}
-
-pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option<String> {
-    let is_msl = dialect == Dialect::Msl;
-
-    // Helper: reinterpret_cast with optional `device` address space qualifier for MSL
-    let reinterpret = |ty: &str| {
-        if is_msl { format!("reinterpret_cast<device {ty}*>") } else { format!("reinterpret_cast<{ty}*>") }
-    };
-
-    // Helper: make_floatN constructor
-    let make_vec = |ty: &str, count: u32, vals: &str| {
-        if is_msl { format!("{ty}{count}({vals})") } else { format!("make_{ty}{count}({vals})") }
-    };
-
-    // Helper: atomic add
-    let atomic_add = |ptr_expr: &str, val_expr: &str| {
-        if is_msl {
-            format!(
-                "atomic_fetch_add_explicit((volatile device atomic_float*)({ptr_expr}), {val_expr}, memory_order_relaxed);"
-            )
-        } else {
-            format!("atomicAdd({ptr_expr}, {val_expr});")
-        }
-    };
-
-    // Helper: powf
-    let powf_fn = if is_msl { "pow" } else { "powf" };
-
+pub fn code_str(op: PointwiseOp, size: Size, dialect: Dialect) -> Option<String> {
     match op {
         PointwiseOp::Buffer { .. } => None,
         PointwiseOp::Div => Some("const int OUT1 = IN1 / IN2;".into()),
@@ -77,7 +23,7 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                 Some(format!("const {ty} OUT1 = IN1[IN2];"))
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                let cast = reinterpret(&format!("{ty}{sz}"));
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
                 Some(format!("const {ty}{sz} OUT1 = {cast}(IN1)[IN2];"))
             } else {
                 None
@@ -94,11 +40,11 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                 Some(format!("const {ty} OUT1 = IN3 > 0 ? IN1[IN2] : {vl};"))
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                let cast = reinterpret(&format!("{ty}{sz}"));
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
                 let vl_vec = if io.p2size == 1 {
-                    make_vec(ty, 2, &format!("{vl}, {vl}"))
+                    dialect.make_vec(ty, 2, &format!("{vl}, {vl}"))
                 } else {
-                    make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}"))
+                    dialect.make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}"))
                 };
                 Some(format!("const {ty}{sz} OUT1 = IN3 > 0 ? {cast}(IN1)[IN2] : {vl_vec};"))
             } else {
@@ -111,7 +57,7 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                 Some("IN1[IN2] = IN3;".to_string())
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                let cast = reinterpret(&format!("{ty}{sz}"));
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
                 Some(format!("{cast}(IN1)[IN2] = IN3;"))
             } else {
                 None
@@ -120,11 +66,11 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
         PointwiseOp::AtomicAdd(io) => {
             let ty = tystr(io.buf_ty);
             if io.p2size == 0 {
-                Some(atomic_add("IN1 + IN2", "IN3"))
+                Some(dialect.atomic_add("IN1 + IN2", "IN3"))
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                let cast = reinterpret(&format!("{ty}{sz}"));
-                Some(atomic_add(&format!("{cast}(IN1) + IN2"), "IN3"))
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
+                Some(dialect.atomic_add(&format!("{cast}(IN1) + IN2"), "IN3"))
             } else {
                 None
             }
@@ -138,36 +84,34 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
 
             match p2size {
                 0 => Some(format!("const {ty} OUT1 = {vl};")),
-                1 => Some(format!("const {ty}2 OUT1 = {};", make_vec(ty, 2, &format!("{vl}, {vl}")))),
-                2 => Some(format!("const {ty}4 OUT1 = {};", make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}")))),
+                1 => Some(format!("const {ty}2 OUT1 = {};", dialect.make_vec(ty, 2, &format!("{vl}, {vl}")))),
+                2 => Some(format!("const {ty}4 OUT1 = {};", dialect.make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}")))),
                 3.. => None,
             }
         }
         PointwiseOp::ThreadId => {
             let size_val = size.get();
-
-            if is_msl {
-                Some(format!(
+            match dialect {
+                Dialect::Msl => Some(format!(
                     "\
                     const int OUT1 = static_cast<int>(metal_tid);\n\
                     if (OUT1 >= ({size_val})) return;\
                 "
-                ))
-            } else {
-                Some(format!(
+                )),
+                Dialect::CudaHip => Some(format!(
                     "\
                     const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;\n\
                     const int OUT1 = idx_in_grid * blockDim.x + threadIdx.x;\n\
                     if (OUT1 >= ({size_val})) return;\
                 "
-                ))
+                )),
             }
         }
         PointwiseOp::Broadcast(ty, p2size) => {
             let ty = tystr(ty);
             match p2size.get() {
-                1 => Some(format!("const {ty}2 OUT1 = {};", make_vec(ty, 2, "IN1, IN1"))),
-                2 => Some(format!("const {ty}4 OUT1 = {};", make_vec(ty, 4, "IN1, IN1, IN1, IN1"))),
+                1 => Some(format!("const {ty}2 OUT1 = {};", dialect.make_vec(ty, 2, "IN1, IN1"))),
+                2 => Some(format!("const {ty}4 OUT1 = {};", dialect.make_vec(ty, 4, "IN1, IN1, IN1, IN1"))),
                 _ => None,
             }
         }
@@ -199,7 +143,7 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
         }
         PointwiseOp::Power { p2size } => {
             let chars = ['x', 'y', 'z', 'w'];
-            let formula = |x, y| format!("{powf_fn}({x}, {y});");
+            let formula = |x, y| format!("{}({x}, {y});", dialect.pow());
             match p2size {
                 0 => Some(format!("const float OUT1 = {}", formula("IN1".into(), "IN2".into()))),
                 3.. => None,
@@ -226,95 +170,29 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                 Unary::IsZero => format!("{x} == static_cast<{ty}>(0)"),
                 Unary::IsNonNegative => format!("{x} >= static_cast<{ty}>(0)"),
                 _ => {
-                    let opstr = match op {
+                    let func: &str = match op {
                         Unary::Cast(nty) => match nty {
                             DType::F32 => "static_cast<float>",
                             DType::I32 => "static_cast<int>",
                         },
                         Unary::Abs => "abs",
-                        Unary::Sin => {
-                            if is_msl {
-                                "sin"
-                            } else {
-                                "sinf"
-                            }
-                        }
-                        Unary::Cos => {
-                            if is_msl {
-                                "cos"
-                            } else {
-                                "cosf"
-                            }
-                        }
-                        Unary::Tan => {
-                            if is_msl {
-                                "tan"
-                            } else {
-                                "tanf"
-                            }
-                        }
-                        Unary::Sinh => {
-                            if is_msl {
-                                "sinh"
-                            } else {
-                                "sinhf"
-                            }
-                        }
-                        Unary::Cosh => {
-                            if is_msl {
-                                "cosh"
-                            } else {
-                                "coshf"
-                            }
-                        }
-                        Unary::Tanh => {
-                            if is_msl {
-                                "tanh"
-                            } else {
-                                "tanhf"
-                            }
-                        }
-                        Unary::Exp => {
-                            if is_msl {
-                                "exp"
-                            } else {
-                                "expf"
-                            }
-                        }
-                        Unary::Log => {
-                            if is_msl {
-                                "log"
-                            } else {
-                                "logf"
-                            }
-                        }
-                        Unary::Sqrt => {
-                            if is_msl {
-                                "sqrt"
-                            } else {
-                                "sqrtf"
-                            }
-                        }
-                        Unary::Round => {
-                            if is_msl {
-                                "round"
-                            } else {
-                                "roundf"
-                            }
-                        }
-                        Unary::Truncate => {
-                            if is_msl {
-                                "trunc"
-                            } else {
-                                "truncf"
-                            }
-                        }
+                        Unary::Sin => dialect.sin(),
+                        Unary::Cos => dialect.cos(),
+                        Unary::Tan => dialect.tan(),
+                        Unary::Sinh => dialect.sinh(),
+                        Unary::Cosh => dialect.cosh(),
+                        Unary::Tanh => dialect.tanh(),
+                        Unary::Exp => dialect.exp(),
+                        Unary::Log => dialect.log(),
+                        Unary::Sqrt => dialect.sqrt(),
+                        Unary::Round => dialect.round(),
+                        Unary::Truncate => dialect.trunc(),
                         Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
                             unimplemented!()
                         }
                     };
 
-                    format!("{opstr}({x})")
+                    format!("{func}({x})")
                 }
             };
 
@@ -353,8 +231,8 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                     let m = rows / 2;
                     let o = offset / 2;
                     let s = stride / 2;
-                    let cast = reinterpret(&format!("{ty}2"));
-                    let zero_vec = make_vec(ty, 2, "0, 0");
+                    let cast = dialect.reinterpret_cast(&format!("{ty}2"));
+                    let zero_vec = dialect.make_vec(ty, 2, "0, 0");
                     Some(format!(
                         "\
                         {ty}2 OUT1 = {zero_vec};
@@ -380,8 +258,8 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                     let m = rows / 4;
                     let o = offset / 4;
                     let s = stride / 4;
-                    let cast = reinterpret(&format!("{ty}4"));
-                    let zero_vec = make_vec(ty, 4, "0, 0, 0, 0");
+                    let cast = dialect.reinterpret_cast(&format!("{ty}4"));
+                    let zero_vec = dialect.make_vec(ty, 4, "0, 0, 0, 0");
                     Some(format!(
                         "\
                         {ty}4 OUT1 = {zero_vec};
@@ -406,7 +284,6 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
             }
         }
         PointwiseOp::SpMMT { nnz, rows, cols, stride, offset, .. } => {
-            let atomic = |ptr: &str, val: &str| atomic_add(ptr, val);
             Some(format!(
                 "\
                     if (IN4 != 0) {{
@@ -419,7 +296,7 @@ pub fn code_str_dialect(op: PointwiseOp, size: Size, dialect: Dialect) -> Option
                             {}
                         }}
                     }}",
-                atomic(&format!("IN1 + j * {stride} + UNIQ2"), "IN4")
+                dialect.atomic_add(&format!("IN1 + j * {stride} + UNIQ2"), "IN4")
             ))
         }
     }

@@ -14,8 +14,9 @@ use bullet_compiler::{
 use crate::{
     kernel::KernelSrc,
     pointwise::{
+        Dialect,
         operations::{MemIO, PType, PointwiseOp},
-        write::{Dialect, tystr},
+        write::tystr,
     },
     runtime::Dim3,
 };
@@ -321,13 +322,11 @@ impl PointwiseIR {
     }
 
     pub fn source_code(&self, kernel_name: &str) -> Result<String, fmt::Error> {
-        use crate::pointwise::write::Dialect;
         self.source_code_dialect(kernel_name, Dialect::active())
     }
 
     pub fn source_code_dialect(&self, kernel_name: &str, dialect: Dialect) -> Result<String, fmt::Error> {
-        use crate::pointwise::write::code_str_dialect;
-        let is_msl = dialect == Dialect::Msl;
+        use crate::pointwise::write::code_str;
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
@@ -335,7 +334,7 @@ impl PointwiseIR {
             let op = self.ir.op(op_id).unwrap();
 
             if !matches!(op.data(), PointwiseOp::Buffer { .. }) {
-                let mut src = code_str_dialect(*op.data(), self.size, dialect).unwrap();
+                let mut src = code_str(*op.data(), self.size, dialect).unwrap();
 
                 for (i, &id) in op.inputs().iter().enumerate() {
                     src = src.replace(&format!("IN{}", i + 1), &name(id));
@@ -353,32 +352,33 @@ impl PointwiseIR {
 
         let mut src = String::new();
 
-        if is_msl {
-            writeln!(&mut src, "#include <metal_stdlib>")?;
-            writeln!(&mut src, "using namespace metal;")?;
-            writeln!(&mut src)?;
+        match dialect {
+            Dialect::Msl => {
+                writeln!(&mut src, "#include <metal_stdlib>")?;
+                writeln!(&mut src, "using namespace metal;")?;
+                writeln!(&mut src)?;
 
-            // MSL kernel signature with [[buffer(N)]] attributes
-            write!(&mut src, "kernel void {kernel_name}(")?;
+                write!(&mut src, "kernel void {kernel_name}(")?;
 
-            let mut buf_index = 0u32;
-            for (i, &input) in self.bufs.iter().enumerate() {
-                let comma = if i > 0 { ", " } else { "" };
-                let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
-                write!(&mut src, "{comma}device {}* {} [[buffer({buf_index})]]", tystr(ty), name(input))?;
-                buf_index += 1;
+                let mut buf_index = 0u32;
+                for (i, &input) in self.bufs.iter().enumerate() {
+                    let comma = if i > 0 { ", " } else { "" };
+                    let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
+                    write!(&mut src, "{comma}device {}* {} [[buffer({buf_index})]]", tystr(ty), name(input))?;
+                    buf_index += 1;
+                }
+
+                let comma = if !self.bufs.is_empty() { ", " } else { "" };
+                write!(&mut src, "{comma}uint metal_tid [[thread_position_in_grid]]")?;
             }
+            Dialect::CudaHip => {
+                write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
 
-            // Add thread position as the last parameter
-            let comma = if !self.bufs.is_empty() { ", " } else { "" };
-            write!(&mut src, "{comma}uint metal_tid [[thread_position_in_grid]]")?;
-        } else {
-            write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
-
-            for (i, &input) in self.bufs.iter().enumerate() {
-                let comma = if i > 0 { ", " } else { "" };
-                let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
-                write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
+                for (i, &input) in self.bufs.iter().enumerate() {
+                    let comma = if i > 0 { ", " } else { "" };
+                    let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
+                    write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
+                }
             }
         }
 

@@ -25,7 +25,7 @@ use bullet_compiler::{
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
+    pointwise::{Dialect, transforms::{CodegenPointwise, FusePointwise, LowerPointwise}},
     runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, KernelArgType, Module, Stream},
 };
 
@@ -405,23 +405,30 @@ impl IRTransform for CodegenReduction {
                 let outer = reduction.outer().get();
                 let dimen = reduction.dimen().get();
 
-                let src = (if cfg!(feature = "metal") { REDUCTION_SRC_MSL } else { REDUCTION_SRC_CUDA })
-                    .replace(
-                        "FUNC",
-                        match reduction.reduction() {
-                            Reduction::Max => "max",
-                            Reduction::Min => "min",
-                            _ => unimplemented!(),
-                        },
-                    )
-                    .replace("INNER", &dimen.to_string())
-                    .replace("OUTER", &outer.to_string());
+                let src = (match Dialect::active() {
+                    Dialect::Msl => REDUCTION_SRC_MSL,
+                    Dialect::CudaHip => REDUCTION_SRC_CUDA,
+                })
+                .replace(
+                    "FUNC",
+                    match reduction.reduction() {
+                        Reduction::Max => "max",
+                        Reduction::Min => "min",
+                        _ => unimplemented!(),
+                    },
+                )
+                .replace("INNER", &dimen.to_string())
+                .replace("OUTER", &outer.to_string());
 
                 let new = unsafe {
                     KernelSrc::new(
                         reduction.inputs(),
                         reduction.outputs(),
-                        if cfg!(feature = "metal") { "reduce_kernel" } else { "kernel" }.to_string(),
+                        match Dialect::active() {
+                            Dialect::Msl => "reduce_kernel",
+                            Dialect::CudaHip => "kernel",
+                        }
+                        .to_string(),
                         src,
                         vec![(0, true), (0, false)],
                         Default::default(),

@@ -7,6 +7,7 @@ use bullet_compiler::tensor::{DType, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
+    pointwise::Dialect,
     runtime::{Device, Dim3, Gpu, Stream},
 };
 
@@ -96,7 +97,10 @@ kernel void adamw(
 
 impl AdamWParams {
     pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
-        let (op_src, decl) = if cfg!(feature = "metal") { (OP_MSL, DECL_MSL) } else { (OP_CUDA, DECL_CUDA) };
+        let (op_src, decl) = match Dialect::active() {
+            Dialect::Msl => (OP_MSL, DECL_MSL),
+            Dialect::CudaHip => (OP_CUDA, DECL_CUDA),
+        };
 
         let op = op_src
             .replace("DECAY", &format!("{:.E}", self.decay))
@@ -106,8 +110,8 @@ impl AdamWParams {
             .replace("WMAX", &format!("{:.E}", self.max_weight))
             .replace("EPSILON", "0.00000001F");
 
-        let body = if cfg!(feature = "metal") {
-            if size.is_multiple_of(4) {
+        let body = match Dialect::active() {
+            Dialect::Msl => if size.is_multiple_of(4) {
                 format!(
                     "
                     const uint tid = metal_tid;
@@ -157,8 +161,8 @@ impl AdamWParams {
                         velocity[tid] = v;
                     }}"
                 )
-            }
-        } else if size.is_multiple_of(4) {
+            },
+            Dialect::CudaHip => if size.is_multiple_of(4) {
             format!(
                 "
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -204,6 +208,7 @@ impl AdamWParams {
                     velocity[tid] = v;
                 }}"
             )
+        },
         };
 
         let ty = TType::new(size, DType::F32);

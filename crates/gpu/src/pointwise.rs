@@ -1,8 +1,11 @@
+pub mod dialect;
 mod generate;
 mod ir;
 mod operations;
 pub(crate) mod transforms;
 mod write;
+
+pub use dialect::Dialect;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
