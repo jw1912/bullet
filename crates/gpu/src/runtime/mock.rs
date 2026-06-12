@@ -3,6 +3,7 @@ use std::{
     ffi::{CStr, c_char, c_int, c_uint, c_void},
 };
 
+use crate::pointwise::Dialect;
 use crate::runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings, KernelArgType}};
 
 /// Used to type check code without requiring CUDA/ROCm
@@ -46,6 +47,7 @@ impl GpuBindings for MockGpu {
             stream_mem_alloc: false,
             vec_atomics: false,
             arch: None,
+            dialect: Dialect::CudaHip,
         })
     }
 
