@@ -332,7 +332,7 @@ impl GpuBindings for Metal {
             {
                 let pipeline_reg = pipeline_registry().lock().unwrap();
                 let pipeline = pipeline_reg.get(&func).ok_or_else(|| MetalError::Runtime("Kernel not found".into()))?;
-                encoder.setComputePipelineState(&**pipeline);
+                encoder.setComputePipelineState(pipeline);
             }
 
             let total_threads = grid_dim.x * block_dim.x;
@@ -412,7 +412,7 @@ impl GpuBindings for Metal {
 
         let device = &*current_device();
         let pipeline = device
-            .newComputePipelineStateWithFunction_error(&*function)
+            .newComputePipelineStateWithFunction_error(&function)
             .map_err(|e| MetalError::Compile(format!("Failed to create pipeline: {}", e.localizedDescription())))?;
 
         let id = next_id();
@@ -521,9 +521,9 @@ impl GpuBindings for Metal {
                 let desc_b = mps_matrix_descriptor(b_rows, b_cols, ldb, batch, stride_b);
                 let desc_c = mps_matrix_descriptor(n, m, ldc, batch, stride_c);
 
-                let mat_a = mps_matrix(&**buf_a, &desc_a);
-                let mat_b = mps_matrix(&**buf_b, &desc_b);
-                let mat_c = mps_matrix(&**buf_c, &desc_c);
+                let mat_a = mps_matrix(buf_a, &desc_a);
+                let mat_b = mps_matrix(buf_b, &desc_b);
+                let mat_c = mps_matrix(buf_c, &desc_c);
                 (mat_a, mat_b, mat_c)
             };
 
@@ -541,7 +541,7 @@ impl GpuBindings for Metal {
             );
 
             // left=B, right=A (swapped for row-major)
-            mps_encode_gemm(&gemm, &*command_buffer, &mat_b, &mat_a, &mat_c);
+            mps_encode_gemm(&gemm, &command_buffer, &mat_b, &mat_a, &mat_c);
             command_buffer.commit();
 
             Ok(())

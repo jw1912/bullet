@@ -128,6 +128,7 @@ impl IRTransform for FusePointwise {
 pub struct CodegenPointwise {
     pub dialect: Dialect,
 }
+
 impl IRTransform for CodegenPointwise {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         // lower fused pointwise to KernelSrc ops
