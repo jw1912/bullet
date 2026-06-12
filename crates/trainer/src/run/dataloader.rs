@@ -6,7 +6,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
-use crate::TensorMap;
+use crate::model::TensorMap;
 
 #[derive(Debug)]
 pub enum DataLoadingError {

@@ -80,6 +80,19 @@ pub fn report_superbatch_finished(
     );
 }
 
+pub fn report_superbatch_throughput(superbatch: usize, superbatch_time: f32, total_time: f32, positions: usize) {
+    let num_cs = num_cs();
+    let pos_per_sec = positions as f32 / superbatch_time;
+
+    println!(
+        "superbatch {} | time {}s | {} pos/sec | total time {}s",
+        ansi(superbatch, num_cs),
+        ansi(format!("{superbatch_time:.1}"), num_cs),
+        ansi(format!("{pos_per_sec:.0}"), num_cs),
+        ansi(format!("{total_time:.1}"), num_cs),
+    );
+}
+
 pub fn report_time_left(steps: TrainingSteps, superbatch: usize, total_time: f32) {
     let num_cs = num_cs();
     let finished_superbatches = superbatch - steps.start_superbatch + 1;

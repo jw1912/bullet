@@ -6,15 +6,16 @@ use bullet_lib::{
     value::loader::{DirectSequentialDataLoader, LoadableDataType},
 };
 use bullet_trainer::{
-    DefaultDevice, Trainer,
     model::{ModelDefinition, ModelInputsBuilder, ModelWeights},
     optimiser::{
         Optimiser,
         adam::{AdamW, AdamWParams},
     },
     run::{
+        DefaultDevice,
         reader::ReadMapLoader,
         schedule::{TrainingSchedule, TrainingSteps},
+        train,
     },
 };
 
@@ -68,21 +69,16 @@ fn main() {
 
     let weights = ModelWeights::new(&defn, 198273612);
     let device = DefaultDevice::new(0).unwrap();
-    let optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, AdamWParams::default()).unwrap();
-    let mut trainer = Trainer::new(optimiser, ());
+    let mut optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, AdamWParams::default()).unwrap();
 
     let reader = DirectSequentialDataLoader::new(&["examples/tests/batch.bf"]);
     let loader = ReadMapLoader::new(reader, inputs.mapper().clone(), 0, 4);
 
-    let steps =
-        TrainingSteps { batch_size: 16_384, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 10 };
+    let schedule = TrainingSchedule {
+        steps: TrainingSteps { batch_size: 16_384, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 10 },
+        log_rate: 128,
+        lr_schedule: Box::new(|_, _| 0.001),
+    };
 
-    trainer
-        .train_custom(
-            TrainingSchedule { steps, log_rate: 128, lr_schedule: Box::new(|_, _| 0.001) },
-            loader,
-            |_, _, _, _| {},
-            |_, _| {},
-        )
-        .unwrap();
+    train(&mut optimiser, schedule, loader, |_, _, _, _| {}, |_, _| {}).unwrap();
 }
