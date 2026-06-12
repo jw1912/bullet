@@ -399,7 +399,7 @@ impl GpuBindings for Metal {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(module: u64, kernel_name: &CStr) -> Result<u64, MetalError> {
+    unsafe fn module_get_kernel(module: u64, kernel_name: &CStr, arg_types: &[KernelArgType]) -> Result<u64, MetalError> {
         let name = kernel_name.to_str().map_err(|e| MetalError::Runtime(format!("{e}")))?;
         let ns_name = NSString::from_str(name);
 
@@ -418,6 +418,7 @@ impl GpuBindings for Metal {
 
         let id = next_id();
         pipeline_registry().lock().unwrap().insert(id, pipeline);
+        kernel_arg_info().lock().unwrap().insert(id, arg_types.to_vec());
         Ok(id)
     }
 
@@ -549,9 +550,6 @@ impl GpuBindings for Metal {
         })
     }
 
-    unsafe fn register_kernel_args(kernel: u64, args: &[KernelArgType]) {
-        kernel_arg_info().lock().unwrap().insert(kernel, args.to_vec());
-    }
 }
 
 // ---------------------------------------------------------------------------

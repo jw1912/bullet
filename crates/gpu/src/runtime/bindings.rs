@@ -150,7 +150,7 @@ pub trait GpuBindings: 'static {
 
     unsafe fn module_destroy(module: Self::Module) -> Result<(), Self::Err>;
 
-    unsafe fn module_get_kernel(module: Self::Module, kernel_name: &CStr) -> Result<Self::Kernel, Self::Err>;
+    unsafe fn module_get_kernel(module: Self::Module, kernel_name: &CStr, arg_types: &[KernelArgType]) -> Result<Self::Kernel, Self::Err>;
 
     unsafe fn program_compile(
         source_code: &CStr,
@@ -181,10 +181,6 @@ pub trait GpuBindings: 'static {
         c: Self::Ptr,
     ) -> Result<(), Self::Err>;
 
-    /// Register the argument types for a compiled kernel.
-    /// The default no-op is used by CUDA/ROCm/mock; Metal overrides this to
-    /// store arg types in a registry for use during kernel launch.
-    unsafe fn register_kernel_args(_kernel: Self::Kernel, _args: &[KernelArgType]) {}
 }
 
 const _C_INT_IS_I32: () = assert!(std::mem::size_of::<i32>() == std::mem::size_of::<c_int>());

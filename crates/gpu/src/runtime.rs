@@ -317,11 +317,10 @@ impl<G: Gpu> Module<G> {
 
         let name = name.into();
         let cname = CString::new(name.clone()).map_err(|e| format!("{e:?}"))?;
-        let kernel = unsafe { G::module_get_kernel(self.module, &cname)? };
+        let kernel = unsafe { G::module_get_kernel(self.module, &cname, arg_types)? };
 
         unsafe {
             G::kernel_load(kernel)?;
-            G::register_kernel_args(kernel, arg_types);
         }
 
         Ok(Kernel { name, kernel, module: self.clone() })

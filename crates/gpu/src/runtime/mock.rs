@@ -3,7 +3,7 @@ use std::{
     ffi::{CStr, c_char, c_int, c_uint, c_void},
 };
 
-use crate::runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings}};
+use crate::runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings, KernelArgType}};
 
 /// Used to type check code without requiring CUDA/ROCm
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -175,7 +175,7 @@ impl GpuBindings for MockGpu {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(module: (), kernel_name: &CStr) -> MockResult {
+    unsafe fn module_get_kernel(module: (), kernel_name: &CStr, _arg_types: &[KernelArgType]) -> MockResult {
         Ok(())
     }
 
