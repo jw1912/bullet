@@ -507,25 +507,24 @@ mod tests {
         let stream = device.new_stream()?;
 
         let kernel_src = match device.dialect() {
-            Dialect::CudaHip => "extern \"C\" __global__ void add_one(const int size, const float* src, float* dst) {
+            Dialect::CudaHip => "extern \"C\" __global__ void add_one(const float* src, float* dst) {
                     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-                    if (tid < size) dst[tid] = src[tid] + 1.0;
+                    dst[tid] = src[tid] + 1.0;
                 }",
             Dialect::Msl => "#include <metal_stdlib>
                 using namespace metal;
                 kernel void add_one(
-                    constant int& size [[buffer(0)]],
-                    device const float* src [[buffer(1)]],
-                    device float* dst [[buffer(2)]],
+                    device const float* src [[buffer(0)]],
+                    device float* dst [[buffer(1)]],
                     uint tid [[thread_position_in_grid]]
                 ) {
-                    if (tid < uint(size)) dst[tid] = src[tid] + 1.0;
+                    dst[tid] = src[tid] + 1.0;
                 }",
         };
 
         let module = Module::new(device.clone(), kernel_src)?;
         let kernel = module.get_kernel("add_one")?;
-        kernel.register_args(&[KernelArgType::Scalar, KernelArgType::Buffer, KernelArgType::Buffer]);
+        kernel.register_args(&[KernelArgType::Buffer, KernelArgType::Buffer]);
 
         unsafe {
             let dev_src = device.malloc(16)?;
@@ -534,9 +533,7 @@ mod tests {
             stream.memcpy_h2d(host_src.as_ptr().cast(), dev_src, 16)?;
 
             let gdim = Dim3 { x: 1, y: 1, z: 1 };
-            let size = 4i32;
             let mut args = Vec::new();
-            args.push((&size) as *const i32 as *mut c_void);
             args.push((&dev_src) as *const G::DevicePtr as *mut c_void);
             args.push((&dev_dst) as *const G::DevicePtr as *mut c_void);
 
