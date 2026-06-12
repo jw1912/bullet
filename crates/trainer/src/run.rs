@@ -46,11 +46,16 @@ impl<G: Gpu> From<DataLoadingError> for TrainingError<G> {
 }
 
 pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSteps) -> Result<(), DataLoadingError> {
+    let timer = Instant::now();
+    logger::clear_colours();
+    println!("{}", logger::ansi("Measuring CPU Throughput", "34;1"));
+
+    let sb_positions = steps.batches_per_superbatch * steps.batch_size;
+
     let mut batch_no = 0;
     let mut superbatch = steps.start_superbatch;
-
-    let t = Instant::now();
     let mut total = 0;
+    let mut sb_timer = Instant::now();
 
     dataloader.map_batches(steps.batch_size, |_| {
         batch_no += 1;
@@ -60,11 +65,16 @@ pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSt
             batch_no = 0;
             superbatch += 1;
 
-            println!("{:.0} datapoints / sec", total as f64 / t.elapsed().as_secs_f64());
+            let total_time = timer.elapsed().as_secs_f32();
+            let sb_time = sb_timer.elapsed().as_secs_f32();
+            logger::report_superbatch_throughput(superbatch, sb_time, total_time, sb_positions);
+            logger::report_time_left(steps, superbatch, total_time);
 
             if superbatch > steps.end_superbatch {
                 return true;
             }
+
+            sb_timer = Instant::now();
         }
 
         false
