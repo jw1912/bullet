@@ -59,10 +59,8 @@ impl KernelSrc {
     }
 
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
-        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name)?;
-
         let arg_types: Vec<_> = self.arg_order.iter().map(|_| KernelArgType::Buffer).collect();
-        kernel.register_args(&arg_types);
+        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name, &arg_types)?;
 
         Ok(CompiledKernel {
             inputs: self.inputs.clone(),

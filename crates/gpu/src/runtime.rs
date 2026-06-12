@@ -312,7 +312,7 @@ impl<G: Gpu> Module<G> {
     }
 
     /// Get kernel with given name from module
-    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>) -> Result<Kernel<G>, G::Error> {
+    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>, arg_types: &[bindings::KernelArgType]) -> Result<Kernel<G>, G::Error> {
         self.device.set()?;
 
         let name = name.into();
@@ -321,6 +321,7 @@ impl<G: Gpu> Module<G> {
 
         unsafe {
             G::kernel_load(kernel)?;
+            G::register_kernel_args(kernel, arg_types);
         }
 
         Ok(Kernel { name, kernel, module: self.clone() })
@@ -387,13 +388,6 @@ impl<G: Gpu> Kernel<G> {
     /// Get the raw kernel handle
     pub fn id(&self) -> G::Kernel {
         self.kernel
-    }
-
-    /// Register the argument types for this kernel.
-    /// No-op for CUDA/ROCm/mock; Metal uses this to record how each argument
-    /// should be bound during kernel launch.
-    pub(crate) fn register_args(&self, args: &[bindings::KernelArgType]) {
-        unsafe { G::register_kernel_args(self.kernel, args) }
     }
 
     /// Get the device that this kernel is on
@@ -522,9 +516,7 @@ mod tests {
                 }",
         };
 
-        let module = Module::new(device.clone(), kernel_src)?;
-        let kernel = module.get_kernel("add_one")?;
-        kernel.register_args(&[KernelArgType::Buffer, KernelArgType::Buffer]);
+        let kernel = Module::new(device.clone(), kernel_src)?.get_kernel("add_one", &[KernelArgType::Buffer, KernelArgType::Buffer])?;
 
         unsafe {
             let dev_src = device.malloc(16)?;

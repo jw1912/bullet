@@ -127,13 +127,11 @@ impl<G: Gpu> Function<G> {
                     insts.push(Inst::Zero { idx: *indices.get(&node_id).unwrap(), ty });
                 }
 
+                let arg_types: Vec<_> = args.iter().map(|_| KernelArgType::Buffer).collect();
                 let func = Module::new(device.clone(), source.clone())
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?
-                    .get_kernel(name)
+                    .get_kernel(name, &arg_types)
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
-
-                let arg_types: Vec<_> = args.iter().map(|_| KernelArgType::Buffer).collect();
-                func.register_args(&arg_types);
 
                 max_num_args = max_num_args.max(args.len());
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });
