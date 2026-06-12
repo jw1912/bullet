@@ -6,7 +6,7 @@ pub mod cuda;
 #[cfg(feature = "metal")]
 pub mod metal;
 #[cfg(all(feature = "metal", not(target_os = "macos")))]
-compile_error!("the `metal` feature requires macOS (the objc2 backend is Apple-only)");
+compile_error!("the `metal` feature requires macOS");
 pub mod mock;
 #[cfg(feature = "rocm")]
 pub mod rocm;
