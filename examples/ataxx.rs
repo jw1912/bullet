@@ -45,7 +45,7 @@ fn main() {
 
         pnt.map_pieces(|pc, sq| {
             stm[i] = 49 * pc + sq;
-            ntm[i] = if pc == 2 { stm[i] } else { 49 * (1 - pc) + sq };
+            ntm[i] = 49 * [1, 0, 2][pc as usize] + sq;
             i += 1;
         });
 
