@@ -22,108 +22,108 @@ impl Dialect {
 
     pub fn reinterpret_cast(&self, ty: &str) -> String {
         match self {
-            Dialect::Msl => format!("reinterpret_cast<device {ty}*>"),
             Dialect::CudaHip => format!("reinterpret_cast<{ty}*>"),
+            Dialect::Msl => format!("reinterpret_cast<device {ty}*>"),
         }
     }
 
     pub fn make_vec(&self, ty: &str, count: u32, vals: &str) -> String {
         match self {
-            Dialect::Msl => format!("{ty}{count}({vals})"),
             Dialect::CudaHip => format!("make_{ty}{count}({vals})"),
+            Dialect::Msl => format!("{ty}{count}({vals})"),
         }
     }
 
     pub fn atomic_add(&self, ptr_expr: &str, val_expr: &str) -> String {
         match self {
+            Dialect::CudaHip => format!("atomicAdd({ptr_expr}, {val_expr});"),
             Dialect::Msl => format!(
                 "atomic_fetch_add_explicit((volatile device atomic_float*)({ptr_expr}), {val_expr}, memory_order_relaxed);"
             ),
-            Dialect::CudaHip => format!("atomicAdd({ptr_expr}, {val_expr});"),
         }
     }
 
     pub fn pow(&self) -> &'static str {
         match self {
-            Dialect::Msl => "pow",
             Dialect::CudaHip => "powf",
+            Dialect::Msl => "pow",
         }
     }
 
     pub fn sin(&self) -> &'static str {
         match self {
-            Dialect::Msl => "sin",
             Dialect::CudaHip => "sinf",
+            Dialect::Msl => "sin",
         }
     }
 
     pub fn cos(&self) -> &'static str {
         match self {
-            Dialect::Msl => "cos",
             Dialect::CudaHip => "cosf",
+            Dialect::Msl => "cos",
         }
     }
 
     pub fn tan(&self) -> &'static str {
         match self {
-            Dialect::Msl => "tan",
             Dialect::CudaHip => "tanf",
+            Dialect::Msl => "tan",
         }
     }
 
     pub fn sinh(&self) -> &'static str {
         match self {
-            Dialect::Msl => "sinh",
             Dialect::CudaHip => "sinhf",
+            Dialect::Msl => "sinh",
         }
     }
 
     pub fn cosh(&self) -> &'static str {
         match self {
-            Dialect::Msl => "cosh",
             Dialect::CudaHip => "coshf",
+            Dialect::Msl => "cosh",
         }
     }
 
     pub fn tanh(&self) -> &'static str {
         match self {
-            Dialect::Msl => "tanh",
             Dialect::CudaHip => "tanhf",
+            Dialect::Msl => "tanh",
         }
     }
 
     pub fn exp(&self) -> &'static str {
         match self {
-            Dialect::Msl => "exp",
             Dialect::CudaHip => "expf",
+            Dialect::Msl => "exp",
         }
     }
 
     pub fn log(&self) -> &'static str {
         match self {
-            Dialect::Msl => "log",
             Dialect::CudaHip => "logf",
+            Dialect::Msl => "log",
         }
     }
 
     pub fn sqrt(&self) -> &'static str {
         match self {
-            Dialect::Msl => "sqrt",
             Dialect::CudaHip => "sqrtf",
+            Dialect::Msl => "sqrt",
         }
     }
 
     pub fn round(&self) -> &'static str {
         match self {
-            Dialect::Msl => "round",
             Dialect::CudaHip => "roundf",
+            Dialect::Msl => "round",
         }
     }
 
     pub fn trunc(&self) -> &'static str {
         match self {
-            Dialect::Msl => "trunc",
             Dialect::CudaHip => "truncf",
+            Dialect::Msl => "trunc",
         }
     }
 }

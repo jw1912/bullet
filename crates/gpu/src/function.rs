@@ -406,8 +406,8 @@ impl IRTransform for CodegenReduction {
                 let dimen = reduction.dimen().get();
 
                 let src = (match Dialect::active() {
-                    Dialect::Msl => REDUCTION_SRC_MSL,
                     Dialect::CudaHip => REDUCTION_SRC_CUDA,
+                    Dialect::Msl => REDUCTION_SRC_MSL,
                 })
                 .replace(
                     "FUNC",
@@ -425,8 +425,8 @@ impl IRTransform for CodegenReduction {
                         reduction.inputs(),
                         reduction.outputs(),
                         match Dialect::active() {
-                            Dialect::Msl => "reduce_kernel",
                             Dialect::CudaHip => "kernel",
+                            Dialect::Msl => "reduce_kernel",
                         }
                         .to_string(),
                         src,

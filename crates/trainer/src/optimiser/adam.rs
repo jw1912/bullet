@@ -98,8 +98,8 @@ kernel void adamw(
 impl AdamWParams {
     pub fn build(&self, size: usize) -> Result<KernelSrc, IRTrace> {
         let (op_src, decl) = match Dialect::active() {
-            Dialect::Msl => (OP_MSL, DECL_MSL),
             Dialect::CudaHip => (OP_CUDA, DECL_CUDA),
+            Dialect::Msl => (OP_MSL, DECL_MSL),
         };
 
         let op = op_src
@@ -111,6 +111,53 @@ impl AdamWParams {
             .replace("EPSILON", "0.00000001F");
 
         let body = match Dialect::active() {
+            Dialect::CudaHip => if size.is_multiple_of(4) {
+            format!(
+                "
+                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+                if (tid < {})
+                {{
+                    const float adj = adj_ptr[0];
+                    const float rate = rate_ptr[0];
+                    float4 p = ((float4 *)network)[tid];
+                    float4 m = ((float4 *)momentum)[tid];
+                    float4 v = ((float4 *)velocity)[tid];
+                    const float4 g = ((const float4 *)gradients)[tid];
+
+                    adamOp(adj * g.x, rate, &p.x, &m.x, &v.x);
+                    adamOp(adj * g.y, rate, &p.y, &m.y, &v.y);
+                    adamOp(adj * g.z, rate, &p.z, &m.z, &v.z);
+                    adamOp(adj * g.w, rate, &p.w, &m.w, &v.w);
+
+                    ((float4 *)network)[tid] = p;
+                    ((float4 *)momentum)[tid] = m;
+                    ((float4 *)velocity)[tid] = v;
+                }}",
+                size / 4,
+            )
+        } else {
+            format!(
+                "
+                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+                if (tid < {size})
+                {{
+                    const float adj = adj_ptr[0];
+                    const float rate = rate_ptr[0];
+                    float p = network[tid];
+                    float m = momentum[tid];
+                    float v = velocity[tid];
+                    const float g = gradients[tid];
+
+                    adamOp(adj * g, rate, &p, &m, &v);
+
+                    network[tid] = p;
+                    momentum[tid] = m;
+                    velocity[tid] = v;
+                }}"
+            )
+        },
             Dialect::Msl => if size.is_multiple_of(4) {
                 format!(
                     "
@@ -162,53 +209,6 @@ impl AdamWParams {
                     }}"
                 )
             },
-            Dialect::CudaHip => if size.is_multiple_of(4) {
-            format!(
-                "
-                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-                if (tid < {})
-                {{
-                    const float adj = adj_ptr[0];
-                    const float rate = rate_ptr[0];
-                    float4 p = ((float4 *)network)[tid];
-                    float4 m = ((float4 *)momentum)[tid];
-                    float4 v = ((float4 *)velocity)[tid];
-                    const float4 g = ((const float4 *)gradients)[tid];
-
-                    adamOp(adj * g.x, rate, &p.x, &m.x, &v.x);
-                    adamOp(adj * g.y, rate, &p.y, &m.y, &v.y);
-                    adamOp(adj * g.z, rate, &p.z, &m.z, &v.z);
-                    adamOp(adj * g.w, rate, &p.w, &m.w, &v.w);
-
-                    ((float4 *)network)[tid] = p;
-                    ((float4 *)momentum)[tid] = m;
-                    ((float4 *)velocity)[tid] = v;
-                }}",
-                size / 4,
-            )
-        } else {
-            format!(
-                "
-                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-                if (tid < {size})
-                {{
-                    const float adj = adj_ptr[0];
-                    const float rate = rate_ptr[0];
-                    float p = network[tid];
-                    float m = momentum[tid];
-                    float v = velocity[tid];
-                    const float g = gradients[tid];
-
-                    adamOp(adj * g, rate, &p, &m, &v);
-
-                    network[tid] = p;
-                    momentum[tid] = m;
-                    velocity[tid] = v;
-                }}"
-            )
-        },
         };
 
         let ty = TType::new(size, DType::F32);

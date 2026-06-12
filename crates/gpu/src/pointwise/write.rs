@@ -92,16 +92,16 @@ pub fn code_str(op: PointwiseOp, size: Size, dialect: Dialect) -> Option<String>
         PointwiseOp::ThreadId => {
             let size_val = size.get();
             match dialect {
-                Dialect::Msl => Some(format!(
-                    "\
-                    const int OUT1 = static_cast<int>(metal_tid);\n\
-                    if (OUT1 >= ({size_val})) return;\
-                "
-                )),
                 Dialect::CudaHip => Some(format!(
                     "\
                     const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;\n\
                     const int OUT1 = idx_in_grid * blockDim.x + threadIdx.x;\n\
+                    if (OUT1 >= ({size_val})) return;\
+                "
+                )),
+                Dialect::Msl => Some(format!(
+                    "\
+                    const int OUT1 = static_cast<int>(metal_tid);\n\
                     if (OUT1 >= ({size_val})) return;\
                 "
                 )),

@@ -350,6 +350,15 @@ impl PointwiseIR {
         let mut src = String::new();
 
         match dialect {
+            Dialect::CudaHip => {
+                write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
+
+                for (i, &input) in self.bufs.iter().enumerate() {
+                    let comma = if i > 0 { ", " } else { "" };
+                    let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
+                    write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
+                }
+            }
             Dialect::Msl => {
                 writeln!(&mut src, "#include <metal_stdlib>")?;
                 writeln!(&mut src, "using namespace metal;")?;
@@ -367,15 +376,6 @@ impl PointwiseIR {
 
                 let comma = if !self.bufs.is_empty() { ", " } else { "" };
                 write!(&mut src, "{comma}uint metal_tid [[thread_position_in_grid]]")?;
-            }
-            Dialect::CudaHip => {
-                write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
-
-                for (i, &input) in self.bufs.iter().enumerate() {
-                    let comma = if i > 0 { ", " } else { "" };
-                    let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
-                    write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
-                }
             }
         }
 
