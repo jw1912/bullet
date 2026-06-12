@@ -14,9 +14,10 @@ use bullet_gpu::{
 use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{
-    OptimiserState, WrapOptimiser,
+    OptimiserState,
     radam::{RAdam, RAdamParams},
     utils,
+    wrap::WrapOptimiser,
 };
 
 fn build_ranger_op(size: usize, alpha: f32) -> Result<KernelSrc, IRError> {

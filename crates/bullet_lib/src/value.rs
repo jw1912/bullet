@@ -7,9 +7,8 @@ use std::cell::RefCell;
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
-    Trainer,
-    model::{ModelInputsBuilder, ModelInputsMapper, SavedFormat},
-    optimiser::OptimiserState,
+    model::{ModelEvaluator, ModelInputsBuilder, ModelInputsMapper, SavedFormat},
+    optimiser::{Optimiser, OptimiserState},
     run::{
         self,
         dataloader::PreparedBatchHost,
@@ -32,34 +31,10 @@ use crate::{
 use loader::LoadableDataType;
 
 /// Value network trainer, generally for training NNUE networks.
-pub struct ValueTrainer<
-    Opt: OptimiserState<ExecutionContext>,
-    Inp: SparseInputType,
-    Out: OutputBuckets<Inp::RequiredDataType>,
->(Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>);
-
-impl<Opt, Inp, Out> std::ops::Deref for ValueTrainer<Opt, Inp, Out>
-where
-    Opt: OptimiserState<ExecutionContext>,
-    Inp: SparseInputType,
-    Out: OutputBuckets<Inp::RequiredDataType>,
-{
-    type Target = Trainer<ExecutionContext, Opt, ValueTrainerState<Inp, Out>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<Opt, Inp, Out> std::ops::DerefMut for ValueTrainer<Opt, Inp, Out>
-where
-    Opt: OptimiserState<ExecutionContext>,
-    Inp: SparseInputType,
-    Out: OutputBuckets<Inp::RequiredDataType>,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+pub struct ValueTrainer<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out> {
+    pub optimiser: Optimiser<ExecutionContext, Opt>,
+    state: ValueTrainerState<Inp, Out>,
+    evaluator: Option<ModelEvaluator<ExecutionContext>>,
 }
 
 type B<I> = fn(&<I as SparseInputType>::RequiredDataType, f32) -> f32;
@@ -79,8 +54,8 @@ pub struct ValueTrainerState<Inp: SparseInputType, Out> {
 impl<I, O> ValueTrainerState<I, O>
 where
     I: SparseInputType,
-    O: OutputBuckets<I::RequiredDataType>,
     I::RequiredDataType: LoadableDataType,
+    O: OutputBuckets<I::RequiredDataType>,
 {
     fn make_mapper(
         &self,
@@ -170,7 +145,6 @@ where
     ) -> ReadMapLoader<D, I::RequiredDataType>
     where
         D: DataReader<I::RequiredDataType>,
-        I::RequiredDataType: LoadableDataType,
     {
         ReadMapLoader::new(
             reader,
@@ -209,8 +183,6 @@ where
 
         let steps = schedule.steps;
 
-        //let dataloader = self.state.make_dataloader(dataloader.clone(), schedule.eval_scale);
-        //let dataloader = ValueDataLoader { steps, threads: settings.threads, dataloader, wdl: schedule.wdl_scheduler.clone() };
         let dataloader = self.state.make_read_map_loader(
             steps,
             dataloader.clone(),
@@ -222,12 +194,14 @@ where
         let _ = std::fs::create_dir(settings.output_directory);
 
         let lr_scheduler = schedule.lr_scheduler.clone();
+        let saved_format = self.state.saved_format.clone();
 
         let error_record = RefCell::new(Vec::new());
         let mut loss_sum = 0.0;
         let mut ticks_since_last = 0.0;
 
-        self.train_custom(
+        run::train(
+            &mut self.optimiser,
             run::schedule::TrainingSchedule {
                 steps,
                 log_rate: 128,
@@ -254,7 +228,7 @@ where
                     let name = format!("{}-{superbatch}", schedule.net_id);
                     let path = format!("{}/{name}", settings.output_directory);
                     std::fs::create_dir(path.as_str()).unwrap_or(());
-                    save::save_to_checkpoint(trainer, &path);
+                    save::save_to_checkpoint(trainer, &saved_format, &path);
                     save::write_losses(&format!("{path}/log.txt"), &error_record.borrow());
 
                     println!("Saved [{}]", logger::ansi(name, 31));
@@ -266,7 +240,7 @@ where
 
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
     where
-        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
+        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug>,
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
@@ -275,7 +249,14 @@ where
         let host_data = PreparedBatchHost { inputs: mapper.map(&[pos], 0, 1) };
 
         let device_data = host_data.to_device(&self.optimiser.device()).unwrap();
-        let outputs = self.evaluate(&device_data).unwrap();
+
+        if self.evaluator.is_none() {
+            let mut evaluator = ModelEvaluator::new(self.optimiser.definition(), self.optimiser.device()).unwrap();
+            evaluator.load_device_weights(self.optimiser.weights()).unwrap();
+            self.evaluator = Some(evaluator);
+        }
+
+        let outputs = self.evaluator.as_mut().unwrap().evaluate(&device_data).unwrap();
 
         let output = outputs.get("output").unwrap().clone();
         let TValue::F32(output) = output.to_host().unwrap() else { panic!() };
@@ -284,7 +265,7 @@ where
 
     pub fn eval(&mut self, fen: &str) -> f32
     where
-        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug> + LoadableDataType,
+        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug>,
     {
         let vals = self.eval_raw_output(fen);
 
