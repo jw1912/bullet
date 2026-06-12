@@ -7,53 +7,52 @@ use bullet_trainer::{
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ChessBoard {
-    pub occ: u64,
-    pub pcs: [u8; 16],
+pub struct AtaxxBoard {
+    pub bbs: [u64; 3],
     pub score: i16,
     pub result: u8,
-    pub ksq: u8,
-    pub opp_ksq: u8,
-    pub extra: [u8; 3],
+    pub origstm: u8,
+    pub fullm: u16,
+    pub halfm: u8,
+    pub extra: u8,
 }
 
-unsafe impl FixedSizeData for ChessBoard {}
+unsafe impl FixedSizeData for AtaxxBoard {}
 
-impl ChessBoard {
-    pub fn map_pieces(&self, mut f: impl FnMut(u8, u8)) {
-        let mut occ = self.occ;
-        let mut idx = 0;
+impl AtaxxBoard {
+    pub fn map_pieces(&self, mut f: impl FnMut(i32, i32)) {
+        let mut stage = 0;
 
-        while occ > 0 {
-            let square = occ.trailing_zeros() as u8;
-            let piece = (self.pcs[idx / 2] >> (4 * (idx % 2))) & 0b1111;
+        while stage < 3 {
+            let mut occ = self.bbs[stage];
+            while occ > 0 {
+                let sq = occ.trailing_zeros();
+                occ &= occ - 1;
 
-            occ &= occ - 1;
-            idx += 1;
+                f(stage as i32, sq as i32)
+            }
 
-            f(piece, square)
+            stage += 1;
         }
     }
 }
 
 fn main() {
-    let num_inputs = 768;
-    let nnz = 32;
+    let hl_size = 256;
+    let num_inputs = 147;
+    let nnz = 49;
+
     let inputs = ModelInputs::default()
         .add_sparse("stm", (num_inputs, 1), nnz)
         .add_sparse("ntm", (num_inputs, 1), nnz)
         .add_dense("target", (1, 1));
 
-    let mapper = ModelInputsMapper::build(&inputs, move |pnt: &ChessBoard, _, ((stm, ntm), target)| {
+    let mapper = ModelInputsMapper::build(&inputs, move |pnt: &AtaxxBoard, _, ((stm, ntm), target)| {
         let mut i = 0;
 
         pnt.map_pieces(|pc, sq| {
-            let c = usize::from(pc & 8 > 0);
-            let pc = 64 * i32::from(pc & 7);
-            let sq = i32::from(sq);
-
-            stm[i] = [0, 384][c] + pc + sq;
-            ntm[i] = [384, 0][c] + pc + (sq ^ 56);
+            stm[i] = 49 * pc + sq;
+            ntm[i] = if pc == 2 { stm[i] } else { 49 * (1 - pc) + sq };
             i += 1;
         });
 
@@ -69,8 +68,8 @@ fn main() {
     });
 
     let defn = ModelDefinition::build(&inputs, |builder, ((stm, ntm), target)| {
-        let l0 = builder.new_affine("l0", 768, 32);
-        let l1 = builder.new_affine("l1", 2 * 32, 1);
+        let l0 = builder.new_affine("l0", num_inputs, hl_size);
+        let l1 = builder.new_affine("l1", 2 * hl_size, 1);
 
         let stm_hidden = l0.forward(stm).screlu();
         let ntm_hidden = l0.forward(ntm).screlu();
@@ -88,7 +87,7 @@ fn main() {
 
     let mut optimiser = AdamW::new(defn, weights, device, params).unwrap();
 
-    let reader = FixedSizeDataReader::new(&["examples/tests/batch.bf"]);
+    let reader = FixedSizeDataReader::new(&["data/ataxx.data"]);
     let loader = ReadMapLoader::new(reader, mapper, 4);
 
     let schedule = TrainingSchedule {
