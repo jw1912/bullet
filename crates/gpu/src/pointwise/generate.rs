@@ -374,10 +374,11 @@ mod tests {
     use crate::{
         buffer::Buffer,
         kernel::KernelSrc,
+        pointwise::Dialect,
         runtime::{Device, DeviceProps, Gpu},
     };
 
-    fn make_axby(props: &DeviceProps, size: usize) -> Result<KernelSrc, IRTrace> {
+    fn make_axby(props: &DeviceProps, dialect: Dialect, size: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
         let a = builder.add_input(8, DType::F32);
@@ -387,14 +388,14 @@ mod tests {
         let ir = builder.build([x, y]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node(), x.node()], vec![x.node(), y.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string(), dialect).map_err(IRTrace::from) }
     }
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let src = make_axby(device.props(), 4).unwrap();
+        let src = make_axby(device.props(), device.dialect(), 4).unwrap();
 
         let axby = src.compile(device.clone())?;
 
@@ -427,7 +428,7 @@ mod tests {
         Ok(())
     }
 
-    fn make_concat(props: &DeviceProps, dim: usize) -> Result<KernelSrc, IRTrace> {
+    fn make_concat(props: &DeviceProps, dialect: Dialect, dim: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
         let a = builder.add_input(8, DType::F32);
@@ -440,14 +441,14 @@ mod tests {
         let ir = builder.build([concat]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node()], vec![concat.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string(), dialect).map_err(IRTrace::from) }
     }
 
     fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let src = make_concat(device.props(), dim).unwrap();
+        let src = make_concat(device.props(), device.dialect(), dim).unwrap();
 
         let concat = src.compile(device.clone())?;
 
@@ -466,7 +467,7 @@ mod tests {
         Ok(())
     }
 
-    fn make_slice(props: &DeviceProps, dim: usize) -> Result<KernelSrc, IRTrace> {
+    fn make_slice(props: &DeviceProps, dialect: Dialect, dim: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
         let input = builder.add_input(8, DType::F32);
@@ -475,14 +476,14 @@ mod tests {
         let ir = builder.build([slice]);
 
         let sub = SubGraph::new(ir, vec![input.node()], vec![slice.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string(), dialect).map_err(IRTrace::from) }
     }
 
     fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
 
-        let src = make_slice(device.props(), dim).unwrap();
+        let src = make_slice(device.props(), device.dialect(), dim).unwrap();
 
         let slice = src.compile(device.clone())?;
 

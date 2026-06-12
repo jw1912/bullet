@@ -381,7 +381,7 @@ extern \"C\" __global__ void kernel(const float* input, float* output) {
 static REDUCTION_SRC_MSL: &str = "
 #include <metal_stdlib>
 using namespace metal;
-kernel void reduce_kernel(constant int& size [[buffer(0)]], device const float* input [[buffer(1)]], device float* output [[buffer(2)]], uint tid [[thread_position_in_grid]]) {
+kernel void reduce_kernel(device const float* input [[buffer(0)]], device float* output [[buffer(1)]], uint tid [[thread_position_in_grid]]) {
     if (tid < (OUTER)) {
         float reduction = input[INNER * tid];
 
