@@ -2,7 +2,7 @@ mod dataloader;
 pub mod logger;
 mod schedule;
 
-pub use dataloader::{DataLoader, DataLoadingError, PreparedBatchHost};
+pub use dataloader::{DataLoader, DataLoadingError, HostPool, PreparedBatchHost};
 pub use schedule::{TrainingSchedule, TrainingSteps};
 
 use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
