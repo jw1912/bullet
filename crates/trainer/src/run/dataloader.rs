@@ -70,22 +70,22 @@ impl Drop for PreparedBatchHost {
 }
 
 #[derive(Default)]
-pub struct Pool<T> {
+struct Pool<T> {
     free: Mutex<Vec<T>>,
 }
 
 impl<T> Pool<T> {
-    pub fn take(&self) -> Option<T> {
+    fn take(&self) -> Option<T> {
         self.free.lock().unwrap().pop()
     }
 
-    pub fn give(&self, value: T) {
+    fn give(&self, value: T) {
         self.free.lock().unwrap().push(value);
     }
 }
 
 impl<E: Clone + Default> Pool<Vec<E>> {
-    pub fn take_vec(&self, len: usize) -> Vec<E> {
+    fn take_vec(&self, len: usize) -> Vec<E> {
         let mut value = self.take().unwrap_or_default();
         value.resize(len, E::default());
         value
