@@ -46,7 +46,7 @@ where
                     let prepared = self.mapper.map(&incomplete_buf, batch, self.threads);
                     batch += 1;
 
-                    if f(PreparedBatchHost { inputs: prepared }) {
+                    if f(prepared) {
                         return true;
                     }
 
@@ -68,7 +68,7 @@ where
                     let prepared = self.mapper.map(data, batch, self.threads);
                     batch += 1;
 
-                    if f(PreparedBatchHost { inputs: prepared }) {
+                    if f(prepared) {
                         return true;
                     }
                 }
