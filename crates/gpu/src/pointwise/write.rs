@@ -1,6 +1,6 @@
 use bullet_compiler::tensor::{
-    operation::{CABinary, Unary}, DType, DValue,
-    Size,
+    DType, DValue, Size,
+    operation::{CABinary, Unary},
 };
 
 use crate::pointwise::operations::PointwiseOp;
@@ -88,7 +88,9 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
             match p2size {
                 0 => Some(format!("const {ty} OUT1 = {vl};")),
                 1 => Some(format!("const {ty}2 OUT1 = {};", dialect.make_vec(ty, 2, &format!("{vl}, {vl}")))),
-                2 => Some(format!("const {ty}4 OUT1 = {};", dialect.make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}")))),
+                2 => {
+                    Some(format!("const {ty}4 OUT1 = {};", dialect.make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}"))))
+                }
                 3.. => None,
             }
         }
@@ -286,9 +288,8 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                 3.. => None,
             }
         }
-        PointwiseOp::SpMMT { nnz, rows, cols, stride, offset, .. } => {
-            Some(format!(
-                "\
+        PointwiseOp::SpMMT { nnz, rows, cols, stride, offset, .. } => Some(format!(
+            "\
                     if (IN4 != 0) {{
                         int UNIQ1 = IN3 / {rows};
                         int UNIQ2 = {offset} + IN3 % {rows};
@@ -299,8 +300,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                             {}
                         }}
                     }}",
-                dialect.atomic_add(&format!("IN1 + j * {stride} + UNIQ2"), "IN4")
-            ))
-        }
+            dialect.atomic_add(&format!("IN1 + j * {stride} + UNIQ2"), "IN4")
+        )),
     }
 }

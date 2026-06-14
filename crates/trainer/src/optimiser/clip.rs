@@ -1,17 +1,17 @@
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::optimiser::OptimiserUpdateSync;
 use bullet_compiler::{
     ir::IRError,
     tensor::{DType, DValue, TType, operation::CABinary},
 };
+use bullet_gpu::runtime::DeviceProps;
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::{PointwiseIR},
+    pointwise::PointwiseIR,
     runtime::{Device, Gpu, Stream},
 };
-use bullet_gpu::runtime::DeviceProps;
-use crate::optimiser::OptimiserUpdateSync;
 
 use super::{OptimiserState, OptimiserUpdateResult, utils::Placement};
 

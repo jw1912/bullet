@@ -3,16 +3,16 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    model::{ModelDefinition, ModelWeights},
+    optimiser::{Optimiser, OptimiserUpdateResult, OptimiserUpdateSync},
+};
 use bullet_compiler::tensor::{DType, IRTrace, TType, TValue};
+use bullet_gpu::runtime::{DeviceProps, Dialect};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
     runtime::{Device, Dim3, Gpu, Stream},
-};
-use bullet_gpu::runtime::{DeviceProps, Dialect};
-use crate::{
-    model::{ModelDefinition, ModelWeights},
-    optimiser::{Optimiser, OptimiserUpdateResult, OptimiserUpdateSync},
 };
 
 use super::{OptimiserState, utils};
@@ -110,9 +110,10 @@ impl AdamWParams {
             .replace("EPSILON", "0.00000001F");
 
         let body = match props.dialect() {
-            Dialect::CudaHip => if size.is_multiple_of(4) {
-            format!(
-                "
+            Dialect::CudaHip => {
+                if size.is_multiple_of(4) {
+                    format!(
+                        "
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
                 if (tid < {})
@@ -133,11 +134,11 @@ impl AdamWParams {
                     ((float4 *)momentum)[tid] = m;
                     ((float4 *)velocity)[tid] = v;
                 }}",
-                size / 4,
-            )
-        } else {
-            format!(
-                "
+                        size / 4,
+                    )
+                } else {
+                    format!(
+                        "
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
                 if (tid < {size})
@@ -155,11 +156,13 @@ impl AdamWParams {
                     momentum[tid] = m;
                     velocity[tid] = v;
                 }}"
-            )
-        },
-            Dialect::Msl => if size.is_multiple_of(4) {
-                format!(
-                    "
+                    )
+                }
+            }
+            Dialect::Msl => {
+                if size.is_multiple_of(4) {
+                    format!(
+                        "
                     const uint tid = metal_tid;
 
                     if (tid < {})
@@ -184,11 +187,11 @@ impl AdamWParams {
                         ((device float4 *)momentum)[tid] = float4(mx, my, mz, mw);
                         ((device float4 *)velocity)[tid] = float4(vx, vy, vz, vw);
                     }}",
-                    size / 4,
-                )
-            } else {
-                format!(
-                    "
+                        size / 4,
+                    )
+                } else {
+                    format!(
+                        "
                     const uint tid = metal_tid;
 
                     if (tid < {size})
@@ -206,8 +209,9 @@ impl AdamWParams {
                         momentum[tid] = m;
                         velocity[tid] = v;
                     }}"
-                )
-            },
+                    )
+                }
+            }
         };
 
         let ty = TType::new(size, DType::F32);

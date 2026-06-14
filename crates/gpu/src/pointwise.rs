@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bullet_compiler::{
     ir::NodeId,
-    tensor::{operation::SubGraph, IRTrace, OpType, TType, TValue, TensorOp},
+    tensor::{IRTrace, OpType, TType, TValue, TensorOp, operation::SubGraph},
 };
 
 pub use ir::PointwiseIR;

@@ -11,6 +11,7 @@ use bullet_compiler::{
     },
 };
 
+use crate::runtime::{DeviceProps, Dialect};
 use crate::{
     kernel::KernelSrc,
     pointwise::{
@@ -19,7 +20,6 @@ use crate::{
     },
     runtime::Dim3,
 };
-use crate::runtime::{DeviceProps, Dialect};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Pointwise;

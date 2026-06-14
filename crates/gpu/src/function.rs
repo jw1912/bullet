@@ -22,13 +22,13 @@ use bullet_compiler::{
     },
 };
 
+use crate::runtime::{DeviceProps, Dialect};
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    pointwise::{transforms::{CodegenPointwise, FusePointwise, LowerPointwise}},
+    pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
     runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, KernelArgType, Module, Stream},
 };
-use crate::runtime::{DeviceProps, Dialect};
 
 enum Inst<G: Gpu> {
     Malloc { idx: usize, ty: TType },

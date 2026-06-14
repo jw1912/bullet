@@ -2,7 +2,10 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::{runtime::{Dialect, bindings::{DeviceProps, GemmConfig}}};
+use crate::runtime::{
+    Dialect,
+    bindings::{DeviceProps, GemmConfig},
+};
 
 use super::bindings::{Dim3, GpuBindings, KernelArgType};
 
@@ -177,7 +180,11 @@ impl GpuBindings for ROCm {
         error::runtime(hipModuleUnload(module))
     }
 
-    unsafe fn module_get_kernel(module: hipModule, kernel_name: &CStr, _arg_types: &[KernelArgType]) -> Result<hipFunction, ROCmError> {
+    unsafe fn module_get_kernel(
+        module: hipModule,
+        kernel_name: &CStr,
+        _arg_types: &[KernelArgType],
+    ) -> Result<hipFunction, ROCmError> {
         let mut func = hipFunction::default();
         error::runtime(hipModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
         Ok(func)

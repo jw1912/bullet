@@ -7,20 +7,19 @@ pub mod cuda;
 pub mod metal;
 #[cfg(all(feature = "metal", not(target_os = "macos")))]
 compile_error!("the `metal` feature requires macOS");
+mod dialect;
 pub mod mock;
 #[cfg(feature = "rocm")]
 pub mod rocm;
-mod dialect;
 
 use std::{
-    ffi::{c_void, CString},
+    ffi::{CString, c_void},
     fmt,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
 };
-
 
 pub use bindings::{DeviceProps, Dim3, GemmConfig, KernelArgType};
 pub use dialect::Dialect;
@@ -313,7 +312,11 @@ impl<G: Gpu> Module<G> {
     }
 
     /// Get kernel with given name from module
-    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>, arg_types: &[bindings::KernelArgType]) -> Result<Kernel<G>, G::Error> {
+    pub fn get_kernel(
+        self: Arc<Self>,
+        name: impl Into<String>,
+        arg_types: &[bindings::KernelArgType],
+    ) -> Result<Kernel<G>, G::Error> {
         self.device.set()?;
 
         let name = name.into();
@@ -502,11 +505,14 @@ mod tests {
         let stream = device.new_stream()?;
 
         let kernel_src = match device.dialect() {
-            Dialect::CudaHip => "extern \"C\" __global__ void add_one(const float* src, float* dst) {
+            Dialect::CudaHip => {
+                "extern \"C\" __global__ void add_one(const float* src, float* dst) {
                     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
                     dst[tid] = src[tid] + 1.0;
-                }",
-            Dialect::Msl => "#include <metal_stdlib>
+                }"
+            }
+            Dialect::Msl => {
+                "#include <metal_stdlib>
                 using namespace metal;
                 kernel void add_one(
                     device const float* src [[buffer(0)]],
@@ -514,10 +520,12 @@ mod tests {
                     uint tid [[thread_position_in_grid]]
                 ) {
                     dst[tid] = src[tid] + 1.0;
-                }",
+                }"
+            }
         };
 
-        let kernel = Module::new(device.clone(), kernel_src)?.get_kernel("add_one", &[KernelArgType::Buffer, KernelArgType::Buffer])?;
+        let kernel = Module::new(device.clone(), kernel_src)?
+            .get_kernel("add_one", &[KernelArgType::Buffer, KernelArgType::Buffer])?;
 
         unsafe {
             let dev_src = device.malloc(16)?;

@@ -11,21 +11,20 @@ use std::{
     },
 };
 
-use objc2::ffi::NSUInteger;
-use objc2::rc::{autoreleasepool, Retained};
-use objc2::runtime::ProtocolObject;
 use objc2::AllocAnyThread;
+use objc2::ffi::NSUInteger;
+use objc2::rc::{Retained, autoreleasepool};
+use objc2::runtime::ProtocolObject;
 use objc2_foundation::NSString;
 use objc2_metal::{
-    MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions,
-    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCreateSystemDefaultDevice,
-    MTLDevice, MTLLibrary, MTLResourceOptions, MTLSize,
+    MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions, MTLComputeCommandEncoder,
+    MTLComputePipelineState, MTLCreateSystemDefaultDevice, MTLDevice, MTLLibrary, MTLResourceOptions, MTLSize,
 };
 use objc2_metal_performance_shaders::{MPSDataType, MPSMatrix, MPSMatrixDescriptor, MPSMatrixMultiplication};
 
-use crate::{runtime::bindings::{DeviceProps, GemmConfig}};
-use crate::runtime::Dialect;
 use super::bindings::{Dim3, GpuBindings, KernelArgType};
+use crate::runtime::Dialect;
+use crate::runtime::bindings::{DeviceProps, GemmConfig};
 
 // ---------------------------------------------------------------------------
 // SendMetal — thread-safe wrapper for MTLBuffer
@@ -92,13 +91,7 @@ thread_local! {
 /// remains valid for the lifetime of the program.
 unsafe fn current_device() -> *const ProtocolObject<dyn MTLDevice> {
     let ordinal = CURRENT_DEVICE.with(|c| c.get());
-    Retained::as_ptr(
-        device_registry()
-            .lock()
-            .unwrap()
-            .get(&ordinal)
-            .expect("Metal device not initialised"),
-    )
+    Retained::as_ptr(device_registry().lock().unwrap().get(&ordinal).expect("Metal device not initialised"))
 }
 
 // ---------------------------------------------------------------------------
@@ -155,8 +148,8 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn device_get(ordinal: c_int) -> Result<c_int, MetalError> {
-        let device = MTLCreateSystemDefaultDevice()
-            .ok_or_else(|| MetalError::Runtime("No Metal device found".into()))?;
+        let device =
+            MTLCreateSystemDefaultDevice().ok_or_else(|| MetalError::Runtime("No Metal device found".into()))?;
         device_registry().lock().unwrap().insert(ordinal, device);
         Ok(ordinal)
     }
@@ -246,9 +239,8 @@ impl GpuBindings for Metal {
 
     unsafe fn stream_create() -> Result<u64, MetalError> {
         let device = &*current_device();
-        let queue = device
-            .newCommandQueue()
-            .ok_or_else(|| MetalError::Runtime("Failed to create command queue".into()))?;
+        let queue =
+            device.newCommandQueue().ok_or_else(|| MetalError::Runtime("Failed to create command queue".into()))?;
         let id = next_id();
         queue_registry().lock().unwrap().insert(id, queue);
         Ok(id)
@@ -350,14 +342,18 @@ impl GpuBindings for Metal {
                         let value_ptr = arg_ptr as *const i32;
                         let nn = NonNull::new(value_ptr as *mut c_void)
                             .ok_or_else(|| MetalError::Runtime("Null scalar arg".into()))?;
-                        encoder.setBytes_length_atIndex(nn, std::mem::size_of::<i32>() as NSUInteger, index as NSUInteger);
+                        encoder.setBytes_length_atIndex(
+                            nn,
+                            std::mem::size_of::<i32>() as NSUInteger,
+                            index as NSUInteger,
+                        );
                     }
                     KernelArgType::Buffer => {
                         // arg_ptr points to a u64 (our synthetic buffer ID)
                         let buffer_id = *(arg_ptr as *const u64);
-                        let entry = buf_reg
-                            .get(&buffer_id)
-                            .ok_or_else(|| MetalError::Runtime(format!("Buffer {buffer_id} not found for arg {index}")))?;
+                        let entry = buf_reg.get(&buffer_id).ok_or_else(|| {
+                            MetalError::Runtime(format!("Buffer {buffer_id} not found for arg {index}"))
+                        })?;
                         encoder.setBuffer_offset_atIndex(Some(&*entry.buffer), 0, index as NSUInteger);
                     }
                 }
@@ -399,7 +395,11 @@ impl GpuBindings for Metal {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(module: u64, kernel_name: &CStr, arg_types: &[KernelArgType]) -> Result<u64, MetalError> {
+    unsafe fn module_get_kernel(
+        module: u64,
+        kernel_name: &CStr,
+        arg_types: &[KernelArgType],
+    ) -> Result<u64, MetalError> {
         let name = kernel_name.to_str().map_err(|e| MetalError::Runtime(format!("{e}")))?;
         let ns_name = NSString::from_str(name);
 
@@ -484,7 +484,8 @@ impl GpuBindings for Metal {
 
             let command_buffer = {
                 let queue_reg = queue_registry().lock().unwrap();
-                let queue = queue_reg.get(&stream_id).ok_or_else(|| MetalError::Runtime("Stream not found for BLAS".into()))?;
+                let queue =
+                    queue_reg.get(&stream_id).ok_or_else(|| MetalError::Runtime("Stream not found for BLAS".into()))?;
                 queue.commandBuffer().ok_or_else(|| MetalError::Runtime("Failed to create command buffer".into()))?
             };
 
@@ -549,7 +550,6 @@ impl GpuBindings for Metal {
             Ok(())
         })
     }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +568,7 @@ lazy_static_mutex! {
 fn mps_matrix_descriptor(
     rows: u64,
     columns: u64,
-    row_bytes: u64,   // element count; multiplied by sizeof(f32) internally
+    row_bytes: u64, // element count; multiplied by sizeof(f32) internally
     matrices: u64,
     matrix_bytes: u64, // element count; multiplied by sizeof(f32) internally
 ) -> Retained<MPSMatrixDescriptor> {
@@ -593,10 +593,7 @@ fn mps_matrix_descriptor(
     }
 }
 
-fn mps_matrix(
-    buffer: &ProtocolObject<dyn MTLBuffer>,
-    descriptor: &MPSMatrixDescriptor,
-) -> Retained<MPSMatrix> {
+fn mps_matrix(buffer: &ProtocolObject<dyn MTLBuffer>, descriptor: &MPSMatrixDescriptor) -> Retained<MPSMatrix> {
     unsafe { MPSMatrix::initWithBuffer_descriptor(MPSMatrix::alloc(), buffer, descriptor) }
 }
 
@@ -639,11 +636,6 @@ fn mps_encode_gemm(
     result: &MPSMatrix,
 ) {
     unsafe {
-        gemm.encodeToCommandBuffer_leftMatrix_rightMatrix_resultMatrix(
-            command_buffer,
-            left,
-            right,
-            result,
-        );
+        gemm.encodeToCommandBuffer_leftMatrix_rightMatrix_resultMatrix(command_buffer, left, right, result);
     }
 }

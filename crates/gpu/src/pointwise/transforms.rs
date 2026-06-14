@@ -9,7 +9,7 @@ use bullet_compiler::{
     },
 };
 
-use crate::{pointwise::{FusedPointwise}, runtime::DeviceProps};
+use crate::{pointwise::FusedPointwise, runtime::DeviceProps};
 
 /// Lower individual ops to FusedPointwise
 #[derive(Clone, Debug)]

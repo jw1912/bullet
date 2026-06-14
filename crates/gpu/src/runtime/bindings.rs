@@ -150,7 +150,11 @@ pub trait GpuBindings: 'static {
 
     unsafe fn module_destroy(module: Self::Module) -> Result<(), Self::Err>;
 
-    unsafe fn module_get_kernel(module: Self::Module, kernel_name: &CStr, arg_types: &[KernelArgType]) -> Result<Self::Kernel, Self::Err>;
+    unsafe fn module_get_kernel(
+        module: Self::Module,
+        kernel_name: &CStr,
+        arg_types: &[KernelArgType],
+    ) -> Result<Self::Kernel, Self::Err>;
 
     unsafe fn program_compile(
         source_code: &CStr,
