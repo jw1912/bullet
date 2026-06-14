@@ -1,17 +1,16 @@
-pub mod dialect;
 mod generate;
 mod ir;
 mod operations;
 pub(crate) mod transforms;
 mod write;
 
-pub use dialect::Dialect;
+pub use crate::runtime::dialect::Dialect;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bullet_compiler::{
     ir::NodeId,
-    tensor::{IRTrace, OpType, TType, TValue, TensorOp, operation::SubGraph},
+    tensor::{operation::SubGraph, IRTrace, OpType, TType, TValue, TensorOp},
 };
 
 pub use ir::PointwiseIR;

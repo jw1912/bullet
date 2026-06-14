@@ -1,9 +1,10 @@
 use bullet_compiler::tensor::{
-    DType, DValue, Size,
-    operation::{CABinary, Unary},
+    operation::{CABinary, Unary}, DType, DValue,
+    Size,
 };
 
-use crate::pointwise::{dialect::Dialect, operations::PointwiseOp};
+use crate::pointwise::operations::PointwiseOp;
+use crate::runtime::dialect::Dialect;
 
 pub fn tystr(dtype: DType) -> &'static str {
     match dtype {

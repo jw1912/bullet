@@ -10,13 +10,14 @@ compile_error!("the `metal` feature requires macOS");
 pub mod mock;
 #[cfg(feature = "rocm")]
 pub mod rocm;
+pub mod dialect;
 
 use std::{
-    ffi::{CString, c_void},
+    ffi::{c_void, CString},
     fmt,
     sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     },
 };
 
