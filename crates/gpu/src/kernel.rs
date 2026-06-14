@@ -4,7 +4,7 @@ use bullet_compiler::tensor::{OpType, TType};
 
 use crate::{
     buffer::{Buffer, BufferGuard, SyncOnDrop, SyncOnValue},
-    runtime::{Device, Dim3, Gpu, Kernel, Module, Stream},
+    runtime::{Device, Dim3, Gpu, Kernel, KernelArgType, Module, Stream},
 };
 
 #[derive(Clone)]
@@ -59,7 +59,8 @@ impl KernelSrc {
     }
 
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
-        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name)?;
+        let arg_types: Vec<_> = self.arg_order.iter().map(|_| KernelArgType::Buffer).collect();
+        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name, &arg_types)?;
 
         Ok(CompiledKernel {
             inputs: self.inputs.clone(),

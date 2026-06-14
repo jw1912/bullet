@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::runtime::{
-    Dim3,
-    bindings::{DeviceProps, GemmConfig, GpuBindings},
+    Dialect, Dim3,
+    bindings::{DeviceProps, GemmConfig, GpuBindings, KernelArgType},
 };
 
 /// Used to type check code without requiring CUDA/ROCm
@@ -49,6 +49,7 @@ impl GpuBindings for MockGpu {
             stream_mem_alloc: false,
             vec_atomics: false,
             arch: None,
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -155,6 +156,10 @@ impl GpuBindings for MockGpu {
         Ok(())
     }
 
+    unsafe fn kernel_destroy(_kernel: ()) -> MockResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: (),
         stream: (),
@@ -174,7 +179,7 @@ impl GpuBindings for MockGpu {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(module: (), kernel_name: &CStr) -> MockResult {
+    unsafe fn module_get_kernel(module: (), kernel_name: &CStr, _arg_types: &[KernelArgType]) -> MockResult {
         Ok(())
     }
 

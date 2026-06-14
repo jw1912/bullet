@@ -17,6 +17,7 @@ rand_distr = "=0.6.0"
 [features]
 cuda = ["bullet-gpu/cuda"]
 rocm = ["bullet-gpu/rocm"]
+metal = ["bullet-gpu/metal"]
 
 [[example]]
 name = "ataxx"

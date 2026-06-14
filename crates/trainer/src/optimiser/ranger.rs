@@ -1,17 +1,17 @@
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 use bullet_compiler::{
     ir::IRError,
     tensor::{DType, TType, TValue, operation::CABinary},
 };
+use bullet_gpu::runtime::DeviceProps;
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
     pointwise::PointwiseIR,
     runtime::{Device, Gpu, Stream},
 };
-
-use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{
     OptimiserState,
@@ -20,7 +20,7 @@ use super::{
     wrap::WrapOptimiser,
 };
 
-fn build_ranger_op(size: usize, alpha: f32) -> Result<KernelSrc, IRError> {
+fn build_ranger_op(size: usize, alpha: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
     let mut pntwise = PointwiseIR::new(size.into())?;
 
     let w = pntwise.add_buf(TType::new(size, DType::F32));
@@ -38,7 +38,7 @@ fn build_ranger_op(size: usize, alpha: f32) -> Result<KernelSrc, IRError> {
     pntwise.write(w, pntwise.tid(), new_w)?;
     pntwise.write(s, pntwise.tid(), new_w)?;
 
-    unsafe { pntwise.lower("ranger".to_string()) }
+    unsafe { pntwise.lower("ranger".to_string(), props) }
 }
 
 #[derive(Clone, Debug)]
@@ -67,7 +67,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
 
     fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
         Ok(Self {
-            op: build_ranger_op(size, params.alpha).unwrap().compile(device.clone())?,
+            op: build_ranger_op(size, params.alpha, device.props()).unwrap().compile(device.clone())?,
             slow_params: Buffer::from_host(device, &TValue::F32(vec![0.0; size]))?,
             inner: S::new(device, size, params.inner.clone())?,
             k: params.k,
@@ -104,7 +104,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for RangerLookahead<G, S> {
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         self.inner.set_params(params.inner)?;
         let device = self.slow_params.device();
-        self.op = build_ranger_op(self.slow_params.size(), params.alpha).unwrap().compile(device)?;
+        self.op = build_ranger_op(self.slow_params.size(), params.alpha, device.props()).unwrap().compile(device)?;
         self.k = params.k;
         self.step = 0;
         Ok(())

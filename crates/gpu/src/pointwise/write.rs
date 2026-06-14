@@ -4,6 +4,7 @@ use bullet_compiler::tensor::{
 };
 
 use crate::pointwise::operations::PointwiseOp;
+use crate::runtime::{DeviceProps, Dialect};
 
 pub fn tystr(dtype: DType) -> &'static str {
     match dtype {
@@ -12,7 +13,9 @@ pub fn tystr(dtype: DType) -> &'static str {
     }
 }
 
-pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
+pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<String> {
+    let dialect = props.dialect();
+
     match op {
         PointwiseOp::Buffer { .. } => None,
         PointwiseOp::Div => Some("const int OUT1 = IN1 / IN2;".into()),
@@ -23,7 +26,8 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 Some(format!("const {ty} OUT1 = IN1[IN2];"))
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                Some(format!("const {ty}{sz} OUT1 = reinterpret_cast<{ty}{sz}*>(IN1)[IN2];"))
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
+                Some(format!("const {ty}{sz} OUT1 = {cast}(IN1)[IN2];"))
             } else {
                 None
             }
@@ -39,12 +43,13 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 Some(format!("const {ty} OUT1 = IN3 > 0 ? IN1[IN2] : {vl};"))
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                let vl = if io.p2size == 2 {
-                    format!("make_{ty}2({vl}, {vl})")
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
+                let vl_vec = if io.p2size == 1 {
+                    dialect.make_vec(ty, 2, &format!("{vl}, {vl}"))
                 } else {
-                    format!("make_{ty}4({vl}, {vl}, {vl}, {vl})")
+                    dialect.make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}"))
                 };
-                Some(format!("const {ty}{sz} OUT1 = IN3 > 0 ? reinterpret_cast<{ty}{sz}*>(IN1)[IN2] : {vl};"))
+                Some(format!("const {ty}{sz} OUT1 = IN3 > 0 ? {cast}(IN1)[IN2] : {vl_vec};"))
             } else {
                 None
             }
@@ -55,7 +60,8 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 Some("IN1[IN2] = IN3;".to_string())
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                Some(format!("reinterpret_cast<{ty}{sz}*>(IN1)[IN2] = IN3;"))
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
+                Some(format!("{cast}(IN1)[IN2] = IN3;"))
             } else {
                 None
             }
@@ -63,10 +69,11 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
         PointwiseOp::AtomicAdd(io) => {
             let ty = tystr(io.buf_ty);
             if io.p2size == 0 {
-                Some("atomicAdd(IN1 + IN2, IN3);".to_string())
+                Some(dialect.atomic_add("IN1 + IN2", "IN3"))
             } else if io.p2size < 3 {
                 let sz = 2u32.pow(io.p2size as u32);
-                Some(format!("atomicAdd(reinterpret_cast<{ty}{sz}*>(IN1) + IN2, IN3);"))
+                let cast = dialect.reinterpret_cast(&format!("{ty}{sz}"));
+                Some(dialect.atomic_add(&format!("{cast}(IN1) + IN2"), "IN3"))
             } else {
                 None
             }
@@ -80,24 +87,36 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
 
             match p2size {
                 0 => Some(format!("const {ty} OUT1 = {vl};")),
-                1 => Some(format!("const {ty}2 OUT1 = make_{ty}2({vl}, {vl});")),
-                2 => Some(format!("const {ty}4 OUT1 = make_{ty}4({vl}, {vl}, {vl}, {vl});")),
+                1 => Some(format!("const {ty}2 OUT1 = {};", dialect.make_vec(ty, 2, &format!("{vl}, {vl}")))),
+                2 => {
+                    Some(format!("const {ty}4 OUT1 = {};", dialect.make_vec(ty, 4, &format!("{vl}, {vl}, {vl}, {vl}"))))
+                }
                 3.. => None,
             }
         }
-        PointwiseOp::ThreadId => Some(format!(
-            "\
-                const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;\n\
-                const int OUT1 = idx_in_grid * blockDim.x + threadIdx.x;\n\
-                if (OUT1 >= ({})) return;\
-            ",
-            size.get()
-        )),
+        PointwiseOp::ThreadId => {
+            let size_val = size.get();
+            match dialect {
+                Dialect::CudaHip => Some(format!(
+                    "\
+                    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;\n\
+                    const int OUT1 = idx_in_grid * blockDim.x + threadIdx.x;\n\
+                    if (OUT1 >= ({size_val})) return;\
+                "
+                )),
+                Dialect::Msl => Some(format!(
+                    "\
+                    const int OUT1 = static_cast<int>(metal_tid);\n\
+                    if (OUT1 >= ({size_val})) return;\
+                "
+                )),
+            }
+        }
         PointwiseOp::Broadcast(ty, p2size) => {
             let ty = tystr(ty);
             match p2size.get() {
-                1 => Some(format!("const {ty}2 OUT1 = make_{ty}2(IN1, IN1);")),
-                2 => Some(format!("const {ty}4 OUT1 = make_{ty}4(IN1, IN1, IN1, IN1);")),
+                1 => Some(format!("const {ty}2 OUT1 = {};", dialect.make_vec(ty, 2, "IN1, IN1"))),
+                2 => Some(format!("const {ty}4 OUT1 = {};", dialect.make_vec(ty, 4, "IN1, IN1, IN1, IN1"))),
                 _ => None,
             }
         }
@@ -129,7 +148,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
         }
         PointwiseOp::Power { p2size } => {
             let chars = ['x', 'y', 'z', 'w'];
-            let formula = |x, y| format!("powf({x}, {y});");
+            let formula = |x, y| format!("{}({x}, {y});", dialect.pow());
             match p2size {
                 0 => Some(format!("const float OUT1 = {}", formula("IN1".into(), "IN2".into()))),
                 3.. => None,
@@ -147,7 +166,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
         PointwiseOp::Unary { ty, p2size, op } => {
             let ty = tystr(ty);
 
-            let opstr = |x| match op {
+            let opstr = |x: &str| match op {
                 Unary::Sgn => {
                     format!("{x} == {ty}(0) ? {ty}(0) : {x} > {ty}(0) ? {ty}(1) : {ty}(-1)")
                 }
@@ -156,29 +175,29 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                 Unary::IsZero => format!("{x} == static_cast<{ty}>(0)"),
                 Unary::IsNonNegative => format!("{x} >= static_cast<{ty}>(0)"),
                 _ => {
-                    let opstr = match op {
+                    let func: &str = match op {
                         Unary::Cast(nty) => match nty {
                             DType::F32 => "static_cast<float>",
                             DType::I32 => "static_cast<int>",
                         },
                         Unary::Abs => "abs",
-                        Unary::Sin => "sinf",
-                        Unary::Cos => "cosf",
-                        Unary::Tan => "tanf",
-                        Unary::Sinh => "sinhf",
-                        Unary::Cosh => "coshf",
-                        Unary::Tanh => "tanhf",
-                        Unary::Exp => "expf",
-                        Unary::Log => "logf",
-                        Unary::Sqrt => "sqrtf",
-                        Unary::Round => "roundf",
-                        Unary::Truncate => "truncf",
+                        Unary::Sin => dialect.sin(),
+                        Unary::Cos => dialect.cos(),
+                        Unary::Tan => dialect.tan(),
+                        Unary::Sinh => dialect.sinh(),
+                        Unary::Cosh => dialect.cosh(),
+                        Unary::Tanh => dialect.tanh(),
+                        Unary::Exp => dialect.exp(),
+                        Unary::Log => dialect.log(),
+                        Unary::Sqrt => dialect.sqrt(),
+                        Unary::Round => dialect.round(),
+                        Unary::Truncate => dialect.trunc(),
                         Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
                             unimplemented!()
                         }
                     };
 
-                    format!("{opstr}({x})")
+                    format!("{func}({x})")
                 }
             };
 
@@ -217,9 +236,11 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                     let m = rows / 2;
                     let o = offset / 2;
                     let s = stride / 2;
+                    let cast = dialect.reinterpret_cast(&format!("{ty}2"));
+                    let zero_vec = dialect.make_vec(ty, 2, "0, 0");
                     Some(format!(
                         "\
-                        {ty}2 OUT1 = make_{ty}2(0, 0);
+                        {ty}2 OUT1 = {zero_vec};
                         int UNIQ1 = IN3 / {m};
                         int UNIQ2 = {o} + IN3 % {m};
 
@@ -228,7 +249,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
 
                             if (j < 0 || j >= {cols}) break;
 
-                            const {ty}2 a = reinterpret_cast<{ty}2*>(IN1)[j * {s} + UNIQ2];
+                            const {ty}2 a = {cast}(IN1)[j * {s} + UNIQ2];
 
                             OUT1.x += a.x;
                             OUT1.y += a.y;
@@ -242,9 +263,11 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
                     let m = rows / 4;
                     let o = offset / 4;
                     let s = stride / 4;
+                    let cast = dialect.reinterpret_cast(&format!("{ty}4"));
+                    let zero_vec = dialect.make_vec(ty, 4, "0, 0, 0, 0");
                     Some(format!(
                         "\
-                        {ty}4 OUT1 = make_{ty}4(0, 0, 0, 0);
+                        {ty}4 OUT1 = {zero_vec};
                         int UNIQ1 = IN3 / {m};
                         int UNIQ2 = {o} + IN3 % {m};
 
@@ -253,7 +276,7 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
 
                             if (j < 0 || j >= {cols}) break;
 
-                            const {ty}4 a = reinterpret_cast<{ty}4*>(IN1)[j * {s} + UNIQ2];
+                            const {ty}4 a = {cast}(IN1)[j * {s} + UNIQ2];
 
                             OUT1.x += a.x;
                             OUT1.y += a.y;
@@ -267,16 +290,17 @@ pub fn code_str(op: PointwiseOp, size: Size) -> Option<String> {
         }
         PointwiseOp::SpMMT { nnz, rows, cols, stride, offset, .. } => Some(format!(
             "\
-                if (IN4 != 0) {{
-                    int UNIQ1 = IN3 / {rows};
-                    int UNIQ2 = {offset} + IN3 % {rows};
+                    if (IN4 != 0) {{
+                        int UNIQ1 = IN3 / {rows};
+                        int UNIQ2 = {offset} + IN3 % {rows};
 
-                    for (int i = 0; i < {nnz}; i++) {{
-                        const int j = IN2[{nnz} * UNIQ1 + i];
-                        if (j < 0 || j >= {cols}) break;
-                        atomicAdd(IN1 + j * {stride} + UNIQ2, IN4);
-                    }}
-                }}"
+                        for (int i = 0; i < {nnz}; i++) {{
+                            const int j = IN2[{nnz} * UNIQ1 + i];
+                            if (j < 0 || j >= {cols}) break;
+                            {}
+                        }}
+                    }}",
+            dialect.atomic_add(&format!("IN1 + j * {stride} + UNIQ2"), "IN4")
         )),
     }
 }

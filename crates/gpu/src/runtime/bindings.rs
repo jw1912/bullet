@@ -3,6 +3,8 @@ use std::{
     fmt,
 };
 
+use crate::runtime::Dialect;
+
 /// Kernel grid or block dimensions
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Dim3 {
@@ -22,13 +24,14 @@ pub struct GemmConfig {
     pub beta: f32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeviceProps {
     pub(super) name: String,
     pub(super) warp_size: Option<u8>,
     pub(super) stream_mem_alloc: bool,
     pub(super) vec_atomics: bool,
     pub(super) arch: Option<String>,
+    pub(super) dialect: Dialect,
 }
 
 impl DeviceProps {
@@ -51,6 +54,19 @@ impl DeviceProps {
     pub fn arch(&self) -> Option<&str> {
         self.arch.as_deref()
     }
+
+    pub fn dialect(&self) -> Dialect {
+        self.dialect
+    }
+}
+
+/// Describes how a kernel argument should be bound during a Metal kernel launch.
+/// For CUDA/ROCm backends, argument binding is handled by the driver; this type
+/// is only acted on by the Metal backend. Other backends ignore it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KernelArgType {
+    Scalar,
+    Buffer,
 }
 
 /// This is a private trait, so nobody outside the crate can access these methods
@@ -119,6 +135,8 @@ pub trait GpuBindings: 'static {
 
     unsafe fn kernel_load(func: Self::Kernel) -> Result<(), Self::Err>;
 
+    unsafe fn kernel_destroy(kernel: Self::Kernel) -> Result<(), Self::Err>;
+
     unsafe fn kernel_launch(
         func: Self::Kernel,
         stream: Self::Stream,
@@ -132,7 +150,11 @@ pub trait GpuBindings: 'static {
 
     unsafe fn module_destroy(module: Self::Module) -> Result<(), Self::Err>;
 
-    unsafe fn module_get_kernel(module: Self::Module, kernel_name: &CStr) -> Result<Self::Kernel, Self::Err>;
+    unsafe fn module_get_kernel(
+        module: Self::Module,
+        kernel_name: &CStr,
+        arg_types: &[KernelArgType],
+    ) -> Result<Self::Kernel, Self::Err>;
 
     unsafe fn program_compile(
         source_code: &CStr,

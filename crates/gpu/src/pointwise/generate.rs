@@ -366,7 +366,7 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
     Ok(Some((pntwise, p2size > 0)))
 }
 
-#[cfg(any(feature = "cuda", feature = "rocm"))]
+#[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
 #[cfg(test)]
 mod tests {
     use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, TValue, operation::SubGraph};
@@ -387,7 +387,7 @@ mod tests {
         let ir = builder.build([x, y]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node(), x.node()], vec![x.node(), y.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string(), props).map_err(IRTrace::from) }
     }
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
@@ -440,7 +440,7 @@ mod tests {
         let ir = builder.build([concat]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node()], vec![concat.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string(), props).map_err(IRTrace::from) }
     }
 
     fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
@@ -475,7 +475,7 @@ mod tests {
         let ir = builder.build([slice]);
 
         let sub = SubGraph::new(ir, vec![input.node()], vec![slice.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string(), props).map_err(IRTrace::from) }
     }
 
     fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
@@ -541,6 +541,36 @@ mod tests {
             super::slice::<ROCm>(0, [1.0, 2.0, 3.0, 4.0])?;
             super::slice::<ROCm>(1, [1.0, 2.0, 5.0, 6.0])?;
             super::slice::<ROCm>(2, [1.0, 3.0, 5.0, 7.0])
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    mod metal {
+        use crate::runtime::metal::{Metal, MetalError};
+
+        #[test]
+        fn axby() -> Result<(), MetalError> {
+            super::axby::<Metal>()
+        }
+
+        #[test]
+        fn concat() -> Result<(), MetalError> {
+            super::concat::<Metal>(
+                0,
+                [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0],
+            )?;
+            super::concat::<Metal>(
+                1,
+                [1.0, 2.0, 3.0, 4.0, 4.0, 3.0, 2.0, 1.0, 5.0, 6.0, 7.0, 8.0, 1.0, 2.0, 3.0, 4.0],
+            )?;
+            super::concat::<Metal>(2, [1.0, 2.0, 4.0, 3.0, 3.0, 4.0, 2.0, 1.0, 5.0, 6.0, 1.0, 2.0, 7.0, 8.0, 3.0, 4.0])
+        }
+
+        #[test]
+        fn slice() -> Result<(), MetalError> {
+            super::slice::<Metal>(0, [1.0, 2.0, 3.0, 4.0])?;
+            super::slice::<Metal>(1, [1.0, 2.0, 5.0, 6.0])?;
+            super::slice::<Metal>(2, [1.0, 3.0, 5.0, 7.0])
         }
     }
 }

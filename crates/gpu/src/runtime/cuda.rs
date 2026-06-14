@@ -2,9 +2,12 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::runtime::bindings::{DeviceProps, GemmConfig};
+use crate::runtime::{
+    Dialect,
+    bindings::{DeviceProps, GemmConfig},
+};
 
-use super::bindings::{Dim3, GpuBindings};
+use super::bindings::{Dim3, GpuBindings, KernelArgType};
 
 use raw::*;
 
@@ -76,6 +79,7 @@ impl GpuBindings for Cuda {
             stream_mem_alloc: mem_pools > 0,
             vec_atomics: mjr >= 9,
             arch: Some(format!("sm_{mjr}{mnr}")),
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -167,6 +171,10 @@ impl GpuBindings for Cuda {
         error::driver(cuFuncLoad(kernel))
     }
 
+    unsafe fn kernel_destroy(_kernel: CUfunction) -> CudaResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: CUfunction,
         stream: CUstream,
@@ -200,7 +208,11 @@ impl GpuBindings for Cuda {
         error::driver(cuModuleUnload(module))
     }
 
-    unsafe fn module_get_kernel(module: CUmodule, kernel_name: &CStr) -> Result<CUfunction, CudaError> {
+    unsafe fn module_get_kernel(
+        module: CUmodule,
+        kernel_name: &CStr,
+        _arg_types: &[KernelArgType],
+    ) -> Result<CUfunction, CudaError> {
         let mut func = CUfunction::default();
         error::driver(cuModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
         Ok(func)

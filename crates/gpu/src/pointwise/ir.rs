@@ -11,6 +11,7 @@ use bullet_compiler::{
     },
 };
 
+use crate::runtime::{DeviceProps, Dialect};
 use crate::{
     kernel::KernelSrc,
     pointwise::{
@@ -320,7 +321,7 @@ impl PointwiseIR {
         Ok(false)
     }
 
-    pub fn source_code(&self, kernel_name: &str) -> Result<String, fmt::Error> {
+    pub fn source_code(&self, kernel_name: &str, props: &DeviceProps) -> Result<String, fmt::Error> {
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
@@ -328,7 +329,7 @@ impl PointwiseIR {
             let op = self.ir.op(op_id).unwrap();
 
             if !matches!(op.data(), PointwiseOp::Buffer { .. }) {
-                let mut src = code_str(*op.data(), self.size).unwrap();
+                let mut src = code_str(*op.data(), self.size, props).unwrap();
 
                 for (i, &id) in op.inputs().iter().enumerate() {
                     src = src.replace(&format!("IN{}", i + 1), &name(id));
@@ -346,12 +347,34 @@ impl PointwiseIR {
 
         let mut src = String::new();
 
-        write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
+        match props.dialect() {
+            Dialect::CudaHip => {
+                write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
 
-        for (i, &input) in self.bufs.iter().enumerate() {
-            let comma = if i > 0 { ", " } else { "" };
-            let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
-            write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
+                for (i, &input) in self.bufs.iter().enumerate() {
+                    let comma = if i > 0 { ", " } else { "" };
+                    let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
+                    write!(&mut src, "{comma}{}* {}", tystr(ty), name(input))?;
+                }
+            }
+            Dialect::Msl => {
+                writeln!(&mut src, "#include <metal_stdlib>")?;
+                writeln!(&mut src, "using namespace metal;")?;
+                writeln!(&mut src)?;
+
+                write!(&mut src, "kernel void {kernel_name}(")?;
+
+                let mut buf_index = 0u32;
+                for (i, &input) in self.bufs.iter().enumerate() {
+                    let comma = if i > 0 { ", " } else { "" };
+                    let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
+                    write!(&mut src, "{comma}device {}* {} [[buffer({buf_index})]]", tystr(ty), name(input))?;
+                    buf_index += 1;
+                }
+
+                let comma = if !self.bufs.is_empty() { ", " } else { "" };
+                write!(&mut src, "{comma}uint metal_tid [[thread_position_in_grid]]")?;
+            }
         }
 
         writeln!(&mut src, ") {{")?;
@@ -402,7 +425,7 @@ impl PointwiseIR {
     /// ### Safety
     ///
     /// User must ensure same invariants as KernelSrc hold
-    pub unsafe fn lower(&self, name: String) -> Result<KernelSrc, IRError> {
+    pub unsafe fn lower(&self, name: String, props: &DeviceProps) -> Result<KernelSrc, IRError> {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
@@ -430,7 +453,7 @@ impl PointwiseIR {
             }
         }
 
-        let source = self.source_code(&name).map_err(|e| IRError::from(format!("{e:?}")))?;
+        let source = self.source_code(&name, props).map_err(|e| IRError::from(format!("{e:?}")))?;
         let total = self.size.get();
 
         unsafe {
@@ -449,7 +472,7 @@ impl PointwiseIR {
     }
 }
 
-#[cfg(any(feature = "cuda", feature = "rocm"))]
+#[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
 #[cfg(test)]
 mod tests {
     use bullet_compiler::tensor::TValue;
@@ -479,7 +502,7 @@ mod tests {
         ir.write(input2, tid, value4).unwrap();
 
         let device = Device::<G>::new(0)?;
-        let kernel = unsafe { ir.lower("fmadd".to_string()).unwrap() }.compile(device.clone())?;
+        let kernel = unsafe { ir.lower("fmadd".to_string(), device.props()).unwrap() }.compile(device.clone())?;
         let stream = device.new_stream()?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);
@@ -514,6 +537,16 @@ mod tests {
         #[test]
         fn fmadd() -> Result<(), ROCmError> {
             super::fmadd::<ROCm>()
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    mod metal {
+        use crate::runtime::metal::{Metal, MetalError};
+
+        #[test]
+        fn fmadd() -> Result<(), MetalError> {
+            super::fmadd::<Metal>()
         }
     }
 }
