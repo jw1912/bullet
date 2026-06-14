@@ -15,7 +15,7 @@ pub enum DataLoadingError {
     Message(String),
 }
 
-pub trait DataLoader: Send + Sync + 'static {
+pub trait DataLoader: Send + Sync {
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
         self,
         start_batch: usize,

@@ -14,10 +14,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu},
 };
 
-use rand_distr::{Distribution, Normal, Uniform};
-use rand_xoshiro::{Xoroshiro128Plus, rand_core::SeedableRng};
-
-use crate::model::ModelDefinition;
+use crate::{model::ModelDefinition, rng::Rng};
 
 pub type TensorMap<G> = BTreeMap<String, Arc<Buffer<G>>>;
 
@@ -52,7 +49,7 @@ impl ModelWeights {
     pub fn new(defn: &ModelDefinition, rng_seed: u64) -> Self {
         let ir = defn.ir();
         let mut stores = BTreeMap::new();
-        let mut rng = Xoroshiro128Plus::seed_from_u64(rng_seed);
+        let mut rng = Rng::new(rng_seed);
 
         for (&id, (name, init)) in ir.weights() {
             let ty = ir.node(id).ty();
@@ -62,8 +59,8 @@ impl ModelWeights {
 
             let init = match init {
                 InitSettings::Zeroed => vec![0.0; size],
-                InitSettings::Uniform { mean, stdev } => vec_f32(&mut rng, size, *mean, *stdev, false),
-                InitSettings::Normal { mean, stdev } => vec_f32(&mut rng, size, *mean, *stdev, true),
+                InitSettings::Uniform { mean, stdev } => rng.vec_f32(size, *mean, *stdev, false),
+                InitSettings::Normal { mean, stdev } => rng.vec_f32(size, *mean, *stdev, true),
                 InitSettings::Custom(value) => value.f32().to_vec(),
             };
 
@@ -362,40 +359,6 @@ impl Quant for i32 {
     fn to_target(q: Self::Multiplier) -> QuantTarget {
         QuantTarget::I32(q)
     }
-}
-
-enum Dist {
-    Normal(Normal<f32>),
-    Uniform(Uniform<f32>),
-}
-
-impl Dist {
-    fn new(mean: f32, stdev: f32, use_gaussian: bool) -> Self {
-        if use_gaussian {
-            Self::Normal(Normal::new(mean, stdev).unwrap())
-        } else {
-            Self::Uniform(Uniform::new(mean - stdev, mean + stdev).unwrap())
-        }
-    }
-
-    fn sample(&self, rng: &mut Xoroshiro128Plus) -> f32 {
-        match self {
-            Dist::Normal(x) => x.sample(rng),
-            Dist::Uniform(x) => x.sample(rng),
-        }
-    }
-}
-
-pub fn vec_f32(rng: &mut Xoroshiro128Plus, length: usize, mean: f32, stdev: f32, use_gaussian: bool) -> Vec<f32> {
-    let mut res = Vec::with_capacity(length);
-
-    let dist = Dist::new(mean, stdev, use_gaussian);
-
-    for _ in 0..length {
-        res.push(dist.sample(rng));
-    }
-
-    res
 }
 
 pub mod utils {

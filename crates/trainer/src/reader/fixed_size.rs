@@ -11,7 +11,7 @@ use crate::reader::DataReader;
 /// ## Safety
 /// Type must be `repr(C)`, have no padding or uninitialised
 /// bytes, valid as any bit pattern and of fixed size.
-pub unsafe trait FixedSizeData: Copy + Send + Sync + 'static {}
+pub unsafe trait FixedSizeData: Copy + Send + Sync {}
 
 #[derive(Clone)]
 pub struct FixedSizeDataReader<T: FixedSizeData> {
