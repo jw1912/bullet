@@ -321,7 +321,7 @@ impl PointwiseIR {
         Ok(false)
     }
 
-    fn source_code(&self, kernel_name: &str, props: &DeviceProps) -> Result<String, fmt::Error> {
+    pub fn source_code(&self, kernel_name: &str, props: &DeviceProps) -> Result<String, fmt::Error> {
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
