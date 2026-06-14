@@ -11,8 +11,9 @@ edition = { workspace = true }
 [dependencies]
 bullet-compiler = { workspace = true }
 bullet-gpu = { workspace = true }
-rand_xoshiro = "=0.8.1"
+rand = "=0.10.0"
 rand_distr = "=0.6.0"
+rand_xoshiro = "=0.8.1"
 
 [features]
 cuda = ["bullet-gpu/cuda"]
