@@ -3,8 +3,7 @@ use std::{
     ffi::{CStr, c_char, c_int, c_uint, c_void},
 };
 
-use crate::pointwise::Dialect;
-use crate::runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings, KernelArgType}};
+use crate::runtime::{Dim3, bindings::{DeviceProps, GemmConfig, GpuBindings, KernelArgType}, Dialect};
 
 /// Used to type check code without requiring CUDA/ROCm
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

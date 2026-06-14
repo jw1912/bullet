@@ -23,8 +23,8 @@ use objc2_metal::{
 };
 use objc2_metal_performance_shaders::{MPSDataType, MPSMatrix, MPSMatrixDescriptor, MPSMatrixMultiplication};
 
-use crate::{pointwise::Dialect, runtime::bindings::{DeviceProps, GemmConfig}};
-
+use crate::{runtime::bindings::{DeviceProps, GemmConfig}};
+use crate::runtime::Dialect;
 use super::bindings::{Dim3, GpuBindings, KernelArgType};
 
 // ---------------------------------------------------------------------------

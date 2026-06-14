@@ -9,10 +9,9 @@ use bullet_compiler::tensor::{DType, DValue, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::Dialect,
     runtime::{Device, Dim3, Gpu, Stream},
 };
-
+use bullet_gpu::runtime::{DeviceProps, Dialect};
 use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{OptimiserState, utils};
@@ -103,10 +102,10 @@ kernel void radam(
 )";
 
 impl RAdamParams {
-    pub fn build(&self, size: usize, dialect: Dialect) -> Result<KernelSrc, IRTrace> {
+    pub fn build(&self, size: usize, props: &DeviceProps) -> Result<KernelSrc, IRTrace> {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
-        let (op_src, decl) = match dialect {
+        let (op_src, decl) = match props.dialect() {
             Dialect::CudaHip => (OP_CUDA, DECL_CUDA),
             Dialect::Msl => (OP_MSL, DECL_MSL),
         };
@@ -119,7 +118,7 @@ impl RAdamParams {
             .replace("WMAX", &format!("{max:.E}"))
             .replace("EPSILON", "0.00000001F");
 
-        let body = match dialect {
+        let body = match props.dialect() {
             Dialect::CudaHip => if size.is_multiple_of(4) {
             format!(
                 "
@@ -262,7 +261,7 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
     type Params = RAdamParams;
 
     fn new(device: &Arc<Device<G>>, size: usize, default_params: Self::Params) -> Result<Self, G::Error> {
-        let op = default_params.build(size, device.dialect()).unwrap().compile(device.clone())?;
+        let op = default_params.build(size, device.props()).unwrap().compile(device.clone())?;
 
         Ok(Self {
             momentum: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
@@ -387,7 +386,7 @@ impl<G: Gpu> OptimiserState<G> for RAdam<G> {
 
         let size = self.momentum.size();
         let device = self.momentum.device();
-        self.op = params.build(size, device.dialect()).unwrap().compile(device)?;
+        self.op = params.build(size, device.props()).unwrap().compile(device)?;
         Ok(())
     }
 }

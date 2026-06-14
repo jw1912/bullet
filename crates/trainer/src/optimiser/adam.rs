@@ -7,10 +7,9 @@ use bullet_compiler::tensor::{DType, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::Dialect,
     runtime::{Device, Dim3, Gpu, Stream},
 };
-
+use bullet_gpu::runtime::{DeviceProps, Dialect};
 use crate::{
     model::{ModelDefinition, ModelWeights},
     optimiser::{Optimiser, OptimiserUpdateResult, OptimiserUpdateSync},
@@ -96,8 +95,8 @@ kernel void adamw(
 )";
 
 impl AdamWParams {
-    pub fn build(&self, size: usize, dialect: Dialect) -> Result<KernelSrc, IRTrace> {
-        let (op_src, decl) = match dialect {
+    pub fn build(&self, size: usize, props: &DeviceProps) -> Result<KernelSrc, IRTrace> {
+        let (op_src, decl) = match props.dialect() {
             Dialect::CudaHip => (OP_CUDA, DECL_CUDA),
             Dialect::Msl => (OP_MSL, DECL_MSL),
         };
@@ -110,7 +109,7 @@ impl AdamWParams {
             .replace("WMAX", &format!("{:.E}", self.max_weight))
             .replace("EPSILON", "0.00000001F");
 
-        let body = match dialect {
+        let body = match props.dialect() {
             Dialect::CudaHip => if size.is_multiple_of(4) {
             format!(
                 "
@@ -259,7 +258,7 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
             );
         }
 
-        let op = default_params.build(size, device.dialect()).unwrap().compile(device.clone())?;
+        let op = default_params.build(size, device.props()).unwrap().compile(device.clone())?;
 
         Ok(Self {
             momentum: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
@@ -323,7 +322,7 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         let size = self.momentum.size();
         let device = self.momentum.device();
-        self.op = params.build(size, device.dialect()).unwrap().compile(device)?;
+        self.op = params.build(size, device.props()).unwrap().compile(device)?;
         Ok(())
     }
 }

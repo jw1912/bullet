@@ -25,9 +25,10 @@ use bullet_compiler::{
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    pointwise::{Dialect, transforms::{CodegenPointwise, FusePointwise, LowerPointwise}},
+    pointwise::{transforms::{CodegenPointwise, FusePointwise, LowerPointwise}},
     runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, KernelArgType, Module, Stream},
 };
+use crate::runtime::{DeviceProps, Dialect};
 
 enum Inst<G: Gpu> {
     Malloc { idx: usize, ty: TType },
@@ -72,16 +73,15 @@ impl<G: Gpu> Function<G> {
 
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         let props = device.props().clone();
-        let dialect = device.dialect();
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
         ir.transform(DuplicateScalarsAndIndexing)?;
         ir.transform(LowerPointwise(props.clone()))?;
         ir.transform(FusePointwise(props.clone()))?;
         ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(EliminateCommonSubExpressions)?;
-        ir.transform(LowerPointwise(props))?;
-        ir.transform(CodegenPointwise { dialect })?;
-        ir.transform(CodegenReduction { dialect })?;
+        ir.transform(LowerPointwise(props.clone()))?;
+        ir.transform(CodegenPointwise(props.clone()))?;
+        ir.transform(CodegenReduction(props.clone()))?;
 
         let mut maps = BTreeMap::new();
         let mut num_ptrs = 0;
@@ -362,7 +362,7 @@ rewriterule! {
 }
 
 static REDUCTION_SRC_CUDA: &str = "
-extern \"C\" __global__ void kernel(const float* input, float* output) {
+extern \"C\" __global__ void reduce_kernel(const float* input, float* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
     if (tid < OUTER) {
@@ -391,10 +391,8 @@ kernel void reduce_kernel(device const float* input [[buffer(0)]], device float*
     }
 }";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CodegenReduction {
-    pub dialect: Dialect,
-}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodegenReduction(pub DeviceProps);
 
 impl IRTransform for CodegenReduction {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
@@ -406,7 +404,7 @@ impl IRTransform for CodegenReduction {
                 let outer = reduction.outer().get();
                 let dimen = reduction.dimen().get();
 
-                let src = (match self.dialect {
+                let src = (match self.0.dialect() {
                     Dialect::CudaHip => REDUCTION_SRC_CUDA,
                     Dialect::Msl => REDUCTION_SRC_MSL,
                 })
@@ -425,11 +423,7 @@ impl IRTransform for CodegenReduction {
                     KernelSrc::new(
                         reduction.inputs(),
                         reduction.outputs(),
-                        match self.dialect {
-                            Dialect::CudaHip => "kernel",
-                            Dialect::Msl => "reduce_kernel",
-                        }
-                        .to_string(),
+                        "reduce_kernel".to_string(),
                         src,
                         vec![(0, true), (0, false)],
                         Default::default(),

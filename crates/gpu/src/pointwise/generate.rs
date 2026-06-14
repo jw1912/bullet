@@ -387,7 +387,7 @@ mod tests {
         let ir = builder.build([x, y]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node(), x.node()], vec![x.node(), y.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string(), props.dialect()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string(), props).map_err(IRTrace::from) }
     }
 
     fn axby<G: Gpu>() -> Result<(), G::Error> {
@@ -440,7 +440,7 @@ mod tests {
         let ir = builder.build([concat]);
 
         let sub = SubGraph::new(ir, vec![a.node(), b.node()], vec![concat.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string(), props.dialect()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string(), props).map_err(IRTrace::from) }
     }
 
     fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
@@ -475,7 +475,7 @@ mod tests {
         let ir = builder.build([slice]);
 
         let sub = SubGraph::new(ir, vec![input.node()], vec![slice.node()])?;
-        unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string(), props.dialect()).map_err(IRTrace::from) }
+        unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string(), props).map_err(IRTrace::from) }
     }
 
     fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {

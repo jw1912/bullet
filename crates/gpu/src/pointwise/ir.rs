@@ -14,12 +14,12 @@ use bullet_compiler::{
 use crate::{
     kernel::KernelSrc,
     pointwise::{
-        Dialect,
         operations::{MemIO, PType, PointwiseOp},
         write::{code_str, tystr},
     },
     runtime::Dim3,
 };
+use crate::runtime::{DeviceProps, Dialect};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Pointwise;
@@ -321,7 +321,7 @@ impl PointwiseIR {
         Ok(false)
     }
 
-    fn source_code(&self, kernel_name: &str, dialect: Dialect) -> Result<String, fmt::Error> {
+    fn source_code(&self, kernel_name: &str, props: &DeviceProps) -> Result<String, fmt::Error> {
         let name = |id: NodeId| format!("n{}", id.inner());
         let mut code = String::new();
 
@@ -329,7 +329,7 @@ impl PointwiseIR {
             let op = self.ir.op(op_id).unwrap();
 
             if !matches!(op.data(), PointwiseOp::Buffer { .. }) {
-                let mut src = code_str(*op.data(), self.size, dialect).unwrap();
+                let mut src = code_str(*op.data(), self.size, props).unwrap();
 
                 for (i, &id) in op.inputs().iter().enumerate() {
                     src = src.replace(&format!("IN{}", i + 1), &name(id));
@@ -347,7 +347,7 @@ impl PointwiseIR {
 
         let mut src = String::new();
 
-        match dialect {
+        match props.dialect() {
             Dialect::CudaHip => {
                 write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
 
@@ -425,7 +425,7 @@ impl PointwiseIR {
     /// ### Safety
     ///
     /// User must ensure same invariants as KernelSrc hold
-    pub unsafe fn lower(&self, name: String, dialect: Dialect) -> Result<KernelSrc, IRError> {
+    pub unsafe fn lower(&self, name: String, props: &DeviceProps) -> Result<KernelSrc, IRError> {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         let mut arg_order = Vec::new();
@@ -453,7 +453,7 @@ impl PointwiseIR {
             }
         }
 
-        let source = self.source_code(&name, dialect).map_err(|e| IRError::from(format!("{e:?}")))?;
+        let source = self.source_code(&name, props).map_err(|e| IRError::from(format!("{e:?}")))?;
         let total = self.size.get();
 
         unsafe {
@@ -502,7 +502,7 @@ mod tests {
         ir.write(input2, tid, value4).unwrap();
 
         let device = Device::<G>::new(0)?;
-        let kernel = unsafe { ir.lower("fmadd".to_string(), device.dialect()).unwrap() }.compile(device.clone())?;
+        let kernel = unsafe { ir.lower("fmadd".to_string(), device.props()).unwrap() }.compile(device.clone())?;
         let stream = device.new_stream()?;
 
         let values1 = TValue::F32(vec![1.0, 2.0, 3.0, 4.0]);

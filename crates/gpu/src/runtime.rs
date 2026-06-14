@@ -10,7 +10,7 @@ compile_error!("the `metal` feature requires macOS");
 pub mod mock;
 #[cfg(feature = "rocm")]
 pub mod rocm;
-pub mod dialect;
+mod dialect;
 
 use std::{
     ffi::{c_void, CString},
@@ -21,9 +21,9 @@ use std::{
     },
 };
 
-use crate::pointwise::Dialect;
 
 pub use bindings::{DeviceProps, Dim3, GemmConfig, KernelArgType};
+pub use dialect::Dialect;
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
 pub trait Gpu: bindings::GpuBindings<Err = Self::Error, Ptr = Self::DevicePtr> {

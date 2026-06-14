@@ -3,7 +3,7 @@ use std::{
     fmt,
 };
 
-use crate::pointwise::Dialect;
+use crate::runtime::Dialect;
 
 /// Kernel grid or block dimensions
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub struct GemmConfig {
     pub beta: f32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeviceProps {
     pub(super) name: String,
     pub(super) warp_size: Option<u8>,

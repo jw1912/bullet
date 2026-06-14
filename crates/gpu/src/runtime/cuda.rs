@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::{pointwise::Dialect, runtime::bindings::{DeviceProps, GemmConfig}};
+use crate::{runtime::{Dialect, bindings::{DeviceProps, GemmConfig}}};
 
 use super::bindings::{Dim3, GpuBindings, KernelArgType};
 

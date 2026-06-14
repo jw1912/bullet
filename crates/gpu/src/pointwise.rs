@@ -4,8 +4,6 @@ mod operations;
 pub(crate) mod transforms;
 mod write;
 
-pub use crate::runtime::dialect::Dialect;
-
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bullet_compiler::{

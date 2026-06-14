@@ -4,7 +4,7 @@ use bullet_compiler::tensor::{
 };
 
 use crate::pointwise::operations::PointwiseOp;
-use crate::runtime::dialect::Dialect;
+use crate::runtime::{DeviceProps, Dialect};
 
 pub fn tystr(dtype: DType) -> &'static str {
     match dtype {
@@ -13,7 +13,9 @@ pub fn tystr(dtype: DType) -> &'static str {
     }
 }
 
-pub fn code_str(op: PointwiseOp, size: Size, dialect: Dialect) -> Option<String> {
+pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<String> {
+    let dialect = props.dialect();
+
     match op {
         PointwiseOp::Buffer { .. } => None,
         PointwiseOp::Div => Some("const int OUT1 = IN1 / IN2;".into()),
