@@ -177,23 +177,24 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                 Unary::IsZero => format!("{x} == static_cast<{ty}>(0)"),
                 Unary::IsNonNegative => format!("{x} >= static_cast<{ty}>(0)"),
                 _ => {
+                    let mslidx = usize::from(dialect == Dialect::Msl);
                     let opstr: &str = match op {
                         Unary::Cast(nty) => match nty {
                             DType::F32 => "static_cast<float>",
                             DType::I32 => "static_cast<int>",
                         },
                         Unary::Abs => "abs",
-                        Unary::Sin => dialect.sin(),
-                        Unary::Cos => dialect.cos(),
-                        Unary::Tan => dialect.tan(),
-                        Unary::Sinh => dialect.sinh(),
-                        Unary::Cosh => dialect.cosh(),
-                        Unary::Tanh => dialect.tanh(),
-                        Unary::Exp => dialect.exp(),
-                        Unary::Log => dialect.log(),
-                        Unary::Sqrt => dialect.sqrt(),
-                        Unary::Round => dialect.round(),
-                        Unary::Truncate => dialect.trunc(),
+                        Unary::Sin => ["sinf", "sin"][mslidx],
+                        Unary::Cos => ["cosf", "cos"][mslidx],
+                        Unary::Tan => ["tanf", "tan"][mslidx],
+                        Unary::Sinh => ["sinhf", "sinh"][mslidx],
+                        Unary::Cosh => ["coshf", "cosh"][mslidx],
+                        Unary::Tanh => ["tanhf", "tanh"][mslidx],
+                        Unary::Exp => ["expf", "exp"][mslidx],
+                        Unary::Log => ["logf", "log"][mslidx],
+                        Unary::Sqrt => ["sqrtf", "sqrt"][mslidx],
+                        Unary::Round => ["roundf", "round"][mslidx],
+                        Unary::Truncate => ["truncf", "trunc"][mslidx],
                         Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
                             unimplemented!()
                         }
