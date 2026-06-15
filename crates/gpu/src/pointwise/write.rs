@@ -177,7 +177,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                 Unary::IsZero => format!("{x} == static_cast<{ty}>(0)"),
                 Unary::IsNonNegative => format!("{x} >= static_cast<{ty}>(0)"),
                 _ => {
-                    let func: &str = match op {
+                    let opstr: &str = match op {
                         Unary::Cast(nty) => match nty {
                             DType::F32 => "static_cast<float>",
                             DType::I32 => "static_cast<int>",
@@ -199,7 +199,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                         }
                     };
 
-                    format!("{func}({x})")
+                    format!("{opstr}({x})")
                 }
             };
 
