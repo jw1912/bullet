@@ -338,9 +338,9 @@ impl GpuBindings for Metal {
 
                 // arg_ptr points to a u64 (our synthetic buffer ID)
                 let buffer_id = *(arg_ptr as *const u64);
-                let entry = buf_reg.get(&buffer_id).ok_or_else(|| {
-                    MetalError::Runtime(format!("Buffer {buffer_id} not found for arg {index}"))
-                })?;
+                let entry = buf_reg
+                    .get(&buffer_id)
+                    .ok_or_else(|| MetalError::Runtime(format!("Buffer {buffer_id} not found for arg {index}")))?;
                 encoder.setBuffer_offset_atIndex(Some(&*entry.buffer), 0, index as NSUInteger);
             }
 
@@ -380,11 +380,7 @@ impl GpuBindings for Metal {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(
-        module: u64,
-        kernel_name: &CStr,
-        nargs: usize,
-    ) -> Result<u64, MetalError> {
+    unsafe fn module_get_kernel(module: u64, kernel_name: &CStr, nargs: usize) -> Result<u64, MetalError> {
         let name = kernel_name.to_str().map_err(|e| MetalError::Runtime(format!("{e}")))?;
         let ns_name = NSString::from_str(name);
 

@@ -312,11 +312,7 @@ impl<G: Gpu> Module<G> {
     }
 
     /// Get kernel with given name from module
-    pub fn get_kernel(
-        self: Arc<Self>,
-        name: impl Into<String>,
-        nargs: usize,
-    ) -> Result<Kernel<G>, G::Error> {
+    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>, nargs: usize) -> Result<Kernel<G>, G::Error> {
         self.device.set()?;
 
         let name = name.into();
@@ -524,8 +520,7 @@ mod tests {
             }
         };
 
-        let kernel = Module::new(device.clone(), kernel_src)?
-            .get_kernel("add_one", 2)?;
+        let kernel = Module::new(device.clone(), kernel_src)?.get_kernel("add_one", 2)?;
 
         unsafe {
             let dev_src = device.malloc(16)?;

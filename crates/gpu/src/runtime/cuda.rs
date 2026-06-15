@@ -4,7 +4,7 @@ use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::runtime::{
     Dialect,
-    bindings::{DeviceProps, Dim3, GpuBindings, GemmConfig},
+    bindings::{DeviceProps, Dim3, GemmConfig, GpuBindings},
 };
 
 use raw::*;
@@ -206,11 +206,7 @@ impl GpuBindings for Cuda {
         error::driver(cuModuleUnload(module))
     }
 
-    unsafe fn module_get_kernel(
-        module: CUmodule,
-        kernel_name: &CStr,
-        _nargs: usize,
-    ) -> Result<CUfunction, CudaError> {
+    unsafe fn module_get_kernel(module: CUmodule, kernel_name: &CStr, _nargs: usize) -> Result<CUfunction, CudaError> {
         let mut func = CUfunction::default();
         error::driver(cuModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
         Ok(func)
