@@ -5,14 +5,14 @@ use std::{
     sync::Arc,
 };
 
-use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 use bullet_compiler::tensor::{DType, DValue, IRTrace, TType, TValue};
-use bullet_gpu::runtime::{DeviceProps, Dialect};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    runtime::{Device, Dim3, Gpu, Stream},
+    runtime::{Device, DeviceProps, Dialect, Dim3, Gpu, Stream},
 };
+
+use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{OptimiserState, utils};
 
