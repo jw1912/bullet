@@ -4,10 +4,8 @@ use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::runtime::{
     Dialect,
-    bindings::{DeviceProps, GemmConfig},
+    bindings::{DeviceProps, Dim3, GpuBindings, GemmConfig, KernelArgType},
 };
-
-use super::bindings::{Dim3, GpuBindings, KernelArgType};
 
 use raw::*;
 
