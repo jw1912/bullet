@@ -512,20 +512,23 @@ impl GpuBindings for Metal {
             };
 
             // Swap A↔B and transpose flags for row-major MPS
-            let gemm = mps_matrix_multiplication(
+            let gemm = MPSMatrixMultiplication::initWithDevice_transposeLeft_transposeRight_resultRows_resultColumns_interiorColumns_alpha_beta(
+                MPSMatrixMultiplication::alloc(),
                 device,
-                config.row_mjr_b, // transpose left (= B in MPS)
-                config.row_mjr_a, // transpose right (= A in MPS)
-                n as usize,       // resultRows (swapped from m)
-                m as usize,       // resultColumns (swapped from n)
-                k as usize,
+                config.row_mjr_b,
+                config.row_mjr_a,
+                (n as usize) as NSUInteger,
+                (m as usize) as NSUInteger,
+                (k as usize) as NSUInteger,
                 config.alpha as f64,
                 config.beta as f64,
-                batch as usize,
-            );
+                );
+            if batch as usize > 1 {
+                gemm.setBatchStart(0);
+                gemm.setBatchSize((batch as usize) as NSUInteger);
+            }
 
-            // left=B, right=A (swapped for row-major)
-            mps_encode_gemm(&gemm, &command_buffer, &mat_b, &mat_a, &mat_c);
+            gemm.encodeToCommandBuffer_leftMatrix_rightMatrix_resultMatrix(&command_buffer, &mat_b, &mat_a, &mat_c);
             command_buffer.commit();
 
             Ok(())
@@ -576,47 +579,4 @@ fn mps_matrix_descriptor(
 
 fn mps_matrix(buffer: &ProtocolObject<dyn MTLBuffer>, descriptor: &MPSMatrixDescriptor) -> Retained<MPSMatrix> {
     unsafe { MPSMatrix::initWithBuffer_descriptor(MPSMatrix::alloc(), buffer, descriptor) }
-}
-
-fn mps_matrix_multiplication(
-    device: &ProtocolObject<dyn MTLDevice>,
-    transpose_left: bool,
-    transpose_right: bool,
-    result_rows: usize,
-    result_columns: usize,
-    interior_columns: usize,
-    alpha: f64,
-    beta: f64,
-    batch_count: usize,
-) -> Retained<MPSMatrixMultiplication> {
-    unsafe {
-        let gemm = MPSMatrixMultiplication::initWithDevice_transposeLeft_transposeRight_resultRows_resultColumns_interiorColumns_alpha_beta(
-            MPSMatrixMultiplication::alloc(),
-            device,
-            transpose_left,
-            transpose_right,
-            result_rows as NSUInteger,
-            result_columns as NSUInteger,
-            interior_columns as NSUInteger,
-            alpha,
-            beta,
-        );
-        if batch_count > 1 {
-            gemm.setBatchStart(0);
-            gemm.setBatchSize(batch_count as NSUInteger);
-        }
-        gemm
-    }
-}
-
-fn mps_encode_gemm(
-    gemm: &MPSMatrixMultiplication,
-    command_buffer: &ProtocolObject<dyn MTLCommandBuffer>,
-    left: &MPSMatrix,
-    right: &MPSMatrix,
-    result: &MPSMatrix,
-) {
-    unsafe {
-        gemm.encodeToCommandBuffer_leftMatrix_rightMatrix_resultMatrix(command_buffer, left, right, result);
-    }
 }
