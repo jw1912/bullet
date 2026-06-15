@@ -4,7 +4,6 @@ use std::{
     collections::HashMap,
     ffi::{CStr, c_char, c_int, c_uint, c_void},
     ops::Deref,
-    ptr::NonNull,
     sync::{
         Mutex,
         atomic::{AtomicU64, Ordering},
@@ -337,17 +336,6 @@ impl GpuBindings for Metal {
             for (index, arg_type) in info.iter().enumerate() {
                 let arg_ptr = *args.add(index);
                 match arg_type {
-                    KernelArgType::Scalar => {
-                        // arg_ptr points to an i32 value
-                        let value_ptr = arg_ptr as *const i32;
-                        let nn = NonNull::new(value_ptr as *mut c_void)
-                            .ok_or_else(|| MetalError::Runtime("Null scalar arg".into()))?;
-                        encoder.setBytes_length_atIndex(
-                            nn,
-                            std::mem::size_of::<i32>() as NSUInteger,
-                            index as NSUInteger,
-                        );
-                    }
                     KernelArgType::Buffer => {
                         // arg_ptr points to a u64 (our synthetic buffer ID)
                         let buffer_id = *(arg_ptr as *const u64);

@@ -65,7 +65,6 @@ impl DeviceProps {
 /// is only acted on by the Metal backend. Other backends ignore it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KernelArgType {
-    Scalar,
     Buffer,
 }
 
