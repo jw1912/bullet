@@ -3,8 +3,10 @@ use bullet_compiler::tensor::{
     operation::{CABinary, Unary},
 };
 
-use crate::pointwise::operations::PointwiseOp;
-use crate::runtime::{DeviceProps, Dialect};
+use crate::{
+    pointwise::operations::PointwiseOp,
+    runtime::{DeviceProps, Dialect},
+};
 
 pub fn tystr(dtype: DType) -> &'static str {
     match dtype {

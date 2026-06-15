@@ -11,14 +11,13 @@ use bullet_compiler::{
     },
 };
 
-use crate::runtime::{DeviceProps, Dialect};
 use crate::{
     kernel::KernelSrc,
     pointwise::{
         operations::{MemIO, PType, PointwiseOp},
         write::{code_str, tystr},
     },
-    runtime::Dim3,
+    runtime::{DeviceProps, Dialect, Dim3},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
