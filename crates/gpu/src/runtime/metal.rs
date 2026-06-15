@@ -298,7 +298,6 @@ impl GpuBindings for Metal {
 
     unsafe fn kernel_destroy(kernel: u64) -> MetalResult {
         pipeline_registry().lock().unwrap().remove(&kernel);
-        kernel_arg_info().lock().unwrap().remove(&kernel);
         Ok(())
     }
 
@@ -307,7 +306,7 @@ impl GpuBindings for Metal {
         stream: u64,
         grid_dim: Dim3,
         block_dim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         _smem: c_uint,
     ) -> MetalResult {
         autoreleasepool(|_| unsafe {
@@ -330,13 +329,7 @@ impl GpuBindings for Metal {
             let total_threads = grid_dim.x * block_dim.x;
             let buf_reg = buffer_registry().lock().unwrap();
 
-            let arg_info = kernel_arg_info().lock().unwrap();
-            let nargs = *arg_info.get(&func).ok_or_else(|| MetalError::Runtime("Kernel arg info not found".into()))?;
-
-            for index in 0..nargs {
-                let arg_ptr = *args.add(index);
-
-                // arg_ptr points to a u64 (our synthetic buffer ID)
+            for (index, &mut arg_ptr) in args.iter_mut().enumerate() {
                 let buffer_id = *(arg_ptr as *const u64);
                 let entry = buf_reg
                     .get(&buffer_id)
@@ -380,7 +373,7 @@ impl GpuBindings for Metal {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(module: u64, kernel_name: &CStr, nargs: usize) -> Result<u64, MetalError> {
+    unsafe fn module_get_kernel(module: u64, kernel_name: &CStr) -> Result<u64, MetalError> {
         let name = kernel_name.to_str().map_err(|e| MetalError::Runtime(format!("{e}")))?;
         let ns_name = NSString::from_str(name);
 
@@ -399,7 +392,6 @@ impl GpuBindings for Metal {
 
         let id = next_id();
         pipeline_registry().lock().unwrap().insert(id, pipeline);
-        kernel_arg_info().lock().unwrap().insert(id, nargs);
         Ok(id)
     }
 
@@ -537,12 +529,7 @@ impl GpuBindings for Metal {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Kernel argument type tracking
-// ---------------------------------------------------------------------------
-
 lazy_static_mutex! {
-    static kernel_arg_info: HashMap<u64, usize> = HashMap::new();
     static blas_stream_map: HashMap<u64, u64> = HashMap::new();
 }
 

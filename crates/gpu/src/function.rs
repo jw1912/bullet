@@ -128,7 +128,7 @@ impl<G: Gpu> Function<G> {
 
                 let func = Module::new(device.clone(), source.clone())
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?
-                    .get_kernel(name, args.len())
+                    .get_kernel(name)
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
                 max_num_args = max_num_args.max(args.len());
@@ -251,7 +251,7 @@ impl<G: Gpu> Function<G> {
                         let mut args: Vec<_> =
                             args.iter().map(|&arg| ptrs.as_ptr().add(arg).cast_mut().cast()).collect();
 
-                        func.launch(&stream, *gdim, *bdim, args.as_mut_ptr(), *smem)?;
+                        func.launch(&stream, *gdim, *bdim, &mut args, *smem)?;
                     }
                     &Inst::Matmul { cfg, a, b, c } => {
                         let handle = self.blas.as_ref().unwrap();
