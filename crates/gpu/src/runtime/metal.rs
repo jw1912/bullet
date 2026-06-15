@@ -25,14 +25,13 @@ use super::bindings::{Dim3, GpuBindings};
 use crate::runtime::Dialect;
 use crate::runtime::bindings::{DeviceProps, GemmConfig};
 
-// ---------------------------------------------------------------------------
-// SendMetal — thread-safe wrapper for MTLBuffer
-// ---------------------------------------------------------------------------
-
-// MTLBuffer (via MTLResource/MTLAllocation) doesn't carry Send+Sync supertrait
-// bounds in objc2-metal, so we need an explicit wrapper. MTLDevice, MTLLibrary,
-// MTLCommandQueue and MTLComputePipelineState do carry those bounds and are stored
-// as plain Retained<ProtocolObject<T>> values.
+/// ###  Safety
+///
+/// This is not safe in general
+///
+/// The only concrete type that does get constructed in this
+/// that does not also implement Send + Sync is MTLBuffer
+/// and we only use this in a safe way
 struct SendMetal<T: ?Sized>(Retained<ProtocolObject<T>>);
 
 unsafe impl<T: ?Sized> Send for SendMetal<T> {}
@@ -44,10 +43,6 @@ impl<T: ?Sized> Deref for SendMetal<T> {
         &self.0
     }
 }
-
-// ---------------------------------------------------------------------------
-// Global registries
-// ---------------------------------------------------------------------------
 
 struct BufferEntry {
     buffer: SendMetal<dyn MTLBuffer>,
@@ -80,22 +75,20 @@ fn next_id() -> u64 {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-// Thread-local current device ordinal
 thread_local! {
     static CURRENT_DEVICE: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
 }
 
 /// Returns a raw pointer to the current Metal device.
-/// SAFETY: Devices are inserted once and never removed, so the pointer
-/// remains valid for the lifetime of the program.
+///
+/// ### SAFETY
+///
+/// Devices are inserted once and never removed, so the
+/// pointer remains valid for the lifetime of the program
 unsafe fn current_device() -> *const ProtocolObject<dyn MTLDevice> {
     let ordinal = CURRENT_DEVICE.with(|c| c.get());
     Retained::as_ptr(device_registry().lock().unwrap().get(&ordinal).expect("Metal device not initialised"))
 }
-
-// ---------------------------------------------------------------------------
-// Metal marker type and error
-// ---------------------------------------------------------------------------
 
 /// Marker for the Metal runtime
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -125,22 +118,16 @@ impl From<String> for MetalError {
 
 type MetalResult = Result<(), MetalError>;
 
-// ---------------------------------------------------------------------------
-// GpuBindings implementation
-// ---------------------------------------------------------------------------
-
 #[allow(unsafe_op_in_unsafe_fn)]
 impl GpuBindings for Metal {
     type Err = MetalError;
-    type Dev = c_int; // Device ordinal
-    type Ptr = u64; // Synthetic buffer ID
-    type Ctx = c_int; // Device ordinal (Metal has no separate context)
-    type Stream = u64; // Command queue ID in registry
-    type BlasHandle = u64; // MPS state ID
-    type Kernel = u64; // Pipeline state ID in registry
-    type Module = u64; // Library ID in registry
-
-    // ----- Driver / Device -----
+    type Dev = c_int;
+    type Ptr = u64;
+    type Ctx = c_int;
+    type Stream = u64;
+    type BlasHandle = u64;
+    type Kernel = u64;
+    type Module = u64;
 
     unsafe fn driver_init() -> MetalResult {
         Ok(())
@@ -167,8 +154,6 @@ impl GpuBindings for Metal {
         })
     }
 
-    // ----- Context -----
-
     unsafe fn context_create(device: c_int) -> Result<c_int, MetalError> {
         CURRENT_DEVICE.with(|c| c.set(device));
         Ok(device)
@@ -184,12 +169,8 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn context_sync() -> MetalResult {
-        // Metal doesn't have a global device sync — this is a no-op.
-        // Actual synchronisation happens via command buffer completion.
         Ok(())
     }
-
-    // ----- Memory (blocking, device-level) -----
 
     unsafe fn context_malloc(bytes: usize) -> Result<u64, MetalError> {
         let device = &*current_device();
@@ -234,8 +215,6 @@ impl GpuBindings for Metal {
         Ok(())
     }
 
-    // ----- Stream (command queue) -----
-
     unsafe fn stream_create() -> Result<u64, MetalError> {
         let device = &*current_device();
         let queue =
@@ -251,8 +230,6 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn stream_sync(stream: u64) -> MetalResult {
-        // Create an empty command buffer and wait for completion to ensure
-        // all prior work on this queue has finished.
         autoreleasepool(|_| {
             let command_buffer = {
                 let registry = queue_registry().lock().unwrap();
@@ -266,8 +243,6 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn stream_malloc(_stream: u64, bytes: usize) -> Result<u64, MetalError> {
-        // Metal doesn't support stream-ordered allocation.
-        // Fall back to device-level allocation.
         Self::context_malloc(bytes)
     }
 
@@ -276,12 +251,10 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn stream_memset(_stream: u64, dev_ptr: u64, bytes: usize, value: u8) -> MetalResult {
-        // With StorageModeShared, we can memset directly on CPU side.
         Self::context_memset(dev_ptr, bytes, value)
     }
 
     unsafe fn stream_memcpy_d2h(_stream: u64, dst: *mut c_void, src: u64, bytes: usize) -> MetalResult {
-        // With StorageModeShared, CPU and GPU share the same memory on Apple Silicon.
         Self::context_memcpy_d2h(dst, src, bytes)
     }
 
@@ -289,10 +262,7 @@ impl GpuBindings for Metal {
         Self::context_memcpy_h2d(dst, src, bytes)
     }
 
-    // ----- Kernel compilation and launch -----
-
     unsafe fn kernel_load(_kernel: u64) -> MetalResult {
-        // Pipeline state is already created at module_get_kernel time.
         Ok(())
     }
 
@@ -357,14 +327,11 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn module_create(code: *const c_void) -> Result<u64, MetalError> {
-        // `code` is a pointer to a u64 library ID (set by program_compile)
         let library_id = *(code as *const u64);
-        // Verify it exists
         let reg = library_registry().lock().unwrap();
         if !reg.contains_key(&library_id) {
             return Err(MetalError::Runtime("Library not found in registry".into()));
         }
-        // Return the same ID as the module ID
         Ok(library_id)
     }
 
@@ -412,17 +379,12 @@ impl GpuBindings for Metal {
         let id = next_id();
         library_registry().lock().unwrap().insert(id, library);
 
-        // Return the library ID as bytes so module_create can retrieve it
         let id_bytes = id.to_ne_bytes();
         let result: Vec<c_char> = id_bytes.iter().map(|&b| b as c_char).collect();
         Ok(result)
     }
 
-    // ----- BLAS -----
-
     unsafe fn blas_create() -> Result<u64, MetalError> {
-        // MPS state will be managed per-call since MPSMatrixMultiplication
-        // needs to be configured per operation.
         Ok(next_id())
     }
 
@@ -432,7 +394,6 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn blas_set_stream(handle: u64, stream: u64) -> MetalResult {
-        // Store the stream association for this BLAS handle
         blas_stream_map().lock().unwrap().insert(handle, stream);
         Ok(())
     }
@@ -467,12 +428,7 @@ impl GpuBindings for Metal {
             let k = config.k as u64;
             let batch = batch_size as u64;
 
-            // cuBLAS is column-major, MPS is row-major.
-            // C_cm = op(A) * op(B) ↔ C_rm^T = op(B)^T * op(A)^T
-            // So in MPS: swap A↔B, swap transpose flags, result is n×m.
-            //
-            // Column-major data viewed as row-major flips dimensions:
-            //   col-major m×k with lda → row-major: rows=k, cols=m, rowBytes=lda*4
+            // MPS is row-major
             let lda = if config.row_mjr_a { k } else { m };
             let ldb = if config.row_mjr_b { n } else { k };
             let ldc = m;
@@ -481,7 +437,6 @@ impl GpuBindings for Metal {
             let stride_b = k * n;
             let stride_c = m * n;
 
-            // Row-major interpretation of column-major storage (dims flipped)
             let (a_rows, a_cols) = if config.row_mjr_a { (m, k) } else { (k, m) };
             let (b_rows, b_cols) = if config.row_mjr_b { (k, n) } else { (n, k) };
 
@@ -503,7 +458,6 @@ impl GpuBindings for Metal {
                 (mat_a, mat_b, mat_c)
             };
 
-            // Swap A↔B and transpose flags for row-major MPS
             let gemm = MPSMatrixMultiplication::initWithDevice_transposeLeft_transposeRight_resultRows_resultColumns_interiorColumns_alpha_beta(
                 MPSMatrixMultiplication::alloc(),
                 device,
@@ -533,16 +487,12 @@ lazy_static_mutex! {
     static blas_stream_map: HashMap<u64, u64> = HashMap::new();
 }
 
-// ---------------------------------------------------------------------------
-// MPS helpers (using objc2_metal_performance_shaders)
-// ---------------------------------------------------------------------------
-
 fn mps_matrix_descriptor(
     rows: u64,
     columns: u64,
-    row_bytes: u64, // element count; multiplied by sizeof(f32) internally
+    row_numel: u64,
     matrices: u64,
-    matrix_bytes: u64, // element count; multiplied by sizeof(f32) internally
+    matrix_numel: u64,
 ) -> Retained<MPSMatrixDescriptor> {
     unsafe {
         if matrices > 1 {
