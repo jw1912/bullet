@@ -7,7 +7,7 @@ use crate::runtime::{
     bindings::{DeviceProps, GemmConfig},
 };
 
-use super::bindings::{Dim3, GpuBindings, KernelArgType};
+use super::bindings::{Dim3, GpuBindings};
 
 use raw::*;
 
@@ -183,7 +183,7 @@ impl GpuBindings for ROCm {
     unsafe fn module_get_kernel(
         module: hipModule,
         kernel_name: &CStr,
-        _arg_types: &[KernelArgType],
+        _nargs: usize,
     ) -> Result<hipFunction, ROCmError> {
         let mut func = hipFunction::default();
         error::runtime(hipModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
