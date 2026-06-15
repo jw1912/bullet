@@ -363,12 +363,10 @@ impl PointwiseIR {
 
                 write!(&mut src, "kernel void {kernel_name}(")?;
 
-                let mut buf_index = 0u32;
                 for (i, &input) in self.bufs.iter().enumerate() {
                     let comma = if i > 0 { ", " } else { "" };
                     let PType::Pointer(ty) = self.ir.node(input).unwrap().ty() else { panic!() };
-                    write!(&mut src, "{comma}device {}* {} [[buffer({buf_index})]]", tystr(ty), name(input))?;
-                    buf_index += 1;
+                    write!(&mut src, "{comma}device {}* {} [[buffer({i})]]", tystr(ty), name(input))?;
                 }
 
                 let comma = if !self.bufs.is_empty() { ", " } else { "" };
