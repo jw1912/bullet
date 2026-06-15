@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::runtime::{
-    Dim3,
+    Dialect, Dim3,
     bindings::{DeviceProps, GemmConfig, GpuBindings},
 };
 
@@ -49,6 +49,7 @@ impl GpuBindings for MockGpu {
             stream_mem_alloc: false,
             vec_atomics: false,
             arch: None,
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -155,12 +156,16 @@ impl GpuBindings for MockGpu {
         Ok(())
     }
 
+    unsafe fn kernel_destroy(_kernel: ()) -> MockResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: (),
         stream: (),
         gdim: Dim3,
         bdim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: c_uint,
     ) -> MockResult {
         Err(MSG.into())

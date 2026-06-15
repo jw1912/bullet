@@ -18,6 +18,7 @@ rand_xoshiro = "=0.8.1"
 [features]
 cuda = ["bullet-gpu/cuda"]
 rocm = ["bullet-gpu/rocm"]
+metal = ["bullet-gpu/metal"]
 
 [[example]]
 name = "ataxx"

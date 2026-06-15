@@ -10,7 +10,7 @@ use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
-    run::{self, PreparedBatchHost, TrainingSteps, logger},
+    run::{self, TrainingSteps, logger},
 };
 
 use crate::{
@@ -92,9 +92,9 @@ where
                 cnt += 1;
             });
 
-            for j in cnt..nnz {
-                stm[j] = -1;
-                ntm[j] = -1;
+            if cnt < nnz {
+                stm[cnt] = -1;
+                ntm[cnt] = -1;
             }
 
             assert!(cnt <= nnz, "More inputs provided than the specified maximum!");
@@ -231,7 +231,7 @@ where
 
         let steps = TrainingSteps { batch_size: 1, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 1 };
         let mapper = self.state.make_mapper(steps, 1.0, wdl::ConstantWDL { value: 1.0 });
-        let host_data = PreparedBatchHost { inputs: mapper.map(&[pos], 0, 1) };
+        let host_data = mapper.map(&[pos], 0, 1);
 
         let device_data = host_data.to_device(&self.optimiser.device()).unwrap();
 

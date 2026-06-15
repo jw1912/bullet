@@ -50,3 +50,9 @@ For users with AMD GPUs.
 - Install the [HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/how-to/install.html)
 - The `HIP_PATH` environment variable must be set to the HIP install location (should contain the `bin`, `lib` and `include` directories)
 - You will probably need to specify the `GCN_ARCH_NAME` environment variable - which you should be able to find using `rocminfo` on Linux, or `hipinfo` on Windows
+
+#### Metal
+
+For users on macOS.
+
+- Enable the `metal` feature

@@ -26,7 +26,7 @@ use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
     pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
-    runtime::{Blas, Device, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
+    runtime::{Blas, Device, DeviceProps, Dialect, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
 enum Inst<G: Gpu> {
@@ -78,9 +78,9 @@ impl<G: Gpu> Function<G> {
         ir.transform(FusePointwise(props.clone()))?;
         ir.transform(RewritePass(ReduceToMatmul))?;
         ir.transform(EliminateCommonSubExpressions)?;
-        ir.transform(LowerPointwise(props))?;
-        ir.transform(CodegenPointwise)?;
-        ir.transform(CodegenReduction)?;
+        ir.transform(LowerPointwise(props.clone()))?;
+        ir.transform(CodegenPointwise(props.clone()))?;
+        ir.transform(CodegenReduction(props.clone()))?;
 
         let mut maps = BTreeMap::new();
         let mut num_ptrs = 0;
@@ -251,7 +251,7 @@ impl<G: Gpu> Function<G> {
                         let mut args: Vec<_> =
                             args.iter().map(|&arg| ptrs.as_ptr().add(arg).cast_mut().cast()).collect();
 
-                        func.launch(&stream, *gdim, *bdim, args.as_mut_ptr(), *smem)?;
+                        func.launch(&stream, *gdim, *bdim, &mut args, *smem)?;
                     }
                     &Inst::Matmul { cfg, a, b, c } => {
                         let handle = self.blas.as_ref().unwrap();
@@ -359,8 +359,8 @@ rewriterule! {
     }
 }
 
-static REDUCTION_SRC: &str = "
-extern \"C\" __global__ void kernel(const float* input, float* output) {
+static REDUCTION_SRC_CUDA: &str = "
+extern \"C\" __global__ void reduce_kernel(const float* input, float* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
     if (tid < OUTER) {
@@ -374,8 +374,23 @@ extern \"C\" __global__ void kernel(const float* input, float* output) {
     }
 }";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CodegenReduction;
+static REDUCTION_SRC_MSL: &str = "
+#include <metal_stdlib>
+using namespace metal;
+kernel void reduce_kernel(device const float* input [[buffer(0)]], device float* output [[buffer(1)]], uint tid [[thread_position_in_grid]]) {
+    if (tid < (OUTER)) {
+        float reduction = input[INNER * tid];
+
+        for (int i = 1; i < INNER; i++) {
+            reduction = FUNC(reduction, input[INNER * tid + i]);
+        }
+
+        output[tid] = reduction;
+    }
+}";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodegenReduction(pub DeviceProps);
 
 impl IRTransform for CodegenReduction {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
@@ -387,23 +402,26 @@ impl IRTransform for CodegenReduction {
                 let outer = reduction.outer().get();
                 let dimen = reduction.dimen().get();
 
-                let src = REDUCTION_SRC
-                    .replace(
-                        "FUNC",
-                        match reduction.reduction() {
-                            Reduction::Max => "max",
-                            Reduction::Min => "min",
-                            _ => unimplemented!(),
-                        },
-                    )
-                    .replace("INNER", &dimen.to_string())
-                    .replace("OUTER", &outer.to_string());
+                let src = (match self.0.dialect() {
+                    Dialect::CudaHip => REDUCTION_SRC_CUDA,
+                    Dialect::Msl => REDUCTION_SRC_MSL,
+                })
+                .replace(
+                    "FUNC",
+                    match reduction.reduction() {
+                        Reduction::Max => "max",
+                        Reduction::Min => "min",
+                        _ => unimplemented!(),
+                    },
+                )
+                .replace("INNER", &dimen.to_string())
+                .replace("OUTER", &outer.to_string());
 
                 let new = unsafe {
                     KernelSrc::new(
                         reduction.inputs(),
                         reduction.outputs(),
-                        "kernel".to_string(),
+                        "reduce_kernel".to_string(),
                         src,
                         vec![(0, true), (0, false)],
                         Default::default(),

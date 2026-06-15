@@ -8,14 +8,14 @@ use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
     pointwise::PointwiseIR,
-    runtime::{Device, Gpu, Stream},
+    runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
 use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 
 use super::{OptimiserState, utils::Placement};
 
-fn build_decay_op(size: usize, decay: f32) -> Result<KernelSrc, IRError> {
+fn build_decay_op(size: usize, decay: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
     let mut pntwise = PointwiseIR::new(size.into())?;
 
     let zero = pntwise.add_const(DValue::I32(0), 0);
@@ -36,7 +36,7 @@ fn build_decay_op(size: usize, decay: f32) -> Result<KernelSrc, IRError> {
 
     pntwise.write(w, pntwise.tid(), new_w)?;
 
-    unsafe { pntwise.lower("decay".to_string()) }
+    unsafe { pntwise.lower("decay".to_string(), props) }
 }
 
 #[derive(Clone, Debug)]
@@ -65,7 +65,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightDecay<G, S> {
 
     fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
         Ok(Self {
-            op: build_decay_op(size, params.decay).unwrap().compile(device.clone())?,
+            op: build_decay_op(size, params.decay, device.props()).unwrap().compile(device.clone())?,
             inner: S::new(device, size, params.inner.clone())?,
             placement: params.placement,
             device: device.clone(),
@@ -102,7 +102,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightDecay<G, S> {
         self.inner.set_params(params.inner)?;
         self.placement = params.placement;
 
-        self.op = build_decay_op(self.size, params.decay).unwrap().compile(self.device.clone())?;
+        self.op = build_decay_op(self.size, params.decay, self.device.props()).unwrap().compile(self.device.clone())?;
         Ok(())
     }
 

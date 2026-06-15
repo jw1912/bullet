@@ -302,7 +302,7 @@ impl<G: Gpu> BufferGuard<G> {
     }
 }
 
-#[cfg(any(feature = "cuda", feature = "rocm"))]
+#[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
 #[cfg(test)]
 mod tests {
     use crate::runtime::Device;
@@ -339,6 +339,16 @@ mod tests {
         #[test]
         fn from_to_host() -> Result<(), ROCmError> {
             super::from_to_host::<ROCm>()
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    mod metal {
+        use crate::runtime::metal::{Metal, MetalError};
+
+        #[test]
+        fn from_to_host() -> Result<(), MetalError> {
+            super::from_to_host::<Metal>()
         }
     }
 }

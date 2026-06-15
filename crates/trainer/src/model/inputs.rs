@@ -1,9 +1,11 @@
-use std::{collections::BTreeMap, iter::Zip, marker::PhantomData, slice::ChunksMut, sync::Arc};
+use std::{iter::Zip, marker::PhantomData, slice::ChunksMut, sync::Arc};
 
 use bullet_compiler::{
     model::{ModelBuilder, ModelNode, Shape},
     tensor::TValue,
 };
+
+use crate::run::{HostPool, PreparedBatchHost};
 
 pub struct ModelInputs<T> {
     inputs: T,
@@ -61,7 +63,7 @@ impl<T: InputType + 'static> ModelInputs<T> {
 
 pub struct ModelInputsMapper<T> {
     #[allow(clippy::type_complexity)]
-    func: Arc<dyn Fn(&[T], usize, u8) -> BTreeMap<String, TValue> + Send + Sync>,
+    func: Arc<dyn Fn(&[T], usize, u8) -> PreparedBatchHost + Send + Sync>,
     names: Vec<String>,
 }
 
@@ -79,11 +81,13 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
         let names = inputs.names.clone();
         let inp = inputs.inputs.clone();
 
+        let pool = Arc::<HostPool>::default();
+
         let func = move |batch: &[T], batch_number, threads| {
             let f = &f;
             let chunk_size = batch.len().div_ceil(usize::from(threads));
 
-            let mut bufs = inp.make_bufs(batch.len());
+            let mut bufs = inp.make_bufs(batch.len(), &pool);
             let chunks = inp.chunks(&mut bufs, chunk_size);
 
             std::thread::scope(|s| {
@@ -100,13 +104,14 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
 
             let mut vec = Vec::new();
             inp.append_bufs_to_vec(bufs, &mut vec);
-            names.iter().cloned().zip(vec).collect()
+            let inputs = names.iter().cloned().zip(vec).collect();
+            PreparedBatchHost::new(pool.clone(), inputs)
         };
 
         ModelInputsMapper { func: Arc::new(func), names: inputs.names.clone() }
     }
 
-    pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> BTreeMap<String, TValue> {
+    pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> PreparedBatchHost {
         (self.func)(data, batch_number, threads)
     }
 
@@ -121,7 +126,7 @@ pub trait InputType: Clone + Send + Sync + 'static {
     type Slices<'a>: 'a + Send + Sync;
     type Nodes<'a>: 'a;
 
-    fn make_bufs(&self, batch_size: usize) -> Self::Buf;
+    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf;
 
     fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a>;
 
@@ -163,8 +168,8 @@ impl InputType for SparseInput {
     type Slices<'a> = &'a mut [i32];
     type Nodes<'a> = ModelNode<'a>;
 
-    fn make_bufs(&self, batch_size: usize) -> Self::Buf {
-        vec![0; self.nnz * batch_size]
+    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf {
+        pool.take_i32(self.nnz * batch_size)
     }
 
     fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a> {
@@ -190,8 +195,10 @@ impl InputType for DenseInput<f32> {
     type Slices<'a> = &'a mut [f32];
     type Nodes<'a> = ModelNode<'a>;
 
-    fn make_bufs(&self, batch_size: usize) -> Self::Buf {
-        vec![0.0; self.shape.size() * batch_size]
+    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf {
+        let mut buf = pool.take_f32(self.shape.size() * batch_size);
+        buf.fill(0.0);
+        buf
     }
 
     fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a> {
@@ -217,8 +224,8 @@ impl<T: InputType, U: InputType> InputType for (T, U) {
     type Slices<'a> = (T::Slices<'a>, U::Slices<'a>);
     type Nodes<'a> = (T::Nodes<'a>, U::Nodes<'a>);
 
-    fn make_bufs(&self, batch_size: usize) -> Self::Buf {
-        (self.0.make_bufs(batch_size), self.1.make_bufs(batch_size))
+    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf {
+        (self.0.make_bufs(batch_size, pool), self.1.make_bufs(batch_size, pool))
     }
 
     fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a> {
