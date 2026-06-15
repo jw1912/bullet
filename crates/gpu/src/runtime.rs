@@ -21,7 +21,7 @@ use std::{
     },
 };
 
-pub use bindings::{DeviceProps, Dim3, GemmConfig, KernelArgType};
+pub use bindings::{DeviceProps, Dim3, GemmConfig};
 pub use dialect::Dialect;
 
 /// Marker trait for the CUDA and ROCm runtimes to implement
@@ -315,13 +315,13 @@ impl<G: Gpu> Module<G> {
     pub fn get_kernel(
         self: Arc<Self>,
         name: impl Into<String>,
-        arg_types: &[bindings::KernelArgType],
+        nargs: usize,
     ) -> Result<Kernel<G>, G::Error> {
         self.device.set()?;
 
         let name = name.into();
         let cname = CString::new(name.clone()).map_err(|e| format!("{e:?}"))?;
-        let kernel = unsafe { G::module_get_kernel(self.module, &cname, arg_types)? };
+        let kernel = unsafe { G::module_get_kernel(self.module, &cname, nargs)? };
 
         unsafe {
             G::kernel_load(kernel)?;
@@ -525,7 +525,7 @@ mod tests {
         };
 
         let kernel = Module::new(device.clone(), kernel_src)?
-            .get_kernel("add_one", &[KernelArgType::Buffer, KernelArgType::Buffer])?;
+            .get_kernel("add_one", 2)?;
 
         unsafe {
             let dev_src = device.malloc(16)?;

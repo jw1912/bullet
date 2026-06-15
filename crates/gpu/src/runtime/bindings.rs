@@ -60,14 +60,6 @@ impl DeviceProps {
     }
 }
 
-/// Describes how a kernel argument should be bound during a Metal kernel launch.
-/// For CUDA/ROCm backends, argument binding is handled by the driver; this type
-/// is only acted on by the Metal backend. Other backends ignore it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum KernelArgType {
-    Buffer,
-}
-
 /// This is a private trait, so nobody outside the crate can access these methods
 /// and instead must go through the `Device` and `Stream` structs
 #[allow(clippy::missing_safety_doc)]
@@ -152,7 +144,7 @@ pub trait GpuBindings: 'static {
     unsafe fn module_get_kernel(
         module: Self::Module,
         kernel_name: &CStr,
-        arg_types: &[KernelArgType],
+        nargs: usize,
     ) -> Result<Self::Kernel, Self::Err>;
 
     unsafe fn program_compile(

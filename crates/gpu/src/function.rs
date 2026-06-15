@@ -26,7 +26,7 @@ use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
     pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
-    runtime::{Blas, Device, DeviceProps, Dialect, Dim3, GemmConfig, Gpu, Kernel, KernelArgType, Module, Stream},
+    runtime::{Blas, Device, DeviceProps, Dialect, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
 enum Inst<G: Gpu> {
@@ -126,10 +126,9 @@ impl<G: Gpu> Function<G> {
                     insts.push(Inst::Zero { idx: *indices.get(&node_id).unwrap(), ty });
                 }
 
-                let arg_types: Vec<_> = args.iter().map(|_| KernelArgType::Buffer).collect();
                 let func = Module::new(device.clone(), source.clone())
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?
-                    .get_kernel(name, &arg_types)
+                    .get_kernel(name, args.len())
                     .map_err(|e| IRTrace::from(format!("{e:?}\n{source}")))?;
 
                 max_num_args = max_num_args.max(args.len());

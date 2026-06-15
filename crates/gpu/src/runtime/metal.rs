@@ -21,7 +21,7 @@ use objc2_metal::{
 };
 use objc2_metal_performance_shaders::{MPSDataType, MPSMatrix, MPSMatrixDescriptor, MPSMatrixMultiplication};
 
-use super::bindings::{Dim3, GpuBindings, KernelArgType};
+use super::bindings::{Dim3, GpuBindings};
 use crate::runtime::Dialect;
 use crate::runtime::bindings::{DeviceProps, GemmConfig};
 
@@ -331,20 +331,17 @@ impl GpuBindings for Metal {
             let buf_reg = buffer_registry().lock().unwrap();
 
             let arg_info = kernel_arg_info().lock().unwrap();
-            let info = arg_info.get(&func).ok_or_else(|| MetalError::Runtime("Kernel arg info not found".into()))?;
+            let nargs = *arg_info.get(&func).ok_or_else(|| MetalError::Runtime("Kernel arg info not found".into()))?;
 
-            for (index, arg_type) in info.iter().enumerate() {
+            for index in 0..nargs {
                 let arg_ptr = *args.add(index);
-                match arg_type {
-                    KernelArgType::Buffer => {
-                        // arg_ptr points to a u64 (our synthetic buffer ID)
-                        let buffer_id = *(arg_ptr as *const u64);
-                        let entry = buf_reg.get(&buffer_id).ok_or_else(|| {
-                            MetalError::Runtime(format!("Buffer {buffer_id} not found for arg {index}"))
-                        })?;
-                        encoder.setBuffer_offset_atIndex(Some(&*entry.buffer), 0, index as NSUInteger);
-                    }
-                }
+
+                // arg_ptr points to a u64 (our synthetic buffer ID)
+                let buffer_id = *(arg_ptr as *const u64);
+                let entry = buf_reg.get(&buffer_id).ok_or_else(|| {
+                    MetalError::Runtime(format!("Buffer {buffer_id} not found for arg {index}"))
+                })?;
+                encoder.setBuffer_offset_atIndex(Some(&*entry.buffer), 0, index as NSUInteger);
             }
 
             let threads_per_grid = MTLSize {
@@ -386,7 +383,7 @@ impl GpuBindings for Metal {
     unsafe fn module_get_kernel(
         module: u64,
         kernel_name: &CStr,
-        arg_types: &[KernelArgType],
+        nargs: usize,
     ) -> Result<u64, MetalError> {
         let name = kernel_name.to_str().map_err(|e| MetalError::Runtime(format!("{e}")))?;
         let ns_name = NSString::from_str(name);
@@ -406,7 +403,7 @@ impl GpuBindings for Metal {
 
         let id = next_id();
         pipeline_registry().lock().unwrap().insert(id, pipeline);
-        kernel_arg_info().lock().unwrap().insert(id, arg_types.to_vec());
+        kernel_arg_info().lock().unwrap().insert(id, nargs);
         Ok(id)
     }
 
@@ -545,7 +542,7 @@ impl GpuBindings for Metal {
 // ---------------------------------------------------------------------------
 
 lazy_static_mutex! {
-    static kernel_arg_info: HashMap<u64, Vec<KernelArgType>> = HashMap::new();
+    static kernel_arg_info: HashMap<u64, usize> = HashMap::new();
     static blas_stream_map: HashMap<u64, u64> = HashMap::new();
 }
 
