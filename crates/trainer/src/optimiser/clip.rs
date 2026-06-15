@@ -8,14 +8,14 @@ use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
     pointwise::PointwiseIR,
-    runtime::{Device, Gpu, Stream},
+    runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
 use crate::optimiser::OptimiserUpdateSync;
 
 use super::{OptimiserState, OptimiserUpdateResult, utils::Placement};
 
-fn build_clip_op(size: usize, min: f32, max: f32) -> Result<KernelSrc, IRError> {
+fn build_clip_op(size: usize, min: f32, max: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
     let mut pntwise = PointwiseIR::new(size.into())?;
     let min = pntwise.add_const(DValue::F32(min), 0);
     let max = pntwise.add_const(DValue::F32(max), 0);
@@ -27,7 +27,7 @@ fn build_clip_op(size: usize, min: f32, max: f32) -> Result<KernelSrc, IRError> 
     let new_w = pntwise.binary(high, min, CABinary::Max)?;
     pntwise.write(w, pntwise.tid(), new_w)?;
 
-    unsafe { pntwise.lower("clip".to_string()) }
+    unsafe { pntwise.lower("clip".to_string(), props) }
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +57,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightClipping<G, S> {
 
     fn new(device: &Arc<Device<G>>, size: usize, params: Self::Params) -> Result<Self, G::Error> {
         Ok(Self {
-            op: build_clip_op(size, params.min, params.max).unwrap().compile(device.clone())?,
+            op: build_clip_op(size, params.min, params.max, device.props()).unwrap().compile(device.clone())?,
             inner: S::new(device, size, params.inner.clone())?,
             placement: params.placement,
             device: device.clone(),
@@ -93,7 +93,7 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightClipping<G, S> {
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
         self.inner.set_params(params.inner)?;
         self.placement = params.placement;
-        let src = build_clip_op(self.size, params.min, params.max).unwrap();
+        let src = build_clip_op(self.size, params.min, params.max, self.device.props()).unwrap();
         self.op = src.compile(self.device.clone())?;
         Ok(())
     }

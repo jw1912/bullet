@@ -59,7 +59,7 @@ impl KernelSrc {
     }
 
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
-        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name)?;
+        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name, self.arg_order.len())?;
 
         Ok(CompiledKernel {
             inputs: self.inputs.clone(),

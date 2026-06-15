@@ -6,7 +6,7 @@ pub mod kernel;
 pub mod pointwise;
 pub mod runtime;
 
-#[cfg(any(feature = "cuda", feature = "rocm"))]
+#[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
 #[cfg(test)]
 mod tests {
     use bullet_compiler::{
@@ -115,6 +115,16 @@ mod tests {
         #[test]
         fn axby() -> Result<(), ROCmError> {
             super::axby::<ROCm>()
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    mod metal {
+        use crate::runtime::metal::{Metal, MetalError};
+
+        #[test]
+        fn axby() -> Result<(), MetalError> {
+            super::axby::<Metal>()
         }
     }
 }

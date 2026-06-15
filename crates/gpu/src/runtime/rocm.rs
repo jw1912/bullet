@@ -2,7 +2,10 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::runtime::bindings::{DeviceProps, GemmConfig};
+use crate::runtime::{
+    Dialect,
+    bindings::{DeviceProps, GemmConfig},
+};
 
 use super::bindings::{Dim3, GpuBindings};
 
@@ -58,6 +61,7 @@ impl GpuBindings for ROCm {
             stream_mem_alloc: false,
             vec_atomics: false,
             arch: None,
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -139,6 +143,10 @@ impl GpuBindings for ROCm {
         Ok(())
     }
 
+    unsafe fn kernel_destroy(_kernel: hipFunction) -> ROCmResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: hipFunction,
         stream: hipStream,
@@ -172,7 +180,11 @@ impl GpuBindings for ROCm {
         error::runtime(hipModuleUnload(module))
     }
 
-    unsafe fn module_get_kernel(module: hipModule, kernel_name: &CStr) -> Result<hipFunction, ROCmError> {
+    unsafe fn module_get_kernel(
+        module: hipModule,
+        kernel_name: &CStr,
+        _nargs: usize,
+    ) -> Result<hipFunction, ROCmError> {
         let mut func = hipFunction::default();
         error::runtime(hipModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
         Ok(func)
