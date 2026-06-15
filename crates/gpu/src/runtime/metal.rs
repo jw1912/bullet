@@ -517,15 +517,16 @@ impl GpuBindings for Metal {
                 device,
                 config.row_mjr_b,
                 config.row_mjr_a,
-                (n as usize) as NSUInteger,
-                (m as usize) as NSUInteger,
-                (k as usize) as NSUInteger,
+                n as NSUInteger,
+                m as NSUInteger,
+                k as NSUInteger,
                 config.alpha as f64,
                 config.beta as f64,
-                );
-            if batch as usize > 1 {
+            );
+
+            if batch > 1 {
                 gemm.setBatchStart(0);
-                gemm.setBatchSize((batch as usize) as NSUInteger);
+                gemm.setBatchSize(batch as NSUInteger);
             }
 
             gemm.encodeToCommandBuffer_leftMatrix_rightMatrix_resultMatrix(&command_buffer, &mat_b, &mat_a, &mat_c);
