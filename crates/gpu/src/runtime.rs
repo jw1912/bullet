@@ -312,12 +312,12 @@ impl<G: Gpu> Module<G> {
     }
 
     /// Get kernel with given name from module
-    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>, nargs: usize) -> Result<Kernel<G>, G::Error> {
+    pub fn get_kernel(self: Arc<Self>, name: impl Into<String>) -> Result<Kernel<G>, G::Error> {
         self.device.set()?;
 
         let name = name.into();
         let cname = CString::new(name.clone()).map_err(|e| format!("{e:?}"))?;
-        let kernel = unsafe { G::module_get_kernel(self.module, &cname, nargs)? };
+        let kernel = unsafe { G::module_get_kernel(self.module, &cname)? };
 
         unsafe {
             G::kernel_load(kernel)?;
@@ -361,7 +361,7 @@ impl<G: Gpu> Kernel<G> {
         stream: &Stream<G>,
         grid_dim: Dim3,
         block_size: u32,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: u32,
     ) -> Result<(), G::Error> {
         let o1 = stream.device.ordinal();
@@ -520,7 +520,7 @@ mod tests {
             }
         };
 
-        let kernel = Module::new(device.clone(), kernel_src)?.get_kernel("add_one", 2)?;
+        let kernel = Module::new(device.clone(), kernel_src)?.get_kernel("add_one")?;
 
         unsafe {
             let dev_src = device.malloc(16)?;
@@ -533,7 +533,7 @@ mod tests {
             args.push((&dev_src) as *const G::DevicePtr as *mut c_void);
             args.push((&dev_dst) as *const G::DevicePtr as *mut c_void);
 
-            kernel.launch(&stream, gdim, 4, args.as_mut_ptr(), 0)?;
+            kernel.launch(&stream, gdim, 4, &mut args, 0)?;
 
             stream.sync()?;
             stream.memcpy_d2h(dev_dst, host_dst.as_mut_ptr().cast(), 16)?;

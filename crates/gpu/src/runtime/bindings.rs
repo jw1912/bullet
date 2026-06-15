@@ -133,7 +133,7 @@ pub trait GpuBindings: 'static {
         stream: Self::Stream,
         grid_dim: Dim3,
         block_dim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: c_uint,
     ) -> Result<(), Self::Err>;
 
@@ -141,11 +141,7 @@ pub trait GpuBindings: 'static {
 
     unsafe fn module_destroy(module: Self::Module) -> Result<(), Self::Err>;
 
-    unsafe fn module_get_kernel(
-        module: Self::Module,
-        kernel_name: &CStr,
-        nargs: usize,
-    ) -> Result<Self::Kernel, Self::Err>;
+    unsafe fn module_get_kernel(module: Self::Module, kernel_name: &CStr) -> Result<Self::Kernel, Self::Err>;
 
     unsafe fn program_compile(
         source_code: &CStr,

@@ -152,7 +152,7 @@ impl GpuBindings for ROCm {
         stream: hipStream,
         gdim: Dim3,
         bdim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: c_uint,
     ) -> ROCmResult {
         error::runtime(hipModuleLaunchKernel(
@@ -165,7 +165,7 @@ impl GpuBindings for ROCm {
             bdim.z,
             smem as c_uint,
             stream,
-            args,
+            args.as_mut_ptr(),
             std::ptr::null_mut(),
         ))
     }
@@ -180,11 +180,7 @@ impl GpuBindings for ROCm {
         error::runtime(hipModuleUnload(module))
     }
 
-    unsafe fn module_get_kernel(
-        module: hipModule,
-        kernel_name: &CStr,
-        _nargs: usize,
-    ) -> Result<hipFunction, ROCmError> {
+    unsafe fn module_get_kernel(module: hipModule, kernel_name: &CStr) -> Result<hipFunction, ROCmError> {
         let mut func = hipFunction::default();
         error::runtime(hipModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
         Ok(func)

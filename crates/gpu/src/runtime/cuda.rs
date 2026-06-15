@@ -178,7 +178,7 @@ impl GpuBindings for Cuda {
         stream: CUstream,
         gdim: Dim3,
         bdim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: c_uint,
     ) -> CudaResult {
         error::driver(cuLaunchKernel(
@@ -191,7 +191,7 @@ impl GpuBindings for Cuda {
             bdim.z,
             smem as c_uint,
             stream,
-            args,
+            args.as_mut_ptr(),
             std::ptr::null_mut(),
         ))
     }
@@ -206,7 +206,7 @@ impl GpuBindings for Cuda {
         error::driver(cuModuleUnload(module))
     }
 
-    unsafe fn module_get_kernel(module: CUmodule, kernel_name: &CStr, _nargs: usize) -> Result<CUfunction, CudaError> {
+    unsafe fn module_get_kernel(module: CUmodule, kernel_name: &CStr) -> Result<CUfunction, CudaError> {
         let mut func = CUfunction::default();
         error::driver(cuModuleGetFunction(&mut func, module, kernel_name.as_ptr()))?;
         Ok(func)

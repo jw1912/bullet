@@ -59,7 +59,7 @@ impl KernelSrc {
     }
 
     pub fn compile<G: Gpu>(&self, device: Arc<Device<G>>) -> Result<CompiledKernel<G>, G::Error> {
-        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name, self.arg_order.len())?;
+        let kernel = Module::new(device, &self.source)?.get_kernel(&self.name)?;
 
         Ok(CompiledKernel {
             inputs: self.inputs.clone(),
@@ -175,7 +175,7 @@ impl<G: Gpu> CompiledKernel<G> {
                 unimplemented!();
             }
 
-            self.kernel.launch(&stream, self.gdim, self.bdim, args.as_ptr().cast_mut().cast(), self.smem)?;
+            self.kernel.launch(&stream, self.gdim, self.bdim, &mut args, self.smem)?;
         }
 
         for i in inputs {

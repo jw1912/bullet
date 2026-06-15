@@ -165,7 +165,7 @@ impl GpuBindings for MockGpu {
         stream: (),
         gdim: Dim3,
         bdim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: c_uint,
     ) -> MockResult {
         Err(MSG.into())
@@ -179,7 +179,7 @@ impl GpuBindings for MockGpu {
         Ok(())
     }
 
-    unsafe fn module_get_kernel(module: (), kernel_name: &CStr, _nargs: usize) -> MockResult {
+    unsafe fn module_get_kernel(module: (), kernel_name: &CStr) -> MockResult {
         Ok(())
     }
 
