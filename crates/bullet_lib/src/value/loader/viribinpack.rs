@@ -56,7 +56,7 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
                     &paths,
                     self.buffer_size_mb,
                     self.threads,
-                    |board, mv, score, wdl, _| filter.should_filter(mv, score.into(), board, wdl, &mut rand::rng()),
+                    |board, mv, score, wdl, _| !filter.should_filter(mv, score.into(), board, wdl, &mut rand::rng()),
                 );
                 reader.read_chunks(skip_count, f);
             }

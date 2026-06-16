@@ -1,8 +1,9 @@
 use std::{
     fs::File,
     io::{BufReader, Cursor},
+    mem,
     sync::mpsc,
-    thread::Scope,
+    thread,
 };
 
 use bullet_trainer::{reader::DataReader, rng::Rng};
@@ -32,7 +33,7 @@ where
     F: Fn(&Board, Move, i16, WDL, &mut Rng) -> bool + Clone + Send + Sync,
 {
     fn read_chunks<T: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, f: T) {
-        std::thread::scope(|s| self.read(s, &|board, score, wdl| board.to_bulletformat(wdl as u8, score).unwrap(), f));
+        thread::scope(|s| self.read(s, &|board, score, wdl| board.to_bulletformat(wdl as u8, score).unwrap(), f));
     }
 }
 
@@ -41,7 +42,7 @@ where
     F: Fn(&Board, Move, i16, WDL, &mut Rng) -> bool + Clone + Send + Sync,
 {
     fn read_chunks<T: FnMut(&[ChessDatapoint]) -> bool>(&self, _: usize, f: T) {
-        std::thread::scope(|s| {
+        thread::scope(|s| {
             self.read(
                 s,
                 &|board, score, wdl| ChessDatapoint {
@@ -74,22 +75,22 @@ impl<F> ViriformatReader<F>
 where
     F: Fn(&Board, Move, i16, WDL, &mut Rng) -> bool + Sync,
 {
-    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: F) -> Self {
-        Self::new_concat_multiple(&[path], buffer_size_mb, threads, filter)
+    pub fn new(path: &str, buffer_size_mb: usize, threads: usize, should_keep: F) -> Self {
+        Self::new_concat_multiple(&[path], buffer_size_mb, threads, should_keep)
     }
 
-    pub fn new_concat_multiple(paths: &[&str], buffer_size_mb: usize, threads: usize, filter: F) -> Self {
-        Self { file_paths: paths.iter().map(|x| x.to_string()).collect(), buffer_size_mb, threads, filter }
+    pub fn new_concat_multiple(paths: &[&str], buffer_size_mb: usize, threads: usize, should_keep: F) -> Self {
+        Self { file_paths: paths.iter().map(|x| x.to_string()).collect(), buffer_size_mb, threads, filter: should_keep }
     }
 
-    pub fn read<'a, 'b, D, M, T>(&'a self, s: &'a Scope<'a, 'b>, map: &'a M, mut func: T)
+    pub fn read<'a, 'b, D, M, T>(&'a self, s: &'a thread::Scope<'a, 'b>, map: &'a M, mut func: T)
     where
         D: Clone + Send + 'static,
         M: Fn(&Board, i16, WDL) -> D + Sync,
         T: FnMut(&[D]) -> bool,
     {
         let threads = self.threads;
-        let buffer_size = (self.buffer_size_mb * 1024 * 1024).div_ceil(threads);
+        let buffer_size = (self.buffer_size_mb * 1024 * 1024).div_ceil(mem::size_of::<D>());
 
         let mut shuffle_buffer = Vec::new();
         shuffle_buffer.reserve_exact(buffer_size);
@@ -191,7 +192,7 @@ where
     }
 }
 
-fn parse_into_buffer<D, M, F>(game: &Game, buffer: &mut Vec<D>, rng: &mut Rng, map: &M, should_filter: &F)
+fn parse_into_buffer<D, M, F>(game: &Game, buffer: &mut Vec<D>, rng: &mut Rng, map: &M, should_keep: &F)
 where
     M: Fn(&Board, i16, WDL) -> D,
     F: Fn(&Board, Move, i16, WDL, &mut Rng) -> bool,
@@ -201,7 +202,7 @@ where
 
     for &(mv, eval) in &game.moves {
         let eval = eval.get();
-        if !should_filter(&board, mv, eval, outcome, rng) {
+        if should_keep(&board, mv, eval, outcome, rng) {
             buffer.push(map(&board, eval, outcome));
         }
         board.make_move_simple(mv);
