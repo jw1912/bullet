@@ -9,7 +9,7 @@ fn map_bb<F: FnMut(usize)>(mut bb: u64, mut f: F) {
     }
 }
 
-fn flip_horizontal(mut bb: u64) -> u64 {
+fn flip_horizontal(bb: u64) -> u64 {
     bb.swap_bytes().reverse_bits()
 }
 
@@ -48,7 +48,7 @@ pub mod threat_inputs {
 
     use montyformat::chess::{Attacks, Piece, Side};
 
-    use super::{build_bbs, flip_view, map_bb, normalize_hm, offsets, threats::map_piece_threat};
+    use super::{build_bbs, map_bb, offsets, threats::map_piece_threat};
 
     #[derive(Clone, Copy)]
     pub struct ThreatInputs {
@@ -99,8 +99,8 @@ pub mod threat_inputs {
             #[rustfmt::skip]
             inputs::Chess768.map_features(pos, |stm, ntm| {
                 f(
-                    ThreatInputs::TOTAL_THREATS + stm ^ stm_flip,
-                    ThreatInputs::TOTAL_THREATS + ntm ^ ntm_flip,
+                    ThreatInputs::TOTAL_THREATS + (stm ^ stm_flip),
+                    ThreatInputs::TOTAL_THREATS + (ntm ^ ntm_flip),
                 );
                 f(
                     ThreatInputs::TOTAL_THREATS + 768 + stm_bucket + (stm ^ stm_flip),
