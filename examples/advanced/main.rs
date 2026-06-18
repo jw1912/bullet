@@ -1,29 +1,24 @@
-use std::cell::{Cell, RefCell};
+mod filter;
+mod inputs;
 
 use bullet_lib::{
-    game::{inputs::SparseInputType, outputs::MaterialCount},
-    nn::{
-        Shape,
-        optimiser::{AdamW, AdamWParams},
-    },
+    game::inputs::{ChessBucketsMirrored, SparseInputType},
+    nn::InitSettings,
     trainer::{
-        save::SavedFormat,
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::LocalSettings,
     },
-    value::{
-        ValueTrainerBuilder,
-        loader::{ViriBinpackLoader, viribinpack::ViriFilter},
-    },
+    value::loader::{ViriBinpackLoader, viribinpack::ViriFilter},
 };
-use rand::{Rng, rng};
-use viriformat::{
-    chess::{board::Board, chessmove::Move},
-    dataformat::{Filter, WDL},
+use bullet_trainer::{
+    model::{ModelDefinition, ModelInputs, ModelWeights},
+    optimiser::{
+        Optimiser,
+        adam::{AdamW, AdamWParams},
+    },
+    run::DefaultDevice,
 };
 
-type Optimiser = AdamW;
-type OptimiserParams = AdamWParams;
 const NET_NAME: &str = "pawnocchio_new_relabeller";
 
 const SUPERBATCHES_STAGE0: usize = 100;
@@ -56,131 +51,39 @@ const BUCKET_LAYOUT: [usize; 32] = [
     14, 14, 15, 15,
 ];
 
-fn piece_count_acceptance(board: &Board) -> f64 {
-    #[rustfmt::skip]
-    const DESIRED_DISTRIBUTION: [f64; 33] = [
-        0.018411966423, 0.020641545085, 0.022727271053,
-        0.024669162740, 0.026467201733, 0.028121406444,
-        0.029631758462, 0.030998276198, 0.032220941240,
-        0.033299772000, 0.034234750067, 0.035025893853,
-        0.035673184944, 0.036176641754, 0.036536245870,
-        0.036752015705, 0.036823932846, 0.036752015705,
-        0.036536245870, 0.036176641754, 0.035673184944,
-        0.035025893853, 0.034234750067, 0.033299772000,
-        0.032220941240, 0.030998276198, 0.029631758462,
-        0.028121406444, 0.026467201733, 0.024669162740,
-        0.022727271053, 0.020641545085, 0.018411966423,
-    ];
-
-    thread_local! {
-        static PIECE_COUNT_STATS: RefCell<[u64; 33]> = const { RefCell::new([0; 33]) };
-        static PIECE_COUNT_TOTAL: Cell<u64> = const { Cell::new(0) };
-    }
-
-    let pc = board.pieces.occupied().count() as usize;
-    let count = PIECE_COUNT_STATS.with_borrow_mut(|stats| {
-        stats[pc] += 1;
-        stats[pc]
-    });
-    let total = PIECE_COUNT_TOTAL.with(|t| {
-        let total = t.get() + 1;
-        t.set(total);
-        total
-    });
-    let frequency = count as f64 / total as f64;
-
-    let acceptance = 0.5 * DESIRED_DISTRIBUTION[pc] / frequency;
-    acceptance.clamp(0., 1.)
-}
-
-fn filter(board: &Board, mv: Move, eval: i16, wdl: f32) -> bool {
-    const DEFAULT_VIRI_FILTER: Filter = Filter {
-        min_ply: 16,
-        min_pieces: 4,
-        filter_tactical: true,
-        filter_check: true,
-        filter_castling: true,
-        max_eval: 10000,
-        max_eval_incorrectness: 2500,
-        random_fen_skipping: true,
-        random_fen_skip_probability: 0.15,
-
-        wdl_filtered: false,
-
-        wdl_model_params_a: [0.0; 4],
-        wdl_model_params_b: [0.0; 4],
-        material_min: 17,
-        material_max: 78,
-        mom_target: 58,
-        wdl_heuristic_scale: 1.0,
-    };
-    let mut rng = rng();
-    let wdl = match wdl {
-        1.0 => WDL::Win,
-        0.5 => WDL::Draw,
-        0.0 => WDL::Loss,
-        _ => unreachable!(),
-    };
-
-    !DEFAULT_VIRI_FILTER.should_filter(mv, eval as i32, board, wdl, &mut rng)
-        && rng.random_bool(piece_count_acceptance(board))
-}
-
-#[path = "pawn_pawn_masked.rs"]
-mod inputs;
-
-use inputs::pawn_pawn_inputs;
-
 fn main() {
-    let inputs = pawn_pawn_inputs::PawnPawnInputs::new(BUCKET_LAYOUT, pawn_pawn_inputs::three_file_band_mask());
-    const NON_PSQT_FEATURES: usize =
-        pawn_pawn_inputs::PawnPawnInputs::TOTAL_PAIRS + pawn_pawn_inputs::PawnPawnInputs::TOTAL_THREATS;
+    let pp = inputs::PawnPawnInputs::new(BUCKET_LAYOUT, inputs::three_file_band_mask());
+    let psqt = ChessBucketsMirrored::new(BUCKET_LAYOUT);
 
-    let mut trainer = ValueTrainerBuilder::default()
-        .dual_perspective()
-        .optimiser(Optimiser::default())
-        .inputs(inputs)
-        .output_buckets(MaterialCount::<OUTPUT_BUCKETS>)
-        .save_format(&[
-            SavedFormat::id("l0w")
-                .transform(|_, weights| {
-                    let shared = weights[NON_PSQT_FEATURES * L1..(NON_PSQT_FEATURES + 768) * L1].repeat(INPUT_BUCKETS);
-                    let bucketed = &weights[(NON_PSQT_FEATURES + 768) * L1..];
-                    bucketed.iter().zip(shared).map(|(&a, b)| a + b).collect()
-                })
-                .round()
-                .quantise::<i16>(Q0),
-            SavedFormat::id("l0w")
-                .transform(|_, weights| {
-                    let clip = i8::MAX as f32 / Q0 as f32;
-                    weights[0..NON_PSQT_FEATURES * L1].iter().map(|f| f.clamp(-clip, clip)).collect()
-                })
-                .round()
-                .quantise::<i8>(Q0),
-            SavedFormat::id("l0b").round().quantise::<i16>(Q0),
-            SavedFormat::id("l1w")
-                .transform(|_, weights| weights.iter().map(|f| f / (FT_SHIFT_SCALE * FT_SHIFT_SCALE)).collect())
-                .round()
-                .quantise::<i8>(Q1),
-            SavedFormat::id("l1b").round().quantise::<i32>(Q as i32 * 256),
-            SavedFormat::id("l2w").round().quantise::<i32>(Q as i32),
-            SavedFormat::id("l2b").round().quantise::<i32>((Q as i32).pow(3)),
-            SavedFormat::id("l3w").round().quantise::<i32>(Q as i32),
-            SavedFormat::id("l3b").round().quantise::<i32>((Q as i32).pow(4)),
-        ])
-        .build_custom(|builder, (stm_inputs, ntm_inputs, output_buckets), target| {
-            let l0 = builder.new_affine("l0", inputs.num_inputs(), L1);
+    let inputs = ModelInputs::default()
+        .add_sparse("stm/pp", (pp.num_inputs(), 1), pp.max_active())
+        .add_sparse("ntm/pp", (pp.num_inputs(), 1), pp.max_active())
+        .add_sparse("stm/psqt", (psqt.num_inputs(), 1), psqt.max_active())
+        .add_sparse("ntm/psqt", (psqt.num_inputs(), 1), psqt.max_active())
+        .add_sparse("bucekts", (1, 1), 1)
+        .add_dense("targets", (1, 1));
 
-            let l1 = builder.new_affine("l1", L1, OUTPUT_BUCKETS * L2);
-            let l2 = builder.new_affine("l2", L2 * 2, OUTPUT_BUCKETS * L3);
-            let l3 = builder.new_affine("l3", L3, OUTPUT_BUCKETS);
+    let defn = ModelDefinition::build(
+        &inputs,
+        |builder, (((((stm_pp, ntm_pp), stm_psqt), ntm_psqt), output_buckets), target)| {
+            let l0_pp = builder.new_affine("l0/pp/", pp.num_inputs(), L1);
 
-            let ft = |input, start, end| l0.slice(start, end).forward(input).crelu();
-            let stm_hidden = ft(stm_inputs, 0, L1 / 2) * ft(stm_inputs, L1 / 2, L1);
-            let ntm_hidden = ft(ntm_inputs, 0, L1 / 2) * ft(ntm_inputs, L1 / 2, L1);
+            let l0f = builder.new_weights("l0/fac/", (L1, 768), InitSettings::Zeroed);
+            let mut l0_psqt = builder.new_affine("l0/psqt/", psqt.num_inputs(), L1);
+            l0_psqt.weights = l0_psqt.weights + l0f.repeat(psqt.num_inputs() / 768);
+
+            let l1 = builder.new_affine("l1/", L1, OUTPUT_BUCKETS * L2);
+            let l2 = builder.new_affine("l2/", L2 * 2, OUTPUT_BUCKETS * L3);
+            let l3 = builder.new_affine("l3/", L3, OUTPUT_BUCKETS);
+
+            let ft = |pp, psqt, start, end| {
+                (l0_pp.slice(start, end).forward(pp) + l0_psqt.slice(start, end).forward(psqt)).crelu()
+            };
+            let stm_hidden = ft(stm_pp, stm_psqt, 0, L1 / 2) * ft(stm_pp, stm_psqt, L1 / 2, L1);
+            let ntm_hidden = ft(ntm_pp, ntm_psqt, 0, L1 / 2) * ft(ntm_pp, ntm_psqt, L1 / 2, L1);
             let l0_out = stm_hidden.concat(ntm_hidden);
 
-            let ones_l1_vec = builder.new_constant(Shape::new(1, L1), &[1.0 / L1 as f32; L1]);
+            let ones_l1_vec = builder.new_constant((1, L1), &[1.0 / L1 as f32; L1]);
             let l0_out_norm = ones_l1_vec.matmul(l0_out);
 
             let l1_out = l1.forward(l0_out).select(output_buckets);
@@ -195,13 +98,21 @@ fn main() {
 
             let loss = loss + 0.005 * l0_out_norm;
 
-            (l3_out, loss)
-        });
-    let l0_clip = OptimiserParams { max_weight: 0.99, min_weight: -0.99, ..Default::default() };
-    trainer.optimiser.set_params_for_weight("l0w", l0_clip);
+            (Some(loss), vec![("output".to_string(), l3_out)])
+        },
+    );
 
-    let l1_clip = OptimiserParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
-    trainer.optimiser.set_params_for_weight("l1w", l1_clip);
+    let weights = ModelWeights::new(&defn, 12412421);
+    let device = DefaultDevice::new(0).unwrap();
+    let params = AdamWParams::default();
+    let mut optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, params).unwrap();
+
+    let l0_clip = AdamWParams { max_weight: 0.99, min_weight: -0.99, ..Default::default() };
+    optimiser.set_params_for_weight("l0/fac/w", l0_clip);
+    optimiser.set_params_for_weight("l0/psqt/w", l0_clip);
+
+    let l1_clip = AdamWParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
+    optimiser.set_params_for_weight("l1/w", l1_clip);
 
     const WARMUP_SBS: usize = SUPERBATCHES_STAGE0 / 2;
     const COOLDOWN_SBS: usize = SUPERBATCHES_STAGE0 - WARMUP_SBS;
@@ -249,13 +160,17 @@ fn main() {
         save_rate: 100,
     };
 
-    let loader =
-        ViriBinpackLoader::new("/k4/vine_data/vine_37/mixed_data_chonked.vf", 8192, 16, ViriFilter::Custom(filter));
+    let loader = ViriBinpackLoader::new(
+        "/k4/vine_data/vine_37/mixed_data_chonked.vf",
+        8192,
+        16,
+        ViriFilter::Custom(filter::should_keep),
+    );
     let settings = LocalSettings { threads: 8, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
-    trainer.run(&stage0_schedule, &settings, &loader);
-    trainer.run(&stage1_schedule, &settings, &loader);
-    trainer.run(&stage2_schedule, &settings, &loader);
+    //trainer.run(&stage0_schedule, &settings, &loader);
+    //trainer.run(&stage1_schedule, &settings, &loader);
+    //trainer.run(&stage2_schedule, &settings, &loader);
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -334,8 +249,8 @@ fn main() {
         "6K1/8/b6R/N2p2P1/8/q1Q5/6r1/2Bk3n b - - 0 1",
         "7K/r2R3b/1Q6/8/2q5/1nPB2k1/N3p3/8 w - - 0 1",
     ] {
-        let eval = trainer.eval(fen);
-        println!("FEN: {fen}");
-        println!("EVAL: {}", 400.0 * eval);
+        //let eval = trainer.eval(fen);
+        //println!("FEN: {fen}");
+        //println!("EVAL: {}", 400.0 * eval);
     }
 }
