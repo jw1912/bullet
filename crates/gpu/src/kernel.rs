@@ -175,7 +175,7 @@ impl<G: Gpu> CompiledKernel<G> {
                 unimplemented!();
             }
 
-            self.kernel.launch(&stream, self.gdim, self.bdim, args.as_ptr().cast_mut().cast(), self.smem)?;
+            self.kernel.launch(&stream, self.gdim, self.bdim, &mut args, self.smem)?;
         }
 
         for i in inputs {

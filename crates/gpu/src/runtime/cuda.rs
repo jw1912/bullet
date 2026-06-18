@@ -2,9 +2,10 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-use crate::runtime::bindings::{DeviceProps, GemmConfig};
-
-use super::bindings::{Dim3, GpuBindings};
+use crate::runtime::{
+    Dialect,
+    bindings::{DeviceProps, Dim3, GemmConfig, GpuBindings},
+};
 
 use raw::*;
 
@@ -76,6 +77,7 @@ impl GpuBindings for Cuda {
             stream_mem_alloc: mem_pools > 0,
             vec_atomics: mjr >= 9,
             arch: Some(format!("sm_{mjr}{mnr}")),
+            dialect: Dialect::CudaHip,
         })
     }
 
@@ -167,12 +169,16 @@ impl GpuBindings for Cuda {
         error::driver(cuFuncLoad(kernel))
     }
 
+    unsafe fn kernel_destroy(_kernel: CUfunction) -> CudaResult {
+        Ok(())
+    }
+
     unsafe fn kernel_launch(
         func: CUfunction,
         stream: CUstream,
         gdim: Dim3,
         bdim: Dim3,
-        args: *mut *mut c_void,
+        args: &mut [*mut c_void],
         smem: c_uint,
     ) -> CudaResult {
         error::driver(cuLaunchKernel(
@@ -185,7 +191,7 @@ impl GpuBindings for Cuda {
             bdim.z,
             smem as c_uint,
             stream,
-            args,
+            args.as_mut_ptr(),
             std::ptr::null_mut(),
         ))
     }
