@@ -1,82 +1,73 @@
 use std::sync::Arc;
 
-use bullet_lib::game::{
-    formats::bulletformat::ChessBoard,
-    inputs::{ChessBucketsMirrored, SparseInputType},
+use bullet_lib::{
+    TrainingSteps,
+    game::{
+        formats::bulletformat::ChessBoard,
+        inputs::{ChessBucketsMirrored, SparseInputType},
+        outputs::OutputBuckets,
+    },
+    wdl::WdlScheduler,
 };
+use bullet_trainer::model::{DenseInput, ModelInputs, ModelInputsMapper, SparseInput};
 use montyformat::chess::{Attacks, Piece, Side};
 
-#[derive(Clone)]
-pub struct PawnPawnInputs {
-    buckets: ChessBucketsMirrored,
-    threats: Arc<Threats>,
-    masks: [u64; 64],
-}
+pub type InputTy = (((((SparseInput, SparseInput), SparseInput), SparseInput), SparseInput), DenseInput<f32>);
 
-impl PawnPawnInputs {
-    pub const TOTAL_PAIRS: usize = 96 * 95 / 2;
-    const MAX_PAIRS: usize = 16 * 15 / 2;
+pub fn make_inputs_mapper(
+    params: (&ModelInputs<InputTy>, &PawnPawnInputs, ChessBucketsMirrored, impl OutputBuckets<ChessBoard>),
+    steps: TrainingSteps,
+    wdl: impl WdlScheduler,
+) -> ModelInputsMapper<ChessBoard> {
+    let pp = params.1.clone();
 
-    pub fn new(buckets: [usize; 32], masks: [u64; 64]) -> Self {
-        Self { buckets: ChessBucketsMirrored::new(buckets), threats: Arc::new(Threats::new()), masks }
-    }
-
-    pub fn total_threats(&self) -> usize {
-        self.threats.num_inputs()
-    }
-
-    fn pawn_id(colour: usize, sq: usize) -> usize {
-        colour * 48 + sq - 8
-    }
-
-    fn pair_index(id_a: usize, id_b: usize) -> usize {
-        let lo = id_a.min(id_b);
-        let hi = id_a.max(id_b);
-        hi * (hi - 1) / 2 + lo
-    }
-
-    fn collect_pairs(&self, bbs: [u64; 8]) -> ([(usize, usize); Self::MAX_PAIRS], usize) {
-        let friendly = bbs[Side::WHITE] & bbs[Piece::PAWN];
-        let enemy = bbs[Side::BLACK] & bbs[Piece::PAWN];
-
-        let mut pairs = [(0usize, 0usize); Self::MAX_PAIRS];
-        let mut n = 0;
-
-        self.emit_same_colour(friendly, 0, &mut pairs, &mut n);
-        self.emit_cross_colour(friendly, enemy, &mut pairs, &mut n);
-        self.emit_same_colour(enemy, 1, &mut pairs, &mut n);
-
-        (pairs, n)
-    }
-
-    fn emit_same_colour(&self, bb: u64, colour: usize, pairs: &mut [(usize, usize); Self::MAX_PAIRS], n: &mut usize) {
-        let mut outer = bb;
-        while outer != 0 {
-            let sq_a = outer.trailing_zeros() as usize;
-            outer &= outer - 1;
-            let id_a = Self::pawn_id(colour, sq_a);
-            map_bb(outer & self.masks[sq_a], |sq_b| {
-                pairs[*n] = (id_a, Self::pawn_id(colour, sq_b));
-                *n += 1;
+    ModelInputsMapper::build(
+        params.0,
+        move |pos, batch, (((((stm_pp, ntm_pp), stm_psqt), ntm_psqt), bucket), target)| {
+            let mut cnt = 0;
+            params.2.map_features(pos, |stm, ntm| {
+                stm_psqt[cnt] = stm.try_into().unwrap();
+                ntm_psqt[cnt] = ntm.try_into().unwrap();
+                cnt += 1;
             });
-        }
-    }
 
-    fn emit_cross_colour(
-        &self,
-        friendly: u64,
-        enemy: u64,
-        pairs: &mut [(usize, usize); Self::MAX_PAIRS],
-        n: &mut usize,
-    ) {
-        map_bb(friendly, |sq_a| {
-            let id_a = Self::pawn_id(0, sq_a);
-            map_bb(enemy & self.masks[sq_a], |sq_b| {
-                pairs[*n] = (id_a, Self::pawn_id(1, sq_b));
-                *n += 1;
-            });
-        });
-    }
+            if cnt < params.2.max_active() {
+                stm_psqt[cnt] = -1;
+                ntm_psqt[cnt] = -1;
+            }
+
+            let mut stm_cnt = 0;
+            let mut ntm_cnt = 0;
+            pp.map_features(
+                pos,
+                |stm| {
+                    stm_pp[stm_cnt] = stm.try_into().unwrap();
+                    stm_cnt += 1;
+                },
+                |ntm| {
+                    ntm_pp[ntm_cnt] = ntm.try_into().unwrap();
+                    ntm_cnt += 1;
+                },
+            );
+
+            assert_eq!(stm_cnt, ntm_cnt);
+
+            if stm_cnt < pp.max_active() {
+                stm_pp[stm_cnt] = -1;
+                ntm_pp[stm_cnt] = -1;
+            }
+
+            bucket[0] = i32::from(params.3.bucket(pos));
+
+            let result = f32::from(pos.result) / 2.0;
+            let score = 1.0 / (1.0 + (f32::from(-pos.score) / 400.0).exp());
+            let superbatch = 1 + batch / steps.batches_per_superbatch;
+            let batch = batch % steps.batches_per_superbatch;
+            let lambda = wdl.blend(batch, superbatch, steps.end_superbatch);
+            assert!((0.0..=1.0).contains(&lambda), "WDL lambda must be in [0, 1]");
+            target[0] = lambda * result + (1. - lambda) * score;
+        },
+    )
 }
 
 pub fn three_file_band_mask() -> [u64; 64] {
@@ -96,65 +87,71 @@ pub fn three_file_band_mask() -> [u64; 64] {
     masks
 }
 
-impl SparseInputType for PawnPawnInputs {
-    type RequiredDataType = ChessBoard;
+#[derive(Clone)]
+pub struct PawnPawnInputs {
+    threats: Arc<Threats>,
+    masks: [u64; 64],
+}
 
-    fn num_inputs(&self) -> usize {
-        Self::TOTAL_PAIRS + self.threats.num_inputs() + self.buckets.num_inputs()
+impl PawnPawnInputs {
+    pub const TOTAL_PAIRS: usize = 96 * 95 / 2;
+    const MAX_PAIRS: usize = 16 * 15 / 2;
+
+    pub fn new(masks: [u64; 64]) -> Self {
+        Self { threats: Arc::new(Threats::new()), masks }
     }
 
-    fn max_active(&self) -> usize {
-        Self::MAX_PAIRS + self.threats.max_active() + self.buckets.max_active()
+    pub fn _total_threats(&self) -> usize {
+        self.threats.num_inputs()
     }
 
-    fn map_features<F: FnMut(usize, usize)>(&self, pos: &ChessBoard, mut f: F) {
-        let psqt_offset = Self::TOTAL_PAIRS + self.threats.num_inputs();
-        self.buckets.map_features(pos, |stm, ntm| f(psqt_offset + stm, psqt_offset + ntm));
+    pub fn num_inputs(&self) -> usize {
+        Self::TOTAL_PAIRS + self.threats.num_inputs()
+    }
 
+    pub fn max_active(&self) -> usize {
+        Self::MAX_PAIRS + self.threats.max_active()
+    }
+
+    fn pawn_id(colour: usize, sq: usize) -> usize {
+        colour * 48 + sq - 8
+    }
+
+    fn pair_index(id_a: usize, id_b: usize) -> usize {
+        let lo = id_a.min(id_b);
+        let hi = id_a.max(id_b);
+        hi * (hi - 1) / 2 + lo
+    }
+
+    fn emit_same_colour(&self, bb: u64, colour: usize, f: &mut impl FnMut(usize)) {
+        let mut outer = bb;
+        while outer != 0 {
+            let sq_a = outer.trailing_zeros() as usize;
+            outer &= outer - 1;
+            let id_a = Self::pawn_id(colour, sq_a);
+            map_bb(outer & self.masks[sq_a], |sq_b| f(Self::pair_index(id_a, Self::pawn_id(colour, sq_b))));
+        }
+    }
+
+    fn collect_pairs(&self, bbs: [u64; 8], f: &mut impl FnMut(usize)) {
+        let friendly = bbs[Side::WHITE] & bbs[Piece::PAWN];
+        let enemy = bbs[Side::BLACK] & bbs[Piece::PAWN];
+
+        self.emit_same_colour(friendly, 0, f);
+
+        map_bb(friendly, |sq_a| {
+            let id_a = Self::pawn_id(0, sq_a);
+            map_bb(enemy & self.masks[sq_a], |sq_b| f(Self::pair_index(id_a, Self::pawn_id(1, sq_b))));
+        });
+
+        self.emit_same_colour(enemy, 1, f);
+    }
+
+    pub fn map_features(&self, pos: &ChessBoard, mut on_stm: impl FnMut(usize), mut on_ntm: impl FnMut(usize)) {
         let bbs = build_bbs(pos);
-
-        let mut stm_count = 0;
-        let mut stm_feats = [0; 128];
-        let mut ntm_count = 0;
-        let mut ntm_feats = [0; 128];
-        self.threats.map(
-            bbs,
-            |stm| {
-                stm_feats[stm_count] = Self::TOTAL_PAIRS + stm;
-                stm_count += 1;
-            },
-            |ntm| {
-                ntm_feats[ntm_count] = Self::TOTAL_PAIRS + ntm;
-                ntm_count += 1;
-            },
-        );
-
-        assert_eq!(stm_count, ntm_count);
-        for (&stm, &ntm) in stm_feats.iter().zip(ntm_feats.iter()).take(stm_count) {
-            f(stm, ntm);
-        }
-
-        let stm_bbs = normalize_hm(bbs);
-        let ntm_bbs = normalize_hm(flip_view(bbs));
-
-        let (stm_pairs, stm_count) = self.collect_pairs(stm_bbs);
-        let (ntm_pairs, ntm_count) = self.collect_pairs(ntm_bbs);
-
-        assert_eq!(stm_count, ntm_count);
-
-        for i in 0..stm_count {
-            let stm_idx = Self::pair_index(stm_pairs[i].0, stm_pairs[i].1);
-            let ntm_idx = Self::pair_index(ntm_pairs[i].0, ntm_pairs[i].1);
-            f(stm_idx, ntm_idx);
-        }
-    }
-
-    fn shorthand(&self) -> String {
-        todo!();
-    }
-
-    fn description(&self) -> String {
-        todo!();
+        self.threats.map(bbs, |stm| on_stm(Self::TOTAL_PAIRS + stm), |ntm| on_ntm(Self::TOTAL_PAIRS + ntm));
+        self.collect_pairs(normalize_hm(bbs), &mut on_stm);
+        self.collect_pairs(normalize_hm(flip_view(bbs)), &mut on_ntm);
     }
 }
 

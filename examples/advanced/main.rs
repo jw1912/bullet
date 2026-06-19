@@ -2,24 +2,28 @@ mod filter;
 mod inputs;
 
 use bullet_lib::{
-    game::inputs::{ChessBucketsMirrored, SparseInputType},
-    nn::InitSettings,
-    trainer::{
-        schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
-        settings::LocalSettings,
+    game::{
+        inputs::{ChessBucketsMirrored, SparseInputType, get_num_buckets},
+        outputs::MaterialCount,
+    },
+    trainer::schedule::{
+        lr::{self, LrScheduler},
+        wdl,
     },
     value::loader::{ViriBinpackLoader, viribinpack::ViriFilter},
 };
 use bullet_trainer::{
-    model::{ModelDefinition, ModelInputs, ModelWeights},
+    model::{InitSettings, ModelDefinition, ModelEvaluator, ModelInputs, ModelWeights},
     optimiser::{
         Optimiser,
         adam::{AdamW, AdamWParams},
     },
-    run::DefaultDevice,
+    reader::ReadMapLoader,
+    run::{DefaultDevice, TrainingSchedule, TrainingSteps, train},
 };
 
-const NET_NAME: &str = "pawnocchio_new_relabeller";
+const _NET_NAME: &str = "pawnocchio_new_relabeller";
+const MAP_THREADS: u8 = 8;
 
 const SUPERBATCHES_STAGE0: usize = 100;
 const SUPERBATCHES_STAGE1: usize = 800;
@@ -27,11 +31,10 @@ const SUPERBATCHES_STAGE2: usize = 200;
 const L1: usize = 768;
 const L2: usize = 16;
 const L3: usize = 32;
-const SCALE: i32 = 400;
 const Q0: i16 = 255;
 const Q1: i16 = 128;
-const Q: i16 = 64;
-const INPUT_BUCKETS: usize = 16;
+const _Q: i16 = 64;
+const _INPUT_BUCKETS: usize = get_num_buckets(&BUCKET_LAYOUT);
 const OUTPUT_BUCKETS: usize = 8;
 
 const FT_SHIFT: usize = 8;
@@ -52,8 +55,9 @@ const BUCKET_LAYOUT: [usize; 32] = [
 ];
 
 fn main() {
-    let pp = inputs::PawnPawnInputs::new(BUCKET_LAYOUT, inputs::three_file_band_mask());
+    let pp = inputs::PawnPawnInputs::new(inputs::three_file_band_mask());
     let psqt = ChessBucketsMirrored::new(BUCKET_LAYOUT);
+    let output_buckets = MaterialCount::<OUTPUT_BUCKETS>;
 
     let inputs = ModelInputs::default()
         .add_sparse("stm/pp", (pp.num_inputs(), 1), pp.max_active())
@@ -68,7 +72,7 @@ fn main() {
         |builder, (((((stm_pp, ntm_pp), stm_psqt), ntm_psqt), output_buckets), target)| {
             let l0_pp = builder.new_affine("l0/pp/", pp.num_inputs(), L1);
 
-            let l0f = builder.new_weights("l0/fac/", (L1, 768), InitSettings::Zeroed);
+            let l0f = builder.new_weights("l0/fac", (L1, 768), InitSettings::Zeroed);
             let mut l0_psqt = builder.new_affine("l0/psqt/", psqt.num_inputs(), L1);
             l0_psqt.weights = l0_psqt.weights + l0f.repeat(psqt.num_inputs() / 768);
 
@@ -105,72 +109,97 @@ fn main() {
     let weights = ModelWeights::new(&defn, 12412421);
     let device = DefaultDevice::new(0).unwrap();
     let params = AdamWParams::default();
-    let mut optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device, params).unwrap();
+
+    let mut evaluator = ModelEvaluator::new(&defn, device.clone()).unwrap();
+    let mut optimiser = Optimiser::<_, AdamW<_>>::new(defn, weights, device.clone(), params).unwrap();
 
     let l0_clip = AdamWParams { max_weight: 0.99, min_weight: -0.99, ..Default::default() };
-    optimiser.set_params_for_weight("l0/fac/w", l0_clip);
+    optimiser.set_params_for_weight("l0/fac", l0_clip);
     optimiser.set_params_for_weight("l0/psqt/w", l0_clip);
 
     let l1_clip = AdamWParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
     optimiser.set_params_for_weight("l1/w", l1_clip);
 
-    const WARMUP_SBS: usize = SUPERBATCHES_STAGE0 / 2;
-    const COOLDOWN_SBS: usize = SUPERBATCHES_STAGE0 - WARMUP_SBS;
-    let stage0_schedule = TrainingSchedule {
-        net_id: NET_NAME.to_string() + "_stage0",
-        eval_scale: SCALE as f32,
-        steps: TrainingSteps {
-            batch_size: 16_384,
-            batches_per_superbatch: 6104,
-            start_superbatch: 1,
-            end_superbatch: SUPERBATCHES_STAGE0,
-        },
-        wdl_scheduler: wdl::ConstantWDL { value: 0.2 },
-        lr_scheduler: lr::Sequence {
-            first: lr::LinearDecayLR { initial_lr: 1e-4, final_lr: 5e-3, final_superbatch: WARMUP_SBS },
-            second: lr::LinearDecayLR { initial_lr: 5e-3, final_lr: 1e-4, final_superbatch: COOLDOWN_SBS },
-            first_scheduler_final_superbatch: WARMUP_SBS,
-        },
-        save_rate: 100,
-    };
-    let stage1_schedule = TrainingSchedule {
-        net_id: NET_NAME.to_string() + "_stage1",
-        eval_scale: SCALE as f32,
-        steps: TrainingSteps {
-            batch_size: 16_384,
-            batches_per_superbatch: 6104,
-            start_superbatch: 1,
-            end_superbatch: SUPERBATCHES_STAGE1,
-        },
-        wdl_scheduler: wdl::LinearWDL { start: 0.2, end: 0.5 },
-        lr_scheduler: lr::LinearDecayLR { initial_lr: 1e-3, final_lr: 1e-6, final_superbatch: SUPERBATCHES_STAGE1 },
-        save_rate: 100,
-    };
-    let stage2_schedule = TrainingSchedule {
-        net_id: NET_NAME.to_string() + "_stage2",
-        eval_scale: SCALE as f32,
-        steps: TrainingSteps {
-            batch_size: 16_384,
-            batches_per_superbatch: 6104,
-            start_superbatch: 1,
-            end_superbatch: SUPERBATCHES_STAGE2,
-        },
-        wdl_scheduler: wdl::ConstantWDL { value: 1.0 },
-        lr_scheduler: lr::LinearDecayLR { initial_lr: 1e-5, final_lr: 1e-7, final_superbatch: SUPERBATCHES_STAGE2 },
-        save_rate: 100,
-    };
-
-    let loader = ViriBinpackLoader::new(
+    let reader = ViriBinpackLoader::new(
         "/k4/vine_data/vine_37/mixed_data_chonked.vf",
         8192,
         16,
         ViriFilter::Custom(filter::should_keep),
     );
-    let settings = LocalSettings { threads: 8, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
 
-    //trainer.run(&stage0_schedule, &settings, &loader);
-    //trainer.run(&stage1_schedule, &settings, &loader);
-    //trainer.run(&stage2_schedule, &settings, &loader);
+    let params = (&inputs, &pp, psqt, output_buckets);
+
+    const WARMUP_SBS: usize = SUPERBATCHES_STAGE0 / 2;
+    const COOLDOWN_SBS: usize = SUPERBATCHES_STAGE0 - WARMUP_SBS;
+    let stage0_steps = TrainingSteps {
+        batch_size: 16_384,
+        batches_per_superbatch: 6104,
+        start_superbatch: 1,
+        end_superbatch: SUPERBATCHES_STAGE0,
+    };
+    let stage0_mapper = inputs::make_inputs_mapper(params, stage0_steps, wdl::ConstantWDL { value: 0.2 });
+    train(
+        &mut optimiser,
+        TrainingSchedule {
+            steps: stage0_steps,
+            lr_schedule: lr::Sequence {
+                first: lr::LinearDecayLR { initial_lr: 1e-4, final_lr: 5e-3, final_superbatch: WARMUP_SBS },
+                second: lr::LinearDecayLR { initial_lr: 5e-3, final_lr: 1e-4, final_superbatch: COOLDOWN_SBS },
+                first_scheduler_final_superbatch: WARMUP_SBS,
+            }
+            .boxed(),
+            log_rate: 128,
+        },
+        ReadMapLoader::new(reader.clone(), stage0_mapper, MAP_THREADS),
+        |_, _, _, _| {},
+        |_, _| {},
+    )
+    .unwrap();
+
+    let stage1_steps = TrainingSteps {
+        batch_size: 16_384,
+        batches_per_superbatch: 6104,
+        start_superbatch: 1,
+        end_superbatch: SUPERBATCHES_STAGE1,
+    };
+    let stage1_mapper = inputs::make_inputs_mapper(params, stage1_steps, wdl::LinearWDL { start: 0.2, end: 0.5 });
+    train(
+        &mut optimiser,
+        TrainingSchedule {
+            steps: stage1_steps,
+            lr_schedule: lr::LinearDecayLR { initial_lr: 1e-3, final_lr: 1e-6, final_superbatch: SUPERBATCHES_STAGE1 }
+                .boxed(),
+            log_rate: 128,
+        },
+        ReadMapLoader::new(reader.clone(), stage1_mapper, MAP_THREADS),
+        |_, _, _, _| {},
+        |_, _| {},
+    )
+    .unwrap();
+
+    let stage2_steps = TrainingSteps {
+        batch_size: 16_384,
+        batches_per_superbatch: 6104,
+        start_superbatch: 1,
+        end_superbatch: SUPERBATCHES_STAGE2,
+    };
+    let stage2_mapper = inputs::make_inputs_mapper(params, stage2_steps, wdl::ConstantWDL { value: 1.0 });
+    train(
+        &mut optimiser,
+        TrainingSchedule {
+            steps: stage2_steps,
+            lr_schedule: lr::LinearDecayLR { initial_lr: 1e-5, final_lr: 1e-7, final_superbatch: SUPERBATCHES_STAGE2 }
+                .boxed(),
+            log_rate: 128,
+        },
+        ReadMapLoader::new(reader, stage2_mapper, MAP_THREADS),
+        |_, _, _, _| {},
+        |_, _| {},
+    )
+    .unwrap();
+
+    evaluator.load_device_weights(optimiser.weights()).unwrap();
+    let evaluator_mapper = inputs::make_inputs_mapper(params, stage0_steps, wdl::ConstantWDL { value: 0.0 });
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -249,8 +278,11 @@ fn main() {
         "6K1/8/b6R/N2p2P1/8/q1Q5/6r1/2Bk3n b - - 0 1",
         "7K/r2R3b/1Q6/8/2q5/1nPB2k1/N3p3/8 w - - 0 1",
     ] {
-        //let eval = trainer.eval(fen);
-        //println!("FEN: {fen}");
-        //println!("EVAL: {}", 400.0 * eval);
+        let pos = format!("{fen} | 0 | 0.0").parse().unwrap();
+        let inputs = evaluator_mapper.map(&[pos], 0, 1).to_device(&device).unwrap();
+        let output = evaluator.evaluate(&inputs).unwrap().get("output").unwrap();
+        let [value] = output.to_host().unwrap().f32()[..] else { panic!() };
+        println!("FEN: {fen}");
+        println!("EVAL: {}", 400.0 * value);
     }
 }

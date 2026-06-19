@@ -4,12 +4,16 @@ use bullet_trainer::run::logger::ansi;
 
 /// Learning rate scheduling. Types implementing this trait output a learning rate
 /// at each point in training, indexed by batch and superbatch.
-pub trait LrScheduler: Clone + Debug + Send + Sync {
+pub trait LrScheduler: Clone + Debug + Send + Sync + 'static {
     /// The learning rate for the current batch and superbatch.
     /// Most schedulers do not depend on the batch index.
     fn lr(&self, batch: usize, superbatch: usize) -> f32;
     /// A colourful display representation of the learning rate scheduler.
     fn colourful(&self) -> String;
+
+    fn boxed(self) -> Box<dyn Fn(usize, usize) -> f32> {
+        Box::new(move |b, sb| self.lr(b, sb))
+    }
 }
 
 /// Constant learning rate.
