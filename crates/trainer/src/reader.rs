@@ -4,7 +4,7 @@ pub use fixed_size::{FixedSizeData, FixedSizeDataReader};
 
 use crate::{
     model::ModelInputsMapper,
-    run::{DataLoader, DataLoadingError, PreparedBatchHost},
+    run::{DataLoader, DataLoadingError, PreparedBatchHost, Step},
 };
 
 pub trait DataReader<T>: Clone + Send + Sync {
@@ -30,21 +30,21 @@ where
 {
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
         self,
-        start_batch: usize,
+        start: Step,
         batch_size: usize,
         mut f: F,
     ) -> Result<(), DataLoadingError> {
-        let mut batch = start_batch;
+        let mut step = start;
         let mut incomplete_buf = Vec::new();
 
-        self.reader.read_chunks(start_batch * batch_size, |chunk| {
+        self.reader.read_chunks(batch_size * start.total_batches(), |chunk| {
             let remainder = if !incomplete_buf.is_empty() {
                 let remainder = batch_size - incomplete_buf.len();
 
                 if chunk.len() >= remainder {
                     incomplete_buf.extend_from_slice(&chunk[..remainder]);
-                    let prepared = self.mapper.map(&incomplete_buf, batch, self.threads);
-                    batch += 1;
+                    let prepared = self.mapper.map(&incomplete_buf, step, self.threads);
+                    step.step();
 
                     if f(prepared) {
                         return true;
@@ -65,8 +65,8 @@ where
                 incomplete_buf.extend_from_slice(chunks.remainder());
 
                 for data in chunks {
-                    let prepared = self.mapper.map(data, batch, self.threads);
-                    batch += 1;
+                    let prepared = self.mapper.map(data, step, self.threads);
+                    step.step();
 
                     if f(prepared) {
                         return true;

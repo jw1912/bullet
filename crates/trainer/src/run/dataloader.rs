@@ -10,7 +10,7 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
-use crate::model::TensorMap;
+use crate::{model::TensorMap, run::Step};
 
 #[derive(Debug)]
 pub enum DataLoadingError {
@@ -22,7 +22,7 @@ pub enum DataLoadingError {
 pub trait DataLoader: Send + Sync {
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
         self,
-        start_batch: usize,
+        start: Step,
         batch_size: usize,
         f: F,
     ) -> Result<(), DataLoadingError>;
