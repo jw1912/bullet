@@ -6,7 +6,7 @@ use std::{
 };
 
 use bullet_trainer::reader::DataReader;
-use sfbinpack::{ChunkReader, parse_chunk, read_chunk_into};
+use sfbinpack::{ChunkReader, read_chunk_into};
 pub use sfbinpack::{
     TrainingDataEntry,
     chess::{
