@@ -1,7 +1,12 @@
-use std::{fs::File, sync::mpsc, thread};
+use std::{
+    fs::File,
+    io::BufReader,
+    sync::mpsc::{self, SyncSender},
+    thread,
+};
 
 use bullet_trainer::reader::DataReader;
-use sfbinpack::CompressedTrainingDataEntryReader;
+use sfbinpack::{ChunkReader, parse_chunk, read_chunk_into};
 pub use sfbinpack::{
     TrainingDataEntry,
     chess::{
@@ -74,29 +79,38 @@ where
         let buffer_size = self.buffer_size;
         let threads = self.threads;
         let filter = self.filter.clone();
+        let reader_buffer_size = threads.max(1);
 
-        let reader_buffer_size = 16384 * threads;
-        let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<TrainingDataEntry>>(4);
+        let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
         let (reader_msg_sender, reader_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
-            let mut buffer = Vec::with_capacity(reader_buffer_size);
+            let mut games = Vec::new();
 
             'dataloading: loop {
-                for file in &file_paths {
-                    let file = File::open(file).unwrap();
-                    let mut reader = CompressedTrainingDataEntryReader::new(file).unwrap();
+                for file_path in &file_paths {
+                    let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
 
-                    while reader.has_next() {
-                        buffer.push(reader.next());
+                    let mut chunk = Vec::new();
 
-                        if buffer.len() == reader_buffer_size || !reader.has_next() {
-                            if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(buffer).is_err() {
+                    while read_chunk_into(&mut reader, &mut chunk).unwrap() {
+                        games.push(std::mem::take(&mut chunk));
+
+                        if games.len() == reader_buffer_size {
+                            if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(games).is_err() {
                                 break 'dataloading;
                             }
 
-                            buffer = Vec::with_capacity(reader_buffer_size);
+                            games = Vec::new();
                         }
+                    }
+
+                    if !games.is_empty() {
+                        if reader_msg_receiver.try_recv().unwrap_or(false) || reader_sender.send(games).is_err() {
+                            break 'dataloading;
+                        }
+
+                        games = Vec::new();
                     }
                 }
             }
@@ -108,39 +122,13 @@ where
         std::thread::spawn(move || {
             let filter = &filter;
             let mut should_break = false;
-            'dataloading: while let Ok(unfiltered) = reader_receiver.recv() {
+            'dataloading: while let Ok(chunks) = reader_receiver.recv() {
                 if should_break || converted_msg_receiver.try_recv().unwrap_or(false) {
                     reader_msg_sender.send(true).unwrap();
                     break 'dataloading;
                 }
 
-                thread::scope(|s| {
-                    let chunk_size = unfiltered.len().div_ceil(threads);
-                    let mut handles = Vec::new();
-
-                    for chunk in unfiltered.chunks(chunk_size) {
-                        let this_sender = converted_sender.clone();
-                        let handle = s.spawn(move || {
-                            let mut buffer = Vec::with_capacity(chunk_size);
-
-                            for entry in chunk {
-                                if filter(entry) {
-                                    buffer.push(convert_to_bulletformat(entry));
-                                }
-                            }
-
-                            this_sender.send(buffer).is_err()
-                        });
-
-                        handles.push(handle);
-                    }
-
-                    for handle in handles {
-                        if handle.join().unwrap() {
-                            should_break = true;
-                        }
-                    }
-                });
+                should_break = convert_buffer(threads, &converted_sender, &chunks, filter);
 
                 if should_break {
                     reader_msg_sender.send(true).unwrap();
@@ -182,6 +170,48 @@ where
             }
         }
     }
+}
+
+fn convert_buffer<T>(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, chunks: &[Vec<u8>], filter: &T) -> bool
+where
+    T: Fn(&TrainingDataEntry) -> bool + Sync,
+{
+    let chunk_size = chunks.len().div_ceil(threads);
+    let mut should_break = false;
+
+    thread::scope(|s| {
+        let mut handles = Vec::new();
+
+        for chunk_group in chunks.chunks(chunk_size) {
+            let this_sender = sender.clone();
+            let handle = s.spawn(move || {
+                let mut buffer = Vec::new();
+
+                for chunk in chunk_group {
+                    let mut reader = ChunkReader::default();
+
+                    while reader.has_next(chunk) {
+                        let entry = reader.next(chunk);
+                        if filter(&entry) {
+                            buffer.push(convert_to_bulletformat(&entry));
+                        }
+                    }
+                }
+
+                this_sender.send(buffer).is_err()
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            if handle.join().unwrap() {
+                should_break = true;
+            }
+        }
+    });
+
+    should_break
 }
 
 fn shuffle(data: &mut [ChessBoard]) {
