@@ -16,8 +16,7 @@ bullet-trainer = { workspace = true }
 bulletformat = "1.8.0"
 montyformat = "0.9.2"
 sfbinpack = "0.6.0"
-viriformat = "=2.0.1"
-rand = "=0.9"
+viriformat = "2.0.1"
 
 [features]
 cuda = ["bullet-gpu/cuda", "bullet-trainer/cuda"]

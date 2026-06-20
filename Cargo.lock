@@ -107,7 +107,6 @@ dependencies = [
  "bullet-trainer",
  "bulletformat",
  "montyformat",
- "rand 0.9.4",
  "sfbinpack",
  "viriformat",
 ]
