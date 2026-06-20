@@ -1,15 +1,19 @@
 use std::{f32::consts::PI, fmt::Debug};
 
-use bullet_trainer::run::logger::ansi;
+use bullet_trainer::run::{Step, logger::ansi};
 
 /// Learning rate scheduling. Types implementing this trait output a learning rate
 /// at each point in training, indexed by batch and superbatch.
-pub trait LrScheduler: Clone + Debug + Send + Sync {
+pub trait LrScheduler: Clone + Debug + 'static {
     /// The learning rate for the current batch and superbatch.
     /// Most schedulers do not depend on the batch index.
     fn lr(&self, batch: usize, superbatch: usize) -> f32;
     /// A colourful display representation of the learning rate scheduler.
     fn colourful(&self) -> String;
+
+    fn boxed(self) -> Box<dyn Fn(Step) -> f32> {
+        Box::new(move |step| self.lr(step.batch(), step.superbatch()))
+    }
 }
 
 /// Constant learning rate.

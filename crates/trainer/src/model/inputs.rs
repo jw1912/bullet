@@ -5,7 +5,7 @@ use bullet_compiler::{
     tensor::TValue,
 };
 
-use crate::run::{HostPool, PreparedBatchHost};
+use crate::run::{HostPool, PreparedBatchHost, Step};
 
 pub struct ModelInputs<T> {
     inputs: T,
@@ -63,7 +63,7 @@ impl<T: InputType + 'static> ModelInputs<T> {
 
 pub struct ModelInputsMapper<T> {
     #[allow(clippy::type_complexity)]
-    func: Arc<dyn Fn(&[T], usize, u8) -> PreparedBatchHost + Send + Sync>,
+    func: Arc<dyn Fn(&[T], Step, u8) -> PreparedBatchHost + Send + Sync>,
     names: Vec<String>,
 }
 
@@ -76,14 +76,14 @@ impl<T> Clone for ModelInputsMapper<T> {
 impl<T: Send + Sync> ModelInputsMapper<T> {
     pub fn build<I: InputType, F>(inputs: &ModelInputs<I>, f: F) -> Self
     where
-        F: for<'a> Fn(&T, usize, I::Slices<'a>) + Send + Sync + 'static,
+        F: for<'a> Fn(&T, Step, I::Slices<'a>) + Send + Sync + 'static,
     {
         let names = inputs.names.clone();
         let inp = inputs.inputs.clone();
 
         let pool = Arc::<HostPool>::default();
 
-        let func = move |batch: &[T], batch_number, threads| {
+        let func = move |batch: &[T], step, threads| {
             let f = &f;
             let chunk_size = batch.len().div_ceil(usize::from(threads));
 
@@ -96,7 +96,7 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
                 for (data, chunk) in batch.chunks(chunk_size).zip(chunks) {
                     s.spawn(move || {
                         for (datapoint, slices) in data.iter().zip(inputs.slices(chunk)) {
-                            f(datapoint, batch_number, slices);
+                            f(datapoint, step, slices);
                         }
                     });
                 }
@@ -111,8 +111,8 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
         ModelInputsMapper { func: Arc::new(func), names: inputs.names.clone() }
     }
 
-    pub fn map(&self, data: &[T], batch_number: usize, threads: u8) -> PreparedBatchHost {
-        (self.func)(data, batch_number, threads)
+    pub fn map(&self, data: &[T], step: Step, threads: u8) -> PreparedBatchHost {
+        (self.func)(data, step, threads)
     }
 
     pub fn names(&self) -> &[String] {
