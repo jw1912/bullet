@@ -5,6 +5,8 @@ use std::{
     time::Instant,
 };
 
+use crate::run::Step;
+
 use super::schedule::TrainingSteps;
 
 static CBCS: AtomicBool = AtomicBool::new(false);
@@ -33,16 +35,10 @@ fn esc() -> &'static str {
     if CBCS.load(SeqCst) { "\x1b[38;5;225m" } else { "" }
 }
 
-pub fn report_superbatch_progress(
-    superbatch: usize,
-    batches: usize,
-    finished_batches: usize,
-    superbatch_timer: &Instant,
-    superbatch_positions: usize,
-) {
+pub fn report_superbatch_progress(step: Step, superbatch_timer: &Instant, superbatch_positions: usize) {
     let num_cs = num_cs();
     let superbatch_time = superbatch_timer.elapsed().as_secs_f32();
-    let pct = finished_batches as f32 / batches as f32;
+    let pct = step.batch() as f32 / step.batches_per_superbatch() as f32;
     let pos_per_sec = superbatch_positions as f32 / superbatch_time;
 
     let seconds = superbatch_time / pct - superbatch_time;
@@ -50,10 +46,10 @@ pub fn report_superbatch_progress(
     print!(
         "superbatch {} [{}% ({}/{} batches, {} pos/sec)]\n\
         Estimated time to end of superbatch: {}s     \x1b[F",
-        ansi(superbatch, num_cs),
+        ansi(step.superbatch(), num_cs),
         ansi(format!("{:.1}", pct * 100.0), 35),
-        ansi(finished_batches, num_cs),
-        ansi(batches, num_cs),
+        ansi(step.batch(), num_cs),
+        ansi(step.batches_per_superbatch(), num_cs),
         ansi(format!("{pos_per_sec:.0}"), num_cs),
         ansi(format!("{seconds:.1}"), num_cs),
     );

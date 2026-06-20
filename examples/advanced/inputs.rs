@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bullet_lib::{
-    TrainingSteps,
     game::{
         formats::bulletformat::ChessBoard,
         inputs::{ChessBucketsMirrored, SparseInputType},
@@ -16,14 +15,13 @@ pub type InputTy = (((((SparseInput, SparseInput), SparseInput), SparseInput), S
 
 pub fn make_inputs_mapper(
     params: (&ModelInputs<InputTy>, &PawnPawnInputs, ChessBucketsMirrored, impl OutputBuckets<ChessBoard>),
-    steps: TrainingSteps,
     wdl: impl WdlScheduler,
 ) -> ModelInputsMapper<ChessBoard> {
     let pp = params.1.clone();
 
     ModelInputsMapper::build(
         params.0,
-        move |pos, batch, (((((stm_pp, ntm_pp), stm_psqt), ntm_psqt), bucket), target)| {
+        move |pos, step, (((((stm_pp, ntm_pp), stm_psqt), ntm_psqt), bucket), target)| {
             let mut cnt = 0;
             params.2.map_features(pos, |stm, ntm| {
                 stm_psqt[cnt] = stm.try_into().unwrap();
@@ -61,9 +59,7 @@ pub fn make_inputs_mapper(
 
             let result = f32::from(pos.result) / 2.0;
             let score = 1.0 / (1.0 + (f32::from(-pos.score) / 400.0).exp());
-            let superbatch = 1 + batch / steps.batches_per_superbatch;
-            let batch = batch % steps.batches_per_superbatch;
-            let lambda = wdl.blend(batch, superbatch, steps.end_superbatch);
+            let lambda = wdl.blend(step.batch(), step.superbatch(), step.final_superbatch());
             assert!((0.0..=1.0).contains(&lambda), "WDL lambda must be in [0, 1]");
             target[0] = lambda * result + (1. - lambda) * score;
         },

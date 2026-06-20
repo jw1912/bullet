@@ -131,17 +131,16 @@ fn main() {
 
     const WARMUP_SBS: usize = SUPERBATCHES_STAGE0 / 2;
     const COOLDOWN_SBS: usize = SUPERBATCHES_STAGE0 - WARMUP_SBS;
-    let stage0_steps = TrainingSteps {
-        batch_size: 16_384,
-        batches_per_superbatch: 6104,
-        start_superbatch: 1,
-        end_superbatch: SUPERBATCHES_STAGE0,
-    };
-    let stage0_mapper = inputs::make_inputs_mapper(params, stage0_steps, wdl::ConstantWDL { value: 0.2 });
+    let stage0_mapper = inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 0.2 });
     train(
         &mut optimiser,
         TrainingSchedule {
-            steps: stage0_steps,
+            steps: TrainingSteps {
+                batch_size: 16_384,
+                batches_per_superbatch: 6104,
+                start_superbatch: 1,
+                end_superbatch: SUPERBATCHES_STAGE0,
+            },
             lr_schedule: lr::Sequence {
                 first: lr::LinearDecayLR { initial_lr: 1e-4, final_lr: 5e-3, final_superbatch: WARMUP_SBS },
                 second: lr::LinearDecayLR { initial_lr: 5e-3, final_lr: 1e-4, final_superbatch: COOLDOWN_SBS },
@@ -151,55 +150,53 @@ fn main() {
             log_rate: 128,
         },
         ReadMapLoader::new(reader.clone(), stage0_mapper, MAP_THREADS),
-        |_, _, _, _| {},
+        |_, _, _| {},
         |_, _| {},
     )
     .unwrap();
 
-    let stage1_steps = TrainingSteps {
-        batch_size: 16_384,
-        batches_per_superbatch: 6104,
-        start_superbatch: 1,
-        end_superbatch: SUPERBATCHES_STAGE1,
-    };
-    let stage1_mapper = inputs::make_inputs_mapper(params, stage1_steps, wdl::LinearWDL { start: 0.2, end: 0.5 });
+    let stage1_mapper = inputs::make_inputs_mapper(params, wdl::LinearWDL { start: 0.2, end: 0.5 });
     train(
         &mut optimiser,
         TrainingSchedule {
-            steps: stage1_steps,
+            steps: TrainingSteps {
+                batch_size: 16_384,
+                batches_per_superbatch: 6104,
+                start_superbatch: 1,
+                end_superbatch: SUPERBATCHES_STAGE1,
+            },
             lr_schedule: lr::LinearDecayLR { initial_lr: 1e-3, final_lr: 1e-6, final_superbatch: SUPERBATCHES_STAGE1 }
                 .boxed(),
             log_rate: 128,
         },
         ReadMapLoader::new(reader.clone(), stage1_mapper, MAP_THREADS),
-        |_, _, _, _| {},
+        |_, _, _| {},
         |_, _| {},
     )
     .unwrap();
 
-    let stage2_steps = TrainingSteps {
-        batch_size: 16_384,
-        batches_per_superbatch: 6104,
-        start_superbatch: 1,
-        end_superbatch: SUPERBATCHES_STAGE2,
-    };
-    let stage2_mapper = inputs::make_inputs_mapper(params, stage2_steps, wdl::ConstantWDL { value: 1.0 });
+    let stage2_mapper = inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 1.0 });
     train(
         &mut optimiser,
         TrainingSchedule {
-            steps: stage2_steps,
+            steps: TrainingSteps {
+                batch_size: 16_384,
+                batches_per_superbatch: 6104,
+                start_superbatch: 1,
+                end_superbatch: SUPERBATCHES_STAGE2,
+            },
             lr_schedule: lr::LinearDecayLR { initial_lr: 1e-5, final_lr: 1e-7, final_superbatch: SUPERBATCHES_STAGE2 }
                 .boxed(),
             log_rate: 128,
         },
         ReadMapLoader::new(reader, stage2_mapper, MAP_THREADS),
-        |_, _, _, _| {},
+        |_, _, _| {},
         |_, _| {},
     )
     .unwrap();
 
     evaluator.load_device_weights(optimiser.weights()).unwrap();
-    let evaluator_mapper = inputs::make_inputs_mapper(params, stage0_steps, wdl::ConstantWDL { value: 0.0 });
+    let evaluator_mapper = inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 0.0 });
 
     for fen in [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -279,7 +276,7 @@ fn main() {
         "7K/r2R3b/1Q6/8/2q5/1nPB2k1/N3p3/8 w - - 0 1",
     ] {
         let pos = format!("{fen} | 0 | 0.0").parse().unwrap();
-        let inputs = evaluator_mapper.map(&[pos], 0, 1).to_device(&device).unwrap();
+        let inputs = evaluator_mapper.map(&[pos], Default::default(), 1).to_device(&device).unwrap();
         let output = evaluator.evaluate(&inputs).unwrap().get("output").unwrap();
         let [value] = output.to_host().unwrap().f32()[..] else { panic!() };
         println!("FEN: {fen}");
