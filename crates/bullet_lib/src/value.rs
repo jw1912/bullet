@@ -10,7 +10,7 @@ use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
-    run::{self, TrainingSteps, logger},
+    run::{self, Step, logger},
 };
 
 use crate::{
@@ -52,16 +52,7 @@ where
     I::RequiredDataType: LoadableDataType,
     O: OutputBuckets<I::RequiredDataType>,
 {
-    fn make_mapper(
-        &self,
-        steps: TrainingSteps,
-        scale: f32,
-        wdl: impl WdlScheduler,
-    ) -> ModelInputsMapper<I::RequiredDataType> {
-        assert!(steps.start_superbatch > 0);
-        assert!(steps.batches_per_superbatch > 0);
-        assert!(steps.end_superbatch >= steps.start_superbatch);
-
+    fn make_mapper(&self, scale: f32, wdl: impl WdlScheduler) -> ModelInputsMapper<I::RequiredDataType> {
         let nnz = self.input_getter.max_active();
         let num = self.input_getter.num_inputs();
         let inp = self.input_getter.clone();
@@ -83,7 +74,7 @@ where
             .add_dense("targets", (if target_wdl { 3 } else { 1 }, 1))
             .add_dense("entry_weights", (1, 1));
 
-        ModelInputsMapper::build(&inputs, move |pos, batch, ((((stm, ntm), buckets), targets), weights)| {
+        ModelInputsMapper::build(&inputs, move |pos, step, ((((stm, ntm), buckets), targets), weights)| {
             let mut cnt = 0;
             inp.map_features(pos, |our, opp| {
                 assert!(our < num && opp < num, "Input feature index exceeded input size!");
@@ -117,12 +108,9 @@ where
                 } else {
                     sigmoid(rscale * score)
                 };
-                let result = f32::from(pos.result() as u8) / 2.0;
 
-                let superbatch = 1 + batch / steps.batches_per_superbatch;
-                let batch = batch % steps.batches_per_superbatch;
-                let blend = blend_getter(pos, wdl.blend(batch, superbatch, steps.end_superbatch));
-                assert!(superbatch >= steps.start_superbatch);
+                let result = f32::from(pos.result() as u8) / 2.0;
+                let blend = blend_getter(pos, wdl.blend(step.batch(), step.superbatch(), step.final_superbatch()));
                 assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
                 targets[0] = blend * result + (1. - blend) * score;
             }
@@ -131,7 +119,6 @@ where
 
     pub fn make_read_map_loader<D>(
         &self,
-        steps: TrainingSteps,
         reader: D,
         scale: f32,
         wdl: impl WdlScheduler,
@@ -140,7 +127,7 @@ where
     where
         D: DataReader<I::RequiredDataType>,
     {
-        ReadMapLoader::new(reader, self.make_mapper(steps, scale, wdl), threads)
+        ReadMapLoader::new(reader, self.make_mapper(scale, wdl), threads)
     }
 }
 
@@ -173,7 +160,6 @@ where
         let steps = schedule.steps;
 
         let dataloader = self.state.make_read_map_loader(
-            steps,
             dataloader.clone(),
             schedule.eval_scale,
             schedule.wdl_scheduler.clone(),
@@ -191,25 +177,26 @@ where
 
         run::train(
             &mut self.optimiser,
-            run::TrainingSchedule { steps, log_rate: 128, lr_schedule: Box::new(|a, b| lr_scheduler.lr(a, b)) },
+            run::TrainingSchedule { steps, log_rate: 128, lr_schedule: lr_scheduler.boxed() },
             dataloader,
-            |_, superbatch, curr_batch, error| {
+            |_, step, error| {
                 loss_sum += error;
                 ticks_since_last += 1.0;
 
-                if curr_batch % 32 == 0
-                    || (steps.batches_per_superbatch < 32 && curr_batch == steps.batches_per_superbatch)
+                if step.batch().is_multiple_of(32)
+                    || (step.batches_per_superbatch() < 32 && step.batch() == step.batches_per_superbatch())
                 {
-                    let normalised_loss = loss_sum / f32::min(ticks_since_last, steps.batches_per_superbatch as f32);
+                    let normalised_loss = loss_sum / f32::min(ticks_since_last, step.batches_per_superbatch() as f32);
 
-                    error_record.borrow_mut().push((superbatch, curr_batch, normalised_loss));
+                    error_record.borrow_mut().push((step.superbatch(), step.batch(), normalised_loss));
 
                     loss_sum = 0.0;
                     ticks_since_last = 0.0;
                 }
             },
-            |trainer, superbatch| {
-                if superbatch % schedule.save_rate == 0 || superbatch == steps.end_superbatch {
+            |trainer, step| {
+                let superbatch = step.superbatch();
+                if superbatch % schedule.save_rate == 0 || superbatch == step.final_superbatch() {
                     let name = format!("{}-{superbatch}", schedule.net_id);
                     let path = format!("{}/{name}", settings.output_directory);
                     std::fs::create_dir(path.as_str()).unwrap_or(());
@@ -229,9 +216,8 @@ where
     {
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
-        let steps = TrainingSteps { batch_size: 1, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 1 };
-        let mapper = self.state.make_mapper(steps, 1.0, wdl::ConstantWDL { value: 1.0 });
-        let host_data = mapper.map(&[pos], 0, 1);
+        let mapper = self.state.make_mapper(1.0, wdl::ConstantWDL { value: 1.0 });
+        let host_data = mapper.map(&[pos], Step::default(), 1);
 
         let device_data = host_data.to_device(&self.optimiser.device()).unwrap();
 
@@ -276,7 +262,6 @@ where
     ) {
         let steps = schedule.steps;
         let dataloader = self.state.make_read_map_loader(
-            steps,
             dataloader.clone(),
             schedule.eval_scale,
             schedule.wdl_scheduler.clone(),

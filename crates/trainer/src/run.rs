@@ -3,7 +3,7 @@ pub mod logger;
 mod schedule;
 
 pub use dataloader::{DataLoader, DataLoadingError, HostPool, PreparedBatchHost};
-pub use schedule::{TrainingSchedule, TrainingSteps};
+pub use schedule::{Step, TrainingSchedule, TrainingSteps};
 
 use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
 
@@ -49,34 +49,24 @@ pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSt
     logger::clear_colours();
     println!("{}", logger::ansi("Measuring CPU Throughput", "34;1"));
 
-    let sb_positions = steps.batches_per_superbatch * steps.batch_size;
+    let sb_cnt = steps.batches_per_superbatch * steps.batch_size;
 
-    let mut batch_no = 0;
-    let mut superbatch = steps.start_superbatch;
-    let mut total = 0;
     let mut sb_timer = Instant::now();
+    let mut step = Step::from(steps);
 
-    dataloader.map_batches(steps.start_batch(), steps.batch_size, |_| {
-        batch_no += 1;
-        total += steps.batch_size;
-
-        if batch_no % steps.batches_per_superbatch == 0 {
-            batch_no = 0;
-            superbatch += 1;
-
+    dataloader.map_batches(step, steps.batch_size, |_| {
+        if step.batch() == steps.batches_per_superbatch - 1 {
+            let sb = step.superbatch();
             let total_time = timer.elapsed().as_secs_f32();
             let sb_time = sb_timer.elapsed().as_secs_f32();
-            logger::report_superbatch_throughput(superbatch, sb_time, total_time, sb_positions);
-            logger::report_time_left(steps, superbatch, total_time);
-
-            if superbatch > steps.end_superbatch {
-                return true;
-            }
+            logger::report_superbatch_throughput(sb, sb_time, total_time, sb_cnt);
+            logger::report_time_left(steps, sb, total_time);
 
             sb_timer = Instant::now();
         }
 
-        false
+        step.step();
+        step.finished()
     })?;
 
     Ok(())
@@ -86,8 +76,8 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
     optimiser: &mut Optimiser<G, O>,
     schedule: TrainingSchedule,
     dataloader: impl DataLoader,
-    mut batch_callback: impl FnMut(&mut Optimiser<G, O>, usize, usize, f32),
-    mut superbatch_callback: impl FnMut(&mut Optimiser<G, O>, usize),
+    mut batch_callback: impl FnMut(&mut Optimiser<G, O>, Step, f32),
+    mut superbatch_callback: impl FnMut(&mut Optimiser<G, O>, Step),
 ) -> Result<(), TrainingError<G>> {
     let timer = Instant::now();
 
@@ -103,24 +93,12 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
     let steps = schedule.steps;
     let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost>(32);
     let dataloader = thread::spawn(move || {
-        let mut batch_no = 0;
-        let mut superbatch = steps.start_superbatch;
+        let mut step = Step::from(steps);
 
-        dataloader.map_batches(steps.start_batch(), steps.batch_size, |batch| {
+        dataloader.map_batches(step, steps.batch_size, |batch| {
             sender.send(batch).unwrap();
-
-            batch_no += 1;
-
-            if batch_no % steps.batches_per_superbatch == 0 {
-                batch_no = 0;
-                superbatch += 1;
-
-                if superbatch > steps.end_superbatch {
-                    return true;
-                }
-            }
-
-            false
+            step.step();
+            step.finished()
         })
     });
 
@@ -179,23 +157,22 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
     let compute_stream = device.new_stream().map_err(TrainingError::Unexpected)?;
     let lr = schedule.lr_schedule;
     let mut batch_queued = true;
-    let mut prev_lr = lr(0, 1);
-    let mut superbatch = steps.start_superbatch;
-    let mut curr_batch = 0;
+    let mut step = Step::from(steps);
+    let mut prev_lr = lr(step);
     let mut superbatch_timer = Instant::now();
     let mut running_loss = 0.0;
     let mut superbatch_positions = 0;
 
     while batch_queued {
-        if superbatch > steps.end_superbatch {
+        if step.finished() {
             return Err(TrainingError::DataLoadingError(DataLoadingError::TooManyBatchesReceived));
         }
 
-        let lrate = lr(curr_batch, superbatch);
+        let lrate = lr(step);
         let lrdrop = TValue::F32(vec![lrate]);
         let lrdrop = tlr.copy_from_host_async(&copy_stream, &lrdrop).map_err(TrainingError::Unexpected)?;
 
-        if curr_batch == 0 {
+        if step.batch() == 0 {
             if lrate < prev_lr {
                 println!("LR dropped to {}", logger::ansi(lrate, logger::num_cs()));
             } else if lrate > prev_lr {
@@ -246,37 +223,30 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
         running_loss += error;
         superbatch_positions += steps.batch_size;
 
-        if curr_batch % schedule.log_rate == 0 {
-            logger::report_superbatch_progress(
-                superbatch,
-                steps.batches_per_superbatch,
-                curr_batch,
-                &superbatch_timer,
-                superbatch_positions,
-            );
+        if step.batch().is_multiple_of(schedule.log_rate) {
+            logger::report_superbatch_progress(step, &superbatch_timer, superbatch_positions);
         }
 
-        curr_batch += 1;
+        batch_callback(optimiser, step, error);
 
-        batch_callback(optimiser, superbatch, curr_batch, error);
-
-        if curr_batch % steps.batches_per_superbatch == 0 {
+        if step.batch() == step.batches_per_superbatch() - 1 {
             let error = running_loss / steps.batches_per_superbatch as f32;
             running_loss = 0.0;
 
             let total_time = timer.elapsed().as_secs_f32();
             let sb_time = superbatch_timer.elapsed().as_secs_f32();
 
-            logger::report_superbatch_finished(superbatch, error, sb_time, total_time, superbatch_positions);
-            logger::report_time_left(steps, superbatch, total_time);
+            let sb = step.superbatch();
+            logger::report_superbatch_finished(sb, error, sb_time, total_time, superbatch_positions);
+            logger::report_time_left(steps, sb, total_time);
 
-            superbatch_callback(optimiser, superbatch);
+            superbatch_callback(optimiser, step);
 
-            superbatch += 1;
-            curr_batch = 0;
             superbatch_positions = 0;
             superbatch_timer = Instant::now();
         }
+
+        step.step();
     }
 
     let total_time = timer.elapsed().as_secs();
