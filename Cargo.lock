@@ -626,8 +626,9 @@ dependencies = [
 
 [[package]]
 name = "sfbinpack"
-version = "0.6.3"
-source = "git+https://github.com/Disservin/binpack-rust.git?branch=parse-chunk#521212e8cd32d32fd74af906b2fcc51bd7322047"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "339b783069f7e64546dfa20076c7176bf23e6dcf8ece4255bf7a4e6250d24d45"
 dependencies = [
  "arrayvec",
  "js-sys",
