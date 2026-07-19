@@ -10,6 +10,7 @@ use std::{
     collections::BTreeMap,
     fmt::Debug,
     fs::File,
+    io,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
@@ -224,12 +225,101 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
     }
 
     pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), G::Error> {
+        self.sync_cpu()?;
         let weights = self.cpu_weights.get_mut().unwrap();
         weights.load_from(File::open(path).unwrap()).map_err(|e| format!("{e}"))?;
         weights.write_to_device(&self.weights)
     }
 
     pub fn load_from_checkpoint(&mut self, path: &str) -> Result<(), G::Error> {
+        self.load_weights_from_file(&format!("{path}/weights.bin"))?;
+        let mut map = self.state.iter_mut().map(|(id, single)| (id.clone(), single)).collect();
+        S::load_from_checkpoint(&mut map, path)
+    }
+}
+
+pub trait CpuOptimiserState: Sized {
+    type Params: Clone + Debug + Default;
+
+    fn new(size: usize, params: Self::Params) -> Self;
+
+    fn update(&mut self, weights: &mut TValue, grads: &mut TValue, gradient_factor: f32, learning_rate: f32);
+
+    fn reset(&mut self);
+
+    fn load_from_checkpoint(map: &mut BTreeMap<String, &mut Self>, path: &str) -> io::Result<()>;
+
+    fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> io::Result<()>;
+
+    fn set_params(&mut self, params: Self::Params);
+}
+
+pub struct CpuOptimiser<S: CpuOptimiserState> {
+    definition: ModelDefinition,
+    weights: ModelWeights,
+    state: BTreeMap<String, S>,
+}
+
+impl<S: CpuOptimiserState> CpuOptimiser<S> {
+    pub fn new(definition: ModelDefinition, weights: ModelWeights, params: S::Params) -> Self {
+        let mut state = BTreeMap::new();
+
+        for (id, value) in weights.iter() {
+            let size = value.values.size();
+            let single = S::new(size, params.clone());
+            let old = state.insert(id.clone(), single);
+            assert!(old.is_none());
+        }
+
+        Self { weights, state, definition }
+    }
+
+    pub fn weights(&self) -> &ModelWeights {
+        &self.weights
+    }
+
+    pub fn definition(&self) -> &ModelDefinition {
+        &self.definition
+    }
+
+    pub fn update(&mut self, gradient_factor: f32, learning_rate: f32, gradients: &mut BTreeMap<String, TValue>) {
+        for (id, single) in &mut self.state {
+            let weight = &mut self.weights.get_mut(id).values;
+
+            if let Some(grads) = gradients.get_mut(id) {
+                single.update(weight, grads, gradient_factor, learning_rate);
+            }
+        }
+    }
+
+    pub fn reset_state(&mut self) {
+        for single in self.state.values_mut() {
+            single.reset();
+        }
+    }
+
+    pub fn set_params_for_weight(&mut self, id: &str, params: S::Params) {
+        self.state.get_mut(id).unwrap().set_params(params);
+    }
+
+    pub fn set_params(&mut self, params: S::Params) {
+        for (id, _) in self.weights.clone().iter() {
+            self.set_params_for_weight(id, params.clone());
+        }
+    }
+
+    pub fn write_to_checkpoint(&self, path: &str) -> io::Result<()> {
+        let mut file = File::create(format!("{path}/weights.bin")).unwrap();
+        self.weights.write_into(&mut file)?;
+        let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
+        S::write_to_checkpoint(&map, path)
+    }
+
+    pub fn load_weights_from_file(&mut self, path: &str) -> io::Result<()> {
+        self.weights.load_from(File::open(path).unwrap())
+    }
+
+    pub fn load_from_checkpoint(&mut self, path: &str) -> io::Result<()> {
         self.load_weights_from_file(&format!("{path}/weights.bin"))?;
         let mut map = self.state.iter_mut().map(|(id, single)| (id.clone(), single)).collect();
         S::load_from_checkpoint(&mut map, path)

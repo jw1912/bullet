@@ -78,7 +78,11 @@ impl ModelWeights {
     }
 
     pub fn get(&self, id: &str) -> &ShapedTValue {
-        self.stores.get(id).as_ref().unwrap()
+        self.stores.get(id).unwrap()
+    }
+
+    pub(crate) fn get_mut(&mut self, id: &str) -> &mut ShapedTValue {
+        self.stores.get_mut(id).unwrap()
     }
 
     pub fn set(&mut self, id: &str, value: TValue) -> bool {

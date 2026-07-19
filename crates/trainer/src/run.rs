@@ -17,7 +17,7 @@ use bullet_gpu::{
     runtime::{self, Device, Gpu},
 };
 
-use crate::optimiser::{Optimiser, OptimiserState};
+use crate::optimiser::{CpuOptimiser, CpuOptimiserState, Optimiser, OptimiserState};
 
 #[cfg(not(any(feature = "cuda", feature = "rocm")))]
 pub type DefaultDevice = Device<runtime::mock::MockGpu>;
@@ -70,6 +70,52 @@ pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSt
     })?;
 
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn end_of_batch<T>(
+    optimiser: &mut T,
+    mut batch_callback: impl FnMut(&mut T, Step, f32),
+    mut superbatch_callback: impl FnMut(&mut T, Step),
+    timer: &Instant,
+    loss: &TValue,
+    steps: &TrainingSteps,
+    log_rate: usize,
+    step: &mut Step,
+    running_loss: &mut f32,
+    sb_positions: &mut usize,
+    sb_timer: &mut Instant,
+) {
+    let [loss] = loss.f32()[..] else { panic!() };
+    let error = loss / steps.batch_size as f32;
+
+    *running_loss += error;
+    *sb_positions += steps.batch_size;
+
+    if step.batch().is_multiple_of(log_rate) {
+        logger::report_superbatch_progress(*step, sb_timer, *sb_positions);
+    }
+
+    batch_callback(optimiser, *step, error);
+
+    if step.batch() == step.batches_per_superbatch() - 1 {
+        let error = *running_loss / steps.batches_per_superbatch as f32;
+        *running_loss = 0.0;
+
+        let total_time = timer.elapsed().as_secs_f32();
+        let sb_time = sb_timer.elapsed().as_secs_f32();
+
+        let sb = step.superbatch();
+        logger::report_superbatch_finished(sb, error, sb_time, total_time, *sb_positions);
+        logger::report_time_left(*steps, sb, total_time);
+
+        superbatch_callback(optimiser, *step);
+
+        *sb_positions = 0;
+        *sb_timer = Instant::now();
+    }
+
+    step.step();
 }
 
 pub fn train<G: Gpu, O: OptimiserState<G>>(
@@ -209,44 +255,25 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
         let _ = compute_block1.value().map_err(TrainingError::Unexpected)?;
         compute_block2.sync().map_err(TrainingError::Unexpected)?;
 
-        let TValue::F32(loss) = loss
+        let loss = loss
             .to_host_async(&copy_stream)
             .map(SyncOnValue::value)
             .map_err(TrainingError::Unexpected)?
-            .map_err(TrainingError::Unexpected)?
-        else {
-            panic!()
-        };
-        let [loss] = loss[..] else { panic!() };
-        let error = loss / steps.batch_size as f32;
+            .map_err(TrainingError::Unexpected)?;
 
-        running_loss += error;
-        superbatch_positions += steps.batch_size;
-
-        if step.batch().is_multiple_of(schedule.log_rate) {
-            logger::report_superbatch_progress(step, &superbatch_timer, superbatch_positions);
-        }
-
-        batch_callback(optimiser, step, error);
-
-        if step.batch() == step.batches_per_superbatch() - 1 {
-            let error = running_loss / steps.batches_per_superbatch as f32;
-            running_loss = 0.0;
-
-            let total_time = timer.elapsed().as_secs_f32();
-            let sb_time = superbatch_timer.elapsed().as_secs_f32();
-
-            let sb = step.superbatch();
-            logger::report_superbatch_finished(sb, error, sb_time, total_time, superbatch_positions);
-            logger::report_time_left(steps, sb, total_time);
-
-            superbatch_callback(optimiser, step);
-
-            superbatch_positions = 0;
-            superbatch_timer = Instant::now();
-        }
-
-        step.step();
+        end_of_batch(
+            optimiser,
+            &mut batch_callback,
+            &mut superbatch_callback,
+            &timer,
+            &loss,
+            &steps,
+            schedule.log_rate,
+            &mut step,
+            &mut running_loss,
+            &mut superbatch_positions,
+            &mut superbatch_timer,
+        );
     }
 
     let total_time = timer.elapsed().as_secs();
@@ -262,4 +289,112 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
     dataloader.join().unwrap()?;
 
     Ok(())
+}
+
+pub fn train_cpu<O: CpuOptimiserState>(
+    optimiser: &mut CpuOptimiser<O>,
+    schedule: TrainingSchedule,
+    dataloader: impl DataLoader,
+    mut batch_callback: impl FnMut(&mut CpuOptimiser<O>, Step, f32),
+    mut superbatch_callback: impl FnMut(&mut CpuOptimiser<O>, Step),
+) {
+    let timer = Instant::now();
+
+    logger::clear_colours();
+    println!("{}", logger::ansi("Training on CPU", "34;1"));
+
+    let steps = schedule.steps;
+    let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost>(32);
+    let dataloader = thread::spawn(move || {
+        let mut step = Step::from(steps);
+
+        dataloader.map_batches(step, steps.batch_size, |batch| {
+            sender.send(batch).unwrap();
+            step.step();
+            step.finished()
+        })
+    });
+
+    let defn = optimiser.definition();
+    let (func, gmap) = defn.lower_backward(&Default::default(), steps.batch_size).unwrap();
+    let map = func.map();
+    let backwards = func.ir();
+    let loss_id = *map.get(&defn.loss().unwrap()).unwrap();
+
+    let mut grad_names = BTreeMap::new();
+    for (mid, (name, _)) in defn.ir().weights() {
+        let gid = *gmap.get(mid).unwrap();
+        grad_names.insert(gid, name.clone());
+    }
+
+    let gf = 1.0 / steps.batch_size as f32;
+
+    let mut input_ids = BTreeMap::new();
+    for (mid, name) in defn.ir().inputs() {
+        let tid = *map.get(mid).unwrap();
+
+        input_ids.insert(name.clone(), tid);
+    }
+
+    let lr = schedule.lr_schedule;
+    let mut step = Step::from(steps);
+    let mut prev_lr = lr(step);
+    let mut superbatch_timer = Instant::now();
+    let mut running_loss = 0.0;
+    let mut superbatch_positions = 0;
+
+    while let Ok(batch) = receiver.recv() {
+        assert!(!step.finished());
+
+        let lrate = lr(step);
+
+        if step.batch() == 0 {
+            if lrate < prev_lr {
+                println!("LR dropped to {}", logger::ansi(lrate, logger::num_cs()));
+            } else if lrate > prev_lr {
+                println!("LR increased to {}", logger::ansi(lrate, logger::num_cs()));
+            }
+        }
+
+        prev_lr = lrate;
+
+        let inputs = batch
+            .inputs
+            .iter()
+            .map(|(name, value)| (*input_ids.get(name).unwrap(), value.clone()))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut gradients = backwards.evaluate(inputs).unwrap().unwrap();
+        let loss = gradients.remove(&loss_id).unwrap();
+        let mut gradients =
+            gradients.into_iter().map(|(id, value)| (grad_names.get(&id).cloned().unwrap(), value)).collect();
+
+        optimiser.update(gf, lrate, &mut gradients);
+
+        end_of_batch(
+            optimiser,
+            &mut batch_callback,
+            &mut superbatch_callback,
+            &timer,
+            &loss,
+            &steps,
+            schedule.log_rate,
+            &mut step,
+            &mut running_loss,
+            &mut superbatch_positions,
+            &mut superbatch_timer,
+        );
+    }
+
+    let total_time = timer.elapsed().as_secs();
+    let (hours, minutes, seconds) = logger::seconds_to_hms(total_time as u32);
+
+    println!(
+        "Total Training Time: {}h {}m {}s",
+        logger::ansi(hours, logger::num_cs()),
+        logger::ansi(minutes, logger::num_cs()),
+        logger::ansi(seconds, logger::num_cs()),
+    );
+
+    dataloader.join().unwrap().unwrap();
 }
