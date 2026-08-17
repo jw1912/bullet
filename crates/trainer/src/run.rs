@@ -361,7 +361,7 @@ pub fn train_cpu<O: CpuOptimiserState>(
         let inputs = batch
             .inputs
             .iter()
-            .map(|(name, value)| (*input_ids.get(name).unwrap(), value.clone()))
+            .flat_map(|(name, value)| input_ids.get(name).map(|id| (*id, value.clone())))
             .collect::<BTreeMap<_, _>>();
 
         let mut gradients = backwards.evaluate(inputs).unwrap().unwrap();

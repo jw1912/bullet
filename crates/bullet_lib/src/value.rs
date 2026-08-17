@@ -356,4 +356,12 @@ where
             },
         );
     }
+
+    pub fn eval(&mut self, _fen: &str) -> f32
+    where
+        Inp::RequiredDataType: std::str::FromStr<Err: std::fmt::Debug>,
+    {
+        println!("`ValueTrainer::eval` is UNIMPLEMENTED for CPU!");
+        0.0
+    }
 }

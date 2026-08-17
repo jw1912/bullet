@@ -71,7 +71,7 @@ impl TensorIR {
                 if !op.data().is_input() {
                     assert!(values.insert(output, RefCell::new(tensor)).is_none(), "Cannot happen!");
                 } else if !is_prev {
-                    return Err("Input node not seeded!".into());
+                    return Err(format!("Input node \"{}\" not seeded!", op.data().opname()).into());
                 }
             }
 
