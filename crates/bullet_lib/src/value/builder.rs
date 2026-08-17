@@ -115,7 +115,7 @@ where
         self
     }
 
-    fn build_custom_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
+    fn build_custom_internal<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, Nbn<'a>, Nb<'a>) -> (Nbn<'a>, Nbn<'a>),
         Out: Bucket,
@@ -160,7 +160,7 @@ where
         }
     }
 
-    fn build_internal<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out::Inner>
+    fn build_internal<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, Nb<'a>) -> Nbn<'a>,
         Out: Bucket,
@@ -280,7 +280,7 @@ where
     I: SparseInputType,
     O: OptimiserType,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, NoOutputBuckets>
+    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -290,7 +290,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, NoOutputBuckets>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -307,7 +307,7 @@ where
     I: SparseInputType,
     O: OptimiserType,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, NoOutputBuckets>
+    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -318,7 +318,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, NoOutputBuckets>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -337,7 +337,7 @@ where
     O: OptimiserType,
     Out: OutputBuckets<I::RequiredDataType>,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out>
+    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -348,7 +348,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -367,7 +367,7 @@ where
     O: OptimiserType,
     Out: OutputBuckets<I::RequiredDataType>,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out>
+    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -379,7 +379,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<O::Optimiser, I, Out>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {

@@ -18,7 +18,7 @@ pub type ExecutionContext = bullet_gpu::runtime::mock::MockGpu;
 pub mod optimiser {
     use super::ExecutionContext;
 
-    use bullet_trainer::optimiser::{self, OptimiserState, radam};
+    use bullet_trainer::optimiser::{self, CpuOptimiserState, OptimiserState, adam::CpuAdamW, radam};
 
     pub type AdamWOptimiser = optimiser::adam::AdamW<ExecutionContext>;
     pub type RAdamOptimiser = radam::RAdam<ExecutionContext>;
@@ -29,10 +29,18 @@ pub mod optimiser {
         type Optimiser: OptimiserState<ExecutionContext>;
     }
 
+    pub trait CpuOptimiserType: Default {
+        type Optimiser: CpuOptimiserState;
+    }
+
     #[derive(Default)]
     pub struct AdamW;
     impl OptimiserType for AdamW {
         type Optimiser = AdamWOptimiser;
+    }
+
+    impl CpuOptimiserType for AdamW {
+        type Optimiser = CpuAdamW;
     }
 
     #[derive(Default)]

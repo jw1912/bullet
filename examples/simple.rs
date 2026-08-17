@@ -108,6 +108,9 @@ fn main() {
     let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
 
     trainer.run(&schedule, &settings, &data_loader);
+
+    let eval = trainer.eval("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    println!("Eval: {:.3}cp", 400.0 * eval);
 }
 
 // ============ EXAMPLE INFERENCE STARTS HERE ============

@@ -8,7 +8,7 @@ pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
-    optimiser::{Optimiser, OptimiserState},
+    optimiser::{CpuOptimiser, CpuOptimiserState, Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
     run::{self, Step, logger},
 };
@@ -26,8 +26,8 @@ use crate::{
 use loader::LoadableDataType;
 
 /// Value network trainer, generally for training NNUE networks.
-pub struct ValueTrainer<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out> {
-    pub optimiser: Optimiser<ExecutionContext, Opt>,
+pub struct ValueTrainer<Opt, Inp: SparseInputType, Out> {
+    pub optimiser: Opt,
     state: ValueTrainerState<Inp, Out>,
     evaluator: Option<ModelEvaluator<ExecutionContext>>,
 }
@@ -132,6 +132,30 @@ where
 }
 
 impl<Opt, Inp, Out> ValueTrainer<Opt, Inp, Out>
+where
+    Inp: SparseInputType,
+    Inp::RequiredDataType: LoadableDataType,
+    Out: OutputBuckets<Inp::RequiredDataType>,
+{
+    pub fn measure_max_cpu_throughput(
+        &self,
+        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
+        settings: &LocalSettings,
+        dataloader: &impl DataReader<Inp::RequiredDataType>,
+    ) {
+        let steps = schedule.steps;
+        let dataloader = self.state.make_read_map_loader(
+            dataloader.clone(),
+            schedule.eval_scale,
+            schedule.wdl_scheduler.clone(),
+            settings.threads as u8,
+        );
+
+        run::measure_max_cpu_throughput(dataloader, steps).unwrap()
+    }
+}
+
+impl<Opt, Inp, Out> ValueTrainer<Optimiser<ExecutionContext, Opt>, Inp, Out>
 where
     Opt: OptimiserState<ExecutionContext>,
     Inp: SparseInputType,
@@ -253,14 +277,36 @@ where
             _ => panic!("Invalid output size!"),
         }
     }
+}
 
-    pub fn measure_max_cpu_throughput(
-        &self,
+impl<Opt, Inp, Out> ValueTrainer<CpuOptimiser<Opt>, Inp, Out>
+where
+    Opt: CpuOptimiserState,
+    Inp: SparseInputType,
+    Inp::RequiredDataType: LoadableDataType,
+    Out: OutputBuckets<Inp::RequiredDataType>,
+{
+    pub fn run(
+        &mut self,
         schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
         settings: &LocalSettings,
         dataloader: &impl DataReader<Inp::RequiredDataType>,
     ) {
+        logger::clear_colours();
+        println!("{}", logger::ansi("Training Preamble", "34;1"));
+
+        schedule.display();
+        settings.display();
+
+        if settings.test_set.is_some() {
+            println!(
+                "{}",
+                logger::ansi("Warning: Validation data not currently implemented! Please bother me on discord.", "31")
+            )
+        }
+
         let steps = schedule.steps;
+
         let dataloader = self.state.make_read_map_loader(
             dataloader.clone(),
             schedule.eval_scale,
@@ -268,6 +314,46 @@ where
             settings.threads as u8,
         );
 
-        run::measure_max_cpu_throughput(dataloader, steps).unwrap()
+        let _ = std::fs::create_dir(settings.output_directory);
+
+        let lr_scheduler = schedule.lr_scheduler.clone();
+        let saved_format = self.state.saved_format.clone();
+
+        let error_record = RefCell::new(Vec::new());
+        let mut loss_sum = 0.0;
+        let mut ticks_since_last = 0.0;
+
+        run::train_cpu(
+            &mut self.optimiser,
+            run::TrainingSchedule { steps, log_rate: 128, lr_schedule: lr_scheduler.boxed() },
+            dataloader,
+            |_, step, error| {
+                loss_sum += error;
+                ticks_since_last += 1.0;
+
+                if step.batch().is_multiple_of(32)
+                    || (step.batches_per_superbatch() < 32 && step.batch() == step.batches_per_superbatch())
+                {
+                    let normalised_loss = loss_sum / f32::min(ticks_since_last, step.batches_per_superbatch() as f32);
+
+                    error_record.borrow_mut().push((step.superbatch(), step.batch(), normalised_loss));
+
+                    loss_sum = 0.0;
+                    ticks_since_last = 0.0;
+                }
+            },
+            |trainer, step| {
+                let superbatch = step.superbatch();
+                if superbatch % schedule.save_rate == 0 || superbatch == step.final_superbatch() {
+                    let name = format!("{}-{superbatch}", schedule.net_id);
+                    let path = format!("{}/{name}", settings.output_directory);
+                    std::fs::create_dir(path.as_str()).unwrap_or(());
+                    save::save_to_checkpoint(trainer, &saved_format, &path);
+                    save::write_losses(&format!("{path}/log.txt"), &error_record.borrow());
+
+                    println!("Saved [{}]", logger::ansi(name, 31));
+                }
+            },
+        );
     }
 }
