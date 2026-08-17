@@ -3,14 +3,11 @@ use std::marker::PhantomData;
 use bullet_compiler::model::{ModelBuilder, ModelNode, Shape};
 use bullet_gpu::runtime::Device;
 use bullet_trainer::{
-    model::{ModelDefinition, ModelWeights, SavedFormat},
-    optimiser::Optimiser,
+    model::{ModelDefinition, ModelWeights, SavedFormat}, optimiser::{CpuOptimiser, Optimiser},
 };
 
 use crate::{
-    game::{inputs::SparseInputType, outputs::OutputBuckets},
-    nn::{ExecutionContext, optimiser::OptimiserType},
-    value::ValueTrainerState,
+    game::{inputs::SparseInputType, outputs::OutputBuckets}, nn::{ExecutionContext, optimiser::{CpuOptimiserType, OptimiserType}}, value::ValueTrainerState,
 };
 
 use super::{B, ValueTrainer};
@@ -18,7 +15,7 @@ use super::{B, ValueTrainer};
 type Wgt<I> = fn(&<I as SparseInputType>::RequiredDataType) -> f32;
 type LossFn = for<'a> fn(Nbn<'a>, Nbn<'a>) -> Nbn<'a>;
 
-pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
+pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out, T> {
     input_getter: Option<I>,
     saved_format: Option<Vec<SavedFormat>>,
     optimiser: Option<O>,
@@ -31,9 +28,10 @@ pub struct ValueTrainerBuilder<O, I: SparseInputType, P, Out> {
     use_win_rate_model: bool,
     seed: u64,
     device: i32,
+    target: PhantomData<T>,
 }
 
-impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
+impl<O, I> Default for ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets, GpuTarget>
 where
     I: SparseInputType,
 {
@@ -51,14 +49,14 @@ where
             use_win_rate_model: false,
             seed: 198273612,
             device: 0,
+            target: PhantomData,
         }
     }
 }
 
-impl<O, I, P, Out> ValueTrainerBuilder<O, I, P, Out>
+impl<O, I, P, Out, T> ValueTrainerBuilder<O, I, P, Out, T>
 where
     I: SparseInputType,
-    O: OptimiserType,
 {
     pub fn inputs(mut self, inputs: I) -> Self {
         assert!(self.input_getter.is_none(), "Inputs already set!");
@@ -94,11 +92,6 @@ where
         self
     }
 
-    pub fn use_device(mut self, ordinal: i32) -> Self {
-        self.device = ordinal;
-        self
-    }
-
     pub fn wdl_adjust_function(mut self, f: B<I>) -> Self {
         self.blend_getter = f;
         self
@@ -115,9 +108,10 @@ where
         self
     }
 
-    fn build_custom_internal<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out::Inner>
+    fn build_custom_opt_internal<F, M, Opt>(self, f: F, make_optimiser: M) -> ValueTrainer<Opt, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, Nbn<'a>, Nb<'a>) -> (Nbn<'a>, Nbn<'a>),
+        M: Fn(ModelDefinition, ModelWeights, i32) -> Opt,
         Out: Bucket,
         Out::Inner: OutputBuckets<I::RequiredDataType>,
     {
@@ -143,10 +137,9 @@ where
 
         let definition = ModelDefinition::new(builder.ir().clone(), Some(loss.node()), [(out.node(), "output".into())]);
         let weights = ModelWeights::new(&definition, self.seed);
-        let device = Device::<ExecutionContext>::new(self.device).unwrap();
 
         ValueTrainer {
-            optimiser: Optimiser::new(definition, weights, device, Default::default()).unwrap(),
+            optimiser: make_optimiser(definition, weights, self.device),
             state: ValueTrainerState {
                 input_getter: input_getter.clone(),
                 output_getter: buckets,
@@ -159,8 +152,92 @@ where
             evaluator: None,
         }
     }
+}
 
-    fn build_internal<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out::Inner>
+impl<O, I, P, Out> ValueTrainerBuilder<O, I, P, Out, GpuTarget>
+where
+    I: SparseInputType,
+{
+    pub fn use_device(mut self, ordinal: i32) -> Self {
+        self.device = ordinal;
+        self
+    }
+}
+
+impl<O, I, P, Out> ValueTrainerBuilder<O, I, P, Out, GpuTarget>
+where
+    I: SparseInputType,
+{
+    pub fn use_cpu(self, num_threads: i32) -> ValueTrainerBuilder<O, I, P, Out, CpuTarget> {
+        assert!(num_threads > 0);
+
+        ValueTrainerBuilder {
+            input_getter: self.input_getter,
+            saved_format: self.saved_format,
+            optimiser: self.optimiser,
+            perspective: PhantomData,
+            output_buckets: self.output_buckets,
+            blend_getter: self.blend_getter,
+            weight_getter: self.weight_getter,
+            loss_fn: self.loss_fn,
+            wdl_output: self.wdl_output,
+            use_win_rate_model: self.use_win_rate_model,
+            seed: self.seed,
+            device: num_threads,
+            target: PhantomData,
+        }
+    }
+}
+
+mod sealed {
+    use super::*;
+
+    pub struct GpuTarget;
+    pub struct CpuTarget;
+
+    pub struct OptimiserInfo<O, T>(PhantomData<O>, PhantomData<T>);
+
+    pub trait OptimiserInfoTrait {
+        type Opt;
+
+        fn make_optimiser(definition: ModelDefinition, weights: ModelWeights, device: i32) -> Self::Opt;
+    }
+}
+
+use sealed::*;
+
+impl<O: OptimiserType> OptimiserInfoTrait for OptimiserInfo<O, GpuTarget> {
+    type Opt = Optimiser<ExecutionContext, O::Optimiser>;
+
+    fn make_optimiser(definition: ModelDefinition, weights: ModelWeights, device: i32) -> Self::Opt {
+        let device = Device::<ExecutionContext>::new(device).unwrap();
+        Optimiser::new(definition, weights, device, Default::default()).unwrap()
+    }
+}
+
+impl<O: CpuOptimiserType> OptimiserInfoTrait for OptimiserInfo<O, CpuTarget> {
+    type Opt = CpuOptimiser<O::Optimiser>;
+
+    fn make_optimiser(definition: ModelDefinition, weights: ModelWeights, _: i32) -> Self::Opt {
+        CpuOptimiser::new(definition, weights, Default::default())
+    }
+}
+
+impl<O, I, P, Out, T> ValueTrainerBuilder<O, I, P, Out, T>
+where
+    I: SparseInputType,
+    OptimiserInfo<O, T>: OptimiserInfoTrait,
+{
+    fn build_custom_internal<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out::Inner>
+    where
+        F: for<'a> Fn(usize, usize, Nbn<'a>, Nb<'a>) -> (Nbn<'a>, Nbn<'a>),
+        Out: Bucket,
+        Out::Inner: OutputBuckets<I::RequiredDataType>,
+    {
+        self.build_custom_opt_internal(f, OptimiserInfo::<O, T>::make_optimiser)
+    }
+
+    fn build_internal<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, Nb<'a>) -> Nbn<'a>,
         Out: Bucket,
@@ -217,7 +294,7 @@ impl<T> Bucket for OutputBucket<T> {
 pub struct SinglePerspective;
 pub struct DualPerspective;
 
-impl<O, I, Out> ValueTrainerBuilder<O, I, SinglePerspective, Out>
+impl<O, I, Out, T> ValueTrainerBuilder<O, I, SinglePerspective, Out, T>
 where
     I: SparseInputType,
     O: OptimiserType,
@@ -226,7 +303,7 @@ where
         self
     }
 
-    pub fn dual_perspective(self) -> ValueTrainerBuilder<O, I, DualPerspective, Out> {
+    pub fn dual_perspective(self) -> ValueTrainerBuilder<O, I, DualPerspective, Out, T> {
         ValueTrainerBuilder {
             input_getter: self.input_getter,
             saved_format: self.saved_format,
@@ -240,11 +317,12 @@ where
             use_win_rate_model: self.use_win_rate_model,
             seed: self.seed,
             device: self.device,
+            target: self.target
         }
     }
 }
 
-impl<O, I, P> ValueTrainerBuilder<O, I, P, NoOutputBuckets>
+impl<O, I, P, T> ValueTrainerBuilder<O, I, P, NoOutputBuckets, T>
 where
     I: SparseInputType,
     O: OptimiserType,
@@ -252,7 +330,7 @@ where
     pub fn output_buckets<Out: OutputBuckets<I::RequiredDataType>>(
         self,
         buckets: Out,
-    ) -> ValueTrainerBuilder<O, I, P, OutputBucket<Out>> {
+    ) -> ValueTrainerBuilder<O, I, P, OutputBucket<Out>, T> {
         assert!(Out::BUCKETS > 1, "The output bucket type must have more than 1 bucket!");
 
         ValueTrainerBuilder {
@@ -268,6 +346,7 @@ where
             use_win_rate_model: self.use_win_rate_model,
             seed: self.seed,
             device: self.device,
+            target: self.target
         }
     }
 }
@@ -275,12 +354,12 @@ where
 type Nb<'a> = &'a ModelBuilder;
 type Nbn<'a> = ModelNode<'a>;
 
-impl<O, I> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
+impl<O, I, T> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets, T>
 where
     I: SparseInputType,
-    O: OptimiserType,
+    OptimiserInfo<O, T>: OptimiserInfoTrait,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
+    pub fn build<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -290,7 +369,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -302,12 +381,12 @@ where
     }
 }
 
-impl<O, I> ValueTrainerBuilder<O, I, DualPerspective, NoOutputBuckets>
+impl<O, I, T> ValueTrainerBuilder<O, I, DualPerspective, NoOutputBuckets, T>
 where
     I: SparseInputType,
-    O: OptimiserType,
+    OptimiserInfo<O, T>: OptimiserInfoTrait,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
+    pub fn build<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -318,7 +397,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, NoOutputBuckets>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -331,13 +410,13 @@ where
     }
 }
 
-impl<O, I, Out> ValueTrainerBuilder<O, I, SinglePerspective, OutputBucket<Out>>
+impl<O, I, Out, T> ValueTrainerBuilder<O, I, SinglePerspective, OutputBucket<Out>, T>
 where
     I: SparseInputType,
-    O: OptimiserType,
+    OptimiserInfo<O, T>: OptimiserInfoTrait,
     Out: OutputBuckets<I::RequiredDataType>,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
+    pub fn build<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -348,7 +427,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -361,13 +440,13 @@ where
     }
 }
 
-impl<O, I, Out> ValueTrainerBuilder<O, I, DualPerspective, OutputBucket<Out>>
+impl<O, I, Out, T> ValueTrainerBuilder<O, I, DualPerspective, OutputBucket<Out>, T>
 where
     I: SparseInputType,
-    O: OptimiserType,
+    OptimiserInfo<O, T>: OptimiserInfoTrait,
     Out: OutputBuckets<I::RequiredDataType>,
 {
-    pub fn build<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
+    pub fn build<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>, Nbn<'a>) -> Nbn<'a>,
     {
@@ -379,7 +458,7 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<Optimiser<ExecutionContext, O::Optimiser>, I, Out>
+    pub fn build_custom<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
