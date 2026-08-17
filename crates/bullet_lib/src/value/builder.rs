@@ -3,11 +3,17 @@ use std::marker::PhantomData;
 use bullet_compiler::model::{ModelBuilder, ModelNode, Shape};
 use bullet_gpu::runtime::Device;
 use bullet_trainer::{
-    model::{ModelDefinition, ModelWeights, SavedFormat}, optimiser::{CpuOptimiser, Optimiser},
+    model::{ModelDefinition, ModelWeights, SavedFormat},
+    optimiser::{CpuOptimiser, Optimiser},
 };
 
 use crate::{
-    game::{inputs::SparseInputType, outputs::OutputBuckets}, nn::{ExecutionContext, optimiser::{CpuOptimiserType, OptimiserType}}, value::ValueTrainerState,
+    game::{inputs::SparseInputType, outputs::OutputBuckets},
+    nn::{
+        ExecutionContext,
+        optimiser::{CpuOptimiserType, OptimiserType},
+    },
+    value::ValueTrainerState,
 };
 
 use super::{B, ValueTrainer};
@@ -228,7 +234,10 @@ where
     I: SparseInputType,
     OptimiserInfo<O, T>: OptimiserInfoTrait,
 {
-    fn build_custom_internal<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out::Inner>
+    fn build_custom_internal<F>(
+        self,
+        f: F,
+    ) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, Out::Inner>
     where
         F: for<'a> Fn(usize, usize, Nbn<'a>, Nb<'a>) -> (Nbn<'a>, Nbn<'a>),
         Out: Bucket,
@@ -317,7 +326,7 @@ where
             use_win_rate_model: self.use_win_rate_model,
             seed: self.seed,
             device: self.device,
-            target: self.target
+            target: self.target,
         }
     }
 }
@@ -346,7 +355,7 @@ where
             use_win_rate_model: self.use_win_rate_model,
             seed: self.seed,
             device: self.device,
-            target: self.target
+            target: self.target,
         }
     }
 }
@@ -369,7 +378,10 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
+    pub fn build_custom<F>(
+        self,
+        f: F,
+    ) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, Nbn<'a>, Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
@@ -397,7 +409,10 @@ where
         })
     }
 
-    pub fn build_custom<F>(self, f: F) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
+    pub fn build_custom<F>(
+        self,
+        f: F,
+    ) -> ValueTrainer<<OptimiserInfo<O, T> as OptimiserInfoTrait>::Opt, I, NoOutputBuckets>
     where
         F: for<'a> Fn(Nb<'a>, (Nbn<'a>, Nbn<'a>), Nbn<'a>) -> (Nbn<'a>, Nbn<'a>),
     {
