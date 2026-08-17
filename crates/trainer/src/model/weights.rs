@@ -104,7 +104,8 @@ impl ModelWeights {
                 unimplemented!("Non f32 writing!");
             }
 
-            let byte_buf = utils::write_to_byte_buffer(&value.values, id).unwrap();
+            let TValue::F32(vals) = &value.values else { panic!() };
+            let byte_buf = utils::write_to_byte_buffer(vals, id).unwrap();
             buf.extend_from_slice(&byte_buf);
         }
 
@@ -403,12 +404,8 @@ pub fn vec_f32(rng: &mut Xoroshiro128Plus, length: usize, mean: f32, stdev: f32,
 }
 
 pub mod utils {
-    use bullet_compiler::tensor::TValue;
-
-    pub fn write_to_byte_buffer(value: &TValue, id: &str) -> std::io::Result<Vec<u8>> {
+    pub fn write_to_byte_buffer(value: &[f32], id: &str) -> std::io::Result<Vec<u8>> {
         use std::io::{Error, ErrorKind, Write};
-
-        let TValue::F32(value) = value else { unimplemented!() };
 
         if !id.is_ascii() {
             return Err(Error::new(ErrorKind::InvalidInput, "IDs may not contain non-ASCII characters!"));

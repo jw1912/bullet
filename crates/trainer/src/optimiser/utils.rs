@@ -1,5 +1,10 @@
-use std::sync::Arc;
+use std::{
+    fs::File,
+    io::{self, Read, Write},
+    sync::Arc,
+};
 
+use bullet_compiler::tensor::TValue;
 use bullet_gpu::{buffer::Buffer, runtime::Gpu};
 
 use crate::model::utils::{read_from_byte_buffer, write_to_byte_buffer};
@@ -12,13 +17,24 @@ pub enum Placement {
 
 /// Write a set of labelled weights from a `BTreeMap` into a file.
 pub fn write_weights_to_file<G: Gpu>(map: &[(impl AsRef<str>, &Arc<Buffer<G>>)], path: &str) -> Result<(), G::Error> {
-    use std::{fs::File, io::Write};
+    write_mapped_weights_to_file(map, path, |buf| {
+        let this_buf = (*buf).clone().to_host().unwrap();
+        let TValue::F32(this_buf) = this_buf else { panic!() };
+        this_buf
+    })
+    .map_err(|e| G::Error::from(e.to_string()))
+}
 
+/// Write a set of labelled weights from a `BTreeMap` into a file.
+pub fn write_mapped_weights_to_file<T>(
+    map: &[(impl AsRef<str>, &T)],
+    path: &str,
+    f: impl Fn(&T) -> Vec<f32>,
+) -> io::Result<()> {
     let mut buf = Vec::new();
 
     for (id, weights) in map {
-        let this_buf = (*weights).clone().to_host()?;
-        let byte_buf = write_to_byte_buffer(&this_buf, id.as_ref()).unwrap();
+        let byte_buf = write_to_byte_buffer(&f(weights), id.as_ref()).unwrap();
         buf.extend_from_slice(&byte_buf);
     }
 
@@ -30,8 +46,6 @@ pub fn write_weights_to_file<G: Gpu>(map: &[(impl AsRef<str>, &Arc<Buffer<G>>)],
 
 /// Loads a set of labelled weights from a file into a `BTreeMap`.
 pub fn load_weights_from_file(path: &str) -> Vec<(String, Vec<f32>)> {
-    use std::{fs::File, io::Read};
-
     let mut buf = Vec::new();
     let mut file = File::open(path).unwrap();
     file.read_to_end(&mut buf).unwrap();
