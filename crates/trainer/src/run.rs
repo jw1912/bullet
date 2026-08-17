@@ -332,7 +332,11 @@ pub fn train_cpu<O: CpuOptimiserState>(
     let mut input_ids = BTreeMap::new();
     for (mid, name) in defn.ir().inputs() {
         let tid = *map.get(mid).unwrap();
+        input_ids.insert(name.clone(), tid);
+    }
 
+    for (mid, (name, _)) in defn.ir().weights() {
+        let tid = *map.get(mid).unwrap();
         input_ids.insert(name.clone(), tid);
     }
 
@@ -358,11 +362,15 @@ pub fn train_cpu<O: CpuOptimiserState>(
 
         prev_lr = lrate;
 
-        let inputs = batch
+        let mut inputs = batch
             .inputs
             .iter()
             .flat_map(|(name, value)| input_ids.get(name).map(|id| (*id, value.clone())))
             .collect::<BTreeMap<_, _>>();
+
+        for (name, values) in optimiser.weights().iter() {
+            inputs.insert(*input_ids.get(name).unwrap(), values.values.clone());
+        }
 
         let mut gradients = backwards.evaluate(inputs).unwrap().unwrap();
         let loss = gradients.remove(&loss_id).unwrap();
