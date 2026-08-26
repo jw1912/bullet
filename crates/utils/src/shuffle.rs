@@ -9,7 +9,7 @@ use anyhow::Context;
 use bulletformat::ChessBoard;
 use structopt::StructOpt;
 
-use crate::{Rand, interleave::InterleaveOptions};
+use crate::{interleave::InterleaveOptions, seeded_rng};
 
 #[derive(StructOpt)]
 pub struct ShuffleOptions {
@@ -136,10 +136,10 @@ fn shuffle_positions(data: &mut [u8]) {
 
     let len = data.len() / CHESS_BOARD_SIZE;
 
-    let mut rng = Rand::default();
+    let mut rng = seeded_rng();
 
     for i in (0..len).rev() {
-        let idx = rng.rand() as usize % (i + 1);
+        let idx = rng.rand_range(0..i as u64 + 1) as usize;
         for j in 0..CHESS_BOARD_SIZE {
             data.swap(CHESS_BOARD_SIZE * idx + j, CHESS_BOARD_SIZE * i + j);
         }

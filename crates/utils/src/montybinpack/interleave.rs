@@ -7,7 +7,7 @@ use std::{
 use montyformat::{FastDeserialise, MontyValueFormat};
 use structopt::StructOpt;
 
-use crate::Rand;
+use crate::seeded_rng;
 
 #[derive(StructOpt)]
 pub struct InterleaveOptions {
@@ -39,7 +39,7 @@ impl InterleaveOptions {
         }
 
         let mut remaining = total;
-        let mut rng = Rand::default();
+        let mut rng = seeded_rng();
 
         const INTERVAL: u64 = 1024 * 1024 * 256;
         let mut prev = remaining / INTERVAL;
@@ -48,7 +48,7 @@ impl InterleaveOptions {
         let mut games = 0usize;
 
         while remaining > 0 {
-            let mut spot = rng.rand() % remaining;
+            let mut spot = rng.rand_range(0..remaining);
             let mut idx = 0;
             while streams[idx].0 < spot {
                 spot -= streams[idx].0;
