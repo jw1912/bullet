@@ -165,7 +165,7 @@ impl ModelWeights {
         if pad {
             let bytes = buf.len() % 64;
             if bytes > 0 {
-                let chs = [b'b', b'u', b'l', b'l', b'e', b't'];
+                let chs = *b"bullet";
 
                 for i in 0..64 - bytes {
                     buf.push(chs[i % chs.len()]);

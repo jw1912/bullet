@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::Rand;
+use crate::seeded_rng;
 use anyhow::Context;
 use structopt::StructOpt;
 
@@ -40,12 +40,12 @@ impl InterleaveOptions {
         }
 
         let mut remaining = total;
-        let mut rng = Rand::default();
+        let mut rng = seeded_rng();
 
         while remaining > 0 {
-            let mut spot = rng.rand() as usize % remaining;
+            let mut spot = rng.rand_range(0..remaining as u64) as usize;
             let mut idx = 0;
-            while streams[idx].0 < spot {
+            while streams[idx].0 <= spot {
                 spot -= streams[idx].0;
                 idx += 1;
             }
