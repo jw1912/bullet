@@ -6,7 +6,7 @@ use std::{
 
 use crate::game::formats::bulletformat::ChessBoard;
 
-use super::rng::SimpleRand;
+use super::rng::seeded_rng;
 
 use bullet_trainer::reader::DataReader;
 pub use viriformat::{
@@ -210,10 +210,10 @@ fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFil
 }
 
 fn shuffle(data: &mut [ChessBoard]) {
-    let mut rng = SimpleRand::with_seed();
+    let mut rng = seeded_rng();
 
     for i in (0..data.len()).rev() {
-        let idx = rng.rng() as usize % (i + 1);
+        let idx = rng.rand_range(0..i as u64 + 1) as usize;
         data.swap(idx, i);
     }
 }
