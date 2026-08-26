@@ -56,7 +56,9 @@ const BUCKET_LAYOUT: [usize; 32] = [
 
 fn main() {
     let net_id = "chef";
+    let data_path = "data/viri.vf";
     let save_rate = 32;
+
     let pp = inputs::PawnPawnInputs::new(inputs::three_file_band_mask());
     let psqt = ChessBucketsMirrored::new(BUCKET_LAYOUT);
     let output_buckets = MaterialCount::<OUTPUT_BUCKETS>;
@@ -123,7 +125,7 @@ fn main() {
     let l1_clip = AdamWParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
     optimiser.set_params_for_weight("l1/w", l1_clip);
 
-    let reader = ViriBinpackLoader::new("data/viri.vf", 8192, 16, ViriFilter::Custom(filter::should_keep));
+    let reader = ViriBinpackLoader::new(data_path, 8192, 16, ViriFilter::Custom(filter::should_keep));
 
     let params = (&inputs, &pp, psqt, output_buckets);
 
