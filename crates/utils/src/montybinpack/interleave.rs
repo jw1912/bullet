@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use montyformat::{FastDeserialise, MontyValueFormat};
@@ -30,7 +30,7 @@ impl InterleaveOptions {
         for path in &self.inputs {
             let file = File::open(path)?;
 
-            let count = file.metadata()?.len();
+            let count = count_games(path)?;
 
             if count > 0 {
                 streams.push((count, BufReader::new(file)));
@@ -41,16 +41,15 @@ impl InterleaveOptions {
         let mut remaining = total;
         let mut rng = seeded_rng();
 
-        const INTERVAL: u64 = 1024 * 1024 * 256;
+        const INTERVAL: u64 = 1024 * 1024;
         let mut prev = remaining / INTERVAL;
 
         let mut buffer = Vec::new();
-        let mut games = 0usize;
 
         while remaining > 0 {
             let mut spot = rng.rand_range(0..remaining);
             let mut idx = 0;
-            while streams[idx].0 < spot {
+            while streams[idx].0 <= spot {
                 spot -= streams[idx].0;
                 idx += 1;
             }
@@ -59,12 +58,9 @@ impl InterleaveOptions {
 
             MontyValueFormat::deserialise_fast_into_buffer(reader, &mut buffer)?;
             writer.write_all(&buffer)?;
-            games += 1;
 
-            let size = buffer.len() as u64;
-
-            remaining -= size;
-            *count -= size;
+            remaining -= 1;
+            *count -= 1;
             if *count == 0 {
                 streams.swap_remove(idx);
             }
@@ -72,14 +68,28 @@ impl InterleaveOptions {
             if remaining / INTERVAL < prev {
                 prev = remaining / INTERVAL;
                 let written = total - remaining;
-                print!("Written {written}/{total} Bytes ({:.2}%)\r", written as f64 / total as f64 * 100.0);
+                print!("Written {written}/{total} Games ({:.2}%)\r", written as f64 / total as f64 * 100.0);
                 let _ = std::io::stdout().flush();
             }
         }
 
         println!();
-        println!("Written {games} games to {:#?}", self.output);
+        println!("Written {total} games to {:#?}", self.output);
 
         Ok(())
     }
+}
+
+fn count_games(path: &Path) -> anyhow::Result<u64> {
+    let mut reader = BufReader::new(File::open(path)?);
+    let mut buffer = Vec::new();
+    let mut games = 0;
+
+    while MontyValueFormat::deserialise_fast_into_buffer(&mut reader, &mut buffer).is_ok() {
+        games += 1;
+    }
+
+    println!("{path:#?} contains {games} games");
+
+    Ok(games)
 }

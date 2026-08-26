@@ -45,7 +45,7 @@ impl InterleaveOptions {
         while remaining > 0 {
             let mut spot = rng.rand_range(0..remaining as u64) as usize;
             let mut idx = 0;
-            while streams[idx].0 < spot {
+            while streams[idx].0 <= spot {
                 spot -= streams[idx].0;
                 idx += 1;
             }
