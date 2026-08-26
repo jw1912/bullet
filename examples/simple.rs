@@ -75,7 +75,7 @@ fn main() {
     let _data_loader_viri = {
         use loader::viribinpack::{Filter, ViriBinpackLoader, ViriFilter};
 
-        let file_path = "data/run_2024-06-05_12-12-45_1500000g-4t-tb6-classical-n5000.binpack";
+        let file_path = "data/viri.vf";
         let buffer_size_mb = 1024;
         let threads = 4;
 

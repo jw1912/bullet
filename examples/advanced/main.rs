@@ -55,6 +55,8 @@ const BUCKET_LAYOUT: [usize; 32] = [
 ];
 
 fn main() {
+    let net_id = "chef";
+    let save_rate = 32;
     let pp = inputs::PawnPawnInputs::new(inputs::three_file_band_mask());
     let psqt = ChessBucketsMirrored::new(BUCKET_LAYOUT);
     let output_buckets = MaterialCount::<OUTPUT_BUCKETS>;
@@ -64,7 +66,7 @@ fn main() {
         .add_sparse("ntm/pp", (pp.num_inputs(), 1), pp.max_active())
         .add_sparse("stm/psqt", (psqt.num_inputs(), 1), psqt.max_active())
         .add_sparse("ntm/psqt", (psqt.num_inputs(), 1), psqt.max_active())
-        .add_sparse("bucekts", (1, 1), 1)
+        .add_sparse("buckets", (OUTPUT_BUCKETS, 1), 1)
         .add_dense("targets", (1, 1));
 
     let defn = ModelDefinition::build(
@@ -73,15 +75,16 @@ fn main() {
             let l0_pp = builder.new_affine("l0/pp/", pp.num_inputs(), L1);
 
             let l0f = builder.new_weights("l0/fac", (L1, 768), InitSettings::Zeroed);
-            let mut l0_psqt = builder.new_affine("l0/psqt/", psqt.num_inputs(), L1);
-            l0_psqt.weights = l0_psqt.weights + l0f.repeat(psqt.num_inputs() / 768);
+            let psqt_init = InitSettings::Normal { mean: 0.0, stdev: 2.0 / 32f32.sqrt() };
+            let mut l0_psqt = builder.new_weights("l0/psqt", (L1, psqt.num_inputs()), psqt_init);
+            l0_psqt = l0_psqt + l0f.repeat(psqt.num_inputs() / 768);
 
             let l1 = builder.new_affine("l1/", L1, OUTPUT_BUCKETS * L2);
             let l2 = builder.new_affine("l2/", L2 * 2, OUTPUT_BUCKETS * L3);
             let l3 = builder.new_affine("l3/", L3, OUTPUT_BUCKETS);
 
             let ft = |pp, psqt, start, end| {
-                (l0_pp.slice(start, end).forward(pp) + l0_psqt.slice(start, end).forward(psqt)).crelu()
+                (l0_pp.slice(start, end).forward(pp) + l0_psqt.slice_rows(start, end).matmul(psqt)).crelu()
             };
             let stm_hidden = ft(stm_pp, stm_psqt, 0, L1 / 2) * ft(stm_pp, stm_psqt, L1 / 2, L1);
             let ntm_hidden = ft(ntm_pp, ntm_psqt, 0, L1 / 2) * ft(ntm_pp, ntm_psqt, L1 / 2, L1);
@@ -102,7 +105,7 @@ fn main() {
 
             let loss = loss + 0.005 * l0_out_norm;
 
-            (Some(loss), vec![("output".to_string(), l3_out)])
+            (Some(loss.reduce_sum_batch()), vec![("output".to_string(), l3_out)])
         },
     );
 
@@ -115,85 +118,71 @@ fn main() {
 
     let l0_clip = AdamWParams { max_weight: 0.99, min_weight: -0.99, ..Default::default() };
     optimiser.set_params_for_weight("l0/fac", l0_clip);
-    optimiser.set_params_for_weight("l0/psqt/w", l0_clip);
+    optimiser.set_params_for_weight("l0/psqt", l0_clip);
 
     let l1_clip = AdamWParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
     optimiser.set_params_for_weight("l1/w", l1_clip);
 
-    let reader = ViriBinpackLoader::new(
-        "/k4/vine_data/vine_37/mixed_data_chonked.vf",
-        8192,
-        16,
-        ViriFilter::Custom(filter::should_keep),
-    );
+    let reader = ViriBinpackLoader::new("data/viri.vf", 8192, 16, ViriFilter::Custom(filter::should_keep));
 
     let params = (&inputs, &pp, psqt, output_buckets);
 
+    let mut run = |stage, end_superbatch, lr_schedule, mapper| {
+        train(
+            &mut optimiser,
+            TrainingSchedule {
+                steps: TrainingSteps {
+                    batch_size: 16_384,
+                    batches_per_superbatch: 6104,
+                    start_superbatch: 1,
+                    end_superbatch,
+                },
+                lr_schedule,
+                log_rate: 128,
+            },
+            ReadMapLoader::new(reader.clone(), mapper, MAP_THREADS),
+            |_, _, _| {},
+            |optimiser, step| {
+                let superbatch = step.superbatch();
+                if superbatch % save_rate == 0 || superbatch == step.final_superbatch() {
+                    let name = format!("{net_id}-stage{stage}-{superbatch}");
+                    let path = format!("checkpoints/{name}");
+                    std::fs::create_dir(path.as_str()).unwrap_or(());
+                    optimiser.write_to_checkpoint(&path).unwrap();
+                    println!("Saved [{name}]");
+                }
+            },
+        )
+        .unwrap();
+    };
+
     const WARMUP_SBS: usize = SUPERBATCHES_STAGE0 / 2;
     const COOLDOWN_SBS: usize = SUPERBATCHES_STAGE0 - WARMUP_SBS;
-    let stage0_mapper = inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 0.2 });
-    train(
-        &mut optimiser,
-        TrainingSchedule {
-            steps: TrainingSteps {
-                batch_size: 16_384,
-                batches_per_superbatch: 6104,
-                start_superbatch: 1,
-                end_superbatch: SUPERBATCHES_STAGE0,
-            },
-            lr_schedule: lr::Sequence {
-                first: lr::LinearDecayLR { initial_lr: 1e-4, final_lr: 5e-3, final_superbatch: WARMUP_SBS },
-                second: lr::LinearDecayLR { initial_lr: 5e-3, final_lr: 1e-4, final_superbatch: COOLDOWN_SBS },
-                first_scheduler_final_superbatch: WARMUP_SBS,
-            }
-            .boxed(),
-            log_rate: 128,
-        },
-        ReadMapLoader::new(reader.clone(), stage0_mapper, MAP_THREADS),
-        |_, _, _| {},
-        |_, _| {},
-    )
-    .unwrap();
+    run(
+        0,
+        SUPERBATCHES_STAGE0,
+        lr::Sequence {
+            first: lr::LinearDecayLR { initial_lr: 1e-4, final_lr: 5e-3, final_superbatch: WARMUP_SBS },
+            second: lr::LinearDecayLR { initial_lr: 5e-3, final_lr: 1e-4, final_superbatch: COOLDOWN_SBS },
+            first_scheduler_final_superbatch: WARMUP_SBS,
+        }
+        .boxed(),
+        inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 0.2 }),
+    );
 
-    let stage1_mapper = inputs::make_inputs_mapper(params, wdl::LinearWDL { start: 0.2, end: 0.5 });
-    train(
-        &mut optimiser,
-        TrainingSchedule {
-            steps: TrainingSteps {
-                batch_size: 16_384,
-                batches_per_superbatch: 6104,
-                start_superbatch: 1,
-                end_superbatch: SUPERBATCHES_STAGE1,
-            },
-            lr_schedule: lr::LinearDecayLR { initial_lr: 1e-3, final_lr: 1e-6, final_superbatch: SUPERBATCHES_STAGE1 }
-                .boxed(),
-            log_rate: 128,
-        },
-        ReadMapLoader::new(reader.clone(), stage1_mapper, MAP_THREADS),
-        |_, _, _| {},
-        |_, _| {},
-    )
-    .unwrap();
+    run(
+        1,
+        SUPERBATCHES_STAGE1,
+        lr::LinearDecayLR { initial_lr: 1e-3, final_lr: 1e-6, final_superbatch: SUPERBATCHES_STAGE1 }.boxed(),
+        inputs::make_inputs_mapper(params, wdl::LinearWDL { start: 0.2, end: 0.5 }),
+    );
 
-    let stage2_mapper = inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 1.0 });
-    train(
-        &mut optimiser,
-        TrainingSchedule {
-            steps: TrainingSteps {
-                batch_size: 16_384,
-                batches_per_superbatch: 6104,
-                start_superbatch: 1,
-                end_superbatch: SUPERBATCHES_STAGE2,
-            },
-            lr_schedule: lr::LinearDecayLR { initial_lr: 1e-5, final_lr: 1e-7, final_superbatch: SUPERBATCHES_STAGE2 }
-                .boxed(),
-            log_rate: 128,
-        },
-        ReadMapLoader::new(reader, stage2_mapper, MAP_THREADS),
-        |_, _, _| {},
-        |_, _| {},
-    )
-    .unwrap();
+    run(
+        2,
+        SUPERBATCHES_STAGE2,
+        lr::LinearDecayLR { initial_lr: 1e-5, final_lr: 1e-7, final_superbatch: SUPERBATCHES_STAGE2 }.boxed(),
+        inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 1.0 }),
+    );
 
     evaluator.load_device_weights(optimiser.weights()).unwrap();
     let evaluator_mapper = inputs::make_inputs_mapper(params, wdl::ConstantWDL { value: 0.0 });
