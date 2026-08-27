@@ -3,17 +3,20 @@ mod inputs;
 
 use bullet_lib::{
     game::{
-        inputs::{ChessBucketsMirrored, SparseInputType},
+        inputs::{ChessBucketsMirrored, SparseInputType, get_num_buckets},
         outputs::MaterialCount,
     },
     trainer::schedule::{
         lr::{self, LrScheduler},
         wdl,
     },
-    value::loader::{ViriBinpackLoader, viribinpack::ViriFilter},
+    value::{
+        loader::{ViriBinpackLoader, viribinpack::ViriFilter},
+        save::save_to_checkpoint,
+    },
 };
 use bullet_trainer::{
-    model::{InitSettings, ModelDefinition, ModelEvaluator, ModelInputs, ModelWeights},
+    model::{InitSettings, ModelDefinition, ModelEvaluator, ModelInputs, ModelWeights, SavedFormat},
     optimiser::{
         Optimiser,
         adam::{AdamW, AdamWParams},
@@ -35,13 +38,15 @@ const L2: usize = 16;
 const L3: usize = 32;
 const Q0: i16 = 255;
 const Q1: i16 = 128;
-const _Q: i16 = 64;
+const Q: i16 = 64;
+const INPUT_BUCKETS: usize = get_num_buckets(&BUCKET_LAYOUT);
 const OUTPUT_BUCKETS: usize = 8;
 
 const FT_SHIFT: usize = 8;
 const FT_SHIFT_SCALE: f32 = Q0 as f32 / ((1 << FT_SHIFT) as f32);
 const I8_RANGE: f32 = i8::MAX as f32 / (Q1 as f32);
 const L1_RANGE: f32 = I8_RANGE * FT_SHIFT_SCALE * FT_SHIFT_SCALE;
+const PP_RANGE: f32 = i8::MAX as f32 / (Q0 as f32);
 
 #[rustfmt::skip]
 const BUCKET_LAYOUT: [usize; 32] = [
@@ -119,8 +124,33 @@ fn main() {
     optimiser.set_params_for_weight("l0/fac", l0_clip);
     optimiser.set_params_for_weight("l0/psqt", l0_clip);
 
+    let pp_clip = AdamWParams { max_weight: PP_RANGE, min_weight: -PP_RANGE, ..Default::default() };
+    optimiser.set_params_for_weight("l0/pp/w", pp_clip);
+
     let l1_clip = AdamWParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
     optimiser.set_params_for_weight("l1/w", l1_clip);
+
+    let saved_format = vec![
+        SavedFormat::id("l0/psqt")
+            .transform(|weights, values| {
+                let fac = weights.get("l0/fac").values.f32().repeat(INPUT_BUCKETS);
+                assert_eq!(values.len(), fac.len());
+                values.iter().zip(fac).map(|(&a, b)| a + b).collect()
+            })
+            .round()
+            .quantise::<i16>(Q0),
+        SavedFormat::id("l0/pp/w").round().quantise::<i8>(Q0),
+        SavedFormat::id("l0/pp/b").round().quantise::<i16>(Q0),
+        SavedFormat::id("l1/w")
+            .transform(|_, values| values.iter().map(|f| f / (FT_SHIFT_SCALE * FT_SHIFT_SCALE)).collect())
+            .round()
+            .quantise::<i8>(Q1),
+        SavedFormat::id("l1/b").round().quantise::<i32>(i32::from(Q) * 256),
+        SavedFormat::id("l2/w").round().quantise::<i32>(i32::from(Q)),
+        SavedFormat::id("l2/b").round().quantise::<i32>(i32::from(Q).pow(3)),
+        SavedFormat::id("l3/w").round().quantise::<i32>(i32::from(Q)),
+        SavedFormat::id("l3/b").round().quantise::<i32>(i32::from(Q).pow(4)),
+    ];
 
     let reader = ViriBinpackLoader::new(DATA_PATH, 8192, 16, ViriFilter::Custom(filter::should_keep));
 
@@ -145,9 +175,7 @@ fn main() {
                 let superbatch = step.superbatch();
                 if superbatch.is_multiple_of(SAVE_RATE) || superbatch == step.final_superbatch() {
                     let name = format!("{NET_NAME}-stage{stage}-{superbatch}");
-                    let path = format!("checkpoints/{name}");
-                    std::fs::create_dir(path.as_str()).unwrap_or(());
-                    optimiser.write_to_checkpoint(&path).unwrap();
+                    save_to_checkpoint(optimiser, &saved_format, &format!("checkpoints/{name}"));
                     println!("Saved [{name}]");
                 }
             },
