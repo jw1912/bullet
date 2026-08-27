@@ -3,7 +3,7 @@ mod inputs;
 
 use bullet_lib::{
     game::{
-        inputs::{ChessBucketsMirrored, SparseInputType, get_num_buckets},
+        inputs::{ChessBucketsMirrored, SparseInputType},
         outputs::MaterialCount,
     },
     trainer::schedule::{
@@ -22,8 +22,10 @@ use bullet_trainer::{
     run::{DefaultDevice, TrainingSchedule, TrainingSteps, train},
 };
 
-const _NET_NAME: &str = "pawnocchio_new_relabeller";
+const NET_NAME: &str = "pawnocchio_new_relabeller";
 const MAP_THREADS: u8 = 8;
+const SAVE_RATE: usize = 32;
+const DATA_PATH: &str = "data/viri.vf";
 
 const SUPERBATCHES_STAGE0: usize = 100;
 const SUPERBATCHES_STAGE1: usize = 800;
@@ -34,7 +36,6 @@ const L3: usize = 32;
 const Q0: i16 = 255;
 const Q1: i16 = 128;
 const _Q: i16 = 64;
-const _INPUT_BUCKETS: usize = get_num_buckets(&BUCKET_LAYOUT);
 const OUTPUT_BUCKETS: usize = 8;
 
 const FT_SHIFT: usize = 8;
@@ -55,10 +56,6 @@ const BUCKET_LAYOUT: [usize; 32] = [
 ];
 
 fn main() {
-    let net_id = "chef";
-    let data_path = "data/viri.vf";
-    let save_rate = 32;
-
     let pp = inputs::PawnPawnInputs::new(inputs::three_file_band_mask());
     let psqt = ChessBucketsMirrored::new(BUCKET_LAYOUT);
     let output_buckets = MaterialCount::<OUTPUT_BUCKETS>;
@@ -125,7 +122,7 @@ fn main() {
     let l1_clip = AdamWParams { max_weight: L1_RANGE, min_weight: -L1_RANGE, ..Default::default() };
     optimiser.set_params_for_weight("l1/w", l1_clip);
 
-    let reader = ViriBinpackLoader::new(data_path, 8192, 16, ViriFilter::Custom(filter::should_keep));
+    let reader = ViriBinpackLoader::new(DATA_PATH, 8192, 16, ViriFilter::Custom(filter::should_keep));
 
     let params = (&inputs, &pp, psqt, output_buckets);
 
@@ -146,8 +143,8 @@ fn main() {
             |_, _, _| {},
             |optimiser, step| {
                 let superbatch = step.superbatch();
-                if superbatch % save_rate == 0 || superbatch == step.final_superbatch() {
-                    let name = format!("{net_id}-stage{stage}-{superbatch}");
+                if superbatch.is_multiple_of(SAVE_RATE) || superbatch == step.final_superbatch() {
+                    let name = format!("{NET_NAME}-stage{stage}-{superbatch}");
                     let path = format!("checkpoints/{name}");
                     std::fs::create_dir(path.as_str()).unwrap_or(());
                     optimiser.write_to_checkpoint(&path).unwrap();
