@@ -96,8 +96,7 @@ fn main() {
             let ntm_hidden = ft(ntm_pp, ntm_psqt, 0, L1 / 2) * ft(ntm_pp, ntm_psqt, L1 / 2, L1);
             let l0_out = stm_hidden.concat(ntm_hidden);
 
-            let ones_l1_vec = builder.new_constant((1, L1), &[1.0 / L1 as f32; L1]);
-            let l0_out_norm = ones_l1_vec.matmul(l0_out);
+            let l0_out_norm = l0_out.reduce_sum_rows() / (L1 as f32);
 
             let l1_out = l1.forward(l0_out).select(output_buckets);
             let hl2 = l1_out.concat(l1_out.abs_pow(2.0)).crelu();
