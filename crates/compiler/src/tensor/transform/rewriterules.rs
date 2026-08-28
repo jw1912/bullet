@@ -5,8 +5,8 @@ use crate::{
     tensor::{
         DValue, IRTrace, Tensor, TensorIR,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension, ScalarConstant,
-            SliceAcrossDimension, SparseMatmulBwdMulti, UnaryOp,
+            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
+            ReduceAcrossDimension, Reduction, ScalarConstant, SliceAcrossDimension, SparseMatmulBwdMulti, UnaryOp,
         },
         transform::IRTransform,
     },
@@ -255,6 +255,37 @@ rewriterule! {
             let rm = MatrixLayout { rows: rhs.dimen(), ..matmul.rhs };
             let new_op = Matmul::new(dtype, 1, lm, rm);
             let new_rhs = ir.add_op([rhs_matrix, b], new_op)?[0];
+
+            let ty = ir.get_node(new_rhs)?.ty();
+            let add = CABinaryOp::new(ty, CABinary::Add);
+            ir.replace_operation(op.id(), [new_lhs, new_rhs], add)?;
+            return Ok(true);
+        }
+    }
+}
+
+rewriterule! {
+    rulename ConcatReduceToAddReduce on ir
+    rewrites op (reduce = [ReduceAcrossDimension] (add = [CABinaryOp] (lhs = [PadAcrossDimension] (a)) (rhs = [PadAcrossDimension] (b))))
+    {
+        if add.op() == CABinary::Add
+            && reduce.inner() == 1.into()
+            && reduce.reduction() == Reduction::Sum
+            && lhs.inner() == 1.into()
+            && rhs.inner() == 1.into()
+        {
+            let dtype = a.ty().dtype();
+            let a = a.id();
+            let b = b.id();
+
+            let lhs_shape = [lhs.outer(), lhs.dimen()];
+            let rhs_shape = [rhs.outer(), rhs.dimen()];
+
+            let new_op = ReduceAcrossDimension::new(dtype, lhs_shape, 1, Reduction::Sum);
+            let new_lhs = ir.add_op([a], new_op)?[0];
+
+            let new_op = ReduceAcrossDimension::new(dtype, rhs_shape, 1, Reduction::Sum);
+            let new_rhs = ir.add_op([b], new_op)?[0];
 
             let ty = ir.get_node(new_rhs)?.ty();
             let add = CABinaryOp::new(ty, CABinary::Add);

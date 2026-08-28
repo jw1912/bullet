@@ -12,6 +12,22 @@ use crate::{
     },
 };
 
+pub trait CoercesToModelNode<'a> {
+    fn coerce(&self, builder: &'a ModelBuilder) -> ModelNode<'a>;
+}
+
+impl<'a> CoercesToModelNode<'a> for f32 {
+    fn coerce(&self, builder: &'a ModelBuilder) -> ModelNode<'a> {
+        builder.scalar(*self)
+    }
+}
+
+impl<'a> CoercesToModelNode<'a> for ModelNode<'a> {
+    fn coerce(&self, _: &'a ModelBuilder) -> ModelNode<'a> {
+        *self
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shape {
     rows: usize,
@@ -177,14 +193,23 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], Reshape::new(self.ty(), shape.rows, shape.cols)), ..self }
     }
 
+    pub fn broadcast_across_rows(self, reps: usize) -> Self {
+        let broadcast = Broadcast(self.ty(), Dim::Rows, Some(reps));
+        Self { node: self.builder.add_op([self], broadcast), ..self }
+    }
+
+    pub fn broadcast_across_cols(self, reps: usize) -> Self {
+        let broadcast = Broadcast(self.ty(), Dim::Cols, Some(reps));
+        Self { node: self.builder.add_op([self], broadcast), ..self }
+    }
+
     pub fn broadcast_across_batch(self) -> Self {
         let broadcast = Broadcast(self.ty(), Dim::Batch, None);
         Self { node: self.builder.add_op([self], broadcast), ..self }
     }
 
-    #[deprecated(note = "Use `reduce_sum_batch` instead!")]
-    pub fn reduce_sum_across_batch(self) -> Self {
-        self.reduce_sum_batch()
+    pub fn repeat(self, reps: usize) -> Self {
+        self.broadcast_across_cols(reps)
     }
 
     pub fn reduce_sum_batch(self) -> Self {
@@ -306,12 +331,12 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self, other], matmul), ..self }
     }
 
-    pub fn min(self, value: f32) -> Self {
-        self.binary(self.builder.scalar(value), CABinary::Min)
+    pub fn min(self, value: impl CoercesToModelNode<'a>) -> Self {
+        self.binary(value.coerce(self.builder), CABinary::Min)
     }
 
-    pub fn max(self, value: f32) -> Self {
-        self.binary(self.builder.scalar(value), CABinary::Max)
+    pub fn max(self, value: impl CoercesToModelNode<'a>) -> Self {
+        self.binary(value.coerce(self.builder), CABinary::Max)
     }
 
     pub fn relu(self) -> Self {
@@ -342,8 +367,8 @@ impl<'a> ModelNode<'a> {
         self.unary(Unary::Abs)
     }
 
-    pub fn abs_pow(mut self, power: f32) -> Self {
-        let mut power = self.builder.scalar(power);
+    pub fn abs_pow(mut self, power: impl CoercesToModelNode<'a>) -> Self {
+        let mut power = power.coerce(self.builder);
         (self, power) = self.broadcast_to_same(power);
         Self { node: self.builder.add_op([self, power], AbsPower(self.ty())), ..self }
     }
@@ -416,11 +441,6 @@ impl<'a> ModelNode<'a> {
     pub fn slice_rows(self, start: usize, end: usize) -> Self {
         let op = Slice::new(self.ty(), start, end, true);
         Self { node: self.builder.add_op([self], op), ..self }
-    }
-
-    pub fn repeat(self, reps: usize) -> Self {
-        let broadcast = Broadcast(self.ty(), Dim::Cols, Some(reps));
-        Self { node: self.builder.add_op([self], broadcast), ..self }
     }
 }
 
