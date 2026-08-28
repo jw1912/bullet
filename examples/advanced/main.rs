@@ -81,7 +81,7 @@ fn main() {
             let l0_pp = builder.new_affine("l0/pp/", pp.num_inputs(), L1);
 
             let l0f = builder.new_weights("l0/fac", (L1, 768), InitSettings::Zeroed);
-            let psqt_init = InitSettings::Normal { mean: 0.0, stdev: 2.0 / 32f32.sqrt() };
+            let psqt_init = InitSettings::Normal { mean: 0.0, stdev: (2f32 / 32.0).sqrt() };
             let mut l0_psqt = builder.new_weights("l0/psqt", (L1, psqt.num_inputs()), psqt_init);
             l0_psqt = l0_psqt + l0f.repeat(psqt.num_inputs() / 768);
 
