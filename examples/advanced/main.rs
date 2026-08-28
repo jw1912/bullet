@@ -26,6 +26,8 @@ use bullet_trainer::{
 };
 
 const NET_NAME: &str = "pawnocchio_new_relabeller";
+const READ_BUF_MB: usize = 8192;
+const READ_THREADS: usize = 8;
 const MAP_THREADS: u8 = 8;
 const SAVE_RATE: usize = 32;
 const DATA_PATH: &str = "data/viri.vf";
@@ -152,7 +154,7 @@ fn main() {
         SavedFormat::id("l3/b").round().quantise::<i32>(i32::from(Q).pow(4)),
     ];
 
-    let reader = ViriBinpackLoader::new(DATA_PATH, 8192, 16, ViriFilter::Custom(filter::should_keep));
+    let reader = ViriBinpackLoader::new(DATA_PATH, READ_BUF_MB, READ_THREADS, ViriFilter::Custom(filter::should_keep));
 
     let params = (&inputs, &pp, psqt, output_buckets);
 

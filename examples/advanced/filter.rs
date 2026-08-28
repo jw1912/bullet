@@ -1,10 +1,10 @@
 use std::cell::{Cell, RefCell};
 
-use rand::{Rng, rng};
-use viriformat::{
+use bullet_lib::game::formats::viriformat::{
     chess::{board::Board, chessmove::Move},
     dataformat::{Filter, WDL},
 };
+use rand::{Rng, rng};
 
 fn piece_count_acceptance(board: &Board) -> f64 {
     #[rustfmt::skip]

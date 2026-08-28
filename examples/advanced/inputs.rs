@@ -2,14 +2,16 @@ use std::sync::Arc;
 
 use bullet_lib::{
     game::{
-        formats::bulletformat::ChessBoard,
+        formats::{
+            bulletformat::ChessBoard,
+            montyformat::chess::{Attacks, Piece, Side},
+        },
         inputs::{ChessBucketsMirrored, SparseInputType},
         outputs::OutputBuckets,
     },
     wdl::WdlScheduler,
 };
 use bullet_trainer::model::{DenseInput, ModelInputs, ModelInputsMapper, SparseInput};
-use montyformat::chess::{Attacks, Piece, Side};
 
 pub type InputTy = (((((SparseInput, SparseInput), SparseInput), SparseInput), SparseInput), DenseInput<f32>);
 
