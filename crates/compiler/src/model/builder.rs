@@ -151,17 +151,26 @@ pub struct Affine<'a> {
 
 impl<'a> Affine<'a> {
     /// Slice affine layer from `inputs -> outputs` to `inputs -> (end - start)`, so we have
-    /// ```#
+    /// ```text
     /// affine.slice(start, end).forward(inputs) == affine.forward(inputs).slice_rows(start, end)
     /// ```
+    /// This generally allows the compiled model to be faster because we can use strided sparse/dense
+    /// matmuls directly (i.e. `affine.slice(start, end)` is not materialised into an actual distinct
+    /// operation), rather than doing the whole matmul and then potentially having to materialise the
+    /// sliced output in addition
     pub fn slice(self, start: usize, end: usize) -> Self {
         Self { weights: self.weights.slice_rows(start, end), bias: self.bias.slice_rows(start, end) }
     }
 
+    /// Apply this affine layer to the input: `matmul(self.weights, input) + self.bias`
     pub fn forward(self, input: ModelNode<'a>) -> ModelNode<'a> {
         self.weights.matmul(input) + self.bias
     }
 
+    /// Set the Kaiming initialisation of the weights as-if the input size to the
+    /// affine op is `size`. This can be helpful when you know the inputs will be
+    /// extremely sparse as default initialisation can result in the weights being
+    /// too small
     pub fn init_with_effective_input_size(&self, size: usize) {
         self.weights.builder.ir().weights.get_mut(&self.weights.node).unwrap().1 =
             InitSettings::Normal { mean: 0.0, stdev: (2.0 / size as f32).sqrt() };
@@ -188,45 +197,60 @@ impl<'a> ModelNode<'a> {
         Shape::new(ty.rows, ty.cols)
     }
 
+    /// Create a "copy" of this tensor through which no gradients
+    /// are propagated. There will be no actual copy performed.
+    pub fn detach(self) -> Self {
+        Self { node: self.builder.add_op([self], Detach(self.ty())), ..self }
+    }
+
+    /// Reinterpret the shape of `self` as `shape` - panics if not possible.
     pub fn reshape(self, shape: impl Into<Shape>) -> Self {
         let shape = shape.into();
         Self { node: self.builder.add_op([self], Reshape::new(self.ty(), shape.rows, shape.cols)), ..self }
     }
 
+    /// Broadcast `M x N` tensor into `(M * reps) x N` tensor
     pub fn broadcast_across_rows(self, reps: usize) -> Self {
         let broadcast = Broadcast(self.ty(), Dim::Rows, Some(reps));
         Self { node: self.builder.add_op([self], broadcast), ..self }
     }
 
+    /// Broadcast `M x N` tensor into `M x (N * reps)` tensor
     pub fn broadcast_across_cols(self, reps: usize) -> Self {
         let broadcast = Broadcast(self.ty(), Dim::Cols, Some(reps));
         Self { node: self.builder.add_op([self], broadcast), ..self }
     }
 
+    /// Broadcast an unbatched tensor across the batch
     pub fn broadcast_across_batch(self) -> Self {
         let broadcast = Broadcast(self.ty(), Dim::Batch, None);
         Self { node: self.builder.add_op([self], broadcast), ..self }
     }
 
+    /// Same as `broadcast_across_cols`
     pub fn repeat(self, reps: usize) -> Self {
         self.broadcast_across_cols(reps)
     }
 
+    /// Reduce sum a batched `M x N` tensor into a single `M x N` tensor
     pub fn reduce_sum_batch(self) -> Self {
         let reduce = Reduce(self.ty(), Dim::Batch, Reduction::Sum);
         Self { node: self.builder.add_op([self], reduce), ..self }
     }
 
+    /// Reduce sum an `M x N` tensor into a `1 x N` tensor
     pub fn reduce_sum_rows(self) -> Self {
         let reduce = Reduce(self.ty(), Dim::Rows, Reduction::Sum);
         Self { node: self.builder.add_op([self], reduce), ..self }
     }
 
+    /// Reduce sum an `M x N` tensor into a `M x 1` tensor
     pub fn reduce_sum_cols(self) -> Self {
         let reduce = Reduce(self.ty(), Dim::Cols, Reduction::Sum);
         Self { node: self.builder.add_op([self], reduce), ..self }
     }
 
+    /// Make a scalar `value` tensor with the same shape as `self`
     pub fn scalar_like(self, value: impl Into<DValue>) -> Self {
         let ty = self.ty();
         let value = match value.into() {
@@ -267,10 +291,12 @@ impl<'a> ModelNode<'a> {
         (self, rhs)
     }
 
+    /// Apply pointwise unary operation
     pub fn unary(self, unary: Unary) -> Self {
         Self { node: self.builder.add_op([self], PointwiseUnary(self.ty(), unary)), ..self }
     }
 
+    /// Apply pointwise binary operation
     pub fn binary(mut self, mut rhs: Self, binary: CABinary) -> Self {
         let sty = self.ty();
         let rty = rhs.ty();
@@ -339,22 +365,27 @@ impl<'a> ModelNode<'a> {
         self.binary(value.coerce(self.builder), CABinary::Max)
     }
 
+    /// Apply `max(self, 0)`
     pub fn relu(self) -> Self {
         Self { node: self.builder.add_op([self], ReLU(self.ty())), ..self }
     }
 
+    /// Apply `clamp(self, 0, 1)`
     pub fn crelu(self) -> Self {
         Self { node: self.builder.add_op([self], CReLU(self.ty())), ..self }
     }
 
+    /// Apply `clamp(self, 0, 1)^2`
     pub fn screlu(self) -> Self {
         Self { node: self.builder.add_op([self], SCReLU(self.ty())), ..self }
     }
 
+    /// Apply `max(self, 0)^2`
     pub fn sqrrelu(self) -> Self {
         Self { node: self.builder.add_op([self], SqrReLU(self.ty())), ..self }
     }
 
+    /// Apply `1 / (1 + exp(-self))`
     pub fn sigmoid(self) -> Self {
         Self { node: self.builder.add_op([self], Sigmoid(self.ty())), ..self }
     }
@@ -367,17 +398,20 @@ impl<'a> ModelNode<'a> {
         self.unary(Unary::Abs)
     }
 
+    /// Apply `abs(self)^power`
     pub fn abs_pow(mut self, power: impl CoercesToModelNode<'a>) -> Self {
         let mut power = power.coerce(self.builder);
         (self, power) = self.broadcast_to_same(power);
         Self { node: self.builder.add_op([self, power], AbsPower(self.ty())), ..self }
     }
 
+    /// Apply `(self - other)^2`
     pub fn squared_error(self, other: Self) -> Self {
         let diff = self - other;
         diff * diff
     }
 
+    /// Apply `abs(self - other)^power`
     pub fn power_error(self, targets: Self, power: f32) -> Self {
         (self - targets).abs_pow(power)
     }
@@ -387,11 +421,15 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self, targets], op), ..self }
     }
 
+    /// Apply `clamp(self, min, max)`, but on the backwards pass
+    /// the gradient is propagated as if this was a no-op
     pub fn clip_pass_through_grad(self, min: f32, max: f32) -> Self {
         let op = ClipPassThroughGrad(self.ty(), min, max);
         Self { node: self.builder.add_op([self], op), ..self }
     }
 
+    /// Apply `round/truncate(value * self) / value`, but on the backwards pass
+    /// the gradient is propagated as if this was a no-op
     pub fn faux_quantise(self, value: f32, round: bool) -> Self {
         let op = FauxQuantise(self.ty(), value.into(), round);
         Self { node: self.builder.add_op([self], op), ..self }
@@ -412,11 +450,20 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self, rhs], op), ..self }
     }
 
+    /// Shorthand for `self[0, size / 2] * self[size / 2, size]`
+    #[deprecated(note = "Intended use no longer applies as you should apply the slicing to the FT.")]
     pub fn pairwise_mul(self) -> Self {
         let size = self.ty().rows;
         self.slice_rows(0, size / 2) * self.slice_rows(size / 2, size)
     }
 
+    /// Given `self` is an `M*B x 1` tensor, `indices` is a sparse `B x 1`
+    /// tensor with `nnz == 1`, this operation applies
+    /// ```text
+    /// matmul(self.reshape(M, B), indices)
+    /// ```
+    /// Which can be viewed as selecting the chunk of size `M` from `self`
+    /// that corresponds to the given index in `indices`
     pub fn select(mut self, mut indices: Self) -> Self {
         let sty = self.ty();
         let ity = indices.ty();
@@ -438,6 +485,7 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self, indices], op), ..self }
     }
 
+    /// Extract `(end - start) x N` tensor from `M x N` tensor
     pub fn slice_rows(self, start: usize, end: usize) -> Self {
         let op = Slice::new(self.ty(), start, end, true);
         Self { node: self.builder.add_op([self], op), ..self }

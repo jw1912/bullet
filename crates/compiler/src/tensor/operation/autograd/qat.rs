@@ -11,7 +11,7 @@ pub struct FauxQuantise(pub TType, pub DValue, pub bool);
 
 impl CustomAutograd for FauxQuantise {
     fn opname(&self) -> String {
-        format!("diffable-from-output.{:?}", self.0).to_lowercase()
+        "faux-quantise".to_string()
     }
 
     fn inputs(&self) -> Vec<TType> {

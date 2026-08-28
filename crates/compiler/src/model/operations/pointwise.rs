@@ -5,7 +5,7 @@ use crate::{
         DType, DValue, IRTrace, TensorIR,
         operation::{
             CABinary, Power, Unary,
-            autograd::{CustomAutogradOp, PassThrough, SoftmaxCrossEntropyLoss},
+            autograd::{CopyNoGrad, CustomAutogradOp, PassThrough, SoftmaxCrossEntropyLoss},
         },
     },
 };
@@ -298,5 +298,27 @@ impl ModelOperation for ClipPassThroughGrad {
         );
 
         lower.add_op(inputs, CustomAutogradOp::new(op)).map(|x| x[0])
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Detach(pub MType);
+
+impl ModelOperation for Detach {
+    fn opname(&self) -> String {
+        "Detach".to_string()
+    }
+
+    fn inputs(&self) -> Vec<MType> {
+        vec![self.0]
+    }
+
+    fn output(&self) -> MType {
+        self.0
+    }
+
+    fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
+        let ty = self.0.ttype(batch_size);
+        lower.add_op(inputs, CustomAutogradOp::new(CopyNoGrad(ty))).map(|x| x[0])
     }
 }
