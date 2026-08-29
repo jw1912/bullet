@@ -162,8 +162,8 @@ fn main() {
             &mut optimiser,
             TrainingSchedule {
                 steps: TrainingSteps {
-                    batch_size: 16_384,
-                    batches_per_superbatch: 6104,
+                    batch_size: 16_384 * 8,
+                    batches_per_superbatch: 6104 / 8,
                     start_superbatch: 1,
                     end_superbatch,
                 },
