@@ -3,9 +3,9 @@
 ## Checkpoint Layout
 
 When a checkpoint is saved to a directory `<out_dir>/<checkpoint_name>`, it will contain
-- `raw.bin`, the raw floating point (`f32`) parameters of the network
-- `quantised.bin`, the quantised network, padded to be a multiple of 64 bytes
 - `optimiser_state/`, the internal state of the optimiser
+- `quantised.bin`, the quantised network, padded to be a multiple of 64 bytes which corresponds to your specified save format
+- `raw.bin`, which corresponds to your specified save format with none of the transformation or quantisations applied, and no padding
 
 If quantisation fails (due to integer overflow), then it will not save the quantised network, but training will be otherwise unaffected.
 
