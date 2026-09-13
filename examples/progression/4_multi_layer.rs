@@ -123,7 +123,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        test_set: Some(TestDataset::at(val_path).freq(6104).batches(128)),
+        test_set: Some(TestDataset::at(val_path).freq(0).batches(128)),
         output_directory: "checkpoints",
         batch_queue_size: 64,
     };
