@@ -12,15 +12,15 @@ use bullet_lib::{
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::{LocalSettings, TestDataset},
     },
-    value::{ValueTrainerBuilder, loader::DirectSequentialDataLoader},
+    value::{ValueTrainerBuilder, loader, loader::DirectSequentialDataLoader},
 };
 
 fn main() {
     // hyperparams to fiddle with
     let hl_size = 1024;
     let l2 = 16;
-    let train_path = "data/baseline.data";
-    let val_path = "data/validation.data";
+    let train_path = "/Users/maxol/Downloads/fishpack32.binpack"; //"data/baseline.data";
+    let val_path = "/Users/maxol/Downloads/test79-may2022-16tb7p-filter-v6-dd.min-mar2023.unmin.high-simple-eval-1k.min-v2.binpack"; //"data/validation.data";
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);
     let superbatches = 800;
@@ -108,13 +108,43 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        test_set: Some(TestDataset::at(val_path).freq(1024).batches(128)),
+        test_set: Some(TestDataset::at(val_path).freq(0).positions(200000)),
         output_directory: "checkpoints",
         batch_queue_size: 64,
     };
 
-    let train_loader = DirectSequentialDataLoader::new(&[train_path]);
-    let val_loader = DirectSequentialDataLoader::new(&[val_path]);
+    let train_loader = {
+        use loader::sfbinpack::{MoveType, PieceType, SfBinpackLoader, TrainingDataEntry};
+
+        let buffer_size_mb = 1024;
+        let threads = 4;
+
+        fn filter(entry: &TrainingDataEntry) -> bool {
+            entry.ply >= 16
+                && !entry.pos.is_checked(entry.pos.side_to_move())
+                && entry.score.unsigned_abs() <= 10000
+                && entry.mv.mtype() == MoveType::Normal
+                && entry.pos.piece_at(entry.mv.to()).piece_type() == PieceType::None
+        }
+        let train_filter: fn(&TrainingDataEntry) -> bool = filter;
+
+        SfBinpackLoader::new(train_path, buffer_size_mb, threads, train_filter)
+    };
+
+    let val_loader = {
+        use loader::sfbinpack::{SfBinpackLoader, TrainingDataEntry};
+
+        let buffer_size_mb = 1024;
+        let threads = 4;
+
+        // no filter as all positions are valid for testing
+        fn accept_all(_: &TrainingDataEntry) -> bool {
+            true
+        }
+        let val_filter: fn(&TrainingDataEntry) -> bool = accept_all;
+
+        SfBinpackLoader::new(val_path, buffer_size_mb, threads, val_filter)
+    };
 
     trainer.run(&schedule, &settings, &train_loader, Some(&val_loader)); // or 'None' if no val-set
 }

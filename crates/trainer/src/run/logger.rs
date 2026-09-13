@@ -120,7 +120,7 @@ pub fn seconds_to_hms(mut seconds: u32) -> (u32, u32, u32) {
 pub fn report_validation(step: Step, error: f32, validation_time: f32, positions: usize) {
     let num_cs = num_cs();
     println!(
-        "{} superbatch {} | time {}s   | loss {} | {} positions",
+        "{} superbatch {} | time {}s | loss {} | {} positions",
         ansi("[VALIDATION]", 35),
         ansi(step.superbatch(), num_cs),
         ansi(format!("{validation_time:.1}"), num_cs),
