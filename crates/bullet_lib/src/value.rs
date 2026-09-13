@@ -1,21 +1,17 @@
 pub(crate) mod builder;
 pub mod loader;
 pub mod save;
+pub mod validation;
 
-use std::{
-    cell::RefCell,
-    sync::mpsc::sync_channel,
-    thread,
-    time::Instant,
-};
+use std::cell::RefCell;
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
-    model::{ModelEvaluator, LossEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
+    model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
-    run::{self, Step, logger, DataLoader},
+    run::{self, Step, logger},
 };
 
 use crate::{
@@ -29,6 +25,7 @@ use crate::{
 };
 
 use loader::LoadableDataType;
+use validation::ValidationRunner;
 
 /// Value network trainer, generally for training NNUE networks.
 pub struct ValueTrainer<Opt: OptimiserState<ExecutionContext>, Inp: SparseInputType, Out> {
@@ -178,12 +175,12 @@ where
                 let mapper = self.state.make_mapper(
                     schedule.eval_scale,
                     schedule.wdl_scheduler.clone(),
-                )
+                );
 
                 Some(ValidationRunner::new(
-                    val_loader.clone(),
+                    val_loader,
                     mapper,
-                    &self.optimiser,,
+                    &self.optimiser,
                     steps,
                     test.freq,
                     test.batches,
@@ -222,7 +219,7 @@ where
                     ticks_since_last = 0.0;
                 }
 
-                if let Some((test, val_rx, _, loss_evaluator)) = validation.as_mut() 
+                if let Some(validation) = validation.as_mut() 
                     && validation.should_run(step)
                 {
                     let result = validation.evaluate(trainer, step);
@@ -230,7 +227,7 @@ where
                     val_record.borrow_mut().push((
                         step.superbatch(),
                         step.batch(),
-                        result.loss(),
+                        result.loss,
                     ));
 
                     logger::report_validation(
