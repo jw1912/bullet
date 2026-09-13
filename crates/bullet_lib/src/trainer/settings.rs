@@ -49,7 +49,7 @@ impl LocalSettings<'_> {
         if let Some(test) = self.test_set {
             println!("Validation Data        : {}", ansi(test.path, "32;1"));
             println!(
-                "   Frequency           : {}", 
+                "   Frequency           : {}",
                 ansi(if test.freq == 0 { "End of superbatch".to_string() } else { format!("{}", test.freq) }, 31)
             );
             println!("   Batches             : {}", ansi(test.batches, 31));

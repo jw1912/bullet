@@ -51,8 +51,8 @@ where
         assert!(test.batches > 0);
         let batch_size = steps.batch_size;
 
-        let validation_events_per_superbatch = 
-        if test.freq > 0 { steps.batches_per_superbatch.div_ceil(test.freq) } else { 1 };
+        let validation_events_per_superbatch =
+            if test.freq > 0 { steps.batches_per_superbatch.div_ceil(test.freq) } else { 1 };
 
         let validation_batches_per_superbatch = validation_events_per_superbatch * test.batches;
         let skip_count = (steps.start_superbatch - 1) * validation_batches_per_superbatch * batch_size;
@@ -101,7 +101,7 @@ where
 
     pub fn should_run(&self, step: Step) -> bool {
         step.batch() == step.batches_per_superbatch() - 1
-        || (step.batch() > 0 && step.batch().is_multiple_of(self.freq))
+            || (step.batch() > 0 && step.batch().is_multiple_of(self.freq))
     }
 
     pub fn evaluate<O>(&mut self, optimiser: &Optimiser<ExecutionContext, O>, step: Step) -> ValidationResult

@@ -12,23 +12,15 @@ use bullet_lib::{
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
         settings::{LocalSettings, TestDataset},
     },
-    value::{
-        ValueTrainerBuilder,
-        loader::{
-            //DirectSequentialDataLoader,
-            sfbinpack::{SfBinpackLoader, TrainingDataEntry},
-        },
-    },
+    value::{ValueTrainerBuilder, loader::DirectSequentialDataLoader},
 };
 
 fn main() {
     // hyperparams to fiddle with
     let hl_size = 1024;
     let l2 = 16;
-
     let train_path = "data/baseline.data";
     let val_path = "data/validation.data";
-
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);
     let superbatches = 800;

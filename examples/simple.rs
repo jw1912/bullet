@@ -71,7 +71,7 @@ fn main() {
 
     let settings = LocalSettings {
         threads: 4,
-        test_set: Some(TestDataset::at(&VAL_PATH).freq(0).batches(128)),
+        test_set: Some(TestDataset::at("data/validation.data").freq(0).batches(128)),
         output_directory: "checkpoints",
         batch_queue_size: 64,
     };
@@ -92,20 +92,19 @@ fn main() {
     };
 
     let _val_loader_viri = {
-        use loader::viribinpack::{Filter, ViriBinpackLoader, ViriFilter};
+        use loader::viribinpack::{Board, Move, ViriBinpackLoader, ViriFilter};
 
         let file_path = "data/viri_val.vf";
         let buffer_size_mb = 1024;
         let threads = 4;
 
         // no filter as all positions are valid for testing
-        fn accept_all(_: &Board, _: Move, _: i16, _: f32,) -> bool {
+        fn accept_all(_: &Board, _: Move, _: i16, _: f32) -> bool {
             true
         }
-        let val_filter: fn(&TrainingDataEntry) -> bool = accept_all;
 
         ViriBinpackLoader::new(file_path, buffer_size_mb, threads, ViriFilter::Custom(accept_all))
-    }
+    };
 
     // loading from a SF binpack
     let _train_loader_sf = {
@@ -128,7 +127,7 @@ fn main() {
     };
 
     let _val_loader_sf = {
-        use loader::sfbinpack::{MoveType, PieceType, SfBinpackLoader, TrainingDataEntry};
+        use loader::sfbinpack::{SfBinpackLoader, TrainingDataEntry};
 
         let file_path = "data/sf_val.data";
         let buffer_size_mb = 1024;
@@ -145,9 +144,9 @@ fn main() {
 
     // loading directly from a `BulletFormat` file
     let train_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
-    let val_loader = loader::DirectSequentialDataLoader::new(&["data/validation.data"])
-       
-    trainer.run(&schedule, &settings, &_train_loader_sf, Some(&_val_loader_sf));
+    let val_loader = loader::DirectSequentialDataLoader::new(&["data/validation.data"]);
+
+    trainer.run(&schedule, &settings, &train_loader, Some(&val_loader));
 }
 
 // ============ EXAMPLE INFERENCE STARTS HERE ============
