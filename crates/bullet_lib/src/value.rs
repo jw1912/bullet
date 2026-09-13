@@ -175,39 +175,21 @@ where
             (None, Some(_)) => {panic!("A validation data reader was supplied, but LocalSettings::test_set is None.")}
 
             (Some(test), Some(val_loader)) => {
-                let validation_events_per_superbatch = steps.batches_per_superbatch.div_ceil(test.freq);
-                let validation_steps = run::TrainingSteps {
-                    batch_size: steps.batch_size,
-                    batches_per_superbatch: validation_events_per_superbatch * test.batches,
-
-                    start_superbatch: steps.start_superbatch,
-                    end_superbatch: steps.end_superbatch,
-                };
-
-                let val_loader = self.state.make_read_map_loader(
-                    val_loader.clone(),
+                let mapper = self.state.make_mapper(
                     schedule.eval_scale,
                     schedule.wdl_scheduler.clone(),
+                )
+
+                Some(ValidationRunner::new(
+                    val_loader.clone(),
+                    mapper,
+                    &self.optimiser,,
+                    steps,
+                    test.freq,
+                    test.batches,
+                    settings.batch_queue_size,
                     settings.threads as u8,
-                );
-
-                let (val_tx, val_rx) = sync_channel(settings.batch_queue_size);
-
-                let handle = thread::spawn(move || {
-                    val_loader.map_batches(
-                        Step::from(validation_steps),
-                        validation_steps.batch_size,
-                        |batch| val_tx.send(batch).is_err(),
-                    ).unwrap();
-                });
-
-                let evaluator = LossEvaluator::new(
-                    self.optimiser.definition(),
-                    self.optimiser.device(),
-                    steps.batch_size,
-                ).unwrap();
-
-                Some((test, val_rx, handle, evaluator))
+                ))
             }
         };
 
@@ -241,39 +223,23 @@ where
                 }
 
                 if let Some((test, val_rx, _, loss_evaluator)) = validation.as_mut() 
-                    && (
-                        step.batch().is_multiple_of(test.freq) 
-                        || (
-                            test.freq > step.batches_per_superbatch() 
-                            && step.batch() == step.batches_per_superbatch()
-                            )
-                       )
+                    && validation.should_run(step)
                 {
-                    let timer = Instant::now();
+                    let result = validation.evaluate(trainer, step);
 
-                    // optimiser weights have just been updated for this training batch
-                    // point the validation evaluator at the current device buffers
-                    loss_evaluator.load_device_weights(trainer.weights()).unwrap();
+                    val_record.borrow_mut().push((
+                        step.superbatch(),
+                        step.batch(),
+                        result.loss(),
+                    ));
 
-                    let mut val_loss_sum = 0.0;
-                    for _ in 0..test.batches {
-                        let host_batch = val_rx.recv().expect("Validation data loader ended early");
-                        let device_batch = host_batch.to_device(&trainer.device()).unwrap();
-                        
-                        let batch_loss = loss_evaluator.evaluate(&device_batch).unwrap();
-                        val_loss_sum += batch_loss / steps.batch_size as f32;
-                        
-                        let val_loss = val_loss_sum / test.batches as f32;
-                        val_record.borrow_mut().push((step.superbatch(), step.batch(), val_loss));
-
-                        logger::report_validation(
-                            step, 
-                            val_loss_sum, 
-                            timer.elapsed().as_secs_f32(),
-                            steps.batch_size * test.batches, 
-                            test.batches,
-                        );
-                    }
+                    logger::report_validation(
+                        step,
+                        result.loss,
+                        result.seconds,
+                        result.positions,
+                        result.batches,
+                    );
                 }
             },
             |trainer, step| {
@@ -292,9 +258,8 @@ where
         )
         .unwrap();
 
-        if let Some((_, val_rx, handle, _)) = validation {
-            drop(val_rx);
-            handle.join().unwrap();
+        if let Some(validation) = validation {
+            validation.finish();
         }
     }
 
