@@ -121,7 +121,7 @@ impl ModelDefinition {
         Ok((ModelFunctionDefinition { ir: bwd, map }, gmap))
     }
 
-    // forward pass + register loss without backwards pass
+    // register loss without backwards pass
     pub fn lower_loss(&self, batch_size: usize) -> Result<(ModelFunctionDefinition, NodeId), IRTrace> {
         let (mut fwd, map) = self.ir.lower(batch_size)?;
 

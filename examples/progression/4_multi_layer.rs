@@ -26,9 +26,8 @@ fn main() {
     let hl_size = 1024;
     let l2 = 16;
 
-    //let dataset_path = "data/baseline.data";
-    let train_path = "/Users/maxol/Downloads/fishpack32.binpack";
-    let val_path = "/Users/maxol/Downloads/test79-may2022-16tb7p-filter-v6-dd.min-mar2023.unmin.high-simple-eval-1k.min-v2.binpack";
+    let train_path = "data/baseline.data";
+    let val_path = "data/validation.data";
 
     let initial_lr = 0.001;
     let final_lr = 0.001 * 0.3f32.powi(5);
@@ -115,18 +114,15 @@ fn main() {
         save_rate: 10,
     };
 
-    fn accept_all(_: &TrainingDataEntry) -> bool {
-        true
-    }
-    let train_loader = SfBinpackLoader::new(train_path, 1024, 4, accept_all);
-    let val_loader = SfBinpackLoader::new(val_path, 256, 4, accept_all);
-
     let settings = LocalSettings {
         threads: 4,
-        test_set: Some(TestDataset::at(val_path).freq(0).batches(128)),
+        test_set: Some(TestDataset::at(val_path).freq(1024).batches(128)),
         output_directory: "checkpoints",
         batch_queue_size: 64,
     };
 
-    trainer.run(&schedule, &settings, &train_loader, Some(&val_loader));
+    let train_loader = DirectSequentialDataLoader::new(&[train_path]);
+    let val_loader = DirectSequentialDataLoader::new(&[val_path]);
+
+    trainer.run(&schedule, &settings, &train_loader, Some(&val_loader)); // or 'None' if no val-set
 }

@@ -58,10 +58,16 @@ fn main() {
         lr_scheduler: lr::CosineDecayLR { initial_lr, final_lr, final_superbatch: superbatches },
         save_rate: 10,
     };
+    
+    let settings = LocalSettings {
+        threads: 4,
+        test_set: Some(TestDataset::at(val_path).freq(1024).batches(128)),
+        output_directory: "checkpoints",
+        batch_queue_size: 64,
+    };
 
-    let settings = LocalSettings { threads: 2, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
+    let train_loader = DirectSequentialDataLoader::new(&[train_path]);
+    let val_loader = DirectSequentialDataLoader::new(&[val_path]);
 
-    let dataloader = DirectSequentialDataLoader::new(&[dataset_path]);
-
-    trainer.run(&schedule, &settings, &dataloader, None);
+    trainer.run(&schedule, &settings, &train_loader, Some(&val_loader)); // or 'None' if no val-set
 }

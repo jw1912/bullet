@@ -11,7 +11,7 @@ use bullet_lib::{
     trainer::{
         save::SavedFormat,
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
-        settings::LocalSettings,
+        settings::{LocalSettings, TestDataset},
     },
     value::{ValueTrainerBuilder, loader},
 };
@@ -69,10 +69,15 @@ fn main() {
         save_rate: 10,
     };
 
-    let settings = LocalSettings { threads: 4, test_set: None, output_directory: "checkpoints", batch_queue_size: 64 };
+    let settings = LocalSettings {
+        threads: 4,
+        test_set: Some(TestDataset::at(&VAL_PATH).freq(0).batches(128)),
+        output_directory: "checkpoints",
+        batch_queue_size: 64,
+    };
 
     // loading from a Viriformat binpack
-    let _data_loader_viri = {
+    let _train_loader_viri = {
         use loader::viribinpack::{Filter, ViriBinpackLoader, ViriFilter};
 
         let file_path = "data/viri.vf";
@@ -81,18 +86,35 @@ fn main() {
 
         // The `viriformat` crate exposes a useful `Filter` of its own, but you can also
         // use a custom function like for SF binpacks with `ViriFilter::custom(function)`
-        let filter = ViriFilter::Builtin(Filter::default());
+        let train_filter = ViriFilter::Builtin(Filter::default());
 
-        ViriBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
+        ViriBinpackLoader::new(file_path, buffer_size_mb, threads, train_filter)
     };
 
-    // loading from a SF binpack
-    let _data_loader_sf = {
-        use loader::sfbinpack::{MoveType, PieceType, SfBinpackLoader, TrainingDataEntry};
+    let _val_loader_viri = {
+        use loader::viribinpack::{Filter, ViriBinpackLoader, ViriFilter};
 
-        let file_path = "data/test80-2024-02-feb-2tb7p.min-v2.v6.binpack";
+        let file_path = "data/viri_val.vf";
         let buffer_size_mb = 1024;
         let threads = 4;
+
+        // no filter as all positions are valid for testing
+        fn accept_all(_: &Board, _: Move, _: i16, _: f32,) -> bool {
+            true
+        }
+        let val_filter: fn(&TrainingDataEntry) -> bool = accept_all;
+
+        ViriBinpackLoader::new(file_path, buffer_size_mb, threads, ViriFilter::Custom(accept_all))
+    }
+
+    // loading from a SF binpack
+    let _train_loader_sf = {
+        use loader::sfbinpack::{MoveType, PieceType, SfBinpackLoader, TrainingDataEntry};
+
+        let file_path = "data/sf_train.data";
+        let buffer_size_mb = 1024;
+        let threads = 4;
+
         fn filter(entry: &TrainingDataEntry) -> bool {
             entry.ply >= 16
                 && !entry.pos.is_checked(entry.pos.side_to_move())
@@ -100,14 +122,32 @@ fn main() {
                 && entry.mv.mtype() == MoveType::Normal
                 && entry.pos.piece_at(entry.mv.to()).piece_type() == PieceType::None
         }
+        let train_filter: fn(&TrainingDataEntry) -> bool = filter;
 
-        SfBinpackLoader::new(file_path, buffer_size_mb, threads, filter)
+        SfBinpackLoader::new(file_path, buffer_size_mb, threads, train_filter)
+    };
+
+    let _val_loader_sf = {
+        use loader::sfbinpack::{MoveType, PieceType, SfBinpackLoader, TrainingDataEntry};
+
+        let file_path = "data/sf_val.data";
+        let buffer_size_mb = 1024;
+        let threads = 4;
+
+        // no filter as all positions are valid for testing
+        fn accept_all(_: &TrainingDataEntry) -> bool {
+            true
+        }
+        let val_filter: fn(&TrainingDataEntry) -> bool = accept_all;
+
+        SfBinpackLoader::new(file_path, buffer_size_mb, threads, val_filter)
     };
 
     // loading directly from a `BulletFormat` file
-    let data_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
-
-    trainer.run(&schedule, &settings, &data_loader, None);
+    let train_loader = loader::DirectSequentialDataLoader::new(&["data/baseline.data"]);
+    let val_loader = loader::DirectSequentialDataLoader::new(&["data/validation.data"])
+       
+    trainer.run(&schedule, &settings, &_train_loader_sf, Some(&_val_loader_sf));
 }
 
 // ============ EXAMPLE INFERENCE STARTS HERE ============
