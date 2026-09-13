@@ -182,8 +182,7 @@ where
                     mapper,
                     &self.optimiser,
                     steps,
-                    test.freq,
-                    test.batches,
+                    test,
                     settings.batch_queue_size,
                     settings.threads as u8,
                 ))

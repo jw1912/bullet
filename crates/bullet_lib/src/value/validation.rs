@@ -11,7 +11,7 @@ use bullet_trainer::{
     run::{Step, TrainingSteps},
 };
 
-use crate::nn::ExecutionContext;
+use crate::{nn::ExecutionContext, trainer::settings::TestDataset};
 
 pub struct ValidationResult {
     pub loss: f32,
@@ -40,8 +40,7 @@ where
         mapper: ModelInputsMapper<T>,
         optimiser: &Optimiser<ExecutionContext, O>,
         steps: TrainingSteps,
-        freq: usize,
-        batches: usize,
+        test: TestDataset<'_>,
         queue_size: usize,
         threads: u8,
     ) -> Self
@@ -49,12 +48,12 @@ where
         D: DataReader<T>,
         O: OptimiserState<ExecutionContext>,
     {
-        assert!(freq > 0);
-        assert!(batches > 0);
+        assert!(test.freq > 0);
+        assert!(test.batches > 0);
 
         let batch_size = steps.batch_size;
-        let validation_events_per_superbatch = steps.batches_per_superbatch.div_ceil(freq);
-        let validation_batches_per_superbatch = validation_events_per_superbatch * batches;
+        let validation_events_per_superbatch = steps.batches_per_superbatch.div_ceil(test.freq);
+        let validation_batches_per_superbatch = validation_events_per_superbatch * test.batches;
         let skip_count = (steps.start_superbatch - 1) * validation_batches_per_superbatch * batch_size;
 
         let reader = reader.clone();
@@ -96,7 +95,7 @@ where
 
         let evaluator = LossEvaluator::new(optimiser.definition(), optimiser.device(), batch_size).unwrap();
 
-        Self { receiver, handle, mapper, evaluator, freq, batches, batch_size, threads }
+        Self { receiver, handle, mapper, evaluator, freq: test.freq, batches: test.batches, batch_size, threads }
     }
 
     pub fn should_run(&self, step: Step) -> bool {

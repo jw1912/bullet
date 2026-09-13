@@ -60,11 +60,3 @@ path = "../../examples/progression/4_multi_layer.rs"
 [[example]]
 name = "advanced"
 path = "../../examples/advanced/main.rs"
-
-[[example]]
-name = "v2"
-path = "../../../../nnue/v2.rs"
-
-[[example]]
-name = "v3"
-path = "../../../../nnue/v3.rs"
