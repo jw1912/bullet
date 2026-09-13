@@ -122,7 +122,7 @@ impl ModelDefinition {
     }
 
     // forward pass + register loss without backwards pass
-    pub fn lower_loss(&self, batch_size: usize) -> Result<ModelFunctionDefinition, IRTrace> {
+    pub fn lower_loss(&self, batch_size: usize) -> Result<(ModelFunctionDefinition, NodeId), IRTrace> {
         let (mut fwd, map) = self.ir.lower(batch_size)?;
 
         let loss = self.loss.ok_or("Loss node not defined!")?;
@@ -133,6 +133,6 @@ impl ModelDefinition {
         fwd.transform(InlineSubgraphs)?;
         fwd.optimise()?;
 
-        Ok(ModelFunctionDefinition { ir: fwd, map })
+        Ok((ModelFunctionDefinition { ir: fwd, map }, loss))
     }
 }

@@ -91,7 +91,7 @@ pub struct LossEvaluator<G: Gpu> {
 
 impl<G: Gpu> LossEvaluator<G> {
     pub fn new(defn: &ModelDefinition, device: Arc<Device<G>>, batch_size: usize) -> Result<Self, G::Error> {
-        let forward = defn.lower_forward(batch_size).map_err(|e| format!("{e}"))?;
+        let (forward, loss_tid) = defn.lower_loss(batch_size).map_err(|e| format!("{e}"))?;
         let mut bufs = BTreeMap::new();
 
         let mut weights = BTreeMap::new();
@@ -106,12 +106,10 @@ impl<G: Gpu> LossEvaluator<G> {
             inputs.insert(name.clone(), tid);
         }
 
-        let loss_id = defn.loss().expect("Loss node must exist for validation");
-        let tid = *forward.map().get(&loss_id).unwrap();
-        let ty = forward.ir().get_node(tid).map_err(|e| format!("{e}"))?.ty();
+        let ty = forward.ir().get_node(loss_tid).map_err(|e| format!("{e}"))?.ty();
         let loss = Buffer::zeroed(&device, ty.dtype(), ty.size().get())?;
 
-        bufs.insert(tid, loss.clone());
+        bufs.insert(loss_tid, loss.clone());
 
         let stream = device.new_stream()?;
         let func = Function::new(device, forward.ir().clone()).map_err(|e| format!("{e}"))?;
