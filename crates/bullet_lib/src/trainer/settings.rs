@@ -12,10 +12,10 @@ pub struct TestDataset<'a> {
 
 impl<'a> TestDataset<'a> {
     pub fn at(path: &'a str) -> TestDataset<'a> {
-        Self { path, freq: 32 , batches: 1}
+        Self { path, freq: 32, batches: 1 }
     }
 
-    pub fn freq (mut self, freq: usize) -> Self {
+    pub fn freq(mut self, freq: usize) -> Self {
         assert!(freq > 0, "Validation frequency must be positive!");
         self.freq = freq;
         self

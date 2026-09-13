@@ -74,10 +74,7 @@ where
                     remaining = &remaining[take..];
 
                     if incomplete.len() == batch_size {
-                        let batch = std::mem::replace(
-                            &mut incomplete,
-                            Vec::with_capacity(batch_size),
-                        );
+                        let batch = std::mem::replace(&mut incomplete, Vec::with_capacity(batch_size));
 
                         if sender.send(batch).is_err() {
                             return true;
@@ -97,34 +94,16 @@ where
             });
         });
 
-        let evaluator = LossEvaluator::new(
-            optimiser.definition(),
-            optimiser.device(),
-            batch_size,
-        )
-        .unwrap();
+        let evaluator = LossEvaluator::new(optimiser.definition(), optimiser.device(), batch_size).unwrap();
 
-        Self {
-            receiver,
-            handle,
-            mapper,
-            evaluator,
-            freq,
-            batches,
-            batch_size,
-            threads,
-        }
+        Self { receiver, handle, mapper, evaluator, freq, batches, batch_size, threads }
     }
 
     pub fn should_run(&self, step: Step) -> bool {
         step.batch().is_multiple_of(self.freq)
     }
 
-    pub fn evaluate<O>(
-        &mut self,
-        optimiser: &Optimiser<ExecutionContext, O>,
-        step: Step,
-    ) -> ValidationResult
+    pub fn evaluate<O>(&mut self, optimiser: &Optimiser<ExecutionContext, O>, step: Step) -> ValidationResult
     where
         O: OptimiserState<ExecutionContext>,
     {
@@ -153,7 +132,7 @@ where
     }
 
     pub fn finish(self) {
-        let Self {receiver, handle, ..} = self;
+        let Self { receiver, handle, .. } = self;
         drop(receiver);
         handle.join().unwrap();
     }

@@ -147,8 +147,7 @@ where
         settings: &LocalSettings,
         train_loader: &D,
         val_loader: Option<&D>,
-    )
-    where 
+    ) where
         D: DataReader<Inp::RequiredDataType>,
     {
         logger::clear_colours();
@@ -168,14 +167,15 @@ where
 
         let mut validation = match (settings.test_set, val_loader) {
             (None, None) => None,
-            (Some(_), None) => {panic!("Validation is configured in LocalSettings, but no validation data reader was supplied.");}
-            (None, Some(_)) => {panic!("A validation data reader was supplied, but LocalSettings::test_set is None.")}
+            (Some(_), None) => {
+                panic!("Validation is configured in LocalSettings, but no validation data reader was supplied.");
+            }
+            (None, Some(_)) => {
+                panic!("A validation data reader was supplied, but LocalSettings::test_set is None.")
+            }
 
             (Some(test), Some(val_loader)) => {
-                let mapper = self.state.make_mapper(
-                    schedule.eval_scale,
-                    schedule.wdl_scheduler.clone(),
-                );
+                let mapper = self.state.make_mapper(schedule.eval_scale, schedule.wdl_scheduler.clone());
 
                 Some(ValidationRunner::new(
                     val_loader,
@@ -219,24 +219,12 @@ where
                     ticks_since_last = 0.0;
                 }
 
-                if let Some(validation) = validation.as_mut() 
+                if let Some(validation) = validation.as_mut()
                     && validation.should_run(step)
                 {
                     let result = validation.evaluate(trainer, step);
-
-                    val_record.borrow_mut().push((
-                        step.superbatch(),
-                        step.batch(),
-                        result.loss,
-                    ));
-
-                    logger::report_validation(
-                        step,
-                        result.loss,
-                        result.seconds,
-                        result.positions,
-                        result.batches,
-                    );
+                    val_record.borrow_mut().push((step.superbatch(), step.batch(), result.loss));
+                    logger::report_validation(step, result.loss, result.seconds, result.positions, result.batches);
                 }
             },
             |trainer, step| {

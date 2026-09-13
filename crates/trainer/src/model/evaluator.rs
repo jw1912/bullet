@@ -1,9 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use bullet_compiler::{
-    ir::NodeId,
-    tensor::TValue,
-};
+use bullet_compiler::{ir::NodeId, tensor::TValue};
 use bullet_gpu::{
     buffer::Buffer,
     function::Function,
@@ -83,14 +80,13 @@ impl<G: Gpu> ModelEvaluator<G> {
     }
 }
 
-
 pub struct LossEvaluator<G: Gpu> {
     stream: Arc<Stream<G>>,
     func: Function<G>,
     bufs: BTreeMap<NodeId, Arc<Buffer<G>>>,
     weights: BTreeMap<String, NodeId>,
     inputs: BTreeMap<String, NodeId>,
-    loss: Arc<Buffer<G>>,   
+    loss: Arc<Buffer<G>>,
 }
 
 impl<G: Gpu> LossEvaluator<G> {
