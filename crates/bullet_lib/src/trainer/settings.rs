@@ -50,7 +50,7 @@ impl LocalSettings<'_> {
         if let Some(test) = self.test_set {
             println!("Validation Data    : {}", ansi(test.path, "32;1"));
             println!("   Frequency       : {}", ansi(test.freq, "32;1"));
-            println!("   Batches         : {}", ansi(test.batches), "32;1");
+            println!("   Batches         : {}", ansi(test.batches, "32;1"));
         }
     }
 }

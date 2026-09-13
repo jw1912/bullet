@@ -144,7 +144,7 @@ where
     Out: OutputBuckets<Inp::RequiredDataType>,
     Out: OutputBuckets<Inp::RequiredDataType>,
 {
-    pub fn run(
+    pub fn run<D>(
         &mut self,
         schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
         settings: &LocalSettings,
@@ -152,7 +152,7 @@ where
         val_loader: Option<&D>,
     )
     where 
-        D: DataReader<Inpt::RequiredDataType>,
+        D: DataReader<Inp::RequiredDataType>,
     {
         logger::clear_colours();
         println!("{}", logger::ansi("Training Preamble", "34;1"));
@@ -189,7 +189,7 @@ where
                     schedule.eval_scale,
                     schedule.wdl_scheduler.clone(),
                     settings.threads as u8,
-                )
+                );
 
                 let (val_tx, val_rx) = sync_channel(settings.batch_queue_size);
 
@@ -197,11 +197,11 @@ where
                     val_loader.map_batches(
                         Step::from(validation_steps),
                         validation_steps.batch_size,
-                        |batch| validation_tx.send(batch).is_err(),
+                        |batch| val_tx.send(batch).is_err(),
                     ).unwrap();
                 });
 
-                let mut evaluator = LossEvaluator::new(
+                let evaluator = LossEvaluator::new(
                     self.optimiser.definition(),
                     self.optimiser.device(),
                     steps.batch_size,
@@ -209,7 +209,7 @@ where
 
                 Some((test, val_rx, handle, evaluator))
             }
-        }
+        };
 
         let _ = std::fs::create_dir(settings.output_directory);
 
@@ -244,7 +244,7 @@ where
                     && (
                         step.batch().is_multiple_of(test.freq) 
                         || (
-                            test.freq > step.batches_per_superbatch 
+                            test.freq > step.batches_per_superbatch() 
                             && step.batch() == step.batches_per_superbatch()
                             )
                        )

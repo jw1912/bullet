@@ -94,8 +94,8 @@ pub struct LossEvaluator<G: Gpu> {
 }
 
 impl<G: Gpu> LossEvaluator<G> {
-    pub fn new(defn: &ModelDefinition, device: Arc<Device<G>>) -> Result<Self, G::Error> {
-        let forward = defn.lower_forward(1).map_err(|e| format!("{e}"))?;
+    pub fn new(defn: &ModelDefinition, device: Arc<Device<G>>, batch_size: usize) -> Result<Self, G::Error> {
+        let forward = defn.lower_forward(batch_size).map_err(|e| format!("{e}"))?;
         let mut bufs = BTreeMap::new();
 
         let mut weights = BTreeMap::new();
@@ -110,9 +110,9 @@ impl<G: Gpu> LossEvaluator<G> {
             inputs.insert(name.clone(), tid);
         }
 
-        let loss_id = defn.loss().expect("Loss node must exist for validation")
+        let loss_id = defn.loss().expect("Loss node must exist for validation");
         let tid = *forward.map().get(&loss_id).unwrap();
-        let ty = forward.ir().get_node(tid).map(|e| format!("{e}"))?.ty();
+        let ty = forward.ir().get_node(tid).map_err(|e| format!("{e}"))?.ty();
         let loss = Buffer::zeroed(&device, ty.dtype(), ty.size().get())?;
 
         bufs.insert(tid, loss.clone());
@@ -137,7 +137,7 @@ impl<G: Gpu> LossEvaluator<G> {
         Ok(())
     }
 
-    pub fn evaluate(&mut self, inputs: &TensorMap<G>) -> Result<&TensorMap<G>, G::Error> {
+    pub fn evaluate(&mut self, inputs: &TensorMap<G>) -> Result<f32, G::Error> {
         self.func.prealloc()?;
 
         for (input, buf) in inputs {
@@ -148,7 +148,7 @@ impl<G: Gpu> LossEvaluator<G> {
 
         self.func.execute(self.stream.clone(), &self.bufs)?.value()?;
 
-        let TValue::F32(loss) = self.loss.to_host()? else { unreachable! };
+        let TValue::F32(loss) = self.loss.to_host()? else { unreachable!("Loss cannot be converted to Tensor Value!") };
         let [loss] = loss[..] else { panic!("Loss output must be scalar!") };
 
         Ok(loss)

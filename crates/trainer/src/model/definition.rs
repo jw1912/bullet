@@ -122,10 +122,10 @@ impl ModelDefinition {
     }
 
     // forward pass + register loss without backwards pass
-    pub fn lower_loss(&self, batch_size: usize) -> Result<(ModelFunctionDefinition, BTreeMap<NodeId, NodeId>), IRTrace> {
+    pub fn lower_loss(&self, batch_size: usize) -> Result<ModelFunctionDefinition, IRTrace> {
         let (mut fwd, map) = self.ir.lower(batch_size)?;
 
-        let loss = self.loss.ok_or("Loss node not defined!");
+        let loss = self.loss.ok_or("Loss node not defined!")?;
         let loss = *map.get(&loss).unwrap();
 
         fwd.register_output(loss);
