@@ -11,6 +11,10 @@ pub trait DataReader<T>: Clone + Send + Sync + 'static {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, f: F);
 }
 
+pub trait DataReaderOnce<T>: DataReader<T> {
+    fn read_once<F: FnMut(&[T]) -> bool>(&self, f: F);
+}
+
 pub struct ReadMapLoader<R, D> {
     reader: R,
     mapper: ModelInputsMapper<D>,

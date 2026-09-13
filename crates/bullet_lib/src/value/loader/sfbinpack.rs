@@ -5,7 +5,7 @@ use std::{
     thread,
 };
 
-use bullet_trainer::reader::DataReader;
+use bullet_trainer::reader::{DataReader, DataReaderOnce};
 use sfbinpack::{ChunkReader, read_chunk_into};
 pub use sfbinpack::{
     TrainingDataEntry,
@@ -168,6 +168,47 @@ where
                 buffer_msg_sender.send(true).unwrap();
                 break 'dataloading;
             }
+        }
+    }
+}
+
+impl<T> DataReaderOnce<ChessBoard> for SfBinpackLoader<T>
+where
+    T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
+{
+    fn read_once<F: FnMut(&[ChessBoard]) -> bool>(&self, mut f: F) {
+        let filter = &self.filter;
+
+        let mut output = Vec::with_capacity(self.buffer_size);
+
+        for file_path in &self.file_paths {
+            let file = File::open(file_path).unwrap();
+            let mut reader =
+                sfbinpack::CompressedTrainingDataEntryReader::new(file).unwrap();
+
+            while reader.has_next() {
+                let entry = reader.next();
+
+                if filter(&entry) {
+                    output.push(convert_to_bulletformat(&entry));
+                }
+
+                if output.len() == self.buffer_size {
+                    shuffle(&mut output);
+
+                    if f(&output) {
+                        return;
+                    }
+
+                    output.clear();
+                }
+            }
+        }
+
+        // Don't drop the final partial buffer.
+        if !output.is_empty() {
+            shuffle(&mut output);
+            let _ = f(&output);
         }
     }
 }

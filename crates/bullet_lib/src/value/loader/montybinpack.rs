@@ -8,7 +8,7 @@ use crate::game::formats::bulletformat::ChessBoard;
 
 use super::rng::seeded_rng;
 
-use bullet_trainer::reader::DataReader;
+use bullet_trainer::reader::{DataReader, DataReaderOnce};
 use montyformat::{
     FastDeserialise, MontyValueFormat,
     chess::{Move, Position},
@@ -128,6 +128,53 @@ where
                 buffer_msg_sender.send(true).unwrap();
                 break 'dataloading;
             }
+        }
+    }
+}
+
+impl<T> DataReaderOnce<ChessBoard> for MontyBinpackLoader<T>
+where
+    T: Fn(&Position, Move, i16, f32) -> bool + Clone + Send + Sync + 'static,
+{
+    fn read_once<F: FnMut(&[ChessBoard]) -> bool>(&self, mut f: F) {
+        let filter = &self.filter;
+
+        let mut output = Vec::with_capacity(self.buffer_size);
+        let mut parsed = Vec::new();
+
+        for file_path in &self.file_paths {
+            let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
+
+            loop {
+                let mut game_bytes = Vec::new();
+
+                if MontyValueFormat::deserialise_fast_into_buffer(&mut reader, &mut game_bytes).is_err() {
+                    break;
+                }
+
+                parsed.clear();
+                parse_into_buffer(&game_bytes, &mut parsed, filter);
+
+                for board in parsed.drain(..) {
+                    output.push(board);
+
+                    if output.len() == self.buffer_size {
+                        shuffle(&mut output);
+
+                        if f(&output) {
+                            return;
+                        }
+
+                        output.clear();
+                    }
+                }
+            }
+        }
+
+        // Don't drop the final partial buffer.
+        if !output.is_empty() {
+            shuffle(&mut output);
+            let _ = f(&output);
         }
     }
 }

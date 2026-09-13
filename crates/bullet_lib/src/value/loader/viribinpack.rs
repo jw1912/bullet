@@ -8,7 +8,7 @@ use crate::game::formats::bulletformat::ChessBoard;
 
 use super::rng::seeded_rng;
 
-use bullet_trainer::reader::DataReader;
+use bullet_trainer::reader::{DataReader, DataReaderOnce};
 pub use viriformat::{
     chess::{board::Board, chessmove::Move},
     dataformat::{Filter, Game, WDL},
@@ -148,6 +148,61 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
         }
 
         drop(buffer_receiver);
+    }
+}
+
+impl DataReaderOnce<ChessBoard> for ViriBinpackLoader {
+    fn read_once<F: FnMut(&[ChessBoard]) -> bool>(&self, mut f: F) {
+        let filter = &self.filter;
+
+        let mut output = Vec::with_capacity(self.buffer_size);
+
+        // Reused by viriformat when deserialising games.
+        let mut reusable = Vec::new();
+
+        // Reused for the positions produced by each game.
+        let mut parsed = Vec::new();
+
+        for file_path in &self.file_paths {
+            let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
+
+            loop {
+                let mut game_bytes = Vec::new();
+
+                if Game::deserialise_fast_into_buffer(&mut reader, &mut game_bytes).is_err() {
+                    break;
+                }
+
+                let game =
+                    Game::deserialise_from(&mut Cursor::new(&game_bytes), reusable).unwrap();
+
+                parsed.clear();
+                parse_into_buffer(&game, &mut parsed, filter);
+
+                // Reuse the game's move allocation on the next deserialisation.
+                reusable = game.moves;
+
+                for board in parsed.drain(..) {
+                    output.push(board);
+
+                    if output.len() == self.buffer_size {
+                        shuffle(&mut output);
+
+                        if f(&output) {
+                            return;
+                        }
+
+                        output.clear();
+                    }
+                }
+            }
+        }
+
+        // Don't drop the final partial buffer.
+        if !output.is_empty() {
+            shuffle(&mut output);
+            let _ = f(&output);
+        }
     }
 }
 

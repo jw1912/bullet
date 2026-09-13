@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use bullet_trainer::reader::DataReader;
+use bullet_trainer::reader::{DataReader, DataReaderOnce};
 
 #[derive(Clone)]
 pub struct InMemoryTextLoader {
@@ -32,5 +32,22 @@ where
                 break 'dataloading;
             }
         }
+    }
+}
+
+impl<T: FromStr> DataReaderOnce<T> for InMemoryTextLoader
+where
+    <T as FromStr>::Err: Debug,
+{
+    fn read_once<F: FnMut(&[T]) -> bool>(&self, mut f: F) {
+        let file = File::open(&self.file_path).unwrap();
+        let reader = BufReader::new(file);
+
+        let data = reader
+            .lines()
+            .map(|ln| ln.unwrap().parse::<T>().unwrap())
+            .collect::<Vec<_>>();
+
+        let _ = f(&data);
     }
 }

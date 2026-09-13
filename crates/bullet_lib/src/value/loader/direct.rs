@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use bullet_trainer::reader::{DataReader, FixedSizeData, FixedSizeDataReader};
+use bullet_trainer::reader::{DataReader, DataReaderOnce, FixedSizeData, FixedSizeDataReader};
 
 /// ### Safety
 /// This indicates that the type can be validly transmuted from
@@ -41,6 +41,17 @@ impl<T: CanBeDirectlySequentiallyLoaded> DataReader<T> for DirectSequentialDataL
         let paths = self.file_paths.iter().map(String::as_str).collect::<Vec<_>>();
 
         FixedSizeDataReader::<Wrap<T>>::new(&paths).read_chunks(skip_count, |wrapped| {
+            let ptr = wrapped.as_ptr().cast();
+            f(unsafe { std::slice::from_raw_parts(ptr, wrapped.len()) })
+        });
+    }
+}
+
+impl<T: CanBeDirectlySequentiallyLoaded> DataReaderOnce<T> for DirectSequentialDataLoader {
+    fn read_once<F: FnMut(&[T]) -> bool>(&self, mut f: F) {
+        let paths = self.file_paths.iter().map(String::as_str).collect::<Vec<_>>();
+
+        FixedSizeDataReader::<Wrap<T>>::new(&paths).read_once(|wrapped| {
             let ptr = wrapped.as_ptr().cast();
             f(unsafe { std::slice::from_raw_parts(ptr, wrapped.len()) })
         });
