@@ -6,11 +6,13 @@ pub struct TestDataset<'a> {
     pub path: &'a str,
     /// Frequency of validation loss (run validation every `freq` batches).
     pub freq: usize,
+    /// number of validation batches per validation-event
+    pub batches: usize,
 }
 
 impl<'a> TestDataset<'a> {
     pub fn at(path: &'a str) -> TestDataset<'a> {
-        Self { path, freq: 32 }
+        Self { path, freq: 32 , batches: 1}
     }
 }
 
@@ -32,5 +34,11 @@ impl LocalSettings<'_> {
     pub fn display(&self) {
         println!("Threads                : {}", ansi(self.threads, 31));
         println!("Output Path            : {}", ansi(self.output_directory, "32;1"));
+
+        if let Some(test) = self.test_set {
+            println!("Validation Data    : {}", ansi(test.path, "32;1"));
+            println!("   Frequency       : {}", ansi(test.freq, "32;1"));
+            println!("   Batches         : {}", ansi(test.batches), "32;1");
+        }
     }
 }
