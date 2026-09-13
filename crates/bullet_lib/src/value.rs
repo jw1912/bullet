@@ -2,15 +2,20 @@ pub(crate) mod builder;
 pub mod loader;
 pub mod save;
 
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    sync::mpsc::sync_channel,
+    thread,
+    time::Instant,
+};
 
 pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
-    model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
+    model::{ModelEvaluator, LossEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
-    run::{self, Step, logger},
+    run::{self, Step, logger, DataLoader},
 };
 
 use crate::{
@@ -137,34 +142,74 @@ where
     Inp: SparseInputType,
     Inp::RequiredDataType: LoadableDataType,
     Out: OutputBuckets<Inp::RequiredDataType>,
+    Out: OutputBuckets<Inp::RequiredDataType>,
 {
     pub fn run(
         &mut self,
         schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
         settings: &LocalSettings,
-        dataloader: &impl DataReader<Inp::RequiredDataType>,
-    ) {
+        train_loader: &D,
+        val_loader: Option<&D>,
+    )
+    where 
+        D: DataReader<Inpt::RequiredDataType>,
+    {
         logger::clear_colours();
         println!("{}", logger::ansi("Training Preamble", "34;1"));
 
         schedule.display();
         settings.display();
 
-        if settings.test_set.is_some() {
-            println!(
-                "{}",
-                logger::ansi("Warning: Validation data not currently implemented! Please bother me on discord.", "31")
-            )
-        }
-
         let steps = schedule.steps;
 
-        let dataloader = self.state.make_read_map_loader(
-            dataloader.clone(),
+        let train_loader = self.state.make_read_map_loader(
+            train_loader.clone(),
             schedule.eval_scale,
             schedule.wdl_scheduler.clone(),
             settings.threads as u8,
         );
+
+        let mut validation = match (settings.test_set, val_loader) {
+            (None, None) => None,
+            (Some(_), None) => {panic!("Validation is configured in LocalSettings, but no validation data reader was supplied.");}
+            (None, Some(_)) => {panic!("A validation data reader was supplied, but LocalSettings::test_set is None.")}
+
+            (Some(test), Some(val_loader)) => {
+                let validation_events_per_superbatch = steps.batches_per_superbatch.div_ceil(test.freq);
+                let validation_steps = run::TrainingSteps {
+                    batch_size: steps.batch_size,
+                    batches_per_superbatch: validation_events_per_superbatch * test.batches,
+
+                    start_superbatch: steps.start_superbatch,
+                    end_superbatch: steps.end_superbatch,
+                };
+
+                let val_loader = self.state.make_read_map_loader(
+                    val_loader.clone(),
+                    schedule.eval_scale,
+                    schedule.wdl_scheduler.clone(),
+                    settings.threads as u8,
+                )
+
+                let (val_tx, val_rx) = sync_channel(settings.batch_queue_size);
+
+                let handle = thread::spawn(move || {
+                    val_loader.map_batches(
+                        Step::from(validation_steps),
+                        validation_steps.batch_size,
+                        |batch| validation_tx.send(batch).is_err(),
+                    ).unwrap();
+                });
+
+                let mut evaluator = LossEvaluator::new(
+                    self.optimiser.definition(),
+                    self.optimiser.device(),
+                    steps.batch_size,
+                ).unwrap();
+
+                Some((test, val_rx, handle, evaluator))
+            }
+        }
 
         let _ = std::fs::create_dir(settings.output_directory);
 
@@ -172,14 +217,15 @@ where
         let saved_format = self.state.saved_format.clone();
 
         let error_record = RefCell::new(Vec::new());
+        let val_record = RefCell::new(Vec::new());
         let mut loss_sum = 0.0;
         let mut ticks_since_last = 0.0;
 
         run::train(
             &mut self.optimiser,
             run::TrainingSchedule { steps, log_rate: 128, lr_schedule: lr_scheduler.boxed() },
-            dataloader,
-            |_, step, error| {
+            train_loader,
+            |trainer, step, error| {
                 loss_sum += error;
                 ticks_since_last += 1.0;
 
@@ -193,6 +239,42 @@ where
                     loss_sum = 0.0;
                     ticks_since_last = 0.0;
                 }
+
+                if let Some((test, val_rx, _, loss_evaluator)) = validation.as_mut() 
+                    && (
+                        step.batch().is_multiple_of(test.freq) 
+                        || (
+                            test.freq > step.batches_per_superbatch 
+                            && step.batch() == step.batches_per_superbatch()
+                            )
+                       )
+                {
+                    let timer = Instant::now();
+
+                    // optimiser weights have just been updated for this training batch
+                    // point the validation evaluator at the current device buffers
+                    loss_evaluator.load_device_weights(trainer.weights()).unwrap();
+
+                    let mut val_loss_sum = 0.0;
+                    for _ in 0..test.batches {
+                        let host_batch = val_rx.recv().expect("Validation data loader ended early");
+                        let device_batch = host_batch.to_device(&trainer.device()).unwrap();
+                        
+                        let batch_loss = loss_evaluator.evaluate(&device_batch).unwrap();
+                        val_loss_sum += batch_loss / steps.batch_size as f32;
+                        
+                        let val_loss = val_loss_sum / test.batches as f32;
+                        val_record.borrow_mut().push((step.superbatch(), step.batch(), val_loss));
+
+                        logger::report_validation(
+                            step, 
+                            val_loss_sum, 
+                            timer.elapsed().as_secs_f32(),
+                            steps.batch_size * test.batches, 
+                            test.batches,
+                        );
+                    }
+                }
             },
             |trainer, step| {
                 let superbatch = step.superbatch();
@@ -202,12 +284,18 @@ where
                     std::fs::create_dir(path.as_str()).unwrap_or(());
                     save::save_to_checkpoint(trainer, &saved_format, &path);
                     save::write_losses(&format!("{path}/log.txt"), &error_record.borrow());
+                    save::write_losses(&format!("{path}/val_log.txt"), &val_record.borrow());
 
                     println!("Saved [{}]", logger::ansi(name, 31));
                 }
             },
         )
         .unwrap();
+
+        if let Some((_, val_rx, handle, _)) = validation {
+            drop(val_rx);
+            handle.join().unwrap();
+        }
     }
 
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
