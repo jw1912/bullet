@@ -153,55 +153,145 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
 
 impl DataReaderOnce<ChessBoard> for ViriBinpackLoader {
     fn read_once<F: FnMut(&[ChessBoard]) -> bool>(&self, mut f: F) {
-        let filter = &self.filter;
+        let file_paths = self.file_paths.clone();
+        let buffer_size = self.buffer_size;
+        let threads = self.threads.max(1);
+        let filter = self.filter.clone();
 
-        let mut output = Vec::with_capacity(self.buffer_size);
+        let conversion_batch_size = 8192 * threads;
 
-        // Reused by viriformat when deserialising games.
-        let mut reusable = Vec::new();
+        let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
+        let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
-        // Reused for the positions produced by each game.
-        let mut parsed = Vec::new();
+        std::thread::spawn(move || {
+            let mut games = Vec::with_capacity(conversion_batch_size);
 
-        for file_path in &self.file_paths {
-            let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
+            for file_path in &file_paths {
+                let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
 
-            loop {
-                let mut game_bytes = Vec::new();
+                loop {
+                    let mut game_bytes = Vec::new();
 
-                if Game::deserialise_fast_into_buffer(&mut reader, &mut game_bytes).is_err() {
-                    break;
-                }
+                    if Game::deserialise_fast_into_buffer(&mut reader, &mut game_bytes,).is_err()
+                    {
+                        break;
+                    }
 
-                let game =
-                    Game::deserialise_from(&mut Cursor::new(&game_bytes), reusable).unwrap();
+                    games.push(game_bytes);
 
-                parsed.clear();
-                parse_into_buffer(&game, &mut parsed, filter);
-
-                // Reuse the game's move allocation on the next deserialisation.
-                reusable = game.moves;
-
-                for board in parsed.drain(..) {
-                    output.push(board);
-
-                    if output.len() == self.buffer_size {
-                        shuffle(&mut output);
-
-                        if f(&output) {
+                    if games.len() == conversion_batch_size {
+                        if msg_receiver.try_recv().unwrap_or(false)
+                        {
                             return;
                         }
 
-                        output.clear();
+                        let batch = std::mem::replace(&mut games, Vec::with_capacity(conversion_batch_size));
+                        if sender.send(batch).is_err() {
+                            return;
+                        }
+
+                        games = Vec::with_capacity(conversion_batch_size);
                     }
                 }
             }
-        }
 
-        // Don't drop the final partial buffer.
-        if !output.is_empty() {
-            shuffle(&mut output);
-            let _ = f(&output);
+            if !games.is_empty() && !msg_receiver.try_recv().unwrap_or(false)
+            {
+                let _ = sender.send(games);
+            }
+        });
+
+        let (game_sender, game_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(4 * threads);
+        let (game_msg_sender, game_msg_receiver) = mpsc::sync_channel::<bool>(1);
+
+        std::thread::spawn(move || {
+            while let Ok(games) = receiver.recv() {
+                if game_msg_receiver.try_recv().unwrap_or(false) {
+                    let _ = msg_sender.try_send(true);
+                    break;
+                }
+
+                convert_buffer(
+                    threads,
+                    &game_sender,
+                    &games,
+                    &filter,
+                );
+            }
+        });
+
+        let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
+        let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
+
+        std::thread::spawn(move || {
+            let mut shuffle_buffer = Vec::with_capacity(buffer_size);
+            let mut cancelled = false;
+
+            while let Ok(converted) = game_receiver.recv()
+            {
+                if buffer_msg_receiver.try_recv().unwrap_or(false) {
+                    let _ = game_msg_sender.try_send(true);
+                    cancelled = true;
+                    break;
+                }
+
+                let mut offset = 0;
+
+                while offset < converted.len() {
+                    let remaining =
+                        buffer_size - shuffle_buffer.len();
+
+                    let count =
+                        remaining.min(converted.len() - offset);
+
+                    shuffle_buffer.extend_from_slice(
+                        &converted[offset..offset + count],
+                    );
+
+                    offset += count;
+
+                    if shuffle_buffer.len() == buffer_size {
+                        shuffle(&mut shuffle_buffer);
+
+                        if buffer_msg_receiver
+                            .try_recv()
+                            .unwrap_or(false)
+                        {
+                            let _ = game_msg_sender.try_send(true);
+                            return;
+                        }
+
+                        let full_buffer = std::mem::replace(
+                            &mut shuffle_buffer,
+                            Vec::with_capacity(buffer_size),
+                        );
+
+                        if buffer_sender.send(full_buffer).is_err() {
+                            let _ = game_msg_sender.try_send(true);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Stop may have arrived simultaneously with EOF.
+            if buffer_msg_receiver.try_recv().unwrap_or(false) {
+                cancelled = true;
+                let _ = game_msg_sender.try_send(true);
+            }
+
+            // Preserve final partial validation buffer.
+            if !cancelled && !shuffle_buffer.is_empty() {
+                shuffle(&mut shuffle_buffer);
+                let _ = buffer_sender.send(shuffle_buffer);
+            }
+        });
+
+        while let Ok(buffer) = buffer_receiver.recv() {
+            if f(&buffer) {
+                let _ = buffer_msg_sender.try_send(true);
+                break;
+            }
         }
     }
 }

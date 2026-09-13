@@ -177,38 +177,125 @@ where
     T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
 {
     fn read_once<F: FnMut(&[ChessBoard]) -> bool>(&self, mut f: F) {
-        let filter = &self.filter;
+        let file_paths = self.file_paths.clone();
+        let buffer_size = self.buffer_size;
+        let threads = self.threads.max(1);
+        let filter = self.filter.clone();
+        let reader_buffer_size = threads;
 
-        let mut output = Vec::with_capacity(self.buffer_size);
+        let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
+        let (reader_msg_sender, reader_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
-        for file_path in &self.file_paths {
-            let file = File::open(file_path).unwrap();
-            let mut reader =
-                sfbinpack::CompressedTrainingDataEntryReader::new(file).unwrap();
+        std::thread::spawn(move || {
+            let mut chunks = Vec::with_capacity(reader_buffer_size);
 
-            while reader.has_next() {
-                let entry = reader.next();
+            for file_path in &file_paths {
+                let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
+                let mut chunk = Vec::new();
 
-                if filter(&entry) {
-                    output.push(convert_to_bulletformat(&entry));
-                }
+                while read_chunk_into(&mut reader, &mut chunk).unwrap() {
+                    chunks.push(std::mem::take(&mut chunk));
 
-                if output.len() == self.buffer_size {
-                    shuffle(&mut output);
+                    if chunks.len() == reader_buffer_size {
+                        if reader_msg_receiver.try_recv().unwrap_or(false)
+                        {
+                            return;
+                        }
 
-                    if f(&output) {
-                        return;
+                        let batch = std::mem::replace(&mut chunks, Vec::with_capacity(reader_buffer_size),);
+                        if reader_sender.send(batch).is_err() {
+                            return;
+                        }
                     }
-
-                    output.clear();
                 }
             }
-        }
 
-        // Don't drop the final partial buffer.
-        if !output.is_empty() {
-            shuffle(&mut output);
-            let _ = f(&output);
+            // read_once() must flush the final incomplete reader batch.
+            if !chunks.is_empty() && !reader_msg_receiver.try_recv().unwrap_or(false)
+            {
+                let _ = reader_sender.send(chunks);
+            }
+        });
+
+        let (converted_sender, converted_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(4 * threads);
+        let (converted_msg_sender, converted_msg_receiver) = mpsc::sync_channel::<bool>(1);
+
+        std::thread::spawn(move || {
+            while let Ok(chunks) = reader_receiver.recv() {
+                if converted_msg_receiver.try_recv().unwrap_or(false) {
+                    let _ = reader_msg_sender.try_send(true);
+                    break;
+                }
+
+                if convert_buffer(threads, &converted_sender, &chunks, &filter,
+                ) {
+                    let _ = reader_msg_sender.try_send(true);
+                    break;
+                }
+            }
+        });
+
+        let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
+        let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
+
+        std::thread::spawn(move || {
+            let mut shuffle_buffer = Vec::with_capacity(buffer_size);
+            let mut cancelled = false;
+
+            'dataloading: while let Ok(converted) =
+                converted_receiver.recv()
+            {
+                if buffer_msg_receiver.try_recv().unwrap_or(false) {
+                    let _ = converted_msg_sender.try_send(true);
+                    cancelled = true;
+                    break;
+                }
+
+                let mut offset = 0;
+
+                while offset < converted.len() {
+                    let remaining = buffer_size - shuffle_buffer.len();
+                    let count = remaining.min(converted.len() - offset);
+
+                    shuffle_buffer.extend_from_slice(&converted[offset..offset + count],);
+                    offset += count;
+
+                    if shuffle_buffer.len() == buffer_size {
+                        if buffer_msg_receiver.try_recv().unwrap_or(false)
+                        {
+                            cancelled = true;
+                            break 'dataloading;
+                        }
+
+                        let full_buffer = std::mem::replace(&mut shuffle_buffer, Vec::with_capacity(buffer_size));
+
+                        if buffer_sender.send(full_buffer).is_err() {
+                            cancelled = true;
+                            break 'dataloading;
+                        }
+                    }
+                }
+            }
+
+            // Catch a stop request that arrived exactly as the
+            // converted channel reached EOF.
+            if buffer_msg_receiver.try_recv().unwrap_or(false) {
+                cancelled = true;
+                let _ = converted_msg_sender.try_send(true);
+            }
+
+            // read_once() must preserve the final partial buffer.
+            if !cancelled && !shuffle_buffer.is_empty() {
+                shuffle(&mut shuffle_buffer);
+                let _ = buffer_sender.send(shuffle_buffer);
+            }
+        });
+
+        while let Ok(buffer) = buffer_receiver.recv() {
+            if f(&buffer) {
+                let _ = buffer_msg_sender.try_send(true);
+                break;
+            }
         }
     }
 }
