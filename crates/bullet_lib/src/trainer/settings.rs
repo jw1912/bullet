@@ -6,13 +6,13 @@ pub struct TestDataset<'a> {
     pub path: &'a str,
     /// Frequency of validation loss (run validation every `freq` batches).
     pub freq: usize,
-    /// number of validation batches per validation-event
-    pub batches: usize,
+    /// Number of positions to test against (can be entire dataset)
+    pub positions: Option<usize>,
 }
 
 impl<'a> TestDataset<'a> {
     pub fn at(path: &'a str) -> TestDataset<'a> {
-        Self { path, freq: 32, batches: 1 }
+        Self { path, freq: 32, positions: Some(100_000) }
     }
 
     pub fn freq(mut self, freq: usize) -> Self {
@@ -20,9 +20,8 @@ impl<'a> TestDataset<'a> {
         self
     }
 
-    pub fn batches(mut self, batches: usize) -> Self {
-        assert!(batches > 0, "Validation batch count must be positive!");
-        self.batches = batches;
+    pub fn positions(mut self, positions: usize) -> Self {
+        self.positions = Some(positions);
         self
     }
 }
@@ -52,7 +51,6 @@ impl LocalSettings<'_> {
                 "   Frequency           : {}",
                 ansi(if test.freq == 0 { "End of superbatch".to_string() } else { format!("{}", test.freq) }, 31)
             );
-            println!("   Batches             : {}", ansi(test.batches, 31));
         }
     }
 }

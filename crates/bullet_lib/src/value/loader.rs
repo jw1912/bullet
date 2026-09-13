@@ -1,6 +1,6 @@
 mod direct;
 mod montybinpack;
-mod rng;
+pub(crate) mod rng;
 pub mod sfbinpack;
 mod text;
 pub mod viribinpack;

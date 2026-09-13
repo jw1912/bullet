@@ -10,7 +10,7 @@ use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
-    reader::{DataReader, ReadMapLoader},
+    reader::{DataReader, DataReaderOnce, ReadMapLoader},
     run::{self, Step, logger},
 };
 
@@ -148,7 +148,7 @@ where
         train_loader: &D,
         val_loader: Option<&D>,
     ) where
-        D: DataReader<Inp::RequiredDataType>,
+        D: DataReader<Inp::RequiredDataType> + DataReaderOnce<Inp::RequiredDataType>,
     {
         logger::clear_colours();
         println!("{}", logger::ansi("Training Preamble", "34;1"));
@@ -181,13 +181,15 @@ where
                     val_loader,
                     mapper,
                     &self.optimiser,
-                    steps,
+                    steps.batch_size,
                     test,
-                    settings.batch_queue_size,
                     settings.threads as u8,
                 ))
             }
         };
+        if let Some(validation) = validation.as_ref() {
+            println!("   Positions           : {}", logger::ansi(validation.positions(), 31));
+        }
 
         let _ = std::fs::create_dir(settings.output_directory);
 
@@ -241,10 +243,6 @@ where
             },
         )
         .unwrap();
-
-        if let Some(validation) = validation {
-            validation.finish();
-        }
     }
 
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
