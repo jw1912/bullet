@@ -223,7 +223,7 @@ where
                 {
                     let result = validation.evaluate(trainer, step);
                     val_record.borrow_mut().push((step.superbatch(), step.batch(), result.loss));
-                    logger::report_validation(step, result.loss, result.seconds, result.positions, result.batches);
+                    logger::report_validation(step, result.loss, result.seconds, result.positions);
                 }
             },
             |trainer, step| {

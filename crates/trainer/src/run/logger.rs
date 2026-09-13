@@ -44,8 +44,9 @@ pub fn report_superbatch_progress(step: Step, superbatch_timer: &Instant, superb
     let seconds = superbatch_time / pct - superbatch_time;
 
     print!(
-        "superbatch {} [{}% ({}/{} batches, {} pos/sec)]\n\
+        "{}   superbatch {} [{}% ({}/{} batches, {} pos/sec)]\n\
         Estimated time to end of superbatch: {}s     \x1b[F",
+        ansi("[TRAINING]", "34;1"),
         ansi(step.superbatch(), num_cs),
         ansi(format!("{:.1}", pct * 100.0), 35),
         ansi(step.batch(), num_cs),
@@ -67,7 +68,8 @@ pub fn report_superbatch_finished(
     let pos_per_sec = positions as f32 / superbatch_time;
 
     println!(
-        "superbatch {} | time {}s | running loss {} | {} pos/sec | total time {}s",
+        "{}   superbatch {} | time {}s | running loss {} | {} pos/sec | total time {}s",
+        ansi("[TRAINING]", "32;1"),
         ansi(superbatch, num_cs),
         ansi(format!("{superbatch_time:.1}"), num_cs),
         ansi(format!("{error:.6}"), num_cs),
@@ -115,15 +117,14 @@ pub fn seconds_to_hms(mut seconds: u32) -> (u32, u32, u32) {
     (hours, minutes, seconds)
 }
 
-pub fn report_validation(step: Step, error: f32, validation_time: f32, positions: usize, batches: usize) {
+pub fn report_validation(step: Step, error: f32, validation_time: f32, positions: usize) {
     let num_cs = num_cs();
     println!(
-        "[VALIDATION] superbatch {} | batch {} | loss {} \n             {} batches | {} positions | time {}s",
+        "{} superbatch {} |  time {}s | loss {} | {} positions",
+        ansi("[VALIDATION]", 35),
         ansi(step.superbatch(), num_cs),
-        ansi(step.batch(), num_cs),
-        ansi(format!("{error:.6}"), num_cs),
-        ansi(batches, num_cs),
-        ansi(positions, num_cs),
         ansi(format!("{validation_time:.1}"), num_cs),
+        ansi(format!("{error:.6}"), num_cs),
+        ansi(positions, num_cs),
     );
 }
