@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::reader::DataReader;
+use crate::reader::{DataReader, DataReaderOnce};
 
 /// ## Safety
 /// Type must be `repr(C)`, have no padding or uninitialised
@@ -101,6 +101,41 @@ impl<T: FixedSizeData> DataReader<T> for FixedSizeDataReader<T> {
                     if f(&buf[..len]) {
                         break 'dataloading;
                     }
+                }
+            }
+        }
+    }
+}
+
+impl<T: FixedSizeData> DataReaderOnce<T> for FixedSizeDataReader<T> {
+    fn read_once<F: FnMut(&[T]) -> bool>(&self, mut f: F) {
+        let data_size = size_of::<T>();
+        let cap = (128usize * 1024 * 1024).div_ceil(data_size);
+
+        let mut buf = unsafe { zeroed_boxed_slice::<T>(cap) };
+
+        'dataloading: for file_path in &self.file_paths {
+            let mut loader_file = File::open(file_path).unwrap();
+
+            loop {
+                let count = loader_file.read(unsafe {
+                        std::slice::from_raw_parts_mut(
+                            buf.as_mut_ptr().cast(),
+                            cap * data_size,
+                        )
+                    })
+                    .unwrap_or(0);
+
+                if count == 0 {
+                    break;
+                }
+
+                assert_eq!(count % data_size, 0);
+
+                let len = count / data_size;
+
+                if f(&buf[..len]) {
+                    break 'dataloading;
                 }
             }
         }
