@@ -4,7 +4,7 @@ mod inputs;
 mod weights;
 
 pub use definition::{ModelDefinition, ModelFunctionDefinition};
-pub use evaluator::ModelEvaluator;
+pub use evaluator::{ModelEvaluator, LossEvaluator};
 pub use inputs::{DenseInput, ModelInputs, ModelInputsMapper, SparseInput};
 pub use weights::{ModelWeights, QuantTarget, SavedFormat, ShapedTValue, TensorMap, utils};
 
