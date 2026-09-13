@@ -14,6 +14,18 @@ impl<'a> TestDataset<'a> {
     pub fn at(path: &'a str) -> TestDataset<'a> {
         Self { path, freq: 32 , batches: 1}
     }
+
+    pub fn freq (mut self, freq: usize) -> Self {
+        assert!(freq > 0, "Validation frequency must be positive!");
+        self.freq = freq;
+        self
+    }
+
+    pub fn batches(mut self, batches: usize) -> Self {
+        assert!(batches > 0, "Validation batch count must be positive!");
+        self.batches = batches;
+        self
+    }
 }
 
 pub struct LocalSettings<'a> {
