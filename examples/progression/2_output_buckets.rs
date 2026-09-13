@@ -63,5 +63,5 @@ fn main() {
 
     let dataloader = DirectSequentialDataLoader::new(&[dataset_path]);
 
-    trainer.run(&schedule, &settings, &dataloader);
+    trainer.run(&schedule, &settings, &dataloader, None);
 }

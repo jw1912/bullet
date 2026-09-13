@@ -40,7 +40,7 @@ fn main() {
 
     let data_loader = DirectSequentialDataLoader::new(&["examples/tests/batch.bf"]);
 
-    trainer.run(&schedule, &settings, &data_loader);
+    trainer.run(&schedule, &settings, &data_loader, None);
 
     println!("Expected loss: 0.044886");
 
