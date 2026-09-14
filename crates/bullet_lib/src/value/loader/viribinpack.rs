@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{BufReader, Cursor},
+    io::{BufRead, BufReader, Cursor, Seek, SeekFrom},
     sync::mpsc::{self, SyncSender},
 };
 
@@ -36,10 +36,10 @@ pub struct ViriBinpackLoader {
 
 impl ViriBinpackLoader {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: impl Into<ViriFilter>) -> Self {
-        Self::new_concat_multiple(&[path], buffer_size_mb, threads, filter)
+        Self::new_interleave_multiple(&[path], buffer_size_mb, threads, filter)
     }
 
-    pub fn new_concat_multiple(
+    pub fn new_interleave_multiple(
         paths: &[&str],
         buffer_size_mb: usize,
         threads: usize,
@@ -68,18 +68,52 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
+            const GAMES_READ_PER_FILE: u64 = 16;
+
+            let counts: Vec<u64> = file_paths
+                .iter()
+                .map(|path| {
+                    let mut reader = BufReader::new(File::open(path).unwrap());
+                    let mut count = 0;
+                    let mut buf = Vec::new();
+                    while !reader.fill_buf().unwrap().is_empty() {
+                        buf.clear();
+                        Game::deserialise_fast_into_buffer(&mut reader, &mut buf).unwrap();
+                        count += 1;
+                    }
+                    count
+                })
+                .collect();
+            let total = counts.iter().sum::<u64>();
+            if total == 0 {
+                return;
+            }
+
             let mut games = Vec::new();
+            let mut rng = seeded_rng();
 
             'dataloading: loop {
-                for file_path in &file_paths {
-                    let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
+                let mut streams: Vec<_> = counts.iter().map(|&count| (count, 0)).collect();
+                let mut remaining = total;
 
-                    loop {
+                while remaining > 0 {
+                    let mut spot = rng.rand_range(0..remaining);
+                    let mut idx = 0;
+                    while streams[idx].0 <= spot {
+                        spot -= streams[idx].0;
+                        idx += 1;
+                    }
+
+                    let (games_left, offset) = &mut streams[idx];
+                    let mut reader = BufReader::new(File::open(&file_paths[idx]).unwrap());
+                    reader.seek(SeekFrom::Start(*offset)).unwrap();
+
+                    for _ in 0..GAMES_READ_PER_FILE.min(*games_left) {
                         let mut buf = Vec::new();
-                        if Game::deserialise_fast_into_buffer(&mut reader, &mut buf).is_err() {
-                            break;
-                        }
-
+                        Game::deserialise_fast_into_buffer(&mut reader, &mut buf).unwrap();
+                        *offset += buf.len() as u64;
+                        *games_left -= 1;
+                        remaining -= 1;
                         games.push(buf);
 
                         if games.len().is_multiple_of(8192 * threads) {
