@@ -1,7 +1,7 @@
 use std::{
     fs::File,
-    io::{BufReader, Cursor},
-    sync::mpsc::{self, SyncSender},
+    io::{BufRead, BufReader, Cursor, Seek, SeekFrom},
+    sync::mpsc::{self, Receiver, SyncSender},
 };
 
 use crate::game::formats::bulletformat::ChessBoard;
@@ -32,6 +32,7 @@ pub struct ViriBinpackLoader {
     buffer_size: usize,
     threads: usize,
     filter: ViriFilter,
+    interleave: bool,
 }
 
 impl ViriBinpackLoader {
@@ -50,7 +51,17 @@ impl ViriBinpackLoader {
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
             threads,
             filter: filter.into(),
+            interleave: false,
         }
+    }
+
+    pub fn new_interleave_multiple(
+        paths: &[&str],
+        buffer_size_mb: usize,
+        threads: usize,
+        filter: impl Into<ViriFilter>,
+    ) -> Self {
+        Self { interleave: true, ..Self::new_concat_multiple(paths, buffer_size_mb, threads, filter) }
     }
 }
 
@@ -63,34 +74,16 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
         let buffer_size = self.buffer_size;
         let threads = self.threads;
         let filter = self.filter.clone();
+        let interleave = self.interleave;
 
         let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
-            let mut games = Vec::new();
-
-            'dataloading: loop {
-                for file_path in &file_paths {
-                    let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
-
-                    loop {
-                        let mut buf = Vec::new();
-                        if Game::deserialise_fast_into_buffer(&mut reader, &mut buf).is_err() {
-                            break;
-                        }
-
-                        games.push(buf);
-
-                        if games.len().is_multiple_of(8192 * threads) {
-                            if msg_receiver.try_recv().unwrap_or(false) || sender.send(games).is_err() {
-                                break 'dataloading;
-                            }
-
-                            games = Vec::new();
-                        }
-                    }
-                }
+            if interleave {
+                read_interleave(&file_paths, threads, sender, msg_receiver);
+            } else {
+                read_concat(&file_paths, threads, sender, msg_receiver);
             }
         });
 
@@ -148,6 +141,101 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
         }
 
         drop(buffer_receiver);
+    }
+}
+
+fn read_concat(file_paths: &[String], threads: usize, sender: SyncSender<Vec<Vec<u8>>>, msg_receiver: Receiver<bool>) {
+    let mut games = Vec::new();
+    loop {
+        let mut count = 0;
+        for file_path in file_paths {
+            let mut reader = BufReader::new(File::open(file_path).unwrap());
+
+            loop {
+                let mut buf = Vec::new();
+                if Game::deserialise_fast_into_buffer(&mut reader, &mut buf).is_err() {
+                    break;
+                }
+                count += 1;
+                games.push(buf);
+
+                if games.len().is_multiple_of(8192 * threads) {
+                    if msg_receiver.try_recv().unwrap_or(false) || sender.send(games).is_err() {
+                        return;
+                    }
+                    games = Vec::new();
+                }
+            }
+        }
+        if count == 0 {
+            return;
+        }
+    }
+}
+
+fn read_interleave(
+    file_paths: &[String],
+    threads: usize,
+    sender: SyncSender<Vec<Vec<u8>>>,
+    msg_receiver: Receiver<bool>,
+) {
+    const GAMES_READ_PER_FILE: u64 = 16;
+
+    let counts: Vec<u64> = file_paths
+        .iter()
+        .map(|path| {
+            let mut reader = BufReader::new(File::open(path).unwrap());
+            let mut count = 0;
+            let mut buf = Vec::new();
+            while !reader.fill_buf().unwrap().is_empty() {
+                buf.clear();
+                Game::deserialise_fast_into_buffer(&mut reader, &mut buf).unwrap();
+                count += 1;
+            }
+            count
+        })
+        .collect();
+    let total = counts.iter().sum::<u64>();
+    if total == 0 {
+        return;
+    }
+
+    let mut games = Vec::new();
+    let mut rng = seeded_rng();
+
+    'dataloading: loop {
+        let mut streams: Vec<_> = counts.iter().map(|&count| (count, 0)).collect();
+        let mut remaining = total;
+
+        while remaining > 0 {
+            let mut spot = rng.rand_range(0..remaining);
+            let mut idx = 0;
+            while streams[idx].0 <= spot {
+                spot -= streams[idx].0;
+                idx += 1;
+            }
+
+            let (games_left, offset) = &mut streams[idx];
+            let mut reader = BufReader::new(File::open(&file_paths[idx]).unwrap());
+            reader.seek(SeekFrom::Start(*offset)).unwrap();
+
+            for _ in 0..GAMES_READ_PER_FILE.min(*games_left) {
+                let mut buf = Vec::new();
+                Game::deserialise_fast_into_buffer(&mut reader, &mut buf).unwrap();
+                *offset += buf.len() as u64;
+                *games_left -= 1;
+                remaining -= 1;
+                games.push(buf);
+
+                if games.len().is_multiple_of(8192 * threads) {
+                    if msg_receiver.try_recv().unwrap_or(false) || sender.send(games).is_err() {
+                        break 'dataloading;
+                    }
+
+                    games = Vec::new();
+                }
+            }
+        }
     }
 }
 
