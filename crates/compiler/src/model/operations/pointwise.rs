@@ -1,7 +1,11 @@
 use crate::{
-    ir::NodeId, model::{Layout, MType, ModelOperation}, tensor::{
-        DType, DValue, IRTrace, TensorIR, operation::{
-            CABinary, Power, Unary, autograd::{self, CopyNoGrad, CustomAutogradOp, PassThrough, SoftmaxCrossEntropyLoss},
+    ir::NodeId,
+    model::{Layout, MType, ModelOperation},
+    tensor::{
+        DType, DValue, IRTrace, TensorIR,
+        operation::{
+            CABinary, Power, Unary,
+            autograd::{self, CopyNoGrad, CustomAutogradOp, PassThrough, SoftmaxCrossEntropyLoss},
         },
     },
 };
