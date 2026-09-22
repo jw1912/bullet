@@ -5,7 +5,7 @@ use crate::{
         DType, DValue, IRTrace, TensorIR,
         operation::{
             CABinary, Power, Unary,
-            autograd::{CopyNoGrad, CustomAutogradOp, PassThrough, SoftmaxCrossEntropyLoss},
+            autograd::{self, CopyNoGrad, CustomAutogradOp, PassThrough, SoftmaxCrossEntropyLoss},
         },
     },
 };
@@ -210,13 +210,8 @@ impl ModelOperation for FauxQuantise {
     }
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
-        let [input] = inputs[..] else { return Err("Invalid number of inputs!".into()) };
-        let op = if self.2 { Unary::Round } else { Unary::Truncate };
-        let scalar = lower.add_scalar(self.1, self.0.ttype(batch_size).size());
-        let denom = lower.add_unary(scalar, Unary::Reciprocal)?;
-        let mul = lower.add_binary(scalar, input, CABinary::Mul)?;
-        let int = lower.add_unary(mul, op)?;
-        lower.add_binary(int, denom, CABinary::Mul)
+        let op = autograd::FauxQuantise(self.0.ttype(batch_size), self.1, self.2);
+        lower.add_op(inputs, CustomAutogradOp::new(op)).map(|v| v[0])
     }
 }
 
