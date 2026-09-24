@@ -78,6 +78,7 @@ impl GpuBindings for Cuda {
             vec_atomics: mjr >= 9,
             arch: Some(format!("sm_{mjr}{mnr}")),
             dialect: Dialect::CudaHip,
+            atomic_flag: false,
         })
     }
 

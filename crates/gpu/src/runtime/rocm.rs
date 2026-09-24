@@ -62,6 +62,7 @@ impl GpuBindings for ROCm {
             vec_atomics: false,
             arch: None,
             dialect: Dialect::CudaHip,
+            atomic_flag: true,
         })
     }
 

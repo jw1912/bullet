@@ -297,6 +297,10 @@ impl<G: Gpu> Module<G> {
             options.push(CString::new(s).unwrap())
         }
 
+        if device.props().atomic_flag() {
+            options.push(CString::new("-munsafe-fp-atomics").unwrap());
+        }
+
         let mut options_ptrs = Vec::new();
         for opt in &options {
             options_ptrs.push(opt.as_ptr());
