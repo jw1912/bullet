@@ -71,22 +71,24 @@ impl Drop for PreparedBatchHost {
 
 #[derive(Default)]
 struct Pool<T> {
-    free: Mutex<Vec<T>>,
+    free: Mutex<BTreeMap<usize, Vec<Vec<T>>>>,
 }
 
 impl<T> Pool<T> {
-    fn take(&self) -> Option<T> {
-        self.free.lock().unwrap().pop()
-    }
-
-    fn give(&self, value: T) {
-        self.free.lock().unwrap().push(value);
+    fn give(&self, value: Vec<T>) {
+        self.free.lock().unwrap().entry(value.len().next_power_of_two()).or_default().push(value);
     }
 }
 
-impl<E: Clone + Default> Pool<Vec<E>> {
+impl<E: Clone + Default> Pool<E> {
     fn take_vec(&self, len: usize) -> Vec<E> {
-        let mut value = self.take().unwrap_or_default();
+        let capacity = len.next_power_of_two();
+        let cached = self.free.lock().unwrap().get_mut(&capacity).and_then(Vec::pop);
+        let mut value = cached.unwrap_or_default();
+
+        if len > value.capacity() {
+            value.reserve_exact(len - value.len());
+        }
         value.resize(len, E::default());
         value
     }
@@ -94,8 +96,8 @@ impl<E: Clone + Default> Pool<Vec<E>> {
 
 #[derive(Default)]
 pub struct HostPool {
-    i32s: Pool<Vec<i32>>,
-    f32s: Pool<Vec<f32>>,
+    i32s: Pool<i32>,
+    f32s: Pool<f32>,
 }
 
 impl HostPool {
