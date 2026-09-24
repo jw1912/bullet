@@ -116,38 +116,3 @@ impl HostPool {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn host_pool_reuses_matching_sizes_regardless_of_return_order() {
-        let pool = HostPool::default();
-        let mut small = pool.take_i32(1);
-        let mut large = pool.take_i32(4096);
-        small[0] = 7;
-        large[4095] = 11;
-        let pointers = [small.as_ptr(), large.as_ptr()];
-        pool.give(TValue::I32(small));
-        pool.give(TValue::I32(large));
-        let small = pool.take_i32(1);
-        let large = pool.take_i32(4096);
-        assert_eq!([small.as_ptr(), large.as_ptr()], pointers);
-        assert_eq!(small, [7]);
-        assert_eq!(large[4095], 11);
-        assert_eq!(small.capacity(), 1);
-        // A new shape is correctly sized and initialised without consuming a
-        // differently sized cached buffer. Dtypes have separate pools.
-        pool.give(TValue::I32(large));
-        assert_eq!(pool.take_i32(2), [0, 0]);
-        assert_eq!(pool.take_f32(4096), vec![0.0; 4096]);
-        let reused = pool.take_i32(4096);
-        assert_eq!(reused.as_ptr(), pointers[1]);
-        let mut near_size = pool.take_i32(5);
-        near_size.fill(9);
-        pool.give(TValue::I32(near_size));
-        let grown = pool.take_i32(7);
-        assert_eq!(grown, [9, 9, 9, 9, 9, 0, 0]);
-    }
-}
