@@ -297,6 +297,14 @@ impl<G: Gpu> Module<G> {
             options.push(CString::new(s).unwrap())
         }
 
+        if device.props().atomic_flag() {
+            options.push(CString::new("-munsafe-fp-atomics").unwrap());
+
+            if let Ok(name) = std::env::var("GCN_ARCH_NAME") {
+                options.push(CString::new(format!("--offload-arch={name}")).unwrap());
+            }
+        }
+
         let mut options_ptrs = Vec::new();
         for opt in &options {
             options_ptrs.push(opt.as_ptr());

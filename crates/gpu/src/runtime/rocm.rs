@@ -62,6 +62,7 @@ impl GpuBindings for ROCm {
             vec_atomics: false,
             arch: None,
             dialect: Dialect::CudaHip,
+            atomic_flag: true,
         })
     }
 
@@ -357,7 +358,7 @@ mod raw {
     pub type hipModule = *mut Opaque;
     pub type hipDeviceAttribute = u32;
 
-    pub const hipDeviceAttributeWarpSize: u32 = 89;
+    pub const hipDeviceAttributeWarpSize: u32 = 87;
 
     unsafe extern "C" {
         // Errors

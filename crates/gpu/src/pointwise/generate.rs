@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, Power, ReduceAcrossDimension,
+        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, Power, ReduceAcrossDimension, Reduction,
         ScalarConstant, Select, SelectPad, SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary,
         UnaryOp,
     },
@@ -93,6 +93,7 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             (select_pad.output_size(), Size::from(1))
         } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
             if let Some(warp_size) = props.warp_size()
+                && reduce.reduction() == Reduction::Sum
                 && ir.is_output(op.outputs()[0])
                 && reduce.inner().is_multiple_of(usize::from(warp_size).into())
             {

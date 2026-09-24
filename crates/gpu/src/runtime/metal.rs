@@ -110,6 +110,7 @@ impl GpuBindings for Metal {
                 vec_atomics: true,
                 arch: None,
                 dialect: Dialect::Msl,
+                atomic_flag: false,
             })
         })
     }
