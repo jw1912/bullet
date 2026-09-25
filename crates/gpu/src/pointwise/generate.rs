@@ -160,8 +160,8 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
                 let scalar = buf.read(tid.div(repeats), 0);
                 mapping.insert(out, scalar.broadcast(p2size));
             } else {
-                let repeats = builder.new_constant(i32::try_from(broadcast.repeats().get()).unwrap(), 0);
-                let inner = builder.new_constant(i32::try_from(broadcast.inner().get() / p2actual).unwrap(), 0);
+                let repeats = i32::try_from(broadcast.repeats().get()).unwrap();
+                let inner = i32::try_from(broadcast.inner().get() / p2actual).unwrap();
 
                 let oidx = tid.div(repeats * inner);
                 let iidx = tid.rem(inner);
@@ -206,17 +206,13 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 
             let before = i32::try_from(pad.before()).unwrap();
             let after = i32::try_from(pad.after()).unwrap();
-            let dimen_len = i32::try_from(pad.dimen().get()).unwrap();
+            let dimen = i32::try_from(pad.dimen().get()).unwrap();
+            let inner = i32::try_from(pad.inner().get()).unwrap();
 
-            let inner = builder.new_constant(i32::try_from(pad.inner().get()).unwrap(), 0);
-            let bda = builder.new_constant(before + dimen_len + after, 0);
-
-            let (idx_outer, idx_non_outer) = builder.tid().div_rem(inner * bda);
+            let (idx_outer, idx_non_outer) = builder.tid().div_rem(inner * (before + dimen + after));
             let (idx_bda, idx_inner) = idx_non_outer.div_rem(inner);
 
             let idx_dimen = idx_bda - before;
-
-            let dimen = builder.new_constant(dimen_len, 0);
             let idx = (dimen * idx_outer + idx_dimen) * inner + idx_inner;
 
             // in bounds iff `0 <= idx_dimen < dimen`
@@ -227,14 +223,13 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             assert_eq!(p2size, 0);
             let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
 
-            let inner = builder.new_constant(i32::try_from(slice.inner().get()).unwrap(), 0);
-            let slicelen = builder.new_constant(i32::try_from(slice.end() - slice.start()).unwrap(), 0);
+            let inner = i32::try_from(slice.inner().get()).unwrap();
+            let slicelen = i32::try_from(slice.end() - slice.start()).unwrap();
+            let dimen = i32::try_from(slice.dimen().get()).unwrap();
+            let start = i32::try_from(slice.start()).unwrap();
 
             let (idx_outer, idx_non_outer) = builder.tid().div_rem(inner * slicelen);
             let (idx_slice, idx_inner) = idx_non_outer.div_rem(inner);
-
-            let dimen = builder.new_constant(i32::try_from(slice.dimen().get()).unwrap(), 0);
-            let start = builder.new_constant(i32::try_from(slice.start()).unwrap(), 0);
 
             let idx = (dimen * idx_outer + start + idx_slice) * inner + idx_inner;
 
@@ -244,8 +239,8 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
 
-            let sub_size = builder.new_constant(i32::try_from((select.inner / select.divisor).get()).unwrap(), p2size);
-            let inner = builder.new_constant(i32::try_from(select.inner.get()).unwrap(), p2size);
+            let sub_size = i32::try_from((select.inner / select.divisor).get()).unwrap();
+            let inner = i32::try_from(select.inner.get()).unwrap();
 
             let (batch_idx, elem_idx) = builder.tid().div_rem(sub_size);
             let bucket = indices.read(batch_idx, p2size);
@@ -258,15 +253,14 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
 
-            let divisor = select_pad.inner / select_pad.divisor;
-            let sub_size = builder.new_constant(i32::try_from(divisor.get()).unwrap(), p2size);
-            let inner = builder.new_constant(i32::try_from(select_pad.inner.get()).unwrap(), p2size);
+            let sub_size = i32::try_from((select_pad.inner / select_pad.divisor).get()).unwrap();
+            let inner = i32::try_from(select_pad.inner.get()).unwrap();
 
             let (batch_idx, inner_idx) = builder.tid().div_rem(inner);
             let (bucket_idx, elem_idx) = inner_idx.div_rem(sub_size);
 
             let bucket_target = indices.read(batch_idx, p2size);
-            let cond = (bucket_idx + bucket_target * -1).is_zero();
+            let cond = (bucket_idx - bucket_target).is_zero();
 
             let idx = batch_idx * sub_size + elem_idx;
             let fallback = DValue::zero(select_pad.dtype);
@@ -277,8 +271,8 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
             let Some(value) = get_val(op.inputs()[0], &mapping)? else { return Ok(None) };
             let dest = *out_buf_map.get(&out).unwrap();
 
-            let dimen = builder.new_constant(i32::try_from(reduce.dimen().get()).unwrap(), 0);
-            let inner = builder.new_constant(i32::try_from(reduce.inner().get()).unwrap(), 0);
+            let dimen = i32::try_from(reduce.dimen().get()).unwrap();
+            let inner = i32::try_from(reduce.inner().get()).unwrap();
 
             let tid = builder.tid();
             let inner_idx = tid.rem(inner);
