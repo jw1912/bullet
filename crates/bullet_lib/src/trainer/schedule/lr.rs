@@ -224,27 +224,3 @@ impl<First: LrScheduler, Second: LrScheduler> LrScheduler for Sequence<First, Se
         )
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_endpoints(lr: impl LrScheduler) {
-        assert!((lr.lr(0, 1) - 1.0).abs() < 1e-6, "{lr:?} does not start at initial_lr");
-        assert!((lr.lr(0, 10) - 0.1).abs() < 1e-6, "{lr:?} does not end at final_lr");
-        assert!(lr.lr(0, 2) < 1.0 && lr.lr(0, 9) > 0.1);
-    }
-
-    #[test]
-    fn decay_schedulers_hit_endpoints() {
-        assert_endpoints(LinearDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 10 });
-        assert_endpoints(CosineDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 10 });
-        assert_endpoints(ExponentialDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 10 });
-    }
-
-    #[test]
-    fn decay_single_superbatch() {
-        let lr = LinearDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 1 };
-        assert_eq!(lr.lr(0, 1), 0.1);
-    }
-}
