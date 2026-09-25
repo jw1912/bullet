@@ -3,15 +3,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use bullet_compiler::tensor::{
     DValue, IRTrace, Size,
     operation::{
-        BroadcastAcrossDimension, CABinary, CABinaryOp, PadAcrossDimension, Power, ReduceAcrossDimension, Reduction,
-        ScalarConstant, Select, SelectPad, SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, Unary,
-        UnaryOp,
+        BroadcastAcrossDimension, CABinaryOp, PadAcrossDimension, Power, ReduceAcrossDimension, Reduction,
+        ScalarConstant, Select, SelectPad, SliceAcrossDimension, SparseMatmul, SparseMatmulBwdMulti, SubGraph, UnaryOp,
     },
 };
 
 use crate::runtime::DeviceProps;
 
-use super::PointwiseIR;
+use super::{PointwiseBuf, PointwiseBuilder, PointwiseIR};
 
 pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(PointwiseIR, bool)>, IRTrace> {
     let ir = sub.internal_graph();
@@ -119,24 +118,24 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
     let p2actual = 2usize.pow(p2size);
     let p2size = p2size as u8;
 
-    let mut pntwise = PointwiseIR::new(size / p2actual.into())?;
-    let mut mapping = BTreeMap::new();
+    let builder = PointwiseBuilder::new(size / p2actual.into());
 
     let inp_buf_map: BTreeMap<_, _> =
-        sub.internal_inputs().iter().map(|&i| (i, pntwise.add_buf(ir.get_node(i).unwrap().ty()))).collect();
+        sub.internal_inputs().iter().map(|&i| (i, builder.new_buffer(ir.get_node(i).unwrap().ty()))).collect();
 
     let out_buf_map: BTreeMap<_, _> =
-        sub.internal_outputs().iter().map(|&o| (o, pntwise.add_buf(ir.get_node(o).unwrap().ty()))).collect();
+        sub.internal_outputs().iter().map(|&o| (o, builder.new_buffer(ir.get_node(o).unwrap().ty()))).collect();
 
-    let get_val = |node, pntw: &mut PointwiseIR, map: &BTreeMap<_, _>| {
+    let get_val = |node, map: &BTreeMap<_, _>| {
         if ir.is_input(node)? {
-            let buf = *inp_buf_map.get(&node).unwrap();
-            pntw.read(buf, pntw.tid(), p2size).map(Option::Some).map_err(IRTrace::from)
+            let buf: PointwiseBuf = *inp_buf_map.get(&node).unwrap();
+            Ok(Some(buf.read(builder.tid(), p2size)))
         } else {
-            Ok(map.get(&node).cloned())
+            Ok::<_, IRTrace>(map.get(&node).copied())
         }
     };
 
+    let mut mapping = BTreeMap::new();
     let mut handled_writes = BTreeSet::new();
 
     for op in ir.ordered_operations()? {
@@ -144,72 +143,60 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 
         if op.data().is_input() {
         } else if let Some(scalar) = data.downcast::<ScalarConstant>() {
-            let scalar = pntwise.add_const(scalar.0, p2size);
+            let scalar = builder.new_constant(scalar.0, p2size);
             mapping.insert(op.outputs()[0], scalar);
         } else if let Some(broadcast) = data.downcast::<BroadcastAcrossDimension>() {
             let out = op.outputs()[0];
             let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
 
-            let tid = pntwise.tid();
+            let tid = builder.tid();
 
             // special case, if we are reding an inner scalar and repeating a
             // multiple of 2^N times, we can read the scalar and broadcast it
             // into the appropriate p2 size to avoid killing the vectorization
             // on the rest of the kernel
             if p2size > 0 && broadcast.inner().get() == 1 {
-                let repeats = broadcast.repeats().get() / p2actual;
-                let repeats = pntwise.add_const(DValue::I32(repeats.try_into().unwrap()), 0);
-                let idx = pntwise.div(tid, repeats)?;
-                let scalar = pntwise.read(buf, idx, 0)?;
-                let output = pntwise.broadcast(scalar, p2size)?;
-                mapping.insert(out, output);
+                let repeats = i32::try_from(broadcast.repeats().get() / p2actual).unwrap();
+                let scalar = buf.read(tid.div(repeats), 0);
+                mapping.insert(out, scalar.broadcast(p2size));
             } else {
-                let repeats = broadcast.repeats().get();
-                let inner = broadcast.inner().get() / p2actual;
+                let repeats = builder.new_constant(i32::try_from(broadcast.repeats().get()).unwrap(), 0);
+                let inner = builder.new_constant(i32::try_from(broadcast.inner().get() / p2actual).unwrap(), 0);
 
-                let repeats = pntwise.add_const(DValue::I32(repeats.try_into().unwrap()), 0);
-                let inner = pntwise.add_const(DValue::I32(inner.try_into().unwrap()), 0);
-                let oidx_denom = pntwise.binary(repeats, inner, CABinary::Mul)?;
-                let oidx = pntwise.div(tid, oidx_denom)?;
-                let iidx = pntwise.rem(tid, inner)?;
-                let idx_base = pntwise.binary(inner, oidx, CABinary::Mul)?;
-                let idx = pntwise.binary(idx_base, iidx, CABinary::Add)?;
-                let output = pntwise.read(buf, idx, p2size)?;
-                mapping.insert(out, output);
+                let oidx = tid.div(repeats * inner);
+                let iidx = tid.rem(inner);
+                let idx = inner * oidx + iidx;
+                mapping.insert(out, buf.read(idx, p2size));
             }
         } else if let Some(binary) = data.downcast::<CABinaryOp>() {
             let out = op.outputs()[0];
-            let Some(lhs) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
-            let Some(rhs) = get_val(op.inputs()[1], &mut pntwise, &mapping)? else { return Ok(None) };
+            let Some(lhs) = get_val(op.inputs()[0], &mapping)? else { return Ok(None) };
+            let Some(rhs) = get_val(op.inputs()[1], &mapping)? else { return Ok(None) };
 
-            let output = pntwise.binary(lhs, rhs, binary.op())?;
-            mapping.insert(out, output);
+            mapping.insert(out, lhs.binary(rhs, binary.op()));
         } else if data.downcast::<Power>().is_some() {
             let out = op.outputs()[0];
-            let Some(lhs) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
-            let Some(rhs) = get_val(op.inputs()[1], &mut pntwise, &mapping)? else { return Ok(None) };
+            let Some(lhs) = get_val(op.inputs()[0], &mapping)? else { return Ok(None) };
+            let Some(rhs) = get_val(op.inputs()[1], &mapping)? else { return Ok(None) };
 
-            let output = pntwise.powf(lhs, rhs)?;
-            mapping.insert(out, output);
+            mapping.insert(out, lhs.powf(rhs));
         } else if let Some(unary) = data.downcast::<UnaryOp>() {
             let out = op.outputs()[0];
-            let Some(input) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
+            let Some(input) = get_val(op.inputs()[0], &mapping)? else { return Ok(None) };
 
-            let output = pntwise.unary(input, unary.op())?;
-            mapping.insert(out, output);
+            mapping.insert(out, input.unary(unary.op()));
         } else if let Some(matmul) = data.downcast::<SparseMatmul>() {
             let weights = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
-            let output = pntwise.sparse_matmul(weights, indices, p2size, *matmul)?;
-            mapping.insert(op.outputs()[0], output);
+            mapping.insert(op.outputs()[0], weights.sparse_matmul(indices, *matmul, p2size));
         } else if let Some(bwd) = data.downcast::<SparseMatmulBwdMulti>() {
             let out = op.outputs()[0];
             let weights = *out_buf_map.get(&out).unwrap();
 
             for (this_bwd, inputs) in bwd.inner().iter().zip(op.inputs().chunks_exact(2)) {
                 let indices = *inp_buf_map.get(&inputs[1]).unwrap();
-                let Some(gradients) = get_val(inputs[0], &mut pntwise, &mapping)? else { return Ok(None) };
-                pntwise.sparse_matmul_bwd(weights, indices, gradients, this_bwd.0)?;
+                let Some(gradients) = get_val(inputs[0], &mapping)? else { return Ok(None) };
+                weights.sparse_matmul_bwd(indices, gradients, this_bwd.0);
             }
 
             handled_writes.insert(out);
@@ -219,134 +206,85 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 
             let before = i32::try_from(pad.before()).unwrap();
             let after = i32::try_from(pad.after()).unwrap();
-            let dimen = i32::try_from(pad.dimen().get()).unwrap();
-            let inner = i32::try_from(pad.inner().get()).unwrap();
+            let dimen_len = i32::try_from(pad.dimen().get()).unwrap();
 
-            let inner = pntwise.add_const(DValue::I32(inner), 0);
-            let bda = pntwise.add_const(DValue::I32(before + dimen + after), 0);
-            let stride = pntwise.binary(inner, bda, CABinary::Mul)?;
+            let inner = builder.new_constant(i32::try_from(pad.inner().get()).unwrap(), 0);
+            let bda = builder.new_constant(before + dimen_len + after, 0);
 
-            let tid = pntwise.tid();
-            let idx_outer = pntwise.div(tid, stride)?;
-            let idx_non_outer = pntwise.rem(tid, stride)?;
-            let idx_bda = pntwise.div(idx_non_outer, inner)?;
-            let idx_inner = pntwise.rem(idx_non_outer, inner)?;
+            let (idx_outer, idx_non_outer) = builder.tid().div_rem(inner * bda);
+            let (idx_bda, idx_inner) = idx_non_outer.div_rem(inner);
 
-            let offset = pntwise.add_const(DValue::I32(-before), 0);
-            let idx_dimen = pntwise.binary(idx_bda, offset, CABinary::Add)?;
+            let idx_dimen = idx_bda - before;
 
-            let dimen = pntwise.add_const(DValue::I32(dimen), 0);
-            let mut idx = pntwise.binary(dimen, idx_outer, CABinary::Mul)?;
-            idx = pntwise.binary(idx, idx_dimen, CABinary::Add)?;
-            idx = pntwise.binary(idx, inner, CABinary::Mul)?;
-            idx = pntwise.binary(idx, idx_inner, CABinary::Add)?;
+            let dimen = builder.new_constant(dimen_len, 0);
+            let idx = (dimen * idx_outer + idx_dimen) * inner + idx_inner;
 
-            let p1 = pntwise.unary(idx_dimen, Unary::IsNonNegative)?;
+            // in bounds iff `0 <= idx_dimen < dimen`
+            let cond = idx_dimen.is_non_negative() * (dimen - idx_dimen).is_positive();
 
-            let minus_one = pntwise.add_const(DValue::I32(-1), 0);
-            let neg_idx = pntwise.binary(minus_one, idx_dimen, CABinary::Mul)?;
-            let overflow = pntwise.binary(dimen, neg_idx, CABinary::Add)?;
-            let p2 = pntwise.unary(overflow, Unary::IsPositive)?;
-
-            let cond = pntwise.binary(p1, p2, CABinary::Mul)?;
-
-            let output = pntwise.conditional_read(buf, idx, cond, pad.value(), p2size)?;
-            mapping.insert(op.outputs()[0], output);
+            mapping.insert(op.outputs()[0], buf.conditional_read(idx, cond, pad.value(), p2size));
         } else if let Some(slice) = data.downcast::<SliceAcrossDimension>() {
             assert_eq!(p2size, 0);
             let buf = *inp_buf_map.get(&op.inputs()[0]).unwrap();
 
-            let inner = i32::try_from(slice.inner().get()).unwrap();
-            let inner = pntwise.add_const(DValue::I32(inner), 0);
-            let slicelen = i32::try_from(slice.end() - slice.start()).unwrap();
-            let slicelen = pntwise.add_const(DValue::I32(slicelen), 0);
-            let stride = pntwise.binary(inner, slicelen, CABinary::Mul)?;
+            let inner = builder.new_constant(i32::try_from(slice.inner().get()).unwrap(), 0);
+            let slicelen = builder.new_constant(i32::try_from(slice.end() - slice.start()).unwrap(), 0);
 
-            let tid = pntwise.tid();
-            let idx_outer = pntwise.div(tid, stride)?;
-            let idx_non_outer = pntwise.rem(tid, stride)?;
-            let idx_slice = pntwise.div(idx_non_outer, inner)?;
-            let idx_inner = pntwise.rem(idx_non_outer, inner)?;
+            let (idx_outer, idx_non_outer) = builder.tid().div_rem(inner * slicelen);
+            let (idx_slice, idx_inner) = idx_non_outer.div_rem(inner);
 
-            let dimen = i32::try_from(slice.dimen().get()).unwrap();
-            let dimen = pntwise.add_const(DValue::I32(dimen), 0);
-            let start = i32::try_from(slice.start()).unwrap();
-            let start = pntwise.add_const(DValue::I32(start), 0);
+            let dimen = builder.new_constant(i32::try_from(slice.dimen().get()).unwrap(), 0);
+            let start = builder.new_constant(i32::try_from(slice.start()).unwrap(), 0);
 
-            let mut idx = pntwise.binary(dimen, idx_outer, CABinary::Mul)?;
-            idx = pntwise.binary(idx, start, CABinary::Add)?;
-            idx = pntwise.binary(idx, idx_slice, CABinary::Add)?;
-            idx = pntwise.binary(idx, inner, CABinary::Mul)?;
-            idx = pntwise.binary(idx, idx_inner, CABinary::Add)?;
+            let idx = (dimen * idx_outer + start + idx_slice) * inner + idx_inner;
 
-            let output = pntwise.read(buf, idx, p2size)?;
-            mapping.insert(op.outputs()[0], output);
+            mapping.insert(op.outputs()[0], buf.read(idx, p2size));
         } else if let Some(select) = data.downcast::<Select>() {
             assert_eq!(p2size, 0);
             let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
 
-            let sub_size = i32::try_from((select.inner / select.divisor).get()).unwrap();
-            let sub_size = pntwise.add_const(DValue::I32(sub_size), p2size);
-            let inner = i32::try_from(select.inner.get()).unwrap();
-            let inner = pntwise.add_const(DValue::I32(inner), p2size);
+            let sub_size = builder.new_constant(i32::try_from((select.inner / select.divisor).get()).unwrap(), p2size);
+            let inner = builder.new_constant(i32::try_from(select.inner.get()).unwrap(), p2size);
 
-            let tid = pntwise.tid();
-            let batch_idx = pntwise.div(tid, sub_size)?;
-            let elem_idx = pntwise.rem(tid, sub_size)?;
-            let bucket = pntwise.read(indices, batch_idx, p2size)?;
+            let (batch_idx, elem_idx) = builder.tid().div_rem(sub_size);
+            let bucket = indices.read(batch_idx, p2size);
 
-            let mut idx = pntwise.binary(batch_idx, inner, CABinary::Mul)?;
-            let bucket_offset = pntwise.binary(bucket, sub_size, CABinary::Mul)?;
-            idx = pntwise.binary(idx, bucket_offset, CABinary::Add)?;
-            idx = pntwise.binary(idx, elem_idx, CABinary::Add)?;
+            let idx = batch_idx * inner + bucket * sub_size + elem_idx;
 
-            let output = pntwise.read(values, idx, p2size)?;
-            mapping.insert(op.outputs()[0], output);
+            mapping.insert(op.outputs()[0], values.read(idx, p2size));
         } else if let Some(select_pad) = data.downcast::<SelectPad>() {
             assert_eq!(p2size, 0);
             let values = *inp_buf_map.get(&op.inputs()[0]).unwrap();
             let indices = *inp_buf_map.get(&op.inputs()[1]).unwrap();
 
-            let sub_size = i32::try_from((select_pad.inner / select_pad.divisor).get()).unwrap();
-            let sub_size = pntwise.add_const(DValue::I32(sub_size), p2size);
-            let inner = i32::try_from(select_pad.inner.get()).unwrap();
-            let inner = pntwise.add_const(DValue::I32(inner), p2size);
+            let divisor = select_pad.inner / select_pad.divisor;
+            let sub_size = builder.new_constant(i32::try_from(divisor.get()).unwrap(), p2size);
+            let inner = builder.new_constant(i32::try_from(select_pad.inner.get()).unwrap(), p2size);
 
-            let tid = pntwise.tid();
-            let batch_idx = pntwise.div(tid, inner)?;
-            let inner_idx = pntwise.rem(tid, inner)?;
-            let bucket_idx = pntwise.div(inner_idx, sub_size)?;
-            let elem_idx = pntwise.rem(inner_idx, sub_size)?;
+            let (batch_idx, inner_idx) = builder.tid().div_rem(inner);
+            let (bucket_idx, elem_idx) = inner_idx.div_rem(sub_size);
 
-            let bucket_target = pntwise.read(indices, batch_idx, p2size)?;
-            let neg_one = pntwise.add_const(DValue::I32(-1), p2size);
-            let bucket_neg = pntwise.binary(bucket_target, neg_one, CABinary::Mul)?;
-            let target_zero = pntwise.binary(bucket_idx, bucket_neg, CABinary::Add)?;
-            let cond = pntwise.unary(target_zero, Unary::IsZero)?;
+            let bucket_target = indices.read(batch_idx, p2size);
+            let cond = (bucket_idx + bucket_target * -1).is_zero();
 
-            let mut idx = pntwise.binary(batch_idx, sub_size, CABinary::Mul)?;
-            idx = pntwise.binary(idx, elem_idx, CABinary::Add)?;
+            let idx = batch_idx * sub_size + elem_idx;
+            let fallback = DValue::zero(select_pad.dtype);
 
-            let output = pntwise.conditional_read(values, idx, cond, DValue::zero(select_pad.dtype), p2size)?;
-            mapping.insert(op.outputs()[0], output);
+            mapping.insert(op.outputs()[0], values.conditional_read(idx, cond, fallback, p2size));
         } else if let Some(reduce) = data.downcast::<ReduceAcrossDimension>() {
             let out = op.outputs()[0];
-            let Some(value) = get_val(op.inputs()[0], &mut pntwise, &mapping)? else { return Ok(None) };
+            let Some(value) = get_val(op.inputs()[0], &mapping)? else { return Ok(None) };
             let dest = *out_buf_map.get(&out).unwrap();
 
-            let tid = pntwise.tid();
-            let dimen = pntwise.add_const(DValue::I32(reduce.dimen().get().try_into().unwrap()), 0);
-            let inner = pntwise.add_const(DValue::I32(reduce.inner().get().try_into().unwrap()), 0);
+            let dimen = builder.new_constant(i32::try_from(reduce.dimen().get()).unwrap(), 0);
+            let inner = builder.new_constant(i32::try_from(reduce.inner().get()).unwrap(), 0);
 
-            let inner_idx = pntwise.rem(tid, inner)?;
-            let outer_stride = pntwise.binary(inner, dimen, CABinary::Mul)?;
-            let outer_idx = pntwise.div(tid, outer_stride)?;
+            let tid = builder.tid();
+            let inner_idx = tid.rem(inner);
+            let outer_idx = tid.div(inner * dimen);
 
-            let mut idx = pntwise.binary(inner, outer_idx, CABinary::Mul)?;
-            idx = pntwise.binary(idx, inner_idx, CABinary::Add)?;
-
-            pntwise.atomic_add(dest, idx, value)?;
+            dest.atomic_add(inner * outer_idx + inner_idx, value);
 
             handled_writes.insert(out);
         } else {
@@ -355,16 +293,16 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
 
         for &output in op.outputs() {
             if ir.is_output(output) && !handled_writes.contains(&output) {
-                let id = *out_buf_map.get(&output).unwrap();
-                let Some(val) = get_val(output, &mut pntwise, &mapping)? else { return Ok(None) };
-                pntwise.write(id, pntwise.tid(), val)?;
+                let buf = *out_buf_map.get(&output).unwrap();
+                let Some(val) = get_val(output, &mapping)? else { return Ok(None) };
+                buf.write(builder.tid(), val);
             }
         }
     }
 
-    pntwise.eliminate_common_subexprs()?;
+    builder.ir().eliminate_common_subexprs()?;
 
-    Ok(Some((pntwise, p2size > 0)))
+    Ok(Some((builder.inner(), p2size > 0)))
 }
 
 #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]

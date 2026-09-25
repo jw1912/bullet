@@ -369,7 +369,7 @@ macro_rules! impl_scalar_ops {
                 type Output = PointwiseNode<'a>;
 
                 fn add(self, rhs: PointwiseNode<'a>) -> Self::Output {
-                    rhs.binary(self, CABinary::Add)
+                    self.coerce(rhs.builder, rhs.ty()).binary(rhs, CABinary::Add)
                 }
             }
 
@@ -385,7 +385,7 @@ macro_rules! impl_scalar_ops {
                 type Output = PointwiseNode<'a>;
 
                 fn mul(self, rhs: PointwiseNode<'a>) -> Self::Output {
-                    rhs.binary(self, CABinary::Mul)
+                    self.coerce(rhs.builder, rhs.ty()).binary(rhs, CABinary::Mul)
                 }
             }
 
