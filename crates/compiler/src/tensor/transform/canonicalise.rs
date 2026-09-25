@@ -132,7 +132,9 @@ impl CanonicalisePass {
                 tensors.push(TValue::zeros(ty.dtype(), ty.size().get()));
             }
 
-            op.0.evaluate(consts.iter().collect(), tensors.iter_mut().collect());
+            if !op.0.evaluate(consts.iter().collect(), tensors.iter_mut().collect()) {
+                //return Ok(None);
+            }
 
             return Ok(Some(tensors.into_iter().map(Constant).collect()));
         }

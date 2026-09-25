@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
 fn get_var_path(name: &str) -> PathBuf {
-    println!("rerun-if-env-changed={name}");
+    println!("cargo:rerun-if-env-changed={name}");
 
     let path = env::var(name).unwrap_or_else(|e| match e {
         env::VarError::NotPresent => panic!("{name} is not defined"),

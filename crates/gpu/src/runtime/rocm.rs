@@ -298,13 +298,8 @@ mod error {
             Ok(())
         } else {
             unsafe {
-                let mut name = std::ptr::null();
-                hipGetErrorName(value, &mut name);
-                let name = CStr::from_ptr(name).to_str().unwrap();
-
-                let mut desc = std::ptr::null();
-                hipGetErrorString(value, &mut desc);
-                let desc = CStr::from_ptr(desc).to_str().unwrap();
+                let name = CStr::from_ptr(hipGetErrorName(value)).to_str().unwrap();
+                let desc = CStr::from_ptr(hipGetErrorString(value)).to_str().unwrap();
 
                 Err(ROCmError::Driver(format!("{name}: {desc}")))
             }
@@ -362,8 +357,8 @@ mod raw {
 
     unsafe extern "C" {
         // Errors
-        pub fn hipGetErrorString(error: hipError, pStr: *mut *const c_char) -> hipError;
-        pub fn hipGetErrorName(error: hipError, pStr: *mut *const c_char) -> hipError;
+        pub fn hipGetErrorString(error: hipError) -> *const c_char;
+        pub fn hipGetErrorName(error: hipError) -> *const c_char;
 
         // Device
         pub fn hipSetDevice(device: c_int) -> hipError;

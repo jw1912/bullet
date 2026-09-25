@@ -79,6 +79,13 @@ impl LrScheduler for StepLR {
     }
 }
 
+/// Fraction of the way from superbatch 1 to `final_superbatch`,
+/// so that superbatch 1 is 0.0 and `final_superbatch` is 1.0.
+/// Caller must ensure `superbatch < final_superbatch`.
+fn progress(superbatch: usize, final_superbatch: usize) -> f32 {
+    superbatch.saturating_sub(1) as f32 / (final_superbatch - 1) as f32
+}
+
 #[derive(Clone, Debug)]
 pub struct LinearDecayLR {
     pub initial_lr: f32,
@@ -92,7 +99,7 @@ impl LrScheduler for LinearDecayLR {
             return self.final_lr;
         }
 
-        let lambda = superbatch as f32 / self.final_superbatch as f32;
+        let lambda = progress(superbatch, self.final_superbatch);
         self.initial_lr + lambda * (self.final_lr - self.initial_lr)
     }
 
@@ -119,8 +126,8 @@ impl LrScheduler for CosineDecayLR {
             return self.final_lr;
         }
 
-        let progress = superbatch as f32 / self.final_superbatch as f32;
-        let lambda = 1.0 - 0.5 * (1.0 + (PI * progress).cos());
+        let t = progress(superbatch, self.final_superbatch);
+        let lambda = 1.0 - 0.5 * (1.0 + (PI * t).cos());
         self.initial_lr + lambda * (self.final_lr - self.initial_lr)
     }
 
@@ -147,7 +154,7 @@ impl LrScheduler for ExponentialDecayLR {
             return self.final_lr;
         }
 
-        let lambda = superbatch as f32 / self.final_superbatch as f32;
+        let lambda = progress(superbatch, self.final_superbatch);
         self.initial_lr * (self.final_lr / self.initial_lr).powf(lambda)
     }
 
