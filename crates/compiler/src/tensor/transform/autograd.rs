@@ -48,7 +48,10 @@ impl IRTransform for TakeGradient {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         let mut registered = BTreeSet::new();
 
-        for out in ir.get_op(self.root)?.outputs().to_vec() {
+        // optimising may replace the root op, but its outputs survive
+        let root_outputs = ir.get_op(self.root)?.outputs().to_vec();
+
+        for &out in &root_outputs {
             if !ir.is_output(out) {
                 registered.insert(out);
                 ir.register_output(out);
@@ -68,9 +71,9 @@ impl IRTransform for TakeGradient {
             ir.unregister_output(out_grd);
         }
 
-        let ops = ir.get_dependent_ops_set(self.root)?;
+        let root = ir.get_parent_op(root_outputs[0])?;
+        let ops = ir.get_dependent_ops_set(root)?;
 
-        let root_outputs = ir.get_op(self.root)?.outputs().to_vec();
         let mut grads: BTreeMap<_, _> = root_outputs.into_iter().zip(self.output_grads.clone()).collect();
 
         for &op in &ops {

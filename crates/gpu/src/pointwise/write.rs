@@ -217,6 +217,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                         Unary::Sqrt => ["sqrtf", "sqrt"][mslidx],
                         Unary::Round => ["roundf", "round"][mslidx],
                         Unary::Truncate => ["truncf", "trunc"][mslidx],
+                        Unary::Identity => "",
                         Unary::Sgn | Unary::Reciprocal | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
                             unimplemented!()
                         }

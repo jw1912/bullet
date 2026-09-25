@@ -133,14 +133,6 @@ impl ModelBuilder {
         let bias = self.new_weights(format!("{}b", id.as_ref()), (output_size, bias_cols), InitSettings::Zeroed);
         Affine { weights, bias }
     }
-
-    pub fn with_no_grad<T>(&self, mut f: impl FnMut() -> T) -> T {
-        let value = self.ir().stop_grad;
-        self.ir().stop_grad = true;
-        let out = f();
-        self.ir().stop_grad = value;
-        out
-    }
 }
 
 #[derive(Clone, Copy)]

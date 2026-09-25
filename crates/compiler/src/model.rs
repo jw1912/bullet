@@ -1,11 +1,7 @@
 mod builder;
 pub mod operations;
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    rc::Rc,
-};
+use std::{collections::BTreeMap, fmt, rc::Rc};
 
 use crate::{
     ir::{IR, IRError, Node, NodeId, Operation, TypeSystem},
@@ -139,8 +135,6 @@ pub struct ModelIR {
     ir: IR<Model>,
     weights: BTreeMap<NodeId, (String, InitSettings)>,
     inputs: BTreeMap<NodeId, String>,
-    requires_grad: BTreeSet<NodeId>,
-    stop_grad: bool,
 }
 
 impl ModelIR {
@@ -165,10 +159,6 @@ impl ModelIR {
         let node = self.ir.add_op([], operations::Input(ty).into()).unwrap()[0];
         self.weights.insert(node, (name.into(), init));
 
-        if !self.stop_grad {
-            self.requires_grad.insert(node);
-        }
-
         node
     }
 
@@ -187,14 +177,7 @@ impl ModelIR {
     }
 
     pub fn add_op(&mut self, inputs: impl AsRef<[NodeId]>, op: impl ModelOperation) -> Result<NodeId, IRError> {
-        let req_grad = inputs.as_ref().iter().any(|i| self.requires_grad.contains(i));
-        let node = self.ir.add_op(inputs, op.into()).map(|x| x[0])?;
-
-        if !self.stop_grad && req_grad {
-            self.requires_grad.insert(node);
-        }
-
-        Ok(node)
+        self.ir.add_op(inputs, op.into()).map(|x| x[0])
     }
 
     pub fn lower(&self, batch_size: usize) -> Result<(TensorIR, BTreeMap<NodeId, NodeId>), IRTrace> {

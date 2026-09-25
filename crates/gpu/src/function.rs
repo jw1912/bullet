@@ -10,8 +10,8 @@ use bullet_compiler::{
     tensor::{
         DType, IRTrace, OpType, TType, TensorIR, TensorOp,
         operation::{
-            BroadcastAcrossDimension, CABinary, CABinaryOp, Matmul, MatrixLayout, PadAcrossDimension,
-            ReduceAcrossDimension, Reduction, ScalarConstant, SliceAcrossDimension,
+            BroadcastAcrossDimension, CABinary, CABinaryOp, CopyOp, Matmul, MatrixLayout, PadAcrossDimension,
+            ReduceAcrossDimension, Reduction, ScalarConstant, SliceAcrossDimension, Unary, UnaryOp,
         },
         transform::{
             IRTransform,
@@ -75,6 +75,7 @@ impl<G: Gpu> Function<G> {
 
     pub fn new(device: Arc<Device<G>>, mut ir: TensorIR) -> Result<Self, IRTrace> {
         let props = device.props().clone();
+        ir.transform(RewritePass(CopyToUnary))?;
         ir.transform(RewritePass(MatmulToBroadcastMul))?;
         ir.transform(DuplicateScalarsAndIndexing)?;
         ir.transform(LowerPointwise(props.clone()))?;
@@ -345,7 +346,7 @@ rewriterule! {
     rulename MatmulToBroadcastMul on ir
     rewrites op (output = [Matmul] (lhs) (rhs))
     {
-        if output.lhs.cols.get() == 1 {
+        if output.lhs.cols.get() == 1 && output.batch == 1.into() {
             let m = output.lhs.rows;
             let n = output.rhs.cols;
 
@@ -359,6 +360,16 @@ rewriterule! {
             ir.replace_operation(op.id(), [lhs, rhs], new_op)?;
             return Ok(true);
         }
+    }
+}
+
+rewriterule! {
+    rulename CopyToUnary on ir
+    rewrites op (copy = [CopyOp] (input))
+    {
+        let input = input.id();
+        ir.replace_operation(op.id(), [input], UnaryOp::new(copy.0, Unary::Identity)?)?;
+        return Ok(true);
     }
 }
 

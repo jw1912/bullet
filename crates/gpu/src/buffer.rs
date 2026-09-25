@@ -116,18 +116,13 @@ pub struct Buffer<G: Gpu> {
     dtype: DType,
     size: usize,
     device: Arc<Device<G>>,
-    creator: Option<Arc<Stream<G>>>,
     owner: Mutex<Option<(Arc<Stream<G>>, usize)>>,
 }
 
 impl<G: Gpu> Drop for Buffer<G> {
     fn drop(&mut self) {
         unsafe {
-            if let Some(stream) = &self.creator {
-                stream.free(self.ptr).unwrap();
-            } else {
-                self.device.free(self.ptr).unwrap();
-            }
+            self.device.free(self.ptr).unwrap();
         }
     }
 }
@@ -146,7 +141,7 @@ impl<G: Gpu> Buffer<G> {
 
         let ptr = device.malloc(dtype.bytes() * size)?;
 
-        Ok(Arc::new(Self { ptr, dtype, size, device: device.clone(), creator: None, owner: Mutex::new(None) }))
+        Ok(Arc::new(Self { ptr, dtype, size, device: device.clone(), owner: Mutex::new(None) }))
     }
 
     /// New zeroed buffer on the device with given size and dtype
