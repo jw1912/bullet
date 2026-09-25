@@ -56,6 +56,7 @@ pub struct IR<T: TypeSystem> {
     nodes: BTreeMap<NodeId, Node<T>>,
     ops: BTreeMap<OpId, Op<T>>,
     links: BTreeMap<NodeId, OpId>,
+    id: usize,
 }
 
 impl<T: TypeSystem> IR<T> {
@@ -67,6 +68,12 @@ impl<T: TypeSystem> IR<T> {
     /// Mutable reference to the node with given ID
     pub fn node_mut(&mut self, node: NodeId) -> Result<&mut Node<T>, IRError> {
         self.nodes.get_mut(&node).ok_or(format!("Node<T> {node:?} does not exist!").into())
+    }
+
+    pub fn new_id(&mut self) -> usize {
+        let id = self.id;
+        self.id += 1;
+        id
     }
 
     /// Unordered iterator over the nodes in the graph
@@ -175,7 +182,7 @@ impl<T: TypeSystem> IR<T> {
 
     /// Adds a new operation to the graph
     pub fn add_op(&mut self, inputs: impl AsRef<[NodeId]>, data: T::OpData) -> Result<Vec<NodeId>, IRError> {
-        let output_ids = (0..data.outputs().len()).map(|_| NodeId::default()).collect::<Vec<_>>();
+        let output_ids = (0..data.outputs().len()).map(|_| NodeId::from_inner(self.new_id())).collect::<Vec<_>>();
         let output_tys = data.outputs();
 
         let mut error = false;
@@ -184,10 +191,10 @@ impl<T: TypeSystem> IR<T> {
             error |= self.nodes.insert(out_id, Node::new(out_id, out_ty.clone())).is_some();
         }
 
+        let op_id = OpId::from_inner(self.new_id());
         let inputs = inputs.as_ref().iter().map(|&id| self.node(id)).collect::<Result<_, _>>()?;
         let outputs = output_ids.iter().map(|&id| self.node(id)).collect::<Result<_, _>>()?;
-        let op = Op::new(inputs, outputs, data)?;
-        let op_id = op.id();
+        let op = Op::new(op_id, inputs, outputs, data)?;
 
         for &input in op.inputs() {
             self.node_mut(input)?.inc_children();

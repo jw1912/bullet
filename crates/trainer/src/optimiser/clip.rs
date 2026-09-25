@@ -16,10 +16,7 @@ use crate::optimiser::OptimiserUpdateSync;
 use super::{OptimiserState, OptimiserUpdateResult, utils::Placement};
 
 fn build_clip_op(size: usize, min: f32, max: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
-    let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
-    let p2actual = 2usize.pow(u32::from(p2size));
-
-    let builder = PointwiseBuilder::new(size / p2actual);
+    let (builder, p2size) = PointwiseBuilder::vectorised(size);
 
     let w = builder.new_buffer(TType::new(size, DType::F32));
 

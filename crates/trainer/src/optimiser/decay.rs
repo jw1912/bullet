@@ -16,17 +16,13 @@ use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 use super::{OptimiserState, utils::Placement};
 
 fn build_decay_op(size: usize, decay: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
-    let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
-    let p2actual = 2usize.pow(u32::from(p2size));
-
-    let builder = PointwiseBuilder::new(size / p2actual);
+    let (builder, p2size) = PointwiseBuilder::vectorised(size);
 
     let lrate_buf = builder.new_buffer(TType::new(1, DType::F32));
     let w = builder.new_buffer(TType::new(size, DType::F32));
 
     // the rate is the same for every weight, so it is read once as a scalar
-    let lrate = lrate_buf.read(0, 0);
-    let lrate = if p2size > 0 { lrate.broadcast(p2size) } else { lrate };
+    let lrate = lrate_buf.read(0, 0).splat(p2size);
 
     let tid = builder.tid();
     let new_w = w.read(tid, p2size) * (1.0 - lrate * decay);

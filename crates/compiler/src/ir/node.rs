@@ -1,7 +1,4 @@
-use std::{
-    fmt,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fmt;
 
 use super::TypeSystem;
 
@@ -12,12 +9,9 @@ impl NodeId {
     pub fn inner(&self) -> usize {
         self.0
     }
-}
 
-impl Default for NodeId {
-    fn default() -> Self {
-        static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
+    pub(super) fn from_inner(val: usize) -> Self {
+        Self(val)
     }
 }
 

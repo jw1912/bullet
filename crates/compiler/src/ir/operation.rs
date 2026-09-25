@@ -1,16 +1,7 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use super::{IRError, Node, NodeId, Operation, TypeSystem};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OpId(usize);
-
-impl Default for OpId {
-    fn default() -> Self {
-        static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
-}
 
 impl OpId {
     pub(super) fn from_inner(id: usize) -> Self {
@@ -31,9 +22,8 @@ pub struct Op<T: TypeSystem> {
 }
 
 impl<T: TypeSystem> Op<T> {
-    pub fn new(inputs: Vec<&Node<T>>, outputs: Vec<&Node<T>>, data: T::OpData) -> Result<Self, IRError> {
+    pub fn new(id: OpId, inputs: Vec<&Node<T>>, outputs: Vec<&Node<T>>, data: T::OpData) -> Result<Self, IRError> {
         Self::check(&inputs, &outputs, &data)?;
-        let id = OpId::default();
         let inputs = inputs.iter().map(|&i| i.id()).collect();
         let outputs = outputs.iter().map(|&i| i.id()).collect();
 

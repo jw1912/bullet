@@ -299,17 +299,130 @@ pub fn generate(sub: &SubGraph, props: &DeviceProps) -> Result<Option<(Pointwise
     Ok(Some((builder.inner(), p2size > 0)))
 }
 
-#[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
 #[cfg(test)]
 mod tests {
-    use bullet_compiler::tensor::{DType, DValue, IRBuilder, IRTrace, TValue, operation::SubGraph};
+    use bullet_compiler::tensor::{
+        DType, IRBuilder,
+        operation::{SparseMatmul, SubGraph},
+    };
 
+    use crate::runtime::{DeviceProps, Dialect};
+
+    // only the tests that compile and run a kernel need a device
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     use crate::{
         buffer::Buffer,
         kernel::KernelSrc,
-        runtime::{Device, DeviceProps, Gpu},
+        runtime::{Device, Gpu},
     };
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
+    use bullet_compiler::tensor::{DValue, IRTrace, TValue};
 
+    fn props() -> DeviceProps {
+        DeviceProps::testing(Dialect::CudaHip, Some(32), false)
+    }
+
+    /// 32 rows over a vector width of 4 leaves 8 rows per thread.
+    fn sparse_matmul_subgraph() -> SubGraph {
+        let matmul = SparseMatmul::new(DType::F32, 4usize, 32usize, 8usize, 32usize, 0, 2usize).unwrap();
+
+        let b = IRBuilder::default();
+        let w = b.add_input(32 * 8, DType::F32);
+        let i = b.add_input(4 * 2, DType::I32);
+        let out = b.add_op([w, i], matmul).unwrap()[0];
+
+        SubGraph::new(b.build([out]), vec![w.node(), i.node()], vec![out.node()]).unwrap()
+    }
+
+    /// Generated source must not depend on how many other graphs have been built, or a
+    /// kernel cannot be meaningfully compared against one from a previous run.
+    #[test]
+    fn generation_is_deterministic() {
+        // the sparse matmul names temporaries after their op, so this covers op ids
+        // as well as node ids
+        let render = || {
+            let ir = super::generate(&sparse_matmul_subgraph(), &props()).unwrap().unwrap().0;
+            ir.source_code("kernel", &props()).unwrap()
+        };
+
+        let first = render();
+
+        // allocate unrelated nodes and ops in between, bumping any global counters
+        for _ in 0..7 {
+            let b = IRBuilder::default();
+            let x = b.add_input(8, DType::F32);
+            let _ = (x * x).unwrap();
+        }
+
+        assert_eq!(first, render(), "kernel source depends on unrelated graph construction");
+    }
+
+    /// The vectorisation analysis decides how many elements each thread handles, and
+    /// silently falling back to scalar is a performance loss rather than a failure, so
+    /// it would otherwise go unnoticed.
+    #[test]
+    fn vector_widths() {
+        for (size, vectorised) in [(4usize, true), (8, true), (6, true), (5, false)] {
+            let b = IRBuilder::default();
+            let x = b.add_input(size, DType::F32);
+            let y = (x * x).unwrap();
+            let sub = SubGraph::new(b.build([y]), vec![x.node()], vec![y.node()]).unwrap();
+
+            let (_, actual) = super::generate(&sub, &props()).unwrap().unwrap();
+            assert_eq!(actual, vectorised, "size {size}");
+        }
+    }
+
+    /// A reduction only fuses when its inner dimension is wave aligned, so the same
+    /// graph fuses on a wave32 device and not on a wave64 one.
+    #[test]
+    fn reduction_fuses_only_when_wave_aligned() {
+        let fuses = |inner: usize, warp_size: Option<u8>| {
+            let b = IRBuilder::default();
+            let x = b.add_input(inner * 4, DType::F32);
+            let r = x.reduce_sum([4, inner], 0).unwrap();
+            let sub = SubGraph::new(b.build([r]), vec![x.node()], vec![r.node()]).unwrap();
+
+            let props = DeviceProps::testing(Dialect::CudaHip, warp_size, false);
+            super::generate(&sub, &props).unwrap().is_some()
+        };
+
+        assert!(fuses(64, Some(32)));
+        assert!(fuses(64, Some(64)));
+        assert!(fuses(32, Some(32)));
+        assert!(!fuses(32, Some(64)));
+        assert!(!fuses(12, Some(32)));
+        assert!(!fuses(64, None));
+    }
+
+    /// The AMD scalar-load hint is only valid on ROCm, and only when the rows each
+    /// thread covers make the batch index uniform across the wave.
+    #[test]
+    fn amd_scalar_load_hint() {
+        let emitted = |rows: usize, warp_size: Option<u8>, is_rocm: bool| {
+            let matmul = SparseMatmul::new(DType::F32, 4usize, rows, 8usize, rows, 0, 2usize).unwrap();
+
+            let b = IRBuilder::default();
+            let w = b.add_input(rows * 8, DType::F32);
+            let i = b.add_input(4 * 2, DType::I32);
+            let out = b.add_op([w, i], matmul).unwrap()[0];
+            let sub = SubGraph::new(b.build([out]), vec![w.node(), i.node()], vec![out.node()]).unwrap();
+
+            let props = DeviceProps::testing(Dialect::CudaHip, warp_size, is_rocm);
+            let ir = super::generate(&sub, &props).unwrap().unwrap().0;
+            ir.source_code("kernel", &props).unwrap().contains("__builtin_amdgcn_readfirstlane")
+        };
+
+        // 256 rows over a vector width of 4 leaves 64 per thread, a multiple of both
+        // wave sizes; 32 rows leave 8, a multiple of neither
+        assert!(emitted(256, Some(32), true));
+        assert!(emitted(256, Some(64), true));
+        assert!(!emitted(256, Some(32), false), "not a ROCm builtin");
+        assert!(!emitted(256, None, true), "wave size unknown");
+        assert!(!emitted(32, Some(32), true), "index not uniform across the wave");
+    }
+
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     fn make_axby(props: &DeviceProps, size: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
@@ -323,6 +436,7 @@ mod tests {
         unsafe { super::generate(&sub, props)?.unwrap().0.lower("axby".to_string(), props).map_err(IRTrace::from) }
     }
 
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     fn axby<G: Gpu>() -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
@@ -360,6 +474,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     fn make_concat(props: &DeviceProps, dim: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
@@ -376,6 +491,7 @@ mod tests {
         unsafe { super::generate(&sub, props)?.unwrap().0.lower("concat".to_string(), props).map_err(IRTrace::from) }
     }
 
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     fn concat<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;
@@ -399,6 +515,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     fn make_slice(props: &DeviceProps, dim: usize) -> Result<KernelSrc, IRTrace> {
         let builder = IRBuilder::default();
 
@@ -411,6 +528,7 @@ mod tests {
         unsafe { super::generate(&sub, props)?.unwrap().0.lower("slice".to_string(), props).map_err(IRTrace::from) }
     }
 
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
     fn slice<G: Gpu>(dim: usize, expected: impl Into<Vec<f32>>) -> Result<(), G::Error> {
         let device = Device::<G>::new(0)?;
         let stream = device.new_stream()?;

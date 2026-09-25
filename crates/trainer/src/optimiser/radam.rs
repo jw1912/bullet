@@ -9,7 +9,7 @@ use bullet_compiler::tensor::{DType, DValue, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::{PointwiseBuilder, PointwiseNode},
+    pointwise::PointwiseBuilder,
     runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
@@ -36,10 +36,7 @@ impl RAdamParams {
     pub fn build(&self, size: usize, props: &DeviceProps) -> Result<KernelSrc, IRTrace> {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
-        let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
-        let p2actual = 2usize.pow(u32::from(p2size));
-
-        let builder = PointwiseBuilder::new(size / p2actual);
+        let (builder, p2size) = PointwiseBuilder::vectorised(size);
 
         let scalar = TType::new(1, DType::F32);
         let ty = TType::new(size, DType::F32);
@@ -53,13 +50,9 @@ impl RAdamParams {
         let momentum_buf = builder.new_buffer(ty);
         let velocity_buf = builder.new_buffer(ty);
 
-        fn splat(node: PointwiseNode<'_>, p2size: u8) -> PointwiseNode<'_> {
-            if p2size > 0 { node.broadcast(p2size) } else { node }
-        }
-
-        let adj = splat(adj_buf.read(0, 0), p2size);
-        let rate = splat(rate_buf.read(0, 0) * step_size_buf.read(0, 0), p2size);
-        let denom = splat(denom_buf.read(0, 0).cast(DType::F32), p2size);
+        let adj = adj_buf.read(0, 0).splat(p2size);
+        let rate = (rate_buf.read(0, 0) * step_size_buf.read(0, 0)).splat(p2size);
+        let denom = denom_buf.read(0, 0).cast(DType::F32).splat(p2size);
 
         let tid = builder.tid();
         let grad = adj * grad_buf.read(tid, p2size);

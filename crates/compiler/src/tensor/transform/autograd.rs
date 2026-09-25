@@ -30,7 +30,7 @@ impl IRTransform for LowerForward {
 
 type GradientMap = BTreeMap<NodeId, NodeId>;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TakeGradient {
     root: OpId,
     output_grads: Vec<NodeId>,

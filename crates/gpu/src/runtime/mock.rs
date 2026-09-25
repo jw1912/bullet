@@ -50,7 +50,7 @@ impl GpuBindings for MockGpu {
             vec_atomics: false,
             arch: None,
             dialect: Dialect::CudaHip,
-            atomic_flag: false,
+            is_rocm: false,
         })
     }
 

@@ -297,7 +297,7 @@ impl<G: Gpu> Module<G> {
             options.push(CString::new(s).unwrap())
         }
 
-        if device.props().atomic_flag() {
+        if device.props().is_rocm() {
             options.push(CString::new("-munsafe-fp-atomics").unwrap());
 
             if let Ok(name) = std::env::var("GCN_ARCH_NAME") {
