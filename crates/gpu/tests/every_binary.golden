@@ -1,0 +1,50 @@
+===== CudaHip =====
+vectorised: true
+inputs:     [f32[64], f32[64]]
+outputs:    [f32[64], f32[64], f32[64], f32[64]]
+args:       [(0, true), (1, true), (0, false), (1, false), (2, false), (3, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void every_binary(float* n2, float* n4, float* n6, float* n8, float* n10, float* n12) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (16)) return;
+    const float4 n14 = reinterpret_cast<float4*>(n2)[n0];
+    const float4 n16 = reinterpret_cast<float4*>(n4)[n0];
+    float4 n18;n18.x = n14.x + n16.x;n18.y = n14.y + n16.y;n18.z = n14.z + n16.z;n18.w = n14.w + n16.w;
+    reinterpret_cast<float4*>(n6)[n0] = n18;
+    float4 n25;n25.x = n14.x * n16.x;n25.y = n14.y * n16.y;n25.z = n14.z * n16.z;n25.w = n14.w * n16.w;
+    reinterpret_cast<float4*>(n8)[n0] = n25;
+    float4 n32;n32.x = min(n14.x, n16.x);n32.y = min(n14.y, n16.y);n32.z = min(n14.z, n16.z);n32.w = min(n14.w, n16.w);
+    reinterpret_cast<float4*>(n10)[n0] = n32;
+    float4 n39;n39.x = max(n14.x, n16.x);n39.y = max(n14.y, n16.y);n39.z = max(n14.z, n16.z);n39.w = max(n14.w, n16.w);
+    reinterpret_cast<float4*>(n12)[n0] = n39;
+}
+
+===== Msl =====
+vectorised: true
+inputs:     [f32[64], f32[64]]
+outputs:    [f32[64], f32[64], f32[64], f32[64]]
+args:       [(0, true), (1, true), (0, false), (1, false), (2, false), (3, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void every_binary(device float* n2 [[buffer(0)]], device float* n4 [[buffer(1)]], device float* n6 [[buffer(2)]], device float* n8 [[buffer(3)]], device float* n10 [[buffer(4)]], device float* n12 [[buffer(5)]], uint metal_tid [[thread_position_in_grid]]) {
+    const int n0 = static_cast<int>(metal_tid);
+    if (n0 >= (16)) return;
+    const float4 n14 = reinterpret_cast<device float4*>(n2)[n0];
+    const float4 n16 = reinterpret_cast<device float4*>(n4)[n0];
+    float4 n18;n18.x = n14.x + n16.x;n18.y = n14.y + n16.y;n18.z = n14.z + n16.z;n18.w = n14.w + n16.w;
+    reinterpret_cast<device float4*>(n6)[n0] = n18;
+    float4 n25;n25.x = n14.x * n16.x;n25.y = n14.y * n16.y;n25.z = n14.z * n16.z;n25.w = n14.w * n16.w;
+    reinterpret_cast<device float4*>(n8)[n0] = n25;
+    float4 n32;n32.x = min(n14.x, n16.x);n32.y = min(n14.y, n16.y);n32.z = min(n14.z, n16.z);n32.w = min(n14.w, n16.w);
+    reinterpret_cast<device float4*>(n10)[n0] = n32;
+    float4 n39;n39.x = max(n14.x, n16.x);n39.y = max(n14.y, n16.y);n39.z = max(n14.z, n16.z);n39.w = max(n14.w, n16.w);
+    reinterpret_cast<device float4*>(n12)[n0] = n39;
+}
+

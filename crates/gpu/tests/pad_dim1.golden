@@ -1,0 +1,94 @@
+===== CudaHip =====
+vectorised: false
+inputs:     [f32[8], f32[8]]
+outputs:    [f32[16]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void pad_dim1(float* n2, float* n4, float* n6) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (16)) return;
+    const int n8 = 8;
+    const int n10 = n0 / n8;
+    const int n14 = n0 % n8;
+    const int n16 = 2;
+    const int n18 = n14 / n16;
+    const int n22 = n14 % n16;
+    const int n24 = 0;
+    const int n26 = n18 + n24;
+    const int n30 = n16 * n10;
+    const int n32 = n30 + n26;
+    const int n36 = n32 * n16;
+    const int n38 = n36 + n22;
+    const int n40 = n26 >= static_cast<int>(0);
+    const int n42 = -1;
+    const int n44 = n42 * n26;
+    const int n48 = n16 + n44;
+    const int n50 = n48 > static_cast<int>(0);
+    const int n52 = n40 * n50;
+    const float n54 = n52 > 0 ? n2[n38] : 0E0;
+    const int n72 = -2;
+    const int n74 = n18 + n72;
+    const int n80 = n30 + n74;
+    const int n84 = n80 * n16;
+    const int n86 = n84 + n22;
+    const int n88 = n74 >= static_cast<int>(0);
+    const int n92 = n42 * n74;
+    const int n96 = n16 + n92;
+    const int n98 = n96 > static_cast<int>(0);
+    const int n100 = n88 * n98;
+    const float n102 = n100 > 0 ? n4[n86] : 0E0;
+    const float n104 = n54 + n102;
+    n6[n0] = n104;
+}
+
+===== Msl =====
+vectorised: false
+inputs:     [f32[8], f32[8]]
+outputs:    [f32[16]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void pad_dim1(device float* n2 [[buffer(0)]], device float* n4 [[buffer(1)]], device float* n6 [[buffer(2)]], uint metal_tid [[thread_position_in_grid]]) {
+    const int n0 = static_cast<int>(metal_tid);
+    if (n0 >= (16)) return;
+    const int n8 = 8;
+    const int n10 = n0 / n8;
+    const int n14 = n0 % n8;
+    const int n16 = 2;
+    const int n18 = n14 / n16;
+    const int n22 = n14 % n16;
+    const int n24 = 0;
+    const int n26 = n18 + n24;
+    const int n30 = n16 * n10;
+    const int n32 = n30 + n26;
+    const int n36 = n32 * n16;
+    const int n38 = n36 + n22;
+    const int n40 = n26 >= static_cast<int>(0);
+    const int n42 = -1;
+    const int n44 = n42 * n26;
+    const int n48 = n16 + n44;
+    const int n50 = n48 > static_cast<int>(0);
+    const int n52 = n40 * n50;
+    const float n54 = n52 > 0 ? n2[n38] : 0E0;
+    const int n72 = -2;
+    const int n74 = n18 + n72;
+    const int n80 = n30 + n74;
+    const int n84 = n80 * n16;
+    const int n86 = n84 + n22;
+    const int n88 = n74 >= static_cast<int>(0);
+    const int n92 = n42 * n74;
+    const int n96 = n16 + n92;
+    const int n98 = n96 > static_cast<int>(0);
+    const int n100 = n88 * n98;
+    const float n102 = n100 > 0 ? n4[n86] : 0E0;
+    const float n104 = n54 + n102;
+    n6[n0] = n104;
+}
+

@@ -1,0 +1,52 @@
+===== CudaHip =====
+vectorised: false
+inputs:     [f32[48], i32[4]]
+outputs:    [f32[16]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void select(float* n2, int* n4, float* n6) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (16)) return;
+    const int n8 = 4;
+    const int n10 = n0 / n8;
+    const int n14 = n0 % n8;
+    const int n16 = n4[n10];
+    const int n18 = 12;
+    const int n20 = n10 * n18;
+    const int n24 = n16 * n8;
+    const int n26 = n20 + n24;
+    const int n28 = n26 + n14;
+    const float n30 = n2[n28];
+    n6[n0] = n30;
+}
+
+===== Msl =====
+vectorised: false
+inputs:     [f32[48], i32[4]]
+outputs:    [f32[16]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void select(device float* n2 [[buffer(0)]], device int* n4 [[buffer(1)]], device float* n6 [[buffer(2)]], uint metal_tid [[thread_position_in_grid]]) {
+    const int n0 = static_cast<int>(metal_tid);
+    if (n0 >= (16)) return;
+    const int n8 = 4;
+    const int n10 = n0 / n8;
+    const int n14 = n0 % n8;
+    const int n16 = n4[n10];
+    const int n18 = 12;
+    const int n20 = n10 * n18;
+    const int n24 = n16 * n8;
+    const int n26 = n20 + n24;
+    const int n28 = n26 + n14;
+    const float n30 = n2[n28];
+    n6[n0] = n30;
+}
+

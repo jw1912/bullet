@@ -36,6 +36,21 @@ pub struct DeviceProps {
 }
 
 impl DeviceProps {
+    /// Props for codegen tests, so that kernel generation can be exercised for
+    /// every dialect without the corresponding device (or feature) being present.
+    #[cfg(test)]
+    pub(crate) fn testing(dialect: Dialect, warp_size: Option<u8>) -> Self {
+        Self {
+            name: "testing".into(),
+            warp_size,
+            stream_mem_alloc: false,
+            vec_atomics: false,
+            arch: None,
+            dialect,
+            atomic_flag: false,
+        }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }

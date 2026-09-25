@@ -10,7 +10,7 @@ impl NodeId {
         self.0
     }
 
-    pub(crate) fn new(val: usize) -> Self {
+    pub(super) fn from_inner(val: usize) -> Self {
         Self(val)
     }
 }

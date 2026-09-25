@@ -1,0 +1,64 @@
+===== CudaHip =====
+vectorised: true
+inputs:     [f32[256], i32[8]]
+outputs:    [f32[128]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void sparse_matmul_fwd(float* n2, int* n4, float* n6) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (32)) return;
+    float4 n8 = make_float4(0, 0, 0, 0);
+                            int uniq_9_1 = n0 / 8;
+                            int uniq_9_2 = 0 + n0 % 8;
+    
+                            for (int i = 0; i < 2; i++) {
+                                const int j = n4[2 * uniq_9_1 + i];
+    
+                                if (j < 0 || j >= 8) break;
+    
+                                const float4 a = reinterpret_cast<float4*>(n2)[j * 8 + uniq_9_2];
+    
+                                n8.x += a.x;
+                                n8.y += a.y;
+                                n8.z += a.z;
+                                n8.w += a.w;
+                            }
+    reinterpret_cast<float4*>(n6)[n0] = n8;
+}
+
+===== Msl =====
+vectorised: true
+inputs:     [f32[256], i32[8]]
+outputs:    [f32[128]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void sparse_matmul_fwd(device float* n2 [[buffer(0)]], device int* n4 [[buffer(1)]], device float* n6 [[buffer(2)]], uint metal_tid [[thread_position_in_grid]]) {
+    const int n0 = static_cast<int>(metal_tid);
+    if (n0 >= (32)) return;
+    float4 n8 = float4(0, 0, 0, 0);
+                            int uniq_9_1 = n0 / 8;
+                            int uniq_9_2 = 0 + n0 % 8;
+    
+                            for (int i = 0; i < 2; i++) {
+                                const int j = n4[2 * uniq_9_1 + i];
+    
+                                if (j < 0 || j >= 8) break;
+    
+                                const float4 a = reinterpret_cast<device float4*>(n2)[j * 8 + uniq_9_2];
+    
+                                n8.x += a.x;
+                                n8.y += a.y;
+                                n8.z += a.z;
+                                n8.w += a.w;
+                            }
+    reinterpret_cast<device float4*>(n6)[n0] = n8;
+}
+
