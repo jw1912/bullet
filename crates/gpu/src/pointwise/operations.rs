@@ -70,7 +70,7 @@ pub enum PointwiseOp {
 
 impl PointwiseOp {
     pub fn is_unique(&self) -> bool {
-        matches!(self, Self::Buffer(_, _) | Self::AtomicAdd(_))
+        matches!(self, Self::Buffer(_, _) | Self::AtomicAdd(_) | Self::SpMMT { .. } | Self::Write(_))
     }
 }
 
@@ -122,20 +122,7 @@ impl Operation<PType> for PointwiseOp {
             Self::Read(io) => vec![PType::Variable { ty: io.buf_ty, p2size: io.p2size }],
             Self::ConditionalRead(io, _) => vec![PType::Variable { ty: io.buf_ty, p2size: io.p2size }],
             Self::Write(_) | Self::AtomicAdd(_) | Self::SpMMT { .. } => Vec::new(),
-            Self::Unary { ty, p2size, op } => {
-                let ty = match op {
-                    Unary::Cast(ty) => ty,
-                    Unary::Sgn
-                    | Unary::Abs
-                    | Unary::Identity
-                    | Unary::IsNonNegative
-                    | Unary::IsPositive
-                    | Unary::IsZero => ty,
-                    _ => (ty != DType::I32).then_some(ty).unwrap(),
-                };
-
-                vec![PType::Variable { ty, p2size }]
-            }
+            Self::Unary { ty, p2size, op } => vec![PType::Variable { ty: op.dtype(ty).unwrap(), p2size }],
             Self::Binary { ty, p2size, .. } => vec![PType::Variable { ty, p2size }],
             Self::Power { p2size } => vec![PType::Variable { ty: DType::F32, p2size }],
             Self::Constant { value, p2size } => vec![PType::Variable { ty: value.dtype(), p2size }],

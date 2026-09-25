@@ -64,7 +64,10 @@ impl ModelWeights {
                 InitSettings::Zeroed => vec![0.0; size],
                 InitSettings::Uniform { mean, stdev } => vec_f32(&mut rng, size, *mean, *stdev, false),
                 InitSettings::Normal { mean, stdev } => vec_f32(&mut rng, size, *mean, *stdev, true),
-                InitSettings::Custom(value) => value.f32().to_vec(),
+                InitSettings::Custom(value) => {
+                    assert_eq!(size, value.size());
+                    value.f32().to_vec()
+                }
             };
 
             stores.insert(name.clone(), ShapedTValue { values: TValue::F32(init), shape: ty.shape() });
@@ -374,7 +377,9 @@ impl Dist {
         if use_gaussian {
             Self::Normal(Normal::new(mean, stdev).unwrap())
         } else {
-            Self::Uniform(Uniform::new(mean - stdev, mean + stdev).unwrap())
+            // U(a, b) has stdev (b - a) / sqrt(12)
+            let half_width = stdev * 3f32.sqrt();
+            Self::Uniform(Uniform::new_inclusive(mean - half_width, mean + half_width).unwrap())
         }
     }
 

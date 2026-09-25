@@ -30,7 +30,9 @@ impl Unary {
     pub fn dtype(self, input: DType) -> Option<DType> {
         match self {
             Self::Cast(ty) => Some(ty),
-            Self::Sgn | Self::Abs | Self::Identity => Some(input),
+            Self::Sgn | Self::Abs | Self::Identity | Self::IsNonNegative | Self::IsPositive | Self::IsZero => {
+                Some(input)
+            }
             _ => (input != DType::I32).then_some(input),
         }
     }

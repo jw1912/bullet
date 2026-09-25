@@ -23,7 +23,7 @@ impl Slice {
 impl ModelOperation for Slice {
     fn opname(&self) -> String {
         let Slice(_, start, end, rows) = *self;
-        format!("Pad<{start}, {end}, {rows}>")
+        format!("Slice<{start}, {end}, {rows}>")
     }
 
     fn inputs(&self) -> Vec<MType> {

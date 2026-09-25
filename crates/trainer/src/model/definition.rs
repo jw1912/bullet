@@ -4,7 +4,7 @@ use bullet_compiler::{
     ir::NodeId,
     model::{Layout, MType, ModelBuilder, ModelIR, ModelNode},
     tensor::{
-        DType, IRTrace, TValue, TensorIR,
+        DType, DValue, IRTrace, TValue, TensorIR,
         transform::{
             autograd::{LowerForward, TakeGradient},
             canonicalise::CanonicalisePass,
@@ -108,7 +108,17 @@ impl ModelDefinition {
         for &id in self.ir.weights().keys() {
             if !frozen.contains(&id) {
                 let wid = *map.get(&id).unwrap();
-                let gid = *grads.borrow().get(&wid).unwrap();
+
+                // weights with no path to the loss have zero gradient
+                let gid = match grads.borrow().get(&wid).copied() {
+                    Some(gid) => gid,
+                    None => {
+                        let ty = self.ir.node(id).ty();
+                        let Layout::Dense(dtype) = ty.layout() else { unreachable!() };
+                        bwd.add_scalar(DValue::zero(dtype), ty.shape().size())
+                    }
+                };
+
                 bwd.register_output(gid);
                 gmap.insert(id, gid);
             }
