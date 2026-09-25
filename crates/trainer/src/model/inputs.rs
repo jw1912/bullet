@@ -83,9 +83,9 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
 
         let pool = Arc::<HostPool>::default();
 
-        let func = move |batch: &[T], step, threads| {
+        let func = move |batch: &[T], step, threads: u8| {
             let f = &f;
-            let chunk_size = batch.len().div_ceil(usize::from(threads));
+            let chunk_size = batch.len().div_ceil(usize::from(threads.max(1)));
 
             let mut bufs = inp.make_bufs(batch.len(), &pool);
             let chunks = inp.chunks(&mut bufs, chunk_size);

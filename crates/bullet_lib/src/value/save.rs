@@ -50,8 +50,6 @@ pub fn save_unquantised<O>(
 where
     O: OptimiserState<ExecutionContext>,
 {
-    let mut file = File::create(path).unwrap();
-
     let mut buf = Vec::new();
 
     for fmt in saved_format {
@@ -63,7 +61,7 @@ where
         }
     }
 
-    file.write_all(&buf)?;
+    File::create(path)?.write_all(&buf)?;
 
     Ok(())
 }
@@ -78,9 +76,8 @@ where
 {
     let weight_store = &*optimiser.cpu_weights().unwrap();
 
-    let mut file = File::create(path).unwrap();
     let buf = weight_store.to_quantised_buffer(saved_format, true)?;
-    file.write_all(&buf)?;
+    File::create(path)?.write_all(&buf)?;
 
     Ok(())
 }

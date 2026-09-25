@@ -152,14 +152,22 @@ impl OpType for UnaryOp {
                 -(x * x)?
             }
             Unary::Log => input.unary(Unary::Reciprocal),
-            Unary::Sgn | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative => {
+            Unary::Sinh => input.cosh(),
+            Unary::Cosh => input.sinh(),
+            Unary::Tanh => {
+                let t = input.tanh()?;
+                1.0 - (t * t)?
+            }
+            Unary::Tan => {
+                let t = input.tan()?;
+                1.0 + (t * t)?
+            }
+            Unary::Sqrt => 0.5 * input.unary(Unary::Sqrt)?.unary(Unary::Reciprocal)?,
+            Unary::Sgn | Unary::IsPositive | Unary::IsZero | Unary::IsNonNegative | Unary::Round | Unary::Truncate => {
                 let zero = DValue::zero(input.ty().dtype());
                 Ok(input.builder().scalar(zero, input.ty().size()))
             }
             Unary::Cast(_) => Ok(grad),
-            Unary::Sinh | Unary::Cosh | Unary::Tanh | Unary::Tan | Unary::Truncate | Unary::Round | Unary::Sqrt => {
-                unimplemented!()
-            }
         }?;
 
         if let Unary::Cast(_) = self.op() {

@@ -3,7 +3,7 @@ mod generate;
 mod ir;
 mod operations;
 pub(crate) mod transforms;
-mod write;
+pub(crate) mod write;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 

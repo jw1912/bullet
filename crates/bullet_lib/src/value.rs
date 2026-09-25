@@ -163,7 +163,7 @@ where
             dataloader.clone(),
             schedule.eval_scale,
             schedule.wdl_scheduler.clone(),
-            settings.threads as u8,
+            settings.loader_threads(),
         );
 
         let _ = std::fs::create_dir(settings.output_directory);
@@ -194,7 +194,7 @@ where
             },
             |trainer, step| {
                 let superbatch = step.superbatch();
-                if superbatch % schedule.save_rate == 0 || superbatch == step.final_superbatch() {
+                if superbatch.is_multiple_of(schedule.save_rate) || superbatch == step.final_superbatch() {
                     let name = format!("{}-{superbatch}", schedule.net_id);
                     let path = format!("{}/{name}", settings.output_directory);
                     std::fs::create_dir(path.as_str()).unwrap_or(());
@@ -263,7 +263,7 @@ where
             dataloader.clone(),
             schedule.eval_scale,
             schedule.wdl_scheduler.clone(),
-            settings.threads as u8,
+            settings.loader_threads(),
         );
 
         run::measure_max_cpu_throughput(dataloader, steps).unwrap()
