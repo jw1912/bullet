@@ -1,9 +1,0 @@
-===== CUDA =====
-not fusable
-
-===== ROCm =====
-not fusable
-
-===== Metal =====
-not fusable
-
