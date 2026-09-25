@@ -61,6 +61,16 @@ impl PointwiseIR {
         self.tid
     }
 
+    /// Number of threads this kernel is launched with
+    pub fn size(&self) -> Size {
+        self.size
+    }
+
+    /// Type of the given node
+    pub fn ty(&self, node: NodeId) -> Result<PType, IRError> {
+        Ok(self.ir.node(node)?.ty())
+    }
+
     pub fn add_buf(&mut self, ty: TType) -> NodeId {
         let node = self.ir.add_op([], PointwiseOp::Buffer(ty.dtype(), ty.size())).unwrap()[0];
         self.bufs.push(node);
