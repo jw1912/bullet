@@ -68,7 +68,7 @@ impl IRTransform for FusePointwise {
                     // dependency then `op_j` is dependent on `op_i` we can only fuse `op_i`
                     // and `op_j` if there does not exist an in between op that is dependent
                     // on `op_i` and is depended upon by `op_j`
-                    if ir.is_immediate_dependent_op(op_i, op_j)? || !ir.is_dependent_op(op_j, op_i)? {
+                    if can_fuse(ir, op_i, op_j)? {
                         let (subgraph, inputs, outputs) = fuse_subgraphs(ir, op_i, op_j)?;
                         if let Some(pntwise) = FusedPointwise::new(subgraph.clone(), &self.0)? {
                             let new_cost = pntwise.ir.estimate_memory_cost()?;
@@ -100,6 +100,12 @@ impl IRTransform for FusePointwise {
                         max_saving = *saving;
                         argmin = arg;
                     }
+                }
+
+                if !can_fuse(ir, argmin.0, argmin.1)? {
+                    cache.remove(&argmin);
+                    failed.insert(argmin);
+                    continue;
                 }
 
                 let (pntwise, inputs, outputs, cost, _) = cache.get(&argmin).cloned().unwrap();
@@ -153,6 +159,10 @@ impl IRTransform for CodegenPointwise {
 
         Ok(())
     }
+}
+
+fn can_fuse(ir: &TensorIR, i: OpId, j: OpId) -> Result<bool, IRTrace> {
+    Ok(ir.is_immediate_dependent_op(i, j)? || !ir.is_dependent_op(j, i)?)
 }
 
 fn fuse_subgraphs(ir: &TensorIR, op_i: OpId, op_j: OpId) -> Result<(SubGraph, Vec<NodeId>, Vec<NodeId>), IRTrace> {
