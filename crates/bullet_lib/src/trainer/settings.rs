@@ -29,8 +29,26 @@ pub struct LocalSettings<'a> {
 }
 
 impl LocalSettings<'_> {
+    /// `threads` clamped to what the batch loader supports, which needs at least one.
+    pub(crate) fn loader_threads(&self) -> u8 {
+        self.threads.clamp(1, u8::MAX.into()) as u8
+    }
+
     pub fn display(&self) {
         println!("Threads                : {}", ansi(self.threads, 31));
         println!("Output Path            : {}", ansi(self.output_directory, "32;1"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loader_threads_in_range() {
+        let settings = |threads| LocalSettings { threads, test_set: None, output_directory: "", batch_queue_size: 0 };
+        assert_eq!(settings(0).loader_threads(), 1);
+        assert_eq!(settings(8).loader_threads(), 8);
+        assert_eq!(settings(256).loader_threads(), 255);
     }
 }

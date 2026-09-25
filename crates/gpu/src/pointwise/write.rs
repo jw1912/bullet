@@ -15,6 +15,19 @@ pub fn tystr(dtype: DType) -> &'static str {
     }
 }
 
+/// Source literal for `value`, bit casting non-finite floats
+/// because `inf`/`NaN` are not valid literals.
+fn literal(value: DValue, dialect: Dialect) -> String {
+    match value {
+        DValue::F32(x) if x.is_finite() => format!("{x:E}"),
+        DValue::F32(x) => match dialect {
+            Dialect::CudaHip => format!("__int_as_float({:#x})", x.to_bits()),
+            Dialect::Msl => format!("as_type<float>({:#x}u)", x.to_bits()),
+        },
+        DValue::I32(x) => x.to_string(),
+    }
+}
+
 pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<String> {
     let dialect = props.dialect();
 
@@ -47,10 +60,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
         }
         PointwiseOp::ConditionalRead(io, value) => {
             let ty = tystr(io.buf_ty);
-            let vl = match value {
-                DValue::F32(x) => format!("{x:E}"),
-                DValue::I32(x) => x.to_string(),
-            };
+            let vl = literal(value, dialect);
 
             if io.p2size == 0 {
                 Some(format!("const {ty} OUT1 = IN3 > 0 ? IN1[IN2] : {vl};"))
@@ -93,10 +103,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
         }
         PointwiseOp::Constant { value, p2size } => {
             let ty = tystr(value.dtype());
-            let vl = match value {
-                DValue::F32(x) => format!("{x:E}"),
-                DValue::I32(x) => x.to_string(),
-            };
+            let vl = literal(value, dialect);
 
             match p2size {
                 0 => Some(format!("const {ty} OUT1 = {vl};")),

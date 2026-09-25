@@ -25,7 +25,10 @@ use bullet_compiler::{
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    pointwise::transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
+    pointwise::{
+        transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
+        write::tystr,
+    },
     runtime::{Blas, Device, DeviceProps, Dialect, Dim3, GemmConfig, Gpu, Kernel, Module, Stream},
 };
 
@@ -360,11 +363,11 @@ rewriterule! {
 }
 
 static REDUCTION_SRC_CUDA: &str = "
-extern \"C\" __global__ void reduce_kernel(const float* input, float* output) {
+extern \"C\" __global__ void reduce_kernel(const DTYPE* input, DTYPE* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
     if (tid < OUTER) {
-        float reduction = input[INNER * tid];
+        DTYPE reduction = input[INNER * tid];
 
         for (int i = 1; i < INNER; i++) {
             reduction = FUNC(reduction, input[INNER * tid + i]);
@@ -377,9 +380,9 @@ extern \"C\" __global__ void reduce_kernel(const float* input, float* output) {
 static REDUCTION_SRC_MSL: &str = "
 #include <metal_stdlib>
 using namespace metal;
-kernel void reduce_kernel(device const float* input [[buffer(0)]], device float* output [[buffer(1)]], uint tid [[thread_position_in_grid]]) {
+kernel void reduce_kernel(device const DTYPE* input [[buffer(0)]], device DTYPE* output [[buffer(1)]], uint tid [[thread_position_in_grid]]) {
     if (tid < (OUTER)) {
-        float reduction = input[INNER * tid];
+        DTYPE reduction = input[INNER * tid];
 
         for (int i = 1; i < INNER; i++) {
             reduction = FUNC(reduction, input[INNER * tid + i]);
@@ -414,6 +417,7 @@ impl IRTransform for CodegenReduction {
                         _ => unimplemented!(),
                     },
                 )
+                .replace("DTYPE", tystr(reduction.dtype()))
                 .replace("INNER", &dimen.to_string())
                 .replace("OUTER", &outer.to_string());
 

@@ -125,7 +125,7 @@ impl ModelOperation for Matmul {
         MType { batch: lbatch | rbatch, rows: m, cols: k, layout: Layout::Dense(dtype) }
     }
 
-    fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
+    fn lower(&self, batch_size: usize, lower: &mut TensorIR, mut inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         let Matmul { lbatch, rbatch, dtype, m, n, k } = *self;
         let lhs = MatrixLayout { rows: m.into(), cols: n.into(), col_mjr: true };
 
@@ -133,6 +133,14 @@ impl ModelOperation for Matmul {
             (false, false) => {
                 let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: true };
                 operation::Matmul::new(dtype, 1, lhs, rhs)
+            }
+            (true, false) => {
+                // repeat rhs for each batch element
+                let broadcast = operation::BroadcastAcrossDimension::new(dtype, [1, n * k], 0, batch_size);
+                inputs[1] = lower.add_op([inputs[1]], broadcast)?[0];
+
+                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: true };
+                operation::Matmul::new(dtype, batch_size, lhs, rhs)
             }
             (true, true) => {
                 let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: true };
@@ -142,7 +150,6 @@ impl ModelOperation for Matmul {
                 let rhs = MatrixLayout { rows: n.into(), cols: (k * batch_size).into(), col_mjr: true };
                 operation::Matmul::new(dtype, 1, lhs, rhs)
             }
-            (true, false) => unimplemented!(),
         };
 
         lower.add_op(inputs, matmul).map(|x| x[0])

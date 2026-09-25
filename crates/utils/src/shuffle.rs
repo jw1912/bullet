@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{BufReader, IoSliceMut, Read, Write},
     path::{Path, PathBuf},
     time::Instant,
@@ -24,7 +24,6 @@ pub struct ShuffleOptions {
 const CHESS_BOARD_SIZE: usize = std::mem::size_of::<ChessBoard>();
 const MIN_TMP_FILES: usize = 4;
 const BYTES_PER_MB: usize = 1_048_576;
-const TMP_DIR: &str = "./tmp";
 
 impl ShuffleOptions {
     pub fn run(&self) -> anyhow::Result<()> {
@@ -32,7 +31,7 @@ impl ShuffleOptions {
         assert_eq!(0, input_size % CHESS_BOARD_SIZE);
 
         // Test path before doing useless work
-        validate_output_path(Path::new(&self.output))
+        validate_output_path(&self.input, &self.output)
             .with_context(|| format!("Invalid output path: {}", self.output.display()))?;
 
         println!("# [Shuffling Data]");
@@ -46,10 +45,12 @@ impl ShuffleOptions {
             let mut file = File::create(&self.output).with_context(|| "Provide a correct path!")?;
             file.write_all(&raw_bytes)?;
         } else {
-            let temp_dir = Path::new(TMP_DIR);
-            if !Path::exists(temp_dir) {
-                fs::create_dir(temp_dir).with_context(|| "Temp dir could not be created.")?;
-            }
+            // must be freshly created, as it is deleted afterwards
+            let mut temp_dir = self.output.clone().into_os_string();
+            temp_dir.push(".tmp");
+            let temp_dir = PathBuf::from(temp_dir);
+            fs::create_dir(&temp_dir)
+                .with_context(|| format!("Temp dir {} could not be created.", temp_dir.display()))?;
             let bytes_used = self.mem_used_mb * BYTES_PER_MB;
             let num_tmp_files = input_size.div_ceil(bytes_used).max(MIN_TMP_FILES);
             let temp_files = (0..num_tmp_files)
@@ -63,13 +64,13 @@ impl ShuffleOptions {
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
 
-            assert!(self.split_file(&temp_files, input_size).is_ok());
+            self.split_file(&temp_files, input_size)?;
 
             println!("# [Finished splitting data. Interleaving...]");
             let interleave = InterleaveOptions::new(temp_files.to_vec(), self.output.clone());
             interleave.run()?;
 
-            if fs::remove_dir_all(temp_dir).is_err() {
+            if fs::remove_dir_all(&temp_dir).is_err() {
                 println!("Error automatically removing temp files");
             }
         }
@@ -146,9 +147,13 @@ fn shuffle_positions(data: &mut [u8]) {
     }
 }
 
-/// Test if we can write to the output path
-fn validate_output_path(path: &Path) -> anyhow::Result<()> {
-    match File::create(path) {
+/// Test if we can write to the output path, without truncating it
+fn validate_output_path(input: &Path, output: &Path) -> anyhow::Result<()> {
+    if output.exists() && fs::canonicalize(input)? == fs::canonicalize(output)? {
+        anyhow::bail!("Output path is the same as the input path");
+    }
+
+    match OpenOptions::new().write(true).create(true).truncate(false).open(output) {
         Ok(_) => Ok(()),
         Err(e) => Err(anyhow::anyhow!("Cannot create file at specified path: {}", e)),
     }

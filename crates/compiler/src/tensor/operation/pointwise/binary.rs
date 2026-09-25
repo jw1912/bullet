@@ -107,13 +107,13 @@ impl OpType for CABinaryOp {
             CABinary::Mul => ((grad * rhs)?, (grad * lhs)?),
             CABinary::Max => {
                 let diff = (lhs - rhs)?;
-                let lgrad = diff.unary(Unary::IsPositive)?;
+                let lgrad = diff.unary(Unary::IsNonNegative)?;
                 let rgrad = (-diff)?.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)
             }
             CABinary::Min => {
                 let diff = (lhs - rhs)?;
-                let lgrad = (-diff)?.unary(Unary::IsPositive)?;
+                let lgrad = (-diff)?.unary(Unary::IsNonNegative)?;
                 let rgrad = diff.unary(Unary::IsPositive)?;
                 ((grad * lgrad)?, (grad * rgrad)?)
             }

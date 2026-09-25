@@ -31,7 +31,7 @@ impl<T: Fn(&Position, Move, i16, f32) -> bool> MontyBinpackLoader<T> {
         Self {
             file_paths: paths.iter().map(|x| x.to_string()).collect(),
             buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
-            threads,
+            threads: threads.max(1),
             filter,
         }
     }
