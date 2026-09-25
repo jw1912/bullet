@@ -23,13 +23,14 @@ pub enum Unary {
     IsNonNegative,
     Round,
     Truncate,
+    Identity,
 }
 
 impl Unary {
     pub fn dtype(self, input: DType) -> Option<DType> {
         match self {
             Self::Cast(ty) => Some(ty),
-            Self::Sgn | Self::Abs => Some(input),
+            Self::Sgn | Self::Abs | Self::Identity => Some(input),
             _ => (input != DType::I32).then_some(input),
         }
     }
@@ -50,6 +51,7 @@ impl Unary {
             Self::Sqrt => fp(|x| x.sqrt())?,
             Self::Round => fp(|x| x.round())?,
             Self::Truncate => fp(|x| x.trunc())?,
+            Self::Identity => input,
             Self::Sgn => match input {
                 DValue::F32(x) => DValue::F32(x.signum()),
                 DValue::I32(x) => DValue::I32(x.signum()),
@@ -167,11 +169,13 @@ impl OpType for UnaryOp {
                 let zero = DValue::zero(input.ty().dtype());
                 Ok(input.builder().scalar(zero, input.ty().size()))
             }
-            Unary::Cast(_) => Ok(grad),
+            Unary::Cast(_) | Unary::Identity => Ok(grad),
         }?;
 
         if let Unary::Cast(_) = self.op() {
             grad.unary(Unary::Cast(self.input_type().dtype()))
+        } else if let Unary::Identity = self.op() {
+            Ok(grad)
         } else {
             grad * g
         }

@@ -125,7 +125,12 @@ impl Operation<PType> for PointwiseOp {
             Self::Unary { ty, p2size, op } => {
                 let ty = match op {
                     Unary::Cast(ty) => ty,
-                    Unary::Sgn | Unary::Abs | Unary::IsNonNegative | Unary::IsPositive | Unary::IsZero => ty,
+                    Unary::Sgn
+                    | Unary::Abs
+                    | Unary::Identity
+                    | Unary::IsNonNegative
+                    | Unary::IsPositive
+                    | Unary::IsZero => ty,
                     _ => (ty != DType::I32).then_some(ty).unwrap(),
                 };
 

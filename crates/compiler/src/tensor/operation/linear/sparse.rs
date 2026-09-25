@@ -106,9 +106,11 @@ impl OpType for SparseMatmul {
 
                 for ni in 0..nnz {
                     let DValue::I32(idx) = s.read(nnz * bi + ni) else { panic!() };
-                    if idx >= 0 && (idx as usize) < cols {
-                        sum = CABinary::Add.evaluate(sum, d.read(stride * idx as usize + offset + ri)).unwrap();
+                    if idx < 0 || (idx as usize) >= cols {
+                        break;
                     }
+
+                    sum = CABinary::Add.evaluate(sum, d.read(stride * idx as usize + offset + ri)).unwrap();
                 }
 
                 o.write(rows * bi + ri, sum);
@@ -173,12 +175,14 @@ impl OpType for SparseMatmulBwd {
             for ri in 0..rows {
                 for ni in 0..nnz {
                     let DValue::I32(idx) = s.read(nnz * bi + ni) else { panic!() };
-                    if idx >= 0 && (idx as usize) < cols {
-                        let g = d.read(rows * bi + ri);
-                        let index = stride * idx as usize + offset + ri;
-                        let new_g = CABinary::Add.evaluate(g, o.read(index));
-                        o.write(index, new_g.unwrap());
+                    if idx < 0 || (idx as usize) >= cols {
+                        break;
                     }
+
+                    let g = d.read(rows * bi + ri);
+                    let index = stride * idx as usize + offset + ri;
+                    let new_g = CABinary::Add.evaluate(g, o.read(index));
+                    o.write(index, new_g.unwrap());
                 }
             }
         }
