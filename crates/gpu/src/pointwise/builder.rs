@@ -52,6 +52,15 @@ impl PointwiseBuilder {
         Self { ir: Mutex::new(PointwiseIR::new(size.into()).unwrap()) }
     }
 
+    /// Builder for an elementwise kernel over `size` elements, vectorised as widely
+    /// as `size` allows, alongside the `p2size` that reads and writes of the
+    /// `size`-element buffers should use - so each thread handles `2^p2size` of them
+    /// and the kernel is launched with correspondingly fewer threads.
+    pub fn vectorised(size: usize) -> (Self, u8) {
+        let p2size = size.trailing_zeros().min(2) as u8;
+        (Self::new(size >> p2size), p2size)
+    }
+
     pub fn ir(&'_ self) -> MutexGuard<'_, PointwiseIR> {
         self.ir.try_lock().unwrap()
     }
@@ -195,6 +204,11 @@ impl<'a> PointwiseNode<'a> {
     /// Copy a scalar into each of the `2^p2size` elements
     pub fn broadcast(self, p2size: u8) -> Self {
         Self { node: self.builder.add(|ir| ir.broadcast(self.node, p2size)), ..self }
+    }
+
+    /// Same as `broadcast`, but a no-op when the kernel is not vectorised
+    pub fn splat(self, p2size: u8) -> Self {
+        if p2size > 0 { self.broadcast(p2size) } else { self }
     }
 
     fn broadcast_to_same(self, rhs: Self) -> (Self, Self) {
@@ -435,6 +449,15 @@ mod tests {
         builder.ir().eliminate_common_subexprs().unwrap();
         assert_eq!(builder.size().get(), 4);
         assert!(builder.inner().estimate_memory_cost().unwrap().get() > 0);
+    }
+
+    #[test]
+    fn vectorisation_width() {
+        for (size, threads, p2size) in [(1024, 256, 2), (1022, 511, 1), (1023, 1023, 0), (4, 1, 2)] {
+            let (builder, actual) = PointwiseBuilder::vectorised(size);
+            assert_eq!((size, actual), (size, p2size));
+            assert_eq!(builder.size().get(), threads);
+        }
     }
 
     #[test]

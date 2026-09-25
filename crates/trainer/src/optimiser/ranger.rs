@@ -21,10 +21,7 @@ use super::{
 };
 
 fn build_ranger_op(size: usize, alpha: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
-    let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
-    let p2actual = 2usize.pow(u32::from(p2size));
-
-    let builder = PointwiseBuilder::new(size / p2actual);
+    let (builder, p2size) = PointwiseBuilder::vectorised(size);
 
     let w = builder.new_buffer(TType::new(size, DType::F32));
     let s = builder.new_buffer(TType::new(size, DType::F32));

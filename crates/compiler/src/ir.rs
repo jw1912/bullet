@@ -56,6 +56,7 @@ pub struct IR<T: TypeSystem> {
     nodes: BTreeMap<NodeId, Node<T>>,
     ops: BTreeMap<OpId, Op<T>>,
     links: BTreeMap<NodeId, OpId>,
+    id: usize,
 }
 
 impl<T: TypeSystem> IR<T> {
@@ -67,6 +68,12 @@ impl<T: TypeSystem> IR<T> {
     /// Mutable reference to the node with given ID
     pub fn node_mut(&mut self, node: NodeId) -> Result<&mut Node<T>, IRError> {
         self.nodes.get_mut(&node).ok_or(format!("Node<T> {node:?} does not exist!").into())
+    }
+
+    pub fn new_id(&mut self) -> NodeId {
+        let id = NodeId::new(self.id);
+        self.id += 1;
+        id
     }
 
     /// Unordered iterator over the nodes in the graph
@@ -175,7 +182,7 @@ impl<T: TypeSystem> IR<T> {
 
     /// Adds a new operation to the graph
     pub fn add_op(&mut self, inputs: impl AsRef<[NodeId]>, data: T::OpData) -> Result<Vec<NodeId>, IRError> {
-        let output_ids = (0..data.outputs().len()).map(|_| NodeId::default()).collect::<Vec<_>>();
+        let output_ids = (0..data.outputs().len()).map(|_| self.new_id()).collect::<Vec<_>>();
         let output_tys = data.outputs();
 
         let mut error = false;
