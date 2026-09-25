@@ -1,6 +1,4 @@
 mod builder;
-#[cfg(test)]
-mod codegen;
 mod generate;
 mod ir;
 mod operations;
