@@ -1,4 +1,4 @@
-===== CudaHip =====
+===== CUDA =====
 vectorised: true
 inputs:     [f32[64]]
 outputs:    [f32[64]]
@@ -16,7 +16,25 @@ extern "C" __global__ void scalar_constant(float* n2, float* n4) {
     reinterpret_cast<float4*>(n4)[n0] = n10;
 }
 
-===== Msl =====
+===== ROCm =====
+vectorised: true
+inputs:     [f32[64]]
+outputs:    [f32[64]]
+args:       [(0, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void scalar_constant(float* n2, float* n4) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (16)) return;
+    const float4 n6 = make_float4(2.5E0, 2.5E0, 2.5E0, 2.5E0);
+    const float4 n8 = reinterpret_cast<float4*>(n2)[n0];
+    float4 n10;n10.x = n8.x + n6.x;n10.y = n8.y + n6.y;n10.z = n8.z + n6.z;n10.w = n8.w + n6.w;
+    reinterpret_cast<float4*>(n4)[n0] = n10;
+}
+
+===== Metal =====
 vectorised: true
 inputs:     [f32[64]]
 outputs:    [f32[64]]

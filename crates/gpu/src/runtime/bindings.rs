@@ -32,14 +32,14 @@ pub struct DeviceProps {
     pub(super) vec_atomics: bool,
     pub(super) arch: Option<String>,
     pub(super) dialect: Dialect,
-    pub(super) atomic_flag: bool,
+    pub(super) is_rocm: bool,
 }
 
 impl DeviceProps {
     /// Props for codegen tests, so that kernel generation can be exercised for
     /// every dialect without the corresponding device (or feature) being present.
     #[cfg(test)]
-    pub(crate) fn testing(dialect: Dialect, warp_size: Option<u8>) -> Self {
+    pub(crate) fn testing(dialect: Dialect, warp_size: Option<u8>, is_rocm: bool) -> Self {
         Self {
             name: "testing".into(),
             warp_size,
@@ -47,7 +47,7 @@ impl DeviceProps {
             vec_atomics: false,
             arch: None,
             dialect,
-            atomic_flag: false,
+            is_rocm,
         }
     }
 
@@ -75,8 +75,8 @@ impl DeviceProps {
         self.dialect
     }
 
-    pub fn atomic_flag(&self) -> bool {
-        self.atomic_flag
+    pub fn is_rocm(&self) -> bool {
+        self.is_rocm
     }
 }
 

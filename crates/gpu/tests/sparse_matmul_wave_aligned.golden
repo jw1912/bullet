@@ -1,4 +1,4 @@
-===== wave32 =====
+===== CUDA =====
 vectorised: true
 inputs:     [f32[2048], i32[8]]
 outputs:    [f32[1024]]
@@ -12,10 +12,6 @@ extern "C" __global__ void sparse_matmul_wave_aligned(float* n2, int* n4, float*
     if (n0 >= (256)) return;
     float4 n8 = make_float4(0, 0, 0, 0);
                             int uniq_9_1 = n0 / 64;
-    #if defined(__AMDGCN__)
-    uniq_9_1 = __builtin_amdgcn_readfirstlane(uniq_9_1);
-    #endif
-    
                             int uniq_9_2 = 0 + n0 % 64;
     
                             for (int i = 0; i < 2; i++) {
@@ -33,7 +29,7 @@ extern "C" __global__ void sparse_matmul_wave_aligned(float* n2, int* n4, float*
     reinterpret_cast<float4*>(n6)[n0] = n8;
 }
 
-===== wave64 =====
+===== ROCm wave32 =====
 vectorised: true
 inputs:     [f32[2048], i32[8]]
 outputs:    [f32[1024]]
@@ -46,11 +42,7 @@ extern "C" __global__ void sparse_matmul_wave_aligned(float* n2, int* n4, float*
     const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
     if (n0 >= (256)) return;
     float4 n8 = make_float4(0, 0, 0, 0);
-                            int uniq_9_1 = n0 / 64;
-    #if defined(__AMDGCN__)
-    uniq_9_1 = __builtin_amdgcn_readfirstlane(uniq_9_1);
-    #endif
-    
+                            int uniq_9_1 = __builtin_amdgcn_readfirstlane(n0 / 64);
                             int uniq_9_2 = 0 + n0 % 64;
     
                             for (int i = 0; i < 2; i++) {
@@ -68,7 +60,38 @@ extern "C" __global__ void sparse_matmul_wave_aligned(float* n2, int* n4, float*
     reinterpret_cast<float4*>(n6)[n0] = n8;
 }
 
-===== no wave size =====
+===== ROCm wave64 =====
+vectorised: true
+inputs:     [f32[2048], i32[8]]
+outputs:    [f32[1024]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void sparse_matmul_wave_aligned(float* n2, int* n4, float* n6) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (256)) return;
+    float4 n8 = make_float4(0, 0, 0, 0);
+                            int uniq_9_1 = __builtin_amdgcn_readfirstlane(n0 / 64);
+                            int uniq_9_2 = 0 + n0 % 64;
+    
+                            for (int i = 0; i < 2; i++) {
+                                const int j = n4[2 * uniq_9_1 + i];
+    
+                                if (j < 0 || j >= 8) break;
+    
+                                const float4 a = reinterpret_cast<float4*>(n2)[j * 64 + uniq_9_2];
+    
+                                n8.x += a.x;
+                                n8.y += a.y;
+                                n8.z += a.z;
+                                n8.w += a.w;
+                            }
+    reinterpret_cast<float4*>(n6)[n0] = n8;
+}
+
+===== ROCm no wave size =====
 vectorised: true
 inputs:     [f32[2048], i32[8]]
 outputs:    [f32[1024]]

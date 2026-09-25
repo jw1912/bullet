@@ -21,13 +21,26 @@ use crate::{
     runtime::{DeviceProps, Dialect, Dim3},
 };
 
-/// Both dialects, at the warp size every real backend reports.
-const DIALECTS: [(&str, Dialect, Option<u8>); 2] =
-    [("CudaHip", Dialect::CudaHip, Some(32)), ("Msl", Dialect::Msl, Some(32))];
+/// A backend to generate for, and the props it reports. Two backends share the
+/// `CudaHip` dialect but still differ: only ROCm gets the AMD wave intrinsics, and
+/// the wave size decides which reductions can be fused.
+#[derive(Clone, Copy)]
+struct Backend {
+    label: &'static str,
+    dialect: Dialect,
+    warp_size: Option<u8>,
+    is_rocm: bool,
+}
+
+const CUDA: Backend = Backend { label: "CUDA", dialect: Dialect::CudaHip, warp_size: Some(32), is_rocm: false };
+const ROCM: Backend = Backend { label: "ROCm", dialect: Dialect::CudaHip, warp_size: Some(64), is_rocm: true };
+const METAL: Backend = Backend { label: "Metal", dialect: Dialect::Msl, warp_size: Some(32), is_rocm: false };
+
+const BACKENDS: [Backend; 3] = [CUDA, ROCM, METAL];
 
 /// Render a subgraph's kernel, or say why no kernel was produced.
-fn render(name: &str, sub: &SubGraph, dialect: Dialect, warp_size: Option<u8>) -> String {
-    let props = DeviceProps::testing(dialect, warp_size);
+fn render(name: &str, sub: &SubGraph, backend: Backend) -> String {
+    let props = DeviceProps::testing(backend.dialect, backend.warp_size, backend.is_rocm);
 
     let Some((ir, vectorised)) = generate(sub, &props).expect("generate failed") else {
         return "not fusable\n".to_string();
@@ -49,14 +62,14 @@ fn render(name: &str, sub: &SubGraph, dialect: Dialect, warp_size: Option<u8>) -
 }
 
 fn golden(name: &str, sub: &SubGraph) {
-    golden_for(name, sub, &DIALECTS);
+    golden_for(name, sub, &BACKENDS);
 }
 
-fn golden_for(name: &str, sub: &SubGraph, cfgs: &[(&str, Dialect, Option<u8>)]) {
+fn golden_for(name: &str, sub: &SubGraph, backends: &[Backend]) {
     let mut actual = String::new();
-    for &(label, dialect, warp_size) in cfgs {
-        writeln!(&mut actual, "===== {label} =====").unwrap();
-        actual.push_str(&render(name, sub, dialect, warp_size));
+    for &backend in backends {
+        writeln!(&mut actual, "===== {} =====", backend.label).unwrap();
+        actual.push_str(&render(name, sub, backend));
         actual.push('\n');
     }
 
@@ -253,8 +266,9 @@ fn sparse_matmul_bwd() {
 }
 
 /// When the row count is a multiple of the wave size, the sparse matmul emits the
-/// AMD scalar-load hint. Both wave sizes reported by real devices must be handled,
-/// as must a device that reports none.
+/// AMD scalar-load hint - on ROCm only, since the builtin does not exist elsewhere.
+/// Both wave sizes reported by real devices must be handled, as must a device that
+/// reports none.
 #[test]
 fn sparse_matmul_wave_aligned() {
     let mm = SparseMatmul::new(DType::F32, 4usize, 256usize, 8usize, 256usize, 0, 2usize).unwrap();
@@ -265,13 +279,14 @@ fn sparse_matmul_wave_aligned() {
     let out = b.add_op([w, i], mm).unwrap()[0];
     let sub = subgraph(b.build([out]), &[w.node(), i.node()], &[out.node()]);
 
-    let cfgs = [
-        ("wave32", Dialect::CudaHip, Some(32)),
-        ("wave64", Dialect::CudaHip, Some(64)),
-        ("no wave size", Dialect::CudaHip, None),
+    let backends = [
+        CUDA,
+        Backend { label: "ROCm wave32", warp_size: Some(32), ..ROCM },
+        Backend { label: "ROCm wave64", ..ROCM },
+        Backend { label: "ROCm no wave size", warp_size: None, ..ROCM },
     ];
 
-    golden_for("sparse_matmul_wave_aligned", &sub, &cfgs);
+    golden_for("sparse_matmul_wave_aligned", &sub, &backends);
 }
 
 #[test]
@@ -295,6 +310,17 @@ fn reduce_not_warp_aligned() {
     golden("reduce_not_warp_aligned", &subgraph(b.build([r]), &[x.node()], &[r.node()]));
 }
 
+/// A reduction fuses only when its inner dimension is wave aligned, so the same
+/// graph is fusable on a wave32 device and not on a wave64 one.
+#[test]
+fn reduce_warp32_only() {
+    let b = IRBuilder::default();
+    let x = b.add_input(32 * 4, DType::F32);
+    let r = x.reduce_sum([4, 32], 0).unwrap();
+
+    golden("reduce_warp32_only", &subgraph(b.build([r]), &[x.node()], &[r.node()]));
+}
+
 /// Generated source must not depend on how many other graphs have been built, or
 /// golden tests - and diffing a kernel against a previous run - become useless.
 #[test]
@@ -305,7 +331,7 @@ fn generation_is_deterministic() {
         let i = b.add_input(4 * 2, DType::I32);
         let out = b.add_op([w, i], sparse_matmul()).unwrap()[0];
         let sub = subgraph(b.build([out]), &[w.node(), i.node()], &[out.node()]);
-        render("spmm", &sub, Dialect::CudaHip, Some(32))
+        render("spmm", &sub, CUDA)
     };
 
     let first = build();
@@ -329,7 +355,7 @@ fn vector_widths() {
         let y = (x * x).unwrap();
         let sub = subgraph(b.build([y]), &[x.node()], &[y.node()]);
 
-        let props = DeviceProps::testing(Dialect::CudaHip, Some(32));
+        let props = DeviceProps::testing(CUDA.dialect, CUDA.warp_size, CUDA.is_rocm);
         let (_, actual) = generate(&sub, &props).unwrap().unwrap();
         assert_eq!(actual, vectorised, "size {size}");
         assert_eq!(Size::from(size).get(), size);

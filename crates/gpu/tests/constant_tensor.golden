@@ -1,6 +1,9 @@
-===== CudaHip =====
+===== CUDA =====
 not fusable
 
-===== Msl =====
+===== ROCm =====
+not fusable
+
+===== Metal =====
 not fusable
 

@@ -1,4 +1,4 @@
-===== CudaHip =====
+===== CUDA =====
 vectorised: false
 inputs:     [f32[128], i32[8]]
 outputs:    [f32[256]]
@@ -13,10 +13,6 @@ extern "C" __global__ void sparse_matmul_bwd(float* n2, int* n4, float* n6) {
     const float n8 = n2[n0];
     if (n8 != 0) {
                             int uniq_10_1 = n0 / 32;
-    #if defined(__AMDGCN__)
-    uniq_10_1 = __builtin_amdgcn_readfirstlane(uniq_10_1);
-    #endif
-    
                             int uniq_10_2 = 0 + n0 % 32;
     
                             for (int i = 0; i < 2; i++) {
@@ -27,7 +23,32 @@ extern "C" __global__ void sparse_matmul_bwd(float* n2, int* n4, float* n6) {
                         }
 }
 
-===== Msl =====
+===== ROCm =====
+vectorised: false
+inputs:     [f32[128], i32[8]]
+outputs:    [f32[256]]
+args:       [(0, true), (1, true), (0, false)]
+zeroed:     {0}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void sparse_matmul_bwd(float* n2, int* n4, float* n6) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (128)) return;
+    const float n8 = n2[n0];
+    if (n8 != 0) {
+                            int uniq_10_1 = n0 / 32;
+                            int uniq_10_2 = 0 + n0 % 32;
+    
+                            for (int i = 0; i < 2; i++) {
+                                const int j = n4[2 * uniq_10_1 + i];
+                                if (j < 0 || j >= 8) break;
+                                atomicAdd(n6 + j * 32 + uniq_10_2, n8);
+                            }
+                        }
+}
+
+===== Metal =====
 vectorised: false
 inputs:     [f32[128], i32[8]]
 outputs:    [f32[256]]
@@ -44,10 +65,6 @@ kernel void sparse_matmul_bwd(device float* n2 [[buffer(0)]], device int* n4 [[b
     const float n8 = n2[n0];
     if (n8 != 0) {
                             int uniq_10_1 = n0 / 32;
-    #if defined(__AMDGCN__)
-    uniq_10_1 = __builtin_amdgcn_readfirstlane(uniq_10_1);
-    #endif
-    
                             int uniq_10_2 = 0 + n0 % 32;
     
                             for (int i = 0; i < 2; i++) {

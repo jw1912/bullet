@@ -22,11 +22,11 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
     // Tell AMD's compiler that the sparse-index address is uniform so it can
     // use scalar loads instead of repeating the same load in every lane.
     let batch_index = |rows: usize| {
-        let mut code = format!("int UNIQ1 = IN3 / {rows};");
-        if props.warp_size().is_some_and(|warp| rows.is_multiple_of(usize::from(warp))) {
-            code.push_str("\n#if defined(__AMDGCN__)\nUNIQ1 = __builtin_amdgcn_readfirstlane(UNIQ1);\n#endif\n");
+        if props.is_rocm() && props.warp_size().is_some_and(|warp| rows.is_multiple_of(usize::from(warp))) {
+            format!("int UNIQ1 = __builtin_amdgcn_readfirstlane(IN3 / {rows});")
+        } else {
+            format!("int UNIQ1 = IN3 / {rows};")
         }
-        code
     };
 
     match op {

@@ -1,0 +1,49 @@
+===== CUDA =====
+vectorised: false
+inputs:     [f32[128]]
+outputs:    [f32[32]]
+args:       [(0, true), (0, false)]
+zeroed:     {0}
+launch:     grid 1x1x1, block 256, smem 0
+
+extern "C" __global__ void reduce_warp32_only(float* n2, float* n4) {
+    const int idx_in_grid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    const int n0 = idx_in_grid * blockDim.x + threadIdx.x;
+    if (n0 >= (128)) return;
+    const float n6 = n2[n0];
+    const int n8 = 32;
+    const int n10 = n0 % n8;
+    const int n12 = 128;
+    const int n14 = n0 / n12;
+    const int n18 = n8 * n14;
+    const int n20 = n18 + n10;
+    atomicAdd(n4 + n20, n6);
+}
+
+===== ROCm =====
+not fusable
+
+===== Metal =====
+vectorised: false
+inputs:     [f32[128]]
+outputs:    [f32[32]]
+args:       [(0, true), (0, false)]
+zeroed:     {0}
+launch:     grid 1x1x1, block 256, smem 0
+
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void reduce_warp32_only(device float* n2 [[buffer(0)]], device float* n4 [[buffer(1)]], uint metal_tid [[thread_position_in_grid]]) {
+    const int n0 = static_cast<int>(metal_tid);
+    if (n0 >= (128)) return;
+    const float n6 = n2[n0];
+    const int n8 = 32;
+    const int n10 = n0 % n8;
+    const int n12 = 128;
+    const int n14 = n0 / n12;
+    const int n18 = n8 * n14;
+    const int n20 = n18 + n10;
+    atomic_fetch_add_explicit((volatile device atomic_float*)(n4 + n20), n6, memory_order_relaxed);
+}
+
