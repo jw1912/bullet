@@ -2,12 +2,12 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::IRError,
-    tensor::{DType, DValue, TType, operation::CABinary},
+    tensor::{DType, TType},
 };
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::PointwiseIR,
+    pointwise::PointwiseBuilder,
     runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
@@ -16,27 +16,23 @@ use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
 use super::{OptimiserState, utils::Placement};
 
 fn build_decay_op(size: usize, decay: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
-    let mut pntwise = PointwiseIR::new(size.into())?;
+    let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
+    let p2actual = 2usize.pow(u32::from(p2size));
 
-    let zero = pntwise.add_const(DValue::I32(0), 0);
-    let one = pntwise.add_const(DValue::F32(1.0), 0);
-    let neg = pntwise.add_const(DValue::F32(-1.0), 0);
+    let builder = PointwiseBuilder::new(size / p2actual);
 
-    let decay = pntwise.add_const(DValue::F32(decay), 0);
-    let lrate = pntwise.add_buf(TType::new(1, DType::F32));
-    let lrate = pntwise.read(lrate, zero, 0)?;
+    let lrate_buf = builder.new_buffer(TType::new(1, DType::F32));
+    let w = builder.new_buffer(TType::new(size, DType::F32));
 
-    let w = pntwise.add_buf(TType::new(size, DType::F32));
-    let old_w = pntwise.read(w, pntwise.tid(), 0)?;
+    // the rate is the same for every weight, so it is read once as a scalar
+    let lrate = lrate_buf.read(0, 0);
+    let lrate = if p2size > 0 { lrate.broadcast(p2size) } else { lrate };
 
-    let amt = pntwise.binary(lrate, decay, CABinary::Mul)?;
-    let neg = pntwise.binary(neg, amt, CABinary::Mul)?;
-    let fac = pntwise.binary(one, neg, CABinary::Add)?;
-    let new_w = pntwise.binary(old_w, fac, CABinary::Mul)?;
+    let tid = builder.tid();
+    let new_w = w.read(tid, p2size) * (1.0 - lrate * decay);
+    w.write(tid, new_w);
 
-    pntwise.write(w, pntwise.tid(), new_w)?;
-
-    unsafe { pntwise.lower("decay".to_string(), props) }
+    unsafe { builder.inner().lower("decay".to_string(), props) }
 }
 
 #[derive(Clone, Debug)]
@@ -83,12 +79,14 @@ impl<G: Gpu, S: OptimiserState<G>> OptimiserState<G> for WeightDecay<G, S> {
     ) -> OptimiserUpdateResult<'a, G> {
         let mut blocks = OptimiserUpdateSync::default();
 
+        let rate = vec![learning_rate.clone()];
+
         if self.placement == Placement::Before {
-            blocks.push_kernel(self.op.execute(stream.clone(), Vec::new(), vec![weights.clone()])?);
+            blocks.push_kernel(self.op.execute(stream.clone(), rate, vec![weights.clone()])?);
             blocks.extend_by(self.inner.update(stream, weights, grads, gradient_factor, learning_rate)?);
         } else {
             blocks.extend_by(self.inner.update(stream, weights.clone(), grads, gradient_factor, learning_rate)?);
-            blocks.push_kernel(self.op.execute(stream.clone(), Vec::new(), vec![weights])?);
+            blocks.push_kernel(self.op.execute(stream.clone(), rate, vec![weights])?);
         }
 
         Ok(blocks)

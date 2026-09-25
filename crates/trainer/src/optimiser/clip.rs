@@ -2,12 +2,12 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::IRError,
-    tensor::{DType, DValue, TType, operation::CABinary},
+    tensor::{DType, TType},
 };
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::PointwiseIR,
+    pointwise::PointwiseBuilder,
     runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
@@ -16,18 +16,18 @@ use crate::optimiser::OptimiserUpdateSync;
 use super::{OptimiserState, OptimiserUpdateResult, utils::Placement};
 
 fn build_clip_op(size: usize, min: f32, max: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
-    let mut pntwise = PointwiseIR::new(size.into())?;
-    let min = pntwise.add_const(DValue::F32(min), 0);
-    let max = pntwise.add_const(DValue::F32(max), 0);
+    let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
+    let p2actual = 2usize.pow(u32::from(p2size));
 
-    let w = pntwise.add_buf(TType::new(size, DType::F32));
+    let builder = PointwiseBuilder::new(size / p2actual);
 
-    let old_w = pntwise.read(w, pntwise.tid(), 0)?;
-    let high = pntwise.binary(old_w, max, CABinary::Min)?;
-    let new_w = pntwise.binary(high, min, CABinary::Max)?;
-    pntwise.write(w, pntwise.tid(), new_w)?;
+    let w = builder.new_buffer(TType::new(size, DType::F32));
 
-    unsafe { pntwise.lower("clip".to_string(), props) }
+    let tid = builder.tid();
+    let new_w = w.read(tid, p2size).min(max).max(min);
+    w.write(tid, new_w);
+
+    unsafe { builder.inner().lower("clip".to_string(), props) }
 }
 
 #[derive(Clone, Debug)]
