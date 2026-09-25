@@ -183,10 +183,8 @@ where
                 loss_sum += error;
                 ticks_since_last += 1.0;
 
-                if step.batch().is_multiple_of(32)
-                    || (step.batches_per_superbatch() < 32 && step.batch() == step.batches_per_superbatch())
-                {
-                    let normalised_loss = loss_sum / f32::min(ticks_since_last, step.batches_per_superbatch() as f32);
+                if step.batch().is_multiple_of(32) || step.batch() + 1 == step.batches_per_superbatch() {
+                    let normalised_loss = loss_sum / ticks_since_last;
 
                     error_record.borrow_mut().push((step.superbatch(), step.batch(), normalised_loss));
 

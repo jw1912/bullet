@@ -220,6 +220,10 @@ rewriterule! {
             && matmul.batch == 1.into()
             && lhs.inner() == 1.into()
             && rhs.inner() == 1.into()
+            && lhs.outer() == matmul.rhs.cols
+            && rhs.outer() == matmul.rhs.cols
+            && lhs.value() == DValue::zero(lhs.value().dtype())
+            && rhs.value() == DValue::zero(rhs.value().dtype())
         {
             let dtype = a.ty().dtype();
             let matrix = matrix.id();
@@ -273,6 +277,10 @@ rewriterule! {
             && reduce.reduction() == Reduction::Sum
             && lhs.inner() == 1.into()
             && rhs.inner() == 1.into()
+            && lhs.outer() == reduce.outer()
+            && rhs.outer() == reduce.outer()
+            && lhs.value() == DValue::zero(lhs.value().dtype())
+            && rhs.value() == DValue::zero(rhs.value().dtype())
         {
             let dtype = a.ty().dtype();
             let a = a.id();
@@ -335,8 +343,10 @@ impl RewriteRule for CombineSparseMatmulBwds {
 mod tests {
     use super::*;
 
+    use std::collections::BTreeMap;
+
     use crate::tensor::{
-        DType, Size, TType,
+        DType, Size, TType, TValue,
         operation::{CABinary, Unary},
     };
 
@@ -402,5 +412,51 @@ mod tests {
         assert_eq!(ir.parent_op(d)?, Some(&broadcast?));
 
         ir.check_valid()
+    }
+
+    /// Evaluates `reduce_sum(pad(a) + pad(b))` before and after
+    /// `ConcatReduceToAddReduce`, returning both results and whether it fired.
+    fn concat_reduce(pad_value: f32) -> Result<(TValue, TValue, bool), IRTrace> {
+        let mut ir = TensorIR::default();
+
+        let a = ir.add_input(TType::new(6, DType::F32));
+        let b = ir.add_input(TType::new(4, DType::F32));
+        let pa = ir.add_op([a], PadAcrossDimension::new([2, 3], 1, 0, 2, pad_value.into()))?[0];
+        let pb = ir.add_op([b], PadAcrossDimension::new([2, 2], 1, 3, 0, pad_value.into()))?[0];
+        let c = ir.add_binary(pa, pb, CABinary::Add)?;
+        let d = ir.add_op([c], ReduceAcrossDimension::new(DType::F32, [2, 5], 1, Reduction::Sum))?[0];
+        ir.register_output(d);
+
+        let inputs = || {
+            BTreeMap::from([
+                (a, TValue::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])),
+                (b, TValue::F32(vec![10.0, 20.0, 30.0, 40.0])),
+            ])
+        };
+
+        let before = ir.evaluate(inputs())?.unwrap().remove(&d).unwrap();
+        ir.transform(RewritePass(ConcatReduceToAddReduce))?;
+        ir.check_valid()?;
+        let after = ir.evaluate(inputs())?.unwrap().remove(&d).unwrap();
+
+        let fired = ir.parent_op::<ReduceAcrossDimension>(d)?.is_none();
+
+        Ok((before, after, fired))
+    }
+
+    #[test]
+    fn concat_reduce_zero_pad() -> Result<(), IRTrace> {
+        let (before, after, fired) = concat_reduce(0.0)?;
+        assert!(fired);
+        assert_eq!(before, after);
+        Ok(())
+    }
+
+    #[test]
+    fn concat_reduce_nonzero_pad() -> Result<(), IRTrace> {
+        let (before, after, fired) = concat_reduce(1.0)?;
+        assert!(!fired);
+        assert_eq!(before, after);
+        Ok(())
     }
 }

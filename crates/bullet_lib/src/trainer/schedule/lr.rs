@@ -79,6 +79,13 @@ impl LrScheduler for StepLR {
     }
 }
 
+/// Fraction of the way from superbatch 1 to `final_superbatch`,
+/// so that superbatch 1 is 0.0 and `final_superbatch` is 1.0.
+/// Caller must ensure `superbatch < final_superbatch`.
+fn progress(superbatch: usize, final_superbatch: usize) -> f32 {
+    superbatch.saturating_sub(1) as f32 / (final_superbatch - 1) as f32
+}
+
 #[derive(Clone, Debug)]
 pub struct LinearDecayLR {
     pub initial_lr: f32,
@@ -92,7 +99,7 @@ impl LrScheduler for LinearDecayLR {
             return self.final_lr;
         }
 
-        let lambda = superbatch as f32 / self.final_superbatch as f32;
+        let lambda = progress(superbatch, self.final_superbatch);
         self.initial_lr + lambda * (self.final_lr - self.initial_lr)
     }
 
@@ -119,8 +126,8 @@ impl LrScheduler for CosineDecayLR {
             return self.final_lr;
         }
 
-        let progress = superbatch as f32 / self.final_superbatch as f32;
-        let lambda = 1.0 - 0.5 * (1.0 + (PI * progress).cos());
+        let t = progress(superbatch, self.final_superbatch);
+        let lambda = 1.0 - 0.5 * (1.0 + (PI * t).cos());
         self.initial_lr + lambda * (self.final_lr - self.initial_lr)
     }
 
@@ -147,7 +154,7 @@ impl LrScheduler for ExponentialDecayLR {
             return self.final_lr;
         }
 
-        let lambda = superbatch as f32 / self.final_superbatch as f32;
+        let lambda = progress(superbatch, self.final_superbatch);
         self.initial_lr * (self.final_lr / self.initial_lr).powf(lambda)
     }
 
@@ -215,5 +222,29 @@ impl<First: LrScheduler, Second: LrScheduler> LrScheduler for Sequence<First, Se
             ansi(self.first_scheduler_final_superbatch, 32),
             self.second.colourful()
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_endpoints(lr: impl LrScheduler) {
+        assert!((lr.lr(0, 1) - 1.0).abs() < 1e-6, "{lr:?} does not start at initial_lr");
+        assert!((lr.lr(0, 10) - 0.1).abs() < 1e-6, "{lr:?} does not end at final_lr");
+        assert!(lr.lr(0, 2) < 1.0 && lr.lr(0, 9) > 0.1);
+    }
+
+    #[test]
+    fn decay_schedulers_hit_endpoints() {
+        assert_endpoints(LinearDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 10 });
+        assert_endpoints(CosineDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 10 });
+        assert_endpoints(ExponentialDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 10 });
+    }
+
+    #[test]
+    fn decay_single_superbatch() {
+        let lr = LinearDecayLR { initial_lr: 1.0, final_lr: 0.1, final_superbatch: 1 };
+        assert_eq!(lr.lr(0, 1), 0.1);
     }
 }
