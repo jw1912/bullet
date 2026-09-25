@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs::File,
     io::{BufRead, BufReader, Write},
     sync::Arc,
@@ -9,7 +9,8 @@ use bullet_compiler::tensor::{DType, DValue, IRTrace, TType, TValue};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    runtime::{Device, DeviceProps, Dialect, Dim3, Gpu, Stream},
+    pointwise::{PointwiseBuilder, PointwiseNode},
+    runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
 use crate::optimiser::{OptimiserUpdateResult, OptimiserUpdateSync};
@@ -31,221 +32,58 @@ impl Default for RAdamParams {
     }
 }
 
-const OP_CUDA: &str = "\
-__device__ __forceinline__ void radamOp(
-    const float grad,
-    const float rate,
-    const int denom,
-    float* p,
-    float* m,
-    float* v
-) {
-    p[0] *= 1.0F - static_cast<float>(DECAY) * rate;
-
-    m[0] = static_cast<float>(BETA1) * m[0] + (1.0F - static_cast<float>(BETA1)) * grad;
-    v[0] = static_cast<float>(BETA2) * v[0] + (1.0F - static_cast<float>(BETA2)) * grad * grad;
-
-    float val = m[0];
-    if (denom) val /= sqrt(v[0]) + EPSILON;
-    p[0] -= rate * val;
-
-    p[0] = min(max(p[0], static_cast<float>(WMIN)), static_cast<float>(WMAX));
-}";
-
-const DECL_CUDA: &str = "
-extern \"C\" __global__ void radam(
-    const float* adj_ptr,
-    const float* rate_ptr,
-    const float* step_size_ptr,
-    const int* denom_ptr,
-    const float* gradients,
-    float* network,
-    float* momentum,
-    float* velocity
-)";
-
-const OP_MSL: &str = "\
-#include <metal_stdlib>
-using namespace metal;
-
-inline void radamOp(
-    const float grad,
-    const float rate,
-    const int denom,
-    thread float* p,
-    thread float* m,
-    thread float* v
-) {
-    p[0] *= 1.0f - float(DECAY) * rate;
-
-    m[0] = float(BETA1) * m[0] + (1.0f - float(BETA1)) * grad;
-    v[0] = float(BETA2) * v[0] + (1.0f - float(BETA2)) * grad * grad;
-
-    float val = m[0];
-    if (denom) val /= sqrt(v[0]) + EPSILON;
-    p[0] -= rate * val;
-
-    p[0] = min(max(p[0], float(WMIN)), float(WMAX));
-}";
-
-const DECL_MSL: &str = "
-kernel void radam(
-    const device float* adj_ptr [[buffer(0)]],
-    const device float* rate_ptr [[buffer(1)]],
-    const device float* step_size_ptr [[buffer(2)]],
-    const device int* denom_ptr [[buffer(3)]],
-    const device float* gradients [[buffer(4)]],
-    device float* network [[buffer(5)]],
-    device float* momentum [[buffer(6)]],
-    device float* velocity [[buffer(7)]],
-    uint metal_tid [[thread_position_in_grid]]
-)";
-
 impl RAdamParams {
     pub fn build(&self, size: usize, props: &DeviceProps) -> Result<KernelSrc, IRTrace> {
         let (min, max) = self.clip.unwrap_or((f32::MIN, f32::MAX));
 
-        let (op_src, decl) = match props.dialect() {
-            Dialect::CudaHip => (OP_CUDA, DECL_CUDA),
-            Dialect::Msl => (OP_MSL, DECL_MSL),
-        };
+        let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
+        let p2actual = 2usize.pow(u32::from(p2size));
 
-        let op = op_src
-            .replace("DECAY", &format!("{:.E}", self.decay))
-            .replace("BETA1", &format!("{:.E}", self.beta1))
-            .replace("BETA2", &format!("{:.E}", self.beta2))
-            .replace("WMIN", &format!("{min:.E}"))
-            .replace("WMAX", &format!("{max:.E}"))
-            .replace("EPSILON", "0.00000001F");
+        let builder = PointwiseBuilder::new(size / p2actual);
 
-        let body = match props.dialect() {
-            Dialect::CudaHip => {
-                if size.is_multiple_of(4) {
-                    format!(
-                        "
-                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-                if (tid < {})
-                {{
-                    const float adj = adj_ptr[0];
-                    const float rate = rate_ptr[0] * step_size_ptr[0];
-                    const int denom = denom_ptr[0];
-                    float4 p = ((float4 *)network)[tid];
-                    float4 m = ((float4 *)momentum)[tid];
-                    float4 v = ((float4 *)velocity)[tid];
-                    const float4 g = ((const float4 *)gradients)[tid];
-
-                    radamOp(adj * g.x, rate, denom, &p.x, &m.x, &v.x);
-                    radamOp(adj * g.y, rate, denom, &p.y, &m.y, &v.y);
-                    radamOp(adj * g.z, rate, denom, &p.z, &m.z, &v.z);
-                    radamOp(adj * g.w, rate, denom, &p.w, &m.w, &v.w);
-
-                    ((float4 *)network)[tid] = p;
-                    ((float4 *)momentum)[tid] = m;
-                    ((float4 *)velocity)[tid] = v;
-                }}",
-                        size / 4,
-                    )
-                } else {
-                    format!(
-                        "
-                const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-                if (tid < {size})
-                {{
-                    const float adj = adj_ptr[0];
-                    const float rate = rate_ptr[0] * step_size_ptr[0];
-                    const int denom = denom_ptr[0];
-                    float p = network[tid];
-                    float m = momentum[tid];
-                    float v = velocity[tid];
-                    const float g = gradients[tid];
-
-                    radamOp(adj * g, rate, denom, &p, &m, &v);
-
-                    network[tid] = p;
-                    momentum[tid] = m;
-                    velocity[tid] = v;
-                }}"
-                    )
-                }
-            }
-            Dialect::Msl => {
-                if size.is_multiple_of(4) {
-                    format!(
-                        "
-                    const uint tid = metal_tid;
-
-                    if (tid < {})
-                    {{
-                        const float adj = adj_ptr[0];
-                        const float rate = rate_ptr[0] * step_size_ptr[0];
-                        const int denom = denom_ptr[0];
-                        float4 p_vec = ((device float4 *)network)[tid];
-                        float4 m_vec = ((device float4 *)momentum)[tid];
-                        float4 v_vec = ((device float4 *)velocity)[tid];
-                        const float4 g = ((const device float4 *)gradients)[tid];
-
-                        float px = p_vec.x, py = p_vec.y, pz = p_vec.z, pw = p_vec.w;
-                        float mx = m_vec.x, my = m_vec.y, mz = m_vec.z, mw = m_vec.w;
-                        float vx = v_vec.x, vy = v_vec.y, vz = v_vec.z, vw = v_vec.w;
-
-                        radamOp(adj * g.x, rate, denom, &px, &mx, &vx);
-                        radamOp(adj * g.y, rate, denom, &py, &my, &vy);
-                        radamOp(adj * g.z, rate, denom, &pz, &mz, &vz);
-                        radamOp(adj * g.w, rate, denom, &pw, &mw, &vw);
-
-                        ((device float4 *)network)[tid] = float4(px, py, pz, pw);
-                        ((device float4 *)momentum)[tid] = float4(mx, my, mz, mw);
-                        ((device float4 *)velocity)[tid] = float4(vx, vy, vz, vw);
-                    }}",
-                        size / 4,
-                    )
-                } else {
-                    format!(
-                        "
-                    const uint tid = metal_tid;
-
-                    if (tid < {size})
-                    {{
-                        const float adj = adj_ptr[0];
-                        const float rate = rate_ptr[0] * step_size_ptr[0];
-                        const int denom = denom_ptr[0];
-                        float p = network[tid];
-                        float m = momentum[tid];
-                        float v = velocity[tid];
-                        const float g = gradients[tid];
-
-                        radamOp(adj * g, rate, denom, &p, &m, &v);
-
-                        network[tid] = p;
-                        momentum[tid] = m;
-                        velocity[tid] = v;
-                    }}"
-                    )
-                }
-            }
-        };
-
+        let scalar = TType::new(1, DType::F32);
         let ty = TType::new(size, DType::F32);
-        let sty = TType::new(1, DType::F32);
 
-        let total_threads = if size.is_multiple_of(4) { size / 4 } else { size };
-        let src = unsafe {
-            KernelSrc::new(
-                vec![sty, sty, sty, TType::new(1, DType::I32), ty],
-                vec![ty; 3],
-                "radam".to_string(),
-                format!("{op}{decl}{{{body}}}"),
-                vec![(0, true), (1, true), (2, true), (3, true), (4, true), (0, false), (1, false), (2, false)],
-                BTreeSet::new(),
-                Dim3 { x: total_threads.div_ceil(256) as u32, y: 1, z: 1 },
-                256,
-                0,
-            )
-        };
+        let adj_buf = builder.new_buffer(scalar);
+        let rate_buf = builder.new_buffer(scalar);
+        let step_size_buf = builder.new_buffer(scalar);
+        let denom_buf = builder.new_buffer(TType::new(1, DType::I32));
+        let grad_buf = builder.new_buffer(ty);
+        let weight_buf = builder.new_buffer(ty);
+        let momentum_buf = builder.new_buffer(ty);
+        let velocity_buf = builder.new_buffer(ty);
 
-        Ok(src)
+        fn splat(node: PointwiseNode<'_>, p2size: u8) -> PointwiseNode<'_> {
+            if p2size > 0 { node.broadcast(p2size) } else { node }
+        }
+
+        let adj = splat(adj_buf.read(0, 0), p2size);
+        let rate = splat(rate_buf.read(0, 0) * step_size_buf.read(0, 0), p2size);
+        let denom = splat(denom_buf.read(0, 0).cast(DType::F32), p2size);
+
+        let tid = builder.tid();
+        let grad = adj * grad_buf.read(tid, p2size);
+        let weight = weight_buf.read(tid, p2size);
+        let momentum = momentum_buf.read(tid, p2size);
+        let velocity = velocity_buf.read(tid, p2size);
+
+        let weight = weight * (1.0 - self.decay * rate);
+        let momentum = self.beta1 * momentum + (1.0 - self.beta1) * grad;
+        let velocity = self.beta2 * velocity + (1.0 - self.beta2) * grad * grad;
+
+        // `denom` is written as 0 or 1, and picks out whether the step is scaled
+        // by `1 / (sqrt(v) + eps)` - as a lerp, since there is no select op
+        let scale = 1.0 - denom + denom * (velocity.sqrt() + 1e-8).recip();
+        let step = momentum * scale;
+        let weight = (weight - rate * step).max(min).min(max);
+
+        weight_buf.write(tid, weight);
+        momentum_buf.write(tid, momentum);
+        velocity_buf.write(tid, velocity);
+
+        builder.ir().eliminate_common_subexprs()?;
+
+        unsafe { Ok(builder.inner().lower("radam".to_string(), props)?) }
     }
 }
 

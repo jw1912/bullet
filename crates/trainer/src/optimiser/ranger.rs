@@ -2,12 +2,12 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use bullet_compiler::{
     ir::IRError,
-    tensor::{DType, TType, TValue, operation::CABinary},
+    tensor::{DType, TType, TValue},
 };
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
-    pointwise::PointwiseIR,
+    pointwise::PointwiseBuilder,
     runtime::{Device, DeviceProps, Gpu, Stream},
 };
 
@@ -21,24 +21,24 @@ use super::{
 };
 
 fn build_ranger_op(size: usize, alpha: f32, props: &DeviceProps) -> Result<KernelSrc, IRError> {
-    let mut pntwise = PointwiseIR::new(size.into())?;
+    let p2size = if size.is_multiple_of(4) { 2 } else { 0 };
+    let p2actual = 2usize.pow(u32::from(p2size));
 
-    let w = pntwise.add_buf(TType::new(size, DType::F32));
-    let s = pntwise.add_buf(TType::new(size, DType::F32));
-    let old_w = pntwise.read(w, pntwise.tid(), 0)?;
-    let old_s = pntwise.read(s, pntwise.tid(), 0)?;
+    let builder = PointwiseBuilder::new(size / p2actual);
 
-    let wweight = pntwise.add_const(alpha.into(), 0);
-    let lhs = pntwise.binary(wweight, old_w, CABinary::Mul)?;
+    let w = builder.new_buffer(TType::new(size, DType::F32));
+    let s = builder.new_buffer(TType::new(size, DType::F32));
 
-    let sweight = pntwise.add_const((1.0 - alpha).into(), 0);
-    let rhs = pntwise.binary(sweight, old_s, CABinary::Mul)?;
+    let tid = builder.tid();
+    let old_w = w.read(tid, p2size);
+    let old_s = s.read(tid, p2size);
 
-    let new_w = pntwise.binary(lhs, rhs, CABinary::Add)?;
-    pntwise.write(w, pntwise.tid(), new_w)?;
-    pntwise.write(s, pntwise.tid(), new_w)?;
+    let new_w = alpha * old_w + (1.0 - alpha) * old_s;
 
-    unsafe { pntwise.lower("ranger".to_string(), props) }
+    w.write(tid, new_w);
+    s.write(tid, new_w);
+
+    unsafe { builder.inner().lower("ranger".to_string(), props) }
 }
 
 #[derive(Clone, Debug)]

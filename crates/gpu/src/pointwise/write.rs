@@ -177,6 +177,10 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
             }
         }
         PointwiseOp::Unary { ty, p2size, op } => {
+            // the declared type follows the op's output type, which matches the
+            // input for everything but a cast; `opstr` still compares against
+            // zero in the input type
+            let out = tystr(if let Unary::Cast(cast) = op { cast } else { ty });
             let ty = tystr(ty);
 
             let opstr = |x: &str| match op {
@@ -216,10 +220,10 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
             };
 
             match p2size {
-                0 => Some(format!("const {ty} OUT1 = {};", opstr("IN1"))),
-                1 => Some(format!("{ty}2 OUT1;\nOUT1.x = {};\nOUT1.y = {};", opstr("IN1.x"), opstr("IN1.y"),)),
+                0 => Some(format!("const {out} OUT1 = {};", opstr("IN1"))),
+                1 => Some(format!("{out}2 OUT1;\nOUT1.x = {};\nOUT1.y = {};", opstr("IN1.x"), opstr("IN1.y"),)),
                 2 => Some(format!(
-                    "{ty}4 OUT1;\nOUT1.x = {};\nOUT1.y = {};\nOUT1.z = {};\nOUT1.w = {};",
+                    "{out}4 OUT1;\nOUT1.x = {};\nOUT1.y = {};\nOUT1.z = {};\nOUT1.w = {};",
                     opstr("IN1.x"),
                     opstr("IN1.y"),
                     opstr("IN1.z"),
