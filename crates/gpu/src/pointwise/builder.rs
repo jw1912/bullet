@@ -39,17 +39,15 @@ fn p2size_of(ty: PType) -> u8 {
 ///
 /// Unlike the model level IR, every node here is a value local to one thread, so
 /// the "shape" of a node is just its dtype plus the number of elements each thread
-/// handles at once - `2^p2size` of them. All ops on a kernel operate at the same
-/// vector width, so the builder carries it and applies it by default, only leaving
-/// it explicit where index arithmetic forces scalar operands.
+/// handles at once - `2^p2size` of them. Each op that touches memory is given its
+/// `p2size` explicitly, as index arithmetic has to stay scalar regardless of the
+/// width the kernel is vectorised at.
 pub struct PointwiseBuilder {
     ir: Mutex<PointwiseIR>,
-    //p2size: u8,
 }
 
 impl PointwiseBuilder {
-    /// `size` is the number of threads the kernel is launched with, and each of them
-    /// processes `2^p2size` elements at a time.
+    /// `size` is the number of threads the kernel is launched with.
     pub fn new(size: impl Into<Size>) -> Self {
         Self { ir: Mutex::new(PointwiseIR::new(size.into()).unwrap()) }
     }
@@ -448,7 +446,7 @@ mod tests {
         let (outer, inner) = builder.tid().div_rem(8);
         let idx = 8 * outer + inner;
 
-        // scalar read broadcast up to the kernel vector width
+        // read a single element and broadcast it across the vector it feeds into
         let scale = buf.read(outer, 0).broadcast(1);
         let cond = (idx - 4).is_non_negative();
         let val = buf.conditional_read(idx, cond, 0.0f32, 1) * scale;
