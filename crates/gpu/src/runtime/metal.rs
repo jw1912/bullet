@@ -177,6 +177,15 @@ impl GpuBindings for Metal {
         Ok(())
     }
 
+    // Unified memory, so there is no need for pinning
+    unsafe fn host_malloc(bytes: usize) -> Result<*mut c_void, MetalError> {
+        super::mock::MockGpu::host_malloc(bytes).map_err(Into::into)
+    }
+
+    unsafe fn host_free(ptr: *mut c_void, bytes: usize) -> MetalResult {
+        super::mock::MockGpu::host_free(ptr, bytes).map_err(Into::into)
+    }
+
     unsafe fn stream_create() -> Result<u64, MetalError> {
         let device = &*current_device();
         let queue =

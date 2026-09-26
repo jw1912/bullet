@@ -130,6 +130,16 @@ impl GpuBindings for Cuda {
         error::driver(cuMemcpyHtoD_v2(dst, src, bytes))
     }
 
+    unsafe fn host_malloc(bytes: usize) -> Result<*mut c_void, CudaError> {
+        let mut ptr = std::ptr::null_mut();
+        error::driver(cuMemHostAlloc(&mut ptr, bytes, CU_MEMHOSTALLOC_PORTABLE))?;
+        Ok(ptr)
+    }
+
+    unsafe fn host_free(ptr: *mut c_void, _bytes: usize) -> CudaResult {
+        error::driver(cuMemFreeHost(ptr))
+    }
+
     unsafe fn stream_create() -> Result<CUstream, CudaError> {
         let mut stream = CUstream::default();
         error::driver(cuStreamCreate(&mut stream, 0))?;
@@ -395,6 +405,8 @@ mod raw {
     pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR: u32 = 76;
     pub const CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED: u32 = 115;
 
+    pub const CU_MEMHOSTALLOC_PORTABLE: c_uint = 0x01;
+
     unsafe extern "C" {
         // Errors
         pub fn cuGetErrorString(error: CUresult, pStr: *mut *const c_char) -> CUresult;
@@ -420,6 +432,8 @@ mod raw {
         pub fn cuMemsetD8_v2(dstDevice: CUdeviceptr, uc: c_uchar, N: usize) -> CUresult;
         pub fn cuMemcpyHtoD_v2(dstDevice: CUdeviceptr, srcHost: *const c_void, ByteCount: usize) -> CUresult;
         pub fn cuMemcpyDtoH_v2(dstHost: *mut c_void, srcDevice: CUdeviceptr, ByteCount: usize) -> CUresult;
+        pub fn cuMemHostAlloc(pp: *mut *mut c_void, bytesize: usize, Flags: c_uint) -> CUresult;
+        pub fn cuMemFreeHost(p: *mut c_void) -> CUresult;
         pub fn cuMemAllocAsync(dptr: *mut CUdeviceptr, bytesize: usize, hStream: CUstream) -> CUresult;
         pub fn cuMemFreeAsync(dptr: CUdeviceptr, hStream: CUstream) -> CUresult;
         pub fn cuMemsetD8Async(dstDevice: CUdeviceptr, uc: c_uchar, N: usize, hStream: CUstream) -> CUresult;

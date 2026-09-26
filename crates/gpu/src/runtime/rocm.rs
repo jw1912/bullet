@@ -104,6 +104,16 @@ impl GpuBindings for ROCm {
         error::runtime(hipMemsetD8(dev_ptr, value, bytes))
     }
 
+    unsafe fn host_malloc(bytes: usize) -> Result<*mut c_void, ROCmError> {
+        let mut ptr = std::ptr::null_mut();
+        error::runtime(hipHostMalloc(&mut ptr, bytes, hipHostMallocPortable))?;
+        Ok(ptr)
+    }
+
+    unsafe fn host_free(ptr: *mut c_void, _bytes: usize) -> ROCmResult {
+        error::runtime(hipHostFree(ptr))
+    }
+
     unsafe fn stream_create() -> Result<hipStream, ROCmError> {
         let mut stream = hipStream::default();
         error::runtime(hipStreamCreate(&mut stream))?;
@@ -355,6 +365,8 @@ mod raw {
 
     pub const hipDeviceAttributeWarpSize: u32 = 87;
 
+    pub const hipHostMallocPortable: c_uint = 0x01;
+
     unsafe extern "C" {
         // Errors
         pub fn hipGetErrorString(error: hipError) -> *const c_char;
@@ -374,6 +386,8 @@ mod raw {
         pub fn hipMemsetD8(dstDevice: *mut c_void, uc: c_uchar, N: usize) -> hipError;
         pub fn hipMemcpyHtoD(dstDevice: *mut c_void, srcHost: *const c_void, ByteCount: usize) -> hipError;
         pub fn hipMemcpyDtoH(dstHost: *mut c_void, srcDevice: *mut c_void, ByteCount: usize) -> hipError;
+        pub fn hipHostMalloc(ptr: *mut *mut c_void, size: usize, flags: c_uint) -> hipError;
+        pub fn hipHostFree(ptr: *mut c_void) -> hipError;
         pub fn hipMallocAsync(dptr: *mut *mut c_void, bytesize: usize, hStream: hipStream) -> hipError;
         pub fn hipFreeAsync(dptr: *mut c_void, hStream: hipStream) -> hipError;
         pub fn hipMemsetD8Async(dstDevice: *mut c_void, uc: c_uchar, N: usize, hStream: hipStream) -> hipError;
