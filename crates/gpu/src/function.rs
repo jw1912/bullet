@@ -25,6 +25,7 @@ use bullet_compiler::{
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
+    matmul::SplitK,
     pointwise::{
         transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
         write::tystr,
@@ -81,6 +82,14 @@ impl<G: Gpu> Function<G> {
         ir.transform(LowerPointwise(props.clone()))?;
         ir.transform(FusePointwise(props.clone()))?;
         ir.transform(RewritePass(ReduceToMatmul))?;
+
+        // hack around bad rocBLAS matmuls
+        if props.is_rocm() {
+            ir.transform(SplitK)?;
+            ir.transform(LowerPointwise(props.clone()))?;
+            ir.transform(RewritePass(ReduceToMatmul))?;
+        }
+
         ir.transform(EliminateCommonSubExpressions)?;
         ir.transform(LowerPointwise(props.clone()))?;
         ir.transform(CodegenPointwise(props.clone()))?;

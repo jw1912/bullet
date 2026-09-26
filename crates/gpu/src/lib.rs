@@ -3,6 +3,7 @@
 pub mod buffer;
 pub mod function;
 pub mod kernel;
+mod matmul;
 pub mod pointwise;
 pub mod runtime;
 
