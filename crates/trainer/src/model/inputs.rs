@@ -2,11 +2,11 @@ use std::{iter::Zip, marker::PhantomData, slice::ChunksMut, sync::Arc};
 
 use bullet_compiler::{
     model::{ModelBuilder, ModelNode, Shape},
-    tensor::TValue,
+    tensor::DType,
 };
+use bullet_gpu::runtime::Gpu;
 
 use crate::run::{HostPool, PreparedBatchHost, Step};
-
 pub struct ModelInputs<T> {
     inputs: T,
     names: Vec<String>,
@@ -61,15 +61,25 @@ impl<T: InputType + 'static> ModelInputs<T> {
     }
 }
 
+/// Mutable view of a single input's host buffer for a whole batch
+pub enum InputSlice<'a> {
+    F32(&'a mut [f32]),
+    I32(&'a mut [i32]),
+}
+
+/// Iterator over the host buffers of a batch, in input order
+pub type InputSlices<'a> = std::vec::IntoIter<InputSlice<'a>>;
+
 pub struct ModelInputsMapper<T> {
     #[allow(clippy::type_complexity)]
-    func: Arc<dyn Fn(&[T], Step, u8) -> PreparedBatchHost + Send + Sync>,
+    func: Arc<dyn Fn(&[T], Step, u8, InputSlices<'_>) + Send + Sync>,
     names: Vec<String>,
+    specs: Vec<(DType, usize)>,
 }
 
 impl<T> Clone for ModelInputsMapper<T> {
     fn clone(&self) -> Self {
-        Self { func: self.func.clone(), names: self.names.clone() }
+        Self { func: self.func.clone(), names: self.names.clone(), specs: self.specs.clone() }
     }
 }
 
@@ -78,16 +88,15 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
     where
         F: for<'a> Fn(&T, Step, I::Slices<'a>) + Send + Sync + 'static,
     {
-        let names = inputs.names.clone();
         let inp = inputs.inputs.clone();
 
-        let pool = Arc::<HostPool>::default();
+        let mut specs = Vec::new();
+        inp.append_specs(&mut specs);
 
-        let func = move |batch: &[T], step, threads: u8| {
+        let func = move |batch: &[T], step, threads: u8, mut bufs: InputSlices<'_>| {
             let f = &f;
             let chunk_size = batch.len().div_ceil(usize::from(threads.max(1)));
 
-            let mut bufs = inp.make_bufs(batch.len(), &pool);
             let chunks = inp.chunks(&mut bufs, chunk_size);
 
             std::thread::scope(|s| {
@@ -101,18 +110,37 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
                     });
                 }
             });
-
-            let mut vec = Vec::new();
-            inp.append_bufs_to_vec(bufs, &mut vec);
-            let inputs = names.iter().cloned().zip(vec).collect();
-            PreparedBatchHost::new(pool.clone(), inputs)
         };
 
-        ModelInputsMapper { func: Arc::new(func), names: inputs.names.clone() }
+        ModelInputsMapper { func: Arc::new(func), names: inputs.names.clone(), specs }
     }
 
-    pub fn map(&self, data: &[T], step: Step, threads: u8) -> PreparedBatchHost {
-        (self.func)(data, step, threads)
+    /// Map the given data into pinned host buffers taken from `pool`
+    pub fn map<G: Gpu>(
+        &self,
+        pool: &Arc<HostPool<G>>,
+        data: &[T],
+        step: Step,
+        threads: u8,
+    ) -> Result<PreparedBatchHost<G>, G::Error> {
+        let mut bufs = self
+            .specs
+            .iter()
+            .map(|&(dtype, size)| pool.take(dtype, size * data.len()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let slices = bufs
+            .iter_mut()
+            .map(|buf| match buf.dtype() {
+                DType::F32 => InputSlice::F32(buf.as_mut_slice().unwrap()),
+                DType::I32 => InputSlice::I32(buf.as_mut_slice().unwrap()),
+            })
+            .collect::<Vec<_>>();
+
+        (self.func)(data, step, threads, slices.into_iter());
+
+        let inputs = self.names.iter().cloned().zip(bufs).collect();
+        Ok(PreparedBatchHost::new(pool.clone(), inputs))
     }
 
     pub fn names(&self) -> &[String] {
@@ -121,20 +149,20 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
 }
 
 pub trait InputType: Clone + Send + Sync + 'static {
-    type Buf: Send + Sync;
     type Chunks<'a>: 'a + Iterator<Item = Self::Slices<'a>> + Send + Sync;
     type Slices<'a>: 'a + Send + Sync;
     type Nodes<'a>: 'a;
 
-    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf;
+    /// Append the dtype and per-datapoint size of each host buffer this input requires
+    fn append_specs(&self, specs: &mut Vec<(DType, usize)>);
 
-    fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a>;
+    /// Consume the host buffers for this input (in the order given by `append_specs`)
+    /// and split them into chunks of `chunk_size` datapoints
+    fn chunks<'a>(&self, bufs: &mut InputSlices<'a>, chunk_size: usize) -> Self::Chunks<'a>;
 
     fn slices<'a>(&self, chunk: <Self::Chunks<'a> as Iterator>::Item) -> Self::Chunks<'a>;
 
     fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a>;
-
-    fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>);
 }
 
 #[derive(Clone)]
@@ -163,16 +191,16 @@ impl<T> DenseInput<T> {
 }
 
 impl InputType for SparseInput {
-    type Buf = Vec<i32>;
     type Chunks<'a> = ChunksMut<'a, i32>;
     type Slices<'a> = &'a mut [i32];
     type Nodes<'a> = ModelNode<'a>;
 
-    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf {
-        pool.take_i32(self.nnz * batch_size)
+    fn append_specs(&self, specs: &mut Vec<(DType, usize)>) {
+        specs.push((DType::I32, self.nnz));
     }
 
-    fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a> {
+    fn chunks<'a>(&self, bufs: &mut InputSlices<'a>, chunk_size: usize) -> Self::Chunks<'a> {
+        let Some(InputSlice::I32(buf)) = bufs.next() else { panic!("Expected an I32 buffer!") };
         buf.chunks_mut(chunk_size * self.nnz)
     }
 
@@ -183,25 +211,20 @@ impl InputType for SparseInput {
     fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a> {
         builder.new_sparse_input(self.name.clone(), self.shape, self.nnz)
     }
-
-    fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {
-        vec.push(TValue::I32(buf));
-    }
 }
 
 impl InputType for DenseInput<f32> {
-    type Buf = Vec<f32>;
     type Chunks<'a> = ChunksMut<'a, f32>;
     type Slices<'a> = &'a mut [f32];
     type Nodes<'a> = ModelNode<'a>;
 
-    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf {
-        let mut buf = pool.take_f32(self.shape.size() * batch_size);
-        buf.fill(0.0);
-        buf
+    fn append_specs(&self, specs: &mut Vec<(DType, usize)>) {
+        specs.push((DType::F32, self.shape.size()));
     }
 
-    fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a> {
+    fn chunks<'a>(&self, bufs: &mut InputSlices<'a>, chunk_size: usize) -> Self::Chunks<'a> {
+        let Some(InputSlice::F32(buf)) = bufs.next() else { panic!("Expected an F32 buffer!") };
+        buf.fill(0.0);
         buf.chunks_mut(chunk_size * self.shape.size())
     }
 
@@ -212,24 +235,21 @@ impl InputType for DenseInput<f32> {
     fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a> {
         builder.new_dense_input(self.name.clone(), self.shape)
     }
-
-    fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {
-        vec.push(TValue::F32(buf));
-    }
 }
 
 impl<T: InputType, U: InputType> InputType for (T, U) {
-    type Buf = (T::Buf, U::Buf);
     type Chunks<'a> = Zip<T::Chunks<'a>, U::Chunks<'a>>;
     type Slices<'a> = (T::Slices<'a>, U::Slices<'a>);
     type Nodes<'a> = (T::Nodes<'a>, U::Nodes<'a>);
 
-    fn make_bufs(&self, batch_size: usize, pool: &Arc<HostPool>) -> Self::Buf {
-        (self.0.make_bufs(batch_size, pool), self.1.make_bufs(batch_size, pool))
+    fn append_specs(&self, specs: &mut Vec<(DType, usize)>) {
+        self.0.append_specs(specs);
+        self.1.append_specs(specs);
     }
 
-    fn chunks<'a>(&self, buf: &'a mut Self::Buf, chunk_size: usize) -> Self::Chunks<'a> {
-        self.0.chunks(&mut buf.0, chunk_size).zip(self.1.chunks(&mut buf.1, chunk_size))
+    fn chunks<'a>(&self, bufs: &mut InputSlices<'a>, chunk_size: usize) -> Self::Chunks<'a> {
+        let first = self.0.chunks(bufs, chunk_size);
+        first.zip(self.1.chunks(bufs, chunk_size))
     }
 
     fn slices<'a>(&self, chunk: <Self::Chunks<'a> as Iterator>::Item) -> Self::Chunks<'a> {
@@ -238,10 +258,5 @@ impl<T: InputType, U: InputType> InputType for (T, U) {
 
     fn make_nodes<'a>(&self, builder: &'a ModelBuilder) -> Self::Nodes<'a> {
         (self.0.make_nodes(builder), self.1.make_nodes(builder))
-    }
-
-    fn append_bufs_to_vec(&self, buf: Self::Buf, vec: &mut Vec<TValue>) {
-        self.0.append_bufs_to_vec(buf.0, vec);
-        self.1.append_bufs_to_vec(buf.1, vec);
     }
 }
