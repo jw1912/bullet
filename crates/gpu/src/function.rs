@@ -25,7 +25,6 @@ use bullet_compiler::{
 use crate::{
     buffer::{Buffer, SyncOnDrop, SyncOnValue},
     kernel::KernelSrc,
-    matmul::SplitK,
     pointwise::{
         transforms::{CodegenPointwise, FusePointwise, LowerPointwise},
         write::tystr,
@@ -85,7 +84,7 @@ impl<G: Gpu> Function<G> {
 
         // hack around bad rocBLAS matmuls
         if props.is_rocm() {
-            ir.transform(SplitK)?;
+            ir.transform(RewritePass(SplitK))?;
             ir.transform(LowerPointwise(props.clone()))?;
             ir.transform(RewritePass(ReduceToMatmul))?;
         }
@@ -382,6 +381,55 @@ rewriterule! {
     }
 }
 
+fn split_k_factor(mm: &Matmul) -> Option<usize> {
+    let k = mm.lhs.cols.get();
+    let size = mm.lhs.rows * mm.rhs.cols;
+
+    if mm.dtype != DType::F32
+        || (!mm.lhs.col_mjr && mm.lhs.rows.get() != 1)
+        || (mm.rhs.col_mjr && mm.rhs.cols.get() != 1)
+        || k < 4096
+        || size.get() > 65536
+    {
+        return None;
+    }
+
+    // Already well-populated grids do not need extra parallelism. Bound
+    // temporary storage to 64 MiB even when the original GEMM is batched.
+    if mm.batch.get() * mm.lhs.rows.get().div_ceil(64) * mm.rhs.cols.get().div_ceil(128) >= 64 {
+        return None;
+    }
+
+    let mut splits = 1;
+    while k.is_multiple_of(splits * 2)
+        && k / (splits * 2) >= 512
+        && splits < 256
+        && mm.batch.get() * size.get() * splits * 2 <= 16 * 1024 * 1024
+    {
+        splits *= 2;
+    }
+
+    (splits > 1).then_some(splits)
+}
+
+rewriterule! {
+    rulename SplitK on ir
+    rewrites op (mm = [Matmul] (lhs) (rhs))
+    {
+        if let Some(splits) = split_k_factor(mm) {
+            let chunk = (mm.lhs.cols.get() / splits).into();
+            let lhs_layout = MatrixLayout { cols: chunk, col_mjr: true, ..mm.lhs };
+            let rhs_layout = MatrixLayout { rows: chunk, col_mjr: false, ..mm.rhs };
+            let partial = Matmul::new(mm.dtype, mm.batch * splits, lhs_layout, rhs_layout)?;
+            let partial = ir.add_op([lhs.id(), rhs.id()], Ok::<_, IRTrace>(partial))?[0];
+            let size = mm.lhs.rows * mm.rhs.cols;
+            let reduce = ReduceAcrossDimension::new(mm.dtype, [mm.batch, splits.into(), size], 1, Reduction::Sum)?;
+            ir.replace_operation(op.id(), [partial], reduce)?;
+            return Ok(true);
+        }
+    }
+}
+
 static REDUCTION_SRC_CUDA: &str = "
 extern \"C\" __global__ void reduce_kernel(const DTYPE* input, DTYPE* output) {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
@@ -460,5 +508,255 @@ impl IRTransform for CodegenReduction {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bullet_compiler::{
+        ir::NodeId,
+        tensor::{IRBuilder, TValue, transform::rewriterules::RewritePass},
+    };
+
+    /// `(batch, m, n, k, lhs col-major, rhs col-major)`
+    type Case = (usize, usize, usize, usize, bool, bool);
+
+    const SPLIT: [Case; 10] = [
+        (2, 3, 5, 4096, true, false),
+        (2, 8, 4, 4096, true, false),
+        (1, 1, 5, 6144, false, false),
+        (2, 3, 1, 4096, true, true),
+        (1, 1, 1, 4096, true, true),
+        // Both operands degenerate and relaid out at once.
+        (1, 1, 1, 4096, false, true),
+        (2, 1, 1, 4096, false, true),
+        // Divisibility stops splitting early, leaving an odd chunk.
+        (1, 3, 5, 4098, true, false),
+        // Non-power-of-two chunk.
+        (1, 2, 3, 4608, true, false),
+        // Capped at 256 splits.
+        (1, 1, 1, 1 << 20, true, false),
+    ];
+
+    const NO_SPLIT: [Case; 5] = [
+        (1, 3, 5, 4096, false, false),
+        (1, 3, 5, 4096, true, true),
+        (1, 3, 5, 4097, true, false),
+        (1, 3, 5, 2048, true, false),
+        (64, 1, 1, 4096, true, false),
+    ];
+
+    fn build((batch, m, n, k, col_a, col_b): Case) -> (TensorIR, [(NodeId, TValue); 2]) {
+        let builder = IRBuilder::default();
+        let a = builder.add_input(batch * m * k, DType::F32);
+        let b = builder.add_input(batch * k * n, DType::F32);
+        let mm = Matmul::new(
+            DType::F32,
+            batch,
+            MatrixLayout { rows: m.into(), cols: k.into(), col_mjr: col_a },
+            MatrixLayout { rows: k.into(), cols: n.into(), col_mjr: col_b },
+        )
+        .unwrap();
+        let out = builder.add_op([a, b], mm).unwrap()[0];
+        // Small integers give exact FP32 sums in either accumulation order.
+        let inputs = [
+            (a.node(), TValue::F32((0..batch * m * k).map(|i| (i % 7) as f32 - 3.0).collect())),
+            (b.node(), TValue::F32((0..batch * k * n).map(|i| (i % 11) as f32 - 5.0).collect())),
+        ];
+        (builder.build([out]), inputs)
+    }
+
+    fn compare(case: Case, split: bool) {
+        let (mut ir, inputs) = build(case);
+        let expected = ir.evaluate(inputs.clone()).unwrap().unwrap();
+        ir.transform(RewritePass(SplitK)).unwrap();
+        ir.check_valid().unwrap();
+        assert_eq!(
+            ir.operations().iter().any(|op| op.data().downcast::<ReduceAcrossDimension>().is_some()),
+            split,
+            "{case:?}"
+        );
+        assert_eq!(ir.evaluate(inputs).unwrap().unwrap(), expected);
+    }
+
+    fn factor((batch, m, n, k, col_a, col_b): Case) -> Option<usize> {
+        let lhs = MatrixLayout { rows: m.into(), cols: k.into(), col_mjr: col_a };
+        let rhs = MatrixLayout { rows: k.into(), cols: n.into(), col_mjr: col_b };
+        split_k_factor(&Matmul::new(DType::F32, batch, lhs, rhs).unwrap())
+    }
+
+    #[test]
+    fn split_k_factor_boundaries() {
+        // Reduction length
+        assert_eq!(factor((1, 3, 5, 4095, true, false)), None);
+        assert_eq!(factor((1, 3, 5, 4096, true, false)), Some(8));
+        // Split count and chunk length caps
+        assert_eq!(factor((1, 1, 1, 1 << 20, true, false)), Some(256));
+        assert_eq!(factor((1, 3, 5, 4098, true, false)), Some(2));
+        assert_eq!(factor((1, 3, 5, 4608, true, false)), Some(8));
+        // Output size
+        assert_eq!(factor((1, 256, 256, 4096, true, false)), Some(8));
+        assert_eq!(factor((1, 257, 256, 4096, true, false)), None);
+        // Grid occupancy
+        assert_eq!(factor((63, 1, 1, 4096, true, false)), Some(8));
+        assert_eq!(factor((64, 1, 1, 4096, true, false)), None);
+        // Temporary storage: the largest single output exactly fills 64 MiB with
+        // 256 splits, but batching shrinks the split count.
+        assert_eq!(factor((1, 256, 256, 1 << 20, true, false)), Some(256));
+        assert_eq!(factor((4, 256, 256, 1 << 20, true, false)), Some(64));
+        // Dtype
+        let layout = MatrixLayout { rows: 1.into(), cols: 4096.into(), col_mjr: true };
+        assert_eq!(split_k_factor(&Matmul::new(DType::I32, 1, layout, layout.transpose()).unwrap()), None);
+    }
+
+    #[test]
+    fn split_k_partials_are_not_split_again() {
+        for case in SPLIT {
+            let (mut ir, _) = build(case);
+            ir.transform(RewritePass(SplitK)).unwrap();
+            for op in ir.operations() {
+                if let Some(mm) = op.data().downcast::<Matmul>() {
+                    assert_eq!(split_k_factor(mm), None, "{case:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn split_k_preserves_batched_products_and_degenerate_layouts() {
+        SPLIT.into_iter().for_each(|case| compare(case, true));
+    }
+
+    #[test]
+    fn split_k_keeps_unsupported_layouts_and_short_or_indivisible_reductions() {
+        NO_SPLIT.into_iter().for_each(|case| compare(case, false));
+    }
+
+    /// `(outer, dimen, inner, expect split)` for a sum across `dimen`.
+    const REDUCE: [(usize, usize, usize, bool); 4] = [
+        // Bias gradient style: summing a long batch dimension of row-major features.
+        (1, 16384, 8, true),
+        (2, 4096, 3, true),
+        (1, 8192, 1, true),
+        // Lowers to a col-major rhs with several columns.
+        (3, 4096, 1, false),
+    ];
+
+    fn build_reduce(outer: usize, dimen: usize, inner: usize) -> (TensorIR, [(NodeId, TValue); 1]) {
+        let builder = IRBuilder::default();
+        let x = builder.add_input(outer * dimen * inner, DType::F32);
+        let reduce = ReduceAcrossDimension::new(DType::F32, [outer, dimen, inner], 1, Reduction::Sum).unwrap();
+        let out = builder.add_op([x], reduce).unwrap()[0];
+        let inputs = [(x.node(), TValue::F32((0..outer * dimen * inner).map(|i| (i % 13) as f32 - 6.0).collect()))];
+        (builder.build([out]), inputs)
+    }
+
+    #[test]
+    fn split_k_applies_to_lowered_sum_reductions() {
+        for (outer, dimen, inner, split) in REDUCE {
+            let (mut ir, inputs) = build_reduce(outer, dimen, inner);
+            let expected = ir.evaluate(inputs.clone()).unwrap().unwrap();
+            ir.transform(RewritePass(ReduceToMatmul)).unwrap();
+            ir.transform(RewritePass(SplitK)).unwrap();
+            ir.check_valid().unwrap();
+            let reduced = ir.operations().iter().any(|op| op.data().downcast::<ReduceAcrossDimension>().is_some());
+            assert_eq!(reduced, split, "{:?}", (outer, dimen, inner));
+            assert_eq!(ir.evaluate(inputs).unwrap().unwrap(), expected);
+        }
+    }
+
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
+    fn run_device<G: crate::runtime::Gpu>(
+        device: &Arc<crate::runtime::Device<G>>,
+        stream: &Arc<crate::runtime::Stream<G>>,
+        ir: TensorIR,
+        inputs: impl IntoIterator<Item = (NodeId, TValue)>,
+        expected: &BTreeMap<NodeId, TValue>,
+        label: &str,
+    ) -> Result<(), G::Error> {
+        use crate::buffer::Buffer;
+
+        let mut bufs = BTreeMap::new();
+        for (id, value) in inputs {
+            bufs.insert(id, Buffer::from_host(device, &value)?);
+        }
+        for (&id, value) in expected {
+            bufs.insert(id, Buffer::zeroed(device, value.dtype(), value.size())?);
+        }
+
+        let mut func = Function::new(device.clone(), ir).unwrap();
+        func.prealloc()?;
+        func.execute(stream.clone(), &bufs)?.value()?;
+        for (&id, value) in expected {
+            assert_eq!(&bufs[&id].to_host()?, value, "{label}");
+        }
+
+        Ok(())
+    }
+
+    /// Exercise the full lowering pipeline. SplitK is only enabled on ROCm, so
+    /// also apply it up front to run partial-product GEMMs and their reduction
+    /// on every backend.
+    #[cfg(any(feature = "cuda", feature = "rocm", feature = "metal"))]
+    fn compare_device<G: crate::runtime::Gpu>() -> Result<(), G::Error> {
+        let device = crate::runtime::Device::<G>::new(0)?;
+        let stream = device.new_stream()?;
+
+        for case in SPLIT.into_iter().chain(NO_SPLIT) {
+            for presplit in [false, true] {
+                let (mut ir, inputs) = build(case);
+                let expected = ir.evaluate(inputs.clone()).unwrap().unwrap();
+                if presplit {
+                    ir.transform(RewritePass(SplitK)).unwrap();
+                }
+                run_device(&device, &stream, ir, inputs, &expected, &format!("{case:?} presplit={presplit}"))?;
+            }
+        }
+
+        for (outer, dimen, inner, _) in REDUCE {
+            for presplit in [false, true] {
+                let (mut ir, inputs) = build_reduce(outer, dimen, inner);
+                let expected = ir.evaluate(inputs.clone()).unwrap().unwrap();
+                if presplit {
+                    ir.transform(RewritePass(ReduceToMatmul)).unwrap();
+                    ir.transform(RewritePass(SplitK)).unwrap();
+                }
+                let label = format!("reduce {:?} presplit={presplit}", (outer, dimen, inner));
+                run_device(&device, &stream, ir, inputs, &expected, &label)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
+    mod cuda {
+        use crate::runtime::cuda::{Cuda, CudaError};
+
+        #[test]
+        fn split_k_device() -> Result<(), CudaError> {
+            super::compare_device::<Cuda>()
+        }
+    }
+
+    #[cfg(feature = "rocm")]
+    mod rocm {
+        use crate::runtime::rocm::{ROCm, ROCmError};
+
+        #[test]
+        fn split_k_device() -> Result<(), ROCmError> {
+            super::compare_device::<ROCm>()
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    mod metal {
+        use crate::runtime::metal::{Metal, MetalError};
+
+        #[test]
+        fn split_k_device() -> Result<(), MetalError> {
+            super::compare_device::<Metal>()
+        }
     }
 }
