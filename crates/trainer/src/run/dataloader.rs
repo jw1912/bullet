@@ -1,12 +1,12 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     mem,
     sync::{Arc, Mutex},
 };
 
-use bullet_compiler::tensor::TValue;
+use bullet_compiler::tensor::DType;
 use bullet_gpu::{
-    buffer::{Buffer, SyncOnValue},
+    buffer::{Buffer, PinnedBuffer, SyncOnValue},
     runtime::{Device, Gpu, Stream},
 };
 
@@ -20,48 +20,49 @@ pub enum DataLoadingError {
 }
 
 pub trait DataLoader: Send + Sync + 'static {
-    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
+    fn map_batches<G: Gpu, F: FnMut(PreparedBatchHost<G>) -> bool>(
         self,
+        pool: &Arc<HostPool<G>>,
         start: Step,
         batch_size: usize,
         f: F,
     ) -> Result<(), DataLoadingError>;
 }
 
-pub struct PreparedBatchHost {
-    pub inputs: BTreeMap<String, TValue>,
-    pool: Arc<HostPool>,
+pub struct PreparedBatchHost<G: Gpu> {
+    pub inputs: BTreeMap<String, PinnedBuffer<G>>,
+    pool: Arc<HostPool<G>>,
 }
 
-impl PreparedBatchHost {
-    pub fn new(pool: Arc<HostPool>, inputs: BTreeMap<String, TValue>) -> Self {
+impl<G: Gpu> PreparedBatchHost<G> {
+    pub fn new(pool: Arc<HostPool<G>>, inputs: BTreeMap<String, PinnedBuffer<G>>) -> Self {
         Self { inputs, pool }
     }
 
-    pub fn copy_to_device_async<'a, G: Gpu>(
+    pub fn copy_to_device_async<'a>(
         &'a self,
         stream: &Arc<Stream<G>>,
         tensors: &TensorMap<G>,
-    ) -> Result<Vec<SyncOnValue<G, &'a TValue>>, G::Error> {
+    ) -> Result<Vec<SyncOnValue<G, &'a PinnedBuffer<G>>>, G::Error> {
         let mut syncs = Vec::new();
 
         for (id, tensor) in tensors {
             let value = self.inputs.get(id).ok_or("Missing input!".into())?;
-            syncs.push(tensor.copy_from_host_async(stream, value)?);
+            syncs.push(tensor.copy_from_pinned_async(stream, value)?);
         }
 
         Ok(syncs)
     }
 
-    pub fn to_device<G: Gpu>(self, device: &Arc<Device<G>>) -> Result<TensorMap<G>, G::Error> {
+    pub fn to_device(self, device: &Arc<Device<G>>) -> Result<TensorMap<G>, G::Error> {
         self.inputs
             .iter()
-            .map(|(id, value)| Buffer::from_host(device, value).map(|tensor| (id.clone(), tensor)))
+            .map(|(id, value)| Buffer::from_pinned(device, value).map(|tensor| (id.clone(), tensor)))
             .collect()
     }
 }
 
-impl Drop for PreparedBatchHost {
+impl<G: Gpu> Drop for PreparedBatchHost<G> {
     fn drop(&mut self) {
         for (_, value) in mem::take(&mut self.inputs) {
             self.pool.give(value);
@@ -69,50 +70,40 @@ impl Drop for PreparedBatchHost {
     }
 }
 
-#[derive(Default)]
-struct Pool<T> {
-    free: Mutex<BTreeMap<usize, Vec<Vec<T>>>>,
+type FreeList<G> = HashMap<(DType, usize), Vec<PinnedBuffer<G>>>;
+
+/// Pool of pinned host buffers for preparing batches in, as pinned
+/// allocations are expensive and batches are generally the same size
+pub struct HostPool<G: Gpu> {
+    device: Arc<Device<G>>,
+    free: Mutex<FreeList<G>>,
 }
 
-impl<T> Pool<T> {
-    fn give(&self, value: Vec<T>) {
-        self.free.lock().unwrap().entry(value.len().next_power_of_two()).or_default().push(value);
-    }
-}
-
-impl<E: Clone + Default> Pool<E> {
-    fn take_vec(&self, len: usize) -> Vec<E> {
-        let capacity = len.next_power_of_two();
-        let cached = self.free.lock().unwrap().get_mut(&capacity).and_then(Vec::pop);
-        let mut value = cached.unwrap_or_default();
-
-        if len > value.capacity() {
-            value.reserve_exact(len - value.len());
-        }
-        value.resize(len, E::default());
-        value
-    }
-}
-
-#[derive(Default)]
-pub struct HostPool {
-    i32s: Pool<i32>,
-    f32s: Pool<f32>,
-}
-
-impl HostPool {
-    pub fn take_i32(&self, len: usize) -> Vec<i32> {
-        self.i32s.take_vec(len)
+impl<G: Gpu> HostPool<G> {
+    pub fn new(device: Arc<Device<G>>) -> Arc<Self> {
+        Arc::new(Self { device, free: Mutex::default() })
     }
 
-    pub fn take_f32(&self, len: usize) -> Vec<f32> {
-        self.f32s.take_vec(len)
+    pub fn device(&self) -> Arc<Device<G>> {
+        self.device.clone()
     }
 
-    fn give(&self, value: TValue) {
-        match value {
-            TValue::I32(v) => self.i32s.give(v),
-            TValue::F32(v) => self.f32s.give(v),
-        }
+    /// Take a buffer of the given dtype and size from the pool, allocating
+    /// a new one if needed. Contents of reused buffers are unspecified.
+    pub fn take(&self, dtype: DType, size: usize) -> Result<PinnedBuffer<G>, G::Error> {
+        let capacity = size.next_power_of_two();
+        let cached = self.free.lock().unwrap().get_mut(&(dtype, capacity)).and_then(Vec::pop);
+
+        let mut value = match cached {
+            Some(value) => value,
+            None => PinnedBuffer::zeroed(&self.device, dtype, capacity)?,
+        };
+
+        value.set_size(size)?;
+        Ok(value)
+    }
+
+    fn give(&self, value: PinnedBuffer<G>) {
+        self.free.lock().unwrap().entry((value.dtype(), value.capacity())).or_default().push(value);
     }
 }

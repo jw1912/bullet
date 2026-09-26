@@ -2,9 +2,13 @@ mod fixed_size;
 
 pub use fixed_size::{FixedSizeData, FixedSizeDataReader};
 
+use std::sync::Arc;
+
+use bullet_gpu::runtime::Gpu;
+
 use crate::{
     model::ModelInputsMapper,
-    run::{DataLoader, DataLoadingError, PreparedBatchHost, Step},
+    run::{DataLoader, DataLoadingError, HostPool, PreparedBatchHost, Step},
 };
 
 pub trait DataReader<T>: Clone + Send + Sync + 'static {
@@ -28,14 +32,21 @@ where
     R: DataReader<D>,
     D: Clone + Send + Sync + 'static,
 {
-    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
+    fn map_batches<G: Gpu, F: FnMut(PreparedBatchHost<G>) -> bool>(
         self,
+        pool: &Arc<HostPool<G>>,
         start: Step,
         batch_size: usize,
         mut f: F,
     ) -> Result<(), DataLoadingError> {
         let mut step = start;
         let mut incomplete_buf = Vec::new();
+        let mut error = None;
+
+        let mut map = |data: &[D], step: Step| {
+            let prepared = self.mapper.map(pool, data, step, self.threads);
+            prepared.map_err(|e| error = Some(DataLoadingError::Message(format!("{e:?}")))).ok()
+        };
 
         self.reader.read_chunks(batch_size * start.total_batches(), |chunk| {
             let remainder = if !incomplete_buf.is_empty() {
@@ -43,7 +54,7 @@ where
 
                 if chunk.len() >= remainder {
                     incomplete_buf.extend_from_slice(&chunk[..remainder]);
-                    let prepared = self.mapper.map(&incomplete_buf, step, self.threads);
+                    let Some(prepared) = map(&incomplete_buf, step) else { return true };
                     step.step();
 
                     if f(prepared) {
@@ -65,7 +76,7 @@ where
                 incomplete_buf.extend_from_slice(chunks.remainder());
 
                 for data in chunks {
-                    let prepared = self.mapper.map(data, step, self.threads);
+                    let Some(prepared) = map(data, step) else { return true };
                     step.step();
 
                     if f(prepared) {
@@ -77,6 +88,6 @@ where
             false
         });
 
-        Ok(())
+        error.map_or(Ok(()), Err)
     }
 }

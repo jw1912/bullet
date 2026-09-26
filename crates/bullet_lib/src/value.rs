@@ -10,7 +10,7 @@ use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
-    run::{self, Step, logger},
+    run::{self, HostPool, Step, logger},
 };
 
 use crate::{
@@ -215,7 +215,8 @@ where
         let pos = format!("{fen} | 0 | 0.0").parse::<Inp::RequiredDataType>().unwrap();
 
         let mapper = self.state.make_mapper(1.0, wdl::ConstantWDL { value: 1.0 });
-        let host_data = mapper.map(&[pos], Step::default(), 1);
+        let pool = HostPool::new(self.optimiser.device());
+        let host_data = mapper.map(&pool, &[pos], Step::default(), 1).unwrap();
 
         let device_data = host_data.to_device(&self.optimiser.device()).unwrap();
 

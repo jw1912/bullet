@@ -54,7 +54,11 @@ pub fn measure_max_cpu_throughput(dataloader: impl DataLoader, steps: TrainingSt
     let mut sb_timer = Instant::now();
     let mut step = Step::from(steps);
 
-    dataloader.map_batches(step, steps.batch_size, |_| {
+    // Batches are never sent to a device, so there is no need for real pinned memory
+    let device = Device::<runtime::mock::MockGpu>::new(0).map_err(DataLoadingError::Message)?;
+    let pool = HostPool::new(device);
+
+    dataloader.map_batches(&pool, step, steps.batch_size, |_| {
         if step.batch() == steps.batches_per_superbatch - 1 {
             let sb = step.superbatch();
             let total_time = timer.elapsed().as_secs_f32();
@@ -91,11 +95,12 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
     );
 
     let steps = schedule.steps;
-    let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost>(32);
+    let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost<G>>(32);
+    let pool = HostPool::new(device.clone());
     let dataloader = thread::spawn(move || {
         let mut step = Step::from(steps);
 
-        dataloader.map_batches(step, steps.batch_size, |batch| {
+        dataloader.map_batches(&pool, step, steps.batch_size, |batch| {
             sender.send(batch).unwrap();
             step.step();
             step.finished()
