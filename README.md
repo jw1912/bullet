@@ -15,6 +15,7 @@ Most people simply clone the repo and edit one of the [examples](/examples) to t
 - [`simple`](examples/simple.rs) - a basic `(768 -> N)x2 -> 1` network, with example inference code, that uses `ValueTrainerBuilder`
 - [`progression`](examples/progression) - from a first network to input buckets, output buckets and multiple layers
 - [`advanced`](examples/advanced) - a SOTA training example that does not use `ValueTrainerBuilder`, instead using `bullet-trainer` directly
+- [`ataxx`](examples/ataxx.rs) - a non-chess example, where a simple custom data format is defined
 
 If you want to create your own example file to ease pulling from upstream, you need to add the example to [`bullet_lib`'s `Cargo.toml`](crates/bullet_lib/Cargo.toml).
 
@@ -24,18 +25,6 @@ bullet = { git = "https://github.com/jw1912/bullet", package = "bullet_lib" }
 ```
 
 Specific API documentation is covered by Rust's docstrings. You can create local documentations with `cargo doc`.
-
-### Crates
-
-| Crate | Description |
-| --- | --- |
-| [`bullet_lib`](crates/bullet_lib) | High-level NNUE trainer, with chess-specific inputs, outputs and data loaders |
-| [`bullet-trainer`](crates/trainer) | General model definition, optimisers, data loading and training loop |
-| [`bullet-compiler`](crates/compiler) | Creates and optimises tensor graphs |
-| [`bullet-gpu`](crates/gpu) | Compiles and executes tensor graphs on CUDA, ROCm and Metal devices |
-| [`bullet-utils`](crates/utils) | CLI for converting, shuffling, interleaving and validating training data |
-
-`bullet_lib` covers most NNUE use cases. For anything else, such as other games, `bullet-trainer` can be used directly. See the [ataxx example](examples/ataxx.rs).
 
 ### Help/Feedback
 
