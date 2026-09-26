@@ -28,6 +28,6 @@ Specific API documentation is covered by Rust's docstrings. You can create local
 
 ### Help/Feedback
 
-- Please open an issue to file any bug reports/feature requests.
-- Feel free to use the dedicated `#bullet` channel in the [Engine Programming](https://discord.com/invite/F6W6mMsTGN) discord server if you run into any issues.
-- For general training discussion the Engine Programming non-`#bullet` channels are appropriate, or `#engines-dev` in the [Stockfish](https://discord.gg/GWDRS3kU6R) discord.
+Open an issue to file any simple bug reports/feature requests.
+The `#bullet` channel in the [Engine Programming](https://discord.com/invite/F6W6mMsTGN) discord server exists for help with the use of bullet and discussing feature requests, development and/or potential bugs.
+It is **not** for questions about how you should train your network - for that refer to `#engines-dev` in [Stockfish](https://discord.gg/GWDRS3kU6R) or `#nnue-dev` in [Alpha-Beta](https://discord.gg/t3aX6XkPaV).
