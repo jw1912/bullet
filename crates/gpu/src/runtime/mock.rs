@@ -23,6 +23,11 @@ pub struct MockPtr {
     bytes: usize,
 }
 
+/// Page-aligned (and never zero-sized) layout for allocations
+fn layout(bytes: usize) -> Layout {
+    Layout::from_size_align(bytes.max(1), 4096).unwrap()
+}
+
 #[allow(unused)]
 impl GpuBindings for MockGpu {
     type Err = String;
@@ -71,7 +76,7 @@ impl GpuBindings for MockGpu {
     }
 
     unsafe fn context_malloc(bytes: usize) -> Result<MockPtr, String> {
-        let layout = Layout::array::<u8>(bytes).unwrap();
+        let layout = layout(bytes);
         let ptr = unsafe { alloc_zeroed(layout) };
         if ptr.is_null() {
             handle_alloc_error(layout);
@@ -80,8 +85,7 @@ impl GpuBindings for MockGpu {
     }
 
     unsafe fn context_free(dev_ptr: MockPtr) -> MockResult {
-        let layout = Layout::array::<u8>(dev_ptr.bytes).unwrap();
-        unsafe { dealloc(dev_ptr.ptr, layout) };
+        unsafe { dealloc(dev_ptr.ptr, layout(dev_ptr.bytes)) };
         Ok(())
     }
 
@@ -119,6 +123,14 @@ impl GpuBindings for MockGpu {
         }
 
         Ok(())
+    }
+
+    unsafe fn host_malloc(bytes: usize) -> Result<*mut c_void, String> {
+        unsafe { Self::context_malloc(bytes).map(|dev_ptr| dev_ptr.ptr.cast()) }
+    }
+
+    unsafe fn host_free(ptr: *mut c_void, bytes: usize) -> MockResult {
+        unsafe { Self::context_free(MockPtr { ptr: ptr.cast(), bytes }) }
     }
 
     unsafe fn stream_create() -> MockResult {
