@@ -1,5 +1,3 @@
-pub use bullet_trainer::run::{TrainingError, events};
-
 pub mod schedule;
 pub mod settings;
 

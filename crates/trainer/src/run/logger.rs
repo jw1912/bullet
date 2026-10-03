@@ -24,8 +24,8 @@ impl ConsoleObserver {
 
     pub fn on_event(&mut self, event: &TrainingEvent) {
         match event {
-            TrainingEvent::RunStarted(event) => {
-                self.steps = event.steps;
+            TrainingEvent::RunStarted { steps, device_name, device_arch, .. } => {
+                self.steps = *steps;
                 self.previous_learning_rate = None;
 
                 clear_colours();
@@ -33,52 +33,44 @@ impl ConsoleObserver {
                 println!(
                     "{}",
                     ansi(
-                        format!(
-                            "Training on {} ({})",
-                            event.device_name,
-                            event.device_arch.as_deref().unwrap_or("unknown")
-                        ),
+                        format!("Training on {} ({})", device_name, device_arch.as_deref().unwrap_or("unknown")),
                         "34;1"
                     )
                 );
             }
 
-            TrainingEvent::BatchCompleted(event) => {
-                if event.step.batch() == 0 {
+            TrainingEvent::BatchCompleted { step, learning_rate, superbatch_elapsed, .. } => {
+                if step.batch() == 0 {
                     if let Some(previous) = self.previous_learning_rate {
-                        if event.learning_rate < previous {
-                            println!("LR dropped to {}", ansi(event.learning_rate, num_cs()));
-                        } else if event.learning_rate > previous {
-                            println!("LR increased to {}", ansi(event.learning_rate, num_cs()));
+                        if *learning_rate < previous {
+                            println!("LR dropped to {}", ansi(*learning_rate, num_cs()));
+                        } else if *learning_rate > previous {
+                            println!("LR increased to {}", ansi(*learning_rate, num_cs()));
                         }
                     }
                 }
 
-                self.previous_learning_rate = Some(event.learning_rate);
+                self.previous_learning_rate = Some(*learning_rate);
 
-                if self.log_rate != 0 && event.step.batch().is_multiple_of(self.log_rate) {
-                    report_progress(
-                        event.step,
-                        event.superbatch_elapsed,
-                        (event.step.batch() + 1) * self.steps.batch_size,
-                    );
+                if self.log_rate != 0 && step.batch().is_multiple_of(self.log_rate) {
+                    report_progress(*step, *superbatch_elapsed, (step.batch() + 1) * self.steps.batch_size);
                 }
             }
 
-            TrainingEvent::SuperbatchCompleted(event) => {
+            TrainingEvent::SuperbatchCompleted { step, loss, elapsed, superbatch_elapsed, .. } => {
                 report_superbatch_finished(
-                    event.step.superbatch(),
-                    event.loss,
-                    event.superbatch_elapsed.as_secs_f32(),
-                    event.elapsed.as_secs_f32(),
+                    step.superbatch(),
+                    *loss,
+                    superbatch_elapsed.as_secs_f32(),
+                    elapsed.as_secs_f32(),
                     self.steps.batch_size * self.steps.batches_per_superbatch,
                 );
 
-                report_time_left(self.steps, event.step.superbatch(), event.elapsed.as_secs_f32());
+                report_time_left(self.steps, step.superbatch(), elapsed.as_secs_f32());
             }
 
-            TrainingEvent::RunCompleted(event) => {
-                let (hours, minutes, seconds) = seconds_to_hms(event.elapsed.as_secs() as u32);
+            TrainingEvent::RunCompleted { elapsed, .. } => {
+                let (hours, minutes, seconds) = seconds_to_hms(elapsed.as_secs() as u32);
 
                 println!(
                     "Total Training Time: {}h {}m {}s",
@@ -88,7 +80,7 @@ impl ConsoleObserver {
                 );
             }
 
-            TrainingEvent::TrainingReady(_) => {}
+            TrainingEvent::TrainingReady { .. } => {}
         }
     }
 }
@@ -117,9 +109,7 @@ fn esc() -> &'static str {
     if CBCS.load(SeqCst) { "\x1b[38;5;225m" } else { "" }
 }
 
-pub fn report_superbatch_progress(
-    step: Step, superbatch_timer: &Instant, superbatch_positions: usize
-) {
+pub fn report_superbatch_progress(step: Step, superbatch_timer: &Instant, superbatch_positions: usize) {
     report_progress(step, superbatch_timer.elapsed(), superbatch_positions);
 }
 
@@ -128,11 +118,7 @@ fn report_progress(step: Step, superbatch_time: Duration, superbatch_positions: 
     let superbatch_time = superbatch_time.as_secs_f32();
     let completed_batches = step.batch() + 1;
     let pct = completed_batches as f32 / step.batches_per_superbatch() as f32;
-    let pos_per_sec = if superbatch_time > 0.0 {
-        superbatch_positions as f32 / superbatch_time
-    } else {
-        0.0
-    };
+    let pos_per_sec = if superbatch_time > 0.0 { superbatch_positions as f32 / superbatch_time } else { 0.0 };
 
     let seconds = superbatch_time / pct - superbatch_time;
 

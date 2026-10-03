@@ -19,8 +19,6 @@ use bullet_gpu::{
     runtime::{self, Device, Gpu},
 };
 
-use self::events::{BatchCompleted, RunCompleted, RunStarted, SuperbatchCompleted, TrainingReady};
-
 use crate::optimiser::{Optimiser, OptimiserState};
 
 #[cfg(not(any(feature = "cuda", feature = "rocm")))]
@@ -90,16 +88,9 @@ pub fn train<G: Gpu, O: OptimiserState<G>>(
 ) -> Result<(), TrainingError<G>> {
     let mut console = logger::ConsoleObserver::new(schedule.steps, schedule.log_rate);
 
-    train_with_observer(
-        optimiser,
-        schedule,
-        dataloader,
-        batch_callback,
-        superbatch_callback,
-        &mut |event| {
-            console.on_event(event);
-        }
-    )
+    train_with_observer(optimiser, schedule, dataloader, batch_callback, superbatch_callback, &mut |event| {
+        console.on_event(event);
+    })
 }
 
 pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
@@ -116,23 +107,25 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
 
     let steps = schedule.steps;
 
-    if  steps.batch_size             == 0                    ||
-        steps.batches_per_superbatch == 0                    ||
-        steps.start_superbatch       == 0                    ||
-        steps.start_superbatch       >  steps.end_superbatch ||
-        steps.  end_superbatch       == usize::MAX           ||
-        steps.  end_superbatch
+    if steps.batch_size == 0
+        || steps.batches_per_superbatch == 0
+        || steps.start_superbatch == 0
+        || steps.start_superbatch > steps.end_superbatch
+        || steps.end_superbatch == usize::MAX
+        || steps
+            .end_superbatch
             .checked_mul(steps.batches_per_superbatch)
-            .and_then(|batches| batches.checked_mul(steps.batch_size)).is_none()
+            .and_then(|batches| batches.checked_mul(steps.batch_size))
+            .is_none()
     {
         return Err(TrainingError::InvalidSchedule);
     }
 
-    observer(&TrainingEvent::RunStarted(RunStarted {
+    observer(&TrainingEvent::RunStarted {
         steps,
         device_name: props.name().to_owned(),
         device_arch: props.arch().map(str::to_owned),
-    }));
+    });
 
     let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost<G>>(32);
 
@@ -141,7 +134,9 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         let mut step = Step::from(steps);
 
         dataloader.map_batches(&pool, step, steps.batch_size, |batch| {
-            if sender.send(batch).is_err() { return true; }
+            if sender.send(batch).is_err() {
+                return true;
+            }
 
             step.step();
             step.finished()
@@ -183,11 +178,7 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
     let first_batch = match receiver.recv() {
         Ok(batch) => batch,
         Err(_) => {
-            dataloader
-                .join()
-                .map_err(
-                    |_| DataLoadingError::Message("Data loader panicked".into())
-                )??;
+            dataloader.join().map_err(|_| DataLoadingError::Message("Data loader panicked".into()))??;
 
             return Err(DataLoadingError::NoBatchesReceived.into());
         }
@@ -219,7 +210,7 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
     let mut running_loss = 0.0;
     let mut completed_batches = 0;
 
-    observer(&TrainingEvent::TrainingReady(TrainingReady { setup_time: timer.elapsed() }));
+    observer(&TrainingEvent::TrainingReady { setup_time: timer.elapsed() });
 
     while batch_queued {
         if step.finished() {
@@ -271,7 +262,7 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         running_loss += error;
         completed_batches += 1;
 
-        observer(&TrainingEvent::BatchCompleted(BatchCompleted {
+        observer(&TrainingEvent::BatchCompleted {
             step,
             loss: error,
             learning_rate: lrate,
@@ -279,7 +270,7 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
             completed_positions: completed_batches * steps.batch_size,
             elapsed: timer.elapsed(),
             superbatch_elapsed: superbatch_timer.elapsed(),
-        }));
+        });
 
         batch_callback(optimiser, step, error);
 
@@ -287,14 +278,14 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
             let error = running_loss / steps.batches_per_superbatch as f32;
             running_loss = 0.0;
 
-            observer(&TrainingEvent::SuperbatchCompleted(SuperbatchCompleted {
+            observer(&TrainingEvent::SuperbatchCompleted {
                 step,
                 loss: error,
                 completed_batches,
                 completed_positions: completed_batches * steps.batch_size,
                 elapsed: timer.elapsed(),
                 superbatch_elapsed: superbatch_timer.elapsed(),
-            }));
+            });
 
             superbatch_callback(optimiser, step);
 
@@ -307,18 +298,14 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
     dataloader.join().map_err(|_| DataLoadingError::Message("Data loader panicked".into()))??;
 
     if !step.finished() {
-        return Err(
-            DataLoadingError::Message(
-                "Data loader ended before all scheduled batches completed".into()
-            ).into()
-        );
+        return Err(DataLoadingError::Message("Data loader ended before all scheduled batches completed".into()).into());
     }
 
-    observer(&TrainingEvent::RunCompleted(RunCompleted {
+    observer(&TrainingEvent::RunCompleted {
         completed_batches,
         completed_positions: completed_batches * steps.batch_size,
         elapsed: timer.elapsed(),
-    }));
+    });
 
     Ok(())
 }
