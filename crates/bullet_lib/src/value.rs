@@ -10,7 +10,7 @@ use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
     optimiser::{Optimiser, OptimiserState},
     reader::{DataReader, ReadMapLoader},
-    run::{self, HostPool, Step, logger},
+    run::{self, HostPool, Step, events::TrainingEvent, logger},
 };
 
 use crate::{
@@ -150,6 +150,29 @@ where
         schedule.display();
         settings.display();
 
+        let mut observer = logger::ConsoleObserver::new(schedule.steps, 128);
+
+        self.run_impl(schedule, settings, dataloader, &mut |event| observer.on_event(event), true).unwrap();
+    }
+
+    pub fn run_with_observer(
+        &mut self,
+        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
+        settings: &LocalSettings,
+        dataloader: &impl DataReader<Inp::RequiredDataType>,
+        observer: &mut (impl FnMut(&TrainingEvent) + ?Sized),
+    ) -> Result<(), run::TrainingError<ExecutionContext>> {
+        self.run_impl(schedule, settings, dataloader, observer, false)
+    }
+
+    fn run_impl(
+        &mut self,
+        schedule: &TrainingSchedule<impl LrScheduler, impl WdlScheduler>,
+        settings: &LocalSettings,
+        dataloader: &impl DataReader<Inp::RequiredDataType>,
+        observer: &mut (impl FnMut(&TrainingEvent) + ?Sized),
+        report_saves: bool,
+    ) -> Result<(), run::TrainingError<ExecutionContext>> {
         if settings.test_set.is_some() {
             println!(
                 "{}",
@@ -175,7 +198,7 @@ where
         let mut loss_sum = 0.0;
         let mut ticks_since_last = 0.0;
 
-        run::train(
+        run::train_with_observer(
             &mut self.optimiser,
             run::TrainingSchedule { steps, log_rate: 128, lr_schedule: lr_scheduler.boxed() },
             dataloader,
@@ -201,11 +224,11 @@ where
                     save::save_to_checkpoint(trainer, &saved_format, &path);
                     save::write_losses(&format!("{path}/log.txt"), &error_record.borrow());
 
-                    println!("Saved [{}]", logger::ansi(name, 31));
+                    if report_saves { println!("Saved [{}]", logger::ansi(name, 31)); }
                 }
             },
+            observer,
         )
-        .unwrap();
     }
 
     pub fn eval_raw_output(&mut self, fen: &str) -> Vec<f32>
