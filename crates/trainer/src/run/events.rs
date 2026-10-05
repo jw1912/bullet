@@ -12,21 +12,10 @@ pub enum TrainingEvent {
     TrainingReady { setup_time: Duration },
 
     #[non_exhaustive]
-    BatchCompleted {
-        step: Step,
-        loss: f32,
-        learning_rate: f32,
-        elapsed: Duration,
-        superbatch_elapsed: Duration
-    },
+    BatchCompleted { step: Step, loss: f32, learning_rate: f32, elapsed: Duration, superbatch_elapsed: Duration },
 
     #[non_exhaustive]
-    SuperbatchCompleted {
-        step: Step,
-        loss: f32,
-        elapsed: Duration,
-        superbatch_elapsed: Duration
-    },
+    SuperbatchCompleted { step: Step, loss: f32, elapsed: Duration, superbatch_elapsed: Duration },
 
     #[non_exhaustive]
     RunCompleted { elapsed: Duration },
