@@ -133,7 +133,7 @@ impl CanonicalisePass {
             }
 
             if !op.0.evaluate(consts.iter().collect(), tensors.iter_mut().collect()) {
-                //return Ok(None);
+                return Ok(None);
             }
 
             return Ok(Some(tensors.into_iter().map(Constant).collect()));
