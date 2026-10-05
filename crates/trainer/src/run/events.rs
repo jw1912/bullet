@@ -16,22 +16,18 @@ pub enum TrainingEvent {
         step: Step,
         loss: f32,
         learning_rate: f32,
-        completed_batches: usize,
-        completed_positions: usize,
         elapsed: Duration,
-        superbatch_elapsed: Duration,
+        superbatch_elapsed: Duration
     },
 
     #[non_exhaustive]
     SuperbatchCompleted {
         step: Step,
         loss: f32,
-        completed_batches: usize,
-        completed_positions: usize,
         elapsed: Duration,
-        superbatch_elapsed: Duration,
+        superbatch_elapsed: Duration
     },
 
     #[non_exhaustive]
-    RunCompleted { completed_batches: usize, completed_positions: usize, elapsed: Duration },
+    RunCompleted { elapsed: Duration },
 }

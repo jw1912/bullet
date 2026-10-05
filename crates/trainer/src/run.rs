@@ -208,7 +208,6 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
     let mut step = Step::from(steps);
     let mut superbatch_timer = Instant::now();
     let mut running_loss = 0.0;
-    let mut completed_batches = 0;
 
     observer(&TrainingEvent::TrainingReady { setup_time: timer.elapsed() });
 
@@ -260,14 +259,11 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         let error = loss / steps.batch_size as f32;
 
         running_loss += error;
-        completed_batches += 1;
 
         observer(&TrainingEvent::BatchCompleted {
             step,
             loss: error,
             learning_rate: lrate,
-            completed_batches,
-            completed_positions: completed_batches * steps.batch_size,
             elapsed: timer.elapsed(),
             superbatch_elapsed: superbatch_timer.elapsed(),
         });
@@ -281,8 +277,6 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
             observer(&TrainingEvent::SuperbatchCompleted {
                 step,
                 loss: error,
-                completed_batches,
-                completed_positions: completed_batches * steps.batch_size,
                 elapsed: timer.elapsed(),
                 superbatch_elapsed: superbatch_timer.elapsed(),
             });
@@ -301,11 +295,7 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         return Err(DataLoadingError::Message("Data loader ended before all scheduled batches completed".into()).into());
     }
 
-    observer(&TrainingEvent::RunCompleted {
-        completed_batches,
-        completed_positions: completed_batches * steps.batch_size,
-        elapsed: timer.elapsed(),
-    });
+    observer(&TrainingEvent::RunCompleted { elapsed: timer.elapsed() });
 
     Ok(())
 }
