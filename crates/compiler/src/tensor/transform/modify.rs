@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt, rc::Rc, sync::LazyLock};
+use std::{cell::RefCell, fmt, rc::Rc};
 
 use crate::{
     ir::{NodeId, OpId},
@@ -50,8 +50,7 @@ impl IRTransform for RemoveOperation {
 }
 
 fn check_edit(ir: &TensorIR) -> Result<(), IRTrace> {
-    static VALIDATE: LazyLock<bool> = LazyLock::new(|| std::env::var_os("BULLET_VALIDATE").is_some());
-    if *VALIDATE { ir.check_valid() } else { Ok(()) }
+    if ir.validate { ir.check_valid() } else { Ok(()) }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
