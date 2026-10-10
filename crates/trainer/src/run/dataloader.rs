@@ -47,7 +47,7 @@ impl<G: Gpu> PreparedBatchHost<G> {
         let mut syncs = Vec::new();
 
         for (id, tensor) in tensors {
-            let value = self.inputs.get(id).ok_or("Missing input!".into())?;
+            let value = self.inputs.get(id).ok_or_else(|| "Missing input!".into())?;
             syncs.push(tensor.copy_from_pinned_async(stream, value)?);
         }
 

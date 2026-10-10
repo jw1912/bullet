@@ -144,7 +144,7 @@ impl ModelWeights {
 
     pub fn write_to_device<G: Gpu>(&self, values: &TensorMap<G>) -> Result<(), G::Error> {
         for (id, val) in &self.stores {
-            values.get(id).ok_or(format!("No weight \"{id}\"!"))?.copy_from_host(&val.values)?;
+            values.get(id).ok_or_else(|| format!("No weight \"{id}\"!"))?.copy_from_host(&val.values)?;
         }
 
         Ok(())
@@ -152,7 +152,7 @@ impl ModelWeights {
 
     pub fn load_from_device<G: Gpu>(&mut self, values: &TensorMap<G>) -> Result<(), G::Error> {
         for (id, val) in &mut self.stores {
-            val.values = values.get(id).ok_or(format!("No weight \"{id}\"!"))?.to_host()?;
+            val.values = values.get(id).ok_or_else(|| format!("No weight \"{id}\"!"))?.to_host()?;
         }
 
         Ok(())

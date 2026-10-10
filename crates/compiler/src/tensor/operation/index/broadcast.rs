@@ -32,7 +32,7 @@ impl BroadcastAcrossDimension {
 
                 Self { dtype, outer, inner, repeats }
             })
-            .ok_or(format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into())
+            .ok_or_else(|| format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into())
     }
 
     pub fn with_new_dtype(&self, dtype: DType) -> Self {
