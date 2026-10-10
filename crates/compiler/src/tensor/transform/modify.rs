@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{cell::RefCell, fmt, rc::Rc, sync::LazyLock};
 
 use crate::{
     ir::{NodeId, OpId},
@@ -49,6 +49,11 @@ impl IRTransform for RemoveOperation {
     }
 }
 
+fn check_edit(ir: &TensorIR) -> Result<(), IRTrace> {
+    static VALIDATE: LazyLock<bool> = LazyLock::new(|| std::env::var_os("BULLET_VALIDATE").is_some());
+    if *VALIDATE { ir.check_valid() } else { Ok(()) }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SwapOutputs(pub NodeId, pub NodeId);
 
@@ -59,7 +64,7 @@ impl IRTransform for SwapOutputs {
         }
 
         ir.ir_mut().swap_outputs_no_cycle_check(self.0, self.1)?;
-        ir.check_valid()
+        check_edit(ir)
     }
 }
 
@@ -76,7 +81,7 @@ impl IRTransform for ReplaceInput {
         }
 
         ir.ir_mut().replace_input_no_cycle_check(self.new, self.old)?;
-        ir.check_valid()
+        check_edit(ir)
     }
 }
 
