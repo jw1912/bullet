@@ -59,7 +59,7 @@ impl IRTransform for SwapOutputs {
         }
 
         ir.ir_mut().swap_outputs_no_cycle_check(self.0, self.1)?;
-        ir.check_valid()
+        ir.debug_check_edit()
     }
 }
 
@@ -76,7 +76,7 @@ impl IRTransform for ReplaceInput {
         }
 
         ir.ir_mut().replace_input_no_cycle_check(self.new, self.old)?;
-        ir.check_valid()
+        ir.debug_check_edit()
     }
 }
 

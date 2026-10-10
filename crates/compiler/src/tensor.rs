@@ -34,6 +34,7 @@ impl TypeSystem for Tensor {
 pub struct TensorIR {
     ir: IR<Tensor>,
     outputs: BTreeSet<NodeId>,
+    debug: bool,
 }
 
 impl TensorIR {
@@ -185,6 +186,14 @@ impl TensorIR {
 
     pub fn check_valid(&self) -> Result<(), IRTrace> {
         self.ir.check_valid().map_err(IRTrace::Root)
+    }
+
+    pub fn set_debug(&mut self, debug: bool) {
+        self.debug = debug;
+    }
+
+    fn debug_check_edit(&self) -> Result<(), IRTrace> {
+        if self.debug { self.check_valid() } else { Ok(()) }
     }
 
     pub fn register_output(&mut self, node: NodeId) {

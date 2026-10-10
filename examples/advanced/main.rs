@@ -25,6 +25,7 @@ use bullet_trainer::{
     run::{DefaultDevice, HostPool, TrainingSchedule, TrainingSteps, train},
 };
 
+const DEBUG: bool = false;
 const NET_NAME: &str = "pawnocchio_new_relabeller";
 const READ_BUF_MB: usize = 8192;
 const READ_THREADS: usize = 8;
@@ -75,7 +76,7 @@ fn main() {
         .add_sparse("buckets", (OUTPUT_BUCKETS, 1), 1)
         .add_dense("targets", (1, 1));
 
-    let defn = ModelDefinition::build(
+    let mut defn = ModelDefinition::build(
         &inputs,
         |builder, (((((stm_pp, ntm_pp), stm_psqt), ntm_psqt), output_buckets), target)| {
             let l0_pp = builder.new_affine("l0/pp/", pp.num_inputs(), L1);
@@ -113,6 +114,8 @@ fn main() {
             (Some(loss.reduce_sum_batch()), vec![("output".to_string(), l3_out)])
         },
     );
+
+    defn.set_debug(DEBUG);
 
     let weights = ModelWeights::new(&defn, 12412421);
     let device = DefaultDevice::new(0).unwrap();
