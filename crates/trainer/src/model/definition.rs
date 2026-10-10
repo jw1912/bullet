@@ -34,6 +34,7 @@ pub struct ModelDefinition {
     ir: ModelIR,
     loss: Option<NodeId>,
     outputs: Vec<(NodeId, String)>,
+    debug: bool,
 }
 
 impl ModelDefinition {
@@ -56,7 +57,11 @@ impl ModelDefinition {
             assert_eq!(ir.node(loss).ty(), MType::new(false, 1, 1, Layout::Dense(DType::F32)));
         }
 
-        Self { ir, loss, outputs: outputs.into() }
+        Self { ir, loss, outputs: outputs.into(), debug: false }
+    }
+
+    pub fn set_debug(&mut self, debug: bool) {
+        self.debug = debug;
     }
 
     pub fn ir(&self) -> &ModelIR {
@@ -73,6 +78,7 @@ impl ModelDefinition {
 
     pub fn lower_forward(&self, batch_size: usize) -> Result<ModelFunctionDefinition, IRTrace> {
         let (mut fwd, map) = self.ir.lower(batch_size)?;
+        fwd.set_debug(self.debug);
 
         for (output, _) in &self.outputs {
             fwd.register_output(*map.get(output).unwrap());
@@ -91,6 +97,7 @@ impl ModelDefinition {
         batch_size: usize,
     ) -> Result<(ModelFunctionDefinition, BTreeMap<NodeId, NodeId>), IRTrace> {
         let (mut bwd, map) = self.ir.lower(batch_size)?;
+        bwd.set_debug(self.debug);
 
         let loss = self.loss.ok_or("Loss node not defined!")?;
         let loss = *map.get(&loss).unwrap();
