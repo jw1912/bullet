@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fmt::{self, Write},
 };
 
@@ -306,28 +306,29 @@ impl PointwiseIR {
     }
 
     pub fn eliminate_common_subexprs(&mut self) -> Result<(), IRTrace> {
-        while self.eliminate_single_common_subexpr()? {}
-        Ok(())
-    }
+        let mut seen: BTreeMap<Vec<NodeId>, Vec<(PointwiseOp, Vec<NodeId>)>> = BTreeMap::new();
 
-    fn eliminate_single_common_subexpr(&mut self) -> Result<bool, IRTrace> {
-        let ops = self.ir.operations().cloned();
+        for id in self.ir.topo_order_ops()? {
+            let op = self.ir.op(id)?.clone();
 
-        for (i, op_i) in ops.clone().enumerate() {
-            for op_j in ops.clone().skip(i + 1) {
-                if op_i.inputs() == op_j.inputs() && op_i.data() == op_j.data() && !op_i.data().is_unique() {
-                    for (&out_i, &out_j) in op_i.outputs().iter().zip(op_j.outputs()) {
-                        self.ir.replace_input_no_cycle_check(out_i, out_j)?;
-                    }
+            if op.data().is_unique() {
+                continue;
+            }
 
-                    self.ir.remove_op(op_j.id())?;
+            let bucket = seen.entry(op.inputs().to_vec()).or_default();
 
-                    return Ok(true);
+            if let Some((_, outs)) = bucket.iter().find(|(data, _)| data == op.data()) {
+                for (&keep, &dup) in outs.iter().zip(op.outputs()) {
+                    self.ir.replace_input_no_cycle_check(keep, dup)?;
                 }
+
+                self.ir.remove_op(id)?;
+            } else {
+                bucket.push((*op.data(), op.outputs().to_vec()));
             }
         }
 
-        Ok(false)
+        Ok(())
     }
 
     pub fn source_code(&self, kernel_name: &str, props: &DeviceProps) -> Result<String, fmt::Error> {

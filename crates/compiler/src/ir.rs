@@ -62,12 +62,12 @@ pub struct IR<T: TypeSystem> {
 impl<T: TypeSystem> IR<T> {
     /// Reference to the node with given ID
     pub fn node(&self, node: NodeId) -> Result<&Node<T>, IRError> {
-        self.nodes.get(&node).ok_or(format!("Node<T> {node:?} does not exist!").into())
+        self.nodes.get(&node).ok_or_else(|| format!("Node<T> {node:?} does not exist!").into())
     }
 
     /// Mutable reference to the node with given ID
     pub fn node_mut(&mut self, node: NodeId) -> Result<&mut Node<T>, IRError> {
-        self.nodes.get_mut(&node).ok_or(format!("Node<T> {node:?} does not exist!").into())
+        self.nodes.get_mut(&node).ok_or_else(|| format!("Node<T> {node:?} does not exist!").into())
     }
 
     pub fn new_id(&mut self) -> usize {
@@ -83,12 +83,12 @@ impl<T: TypeSystem> IR<T> {
 
     /// Reference to the operation with given ID
     pub fn op(&self, op: OpId) -> Result<&Op<T>, IRError> {
-        self.ops.get(&op).ok_or(format!("Operation {op:?} does not exist!").into())
+        self.ops.get(&op).ok_or_else(|| format!("Operation {op:?} does not exist!").into())
     }
 
     /// Mutable reference to the operation with given ID
     pub fn op_mut(&mut self, op: OpId) -> Result<&mut Op<T>, IRError> {
-        self.ops.get_mut(&op).ok_or(format!("Operation {op:?} does not exist!").into())
+        self.ops.get_mut(&op).ok_or_else(|| format!("Operation {op:?} does not exist!").into())
     }
 
     /// Unordered iterator over the operations in the graph
@@ -98,7 +98,7 @@ impl<T: TypeSystem> IR<T> {
 
     /// Get the the parent operation of this node
     pub fn parent_op(&self, node: NodeId) -> Result<OpId, IRError> {
-        self.links.get(&node).cloned().ok_or(format!("Node<T> {node:?} does not exist!").into())
+        self.links.get(&node).cloned().ok_or_else(|| format!("Node<T> {node:?} does not exist!").into())
     }
 
     /// Returns the graph operation IDs in topological order
@@ -114,7 +114,9 @@ impl<T: TypeSystem> IR<T> {
             })
             .collect::<Result<_, _>>()?;
 
-        topo::topo_order(edges_rev).ok_or("Cycle found!".into()).map(|x| x.into_iter().map(OpId::from_inner).collect())
+        topo::topo_order(edges_rev)
+            .ok_or_else(|| "Cycle found!".into())
+            .map(|x| x.into_iter().map(OpId::from_inner).collect())
     }
 
     pub fn ordered_operations(&self) -> Result<Vec<Op<T>>, IRError> {
@@ -129,7 +131,7 @@ impl<T: TypeSystem> IR<T> {
         let mut actual_child_count: BTreeMap<_, _> = self.nodes().map(|x| (x.id(), 0)).collect();
 
         fn check<T: Into<String>>(cond: bool, msg: T) -> Result<(), IRError> {
-            cond.then_some(()).ok_or(format!("{}!", msg.into()).into())
+            cond.then_some(()).ok_or_else(|| format!("{}!", msg.into()).into())
         }
 
         for op_id in self.topo_order_ops()? {
@@ -216,7 +218,7 @@ impl<T: TypeSystem> IR<T> {
     /// Removes operation - fails if any of the output nodes of this operation have children
     pub fn remove_op(&mut self, id: OpId) -> Result<(), IRError> {
         fn check(cond: bool, msg: impl Into<String>) -> Result<(), IRError> {
-            cond.then_some(()).ok_or(format!("{}!", msg.into()).into())
+            cond.then_some(()).ok_or_else(|| format!("{}!", msg.into()).into())
         }
 
         for output in self.op(id)?.outputs().to_vec() {

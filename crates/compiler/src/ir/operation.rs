@@ -104,7 +104,7 @@ impl<T: TypeSystem> Op<T> {
             }
         }
 
-        found.then_some(()).ok_or(format!("Op::swap_output_with: {old:?} not found!").into())
+        found.then_some(()).ok_or_else(|| format!("Op::swap_output_with: {old:?} not found!").into())
     }
 
     pub fn data(&self) -> &T::OpData {

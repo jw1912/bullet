@@ -86,7 +86,7 @@ impl ReduceAcrossDimension {
 
                 Self { dtype, outer, dimen, inner, reduction }
             })
-            .ok_or(format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into())
+            .ok_or_else(|| format!("Dimension {dim} out of bounds for shape of dimension {shape_dim}!").into())
     }
 
     pub fn input_size(&self) -> Size {
@@ -158,7 +158,7 @@ impl OpType for ReduceAcrossDimension {
     }
 
     fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
-        let op = self.invert()?.ok_or::<IRTrace>("Reduction backprop only implemented for Sum!".into())?;
+        let op = self.invert()?.ok_or_else::<IRTrace, _>(|| "Reduction backprop only implemented for Sum!".into())?;
         output_grads[0].builder().add_op([output_grads[0]], op).map(|x| vec![x[0]])
     }
 }
