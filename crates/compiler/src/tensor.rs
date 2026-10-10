@@ -34,7 +34,7 @@ impl TypeSystem for Tensor {
 pub struct TensorIR {
     ir: IR<Tensor>,
     outputs: BTreeSet<NodeId>,
-    debug: bool,
+    pub debug: bool,
 }
 
 impl TensorIR {
