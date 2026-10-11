@@ -34,6 +34,7 @@ pub struct ModelDefinition {
     ir: ModelIR,
     loss: Option<NodeId>,
     outputs: Vec<(NodeId, String)>,
+    /// Enable validation of compiler passes in `TensorIR` compiled from this definition
     pub debug: bool,
 }
 

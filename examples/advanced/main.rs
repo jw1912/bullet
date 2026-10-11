@@ -25,7 +25,9 @@ use bullet_trainer::{
     run::{DefaultDevice, HostPool, TrainingSchedule, TrainingSteps, train},
 };
 
+// whether to validate the graph after every edit during compilation, can be slow
 const DEBUG: bool = false;
+
 const NET_NAME: &str = "pawnocchio_new_relabeller";
 const READ_BUF_MB: usize = 8192;
 const READ_THREADS: usize = 8;

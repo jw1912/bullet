@@ -34,6 +34,8 @@ impl TypeSystem for Tensor {
 pub struct TensorIR {
     ir: IR<Tensor>,
     outputs: BTreeSet<NodeId>,
+    /// Run `check_valid` after every edit
+    /// Useful for debugging compiler passes, slows compilation
     pub debug: bool,
 }
 
