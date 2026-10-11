@@ -115,7 +115,7 @@ fn main() {
         },
     );
 
-    defn.set_debug(DEBUG);
+    defn.debug = DEBUG;
 
     let weights = ModelWeights::new(&defn, 12412421);
     let device = DefaultDevice::new(0).unwrap();
