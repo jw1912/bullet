@@ -16,6 +16,10 @@ use crate::{
 /// Returns true if an operation is cheap enough to be recomputed in the backward pass
 pub type RecomputePolicy = Rc<dyn Fn(&TensorOp) -> bool>;
 
+/// Returns true if an operation can read its inputs without them being materialised, e.g. by
+/// fusing the operations that compute them into the same kernel
+pub type FusionPolicy = Rc<dyn Fn(&TensorOp) -> bool>;
+
 /// Min-cut optimal recomputation, as described in
 /// https://dev-discuss.pytorch.org/t/min-cut-optimal-recomputation-i-e-activation-checkpointing-with-aotautograd/467
 ///
@@ -25,11 +29,14 @@ pub type RecomputePolicy = Rc<dyn Fn(&TensorOp) -> bool>;
 /// recomputing operations allowed by `policy`, then rewrites the backward pass to recompute everything else
 /// it needs from the saved nodes.
 ///
+/// By default every operation is assumed to fuse with the recomputed operations it reads, see `fusible`.
+///
 /// N.B. Recomputed operations are duplicates of forward operations, so common subexpression elimination
 /// will undo this transform.
 pub struct MinCutRecompute {
     gradients: Gradients,
     policy: RecomputePolicy,
+    fusible: FusionPolicy,
     saved: Rc<RefCell<BTreeSet<NodeId>>>,
 }
 
@@ -39,7 +46,16 @@ impl MinCutRecompute {
         policy: impl Fn(&TensorOp) -> bool + 'static,
     ) -> (Self, Rc<RefCell<BTreeSet<NodeId>>>) {
         let saved = Rc::<RefCell<BTreeSet<NodeId>>>::default();
-        (Self { gradients: gradients.clone(), policy: Rc::new(policy), saved: saved.clone() }, saved)
+        let fusible = Rc::new(|_: &TensorOp| true);
+        (Self { gradients: gradients.clone(), policy: Rc::new(policy), fusible, saved: saved.clone() }, saved)
+    }
+
+    /// Restricts which operations can read their inputs without them being materialised. A node read
+    /// by any other operation is materialised regardless, so is cheaper to save, and must be saved if
+    /// read in the backward pass.
+    pub fn fusible(mut self, fusible: impl Fn(&TensorOp) -> bool + 'static) -> Self {
+        self.fusible = Rc::new(fusible);
+        self
     }
 
     /// Operations required for the graph outputs but not for the forward outputs
@@ -70,7 +86,21 @@ impl IRTransform for MinCutRecompute {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         let forward_outputs = self.gradients.forward_outputs();
         let region = Self::backward_pass(ir, &forward_outputs)?;
-        let cost = TransferCost(forward_outputs.into_iter().collect());
+
+        let mut unfused = BTreeMap::<_, (bool, bool)>::new();
+        for op in ir.operations() {
+            if !(self.fusible)(op.data()) {
+                let backward = region.contains(&op.id());
+
+                for &input in op.inputs() {
+                    let entry = unfused.entry(input).or_default();
+                    entry.0 |= !backward;
+                    entry.1 |= backward;
+                }
+            }
+        }
+
+        let cost = TransferCost { forward_outputs: forward_outputs.into_iter().collect(), unfused };
 
         *self.saved.borrow_mut() = recompute_region(ir, &region, &*self.policy, &cost)?;
 
@@ -80,14 +110,25 @@ impl IRTransform for MinCutRecompute {
 
 /// Nodes that are always in memory only need to be read in the
 /// backward pass, anything else needs to be written and then read
-struct TransferCost(BTreeSet<NodeId>);
+struct TransferCost {
+    forward_outputs: BTreeSet<NodeId>,
+    /// Whether each node is read by an unfusible operation in the (forward, backward) pass
+    unfused: BTreeMap<NodeId, (bool, bool)>,
+}
 
 impl RecomputeCost for TransferCost {
     fn save(&self, ir: &TensorIR, node: NodeId) -> Result<u64, IRTrace> {
         let ty = ir.get_node(node)?.ty();
         let bytes = (ty.size().get() * ty.dtype().bytes()) as u64;
-        let persistent = ir.is_input(node)? || ir.is_constant(node)? || self.0.contains(&node);
+        let persistent = ir.is_input(node)?
+            || ir.is_constant(node)?
+            || self.forward_outputs.contains(&node)
+            || self.unfused.get(&node).is_some_and(|&(forward, _)| forward);
         Ok(if persistent { bytes } else { 2 * bytes })
+    }
+
+    fn must_save(&self, _ir: &TensorIR, node: NodeId) -> Result<bool, IRTrace> {
+        Ok(self.unfused.get(&node).is_some_and(|&(_, backward)| backward))
     }
 }
 
@@ -113,6 +154,12 @@ pub trait RecomputeCost {
     /// those inputs, e.g. a slice only reads part of its input. Its inputs must be in memory
     fn load(&self, _ir: &TensorIR, _node: NodeId) -> Result<Option<u64>, IRTrace> {
         Ok(None)
+    }
+
+    /// Whether `node`, read directly by the region, must be materialised for it regardless of
+    /// whether it is recomputed, in which case recomputing it is never cheaper than saving it
+    fn must_save(&self, _ir: &TensorIR, _node: NodeId) -> Result<bool, IRTrace> {
+        Ok(false)
     }
 }
 
@@ -156,7 +203,7 @@ pub fn recompute_region(
             return Err("Recompute region is not convex!".into());
         }
 
-        if op.data().is_input() || !policy(op.data()) {
+        if op.data().is_input() || !policy(op.data()) || (required.contains(&node) && cost.must_save(ir, node)?) {
             fixed.insert(node);
         } else if let Some(load) = cost.load(ir, node)? {
             loads.insert(node, load);
@@ -506,6 +553,30 @@ mod tests {
             let y = rest_of_graph_input(ir);
             Ok(BTreeSet::from([x, parent_of(ir, y, 0)?, y]))
         })?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn cos_cos_saves_unfused_reads() -> Result<(), IRTrace> {
+        let xs = vec![-0.9, -0.3, 0.2, 0.7];
+        let graph = joint_graph(&[xs], |ir, x| {
+            let y = ir.add_unary(x[0], Unary::Cos)?;
+            ir.add_unary(y, Unary::Cos)
+        })?;
+
+        let x = *graph.seeds.keys().next().unwrap();
+        let JointGraph { mut ir, gradients, seeds } = graph;
+        let y = rest_of_graph_input(&ir);
+        let before = ir.evaluate(seeds.clone())?.unwrap();
+
+        // the rest of the graph reads cos(cos(x)) unfused, so it is saved rather than recomputed
+        let (transform, saved) = MinCutRecompute::new(&gradients, pointwise);
+        ir.transform(transform.fusible(|op| op.downcast::<RestOfGraph>().is_none()))?;
+
+        assert_eq!(*saved.borrow(), BTreeSet::from([x, y]), "{ir}");
+        assert_eq!(ir.evaluate(seeds)?.unwrap(), before);
+        assert_eq!(count::<UnaryOp>(&ir), 2 + 2 + 1);
 
         Ok(())
     }
