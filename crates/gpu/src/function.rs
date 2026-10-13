@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -17,6 +17,7 @@ use bullet_compiler::{
             IRTransform,
             eliminate::{EliminateCommonSubExpressions, EliminateUnusedOperations},
             modify::AddOperation,
+            recompute::{RecomputeCost, recompute_region},
             rewriterules::RewritePass,
         },
     },
@@ -292,30 +293,57 @@ impl<G: Gpu> Function<G> {
     }
 }
 
-/// Separate out all `ScalarConst`s, as otherwise we end up
-/// materialising them in kernel A and passing to kernel B,
+/// Recompute `ScalarConst`s and indexing inside each operation that uses them where
+/// cheaper, as otherwise we end up materialising them in kernel A and passing to kernel B,
 /// rather than handling internally for each
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DuplicateScalarsAndIndexing;
+
+impl DuplicateScalarsAndIndexing {
+    fn is_cheap(op: &TensorOp) -> bool {
+        op.downcast::<ScalarConstant>().is_some()
+            || op.downcast::<BroadcastAcrossDimension>().is_some()
+            || op.downcast::<SliceAcrossDimension>().is_some()
+            || op.downcast::<PadAcrossDimension>().is_some()
+    }
+
+    fn bytes(ir: &TensorIR, node: NodeId) -> Result<u64, IRTrace> {
+        let ty = ir.get_node(node)?.ty();
+        Ok((ty.size().get() * ty.dtype().bytes()) as u64)
+    }
+
+    fn is_materialised(ir: &TensorIR, node: NodeId) -> Result<bool, IRTrace> {
+        let op = ir.get_op(ir.get_parent_op(node)?)?;
+        Ok(op.data().is_input() || ir.is_constant(node)? || !Self::is_cheap(op.data()))
+    }
+}
+
+impl RecomputeCost for DuplicateScalarsAndIndexing {
+    /// Nodes that are materialised anyway only need to be read, anything
+    /// else needs to be written out by another kernel and then read
+    fn save(&self, ir: &TensorIR, node: NodeId) -> Result<u64, IRTrace> {
+        let bytes = Self::bytes(ir, node)?;
+        Ok(if Self::is_materialised(ir, node)? { bytes } else { 2 * bytes })
+    }
+
+    /// Slicing a materialised node only reads the slice
+    fn load(&self, ir: &TensorIR, node: NodeId) -> Result<Option<u64>, IRTrace> {
+        let op = ir.get_op(ir.get_parent_op(node)?)?;
+
+        if op.data().downcast::<SliceAcrossDimension>().is_some() && Self::is_materialised(ir, op.inputs()[0])? {
+            return Ok(Some(Self::bytes(ir, node)?));
+        }
+
+        Ok(None)
+    }
+}
+
 impl IRTransform for DuplicateScalarsAndIndexing {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         for op in ir.operations() {
-            for &input in op.inputs() {
-                let grandparents = ir.get_op(ir.get_parent_op(input)?)?.inputs().to_vec();
-
-                if let Some(&ScalarConstant(value, size)) = ir.parent_op(input)? {
-                    let new_scalar = ir.add_scalar(value, size);
-                    ir.ir_mut().replace_single_input(op.id(), new_scalar, input)?;
-                } else if let Some(broadcast) = ir.parent_op::<BroadcastAcrossDimension>(input)? {
-                    let broadcast = ir.add_op(grandparents, Ok::<_, IRTrace>(*broadcast))?[0];
-                    ir.ir_mut().replace_single_input(op.id(), broadcast, input)?;
-                } else if let Some(slice) = ir.parent_op::<SliceAcrossDimension>(input)? {
-                    let slice = ir.add_op(grandparents, Ok::<_, IRTrace>(*slice))?[0];
-                    ir.ir_mut().replace_single_input(op.id(), slice, input)?;
-                } else if let Some(pad) = ir.parent_op::<PadAcrossDimension>(input)? {
-                    let pad = ir.add_op(grandparents, Ok::<_, IRTrace>(*pad))?[0];
-                    ir.ir_mut().replace_single_input(op.id(), pad, input)?;
-                }
+            if !Self::is_cheap(op.data()) {
+                let region = BTreeSet::from([op.id()]);
+                recompute_region(ir, &region, &Self::is_cheap, self)?;
             }
         }
 
@@ -626,6 +654,71 @@ mod tests {
     #[test]
     fn split_k_preserves_batched_products_and_degenerate_layouts() {
         SPLIT.into_iter().for_each(|case| compare(case, true));
+    }
+
+    fn duplicate(mut ir: TensorIR, inputs: &[NodeId]) -> TensorIR {
+        let seeds: BTreeMap<_, _> =
+            inputs.iter().map(|&x| (x, TValue::F32((0..16).map(|i| i as f32 / 8.0).collect()))).collect();
+        let expected = ir.evaluate(seeds.clone()).unwrap().unwrap();
+
+        ir.transform(DuplicateScalarsAndIndexing).unwrap();
+        ir.check_valid().unwrap();
+        assert_eq!(ir.evaluate(seeds).unwrap().unwrap(), expected);
+
+        ir
+    }
+
+    fn count<T: OpType>(ir: &TensorIR) -> usize {
+        ir.operations().iter().filter(|op| op.data().downcast::<T>().is_some()).count()
+    }
+
+    #[test]
+    fn duplicate_scalars() {
+        let builder = IRBuilder::default();
+        let x = builder.add_input(16, DType::F32);
+        let s = builder.scalar(2.0, 16);
+        let ir = builder.build([(x * s).unwrap(), (x + s).unwrap()]);
+
+        let ir = duplicate(ir, &[x.node()]);
+        assert_eq!(count::<ScalarConstant>(&ir), 2);
+    }
+
+    #[test]
+    fn duplicate_indexing_of_inputs() {
+        let builder = IRBuilder::default();
+        let x = builder.add_input(16, DType::F32);
+        let b = x.slice([16], 0, 4, 12).unwrap().broadcast([8], 0, 2).unwrap();
+        let ir = builder.build([b.sin().unwrap(), b.cos().unwrap()]);
+
+        // the whole indexing chain is recomputed in each consumer
+        let ir = duplicate(ir, &[x.node()]);
+        assert_eq!(count::<SliceAcrossDimension>(&ir), 2);
+        assert_eq!(count::<BroadcastAcrossDimension>(&ir), 2);
+    }
+
+    #[test]
+    fn duplicate_broadcast_of_scalar() {
+        let builder = IRBuilder::default();
+        let x = builder.add_input(16, DType::F32);
+        let s = builder.scalar(2.0, 1).broadcast([1], 0, 16).unwrap();
+        let ir = builder.build([(x * s).unwrap(), (x + s).unwrap()]);
+
+        let ir = duplicate(ir, &[x.node()]);
+        assert_eq!(count::<ScalarConstant>(&ir), 2);
+        assert_eq!(count::<BroadcastAcrossDimension>(&ir), 2);
+    }
+
+    #[test]
+    fn duplicate_small_slices() {
+        let builder = IRBuilder::default();
+        let x = builder.add_input(16, DType::F32);
+        let s = x.slice([16], 0, 0, 4).unwrap();
+        let t = x.exp().unwrap().slice([16], 0, 12, 16).unwrap();
+        let ir = builder.build([s.sin().unwrap(), s.cos().unwrap(), t.sin().unwrap(), t.cos().unwrap()]);
+
+        // slicing a materialised node only reads the slice, so is never worth materialising
+        let ir = duplicate(ir, &[x.node()]);
+        assert_eq!(count::<SliceAcrossDimension>(&ir), 4);
     }
 
     #[test]

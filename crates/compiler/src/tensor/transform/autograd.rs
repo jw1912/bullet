@@ -28,19 +28,39 @@ impl IRTransform for LowerForward {
     }
 }
 
-type GradientMap = BTreeMap<NodeId, NodeId>;
+/// Results of a `TakeGradient`, populated once it has been applied
+#[derive(Clone, Debug, Default)]
+pub struct Gradients(Rc<RefCell<GradientsInner>>);
+
+#[derive(Debug, Default)]
+struct GradientsInner {
+    grads: BTreeMap<NodeId, NodeId>,
+    forward_outputs: Vec<NodeId>,
+}
+
+impl Gradients {
+    /// Gradient of `node`, if the root operation depends on it
+    pub fn get(&self, node: NodeId) -> Option<NodeId> {
+        self.0.borrow().grads.get(&node).copied()
+    }
+
+    /// Outputs of the root operation, which mark the end of the forward pass
+    pub fn forward_outputs(&self) -> Vec<NodeId> {
+        self.0.borrow().forward_outputs.clone()
+    }
+}
 
 #[derive(Debug)]
 pub struct TakeGradient {
     root: OpId,
     output_grads: Vec<NodeId>,
-    grads: Rc<RefCell<GradientMap>>,
+    gradients: Gradients,
 }
 
 impl TakeGradient {
-    pub fn new(root: OpId, output_grads: impl Into<Vec<NodeId>>) -> (Self, Rc<RefCell<GradientMap>>) {
-        let grads = Rc::<RefCell<GradientMap>>::default();
-        (Self { root, output_grads: output_grads.into(), grads: grads.clone() }, grads)
+    pub fn new(root: OpId, output_grads: impl Into<Vec<NodeId>>) -> (Self, Gradients) {
+        let gradients = Gradients::default();
+        (Self { root, output_grads: output_grads.into(), gradients: gradients.clone() }, gradients)
     }
 }
 
@@ -74,7 +94,7 @@ impl IRTransform for TakeGradient {
         let root = ir.get_parent_op(root_outputs[0])?;
         let ops = ir.get_dependent_ops_set(root)?;
 
-        let mut grads: BTreeMap<_, _> = root_outputs.into_iter().zip(self.output_grads.clone()).collect();
+        let mut grads: BTreeMap<_, _> = root_outputs.iter().copied().zip(self.output_grads.clone()).collect();
 
         for &op in &ops {
             let op_inputs = ir.get_op(op)?.inputs().to_vec();
@@ -138,7 +158,7 @@ impl IRTransform for TakeGradient {
             }
         }
 
-        *self.grads.borrow_mut() = grads;
+        *self.gradients.0.borrow_mut() = GradientsInner { grads, forward_outputs: root_outputs };
 
         Ok(())
     }
@@ -171,7 +191,7 @@ mod tests {
 
         let (transform, grads) = TakeGradient::new(ir.get_parent_op(y)?, [grad]);
         ir.transform(transform)?;
-        let dydx = *grads.borrow().get(&x).unwrap();
+        let dydx = grads.get(x).unwrap();
         ir.register_output(dydx);
 
         ir.transform(LowerForward)?;
@@ -204,7 +224,7 @@ mod tests {
         ir.transform(LowerForward)?;
         ir.transform(InlineSubgraphs)?;
 
-        let dydx = *grads.borrow().get(&x).unwrap();
+        let dydx = grads.get(x).unwrap();
         ir.register_output(dydx);
 
         ir.optimise()?;
@@ -235,7 +255,7 @@ mod tests {
         ir.transform(LowerForward)?;
         ir.transform(InlineSubgraphs)?;
 
-        let grad_nodes: Vec<_> = nodes.iter().map(|x| *grads.borrow().get(x).unwrap()).collect();
+        let grad_nodes: Vec<_> = nodes.iter().map(|&x| grads.get(x).unwrap()).collect();
         for &g in &grad_nodes {
             ir.register_output(g);
         }

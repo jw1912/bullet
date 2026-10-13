@@ -114,7 +114,7 @@ impl ModelDefinition {
                 let wid = *map.get(&id).unwrap();
 
                 // weights with no path to the loss have zero gradient
-                let gid = match grads.borrow().get(&wid).copied() {
+                let gid = match grads.get(wid) {
                     Some(gid) => gid,
                     None => {
                         let ty = self.ir.node(id).ty();
