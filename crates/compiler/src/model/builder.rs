@@ -327,6 +327,10 @@ impl<'a> ModelNode<'a> {
     }
 
     pub fn matmul(self, other: Self) -> Self {
+        self.gemm(false, other, false)
+    }
+
+    pub fn gemm(self, ltrans: bool, other: Self, rtrans: bool) -> Self {
         let lty = self.ty();
         let rty = other.ty();
 
@@ -336,16 +340,23 @@ impl<'a> ModelNode<'a> {
         };
 
         let rdtype = match rty.layout {
-            Layout::Sparse(_) => return self.sparse_matmul(other),
+            Layout::Sparse(_) => {
+                if ltrans || rtrans {
+                    unimplemented!("Transposed SpMM!");
+                }
+                return self.sparse_matmul(other);
+            }
             Layout::Dense(dtype) => dtype,
         };
 
-        if ldtype != rdtype || lty.cols != rty.rows {
+        let (m, n) = if ltrans { (lty.cols, lty.rows) } else { (lty.rows, lty.cols) };
+        let (rn, k) = if rtrans { (rty.cols, rty.rows) } else { (rty.rows, rty.cols) };
+
+        if ldtype != rdtype || n != rn {
             panic!("Matmul: {lty} @ {rty} is not possible!");
         }
 
-        let matmul =
-            Matmul { lbatch: lty.batch, rbatch: rty.batch, m: lty.rows, n: lty.cols, k: rty.cols, dtype: ldtype };
+        let matmul = Matmul { lbatch: lty.batch, rbatch: rty.batch, ltrans, rtrans, m, n, k, dtype: ldtype };
         Self { node: self.builder.add_op([self, other], matmul), ..self }
     }
 
