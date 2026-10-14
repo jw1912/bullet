@@ -98,6 +98,8 @@ impl ModelOperation for Reduce {
 pub struct Matmul {
     pub(crate) lbatch: bool,
     pub(crate) rbatch: bool,
+    pub(crate) ltrans: bool,
+    pub(crate) rtrans: bool,
     pub(crate) dtype: DType,
     pub(crate) m: usize,
     pub(crate) n: usize,
@@ -106,17 +108,21 @@ pub struct Matmul {
 
 impl ModelOperation for Matmul {
     fn opname(&self) -> String {
-        let Matmul { lbatch, rbatch, dtype, m, n, k } = *self;
+        let Matmul { lbatch, rbatch, ltrans, rtrans, dtype, m, n, k } = *self;
         let lbatch = if lbatch { "B" } else { "N" };
         let rbatch = if rbatch { "B" } else { "N" };
-        format!("Matmul<{dtype:?}, {lbatch}{rbatch}, {m}x{n}x{}>", k)
+        let ltrans = if ltrans { "'" } else { "" };
+        let rtrans = if rtrans { "'" } else { "" };
+        format!("Matmul<{dtype:?}, {lbatch}{ltrans}{rbatch}{rtrans}, {m}x{n}x{}>", k)
     }
 
     fn inputs(&self) -> Vec<MType> {
-        let Matmul { lbatch, rbatch, dtype, m, n, k } = *self;
+        let Matmul { lbatch, rbatch, ltrans, rtrans, dtype, m, n, k } = *self;
+        let (lrows, lcols) = if ltrans { (n, m) } else { (m, n) };
+        let (rrows, rcols) = if rtrans { (k, n) } else { (n, k) };
         vec![
-            MType { batch: lbatch, rows: m, cols: n, layout: Layout::Dense(dtype) },
-            MType { batch: rbatch, rows: n, cols: k, layout: Layout::Dense(dtype) },
+            MType { batch: lbatch, rows: lrows, cols: lcols, layout: Layout::Dense(dtype) },
+            MType { batch: rbatch, rows: rrows, cols: rcols, layout: Layout::Dense(dtype) },
         ]
     }
 
@@ -126,12 +132,12 @@ impl ModelOperation for Matmul {
     }
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, mut inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
-        let Matmul { lbatch, rbatch, dtype, m, n, k } = *self;
-        let lhs = MatrixLayout { rows: m.into(), cols: n.into(), col_mjr: true };
+        let Matmul { lbatch, rbatch, ltrans, rtrans, dtype, m, n, k } = *self;
+        let lhs = MatrixLayout { rows: m.into(), cols: n.into(), col_mjr: !ltrans };
 
         let matmul = match (lbatch, rbatch) {
             (false, false) => {
-                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: true };
+                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: !rtrans };
                 operation::Matmul::new(dtype, 1, lhs, rhs)
             }
             (true, false) => {
@@ -139,16 +145,24 @@ impl ModelOperation for Matmul {
                 let broadcast = operation::BroadcastAcrossDimension::new(dtype, [1, n * k], 0, batch_size);
                 inputs[1] = lower.add_op([inputs[1]], broadcast)?[0];
 
-                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: true };
+                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: !rtrans };
                 operation::Matmul::new(dtype, batch_size, lhs, rhs)
             }
             (true, true) => {
-                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: true };
+                let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: !rtrans };
                 operation::Matmul::new(dtype, batch_size, lhs, rhs)
             }
             (false, true) => {
-                let rhs = MatrixLayout { rows: n.into(), cols: (k * batch_size).into(), col_mjr: true };
-                operation::Matmul::new(dtype, 1, lhs, rhs)
+                if rtrans {
+                    let broadcast = operation::BroadcastAcrossDimension::new(dtype, [1, m * n], 0, batch_size);
+                    inputs[0] = lower.add_op([inputs[0]], broadcast)?[0];
+
+                    let rhs = MatrixLayout { rows: n.into(), cols: k.into(), col_mjr: false };
+                    operation::Matmul::new(dtype, batch_size, lhs, rhs)
+                } else {
+                    let rhs = MatrixLayout { rows: n.into(), cols: (k * batch_size).into(), col_mjr: true };
+                    operation::Matmul::new(dtype, 1, lhs, rhs)
+                }
             }
         };
 
