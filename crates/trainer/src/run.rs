@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
 
 use bullet_compiler::{
     model::Layout,
-    tensor::{IRTrace, TValue},
+    tensor::{DType, IRTrace, TValue},
 };
 use bullet_gpu::{
     buffer::{Buffer, SyncOnValue},
@@ -144,8 +144,9 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
     });
 
     let defn = optimiser.definition();
-    let (func, gmap) =
-        defn.lower_backward(&Default::default(), steps.batch_size).map_err(TrainingError::CompilingBackwards)?;
+    let (func, gmap, norms) = defn
+        .lower_backward(&Default::default(), steps.batch_size, schedule.track_grad_norms)
+        .map_err(TrainingError::CompilingBackwards)?;
     let map = func.map();
     let mut backwards = Function::new(device.clone(), func.ir().clone()).map_err(TrainingError::CompilingBackwards)?;
     backwards.prealloc().map_err(TrainingError::Unexpected)?;
@@ -167,6 +168,15 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
 
         gradients.insert(name.clone(), grad);
     }
+
+    // squared gradient norms
+    let norms = if let Some(norms) = norms {
+        let buf = Buffer::zeroed(&device, DType::F32, norms.names.len()).map_err(TrainingError::Unexpected)?;
+        tensor_map.insert(norms.acc, buf.clone());
+        Some((norms.names, buf))
+    } else {
+        None
+    };
 
     let tgf = TValue::F32(vec![1.0 / steps.batch_size as f32]);
     let tgf = Buffer::from_host(&device, &tgf).map_err(TrainingError::Unexpected)?;
@@ -260,12 +270,29 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
 
         running_loss += error;
 
+        let grad_norm = if let Some((names, buf)) = &norms {
+            let TValue::F32(sqnorms) = buf
+                .to_host_async(&copy_stream)
+                .map(SyncOnValue::value)
+                .map_err(TrainingError::Unexpected)?
+                .map_err(TrainingError::Unexpected)?
+            else {
+                panic!()
+            };
+
+            let norms = sqnorms.iter().map(|sq| sq.sqrt() / steps.batch_size as f32);
+            Some(names.iter().cloned().zip(norms).collect())
+        } else {
+            None
+        };
+
         observer(&TrainingEvent::BatchCompleted {
             step,
             loss: error,
             learning_rate: lrate,
             elapsed: timer.elapsed(),
             superbatch_elapsed: superbatch_timer.elapsed(),
+            grad_norm,
         });
 
         batch_callback(optimiser, step, error);
