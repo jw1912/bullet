@@ -37,17 +37,6 @@ pub struct TrainingSchedule {
     pub track_grad_norms: bool,
 }
 
-impl Default for TrainingSchedule {
-    fn default() -> Self {
-        Self {
-            steps: TrainingSteps::default(),
-            lr_schedule: Box::new(|_| 0.001),
-            log_rate: 128,
-            track_grad_norms: false,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct Step {
     superbatch: NonZeroUsize,
