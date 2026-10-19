@@ -10,12 +10,6 @@ pub struct TrainingSteps {
     pub end_superbatch: usize,
 }
 
-impl Default for TrainingSteps {
-    fn default() -> Self {
-        Self { batch_size: 16_384, batches_per_superbatch: 6104, start_superbatch: 1, end_superbatch: 1 }
-    }
-}
-
 impl TrainingSteps {
     pub fn start_batch(&self) -> usize {
         self.batches_per_superbatch * (self.start_superbatch - 1)
