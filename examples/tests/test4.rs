@@ -95,6 +95,7 @@ fn main() {
         steps: TrainingSteps { batch_size: 16_384, batches_per_superbatch: 1, start_superbatch: 1, end_superbatch: 10 },
         log_rate: 128,
         lr_schedule: Box::new(|_| 0.001),
+        track_grad_norms: false,
     };
 
     train(&mut optimiser, schedule, loader, |_, _, _| {}, |_, _| {}).unwrap();

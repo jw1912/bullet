@@ -174,6 +174,7 @@ fn main() {
                 },
                 lr_schedule,
                 log_rate: 128,
+                track_grad_norms: false,
             },
             ReadMapLoader::new(reader.clone(), mapper, MAP_THREADS),
             |_, _, _| {},

@@ -177,7 +177,7 @@ where
 
         run::train(
             &mut self.optimiser,
-            run::TrainingSchedule { steps, log_rate: 128, lr_schedule: lr_scheduler.boxed() },
+            run::TrainingSchedule { steps, log_rate: 128, lr_schedule: lr_scheduler.boxed(), track_grad_norms: false },
             dataloader,
             |_, step, error| {
                 loss_sum += error;

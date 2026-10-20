@@ -28,6 +28,7 @@ pub struct TrainingSchedule {
     pub steps: TrainingSteps,
     pub lr_schedule: Box<dyn Fn(Step) -> f32>,
     pub log_rate: usize,
+    pub track_grad_norms: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
