@@ -1,4 +1,8 @@
-use crate::tensor::{IRTrace, TensorIR, operation::CopyOp, transform::IRTransform};
+use crate::tensor::{
+    IRTrace, TensorIR,
+    operation::CopyOp,
+    transform::{IRTransform, modify::ForwardCopyOutput},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EliminateUnusedOperations;
@@ -36,9 +40,7 @@ impl IRTransform for EliminateCopies {
                 }
 
                 if !ir.is_output(input) && !ir.is_input(input)? {
-                    // no topo check as performs y = copy(x) -> y = copy(y)
-                    ir.ir_mut().replace_input_no_cycle_check(output, input)?;
-                    ir.swap_outputs(input, output)?;
+                    ir.transform(ForwardCopyOutput { input, output })?;
                     ir.remove_op(op.id())?;
                 }
             }

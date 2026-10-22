@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TensorIR History</title>
+<style>
+:root {
+    --bg: #fafafa; --fg: #1c1c1c; --muted: #6b6b6b; --panel: #ffffff; --border: #dddddd;
+    --add-bg: #d9f5dd; --del-bg: #fbdcdc; --accent: #3b6fd8;
+    /*HIGHLIGHT_LIGHT*/
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #282b34; --fg: #abb1bf; --muted: #7f848e; --panel: #21252b; --border: #3a3f4b;
+        --add-bg: #2b4535; --del-bg: #4d2a33; --accent: #4ea8ef;
+        /*HIGHLIGHT_DARK*/
+    }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+header { position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 16px; z-index: 1; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row + .row { margin-top: 8px; }
+button, select { font: inherit; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+.muted { color: var(--muted); }
+#pass { font-weight: 600; }
+#edit { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-all; max-height: 4.2em; overflow: auto; width: 100%; }
+main { padding: 12px 16px; }
+pre { margin: 0; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre div { padding: 0 6px; border-radius: 3px; white-space: pre; scroll-margin: 160px 0 40px; }
+pre div.add { background: var(--add-bg); }
+pre div.del { background: var(--del-bg); }
+/*HIGHLIGHT_CSS*/
+</style>
+</head>
+<body>
+<header>
+    <div class="row">
+        <select id="recording" aria-label="Recording"></select>
+        <button id="prevPass" title="Previous pass (Shift+←)">⏮</button>
+        <button id="prev" title="Previous frame (←)">◀</button>
+        <button id="play" title="Play/pause (Space)">▶</button>
+        <button id="next" title="Next frame (→)">▶|</button>
+        <button id="nextPass" title="Next pass (Shift+→)">⏭</button>
+        <label class="muted">fps <select id="speed">
+            <option>1</option><option>2</option><option selected>5</option><option>10</option><option>30</option><option>60</option>
+        </select></label>
+        <input id="slider" type="range" min="0" value="0" aria-label="Frame">
+        <span id="counter" class="muted"></span>
+    </div>
+    <div class="row"><span id="pass"></span><span id="delta" class="muted"></span></div>
+    <div class="row"><div id="edit"></div></div>
+</header>
+<main><pre id="ir"></pre></main>
+<script>
+const DATA = /*DATA*/null;
+const $ = (id) => document.getElementById(id);
+let rec = 0, idx = 0, timer = null, steps = [];
+
+DATA.recordings.forEach((r, i) => $("recording").add(new Option(`${r.name} (${r.frames.length} frames)`, i)));
+
+const frames = () => DATA.recordings[rec].frames;
+const frameOf = (s) => steps[s][0];
+// the pass a step belongs to, without the core edit that ends each label
+const passOf = (s) => DATA.passes[frames()[frameOf(s)][0]].replace(/(^| > )[^>]*$/, "");
+const SAME = 0, DEL = 1, ADD = 2;
+
+// line diff between frames i - 1 and i, as a merged list of [line, kind]
+const diffs = new Map();
+function diff(i) {
+    const key = `${rec}:${i}`;
+    if (diffs.has(key)) return diffs.get(key);
+
+    const b = frames()[i][2];
+    const a = i > 0 ? frames()[i - 1][2] : b;
+
+    let pre = 0;
+    while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+    let suf = 0;
+    while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+
+    const out = a.slice(0, pre).map((l) => [l, SAME]);
+    const am = a.slice(pre, a.length - suf), bm = b.slice(pre, b.length - suf);
+    const n = am.length, m = bm.length;
+
+    if (n * m > 4e6) {
+        // too big for LCS, treat the whole middle as replaced
+        for (const l of am) out.push([l, DEL]);
+        for (const l of bm) out.push([l, ADD]);
+    } else {
+        // lcs[x * (m + 1) + y] = LCS length of am[x..] and bm[y..]
+        const lcs = new Uint32Array((n + 1) * (m + 1));
+        for (let x = n - 1; x >= 0; x--)
+            for (let y = m - 1; y >= 0; y--)
+                lcs[x * (m + 1) + y] = am[x] === bm[y]
+                    ? lcs[(x + 1) * (m + 1) + y + 1] + 1
+                    : Math.max(lcs[(x + 1) * (m + 1) + y], lcs[x * (m + 1) + y + 1]);
+
+        let x = 0, y = 0;
+        while (x < n || y < m) {
+            if (x < n && y < m && am[x] === bm[y]) { out.push([am[x], SAME]); x++; y++; }
+            else if (y >= m || (x < n && lcs[(x + 1) * (m + 1) + y] >= lcs[x * (m + 1) + y + 1])) out.push([am[x++], DEL]);
+            else out.push([bm[y++], ADD]);
+        }
+    }
+
+    for (const l of a.slice(a.length - suf)) out.push([l, SAME]);
+    diffs.set(key, out);
+    return out;
+}
+
+// each frame is shown in up to four steps:
+// 0 = previous IR with deletions marked, 1 = deletions and additions marked,
+// 2 = new IR with additions marked, 3 = new IR without highlighting
+function buildSteps() {
+    steps = [];
+    frames().forEach((_, i) => {
+        const lines = diff(i);
+        const dels = lines.some(([, k]) => k === DEL), adds = lines.some(([, k]) => k === ADD);
+        // without additions, step 2 would be identical to step 3
+        if (dels) steps.push([i, 0]);
+        if (dels && adds) steps.push([i, 1]);
+        if (adds) steps.push([i, 2]);
+        steps.push([i, 3]);
+    });
+}
+
+function render() {
+    const fs = frames();
+    if (fs.length === 0) { $("ir").textContent = ""; return; }
+    const [frame, phase] = steps[idx];
+    const [pass, edit] = fs[frame];
+    const lines = diff(frame);
+
+    const out = document.createDocumentFragment();
+    let added = 0, removed = 0, first = null;
+    for (const [l, kind] of lines) {
+        if (kind === ADD) added++;
+        if (kind === DEL) removed++;
+        if ((kind === ADD && phase === 0) || (kind === DEL && phase >= 2)) continue;
+
+        const div = document.createElement("div");
+        // lines are pre-highlighted (and escaped) markup
+        div.innerHTML = DATA.lines[l] || " ";
+        if (phase !== 3 && kind !== SAME) {
+            div.className = kind === ADD ? "add" : "del";
+            first ??= div;
+        }
+        out.appendChild(div);
+    }
+    $("ir").replaceChildren(out);
+    if (first) first.scrollIntoView({ block: "nearest" });
+
+    $("pass").textContent = DATA.passes[pass] || "(top level)";
+    const edits = edit.split("\n").length;
+    $("delta").textContent = (frame > 0 ? `+${added} −${removed} lines` : "") + (edits > 1 ? ` · ${edits} edits` : "");
+    $("edit").textContent = edit;
+    $("slider").max = steps.length - 1;
+    $("slider").value = idx;
+    $("counter").textContent = `step ${idx + 1} / ${steps.length} · frame ${frame + 1} / ${fs.length}`;
+}
+
+function go(i) { idx = Math.max(0, Math.min(steps.length - 1, i)); render(); }
+
+function jumpPass(dir) {
+    let i = idx;
+    const cur = passOf(i);
+    while (i + dir >= 0 && i + dir < steps.length && passOf(i + dir) === cur) i += dir;
+    i += dir;
+    // when going back, land on the start of the previous pass
+    if (dir < 0 && i >= 0) { const p = passOf(i); while (i > 0 && passOf(i - 1) === p) i--; }
+    go(i);
+}
+
+function setPlaying(on) {
+    clearInterval(timer);
+    timer = null;
+    if (on) {
+        if (idx >= steps.length - 1) go(0);
+        timer = setInterval(() => idx >= steps.length - 1 ? setPlaying(false) : go(idx + 1), 1000 / +$("speed").value);
+    }
+    $("play").textContent = timer ? "⏸" : "▶";
+}
+
+$("recording").onchange = (e) => { rec = +e.target.value; setPlaying(false); buildSteps(); go(0); };
+$("slider").oninput = (e) => go(+e.target.value);
+$("prev").onclick = () => go(idx - 1);
+$("next").onclick = () => go(idx + 1);
+$("prevPass").onclick = () => jumpPass(-1);
+$("nextPass").onclick = () => jumpPass(1);
+$("play").onclick = () => setPlaying(!timer);
+$("speed").onchange = () => { if (timer) setPlaying(true); };
+document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "SELECT") return;
+    if (e.key === " ") { e.preventDefault(); setPlaying(!timer); }
+    else if (e.key === "ArrowLeft") e.shiftKey ? jumpPass(-1) : go(idx - 1);
+    else if (e.key === "ArrowRight") e.shiftKey ? jumpPass(1) : go(idx + 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(steps.length - 1);
+});
+
+buildSteps();
+render();
+</script>
+</body>
+</html>

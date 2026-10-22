@@ -36,6 +36,7 @@ impl fmt::Debug for AddOperation {
 impl IRTransform for AddOperation {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
         *self.outputs.borrow_mut() = ir.ir_mut().add_op(&self.inputs, self.operation.clone()?)?;
+        ir.record_edit(self);
         Ok(())
     }
 }
@@ -45,7 +46,9 @@ pub struct RemoveOperation(pub OpId);
 
 impl IRTransform for RemoveOperation {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
-        ir.ir_mut().remove_op(self.0).map_err(IRTrace::Root)
+        ir.ir_mut().remove_op(self.0)?;
+        ir.record_edit(self);
+        Ok(())
     }
 }
 
@@ -59,6 +62,7 @@ impl IRTransform for SwapOutputs {
         }
 
         ir.ir_mut().swap_outputs_no_cycle_check(self.0, self.1)?;
+        ir.record_edit(self);
         ir.debug_check_edit()
     }
 }
@@ -76,6 +80,62 @@ impl IRTransform for ReplaceInput {
         }
 
         ir.ir_mut().replace_input_no_cycle_check(self.new, self.old)?;
+        ir.record_edit(self);
+        ir.debug_check_edit()
+    }
+}
+
+/// Given `output = copy(input)`, make the parent op of `input` produce `output` instead,
+/// and redirect all uses of `input` to `output`, leaving `input = copy(output)` unused.
+///
+/// Done as a single edit as the intermediate IR (`output = copy(output)`) is invalid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ForwardCopyOutput {
+    pub input: NodeId,
+    pub output: NodeId,
+}
+
+impl IRTransform for ForwardCopyOutput {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        if self.input == self.output {
+            return Ok(());
+        }
+
+        ir.ir_mut().replace_input_no_cycle_check(self.output, self.input)?;
+        ir.ir_mut().swap_outputs_no_cycle_check(self.input, self.output)?;
+        ir.record_edit(self);
+        ir.debug_check_edit()
+    }
+}
+
+/// Set the inputs of an operation to a permutation of its current inputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReorderInputs {
+    pub op: OpId,
+    pub inputs: Vec<NodeId>,
+}
+
+impl IRTransform for ReorderInputs {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        let op = ir.get_op_mut(self.op)?;
+
+        let mut old = op.inputs().to_vec();
+        let mut new = self.inputs.clone();
+        old.sort();
+        new.sort();
+        if old != new {
+            return Err("New inputs are not a permutation of the old inputs!".into());
+        }
+
+        if op.inputs() == self.inputs {
+            return Ok(());
+        }
+
+        for (idx, &input) in self.inputs.iter().enumerate() {
+            op.set_input(idx, input);
+        }
+
+        ir.record_edit(self);
         ir.debug_check_edit()
     }
 }

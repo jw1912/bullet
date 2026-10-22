@@ -1,4 +1,6 @@
 mod builder;
+mod highlight;
+mod history;
 pub mod operation;
 mod pattern;
 pub mod transform;
@@ -20,6 +22,8 @@ use operation::{
 use transform::{IRTransform, canonicalise, eliminate, modify};
 
 pub use builder::{IRBuilder, TNode};
+pub use highlight::Token;
+pub use history::{Frame, IRHistory, Line, Recording};
 pub use operation::{OpType, TensorOp};
 pub use ttype::{DType, DValue, Shape, Size, TType, TValue};
 
@@ -37,6 +41,8 @@ pub struct TensorIR {
     /// Run `check_valid` after every edit
     /// Useful for debugging compiler passes, slows compilation
     pub debug: bool,
+    /// Records the IR after each core edit, see `IRHistory::attach`
+    recorder: Option<history::Recorder>,
 }
 
 impl TensorIR {
@@ -113,8 +119,24 @@ impl TensorIR {
 
     pub fn transform_dyn(&mut self, transform: Rc<dyn IRTransform>) -> Result<(), IRTrace> {
         let ir = Box::new(self.ir().clone());
-        transform.apply(self).map_err(|err| IRTrace::Frame(ir, transform, Rc::new(err)))?;
-        Ok(())
+        let result = self.labelled(transform.type_name(), |ir| transform.apply(ir));
+        result.map_err(|err| IRTrace::Frame(ir, transform, Rc::new(err)))
+    }
+
+    /// Run `f` as a pass named by `type_name` in any attached `IRHistory`, without the
+    /// IR snapshot that `transform` takes for error traces, for use in hot loops.
+    pub(crate) fn labelled<T>(&mut self, type_name: &'static str, f: impl FnOnce(&mut Self) -> T) -> T {
+        if let Some(recorder) = &self.recorder {
+            recorder.push_pass(type_name);
+        }
+
+        let result = f(self);
+
+        if let Some(recorder) = &self.recorder {
+            recorder.pop_pass();
+        }
+
+        result
     }
 
     pub fn ordered_operations(&self) -> Result<Vec<Op<Tensor>>, IRTrace> {
@@ -192,6 +214,12 @@ impl TensorIR {
 
     fn debug_check_edit(&self) -> Result<(), IRTrace> {
         if self.debug { self.check_valid() } else { Ok(()) }
+    }
+
+    fn record_edit(&self, edit: &dyn IRTransform) {
+        if let Some(recorder) = &self.recorder {
+            recorder.record(self, edit);
+        }
     }
 
     pub fn register_output(&mut self, node: NodeId) {
@@ -393,46 +421,49 @@ impl fmt::Display for IRTrace {
 
 impl std::error::Error for IRTrace {}
 
-impl fmt::Display for TensorIR {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl TensorIR {
+    /// Write the display form of the IR as a sequence of tokens, with their syntax class if they have one.
+    pub fn write_ir(&self, emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result) -> fmt::Result {
         fn map<T>(x: Result<T, IRTrace>) -> Result<T, fmt::Error> {
             x.map_err(|_| fmt::Error)
         }
 
-        let mut names = BTreeMap::new();
-        let mut get_name = |node| {
-            if let Some(&id) = names.get(&node) {
-                id
-            } else {
-                let id = names.len();
-                names.insert(node, id);
-                id
-            }
-        };
+        fn write_type(emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result, ty: TType) -> fmt::Result {
+            emit(Some(Token::Type), &format!("{:?}", ty.dtype()))?;
+            emit(Some(Token::Bracket(1)), "[")?;
+            emit(Some(Token::Number), &format!("{:?}", ty.size()))?;
+            emit(Some(Token::Bracket(1)), "]")
+        }
 
-        write!(f, "irgraph(")?;
+        emit(Some(Token::Keyword), "irgraph")?;
+        emit(Some(Token::Bracket(0)), "(")?;
         let leaves = self.ir.operations().filter(|x| x.data().is_input()).collect::<Vec<_>>();
         let mline = leaves.len() >= 5;
 
         for (i, leaf) in leaves.iter().enumerate() {
             if mline {
-                writeln!(f)?;
-                write!(f, "    ")?;
+                emit(None, "\n    ")?;
             } else if i != 0 {
-                write!(f, ", ")?;
+                emit(None, ", ")?;
             }
 
             let node = leaf.outputs()[0];
             let ty = map(self.get_node(node))?.ty();
 
-            write!(f, "%{}: {ty:?}", get_name(node))?;
+            emit(None, &format!("{node:?}"))?;
+            emit(Some(Token::Punct), ":")?;
+            emit(None, " ")?;
+            write_type(emit, ty)?;
         }
 
         if mline {
-            writeln!(f)?;
+            emit(None, "\n")?;
         }
 
-        writeln!(f, ") {{")?;
+        emit(Some(Token::Bracket(0)), ")")?;
+        emit(None, " ")?;
+        emit(Some(Token::Bracket(0)), "{")?;
+        emit(None, "\n")?;
 
         for op in map(self.ordered_operations())? {
             if op.data().is_input() {
@@ -442,48 +473,59 @@ impl fmt::Display for TensorIR {
             let inputs = op.inputs();
             let outputs = op.outputs();
 
-            write!(f, "    ")?;
+            emit(None, "    ")?;
             if outputs.len() > 1 {
-                write!(f, "[")?;
+                emit(Some(Token::Bracket(1)), "[")?;
             }
 
             for (i, &output) in outputs.iter().enumerate() {
                 if i != 0 {
-                    write!(f, ", ")?;
+                    emit(None, ", ")?;
                 }
 
-                write!(f, "%{}", get_name(output))?;
+                emit(None, &format!("{output:?}"))?;
             }
 
             if outputs.len() > 1 {
-                write!(f, "]")?;
+                emit(Some(Token::Bracket(1)), "]")?;
             }
 
-            write!(f, " = {}(", op.data().0.opname())?;
+            emit(None, " ")?;
+            emit(Some(Token::Punct), "=")?;
+            emit(None, " ")?;
+            highlight::opname(&op.data().0.opname(), 1, emit)?;
+            emit(Some(Token::Bracket(1)), "(")?;
 
             for (i, &input) in inputs.iter().enumerate() {
                 if i != 0 {
-                    write!(f, ", ")?;
+                    emit(None, ", ")?;
                 }
 
-                write!(f, "%{}", get_name(input))?;
+                emit(None, &format!("{input:?}"))?;
             }
 
-            writeln!(f, ")")?;
+            emit(Some(Token::Bracket(1)), ")")?;
+            emit(None, "\n")?;
         }
 
-        write!(f, "    return ")?;
+        emit(None, "    ")?;
+        emit(Some(Token::Keyword), "return")?;
+        emit(None, " ")?;
         for (i, &output) in self.outputs.iter().enumerate() {
             if i != 0 {
-                write!(f, ", ")?;
+                emit(None, ", ")?;
             }
 
-            write!(f, "%{}", get_name(output))?;
+            emit(None, &format!("{output:?}"))?;
         }
 
-        writeln!(f)?;
-        write!(f, "}}")?;
+        emit(None, "\n")?;
+        emit(Some(Token::Bracket(0)), "}")
+    }
+}
 
-        Ok(())
+impl fmt::Display for TensorIR {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write_ir(&mut |_, text| f.write_str(text))
     }
 }

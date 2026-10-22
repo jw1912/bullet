@@ -11,6 +11,10 @@ use crate::tensor::{IRTrace, TensorIR};
 
 pub trait IRTransform: std::fmt::Debug + 'static {
     fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace>;
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 #[cfg(test)]
