@@ -15,6 +15,7 @@ use std::{
 
 use crate::ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem};
 
+use highlight::Emit;
 use operation::{
     BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ReduceAcrossDimension, Reduction,
     ScalarConstant, SubGraph, Unary, UnaryOp,
@@ -468,12 +469,7 @@ impl TensorIR {
         format!("%{}{}", "s".repeat(level), node.inner())
     }
 
-    fn write_param(
-        &self,
-        node: NodeId,
-        level: usize,
-        emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result,
-    ) -> fmt::Result {
+    fn write_param(&self, node: NodeId, level: usize, emit: Emit<'_>) -> fmt::Result {
         let ty = self.get_node(node).map_err(|_| fmt::Error)?.ty();
         emit(None, &Self::node_name(node, level))?;
         emit(Some(Token::Punct), ":")?;
@@ -501,23 +497,10 @@ impl TensorIR {
 
     /// Write `{ ...operations, return outputs }`, with the operations indented one level
     /// further than `level`, and subgraphs written as closures after their call.
-    fn write_body(
-        &self,
-        outputs: &[NodeId],
-        level: usize,
-        emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result,
-    ) -> fmt::Result {
+    fn write_body(&self, outputs: &[NodeId], level: usize, emit: Emit<'_>) -> fmt::Result {
         let indent = "    ".repeat(level + 1);
-        let list = |nodes: &[NodeId], emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result| {
-            for (i, node) in nodes.iter().enumerate() {
-                if i != 0 {
-                    emit(None, ", ")?;
-                }
-
-                emit(None, &Self::node_name(*node, level))?;
-            }
-
-            Ok(())
+        let list = |nodes: &[NodeId], emit: Emit<'_>| {
+            comma_separated(nodes, emit, |node, emit| emit(None, &Self::node_name(node, level)))
         };
 
         emit(Some(Token::Bracket(level)), "{")?;
@@ -544,37 +527,28 @@ impl TensorIR {
             emit(None, " ")?;
             emit(Some(Token::Punct), "=")?;
             emit(None, " ")?;
-            let mut closure = op.data().0.as_closure();
-            let mut opname = op.data().0.opname();
-            let mut inputs = op.inputs().to_vec();
 
-            if let Some((name, subgraph)) = closure {
-                opname = name.to_string();
-
-                // a single operation is written inline, e.g. `fused.binary.add(%1, %2)`
-                if let Some((inner, inner_inputs)) = Self::single_op(subgraph, op.inputs()) {
-                    opname = format!("{name}.{inner}");
-                    inputs = inner_inputs;
-                    closure = None;
-                }
-            }
+            let (opname, inputs, closure) = match op.data().0.as_closure() {
+                Some((name, subgraph)) => match Self::single_op(subgraph, op.inputs()) {
+                    // a single operation is written inline, e.g. `fused.binary.add(%1, %2)`
+                    Some((inner, inputs)) => (format!("{name}.{inner}"), inputs, None),
+                    None => (name.to_string(), op.inputs().to_vec(), Some(subgraph)),
+                },
+                None => (op.data().0.opname(), op.inputs().to_vec(), None),
+            };
 
             highlight::opname(&opname, level + 1, emit)?;
             emit(Some(Token::Bracket(level + 1)), "(")?;
             list(&inputs, emit)?;
             emit(Some(Token::Bracket(level + 1)), ")")?;
 
-            if let Some((_, subgraph)) = closure {
+            if let Some(subgraph) = closure {
                 let graph = subgraph.internal_graph();
                 emit(None, " ")?;
                 emit(Some(Token::Punct), "|")?;
-                for (i, &input) in subgraph.internal_inputs().iter().enumerate() {
-                    if i != 0 {
-                        emit(None, ", ")?;
-                    }
-
-                    graph.write_param(input, level + 1, emit)?;
-                }
+                comma_separated(subgraph.internal_inputs(), emit, |input, emit| {
+                    graph.write_param(input, level + 1, emit)
+                })?;
                 emit(Some(Token::Punct), "|")?;
                 emit(None, " ")?;
                 graph.write_body(subgraph.internal_outputs(), level + 1, emit)?;
@@ -591,6 +565,19 @@ impl TensorIR {
         emit(None, &"    ".repeat(level))?;
         emit(Some(Token::Bracket(level)), "}")
     }
+}
+
+/// Write each of `items` with `write`, separated by commas.
+fn comma_separated<T: Copy>(items: &[T], emit: Emit<'_>, write: impl Fn(T, Emit<'_>) -> fmt::Result) -> fmt::Result {
+    for (i, &item) in items.iter().enumerate() {
+        if i != 0 {
+            emit(None, ", ")?;
+        }
+
+        write(item, emit)?;
+    }
+
+    Ok(())
 }
 
 impl fmt::Display for TensorIR {

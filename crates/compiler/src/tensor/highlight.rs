@@ -21,7 +21,7 @@ pub(crate) fn opname(text: &str, depth: usize, emit: Emit<'_>) -> fmt::Result {
     lex(params, depth, emit)
 }
 
-type Emit<'a> = &'a mut dyn FnMut(Option<Token>, &str) -> fmt::Result;
+pub(crate) type Emit<'a> = &'a mut dyn FnMut(Option<Token>, &str) -> fmt::Result;
 
 fn namespaced(name: &str, emit: Emit<'_>) -> fmt::Result {
     // namespace separators are operators, as in method calls

@@ -77,10 +77,6 @@ impl IRHistory {
 
     /// Start recording, with `ir` the current display form of the IR.
     pub(crate) fn start(&mut self, ir: Vec<Line>, label: String) {
-        if self.recording {
-            return;
-        }
-
         self.recording = true;
         self.chain = None;
         let mut passes = self.passes();
@@ -96,11 +92,9 @@ impl IRHistory {
     /// only be computed when recording.
     pub(crate) fn record(&mut self, ir: Vec<Line>, edit: &dyn IRTransform) {
         let kind = short_type_name(edit.type_name());
-        let mergeable = MERGEABLE.contains(&kind);
 
-        if self.chain != Some(kind) {
-            self.chain = None;
-        }
+        // a different kind of edit ends the chain
+        self.chain = self.chain.filter(|&chain| chain == kind);
 
         // nothing visible changed
         if self.frames.last().is_some_and(|last| last.ir == ir) {
@@ -111,8 +105,7 @@ impl IRHistory {
         let edit_text = format!("{edit:?}");
 
         // merge consecutive edits of the same kind from the same pass into a single frame
-        if mergeable
-            && self.chain == Some(kind)
+        if self.chain.is_some()
             && let Some(last) = self.frames.last_mut()
             && last.passes == passes
         {
@@ -121,7 +114,7 @@ impl IRHistory {
             return;
         }
 
-        self.chain = mergeable.then_some(kind);
+        self.chain = MERGEABLE.contains(&kind).then_some(kind);
         self.frames.push(Frame { passes, edit: edit_text, ir, label: None });
     }
 
@@ -169,11 +162,7 @@ impl IRHistory {
         // stop the data from closing the script tag early
         let data = data.replace("</", "<\\/");
 
-        HTML_TEMPLATE
-            .replace("/*HIGHLIGHT_LIGHT*/", HIGHLIGHT_LIGHT)
-            .replace("/*HIGHLIGHT_DARK*/", HIGHLIGHT_DARK)
-            .replace("/*HIGHLIGHT_CSS*/", &highlight_css())
-            .replace("/*DATA*/null", &data)
+        HTML_TEMPLATE.replace("/*DATA*/null", &data)
     }
 }
 
@@ -219,26 +208,8 @@ fn json_string(s: &str) -> String {
 
 const HTML_TEMPLATE: &str = include_str!("history.html");
 
-/// Styling for highlighted lines of `TensorIR` display output, for the HTML page.
-///
-/// Token classes are `k` (keyword), `o` (operation), `t` (type), `n` (number/shape), `p` (operator)
-/// and `b0`-`b2` (brackets, coloured by nesting depth). Values and other text are left plain.
-const HIGHLIGHT_LIGHT: &str = "--hl-k:#a626a4; --hl-o:#4078f2; --hl-t:#c18401; --hl-n:#986801; --hl-p:#0184bc; \
-                         --hl-b0:#0431fa; --hl-b1:#319331; --hl-b2:#7b3814;";
-const HIGHLIGHT_DARK: &str = "--hl-k:#e143db; --hl-o:#4ea8ef; --hl-t:#eac47c; --hl-n:#dc9966; --hl-p:#00bbc3; \
-                        --hl-b0:#ffd700; --hl-b1:#da70d6; --hl-b2:#179fff;";
-
-/// CSS rules for the token classes.
-fn highlight_css() -> String {
-    let mut css = String::new();
-    for class in ["k", "o", "t", "n", "p", "b0", "b1", "b2"] {
-        css.push_str(&format!(".{class} {{ color: var(--hl-{class}); }} "));
-    }
-    css.push_str(".k { font-style: italic; }");
-    css
-}
-
-/// Markup for `line`, with each token wrapped in a `span` with its class, and all text escaped.
+/// Markup for `line`, with each token wrapped in a `span` with its class (styled in
+/// `history.html`), and all text escaped.
 fn markup(line: &Line) -> String {
     let mut out = String::new();
     for (token, text) in line {

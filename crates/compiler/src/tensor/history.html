@@ -8,13 +8,15 @@
 :root {
     --bg: #fafafa; --fg: #1c1c1c; --muted: #6b6b6b; --panel: #ffffff; --border: #dddddd;
     --add-bg: #d9f5dd; --del-bg: #fbdcdc; --accent: #3b6fd8;
-    /*HIGHLIGHT_LIGHT*/
+    --hl-k: #a626a4; --hl-o: #4078f2; --hl-t: #c18401; --hl-n: #986801; --hl-p: #0184bc;
+    --hl-b0: #0431fa; --hl-b1: #319331; --hl-b2: #7b3814;
 }
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #282b34; --fg: #abb1bf; --muted: #7f848e; --panel: #21252b; --border: #3a3f4b;
         --add-bg: #2b4535; --del-bg: #4d2a33; --accent: #4ea8ef;
-        /*HIGHLIGHT_DARK*/
+        --hl-k: #e143db; --hl-o: #4ea8ef; --hl-t: #eac47c; --hl-n: #dc9966; --hl-p: #00bbc3;
+        --hl-b0: #ffd700; --hl-b1: #da70d6; --hl-b2: #179fff;
     }
 }
 * { box-sizing: border-box; }
@@ -34,7 +36,11 @@ pre { margin: 0; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
 pre div { padding: 0 6px; border-radius: 3px; white-space: pre; scroll-margin: 160px 0 40px; }
 pre div.add { background: var(--add-bg); }
 pre div.del { background: var(--del-bg); }
-/*HIGHLIGHT_CSS*/
+/* token classes of highlighted IR lines, see `token_class` in history.rs:
+   keyword, operation, type, number/shape, operator, and brackets coloured by nesting depth */
+.k { color: var(--hl-k); font-style: italic; } .o { color: var(--hl-o); } .t { color: var(--hl-t); }
+.n { color: var(--hl-n); } .p { color: var(--hl-p); }
+.b0 { color: var(--hl-b0); } .b1 { color: var(--hl-b1); } .b2 { color: var(--hl-b2); }
 </style>
 </head>
 <body>
