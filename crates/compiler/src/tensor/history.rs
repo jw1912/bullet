@@ -2,9 +2,6 @@ use std::{collections::HashMap, fmt::Write, io, path::Path};
 
 use crate::tensor::{TensorIR, Token, transform::IRTransform};
 
-mod highlight;
-mod svg;
-
 /// Records the displayed form of a `TensorIR` after each core edit (see `transform::modify`),
 /// so that the optimisation and lowering process can be replayed as an animation.
 ///
@@ -128,16 +125,6 @@ impl IRHistory {
         self.frames.push(Frame { passes, edit: edit_text, ir, label: None });
     }
 
-    /// Write a self-contained SVG that animates this history,
-    /// which unlike the HTML page can be embedded in markdown.
-    pub fn write_svg(&self, path: impl AsRef<Path>) -> io::Result<()> {
-        std::fs::write(path, self.to_svg())
-    }
-
-    pub fn to_svg(&self) -> String {
-        svg::to_svg(self)
-    }
-
     /// Write a self-contained HTML page that animates this history.
     pub fn write_html(&self, path: impl AsRef<Path>) -> io::Result<()> {
         std::fs::write(path, self.to_html())
@@ -149,7 +136,7 @@ impl IRHistory {
         let mut line_ids = HashMap::new();
         let mut intern = |line: &Line| {
             *line_ids.entry(line.clone()).or_insert_with(|| {
-                lines.push(json_string(&highlight::markup(line, "span")));
+                lines.push(json_string(&markup(line)));
                 lines.len() - 1
             })
         };
@@ -183,9 +170,9 @@ impl IRHistory {
         let data = data.replace("</", "<\\/");
 
         HTML_TEMPLATE
-            .replace("/*HIGHLIGHT_LIGHT*/", highlight::LIGHT)
-            .replace("/*HIGHLIGHT_DARK*/", highlight::DARK)
-            .replace("/*HIGHLIGHT_CSS*/", &highlight::css("color"))
+            .replace("/*HIGHLIGHT_LIGHT*/", HIGHLIGHT_LIGHT)
+            .replace("/*HIGHLIGHT_DARK*/", HIGHLIGHT_DARK)
+            .replace("/*HIGHLIGHT_CSS*/", &highlight_css())
             .replace("/*DATA*/null", &data)
     }
 }
@@ -230,4 +217,50 @@ fn json_string(s: &str) -> String {
     out
 }
 
-const HTML_TEMPLATE: &str = include_str!("history/history.html");
+const HTML_TEMPLATE: &str = include_str!("history.html");
+
+/// Styling for highlighted lines of `TensorIR` display output, for the HTML page.
+///
+/// Token classes are `k` (keyword), `o` (operation), `t` (type), `n` (number/shape), `p` (operator)
+/// and `b0`-`b2` (brackets, coloured by nesting depth). Values and other text are left plain.
+const HIGHLIGHT_LIGHT: &str = "--hl-k:#a626a4; --hl-o:#4078f2; --hl-t:#c18401; --hl-n:#986801; --hl-p:#0184bc; \
+                         --hl-b0:#0431fa; --hl-b1:#319331; --hl-b2:#7b3814;";
+const HIGHLIGHT_DARK: &str = "--hl-k:#e143db; --hl-o:#4ea8ef; --hl-t:#eac47c; --hl-n:#dc9966; --hl-p:#00bbc3; \
+                        --hl-b0:#ffd700; --hl-b1:#da70d6; --hl-b2:#179fff;";
+
+/// CSS rules for the token classes.
+fn highlight_css() -> String {
+    let mut css = String::new();
+    for class in ["k", "o", "t", "n", "p", "b0", "b1", "b2"] {
+        css.push_str(&format!(".{class} {{ color: var(--hl-{class}); }} "));
+    }
+    css.push_str(".k { font-style: italic; }");
+    css
+}
+
+/// Markup for `line`, with each token wrapped in a `span` with its class, and all text escaped.
+fn markup(line: &Line) -> String {
+    let mut out = String::new();
+    for (token, text) in line {
+        match token {
+            Some(token) => write!(out, r#"<span class="{}">{}</span>"#, token_class(*token), escape(text)).unwrap(),
+            None => out.push_str(&escape(text)),
+        }
+    }
+    out
+}
+
+fn token_class(token: Token) -> &'static str {
+    match token {
+        Token::Keyword => "k",
+        Token::Op => "o",
+        Token::Type => "t",
+        Token::Number => "n",
+        Token::Punct => "p",
+        Token::Bracket(depth) => ["b0", "b1", "b2"][depth % 3],
+    }
+}
+
+fn escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
