@@ -23,7 +23,7 @@ use transform::{IRTransform, canonicalise, eliminate, modify};
 
 pub use builder::{IRBuilder, TNode};
 pub use highlight::Token;
-pub use history::{Frame, IRHistory, Line, Recording};
+pub use history::{Frame, IRHistory, Line};
 pub use operation::{OpType, TensorOp};
 pub use ttype::{DType, DValue, Shape, Size, TType, TValue};
 
@@ -41,8 +41,8 @@ pub struct TensorIR {
     /// Run `check_valid` after every edit
     /// Useful for debugging compiler passes, slows compilation
     pub debug: bool,
-    /// Records the IR after each core edit, see `IRHistory::attach`
-    recorder: Option<history::Recorder>,
+    /// Records the IR after each core edit while recording, see `start_recording`
+    history: IRHistory,
 }
 
 impl TensorIR {
@@ -123,19 +123,12 @@ impl TensorIR {
         result.map_err(|err| IRTrace::Frame(ir, transform, Rc::new(err)))
     }
 
-    /// Run `f` as a pass named by `type_name` in any attached `IRHistory`, without the
+    /// Run `f` as a pass named by `type_name` in the `IRHistory`, without the
     /// IR snapshot that `transform` takes for error traces, for use in hot loops.
     pub(crate) fn labelled<T>(&mut self, type_name: &'static str, f: impl FnOnce(&mut Self) -> T) -> T {
-        if let Some(recorder) = &self.recorder {
-            recorder.push_pass(type_name);
-        }
-
+        self.history.push_pass(type_name);
         let result = f(self);
-
-        if let Some(recorder) = &self.recorder {
-            recorder.pop_pass();
-        }
-
+        self.history.pop_pass();
         result
     }
 
@@ -216,9 +209,30 @@ impl TensorIR {
         if self.debug { self.check_valid() } else { Ok(()) }
     }
 
-    fn record_edit(&self, edit: &dyn IRTransform) {
-        if let Some(recorder) = &self.recorder {
-            recorder.record(self, edit);
+    pub fn history(&self) -> &IRHistory {
+        &self.history
+    }
+
+    /// Start recording edits to the `IRHistory`, which is stopped by default.
+    /// Records a frame of the current IR labelled with `label`, covering anything
+    /// that happened while stopped.
+    /// Does nothing if already recording.
+    pub fn start_recording(&mut self, label: impl Into<String>) {
+        if !self.history.is_recording() {
+            let ir = history::display(self);
+            self.history.start(ir, label.into());
+        }
+    }
+
+    /// Stop recording edits to the `IRHistory`, see `start_recording`.
+    pub fn stop_recording(&mut self) {
+        self.history.stop();
+    }
+
+    fn record_edit(&mut self, edit: &dyn IRTransform) {
+        if self.history.is_recording() {
+            let ir = history::display(self);
+            self.history.record(ir, edit);
         }
     }
 

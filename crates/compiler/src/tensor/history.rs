@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Write, io, path::Path, rc::Rc};
+use std::{collections::HashMap, fmt::Write, io, path::Path};
 
 use crate::tensor::{TensorIR, Token, transform::IRTransform};
 
@@ -8,18 +8,17 @@ mod svg;
 /// Records the displayed form of a `TensorIR` after each core edit (see `transform::modify`),
 /// so that the optimisation and lowering process can be replayed as an animation.
 ///
-/// Cloning gives another handle to the same history, and a single history can hold
-/// several recordings, e.g. forward and backward lowering of the same model.
+/// Every `TensorIR` has one, which only records between `TensorIR::start_recording`
+/// and `TensorIR::stop_recording`.
 #[derive(Clone, Debug, Default)]
-pub struct IRHistory(Rc<RefCell<Vec<Recording>>>);
-
-#[derive(Debug)]
-pub struct Recording {
-    pub name: String,
+pub struct IRHistory {
     pub frames: Vec<Frame>,
+    /// Type names of the transforms being applied, tracked even when not recording
+    /// so that it is correct whenever recording starts
     stack: Vec<&'static str>,
     /// Last frame is a chain of this kind of edit, which can be extended
     chain: Option<&'static str>,
+    recording: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -31,6 +30,9 @@ pub struct Frame {
     pub edit: String,
     /// Display form of the IR after the edit.
     pub ir: Vec<Line>,
+    /// Label given to `TensorIR::start_recording`, set on the first frame each time
+    /// recording is started, as the IR may have changed arbitrarily since the previous frame.
+    pub label: Option<String>,
 }
 
 /// A line of `TensorIR` display output, as plain text and highlighted tokens.
@@ -59,113 +61,86 @@ fn push_token(lines: &mut Vec<Line>, token: Option<Token>, text: &str) {
     }
 }
 
-/// Handle to a single recording within an `IRHistory`, attached to a `TensorIR`.
-#[derive(Clone, Debug)]
-pub(crate) struct Recorder {
-    history: IRHistory,
-    index: usize,
-}
-
-impl Recorder {
-    fn with<T>(&self, f: impl FnOnce(&mut Recording) -> T) -> T {
-        f(&mut self.history.0.borrow_mut()[self.index])
+impl IRHistory {
+    pub fn is_recording(&self) -> bool {
+        self.recording
     }
 
-    pub(crate) fn push_pass(&self, type_name: &'static str) {
-        self.with(|r| r.stack.push(short_type_name(type_name)));
+    pub(crate) fn push_pass(&mut self, type_name: &'static str) {
+        self.stack.push(type_name);
     }
 
-    pub(crate) fn pop_pass(&self) {
-        self.with(|r| r.stack.pop());
+    pub(crate) fn pop_pass(&mut self) {
+        self.stack.pop();
     }
 
-    pub(crate) fn record(&self, ir: &TensorIR, edit: &dyn IRTransform) {
-        let mut lines = vec![Vec::new()];
-        let written = ir.write_ir(&mut |token, text| {
-            push_token(&mut lines, token, text);
-            Ok(())
-        });
-        let text = match written {
-            Ok(()) => lines,
-            Err(_) => vec![vec![(None, "<failed to display IR>".to_string())]],
-        };
+    fn passes(&self) -> Vec<&'static str> {
+        self.stack.iter().map(|&name| short_type_name(name)).collect()
+    }
 
+    /// Start recording, with `ir` the current display form of the IR.
+    pub(crate) fn start(&mut self, ir: Vec<Line>, label: String) {
+        if self.recording {
+            return;
+        }
+
+        self.recording = true;
+        self.chain = None;
+        let mut passes = self.passes();
+        passes.push("StartRecording");
+        self.frames.push(Frame { passes, edit: String::new(), ir, label: Some(label) });
+    }
+
+    pub(crate) fn stop(&mut self) {
+        self.recording = false;
+    }
+
+    /// Record `ir`, the display form of the IR after `edit`, which should
+    /// only be computed when recording.
+    pub(crate) fn record(&mut self, ir: Vec<Line>, edit: &dyn IRTransform) {
         let kind = short_type_name(edit.type_name());
         let mergeable = MERGEABLE.contains(&kind);
 
-        self.with(|r| {
-            if r.chain != Some(kind) {
-                r.chain = None;
-            }
+        if self.chain != Some(kind) {
+            self.chain = None;
+        }
 
-            // nothing visible changed
-            if r.frames.last().is_some_and(|last| last.ir == text) {
-                return;
-            }
+        // nothing visible changed
+        if self.frames.last().is_some_and(|last| last.ir == ir) {
+            return;
+        }
 
-            let passes = r.stack.clone();
+        let passes = self.passes();
+        let edit_text = format!("{edit:?}");
 
-            let edit_text = format!("{edit:?}");
+        // merge consecutive edits of the same kind from the same pass into a single frame
+        if mergeable
+            && self.chain == Some(kind)
+            && let Some(last) = self.frames.last_mut()
+            && last.passes == passes
+        {
+            write!(last.edit, "\n{edit_text}").unwrap();
+            last.ir = ir;
+            return;
+        }
 
-            // merge consecutive edits of the same kind from the same pass into a single frame
-            if mergeable
-                && r.chain == Some(kind)
-                && let Some(last) = r.frames.last_mut()
-                && last.passes == passes
-            {
-                write!(last.edit, "\n{edit_text}").unwrap();
-                last.ir = text;
-                return;
-            }
-
-            r.chain = mergeable.then_some(kind);
-            r.frames.push(Frame { passes, edit: edit_text, ir: text });
-        });
-    }
-}
-
-/// Edits for which a chain from the same pass is shown as a single frame
-const MERGEABLE: [&str; 3] = ["AddOperation", "RemoveOperation", "ReorderInputs"];
-
-fn short_type_name(name: &'static str) -> &'static str {
-    let name = name.split('<').next().unwrap_or(name);
-    name.rsplit("::").next().unwrap_or(name)
-}
-
-impl IRHistory {
-    /// Start a new recording on `ir`, replacing any recording it was already attached to.
-    pub fn attach(&self, ir: &mut TensorIR, name: impl Into<String>) {
-        let mut recordings = self.0.borrow_mut();
-        let index = recordings.len();
-        recordings.push(Recording { name: name.into(), frames: Vec::new(), stack: Vec::new(), chain: None });
-        drop(recordings);
-
-        let recorder = Recorder { history: self.clone(), index };
-        recorder.record(ir, &Attach);
-        ir.recorder = Some(recorder);
+        self.chain = mergeable.then_some(kind);
+        self.frames.push(Frame { passes, edit: edit_text, ir, label: None });
     }
 
-    pub fn num_recordings(&self) -> usize {
-        self.0.borrow().len()
+    /// Write a self-contained SVG that animates this history,
+    /// which unlike the HTML page can be embedded in markdown.
+    pub fn write_svg(&self, path: impl AsRef<Path>) -> io::Result<()> {
+        std::fs::write(path, self.to_svg())
     }
 
-    pub fn with_recordings<T>(&self, f: impl FnOnce(&[Recording]) -> T) -> T {
-        f(&self.0.borrow())
+    pub fn to_svg(&self) -> String {
+        svg::to_svg(self)
     }
 
-    /// Write a self-contained HTML page that animates every recording.
+    /// Write a self-contained HTML page that animates this history.
     pub fn write_html(&self, path: impl AsRef<Path>) -> io::Result<()> {
         std::fs::write(path, self.to_html())
-    }
-
-    /// Write a self-contained SVG that animates the recording at `index`,
-    /// which unlike the HTML page can be embedded in markdown.
-    pub fn write_svg(&self, path: impl AsRef<Path>, index: usize) -> io::Result<()> {
-        std::fs::write(path, self.to_svg(index))
-    }
-
-    pub fn to_svg(&self, index: usize) -> String {
-        svg::to_svg(&self.0.borrow()[index])
     }
 
     pub fn to_html(&self) -> String {
@@ -182,28 +157,24 @@ impl IRHistory {
         let mut passes = Vec::new();
         let mut pass_ids = HashMap::new();
 
-        let mut data = String::from("{\"recordings\":[");
-        for (i, recording) in self.0.borrow().iter().enumerate() {
+        let mut data = String::from("{\"frames\":[");
+        for (i, frame) in self.frames.iter().enumerate() {
             if i != 0 {
                 data.push(',');
             }
 
-            write!(data, "{{\"name\":{},\"frames\":[", json_string(&recording.name)).unwrap();
-            for (j, frame) in recording.frames.iter().enumerate() {
-                if j != 0 {
-                    data.push(',');
-                }
+            let pass = frame.passes.join(" > ");
+            let pass = *pass_ids.entry(pass.clone()).or_insert_with(|| {
+                passes.push(json_string(&pass));
+                passes.len() - 1
+            });
 
-                let pass = frame.passes.join(" > ");
-                let pass = *pass_ids.entry(pass.clone()).or_insert_with(|| {
-                    passes.push(json_string(&pass));
-                    passes.len() - 1
-                });
-
-                let ids = frame.ir.iter().map(|l| intern(l).to_string()).collect::<Vec<_>>().join(",");
-                write!(data, "[{pass},{},[{ids}]]", json_string(&frame.edit)).unwrap();
+            let ids = frame.ir.iter().map(|l| intern(l).to_string()).collect::<Vec<_>>().join(",");
+            write!(data, "[{pass},{},[{ids}]", json_string(&frame.edit)).unwrap();
+            if let Some(label) = &frame.label {
+                write!(data, ",{}", json_string(label)).unwrap();
             }
-            data.push_str("]}");
+            data.push(']');
         }
 
         write!(data, "],\"passes\":[{}],\"lines\":[{}]}}", passes.join(","), lines.join(",")).unwrap();
@@ -219,13 +190,26 @@ impl IRHistory {
     }
 }
 
-#[derive(Debug)]
-struct Attach;
-
-impl IRTransform for Attach {
-    fn apply(&self, _: &mut TensorIR) -> Result<(), super::IRTrace> {
+/// Display form of `ir`, split into highlighted lines.
+pub(crate) fn display(ir: &TensorIR) -> Vec<Line> {
+    let mut lines = vec![Vec::new()];
+    let written = ir.write_ir(&mut |token, text| {
+        push_token(&mut lines, token, text);
         Ok(())
+    });
+
+    match written {
+        Ok(()) => lines,
+        Err(_) => vec![vec![(None, "<failed to display IR>".to_string())]],
     }
+}
+
+/// Edits for which a chain from the same pass is shown as a single frame
+const MERGEABLE: [&str; 3] = ["AddOperation", "RemoveOperation", "ReorderInputs"];
+
+fn short_type_name(name: &'static str) -> &'static str {
+    let name = name.split('<').next().unwrap_or(name);
+    name.rsplit("::").next().unwrap_or(name)
 }
 
 fn json_string(s: &str) -> String {

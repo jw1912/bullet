@@ -27,6 +27,7 @@ button:hover { border-color: var(--accent); }
 input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
 .muted { color: var(--muted); }
 #pass { font-weight: 600; }
+#label { padding: 1px 8px; border-radius: 4px; background: var(--accent); color: var(--panel); font-weight: 600; }
 #edit { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-all; max-height: 4.2em; overflow: auto; width: 100%; }
 main { padding: 12px 16px; }
 pre { margin: 0; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -39,7 +40,6 @@ pre div.del { background: var(--del-bg); }
 <body>
 <header>
     <div class="row">
-        <select id="recording" aria-label="Recording"></select>
         <button id="prevPass" title="Previous pass (Shift+←)">⏮</button>
         <button id="prev" title="Previous frame (←)">◀</button>
         <button id="play" title="Play/pause (Space)">▶</button>
@@ -48,21 +48,20 @@ pre div.del { background: var(--del-bg); }
         <label class="muted">fps <select id="speed">
             <option>1</option><option>2</option><option selected>5</option><option>10</option><option>30</option><option>60</option>
         </select></label>
-        <input id="slider" type="range" min="0" value="0" aria-label="Frame">
+        <input id="slider" type="range" min="0" value="0" list="boundaries" aria-label="Frame">
+        <datalist id="boundaries"></datalist>
         <span id="counter" class="muted"></span>
     </div>
-    <div class="row"><span id="pass"></span><span id="delta" class="muted"></span></div>
+    <div class="row"><span id="label" hidden></span><span id="pass"></span><span id="delta" class="muted"></span></div>
     <div class="row"><div id="edit"></div></div>
 </header>
 <main><pre id="ir"></pre></main>
 <script>
 const DATA = /*DATA*/null;
 const $ = (id) => document.getElementById(id);
-let rec = 0, idx = 0, timer = null, steps = [];
+let idx = 0, timer = null, steps = [];
 
-DATA.recordings.forEach((r, i) => $("recording").add(new Option(`${r.name} (${r.frames.length} frames)`, i)));
-
-const frames = () => DATA.recordings[rec].frames;
+const frames = () => DATA.frames;
 const frameOf = (s) => steps[s][0];
 // the pass a step belongs to, without the core edit that ends each label
 const passOf = (s) => DATA.passes[frames()[frameOf(s)][0]].replace(/(^| > )[^>]*$/, "");
@@ -71,8 +70,7 @@ const SAME = 0, DEL = 1, ADD = 2;
 // line diff between frames i - 1 and i, as a merged list of [line, kind]
 const diffs = new Map();
 function diff(i) {
-    const key = `${rec}:${i}`;
-    if (diffs.has(key)) return diffs.get(key);
+    if (diffs.has(i)) return diffs.get(i);
 
     const b = frames()[i][2];
     const a = i > 0 ? frames()[i - 1][2] : b;
@@ -108,7 +106,7 @@ function diff(i) {
     }
 
     for (const l of a.slice(a.length - suf)) out.push([l, SAME]);
-    diffs.set(key, out);
+    diffs.set(i, out);
     return out;
 }
 
@@ -117,7 +115,10 @@ function diff(i) {
 // 2 = new IR with additions marked, 3 = new IR without highlighting
 function buildSteps() {
     steps = [];
-    frames().forEach((_, i) => {
+    const ticks = [];
+    frames().forEach((frame, i) => {
+        // frames where recording was started are marked on the slider
+        if (frame[3] !== undefined) ticks.push(new Option("", steps.length));
         const lines = diff(i);
         const dels = lines.some(([, k]) => k === DEL), adds = lines.some(([, k]) => k === ADD);
         // without additions, step 2 would be identical to step 3
@@ -126,13 +127,14 @@ function buildSteps() {
         if (adds) steps.push([i, 2]);
         steps.push([i, 3]);
     });
+    $("boundaries").replaceChildren(...ticks);
 }
 
 function render() {
     const fs = frames();
     if (fs.length === 0) { $("ir").textContent = ""; return; }
     const [frame, phase] = steps[idx];
-    const [pass, edit] = fs[frame];
+    const [pass, edit, , label] = fs[frame];
     const lines = diff(frame);
 
     const out = document.createDocumentFragment();
@@ -154,6 +156,8 @@ function render() {
     $("ir").replaceChildren(out);
     if (first) first.scrollIntoView({ block: "nearest" });
 
+    $("label").hidden = label === undefined;
+    $("label").textContent = label ?? "";
     $("pass").textContent = DATA.passes[pass] || "(top level)";
     const edits = edit.split("\n").length;
     $("delta").textContent = (frame > 0 ? `+${added} −${removed} lines` : "") + (edits > 1 ? ` · ${edits} edits` : "");
@@ -185,7 +189,6 @@ function setPlaying(on) {
     $("play").textContent = timer ? "⏸" : "▶";
 }
 
-$("recording").onchange = (e) => { rec = +e.target.value; setPlaying(false); buildSteps(); go(0); };
 $("slider").oninput = (e) => go(+e.target.value);
 $("prev").onclick = () => go(idx - 1);
 $("next").onclick = () => go(idx + 1);

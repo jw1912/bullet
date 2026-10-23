@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Write};
 
 use super::{
-    Line, Recording,
+    IRHistory, Line,
     highlight::{self, escape},
 };
 
@@ -96,10 +96,10 @@ fn phases(dels: bool, adds: bool) -> impl Iterator<Item = u8> {
     [(0, dels), (1, dels && adds), (2, adds), (3, true)].into_iter().filter_map(|(p, show)| show.then_some(p))
 }
 
-/// A self-contained SVG that loops through `recording` using CSS animations only,
+/// A self-contained SVG that loops through `history` using CSS animations only,
 /// so that it plays where scripts are not allowed, e.g. markdown on GitHub.
-pub fn to_svg(recording: &Recording) -> String {
-    let frames = &recording.frames;
+pub fn to_svg(history: &IRHistory) -> String {
+    let frames = &history.frames;
     let irs = frames.iter().map(|f| f.ir.iter().collect::<Vec<_>>()).collect::<Vec<_>>();
     let diffs = (0..frames.len()).map(|i| diff(if i > 0 { &irs[i - 1] } else { &irs[i] }, &irs[i])).collect::<Vec<_>>();
 
@@ -121,12 +121,13 @@ pub fn to_svg(recording: &Recording) -> String {
         svg,
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
 <style>
-svg {{ {} --bg:#fafafa; --fg:#1c1c1c; --muted:#6b6b6b; --panel:#fff; --border:#ddd; --add-bg:#d9f5dd; --del-bg:#fbdcdc; }}
-@media (prefers-color-scheme: dark) {{ svg {{ {} --bg:#282b34; --fg:#abb1bf; --muted:#7f848e; --panel:#21252b; --border:#3a3f4b; --add-bg:#2b4535; --del-bg:#4d2a33; }} }}
+svg {{ {} --bg:#fafafa; --fg:#1c1c1c; --muted:#6b6b6b; --panel:#fff; --border:#ddd; --add-bg:#d9f5dd; --del-bg:#fbdcdc; --accent:#3b6fd8; }}
+@media (prefers-color-scheme: dark) {{ svg {{ {} --bg:#282b34; --fg:#abb1bf; --muted:#7f848e; --panel:#21252b; --border:#3a3f4b; --add-bg:#2b4535; --del-bg:#4d2a33; --accent:#4ea8ef; }} }}
 text {{ font: {FONT_SIZE}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }}
 g > text, use {{ fill: var(--fg); }}
 .m {{ fill: var(--muted); }} .h {{ font-weight: 600; font-family: system-ui, sans-serif; font-size: 13px; }}
 {}
+.b {{ fill: var(--accent); font-weight: 600; }}
 .ab {{ fill: var(--add-bg); }} .db {{ fill: var(--del-bg); }}
 .s {{ visibility: hidden; animation: show {:.2}s step-end infinite; }}
 @keyframes show {{ 0% {{ visibility: visible; }} {:.5}% {{ visibility: hidden; }} }}
@@ -199,6 +200,18 @@ g > text, use {{ fill: var(--fg); }}
         )
         .unwrap();
         write!(svg, r#"<text class="m" x="{PAD}" y="{}">{delta}</text>"#, y + LINE_HEIGHT).unwrap();
+
+        // frames where recording started have no edit, so the label goes in its place
+        if let Some(label) = &frame.label {
+            let text = clip(label);
+            write!(
+                svg,
+                r#"<text class="b" x="{PAD}" y="{}" xml:space="preserve">{}</text>"#,
+                y + 2 * LINE_HEIGHT,
+                escape(&text)
+            )
+            .unwrap();
+        }
 
         for row in 0..EDIT_ROWS.min(edits.len()) {
             let text = if row == EDIT_ROWS - 1 && edits.len() > EDIT_ROWS {
