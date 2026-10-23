@@ -17,7 +17,7 @@ use crate::ir::{IR, IRError, Node, NodeId, Op, OpId, TypeSystem};
 
 use operation::{
     BroadcastAcrossDimension, CABinary, CABinaryOp, Constant, CopyOp, Input, ReduceAcrossDimension, Reduction,
-    ScalarConstant, Unary, UnaryOp,
+    ScalarConstant, SubGraph, Unary, UnaryOp,
 };
 use transform::{IRTransform, canonicalise, eliminate, modify};
 
@@ -438,36 +438,19 @@ impl std::error::Error for IRTrace {}
 impl TensorIR {
     /// Write the display form of the IR as a sequence of tokens, with their syntax class if they have one.
     pub fn write_ir(&self, emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result) -> fmt::Result {
-        fn map<T>(x: Result<T, IRTrace>) -> Result<T, fmt::Error> {
-            x.map_err(|_| fmt::Error)
-        }
-
-        fn write_type(emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result, ty: TType) -> fmt::Result {
-            emit(Some(Token::Type), &format!("{:?}", ty.dtype()))?;
-            emit(Some(Token::Bracket(1)), "[")?;
-            emit(Some(Token::Number), &format!("{:?}", ty.size()))?;
-            emit(Some(Token::Bracket(1)), "]")
-        }
-
         emit(Some(Token::Keyword), "irgraph")?;
         emit(Some(Token::Bracket(0)), "(")?;
-        let leaves = self.ir.operations().filter(|x| x.data().is_input()).collect::<Vec<_>>();
+        let leaves = self.ir.operations().filter(|x| x.data().is_input()).map(|x| x.outputs()[0]).collect::<Vec<_>>();
         let mline = leaves.len() >= 5;
 
-        for (i, leaf) in leaves.iter().enumerate() {
+        for (i, &leaf) in leaves.iter().enumerate() {
             if mline {
                 emit(None, "\n    ")?;
             } else if i != 0 {
                 emit(None, ", ")?;
             }
 
-            let node = leaf.outputs()[0];
-            let ty = map(self.get_node(node))?.ty();
-
-            emit(None, &format!("{node:?}"))?;
-            emit(Some(Token::Punct), ":")?;
-            emit(None, " ")?;
-            write_type(emit, ty)?;
+            self.write_param(leaf, 0, emit)?;
         }
 
         if mline {
@@ -476,65 +459,137 @@ impl TensorIR {
 
         emit(Some(Token::Bracket(0)), ")")?;
         emit(None, " ")?;
-        emit(Some(Token::Bracket(0)), "{")?;
-        emit(None, "\n")?;
+        self.write_body(&self.outputs.iter().copied().collect::<Vec<_>>(), 0, emit)
+    }
 
-        for op in map(self.ordered_operations())? {
-            if op.data().is_input() {
-                continue;
-            }
+    /// Name of `node` in a graph nested `level` subgraphs deep, prefixed so that it
+    /// does not shadow the names of the enclosing graphs.
+    fn node_name(node: NodeId, level: usize) -> String {
+        format!("%{}{}", "s".repeat(level), node.inner())
+    }
 
-            let inputs = op.inputs();
-            let outputs = op.outputs();
+    fn write_param(
+        &self,
+        node: NodeId,
+        level: usize,
+        emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result,
+    ) -> fmt::Result {
+        let ty = self.get_node(node).map_err(|_| fmt::Error)?.ty();
+        emit(None, &Self::node_name(node, level))?;
+        emit(Some(Token::Punct), ":")?;
+        emit(None, " ")?;
+        emit(Some(Token::Type), &format!("{:?}", ty.dtype()))?;
+        emit(Some(Token::Bracket(level + 1)), "[")?;
+        emit(Some(Token::Number), &format!("{:?}", ty.size()))?;
+        emit(Some(Token::Bracket(level + 1)), "]")
+    }
 
-            emit(None, "    ")?;
-            if outputs.len() > 1 {
-                emit(Some(Token::Bracket(1)), "[")?;
-            }
+    /// If `subgraph` is a single operation, which is not itself displayed as a closure, and returns
+    /// exactly its outputs, the operation's name and its inputs in terms of the `outer` inputs.
+    fn single_op(subgraph: &SubGraph, outer: &[NodeId]) -> Option<(String, Vec<NodeId>)> {
+        let mut ops = subgraph.internal_graph().ir.operations().filter(|op| !op.data().is_input());
+        let op = ops.next()?;
 
-            for (i, &output) in outputs.iter().enumerate() {
+        if ops.next().is_some() || op.data().0.as_closure().is_some() || op.outputs() != subgraph.internal_outputs() {
+            return None;
+        }
+
+        let inputs = subgraph.internal_inputs();
+        let outer = op.inputs().iter().map(|node| inputs.iter().position(|x| x == node).map(|i| outer[i]));
+        Some((op.data().0.opname(), outer.collect::<Option<_>>()?))
+    }
+
+    /// Write `{ ...operations, return outputs }`, with the operations indented one level
+    /// further than `level`, and subgraphs written as closures after their call.
+    fn write_body(
+        &self,
+        outputs: &[NodeId],
+        level: usize,
+        emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result,
+    ) -> fmt::Result {
+        let indent = "    ".repeat(level + 1);
+        let list = |nodes: &[NodeId], emit: &mut dyn FnMut(Option<Token>, &str) -> fmt::Result| {
+            for (i, node) in nodes.iter().enumerate() {
                 if i != 0 {
                     emit(None, ", ")?;
                 }
 
-                emit(None, &format!("{output:?}"))?;
+                emit(None, &Self::node_name(*node, level))?;
             }
 
+            Ok(())
+        };
+
+        emit(Some(Token::Bracket(level)), "{")?;
+        emit(None, "\n")?;
+
+        for op in self.ordered_operations().map_err(|_| fmt::Error)? {
+            if op.data().is_input() {
+                continue;
+            }
+
+            let outputs = op.outputs();
+
+            emit(None, &indent)?;
             if outputs.len() > 1 {
-                emit(Some(Token::Bracket(1)), "]")?;
+                emit(Some(Token::Bracket(level + 1)), "[")?;
+            }
+
+            list(outputs, emit)?;
+
+            if outputs.len() > 1 {
+                emit(Some(Token::Bracket(level + 1)), "]")?;
             }
 
             emit(None, " ")?;
             emit(Some(Token::Punct), "=")?;
             emit(None, " ")?;
-            highlight::opname(&op.data().0.opname(), 1, emit)?;
-            emit(Some(Token::Bracket(1)), "(")?;
+            let mut closure = op.data().0.as_closure();
+            let mut opname = op.data().0.opname();
+            let mut inputs = op.inputs().to_vec();
 
-            for (i, &input) in inputs.iter().enumerate() {
-                if i != 0 {
-                    emit(None, ", ")?;
+            if let Some((name, subgraph)) = closure {
+                opname = name.to_string();
+
+                // a single operation is written inline, e.g. `fused.binary.add(%1, %2)`
+                if let Some((inner, inner_inputs)) = Self::single_op(subgraph, op.inputs()) {
+                    opname = format!("{name}.{inner}");
+                    inputs = inner_inputs;
+                    closure = None;
                 }
-
-                emit(None, &format!("{input:?}"))?;
             }
 
-            emit(Some(Token::Bracket(1)), ")")?;
+            highlight::opname(&opname, level + 1, emit)?;
+            emit(Some(Token::Bracket(level + 1)), "(")?;
+            list(&inputs, emit)?;
+            emit(Some(Token::Bracket(level + 1)), ")")?;
+
+            if let Some((_, subgraph)) = closure {
+                let graph = subgraph.internal_graph();
+                emit(None, " ")?;
+                emit(Some(Token::Punct), "|")?;
+                for (i, &input) in subgraph.internal_inputs().iter().enumerate() {
+                    if i != 0 {
+                        emit(None, ", ")?;
+                    }
+
+                    graph.write_param(input, level + 1, emit)?;
+                }
+                emit(Some(Token::Punct), "|")?;
+                emit(None, " ")?;
+                graph.write_body(subgraph.internal_outputs(), level + 1, emit)?;
+            }
+
             emit(None, "\n")?;
         }
 
-        emit(None, "    ")?;
+        emit(None, &indent)?;
         emit(Some(Token::Keyword), "return")?;
         emit(None, " ")?;
-        for (i, &output) in self.outputs.iter().enumerate() {
-            if i != 0 {
-                emit(None, ", ")?;
-            }
-
-            emit(None, &format!("{output:?}"))?;
-        }
-
+        list(outputs, emit)?;
         emit(None, "\n")?;
-        emit(Some(Token::Bracket(0)), "}")
+        emit(None, &"    ".repeat(level))?;
+        emit(Some(Token::Bracket(level)), "}")
     }
 }
 

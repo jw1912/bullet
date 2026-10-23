@@ -198,11 +198,14 @@ $("play").onclick = () => setPlaying(!timer);
 $("speed").onchange = () => { if (timer) setPlaying(true); };
 document.addEventListener("keydown", (e) => {
     if (e.target.tagName === "SELECT") return;
-    if (e.key === " ") { e.preventDefault(); setPlaying(!timer); }
+    if (e.key === " ") setPlaying(!timer);
     else if (e.key === "ArrowLeft") e.shiftKey ? jumpPass(-1) : go(idx - 1);
     else if (e.key === "ArrowRight") e.shiftKey ? jumpPass(1) : go(idx + 1);
     else if (e.key === "Home") go(0);
     else if (e.key === "End") go(steps.length - 1);
+    else return;
+    // otherwise a focused slider would also move, skipping a step
+    e.preventDefault();
 });
 
 buildSteps();

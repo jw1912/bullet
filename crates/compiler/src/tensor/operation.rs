@@ -56,6 +56,12 @@ pub trait OpType: Any + Debug + 'static {
     fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         Err(format!("Gradient not implemented for {}", self.opname()).into())
     }
+
+    /// If set, the op is displayed in `TensorIR` output as a call to the given name,
+    /// followed by the subgraph as a closure, instead of by `opname`.
+    fn as_closure(&self) -> Option<(&str, &SubGraph)> {
+        None
+    }
 }
 
 #[derive(Clone, Debug)]
