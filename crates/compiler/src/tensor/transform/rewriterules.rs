@@ -14,6 +14,10 @@ use crate::{
 
 pub trait RewriteRule: fmt::Debug + 'static {
     fn apply(&self, ir: &mut TensorIR, operation: Op<Tensor>) -> Result<bool, IRTrace>;
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 #[derive(Debug)]

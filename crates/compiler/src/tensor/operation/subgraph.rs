@@ -117,4 +117,8 @@ impl OpType for SubGraph {
     fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, _output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         Err("Cannot call `backward` on arbitrary subgraph!".into())
     }
+
+    fn as_closure(&self) -> Option<(&str, &SubGraph)> {
+        Some(("subgraph", self))
+    }
 }

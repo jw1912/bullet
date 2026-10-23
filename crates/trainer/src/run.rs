@@ -145,7 +145,7 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
 
     let defn = optimiser.definition();
     let (func, gmap, norms) = defn
-        .lower_backward(&Default::default(), steps.batch_size, schedule.track_grad_norms)
+        .lower_backward(&Default::default(), steps.batch_size, schedule.track_grad_norms, false)
         .map_err(TrainingError::CompilingBackwards)?;
     let map = func.map();
     let mut backwards = Function::new(device.clone(), func.ir().clone()).map_err(TrainingError::CompilingBackwards)?;

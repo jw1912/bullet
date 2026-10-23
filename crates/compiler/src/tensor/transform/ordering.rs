@@ -5,7 +5,7 @@ use crate::{
     tensor::{
         IRTrace, TensorIR,
         operation::{Constant, ScalarConstant},
-        transform::IRTransform,
+        transform::{IRTransform, modify::ReorderInputs},
     },
 };
 
@@ -80,9 +80,15 @@ impl IRTransform for OrderCommutativeInputs {
                 group.sort();
                 nodes.sort();
 
-                let op = ir.get_op_mut(op.id())?;
+                let old = ir.get_op(op.id())?.inputs();
+                let mut inputs = old.to_vec();
                 for (idx, NodeScore(id, _)) in group.into_iter().zip(nodes) {
-                    op.set_input(idx, id);
+                    inputs[idx] = id;
+                }
+
+                // only transform on change, as this visits every operation
+                if inputs != old {
+                    ir.transform(ReorderInputs { op: op.id(), inputs })?;
                 }
             }
         }

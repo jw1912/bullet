@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use std::{cell::RefCell, fmt, rc::Rc};
 
 use crate::{
     ir::{NodeId, OpId},
     tensor::{
         IRTrace, TValue, TensorIR, TensorOp,
         operation::{Constant, CopyOp, ScalarConstant},
-        transform::{IRTransform, eliminate::*, foldrules::*, ordering::*, rewriterules::*},
+        transform::{IRTransform, eliminate::*, foldrules::*, modify::AddOperation, ordering::*, rewriterules::*},
     },
 };
 
@@ -82,19 +82,15 @@ impl CanonicalisePass {
             let op = ir.get_op(id)?;
 
             if let Some(consts) = Self::try_evaluate(ir, op.inputs(), op.data())? {
-                let outputs = op.outputs().to_vec();
-                for (old, new_const) in outputs.into_iter().zip(consts) {
-                    let new = ir.add_op([], Ok::<_, IRTrace>(new_const))?[0];
-                    ir.swap_outputs(old, new)?;
-                }
-
-                ir.remove_op(id)?;
+                ir.transform(ConstantFold { op: id, values: RefCell::new(consts) })?;
                 return Ok(true);
             }
 
             for fold in &self.folds {
                 if let Some(new) = fold.fold(ir, op)? {
-                    id = ir.replace_op(op.id(), new)?;
+                    let first_output = op.outputs()[0];
+                    ir.transform(ApplyFold { rule: fold.clone(), op: op.id(), new })?;
+                    id = ir.get_parent_op(first_output)?;
                     success = true;
                     continue 'fold;
                 }
@@ -102,7 +98,8 @@ impl CanonicalisePass {
 
             let op = op.clone();
             for rewrite in &self.rewrites {
-                if rewrite.apply(ir, op.clone())? {
+                // most attempts fail, so these are only labelled rather than full transforms
+                if ir.labelled(rewrite.type_name(), |ir| rewrite.apply(ir, op.clone()))? {
                     return Ok(true);
                 }
             }
@@ -140,6 +137,49 @@ impl CanonicalisePass {
         }
 
         Ok(None)
+    }
+}
+
+/// Replaces an operation whose inputs are all constant with its evaluated outputs.
+struct ConstantFold {
+    op: OpId,
+    values: RefCell<Vec<Constant>>,
+}
+
+impl fmt::Debug for ConstantFold {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // the values themselves can be huge
+        write!(f, "ConstantFold({:?})", self.op)
+    }
+}
+
+impl IRTransform for ConstantFold {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        let outputs = ir.get_op(self.op)?.outputs().to_vec();
+        for (old, value) in outputs.into_iter().zip(self.values.take()) {
+            let new = ir.add_op([], Ok::<_, IRTrace>(value))?[0];
+            ir.swap_outputs(old, new)?;
+        }
+
+        ir.remove_op(self.op)
+    }
+}
+
+/// Applies a matched fold rule, shown under the rule's own name.
+#[derive(Debug)]
+struct ApplyFold {
+    rule: Rc<dyn FoldRule>,
+    op: OpId,
+    new: AddOperation,
+}
+
+impl IRTransform for ApplyFold {
+    fn apply(&self, ir: &mut TensorIR) -> Result<(), IRTrace> {
+        ir.replace_op(self.op, self.new.clone()).map(|_| ())
+    }
+
+    fn type_name(&self) -> &'static str {
+        self.rule.type_name()
     }
 }
 
