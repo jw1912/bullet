@@ -82,7 +82,7 @@ where
 
         std::thread::spawn(move || {
             let mut reusable = Vec::new();
-            
+
             'dataloading: while let Ok(game_bytes) = receiver.recv() {
                 if game_msg_receiver.try_recv().unwrap_or(false) {
                     let _ = msg_sender.send(true);
