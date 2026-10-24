@@ -1,12 +1,18 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader, Cursor, Seek, SeekFrom},
-    sync::mpsc::{self, Receiver, SyncSender},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, SyncSender},
+    },
 };
 
 use crate::game::formats::bulletformat::ChessBoard;
 
-use super::rng::seeded_rng;
+use super::{
+    rng::seeded_rng,
+    shuffle::{Shuffle, convert_chunks},
+};
 
 use bullet_trainer::reader::DataReader;
 pub use viriformat::{
@@ -67,11 +73,13 @@ impl ViriBinpackLoader {
 
 impl DataReader<ChessBoard> for ViriBinpackLoader {
     fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
+        let buffer_size = self.buffer_size.max(1);
         let mut shuffle_buffer = Vec::new();
-        shuffle_buffer.reserve_exact(self.buffer_size);
+        shuffle_buffer.reserve_exact(buffer_size);
+        let mut shuffle = Shuffle::new(self.threads);
+        let decode_pool = Arc::clone(&shuffle.pool);
 
         let file_paths = self.file_paths.clone();
-        let buffer_size = self.buffer_size;
         let threads = self.threads;
         let filter = self.filter.clone();
         let interleave = self.interleave;
@@ -87,17 +95,20 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
             }
         });
 
-        let (game_sender, game_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(4 * self.threads);
+        let (game_sender, game_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
         let (game_msg_sender, game_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
             'dataloading: while let Ok(games) = receiver.recv() {
                 if game_msg_receiver.try_recv().unwrap_or(false) {
-                    msg_sender.send(true).unwrap();
+                    let _ = msg_sender.send(true);
                     break 'dataloading;
                 }
 
-                convert_buffer(threads, &game_sender, &games, &filter);
+                if convert_buffer(&decode_pool, &game_sender, &games, &filter) {
+                    let _ = msg_sender.send(true);
+                    break 'dataloading;
+                }
             }
         });
 
@@ -107,35 +118,36 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
         std::thread::spawn(move || {
             'dataloading: while let Ok(game) = game_receiver.recv() {
                 if buffer_msg_receiver.try_recv().unwrap_or(false) {
-                    game_msg_sender.send(true).unwrap();
+                    let _ = game_msg_sender.send(true);
                     break 'dataloading;
                 }
 
-                if shuffle_buffer.len() + game.len() < shuffle_buffer.capacity() {
-                    shuffle_buffer.extend_from_slice(&game);
-                } else {
-                    let diff = shuffle_buffer.capacity() - shuffle_buffer.len();
-                    if diff > 0 {
-                        shuffle_buffer.extend_from_slice(&game[..diff]);
+                let mut remaining = game.as_slice();
+                while !remaining.is_empty() {
+                    let count = remaining.len().min(buffer_size - shuffle_buffer.len());
+                    shuffle_buffer.extend_from_slice(&remaining[..count]);
+                    remaining = &remaining[count..];
+
+                    if shuffle_buffer.len() == buffer_size {
+                        shuffle.shuffle(&mut shuffle_buffer);
+
+                        if buffer_msg_receiver.try_recv().unwrap_or(false)
+                            || buffer_sender.send(shuffle_buffer).is_err()
+                        {
+                            let _ = game_msg_sender.send(true);
+                            break 'dataloading;
+                        }
+
+                        shuffle_buffer = Vec::new();
+                        shuffle_buffer.reserve_exact(buffer_size);
                     }
-
-                    shuffle(&mut shuffle_buffer);
-
-                    if buffer_msg_receiver.try_recv().unwrap_or(false) || buffer_sender.send(shuffle_buffer).is_err() {
-                        game_msg_sender.send(true).unwrap();
-                        break 'dataloading;
-                    }
-
-                    shuffle_buffer = Vec::new();
-                    shuffle_buffer.reserve_exact(buffer_size);
-                    shuffle_buffer.extend_from_slice(&game[diff..]);
                 }
             }
         });
 
         'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
             if f(&shuffle_buffer) {
-                buffer_msg_sender.send(true).unwrap();
+                let _ = buffer_msg_sender.send(true);
                 break 'dataloading;
             }
         }
@@ -239,26 +251,26 @@ fn read_interleave(
     }
 }
 
-fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &[Vec<u8>], filter: &ViriFilter) {
-    let chunk_size = games.len().div_ceil(threads);
+fn convert_buffer(
+    pool: &rayon::ThreadPool,
+    sender: &SyncSender<Vec<ChessBoard>>,
+    games: &[Vec<u8>],
+    filter: &ViriFilter,
+) -> bool {
+    let chunk_size = games.len().div_ceil(pool.current_num_threads()).clamp(1, 1024);
 
-    std::thread::scope(|s| {
-        for chunk in games.chunks(chunk_size) {
-            let this_sender = sender.clone();
-            s.spawn(move || {
-                let mut buffer = Vec::new();
+    convert_chunks(pool, sender, games, chunk_size, |chunk| {
+        let mut buffer = Vec::new();
 
-                let mut reusable = Vec::new();
-                for game_bytes in chunk {
-                    let game = Game::deserialise_from(&mut Cursor::new(game_bytes), reusable).unwrap();
-                    parse_into_buffer(&game, &mut buffer, filter);
-                    reusable = game.moves;
-                }
-
-                this_sender.send(buffer)
-            });
+        let mut reusable = Vec::new();
+        for game_bytes in chunk {
+            let game = Game::deserialise_from(&mut Cursor::new(game_bytes), reusable).unwrap();
+            parse_into_buffer(&game, &mut buffer, filter);
+            reusable = game.moves;
         }
-    });
+
+        buffer
+    })
 }
 
 fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFilter) {
@@ -294,14 +306,5 @@ fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFil
             )
             .unwrap();
         }
-    }
-}
-
-fn shuffle(data: &mut [ChessBoard]) {
-    let mut rng = seeded_rng();
-
-    for i in (0..data.len()).rev() {
-        let idx = rng.rand_range(0..i as u64 + 1) as usize;
-        data.swap(idx, i);
     }
 }
