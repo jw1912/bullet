@@ -2,12 +2,14 @@ mod direct;
 mod montybinpack;
 mod rng;
 pub mod sfbinpack;
+mod shuffle;
 mod text;
 pub mod viribinpack;
 
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
 pub use montybinpack::MontyBinpackLoader;
 pub use sfbinpack::SfBinpackLoader;
+pub use shuffle::ShuffledDataLoader;
 pub use text::InMemoryTextLoader;
 pub use viribinpack::{ViriBinpackLoader, ViriFilter};
 
@@ -33,11 +35,11 @@ pub trait LoadableDataType: Sized {
 }
 
 impl<T: BulletFormat + 'static> LoadableDataType for T {
-    fn result(&self) -> GameResult {
-        [GameResult::Loss, GameResult::Draw, GameResult::Win][self.result_idx()]
-    }
-
     fn score(&self) -> i16 {
         <Self as BulletFormat>::score(self)
+    }
+
+    fn result(&self) -> GameResult {
+        [GameResult::Loss, GameResult::Draw, GameResult::Win][self.result_idx()]
     }
 }
