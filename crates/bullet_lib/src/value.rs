@@ -4,7 +4,7 @@ pub mod save;
 
 use std::cell::RefCell;
 
-pub use builder::{NoOutputBuckets, ValueTrainerBuilder};
+pub use builder::{NoOutputBuckets, ValueTrainerBuilder, split_inputs};
 use bullet_compiler::tensor::TValue;
 use bullet_trainer::{
     model::{ModelEvaluator, ModelInputs, ModelInputsMapper, SavedFormat},
@@ -14,7 +14,10 @@ use bullet_trainer::{
 };
 
 use crate::{
-    game::{inputs::SparseInputType, outputs::OutputBuckets},
+    game::{
+        inputs::{InputSplit, SparseInputType},
+        outputs::OutputBuckets,
+    },
     nn::ExecutionContext,
     trainer::{
         schedule::{TrainingSchedule, lr::LrScheduler, wdl::WdlScheduler},
@@ -67,29 +70,12 @@ where
             1. / (1. + (-x).exp())
         }
 
-        let inputs = ModelInputs::default()
-            .add_sparse("stm", (num, 1), nnz)
-            .add_sparse("nstm", (num, 1), nnz)
-            .add_sparse("buckets", (1, 1), 1)
-            .add_dense("targets", (if target_wdl { 3 } else { 1 }, 1))
-            .add_dense("entry_weights", (1, 1));
-
-        ModelInputsMapper::build(&inputs, move |pos, step, ((((stm, ntm), buckets), targets), weights)| {
-            let mut cnt = 0;
-            inp.map_features(pos, |our, opp| {
-                assert!(our < num && opp < num, "Input feature index exceeded input size!");
-                stm[cnt] = our as i32;
-                ntm[cnt] = opp as i32;
-                cnt += 1;
-            });
-
-            if cnt < nnz {
-                stm[cnt] = -1;
-                ntm[cnt] = -1;
-            }
-
-            assert!(cnt <= nnz, "More inputs provided than the specified maximum!");
-
+        // Everything but the sparse features: output bucket, entry weight, targets.
+        let fill_rest = move |pos: &I::RequiredDataType,
+                              step: Step,
+                              buckets: &mut [i32],
+                              targets: &mut [f32],
+                              weights: &mut [f32]| {
             buckets[0] = i32::from(out.bucket(pos));
             weights[0] = wget.map_or(1.0, |w| w(pos));
 
@@ -114,6 +100,52 @@ where
                 assert!((0.0..=1.0).contains(&blend), "WDL proportion must be in [0, 1]");
                 targets[0] = blend * result + (1. - blend) * score;
             }
+        };
+
+        if let Some(split) = inp.split() {
+            let (at, nnz1, nnz2) = (split.at, split.max_active_first, split.max_active_second);
+            let inputs = ModelInputs::default()
+                .add_sparse("stm", (at, 1), nnz1)
+                .add_sparse("nstm", (at, 1), nnz1)
+                .add_sparse("stm2", (num - at, 1), nnz2)
+                .add_sparse("nstm2", (num - at, 1), nnz2)
+                .add_sparse("buckets", (1, 1), 1)
+                .add_dense("targets", (if target_wdl { 3 } else { 1 }, 1))
+                .add_dense("entry_weights", (1, 1));
+
+            return ModelInputsMapper::build(
+                &inputs,
+                move |pos, step, ((((((stm, ntm), stm2), ntm2), buckets), targets), weights)| {
+                    map_split(&inp, pos, split, (stm, ntm), (stm2, ntm2));
+                    fill_rest(pos, step, buckets, targets, weights);
+                },
+            );
+        }
+
+        let inputs = ModelInputs::default()
+            .add_sparse("stm", (num, 1), nnz)
+            .add_sparse("nstm", (num, 1), nnz)
+            .add_sparse("buckets", (1, 1), 1)
+            .add_dense("targets", (if target_wdl { 3 } else { 1 }, 1))
+            .add_dense("entry_weights", (1, 1));
+
+        ModelInputsMapper::build(&inputs, move |pos, step, ((((stm, ntm), buckets), targets), weights)| {
+            let mut cnt = 0;
+            inp.map_features(pos, |our, opp| {
+                assert!(our < num && opp < num, "Input feature index exceeded input size!");
+                stm[cnt] = our as i32;
+                ntm[cnt] = opp as i32;
+                cnt += 1;
+            });
+
+            if cnt < nnz {
+                stm[cnt] = -1;
+                ntm[cnt] = -1;
+            }
+
+            assert!(cnt <= nnz, "More inputs provided than the specified maximum!");
+
+            fill_rest(pos, step, buckets, targets, weights);
         })
     }
 
@@ -128,6 +160,43 @@ where
         D: DataReader<I::RequiredDataType>,
     {
         ReadMapLoader::new(reader, self.make_mapper(scale, wdl), threads)
+    }
+}
+
+/// Writes the features of `pos` into the sparse input buffers of the two groups
+/// of `split`, second-group indices relative to `split.at`, each list ended by -1
+/// when shorter than its maximum.
+fn map_split<I: SparseInputType>(
+    inp: &I,
+    pos: &I::RequiredDataType,
+    split: InputSplit,
+    (stm, ntm): (&mut [i32], &mut [i32]),
+    (stm2, ntm2): (&mut [i32], &mut [i32]),
+) {
+    let (at, nnz1, nnz2, num) = (split.at, split.max_active_first, split.max_active_second, inp.num_inputs());
+    let (mut c1, mut c2) = (0, 0);
+    inp.map_features(pos, |our, opp| {
+        assert!(our < num && opp < num, "Input feature index exceeded input size!");
+        assert_eq!(our >= at, opp >= at, "Perspectives disagree on the feature group!");
+        if our < at {
+            assert!(c1 < nnz1, "More first-group inputs provided than the specified maximum!");
+            stm[c1] = our as i32;
+            ntm[c1] = opp as i32;
+            c1 += 1;
+        } else {
+            assert!(c2 < nnz2, "More second-group inputs provided than the specified maximum!");
+            stm2[c2] = (our - at) as i32;
+            ntm2[c2] = (opp - at) as i32;
+            c2 += 1;
+        }
+    });
+    if c1 < nnz1 {
+        stm[c1] = -1;
+        ntm[c1] = -1;
+    }
+    if c2 < nnz2 {
+        stm2[c2] = -1;
+        ntm2[c2] = -1;
     }
 }
 
@@ -268,5 +337,49 @@ where
         );
 
         run::measure_max_cpu_throughput(dataloader, steps).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::formats::bulletformat::ChessBoard;
+
+    /// Features 0..10, split at 6; the dummy emits 2, 7, 3, 9 for both perspectives.
+    #[derive(Clone, Copy)]
+    struct Dummy;
+
+    impl SparseInputType for Dummy {
+        type RequiredDataType = ChessBoard;
+        fn num_inputs(&self) -> usize {
+            10
+        }
+        fn max_active(&self) -> usize {
+            6
+        }
+        fn map_features<F: FnMut(usize, usize)>(&self, _: &ChessBoard, mut f: F) {
+            for i in [2, 7, 3, 9] {
+                f(i, i);
+            }
+        }
+        fn shorthand(&self) -> String {
+            "dummy".into()
+        }
+        fn description(&self) -> String {
+            "dummy".into()
+        }
+        fn split(&self) -> Option<InputSplit> {
+            Some(InputSplit { at: 6, max_active_first: 3, max_active_second: 3 })
+        }
+    }
+
+    #[test]
+    fn split_routes_features() {
+        let (mut stm, mut ntm, mut stm2, mut ntm2) = ([9; 3], [9; 3], [9; 3], [9; 3]);
+        map_split(&Dummy, &ChessBoard::default(), Dummy.split().unwrap(), (&mut stm, &mut ntm), (&mut stm2, &mut ntm2));
+        assert_eq!(stm, [2, 3, -1]);
+        assert_eq!(ntm, [2, 3, -1]);
+        assert_eq!(stm2, [1, 3, -1]);
+        assert_eq!(ntm2, [1, 3, -1]);
     }
 }

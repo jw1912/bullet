@@ -10,6 +10,14 @@ pub use chess_buckets::{ChessBuckets, ChessBucketsMirrored};
 pub use chess768::Chess768;
 pub use factorised::{Factorised, Factorises};
 
+/// See [`SparseInputType::split`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InputSplit {
+    pub at: usize,
+    pub max_active_first: usize,
+    pub max_active_second: usize,
+}
+
 pub trait SparseInputType: Clone + Send + Sync + 'static {
     type RequiredDataType: Copy + Send + Sync;
 
@@ -29,6 +37,15 @@ pub trait SparseInputType: Clone + Send + Sync + 'static {
 
     fn is_factorised(&self) -> bool {
         false
+    }
+
+    /// Optionally split the features into two groups, each fed to its own pair of
+    /// sparse inputs: features below `at` go to "stm"/"nstm" (at most `max_active_first`
+    /// per position), the rest to "stm2"/"nstm2" as `index - at` (at most
+    /// `max_active_second`). A model can then give each group its own weights, e.g. with
+    /// different clipping, without concatenating weight matrices every batch.
+    fn split(&self) -> Option<InputSplit> {
+        None
     }
 
     fn merge_factoriser(&self, unmerged: Vec<f32>) -> Vec<f32> {

@@ -125,8 +125,10 @@ where
         let saved_format = self.saved_format.expect("Need to set save format!");
         let buckets = self.output_buckets.inner();
 
-        let inputs = input_getter.num_inputs();
-        let nnz = input_getter.max_active();
+        let (inputs, nnz) = match input_getter.split() {
+            Some(s) => (s.at, s.max_active_first),
+            None => (input_getter.num_inputs(), input_getter.max_active()),
+        };
 
         let builder = ModelBuilder::default();
 
@@ -274,6 +276,35 @@ where
 
 type Nb<'a> = &'a ModelBuilder;
 type Nbn<'a> = ModelNode<'a>;
+
+/// The sparse inputs for the second feature group of an input type that
+/// [splits](crate::game::inputs::SparseInputType::split) its features: `(stm, nstm)`, sized for
+/// that group. Call it while building the model (e.g. inside `build`); `None` if `inputs`
+/// doesn't split.
+///
+/// ```ignore
+/// let inputs = MyInputs::default();
+/// let trainer = ValueTrainerBuilder::default()
+///     .inputs(inputs)
+///     // ...
+///     .build(|builder, stm, ntm| {
+///         let (stm2, ntm2) = split_inputs(&inputs, builder).unwrap();
+///         let l0 = builder.new_affine("l0", 768, 256);
+///         let l0b = builder.new_affine("l0b", inputs.num_inputs() - 768, 256);
+///         let stm = (l0.forward(stm) + l0b.forward(stm2)).screlu();
+///         let ntm = (l0.forward(ntm) + l0b.forward(ntm2)).screlu();
+///         // ...
+///     });
+/// ```
+pub fn split_inputs<'a, I: SparseInputType>(inputs: &I, builder: Nb<'a>) -> Option<(Nbn<'a>, Nbn<'a>)> {
+    inputs.split().map(|s| {
+        let n = inputs.num_inputs() - s.at;
+        (
+            builder.new_sparse_input("stm2", (n, 1), s.max_active_second),
+            builder.new_sparse_input("nstm2", (n, 1), s.max_active_second),
+        )
+    })
+}
 
 impl<O, I> ValueTrainerBuilder<O, I, SinglePerspective, NoOutputBuckets>
 where
