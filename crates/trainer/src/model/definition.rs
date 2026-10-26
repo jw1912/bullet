@@ -103,6 +103,7 @@ impl ModelDefinition {
         frozen: &BTreeSet<NodeId>,
         batch_size: usize,
         track_grad_norms: bool,
+        record_optimisations: bool,
     ) -> Result<(ModelFunctionDefinition, NodeMap, Option<GradNorms>), IRTrace> {
         // if track_grad_norms is on,              ^^^^^^^^^^^^^^^^^
         // return a node with that in it,
@@ -114,8 +115,14 @@ impl ModelDefinition {
         let loss = self.loss.ok_or("Loss node not defined!")?;
         let loss = *map.get(&loss).unwrap();
         bwd.register_output(loss);
+
+        if record_optimisations {
+            bwd.start_recording("Optimise forward pass");
+        }
+
         bwd.optimise()?;
         bwd.transform(CanonicalisePass::peephole_activations())?;
+        bwd.stop_recording();
 
         let grad = bwd.add_const(TValue::F32(vec![1.0]));
         let op = bwd.get_parent_op(loss)?;
@@ -171,7 +178,13 @@ impl ModelDefinition {
 
         bwd.transform(LowerForward)?;
         bwd.transform(InlineSubgraphs)?;
+
+        if record_optimisations {
+            bwd.start_recording("Take gradient");
+        }
+
         bwd.optimise()?;
+        bwd.stop_recording();
 
         Ok((ModelFunctionDefinition { ir: bwd, map }, gmap, norms))
     }

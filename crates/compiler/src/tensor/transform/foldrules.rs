@@ -26,6 +26,10 @@ use crate::tensor::TValue;
 /// by performing this transformation.
 pub trait FoldRule: fmt::Debug + 'static {
     fn fold(&self, ir: &TensorIR, operation: &Op<Tensor>) -> Result<Option<AddOperation>, IRTrace>;
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 #[macro_export]

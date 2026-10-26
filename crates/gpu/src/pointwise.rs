@@ -61,4 +61,8 @@ impl OpType for FusedPointwise {
     fn evaluate(&self, inputs: Vec<&TValue>, outputs: Vec<&mut TValue>) -> bool {
         self.sub.evaluate(inputs, outputs)
     }
+
+    fn as_closure(&self) -> Option<(&str, &SubGraph)> {
+        Some((if self.vectorised { "vectorised.kernel" } else { "kernel" }, &self.sub))
+    }
 }
