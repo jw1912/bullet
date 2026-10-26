@@ -109,6 +109,16 @@ impl OpType for BroadcastAcrossDimension {
                 let TValue::I32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, output);
             }
+            DType::F16 => {
+                let TValue::F16(input) = inputs[0] else { panic!() };
+                let TValue::F16(output) = &mut outputs[0] else { panic!() };
+                self.apply(input, output);
+            }
+            DType::Bf16 => {
+                let TValue::Bf16(input) = inputs[0] else { panic!() };
+                let TValue::Bf16(output) = &mut outputs[0] else { panic!() };
+                self.apply(input, output);
+            }
         }
 
         true

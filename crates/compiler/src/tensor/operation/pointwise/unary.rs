@@ -1,6 +1,6 @@
 use crate::{
     ir::IRError,
-    tensor::{DType, DValue, IRTrace, OpType, TNode, TType, TValue, TensorOp},
+    tensor::{DType, DValue, IRTrace, OpType, TNode, TType, TValue, TensorOp, bf16, f16},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,13 +28,26 @@ pub enum Unary {
 
 impl Unary {
     pub fn dtype(self, input: DType) -> Option<DType> {
+        let is_half = |ty| matches!(ty, DType::F16 | DType::Bf16);
+
         match self {
-            Self::Cast(ty) => Some(ty),
-            Self::Sgn | Self::Abs | Self::Identity | Self::IsNonNegative | Self::IsPositive | Self::IsZero => {
-                Some(input)
+            // half precision types only support conversion to/from f32
+            Self::Cast(ty) if is_half(input) || is_half(ty) => {
+                (input == ty || input == DType::F32 || ty == DType::F32).then_some(ty)
             }
+            Self::Cast(ty) => Some(ty),
+            Self::Identity => Some(input),
+            _ if is_half(input) => None,
+            Self::Sgn | Self::Abs | Self::IsNonNegative | Self::IsPositive | Self::IsZero => Some(input),
             _ => (input != DType::I32).then_some(input),
         }
+    }
+
+    /// Whether this is a cast between integer and half precision types,
+    /// which is not supported
+    pub fn is_integer_half_cast(self, input: DType) -> bool {
+        let is_half = |ty| matches!(ty, DType::F16 | DType::Bf16);
+        matches!(self, Self::Cast(ty) if (input == DType::I32 && is_half(ty)) || (is_half(input) && ty == DType::I32))
     }
 
     pub fn evaluate(self, input: DValue) -> Option<DValue> {
@@ -57,27 +70,37 @@ impl Unary {
             Self::Sgn => match input {
                 DValue::F32(x) => DValue::F32(x.signum()),
                 DValue::I32(x) => DValue::I32(x.signum()),
+                DValue::F16(_) | DValue::Bf16(_) => return None,
             },
             Self::Abs => match input {
                 DValue::F32(x) => DValue::F32(x.abs()),
                 DValue::I32(x) => DValue::I32(x.abs()),
+                DValue::F16(_) | DValue::Bf16(_) => return None,
             },
             Self::Cast(ty) => match (input, ty) {
                 (DValue::F32(x), DType::I32) => DValue::I32(x as i32),
                 (DValue::I32(x), DType::F32) => DValue::F32(x as f32),
-                _ => input,
+                (DValue::F32(x), DType::F16) => DValue::F16(f16::from_f32(x)),
+                (DValue::F16(x), DType::F32) => DValue::F32(x.to_f32()),
+                (DValue::F32(x), DType::Bf16) => DValue::Bf16(bf16::from_f32(x)),
+                (DValue::Bf16(x), DType::F32) => DValue::F32(x.to_f32()),
+                (x, ty) if x.dtype() == ty => input,
+                _ => return None,
             },
             Self::IsPositive => match input {
                 DValue::F32(x) => DValue::F32(f32::from(x > 0.0)),
                 DValue::I32(x) => DValue::I32(i32::from(x > 0)),
+                DValue::F16(_) | DValue::Bf16(_) => return None,
             },
             Self::IsZero => match input {
                 DValue::F32(x) => DValue::F32(f32::from(x == 0.0)),
                 DValue::I32(x) => DValue::I32(i32::from(x == 0)),
+                DValue::F16(_) | DValue::Bf16(_) => return None,
             },
             Self::IsNonNegative => match input {
                 DValue::F32(x) => DValue::F32(f32::from(x >= 0.0)),
                 DValue::I32(x) => DValue::I32(i32::from(x >= 0)),
+                DValue::F16(_) | DValue::Bf16(_) => return None,
             },
         })
     }
@@ -91,6 +114,10 @@ pub struct UnaryOp {
 
 impl UnaryOp {
     pub fn new(ty: TType, op: Unary) -> Result<Self, IRError> {
+        if op.is_integer_half_cast(ty.dtype()) {
+            return Err("Cannot cast between integer and half precision types!".into());
+        }
+
         if op.dtype(ty.dtype()).is_none() {
             return Err("UnaryOp failed type check!".into());
         }
@@ -203,5 +230,41 @@ mod tests {
         binary.evaluate(vec![&a], vec![&mut b]);
 
         assert_eq!(b, TValue::F32(vec![1.0; 4]));
+    }
+
+    #[test]
+    fn half_casts() {
+        for half in [DType::F16, DType::Bf16] {
+            assert_eq!(Unary::Cast(half).dtype(DType::F32), Some(half));
+            assert_eq!(Unary::Cast(DType::F32).dtype(half), Some(DType::F32));
+            assert_eq!(Unary::Cast(half).dtype(DType::I32), None);
+            assert_eq!(Unary::Cast(DType::I32).dtype(half), None);
+            assert_eq!(Unary::Exp.dtype(half), None);
+            assert_eq!(Unary::Abs.dtype(half), None);
+        }
+
+        assert_eq!(Unary::Cast(DType::Bf16).dtype(DType::F16), None);
+
+        for half in [DType::F16, DType::Bf16] {
+            assert!(UnaryOp::new(TType::new(4, DType::I32), Unary::Cast(half)).is_err());
+            assert!(UnaryOp::new(TType::new(4, half), Unary::Cast(DType::I32)).is_err());
+            assert_eq!(Unary::Cast(half).evaluate(DValue::I32(1)), None);
+            assert_eq!(Unary::Cast(DType::I32).evaluate(DValue::zero(half)), None);
+        }
+
+        let a = TValue::F32(vec![1.0, -2.5, 1.0e-3, 65520.0]);
+        let mut h = TValue::zeros(DType::F16, 4);
+        let mut b = TValue::zeros(DType::Bf16, 4);
+
+        UnaryOp::new(TType::new(4, DType::F32), Unary::Cast(DType::F16)).unwrap().evaluate(vec![&a], vec![&mut h]);
+        UnaryOp::new(TType::new(4, DType::F32), Unary::Cast(DType::Bf16)).unwrap().evaluate(vec![&a], vec![&mut b]);
+
+        let TValue::F32(a) = a else { panic!() };
+        assert_eq!(h, TValue::F16(a.iter().map(|&x| f16::from_f32(x)).collect()));
+        assert_eq!(b, TValue::Bf16(a.iter().map(|&x| bf16::from_f32(x)).collect()));
+
+        let mut back = TValue::zeros(DType::F32, 4);
+        UnaryOp::new(TType::new(4, DType::F16), Unary::Cast(DType::F32)).unwrap().evaluate(vec![&h], vec![&mut back]);
+        assert_eq!(back, TValue::F32(vec![1.0, -2.5, f16::from_f32(1.0e-3).to_f32(), f32::INFINITY]));
     }
 }

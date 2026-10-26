@@ -480,4 +480,16 @@ mod tests {
 
         builder.ir().eliminate_common_subexprs().unwrap();
     }
+
+    #[test]
+    fn integer_half_casts_rejected() {
+        for half in [DType::F16, DType::Bf16] {
+            for (from, to) in [(DType::I32, half), (half, DType::I32)] {
+                let builder = PointwiseBuilder::new(4usize);
+                let buf = builder.new_buffer(TType::new(4, from));
+                let value = buf.read(builder.tid(), 0);
+                assert!(builder.ir().unary(value.node, Unary::Cast(to)).is_err());
+            }
+        }
+    }
 }

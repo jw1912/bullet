@@ -5,6 +5,8 @@ use std::{
     ops::{Add, Div, Index, Mul, Sub},
 };
 
+use half::{bf16, f16};
+
 /// Type of a tensor
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TType {
@@ -229,14 +231,18 @@ impl Shape {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DType {
     F32,
+    F16,
     I32,
+    Bf16,
 }
 
 impl fmt::Debug for DType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::F32 => write!(f, "f32"),
+            Self::F16 => write!(f, "f16"),
             Self::I32 => write!(f, "i32"),
+            Self::Bf16 => write!(f, "bf16"),
         }
     }
 }
@@ -244,8 +250,8 @@ impl fmt::Debug for DType {
 impl DType {
     pub fn bytes(&self) -> usize {
         match self {
-            Self::F32 => 4,
-            Self::I32 => 4,
+            Self::F32 | Self::I32 => 4,
+            Self::F16 | Self::Bf16 => 2,
         }
     }
 }
@@ -254,12 +260,20 @@ impl DType {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DValue {
     F32(f32),
+    F16(f16),
     I32(i32),
+    Bf16(bf16),
 }
 
 impl From<f32> for DValue {
     fn from(value: f32) -> Self {
         Self::F32(value)
+    }
+}
+
+impl From<f16> for DValue {
+    fn from(value: f16) -> Self {
+        Self::F16(value)
     }
 }
 
@@ -269,32 +283,46 @@ impl From<i32> for DValue {
     }
 }
 
+impl From<bf16> for DValue {
+    fn from(value: bf16) -> Self {
+        Self::Bf16(value)
+    }
+}
+
 impl DValue {
     pub fn zero(dtype: DType) -> Self {
         match dtype {
             DType::F32 => 0.0.into(),
+            DType::F16 => f16::ZERO.into(),
             DType::I32 => 0.into(),
+            DType::Bf16 => bf16::ZERO.into(),
         }
     }
 
     pub fn one(dtype: DType) -> Self {
         match dtype {
             DType::F32 => 1.0.into(),
+            DType::F16 => f16::ONE.into(),
             DType::I32 => 1.into(),
+            DType::Bf16 => bf16::ONE.into(),
         }
     }
 
     pub fn neg_one(dtype: DType) -> Self {
         match dtype {
             DType::F32 => (-1.0).into(),
+            DType::F16 => f16::NEG_ONE.into(),
             DType::I32 => (-1).into(),
+            DType::Bf16 => bf16::NEG_ONE.into(),
         }
     }
 
     pub fn dtype(&self) -> DType {
         match *self {
             Self::F32(_) => DType::F32,
+            Self::F16(_) => DType::F16,
             Self::I32(_) => DType::I32,
+            Self::Bf16(_) => DType::Bf16,
         }
     }
 
@@ -309,7 +337,9 @@ impl DValue {
     pub fn ptr(&self) -> *mut c_void {
         match self {
             Self::F32(x) => (x as *const f32).cast_mut().cast(),
+            Self::F16(x) => (x as *const f16).cast_mut().cast(),
             Self::I32(x) => (x as *const i32).cast_mut().cast(),
+            Self::Bf16(x) => (x as *const bf16).cast_mut().cast(),
         }
     }
 }
@@ -318,7 +348,9 @@ impl fmt::Display for DValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::F32(x) => write!(f, "{x}"),
+            Self::F16(x) => write!(f, "{x}"),
             Self::I32(x) => write!(f, "{x}"),
+            Self::Bf16(x) => write!(f, "{x}"),
         }
     }
 }
@@ -327,14 +359,18 @@ impl fmt::Display for DValue {
 #[derive(Clone, Debug, PartialEq)]
 pub enum TValue {
     F32(Vec<f32>),
+    F16(Vec<f16>),
     I32(Vec<i32>),
+    Bf16(Vec<bf16>),
 }
 
 impl From<DValue> for TValue {
     fn from(value: DValue) -> Self {
         match value {
             DValue::F32(x) => TValue::F32(vec![x]),
+            DValue::F16(x) => TValue::F16(vec![x]),
             DValue::I32(x) => TValue::I32(vec![x]),
+            DValue::Bf16(x) => TValue::Bf16(vec![x]),
         }
     }
 }
@@ -343,49 +379,63 @@ impl TValue {
     pub fn ptr(&self) -> *const c_void {
         match self {
             Self::F32(x) => x.as_ptr().cast(),
+            Self::F16(x) => x.as_ptr().cast(),
             Self::I32(x) => x.as_ptr().cast(),
+            Self::Bf16(x) => x.as_ptr().cast(),
         }
     }
 
     pub fn mut_ptr(&mut self) -> *mut c_void {
         match self {
             Self::F32(x) => x.as_mut_ptr().cast(),
+            Self::F16(x) => x.as_mut_ptr().cast(),
             Self::I32(x) => x.as_mut_ptr().cast(),
+            Self::Bf16(x) => x.as_mut_ptr().cast(),
         }
     }
 
     pub fn zeros(dtype: DType, size: usize) -> Self {
         match dtype {
             DType::F32 => Self::F32(vec![0.0; size]),
+            DType::F16 => Self::F16(vec![f16::ZERO; size]),
             DType::I32 => Self::I32(vec![0; size]),
+            DType::Bf16 => Self::Bf16(vec![bf16::ZERO; size]),
         }
     }
 
     pub fn dtype(&self) -> DType {
         match self {
             Self::F32(_) => DType::F32,
+            Self::F16(_) => DType::F16,
             Self::I32(_) => DType::I32,
+            Self::Bf16(_) => DType::Bf16,
         }
     }
 
     pub fn size(&self) -> usize {
         match self {
             Self::F32(x) => x.len(),
+            Self::F16(x) => x.len(),
             Self::I32(x) => x.len(),
+            Self::Bf16(x) => x.len(),
         }
     }
 
     pub fn read(&self, idx: usize) -> DValue {
         match self {
             Self::F32(x) => DValue::F32(x[idx]),
+            Self::F16(x) => DValue::F16(x[idx]),
             Self::I32(x) => DValue::I32(x[idx]),
+            Self::Bf16(x) => DValue::Bf16(x[idx]),
         }
     }
 
     pub fn write(&mut self, idx: usize, value: DValue) {
         match (self, value) {
             (Self::F32(x), DValue::F32(y)) => x[idx] = y,
+            (Self::F16(x), DValue::F16(y)) => x[idx] = y,
             (Self::I32(x), DValue::I32(y)) => x[idx] = y,
+            (Self::Bf16(x), DValue::Bf16(y)) => x[idx] = y,
             _ => panic!(),
         }
     }

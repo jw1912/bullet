@@ -12,6 +12,7 @@ pub fn tystr(dtype: DType) -> &'static str {
     match dtype {
         DType::F32 => "float",
         DType::I32 => "int",
+        DType::F16 | DType::Bf16 => "short",
     }
 }
 
@@ -25,6 +26,70 @@ fn literal(value: DValue, dialect: Dialect) -> String {
             Dialect::Msl => format!("as_type<float>({:#x}u)", x.to_bits()),
         },
         DValue::I32(x) => x.to_string(),
+        DValue::F16(x) => format!("short({:#x})", x.to_bits()),
+        DValue::Bf16(x) => format!("short({:#x})", x.to_bits()),
+    }
+}
+
+static F16_CONVERSIONS: &str = r#"
+__device__ float f16_to_f32(short h) {
+    float f;
+    asm("cvt.f32.f16 %0, %1;" : "=f"(f) : "h"(h));
+    return f;
+}
+__device__ short f32_to_f16(float f) {
+    short h;
+    asm("cvt.rn.f16.f32 %0, %1;" : "=h"(h) : "f"(f));
+    return h;
+}
+"#;
+
+static F16_CONVERSIONS_HIP: &str = r#"
+__device__ float f16_to_f32(short h) {
+    return (float)__builtin_bit_cast(_Float16, h);
+}
+__device__ short f32_to_f16(float f) {
+    return __builtin_bit_cast(short, (_Float16)f);
+}
+"#;
+
+static BF16_CONVERSIONS: &str = r#"
+__device__ float bf16_to_f32(short h) {
+    return __uint_as_float(((unsigned int)(unsigned short)h) << 16);
+}
+__device__ short f32_to_bf16(float f) {
+    unsigned int u = __float_as_uint(f);
+    if ((u & 0x7fffffff) > 0x7f800000) return (short)((u >> 16) | 0x40);
+    u += 0x7fff + ((u >> 16) & 1);
+    return (short)(u >> 16);
+}
+"#;
+
+static HALF_CONVERSIONS_MSL: &str = r#"
+inline float f16_to_f32(short h) {
+    return float(as_type<half>(h));
+}
+inline short f32_to_f16(float f) {
+    return as_type<short>(half(f));
+}
+inline float bf16_to_f32(short h) {
+    return as_type<float>(uint(ushort(h)) << 16);
+}
+inline short f32_to_bf16(float f) {
+    uint u = as_type<uint>(f);
+    if ((u & 0x7fffffff) > 0x7f800000) return short((u >> 16) | 0x40);
+    u += 0x7fff + ((u >> 16) & 1);
+    return short(u >> 16);
+}
+"#;
+
+/// Helpers for converting between `float` and the `short`
+/// bit representations of `f16` and `bf16`
+pub fn half_conversions(props: &DeviceProps) -> String {
+    match props.dialect() {
+        Dialect::CudaHip if props.is_rocm() => format!("{F16_CONVERSIONS_HIP}{BF16_CONVERSIONS}"),
+        Dialect::CudaHip => format!("{F16_CONVERSIONS}{BF16_CONVERSIONS}"),
+        Dialect::Msl => HALF_CONVERSIONS_MSL.to_string(),
     }
 }
 
@@ -188,6 +253,7 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
             // input for everything but a cast; `opstr` still compares against
             // zero in the input type
             let out = tystr(if let Unary::Cast(cast) = op { cast } else { ty });
+            let dtype = ty;
             let ty = tystr(ty);
 
             let opstr = |x: &str| match op {
@@ -201,9 +267,17 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                 _ => {
                     let mslidx = usize::from(dialect == Dialect::Msl);
                     let opstr: &str = match op {
-                        Unary::Cast(nty) => match nty {
-                            DType::F32 => "static_cast<float>",
-                            DType::I32 => "static_cast<int>",
+                        Unary::Cast(nty) => match (dtype, nty) {
+                            (DType::F16, DType::F32) => "f16_to_f32",
+                            (DType::Bf16, DType::F32) => "bf16_to_f32",
+                            (DType::F32, DType::F16) => "f32_to_f16",
+                            (DType::F32, DType::Bf16) => "f32_to_bf16",
+                            (DType::F32 | DType::I32, DType::F32) => "static_cast<float>",
+                            (DType::F32 | DType::I32, DType::I32) => "static_cast<int>",
+                            (x, y) if x == y => "",
+                            (x, y) => unreachable!(
+                                "Unsupported cast {x:?} -> {y:?} should be rejected by `PointwiseIR::unary`!"
+                            ),
                         },
                         Unary::Abs => "abs",
                         Unary::Sin => ["sinf", "sin"][mslidx],

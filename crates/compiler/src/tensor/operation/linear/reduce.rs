@@ -148,6 +148,7 @@ impl OpType for ReduceAcrossDimension {
                 let TValue::I32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, output);
             }
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
 
         true

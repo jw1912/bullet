@@ -11,7 +11,10 @@ pub mod runtime;
 mod tests {
     use bullet_compiler::{
         ir::NodeId,
-        tensor::{DType, IRBuilder, IRTrace, TValue, TensorIR},
+        tensor::{
+            DType, DValue, IRBuilder, IRTrace, TValue, TensorIR, bf16, f16,
+            operation::{Select, SelectPad, Unary},
+        },
     };
 
     use crate::{
@@ -161,6 +164,146 @@ mod tests {
         Ok(())
     }
 
+    fn half_conversions<G: Gpu>() -> Result<(), G::Error> {
+        const SIZE: usize = 1024;
+
+        let builder = IRBuilder::default();
+        let x = builder.add_input(SIZE, DType::F32);
+        let xh = builder.add_input(SIZE, DType::F16);
+        let xb = builder.add_input(SIZE, DType::Bf16);
+        let to_f16 = x.unary(Unary::Cast(DType::F16)).unwrap();
+        let to_bf16 = x.unary(Unary::Cast(DType::Bf16)).unwrap();
+        let from_f16 = xh.unary(Unary::Cast(DType::F32)).unwrap();
+        let from_bf16 = xb.unary(Unary::Cast(DType::F32)).unwrap();
+        let mut ir = builder.build([to_f16, to_bf16, from_f16, from_bf16]);
+        ir.optimise().unwrap();
+
+        let device = Device::<G>::new(0)?;
+        let stream = device.new_stream()?;
+
+        let mut func = Function::new(device.clone(), ir).unwrap();
+        func.prealloc().unwrap();
+
+        // scatter bit patterns to hit subnormals, infinities, NaNs and rounding edge cases
+        let vals = (0..SIZE as u32).map(|i| f32::from_bits(i.wrapping_mul(0x9E37_79B9))).collect::<Vec<_>>();
+        let hvals = (0..SIZE as u16).map(|i| f16::from_bits(i.wrapping_mul(0x9E37))).collect::<Vec<_>>();
+        let bvals = (0..SIZE as u16).map(|i| bf16::from_bits(i.wrapping_mul(0x9E37))).collect::<Vec<_>>();
+
+        let buf_x = Buffer::from_host(&device, &TValue::F32(vals.clone()))?;
+        let buf_xh = Buffer::from_host(&device, &TValue::F16(hvals.clone()))?;
+        let buf_xb = Buffer::from_host(&device, &TValue::Bf16(bvals.clone()))?;
+        let buf_to_f16 = Buffer::from_host(&device, &TValue::zeros(DType::F16, SIZE))?;
+        let buf_to_bf16 = Buffer::from_host(&device, &TValue::zeros(DType::Bf16, SIZE))?;
+        let buf_from_f16 = Buffer::from_host(&device, &TValue::zeros(DType::F32, SIZE))?;
+        let buf_from_bf16 = Buffer::from_host(&device, &TValue::zeros(DType::F32, SIZE))?;
+
+        func.execute(
+            stream.clone(),
+            &[
+                (x.node(), buf_x),
+                (xh.node(), buf_xh),
+                (xb.node(), buf_xb),
+                (to_f16.node(), buf_to_f16.clone()),
+                (to_bf16.node(), buf_to_bf16.clone()),
+                (from_f16.node(), buf_from_f16.clone()),
+                (from_bf16.node(), buf_from_bf16.clone()),
+            ]
+            .into(),
+        )?
+        .value()?;
+
+        let TValue::F16(to_f16) = buf_to_f16.to_host()? else { panic!() };
+        let TValue::Bf16(to_bf16) = buf_to_bf16.to_host()? else { panic!() };
+        let TValue::F32(from_f16) = buf_from_f16.to_host()? else { panic!() };
+        let TValue::F32(from_bf16) = buf_from_bf16.to_host()? else { panic!() };
+
+        for i in 0..SIZE {
+            let (x, h, b) = (vals[i], hvals[i], bvals[i]);
+
+            if x.is_nan() {
+                assert!(to_f16[i].is_nan() && to_bf16[i].is_nan());
+            } else {
+                assert_eq!(to_f16[i].to_bits(), f16::from_f32(x).to_bits(), "{x:e}");
+                assert_eq!(to_bf16[i].to_bits(), bf16::from_f32(x).to_bits(), "{x:e}");
+            }
+
+            if h.is_nan() {
+                assert!(from_f16[i].is_nan());
+            } else {
+                assert_eq!(from_f16[i].to_bits(), h.to_f32().to_bits(), "{h}");
+            }
+
+            if b.is_nan() {
+                assert!(from_bf16[i].is_nan());
+            } else {
+                assert_eq!(from_bf16[i].to_bits(), b.to_f32().to_bits(), "{b}");
+            }
+        }
+
+        Ok(())
+    }
+
+    fn half_index_ops<G: Gpu>(dtype: DType) -> Result<(), G::Error> {
+        let half = |x: f32| match dtype {
+            DType::F16 => DValue::F16(f16::from_f32(x)),
+            DType::Bf16 => DValue::Bf16(bf16::from_f32(x)),
+            _ => unreachable!(),
+        };
+
+        let builder = IRBuilder::default();
+        let x = builder.add_input(16, dtype);
+        let y = builder.add_input(8, dtype);
+        let idx = builder.add_input(4, DType::I32);
+
+        let bcast_outer = x.broadcast([16], 0, 4).unwrap();
+        let bcast_inner = x.broadcast([16, 1], 1, 4).unwrap();
+        let pad = x.pad([4, 4], 1, 1, 2, half(1.5)).unwrap();
+        let slice = x.slice([4, 4], 1, 1, 3).unwrap();
+        let divisor = 2.into();
+        let select = Select { dtype, batch: 4.into(), inner: 4.into(), divisor };
+        let select = builder.add_op([x, idx], select).unwrap()[0];
+        let select_pad = SelectPad { dtype, batch: 4.into(), inner: 4.into(), divisor };
+        let select_pad = builder.add_op([y, idx], select_pad).unwrap()[0];
+
+        let outputs = [bcast_outer, bcast_inner, pad, slice, select, select_pad];
+        let ir = builder.build(outputs);
+
+        let tensor = |size: usize, offset: f32| {
+            let mut value = TValue::zeros(dtype, size);
+            (0..size).for_each(|i| value.write(i, half(0.37 * i as f32 - offset)));
+            value
+        };
+
+        let inputs =
+            [(x.node(), tensor(16, 3.0)), (y.node(), tensor(8, 1.0)), (idx.node(), TValue::I32(vec![0, 1, 1, 0]))];
+        let expected = ir.evaluate(inputs.clone()).unwrap().unwrap();
+
+        let mut ir = ir;
+        ir.optimise().unwrap();
+
+        let device = Device::<G>::new(0)?;
+        let stream = device.new_stream()?;
+
+        let mut func = Function::new(device.clone(), ir).unwrap();
+        func.prealloc().unwrap();
+
+        let mut bufs = Vec::new();
+        for (node, value) in inputs {
+            bufs.push((node, Buffer::from_host(&device, &value)?));
+        }
+        for out in outputs {
+            bufs.push((out.node(), Buffer::from_host(&device, &TValue::zeros(dtype, out.ty().size().get()))?));
+        }
+
+        func.execute(stream.clone(), &bufs.iter().cloned().collect())?.value()?;
+
+        for (node, buf) in bufs.into_iter().skip(3) {
+            assert_eq!(buf.to_host()?, expected[&node], "{node:?}");
+        }
+
+        Ok(())
+    }
+
     #[cfg(feature = "cuda")]
     mod cuda {
         use crate::runtime::cuda::{Cuda, CudaError};
@@ -178,6 +321,17 @@ mod tests {
         #[test]
         fn pad_non_finite() -> Result<(), CudaError> {
             super::pad_non_finite::<Cuda>()
+        }
+
+        #[test]
+        fn half_conversions() -> Result<(), CudaError> {
+            super::half_conversions::<Cuda>()
+        }
+
+        #[test]
+        fn half_index_ops() -> Result<(), CudaError> {
+            super::half_index_ops::<Cuda>(super::DType::F16)?;
+            super::half_index_ops::<Cuda>(super::DType::Bf16)
         }
     }
 
@@ -199,6 +353,17 @@ mod tests {
         fn pad_non_finite() -> Result<(), ROCmError> {
             super::pad_non_finite::<ROCm>()
         }
+
+        #[test]
+        fn half_conversions() -> Result<(), ROCmError> {
+            super::half_conversions::<ROCm>()
+        }
+
+        #[test]
+        fn half_index_ops() -> Result<(), ROCmError> {
+            super::half_index_ops::<ROCm>(super::DType::F16)?;
+            super::half_index_ops::<ROCm>(super::DType::Bf16)
+        }
     }
 
     #[cfg(feature = "metal")]
@@ -218,6 +383,17 @@ mod tests {
         #[test]
         fn pad_non_finite() -> Result<(), MetalError> {
             super::pad_non_finite::<Metal>()
+        }
+
+        #[test]
+        fn half_conversions() -> Result<(), MetalError> {
+            super::half_conversions::<Metal>()
+        }
+
+        #[test]
+        fn half_index_ops() -> Result<(), MetalError> {
+            super::half_index_ops::<Metal>(super::DType::F16)?;
+            super::half_index_ops::<Metal>(super::DType::Bf16)
         }
     }
 }

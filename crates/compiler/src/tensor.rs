@@ -23,6 +23,7 @@ use operation::{
 use transform::{IRTransform, canonicalise, eliminate, modify};
 
 pub use builder::{IRBuilder, TNode};
+pub use half::{bf16, f16};
 pub use highlight::Token;
 pub use history::{Frame, IRHistory, Line};
 pub use operation::{OpType, TensorOp};

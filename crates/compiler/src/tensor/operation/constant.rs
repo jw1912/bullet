@@ -52,7 +52,9 @@ impl ScalarConstant {
     pub fn to_tensor(&self) -> TValue {
         match self.0 {
             DValue::F32(x) => TValue::F32(vec![x; self.1.get()]),
+            DValue::F16(x) => TValue::F16(vec![x; self.1.get()]),
             DValue::I32(x) => TValue::I32(vec![x; self.1.get()]),
+            DValue::Bf16(x) => TValue::Bf16(vec![x; self.1.get()]),
         }
     }
 }
