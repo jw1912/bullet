@@ -65,6 +65,7 @@ impl OpType for Select {
                 let TValue::I32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, indices, output);
             }
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
 
         true
@@ -149,6 +150,7 @@ impl OpType for SelectPad {
                 let TValue::I32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, indices, output);
             }
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
 
         true

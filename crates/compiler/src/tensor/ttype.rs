@@ -229,14 +229,18 @@ impl Shape {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DType {
     F32,
+    F16,
     I32,
+    Bf16,
 }
 
 impl fmt::Debug for DType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::F32 => write!(f, "f32"),
+            Self::F16 => write!(f, "f16"),
             Self::I32 => write!(f, "i32"),
+            Self::Bf16 => write!(f, "bf16"),
         }
     }
 }
@@ -244,8 +248,8 @@ impl fmt::Debug for DType {
 impl DType {
     pub fn bytes(&self) -> usize {
         match self {
-            Self::F32 => 4,
-            Self::I32 => 4,
+            Self::F32 | Self::I32 => 4,
+            Self::F16 | Self::Bf16 => 2,
         }
     }
 }
@@ -274,6 +278,7 @@ impl DValue {
         match dtype {
             DType::F32 => 0.0.into(),
             DType::I32 => 0.into(),
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
     }
 
@@ -281,6 +286,7 @@ impl DValue {
         match dtype {
             DType::F32 => 1.0.into(),
             DType::I32 => 1.into(),
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
     }
 
@@ -288,6 +294,7 @@ impl DValue {
         match dtype {
             DType::F32 => (-1.0).into(),
             DType::I32 => (-1).into(),
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
     }
 
@@ -358,6 +365,7 @@ impl TValue {
         match dtype {
             DType::F32 => Self::F32(vec![0.0; size]),
             DType::I32 => Self::I32(vec![0; size]),
+            DType::F16 | DType::Bf16 => unimplemented!(),
         }
     }
 
