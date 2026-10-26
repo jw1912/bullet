@@ -186,6 +186,14 @@ impl PointwiseIR {
             return Err("Only variables allowed in unary ops!".into());
         };
 
+        if op.is_integer_half_cast(ty) {
+            return Err("Cannot cast between integer and half precision types!".into());
+        }
+
+        if op.dtype(ty).is_none() {
+            return Err("Unary op failed type check!".into());
+        }
+
         self.ir.add_op([node], PointwiseOp::Unary { ty, p2size, op }).map(|x| x[0])
     }
 

@@ -43,6 +43,13 @@ impl Unary {
         }
     }
 
+    /// Whether this is a cast between integer and half precision types,
+    /// which is not supported
+    pub fn is_integer_half_cast(self, input: DType) -> bool {
+        let is_half = |ty| matches!(ty, DType::F16 | DType::Bf16);
+        matches!(self, Self::Cast(ty) if (input == DType::I32 && is_half(ty)) || (is_half(input) && ty == DType::I32))
+    }
+
     pub fn evaluate(self, input: DValue) -> Option<DValue> {
         let fp = |f: fn(f32) -> f32| input.f32().map(|x| DValue::F32(f(x)));
 
@@ -77,7 +84,8 @@ impl Unary {
                 (DValue::F16(x), DType::F32) => DValue::F32(x.to_f32()),
                 (DValue::F32(x), DType::Bf16) => DValue::Bf16(bf16::from_f32(x)),
                 (DValue::Bf16(x), DType::F32) => DValue::F32(x.to_f32()),
-                _ => input,
+                (x, ty) if x.dtype() == ty => input,
+                _ => return None,
             },
             Self::IsPositive => match input {
                 DValue::F32(x) => DValue::F32(f32::from(x > 0.0)),
@@ -106,6 +114,10 @@ pub struct UnaryOp {
 
 impl UnaryOp {
     pub fn new(ty: TType, op: Unary) -> Result<Self, IRError> {
+        if op.is_integer_half_cast(ty.dtype()) {
+            return Err("Cannot cast between integer and half precision types!".into());
+        }
+
         if op.dtype(ty.dtype()).is_none() {
             return Err("UnaryOp failed type check!".into());
         }
@@ -232,6 +244,13 @@ mod tests {
         }
 
         assert_eq!(Unary::Cast(DType::Bf16).dtype(DType::F16), None);
+
+        for half in [DType::F16, DType::Bf16] {
+            assert!(UnaryOp::new(TType::new(4, DType::I32), Unary::Cast(half)).is_err());
+            assert!(UnaryOp::new(TType::new(4, half), Unary::Cast(DType::I32)).is_err());
+            assert_eq!(Unary::Cast(half).evaluate(DValue::I32(1)), None);
+            assert_eq!(Unary::Cast(DType::I32).evaluate(DValue::zero(half)), None);
+        }
 
         let a = TValue::F32(vec![1.0, -2.5, 1.0e-3, 65520.0]);
         let mut h = TValue::zeros(DType::F16, 4);

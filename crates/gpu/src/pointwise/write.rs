@@ -272,9 +272,12 @@ pub fn code_str(op: PointwiseOp, size: Size, props: &DeviceProps) -> Option<Stri
                             (DType::Bf16, DType::F32) => "bf16_to_f32",
                             (DType::F32, DType::F16) => "f32_to_f16",
                             (DType::F32, DType::Bf16) => "f32_to_bf16",
-                            (_, DType::F32) => "static_cast<float>",
-                            (_, DType::I32) => "static_cast<int>",
-                            (_, DType::F16 | DType::Bf16) => "",
+                            (DType::F32 | DType::I32, DType::F32) => "static_cast<float>",
+                            (DType::F32 | DType::I32, DType::I32) => "static_cast<int>",
+                            (x, y) if x == y => "",
+                            (x, y) => unreachable!(
+                                "Unsupported cast {x:?} -> {y:?} should be rejected by `PointwiseIR::unary`!"
+                            ),
                         },
                         Unary::Abs => "abs",
                         Unary::Sin => ["sinf", "sin"][mslidx],
