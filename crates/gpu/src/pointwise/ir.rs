@@ -15,7 +15,7 @@ use crate::{
     kernel::KernelSrc,
     pointwise::{
         operations::{MemIO, PType, PointwiseOp},
-        write::{code_str, tystr},
+        write::{code_str, half_conversions, tystr},
     },
     runtime::{DeviceProps, Dialect, Dim3},
 };
@@ -357,8 +357,19 @@ impl PointwiseIR {
 
         let mut src = String::new();
 
+        let uses_half = self.ir.operations().any(|op| match *op.data() {
+            PointwiseOp::Unary { ty, op: Unary::Cast(cast), .. } => {
+                [ty, cast].iter().any(|t| matches!(t, DType::F16 | DType::Bf16))
+            }
+            _ => false,
+        });
+
         match props.dialect() {
             Dialect::CudaHip => {
+                if uses_half {
+                    writeln!(&mut src, "{}", half_conversions(props))?;
+                }
+
                 write!(&mut src, "extern \"C\" __global__ void {kernel_name}(")?;
 
                 for (i, &input) in self.bufs.iter().enumerate() {
@@ -371,6 +382,10 @@ impl PointwiseIR {
                 writeln!(&mut src, "#include <metal_stdlib>")?;
                 writeln!(&mut src, "using namespace metal;")?;
                 writeln!(&mut src)?;
+
+                if uses_half {
+                    writeln!(&mut src, "{}", half_conversions(props))?;
+                }
 
                 write!(&mut src, "kernel void {kernel_name}(")?;
 

@@ -134,6 +134,7 @@ impl<T: Send + Sync> ModelInputsMapper<T> {
             .map(|buf| match buf.dtype() {
                 DType::F32 => InputSlice::F32(buf.as_mut_slice().unwrap()),
                 DType::I32 => InputSlice::I32(buf.as_mut_slice().unwrap()),
+                DType::F16 | DType::Bf16 => unimplemented!(),
             })
             .collect::<Vec<_>>();
 

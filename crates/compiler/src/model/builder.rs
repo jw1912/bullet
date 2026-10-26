@@ -247,7 +247,9 @@ impl<'a> ModelNode<'a> {
         let ty = self.ty();
         let value = match value.into() {
             DValue::F32(val) => TValue::F32(vec![val; ty.single_size()]),
+            DValue::F16(val) => TValue::F16(vec![val; ty.single_size()]),
             DValue::I32(val) => TValue::I32(vec![val; ty.single_size()]),
+            DValue::Bf16(val) => TValue::Bf16(vec![val; ty.single_size()]),
         };
         let node = self.builder.add_op([], Constant::new(value, ty.rows, ty.cols));
         let scalar = ModelNode { node, ..self };

@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bullet_compiler::tensor::{DType, TValue};
+use bullet_compiler::tensor::{DType, TValue, bf16, f16};
 
 use crate::runtime::{Device, Gpu, Stream};
 
@@ -314,8 +314,16 @@ impl PinnedElement for f32 {
     const DTYPE: DType = DType::F32;
 }
 
+impl PinnedElement for f16 {
+    const DTYPE: DType = DType::F16;
+}
+
 impl PinnedElement for i32 {
     const DTYPE: DType = DType::I32;
+}
+
+impl PinnedElement for bf16 {
+    const DTYPE: DType = DType::Bf16;
 }
 
 /// Page-locked (pinned) host buffer, which allows copies

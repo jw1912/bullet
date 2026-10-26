@@ -131,6 +131,16 @@ impl OpType for PadAcrossDimension {
                 let TValue::I32(output) = &mut outputs[0] else { panic!() };
                 self.apply(input, output, value);
             }
+            DValue::F16(value) => {
+                let TValue::F16(input) = inputs[0] else { panic!() };
+                let TValue::F16(output) = &mut outputs[0] else { panic!() };
+                self.apply(input, output, value);
+            }
+            DValue::Bf16(value) => {
+                let TValue::Bf16(input) = inputs[0] else { panic!() };
+                let TValue::Bf16(output) = &mut outputs[0] else { panic!() };
+                self.apply(input, output, value);
+            }
         }
 
         true
