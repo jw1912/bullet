@@ -1,5 +1,5 @@
 use crate::tensor::{
-    IRTrace, TNode, TType,
+    DValue, IRTrace, TNode, TType,
     operation::autograd::{CustomAutograd, CustomAutogradOp},
 };
 
@@ -20,7 +20,8 @@ impl CustomAutograd for CopyNoGrad {
     }
 
     fn backward<'a>(&self, inputs: Vec<TNode<'a>>, _: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
-        Ok(vec![inputs[0].zeros_like()])
+        let ty = inputs[0].ty();
+        Ok(vec![inputs[0].builder().scalar(DValue::zero(ty.dtype().grad()), ty.size())])
     }
 
     fn equals(&self, other: &CustomAutogradOp) -> bool {

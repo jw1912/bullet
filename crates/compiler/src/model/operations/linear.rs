@@ -128,7 +128,7 @@ impl ModelOperation for Matmul {
 
     fn output(&self) -> MType {
         let Matmul { lbatch, rbatch, dtype, m, k, .. } = *self;
-        MType { batch: lbatch | rbatch, rows: m, cols: k, layout: Layout::Dense(dtype) }
+        MType { batch: lbatch | rbatch, rows: m, cols: k, layout: Layout::Dense(dtype.grad()) }
     }
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, mut inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {

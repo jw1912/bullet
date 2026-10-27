@@ -2,6 +2,8 @@
 
 use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
+use bullet_compiler::tensor::DType;
+
 use crate::runtime::{
     Dialect,
     bindings::{DeviceProps, GemmConfig},
@@ -249,6 +251,10 @@ impl GpuBindings for ROCm {
         b: *mut c_void,
         c: *mut c_void,
     ) -> ROCmResult {
+        if config.dtype != DType::F32 {
+            return Err(ROCmError::Message("Half precision matmul is only supported by the CUDA backend!".into()));
+        }
+
         error::blas(hipblasSgemm(
             handle,
             config.row_mjr_a.into(),
@@ -275,6 +281,10 @@ impl GpuBindings for ROCm {
         b: *mut c_void,
         c: *mut c_void,
     ) -> ROCmResult {
+        if config.dtype != DType::F32 {
+            return Err(ROCmError::Message("Half precision matmul is only supported by the CUDA backend!".into()));
+        }
+
         error::blas(hipblasSgemmStridedBatched(
             handle,
             config.row_mjr_a.into(),

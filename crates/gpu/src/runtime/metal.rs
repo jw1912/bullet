@@ -6,6 +6,7 @@ use std::{
     ffi::{CStr, c_char, c_int, c_uint, c_void},
 };
 
+use bullet_compiler::tensor::DType;
 use objc2::AllocAnyThread;
 use objc2::ffi::NSUInteger;
 use objc2::rc::{Retained, autoreleasepool};
@@ -375,6 +376,10 @@ impl GpuBindings for Metal {
         b: u64,
         c: u64,
     ) -> MetalResult {
+        if config.dtype != DType::F32 {
+            return Err(MetalError::Runtime("Half precision matmul is only supported by the CUDA backend!".into()));
+        }
+
         autoreleasepool(|_| unsafe {
             let stream_id = BLAS_STREAM_MAP.with_borrow(|r| {
                 r.get(&handle)

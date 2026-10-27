@@ -74,6 +74,10 @@ impl ReduceAcrossDimension {
     }
 
     pub fn new(dtype: DType, shape: impl Into<Shape>, dim: usize, reduction: Reduction) -> Result<Self, IRError> {
+        if matches!(dtype, DType::F16 | DType::Bf16) {
+            return Err("Half precision reductions are not supported!".into());
+        }
+
         let shape = shape.into();
         let shape_dim = shape.dim();
 

@@ -290,6 +290,10 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], PointwiseUnary(self.ty(), unary)), ..self }
     }
 
+    pub fn cast(self, dtype: DType) -> Self {
+        self.unary(Unary::Cast(dtype))
+    }
+
     /// Apply pointwise binary operation
     pub fn binary(mut self, mut rhs: Self, binary: CABinary) -> Self {
         let sty = self.ty();
@@ -332,9 +336,27 @@ impl<'a> ModelNode<'a> {
         self.gemm(false, other, false)
     }
 
+    pub fn matmul_with_precision(self, other: Self, precision: DType) -> Self {
+        self.gemm_with_precision(false, other, false, precision)
+    }
+
     pub fn gemm(self, ltrans: bool, other: Self, rtrans: bool) -> Self {
-        let lty = self.ty();
-        let rty = other.ty();
+        self.gemm_with_precision(ltrans, other, rtrans, DType::F32)
+    }
+
+    pub fn gemm_with_precision(self, ltrans: bool, other: Self, rtrans: bool, precision: DType) -> Self {
+        let is_float = |dtype| matches!(dtype, DType::F32 | DType::F16 | DType::Bf16);
+        assert!(is_float(precision), "unsupported matmul precision {precision:?}");
+
+        let cast = |node: Self| match node.ty().layout {
+            Layout::Dense(dtype) if is_float(dtype) && dtype != precision => node.cast(precision),
+            _ => node,
+        };
+
+        let lhs = cast(self);
+        let rhs = cast(other);
+        let lty = lhs.ty();
+        let rty = rhs.ty();
 
         let ldtype = match lty.layout {
             Layout::Sparse(_) => unimplemented!("Sparse on left hand side of matmul!"),
@@ -346,7 +368,8 @@ impl<'a> ModelNode<'a> {
                 if ltrans || rtrans {
                     unimplemented!("Transposed SpMM!");
                 }
-                return self.sparse_matmul(other);
+                assert_eq!(precision, DType::F32, "half precision sparse matmul is not supported");
+                return lhs.sparse_matmul(rhs);
             }
             Layout::Dense(dtype) => dtype,
         };
@@ -359,7 +382,7 @@ impl<'a> ModelNode<'a> {
         }
 
         let matmul = Matmul { lbatch: lty.batch, rbatch: rty.batch, ltrans, rtrans, m, n, k, dtype: ldtype };
-        Self { node: self.builder.add_op([self, other], matmul), ..self }
+        Self { node: lhs.builder.add_op([lhs, rhs], matmul), ..lhs }
     }
 
     pub fn min(self, value: impl CoercesToModelNode<'a>) -> Self {
