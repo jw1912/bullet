@@ -146,7 +146,14 @@ impl<G: Gpu> Function<G> {
                 max_num_args = max_num_args.max(args.len());
                 insts.push(Inst::LaunchKernel { func, args, gdim, bdim, smem });
             } else if let Some(cfg) = data.downcast::<Matmul>().cloned() {
-                if cfg.dtype != DType::F32 {
+                let cuda = props.dialect() == Dialect::CudaHip && !props.is_rocm();
+                let supported = match cfg.dtype {
+                    DType::F32 => true,
+                    DType::F16 | DType::Bf16 => cuda,
+                    _ => false,
+                };
+
+                if !supported {
                     return Err("Unsupported matmul dtype!".into());
                 }
 
@@ -275,6 +282,7 @@ impl<G: Gpu> Function<G> {
                             k: cfg.lhs.cols.get().try_into().unwrap(),
                             alpha: 1.0,
                             beta: 0.0,
+                            dtype: cfg.dtype,
                         };
 
                         let batch = cfg.batch.get();
@@ -354,7 +362,7 @@ rewriterule! {
     rulename MatmulToBroadcastMul on ir
     rewrites op (output = [Matmul] (lhs) (rhs))
     {
-        if output.lhs.cols.get() == 1 && output.batch == 1.into() {
+        if output.lhs.cols.get() == 1 && output.batch == 1.into() && !matches!(output.dtype, DType::F16 | DType::Bf16) {
             let m = output.lhs.rows;
             let n = output.rhs.cols;
 

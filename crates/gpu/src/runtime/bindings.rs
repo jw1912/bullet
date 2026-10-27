@@ -3,6 +3,8 @@ use std::{
     fmt,
 };
 
+use bullet_compiler::tensor::DType;
+
 use crate::runtime::Dialect;
 
 /// Kernel grid or block dimensions
@@ -22,6 +24,7 @@ pub struct GemmConfig {
     pub k: c_int,
     pub alpha: f32,
     pub beta: f32,
+    pub dtype: DType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

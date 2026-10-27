@@ -24,6 +24,10 @@ impl SparseMatmul {
         offset: usize,
         nnz: impl Into<Size>,
     ) -> Result<Self, IRError> {
+        if matches!(dtype, DType::F16 | DType::Bf16) {
+            return Err("Half precision sparse matmul is not supported!".into());
+        }
+
         let stride = stride.into();
         let rows = rows.into();
 
