@@ -182,10 +182,10 @@ impl<G: Gpu> Buffer<G> {
     /// different stream
     pub fn acquire(self: &Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
         self.device.check_same(&stream.device(), "stream")?;
-        self.acquire_unchecked(stream)
+        unsafe { self.acquire_unchecked(stream) }
     }
 
-    fn acquire_unchecked(self: &Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
+    unsafe fn acquire_unchecked(self: &Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
         let mut owner = self.owner.lock().unwrap();
 
         if let Some((owning, count)) = owner.as_mut() {
@@ -351,8 +351,8 @@ impl<G: Gpu> Buffer<G> {
             return Err(format!("Attempted to copy GPU{s} -> GPU{d} on GPU{o} stream!").into());
         }
 
-        let dst_guard = self.acquire_unchecked(stream.clone())?;
-        let src_guard = src.acquire_unchecked(stream.clone())?;
+        let dst_guard = unsafe { self.acquire_unchecked(stream.clone())? };
+        let src_guard = unsafe { src.acquire_unchecked(stream.clone())? };
 
         let bytes = self.dtype.bytes();
         let (dst_offset, src_offset) = (dst_start * bytes, src_start * bytes);
