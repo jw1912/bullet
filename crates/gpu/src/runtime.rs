@@ -63,12 +63,8 @@ impl<G: Gpu> Device<G> {
     }
 
     pub fn new(ordinal: i32) -> Result<Arc<Self>, G::Error> {
-        unsafe {
-            G::driver_init()?;
-        }
-
-        let count = unsafe { G::device_count()? };
-        if !(0..count).contains(&ordinal) {
+        let count = Self::count()?;
+        if !usize::try_from(ordinal).is_ok_and(|o| o < count) {
             return Err(format!("Attempted to create GPU{ordinal}, but only {count} device(s) are available!").into());
         }
 
