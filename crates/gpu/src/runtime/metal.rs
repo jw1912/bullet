@@ -85,6 +85,7 @@ impl GpuBindings for Metal {
     type Ptr = u64;
     type Ctx = c_int;
     type Stream = u64;
+    type Event = ();
     type BlasHandle = u64;
     type Kernel = u64;
     type Module = u64;
@@ -94,10 +95,18 @@ impl GpuBindings for Metal {
     }
 
     unsafe fn device_get(ordinal: c_int) -> Result<c_int, MetalError> {
+        if ordinal != 0 {
+            return Err(MetalError::Runtime(format!("Metal only supports device 0, not {ordinal}!")));
+        }
+
         let device =
             MTLCreateSystemDefaultDevice().ok_or_else(|| MetalError::Runtime("No Metal device found".into()))?;
         DEVICE_REGISTRY.with_borrow_mut(|r| r.insert(ordinal, device));
         Ok(ordinal)
+    }
+
+    unsafe fn device_count() -> Result<c_int, MetalError> {
+        Ok(1)
     }
 
     unsafe fn device_props(device: c_int) -> Result<DeviceProps, MetalError> {
@@ -113,6 +122,10 @@ impl GpuBindings for Metal {
                 is_rocm: false,
             })
         })
+    }
+
+    unsafe fn device_can_access_peer(_device: c_int, _peer: c_int) -> Result<bool, MetalError> {
+        Ok(false)
     }
 
     unsafe fn context_create(device: c_int) -> Result<c_int, MetalError> {
@@ -131,6 +144,14 @@ impl GpuBindings for Metal {
 
     unsafe fn context_sync() -> MetalResult {
         Ok(())
+    }
+
+    unsafe fn context_enable_peer_access(_peer: c_int) -> MetalResult {
+        Err(MetalError::Runtime("Peer access is not supported on Metal!".into()))
+    }
+
+    unsafe fn context_disable_peer_access(_peer: c_int) -> MetalResult {
+        Err(MetalError::Runtime("Peer access is not supported on Metal!".into()))
     }
 
     unsafe fn context_malloc(bytes: usize) -> Result<u64, MetalError> {
@@ -230,6 +251,53 @@ impl GpuBindings for Metal {
 
     unsafe fn stream_memcpy_h2d(_stream: u64, dst: u64, src: *const c_void, bytes: usize) -> MetalResult {
         Self::context_memcpy_h2d(dst, src, bytes)
+    }
+
+    unsafe fn stream_memcpy_d2d(
+        stream: u64,
+        dst: u64,
+        dst_offset: usize,
+        src: u64,
+        src_offset: usize,
+        bytes: usize,
+    ) -> MetalResult {
+        Self::stream_sync(stream)?;
+        let (dst_ptr, src_ptr) = BUFFER_REGISTRY.with_borrow(|r| {
+            let dst_entry = r.get(&dst).ok_or_else(|| MetalError::Runtime(format!("Buffer {dst} not found")))?;
+            let src_entry = r.get(&src).ok_or_else(|| MetalError::Runtime(format!("Buffer {src} not found")))?;
+            Ok::<_, MetalError>((dst_entry.contents().as_ptr() as *mut u8, src_entry.contents().as_ptr() as *const u8))
+        })?;
+        std::ptr::copy(src_ptr.add(src_offset), dst_ptr.add(dst_offset), bytes);
+        Ok(())
+    }
+
+    unsafe fn stream_memcpy_peer(
+        _stream: u64,
+        _dst: u64,
+        _dst_ctx: c_int,
+        _dst_offset: usize,
+        _src: u64,
+        _src_ctx: c_int,
+        _src_offset: usize,
+        _bytes: usize,
+    ) -> MetalResult {
+        Err(MetalError::Runtime("Peer access is not supported on Metal!".into()))
+    }
+
+    unsafe fn event_create() -> MetalResult {
+        Ok(())
+    }
+
+    unsafe fn event_destroy(_event: ()) -> MetalResult {
+        Ok(())
+    }
+
+    unsafe fn event_record(_event: (), stream: u64) -> MetalResult {
+        Self::stream_sync(stream)
+    }
+
+    unsafe fn stream_wait_event(_stream: u64, _event: ()) -> MetalResult {
+        Ok(())
     }
 
     unsafe fn kernel_load(_kernel: u64) -> MetalResult {
