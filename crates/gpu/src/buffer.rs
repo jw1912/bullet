@@ -54,6 +54,15 @@ impl<G: Gpu> SyncOnDrop<G> {
 
         Ok(())
     }
+
+    /// ### Safety
+    ///
+    /// User must ensure that any later work touching the attached buffers on a different stream is
+    /// ordered after the work queued so far on this stream (e.g. via `Stream::record` and `Stream::wait`),
+    /// and that any host memory used by that work outlives it
+    pub unsafe fn release(mut self) {
+        self.synced = true;
+    }
 }
 
 /// Like `SyncOnDrop` but with an attached value
@@ -109,6 +118,13 @@ impl<G: Gpu, T> SyncOnValue<G, T> {
 
     pub fn attach_value<U>(self, other: U) -> SyncOnValue<G, (T, U)> {
         SyncOnValue { sync: self.sync, value: (self.value, other) }
+    }
+
+    /// ### Safety
+    ///
+    /// As `SyncOnDrop::release`
+    pub unsafe fn release(self) {
+        unsafe { self.sync.release() }
     }
 }
 
@@ -294,15 +310,34 @@ impl<G: Gpu> Buffer<G> {
             return Err(format!("Mismatched sizes: {} != {}", self.size(), value.size()).into());
         }
 
+        self.copy_from_pinned_range_async(stream, value, 0, self.size())
+    }
+
+    pub fn copy_from_pinned_range_async<'a>(
+        self: &Arc<Self>,
+        stream: &Arc<Stream<G>>,
+        value: &'a PinnedBuffer<G>,
+        src_start: usize,
+        len: usize,
+    ) -> Result<SyncOnValue<G, &'a PinnedBuffer<G>>, G::Error> {
         if self.dtype() != value.dtype() {
             return Err(format!("Mismatched DType: {:?} != {:?}", self.dtype(), value.dtype()).into());
+        }
+
+        if len > self.size() || src_start.checked_add(len).is_none_or(|end| end > value.size()) {
+            return Err("Copy range out of bounds!".to_string().into());
+        }
+
+        if len == 0 {
+            return Err("Attempted 0-size copy!".to_string().into());
         }
 
         unsafe {
             let mut sync = SyncOnDrop::new(stream.clone());
             let guard = self.clone().acquire(stream.clone())?;
 
-            stream.memcpy_h2d(value.ptr(), guard.ptr(), guard.bytes())?;
+            let src = value.ptr().byte_add(src_start * self.dtype().bytes());
+            stream.memcpy_h2d(src, guard.ptr(), len * self.dtype().bytes())?;
 
             sync.attach(guard)?;
             Ok(SyncOnValue::new(sync, value))

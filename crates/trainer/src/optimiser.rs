@@ -20,7 +20,11 @@ use bullet_gpu::{
     runtime::{Device, Gpu, Stream},
 };
 
-use crate::model::{ModelDefinition, ModelWeights, TensorMap};
+use crate::{
+    model::{ModelDefinition, ModelWeights, TensorMap},
+    parallel::{DataParallel, StepOutput},
+    run::{PreparedBatchHost, TrainingError},
+};
 
 pub struct OptimiserUpdateSync<'a, G: Gpu> {
     kernels: Vec<SyncOnValue<G, &'a CompiledKernel<G>>>,
@@ -60,7 +64,7 @@ impl<'a, G: Gpu> OptimiserUpdateSync<'a, G> {
     }
 }
 
-type OptimiserUpdateResult<'a, G> = Result<OptimiserUpdateSync<'a, G>, <G as Gpu>::Error>;
+pub(crate) type OptimiserUpdateResult<'a, G> = Result<OptimiserUpdateSync<'a, G>, <G as Gpu>::Error>;
 
 pub trait OptimiserState<G: Gpu>: Sized {
     type Params: Clone + Debug + Default;
@@ -86,9 +90,7 @@ pub trait OptimiserState<G: Gpu>: Sized {
 }
 
 pub struct Optimiser<G: Gpu, S: OptimiserState<G>> {
-    device: Arc<Device<G>>,
-    weights: TensorMap<G>,
-    state: BTreeMap<String, S>,
+    parallel: DataParallel<G, S>,
     pre_update: Vec<Box<dyn AdditionalUpdate<G>>>,
     post_update: Vec<Box<dyn AdditionalUpdate<G>>>,
     cpu_weights: RwLock<ModelWeights>,
@@ -106,32 +108,30 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
         device: Arc<Device<G>>,
         params: S::Params,
     ) -> Result<Self, G::Error> {
-        let mut state = BTreeMap::new();
+        Self::with_devices(definition, weights, &[device], params)
+    }
 
-        for (id, value) in weights.iter() {
-            let size = value.values.size();
-            let single = S::new(&device, size, params.clone())?;
-            let old = state.insert(id.clone(), single);
-            assert!(old.is_none());
-        }
-
+    pub fn with_devices(
+        definition: ModelDefinition,
+        weights: ModelWeights,
+        devices: &[Arc<Device<G>>],
+        params: S::Params,
+    ) -> Result<Self, G::Error> {
         Ok(Self {
-            weights: weights.to_device(&device)?,
-            state,
+            parallel: DataParallel::new(&definition, &weights, devices, params)?,
             pre_update: Vec::new(),
             post_update: Vec::new(),
             cpu_weights: RwLock::new(weights),
             definition,
-            device,
         })
     }
 
     pub fn device(&self) -> Arc<Device<G>> {
-        self.device.clone()
+        self.parallel.device()
     }
 
     pub fn weights(&self) -> &TensorMap<G> {
-        &self.weights
+        self.parallel.weights()
     }
 
     fn read_weights(&'_ self) -> RwLockReadGuard<'_, ModelWeights> {
@@ -166,72 +166,79 @@ impl<G: Gpu, S: OptimiserState<G>> Optimiser<G, S> {
         learning_rate: Arc<Buffer<G>>,
         gradients: &TensorMap<G>,
     ) -> OptimiserUpdateResult<'a, G> {
-        let mut sync = OptimiserUpdateSync::default();
-
-        for additional in &mut self.pre_update {
-            sync.extend_by(additional.apply_update(&self.weights)?);
+        if self.ranks() > 1 {
+            return Err("Optimiser::update only supports a single device!".to_string().into());
         }
 
-        for (id, single) in &mut self.state {
-            let weight = self.weights.get(id).unwrap();
-
-            if let Some(grads) = gradients.get(id) {
-                sync.extend_by(single.update(
-                    stream,
-                    weight.clone(),
-                    grads.clone(),
-                    gradient_factor.clone(),
-                    learning_rate.clone(),
-                )?);
-            }
-        }
-
-        for additional in &mut self.post_update {
-            sync.extend_by(additional.apply_update(&self.weights)?);
-        }
-
-        Ok(sync)
+        let (pre_update, post_update) = (&mut self.pre_update, &mut self.post_update);
+        self.parallel.update(stream, gradient_factor, learning_rate, gradients, pre_update, post_update)
     }
 
     pub fn reset_state(&mut self) -> Result<(), G::Error> {
-        for single in self.state.values_mut() {
-            single.reset()?;
+        for state in self.parallel.states_mut() {
+            for single in state.values_mut() {
+                single.reset()?;
+            }
         }
 
         Ok(())
     }
 
     pub fn set_params_for_weight(&mut self, id: &str, params: S::Params) {
-        self.state.get_mut(id).unwrap().set_params(params).unwrap();
+        for state in self.parallel.states_mut() {
+            state.get_mut(id).unwrap().set_params(params.clone()).unwrap();
+        }
     }
 
     pub fn set_params(&mut self, params: S::Params) {
-        for id in self.weights.clone().keys() {
-            self.set_params_for_weight(id, params.clone());
+        for id in self.parallel.state().keys().cloned().collect::<Vec<_>>() {
+            self.set_params_for_weight(&id, params.clone());
         }
     }
 
     pub fn sync_cpu(&self) -> Result<(), G::Error> {
-        self.write_weights().load_from_device(&self.weights)
+        self.parallel.read_weights(&mut self.write_weights())
     }
 
     pub fn write_to_checkpoint(&self, path: &str) -> Result<(), G::Error> {
         self.sync_cpu()?;
         let mut file = File::create(format!("{path}/weights.bin")).unwrap();
         self.read_weights().write_into(&mut file).map_err(|e| format!("{e}"))?;
-        let map = self.state.iter().map(|(id, single)| (id.clone(), single)).collect();
-        S::write_to_checkpoint(&map, path)
+        self.parallel.write_state(path)
     }
 
     pub fn load_weights_from_file(&mut self, path: &str) -> Result<(), G::Error> {
         let weights = self.cpu_weights.get_mut().unwrap();
         weights.load_from(File::open(path).unwrap()).map_err(|e| format!("{e}"))?;
-        weights.write_to_device(&self.weights)
+        self.parallel.write_weights(weights)
     }
 
     pub fn load_from_checkpoint(&mut self, path: &str) -> Result<(), G::Error> {
         self.load_weights_from_file(&format!("{path}/weights.bin"))?;
-        let mut map = self.state.iter_mut().map(|(id, single)| (id.clone(), single)).collect();
-        S::load_from_checkpoint(&mut map, path)
+        self.parallel.load_state(path)
+    }
+
+    pub(crate) fn ranks(&self) -> usize {
+        self.parallel.ranks()
+    }
+
+    pub(crate) fn prepare(&mut self, batch_size: usize, grad_norms: bool) -> Result<(), TrainingError<G>> {
+        self.parallel.prepare(&self.definition, batch_size, grad_norms)
+    }
+
+    pub(crate) fn load_batch(&mut self, batch: &PreparedBatchHost<G>) -> Result<(), G::Error> {
+        self.parallel.load_batch(batch)
+    }
+
+    pub(crate) fn step(
+        &mut self,
+        lr: f32,
+        next: &mut dyn FnMut() -> Option<PreparedBatchHost<G>>,
+    ) -> Result<StepOutput, TrainingError<G>> {
+        self.parallel.step(lr, next, &mut self.pre_update, &mut self.post_update)
+    }
+
+    pub(crate) fn finish(&mut self) {
+        self.parallel.finish();
     }
 }

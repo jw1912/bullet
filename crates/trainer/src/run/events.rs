@@ -6,7 +6,7 @@ use super::{Step, TrainingSteps};
 #[non_exhaustive]
 pub enum TrainingEvent {
     #[non_exhaustive]
-    RunStarted { steps: TrainingSteps, device_name: String, device_arch: Option<String> },
+    RunStarted { steps: TrainingSteps, device_name: String, device_arch: Option<String>, device_count: usize },
 
     #[non_exhaustive]
     TrainingReady { setup_time: Duration },

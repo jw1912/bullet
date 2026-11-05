@@ -24,19 +24,15 @@ impl ConsoleObserver {
 
     pub fn on_event(&mut self, event: &TrainingEvent) {
         match event {
-            TrainingEvent::RunStarted { steps, device_name, device_arch, .. } => {
+            TrainingEvent::RunStarted { steps, device_name, device_arch, device_count, .. } => {
                 self.steps = *steps;
                 self.previous_learning_rate = None;
 
                 clear_colours();
 
-                println!(
-                    "{}",
-                    ansi(
-                        format!("Training on {} ({})", device_name, device_arch.as_deref().unwrap_or("unknown")),
-                        "34;1"
-                    )
-                );
+                let arch = device_arch.as_deref().unwrap_or("unknown");
+                let count = if *device_count == 1 { String::new() } else { format!("{device_count}x ") };
+                println!("{}", ansi(format!("Training on {count}{device_name} ({arch})"), "34;1"));
             }
 
             TrainingEvent::BatchCompleted { step, learning_rate, superbatch_elapsed, .. } => {

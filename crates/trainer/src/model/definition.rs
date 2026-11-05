@@ -4,7 +4,7 @@ use bullet_compiler::{
     ir::NodeId,
     model::{Layout, MType, ModelBuilder, ModelIR, ModelNode},
     tensor::{
-        DType, DValue, IRTrace, TValue, TensorIR,
+        DType, DValue, IRTrace, TType, TValue, TensorIR,
         operation::{CABinary, Matmul, MatrixLayout, PadAcrossDimension},
         transform::{
             autograd::{LowerForward, TakeGradient},
@@ -130,7 +130,7 @@ impl ModelDefinition {
         bwd.transform(transform)?;
 
         let mut gmap = BTreeMap::default();
-        let mut sqnorms = Vec::new();
+        let mut norm_grads = Vec::new();
 
         for (&id, (name, _)) in self.ir.weights() {
             if !frozen.contains(&id) {
@@ -144,9 +144,7 @@ impl ModelDefinition {
                     grads.borrow().get(&wid).copied().unwrap_or_else(|| bwd.add_scalar(DValue::zero(dtype), size));
 
                 if track_grad_norms {
-                    let lhs = MatrixLayout { rows: 1.into(), cols: size.into(), col_mjr: true };
-                    let rhs = MatrixLayout { rows: size.into(), cols: 1.into(), col_mjr: true };
-                    sqnorms.push((name.clone(), bwd.add_op([gid, gid], Matmul::new(dtype, 1, lhs, rhs))?[0]));
+                    norm_grads.push((name.clone(), gid, dtype, size));
                 }
 
                 bwd.register_output(gid);
@@ -154,27 +152,7 @@ impl ModelDefinition {
             }
         }
 
-        // cat squared norms into a single vector
-        // [a, b, c] = [a, 0, 0]
-        //           + [0, b, 0]
-        //           + [0, 0, c]
-        let norms = if sqnorms.is_empty() {
-            None
-        } else {
-            let (names, sqnorms) = sqnorms.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let n = sqnorms.len();
-
-            let mut cat = bwd.add_scalar(DValue::zero(DType::F32), n);
-            for (i, sqnorm) in sqnorms.into_iter().enumerate() {
-                let pad = PadAcrossDimension::new([1], 0, i, n - 1 - i, DValue::zero(DType::F32));
-                let term = bwd.add_op([sqnorm], pad)?[0];
-                cat = bwd.add_binary(cat, term, CABinary::Add)?;
-            }
-
-            bwd.register_output(cat);
-
-            Some(GradNorms { acc: cat, names })
-        };
+        let norms = append_grad_norms(&mut bwd, &norm_grads)?;
 
         bwd.transform(LowerForward)?;
         bwd.transform(InlineSubgraphs)?;
@@ -188,4 +166,66 @@ impl ModelDefinition {
 
         Ok((ModelFunctionDefinition { ir: bwd, map }, gmap, norms))
     }
+
+    pub(crate) fn lower_grad_norms(&self) -> Result<(TensorIR, BTreeMap<String, NodeId>, GradNorms), IRTrace> {
+        let mut ir = TensorIR::default();
+        ir.debug = self.debug;
+
+        let mut inputs = BTreeMap::new();
+        let mut grads = Vec::new();
+
+        for (&id, (name, _)) in self.ir.weights() {
+            let ty = self.ir.node(id).ty();
+            let size = ty.shape().size();
+            let Layout::Dense(dtype) = ty.layout() else { unreachable!() };
+
+            let input = ir.add_input(TType::new(size, dtype));
+            inputs.insert(name.clone(), input);
+            grads.push((name.clone(), input, dtype, size));
+        }
+
+        let norms = append_grad_norms(&mut ir, &grads)?.ok_or("No weights to take gradient norms of!")?;
+
+        ir.transform(LowerForward)?;
+        ir.transform(InlineSubgraphs)?;
+        ir.optimise()?;
+
+        Ok((ir, inputs, norms))
+    }
+}
+
+fn append_grad_norms(
+    ir: &mut TensorIR,
+    grads: &[(String, NodeId, DType, usize)],
+) -> Result<Option<GradNorms>, IRTrace> {
+    if grads.is_empty() {
+        return Ok(None);
+    }
+
+    let mut names = Vec::new();
+    let mut sqnorms = Vec::new();
+
+    for (name, gid, dtype, size) in grads {
+        let lhs = MatrixLayout { rows: 1.into(), cols: (*size).into(), col_mjr: true };
+        let rhs = MatrixLayout { rows: (*size).into(), cols: 1.into(), col_mjr: true };
+        sqnorms.push(ir.add_op([*gid, *gid], Matmul::new(*dtype, 1, lhs, rhs))?[0]);
+        names.push(name.clone());
+    }
+
+    // cat squared norms into a single vector
+    // [a, b, c] = [a, 0, 0]
+    //           + [0, b, 0]
+    //           + [0, 0, c]
+    let n = sqnorms.len();
+
+    let mut cat = ir.add_scalar(DValue::zero(DType::F32), n);
+    for (i, sqnorm) in sqnorms.into_iter().enumerate() {
+        let pad = PadAcrossDimension::new([1], 0, i, n - 1 - i, DValue::zero(DType::F32));
+        let term = ir.add_op([sqnorm], pad)?[0];
+        cat = ir.add_binary(cat, term, CABinary::Add)?;
+    }
+
+    ir.register_output(cat);
+
+    Ok(Some(GradNorms { acc: cat, names }))
 }
