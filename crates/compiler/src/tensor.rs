@@ -320,6 +320,10 @@ impl TensorIR {
             return Err(format!("Mismatched input types to CABinary::{op:?}").into());
         }
 
+        if matches!(ty.dtype(), DType::F16 | DType::Bf16) {
+            return Err(format!("Half precision inputs not supported in CABinary::{op:?}").into());
+        }
+
         let op = CABinaryOp::new(ty, op);
         self.add_op([lhs, rhs], Ok::<_, IRTrace>(op)).map(|x| x[0])
     }

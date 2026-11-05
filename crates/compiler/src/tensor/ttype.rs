@@ -254,6 +254,13 @@ impl DType {
             Self::F16 | Self::Bf16 => 2,
         }
     }
+
+    pub fn grad(self) -> DType {
+        match self {
+            Self::F16 | Self::Bf16 => Self::F32,
+            _ => self,
+        }
+    }
 }
 
 /// Conrete value of some DType

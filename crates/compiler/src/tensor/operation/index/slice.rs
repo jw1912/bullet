@@ -140,7 +140,7 @@ impl OpType for SliceAcrossDimension {
     }
 
     fn backward<'a>(&self, _inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
-        let op = self.invert().unwrap();
+        let op = Self { dtype: self.dtype.grad(), ..*self }.invert()?;
         output_grads[0].builder().add_op([output_grads[0]], op)
     }
 }

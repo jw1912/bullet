@@ -2,7 +2,10 @@ use std::fmt;
 
 use crate::{
     ir::IRError,
-    tensor::{DType, DValue, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp, operation::CABinary},
+    tensor::{
+        DType, DValue, IRTrace, OpType, Size, TNode, TType, TValue, TensorOp,
+        operation::{CABinary, Unary},
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -56,7 +59,7 @@ impl OpType for Matmul {
 
     fn outputs(&self) -> Vec<TType> {
         let Matmul { dtype, batch, lhs, rhs } = *self;
-        vec![TType::new(batch * lhs.rows * rhs.cols, dtype)]
+        vec![TType::new(batch * lhs.rows * rhs.cols, dtype.grad())]
     }
 
     fn evaluate(&self, inputs: Vec<&TValue>, mut outputs: Vec<&mut TValue>) -> bool {
@@ -72,6 +75,20 @@ impl OpType for Matmul {
         assert_eq!(b * m * n, l.size());
         assert_eq!(b * n * k, r.size());
         assert_eq!(b * m * k, o.size());
+
+        if matches!(self.dtype, DType::F16 | DType::Bf16) {
+            let to_f32 = |x: &TValue| -> Vec<f32> {
+                match x {
+                    TValue::F16(x) => x.iter().map(|y| y.to_f32()).collect(),
+                    TValue::Bf16(x) => x.iter().map(|y| y.to_f32()).collect(),
+                    _ => panic!("Incorrect DType!"),
+                }
+            };
+
+            let l = TValue::F32(to_f32(l));
+            let r = TValue::F32(to_f32(r));
+            return Self { dtype: DType::F32, ..*self }.evaluate(vec![&l, &r], outputs);
+        }
 
         for bi in 0..b {
             for ki in 0..k {
@@ -103,6 +120,8 @@ impl OpType for Matmul {
         let lhs_node = inputs[0];
         let rhs_node = inputs[1];
         let grad_node = output_grads[0];
+        let grad_node =
+            if grad_node.ty().dtype() == dtype { grad_node } else { grad_node.unary(Unary::Cast(dtype))? };
 
         let builder = grad_node.builder();
 
