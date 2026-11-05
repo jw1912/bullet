@@ -55,9 +55,17 @@ impl<G: Gpu> Drop for Device<G> {
 }
 
 impl<G: Gpu> Device<G> {
-    pub fn new(ordinal: i32) -> Result<Arc<Self>, G::Error> {
+    pub fn count() -> Result<usize, G::Error> {
         unsafe {
             G::driver_init()?;
+            Ok(G::device_count()? as usize)
+        }
+    }
+
+    pub fn new(ordinal: i32) -> Result<Arc<Self>, G::Error> {
+        let count = Self::count()?;
+        if !usize::try_from(ordinal).is_ok_and(|o| o < count) {
+            return Err(format!("Attempted to create GPU{ordinal}, but only {count} device(s) are available!").into());
         }
 
         let device = unsafe { G::device_get(ordinal)? };
@@ -77,6 +85,45 @@ impl<G: Gpu> Device<G> {
 
     pub fn dialect(&self) -> Dialect {
         self.props.dialect()
+    }
+
+    pub fn can_access_peer(&self, peer: &Self) -> Result<bool, G::Error> {
+        if self.ordinal == peer.ordinal {
+            return Ok(true);
+        }
+
+        self.set()?;
+        unsafe { G::device_can_access_peer(self.device, peer.device) }
+    }
+
+    pub fn enable_peer_access(&self, peer: &Self) -> Result<bool, G::Error> {
+        if self.ordinal == peer.ordinal {
+            return Ok(true);
+        }
+
+        if !self.can_access_peer(peer)? {
+            return Ok(false);
+        }
+
+        unsafe { G::context_enable_peer_access(peer.context)? };
+        Ok(true)
+    }
+
+    pub fn disable_peer_access(&self, peer: &Self) -> Result<(), G::Error> {
+        if self.ordinal == peer.ordinal || !self.can_access_peer(peer)? {
+            return Ok(());
+        }
+
+        self.set()?;
+        unsafe { G::context_disable_peer_access(peer.context) }
+    }
+
+    pub(crate) fn check_same(&self, other: &Self, what: &str) -> Result<(), G::Error> {
+        if self.ordinal != other.ordinal {
+            return Err(format!("Attempted to use GPU{} {what} on GPU{}!", other.ordinal, self.ordinal).into());
+        }
+
+        Ok(())
     }
 
     /// Set this device as currently active for this thread,
@@ -289,6 +336,94 @@ impl<G: Gpu> Stream<G> {
         self.device.set()?;
         unsafe { G::stream_memcpy_d2h(self.inner, dst, src, bytes) }
     }
+
+    pub fn record(&self, event: &Event<G>) -> Result<(), G::Error> {
+        self.device.check_same(&event.device, "event")?;
+        self.device.set()?;
+        unsafe { G::event_record(event.inner, self.inner) }
+    }
+
+    pub fn wait(&self, event: &Event<G>) -> Result<(), G::Error> {
+        self.device.set()?;
+        unsafe { G::stream_wait_event(self.inner, event.inner) }
+    }
+
+    /// ### Safety
+    ///
+    /// User must ensure that `src` and `dst` are valid allocations on this stream's device, of at
+    /// least `src_offset + bytes` and `dst_offset + bytes` bytes respectively, that remain valid
+    /// until the copy has been ensured to have completed via a stream sync
+    pub unsafe fn memcpy_d2d(
+        &self,
+        src: G::DevicePtr,
+        src_offset: usize,
+        dst: G::DevicePtr,
+        dst_offset: usize,
+        bytes: usize,
+    ) -> Result<(), G::Error> {
+        self.device.set()?;
+        unsafe { G::stream_memcpy_d2d(self.inner, dst, dst_offset, src, src_offset, bytes) }
+    }
+
+    /// ### Safety
+    ///
+    /// User must ensure that `src` and `dst` are valid allocations on `src_device` and `dst_device`,
+    /// of at least `src_offset + bytes` and `dst_offset + bytes` bytes respectively, that remain
+    /// valid until the copy has been ensured to have completed via a stream sync
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn memcpy_peer(
+        &self,
+        src: G::DevicePtr,
+        src_offset: usize,
+        src_device: &Device<G>,
+        dst: G::DevicePtr,
+        dst_offset: usize,
+        dst_device: &Device<G>,
+        bytes: usize,
+    ) -> Result<(), G::Error> {
+        let (s, d, o) = (src_device.ordinal, dst_device.ordinal, self.device.ordinal);
+        if o != s && o != d {
+            return Err(format!("Attempted to copy GPU{s} -> GPU{d} on GPU{o} stream!").into());
+        }
+
+        self.device.set()?;
+        unsafe {
+            G::stream_memcpy_peer(
+                self.inner,
+                dst,
+                dst_device.context,
+                dst_offset,
+                src,
+                src_device.context,
+                src_offset,
+                bytes,
+            )
+        }
+    }
+}
+
+pub struct Event<G: Gpu> {
+    inner: G::Event,
+    device: Arc<Device<G>>,
+}
+
+impl<G: Gpu> Drop for Event<G> {
+    fn drop(&mut self) {
+        let _ = self.device.set();
+        let _ = unsafe { G::event_destroy(self.inner) };
+    }
+}
+
+impl<G: Gpu> Event<G> {
+    pub fn new(device: Arc<Device<G>>) -> Result<Self, G::Error> {
+        device.set()?;
+        let inner = unsafe { G::event_create()? };
+        Ok(Self { inner, device })
+    }
+
+    pub fn device(&self) -> Arc<Device<G>> {
+        self.device.clone()
+    }
 }
 
 pub struct Module<G: Gpu> {
@@ -452,6 +587,7 @@ impl<G: Gpu> Blas<G> {
         b: G::DevicePtr,
         c: G::DevicePtr,
     ) -> Result<(), G::Error> {
+        self.device.check_same(&stream.device, "stream")?;
         self.device.set()?;
         unsafe {
             G::blas_set_stream(self.handle, stream.inner)?;
@@ -471,6 +607,7 @@ impl<G: Gpu> Blas<G> {
         b: G::DevicePtr,
         c: G::DevicePtr,
     ) -> Result<(), G::Error> {
+        self.device.check_same(&stream.device, "stream")?;
         self.device.set()?;
         unsafe {
             G::blas_set_stream(self.handle, stream.inner)?;

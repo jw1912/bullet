@@ -212,6 +212,8 @@ impl<G: Gpu> Function<G> {
         stream: Arc<Stream<G>>,
         inputs: &BTreeMap<NodeId, Arc<Buffer<G>>>,
     ) -> Result<SyncOnValue<G, &Self>, G::Error> {
+        self.device.check_same(&stream.device(), "stream")?;
+
         let mut sync = SyncOnDrop::new(stream.clone());
 
         let mut ptrs = self.pointers.lock().unwrap();

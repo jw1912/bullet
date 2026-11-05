@@ -89,6 +89,7 @@ pub trait GpuBindings: 'static {
     type Ptr: Copy + Default + Eq + Ord;
     type Ctx: Copy;
     type Stream: Copy;
+    type Event: Copy;
     type BlasHandle: Copy;
     type Kernel: Copy;
     type Module: Copy;
@@ -97,7 +98,11 @@ pub trait GpuBindings: 'static {
 
     unsafe fn device_get(ordinal: c_int) -> Result<Self::Dev, Self::Err>;
 
+    unsafe fn device_count() -> Result<c_int, Self::Err>;
+
     unsafe fn device_props(device: Self::Dev) -> Result<DeviceProps, Self::Err>;
+
+    unsafe fn device_can_access_peer(device: Self::Dev, peer: Self::Dev) -> Result<bool, Self::Err>;
 
     unsafe fn context_create(device: Self::Dev) -> Result<Self::Ctx, Self::Err>;
 
@@ -106,6 +111,10 @@ pub trait GpuBindings: 'static {
     unsafe fn context_set(ctx: Self::Ctx) -> Result<(), Self::Err>;
 
     unsafe fn context_sync() -> Result<(), Self::Err>;
+
+    unsafe fn context_enable_peer_access(peer: Self::Ctx) -> Result<(), Self::Err>;
+
+    unsafe fn context_disable_peer_access(peer: Self::Ctx) -> Result<(), Self::Err>;
 
     unsafe fn context_malloc(bytes: usize) -> Result<Self::Ptr, Self::Err>;
 
@@ -147,6 +156,35 @@ pub trait GpuBindings: 'static {
         src: *const c_void,
         bytes: usize,
     ) -> Result<(), Self::Err>;
+
+    unsafe fn stream_memcpy_d2d(
+        stream: Self::Stream,
+        dst: Self::Ptr,
+        dst_offset: usize,
+        src: Self::Ptr,
+        src_offset: usize,
+        bytes: usize,
+    ) -> Result<(), Self::Err>;
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn stream_memcpy_peer(
+        stream: Self::Stream,
+        dst: Self::Ptr,
+        dst_ctx: Self::Ctx,
+        dst_offset: usize,
+        src: Self::Ptr,
+        src_ctx: Self::Ctx,
+        src_offset: usize,
+        bytes: usize,
+    ) -> Result<(), Self::Err>;
+
+    unsafe fn event_create() -> Result<Self::Event, Self::Err>;
+
+    unsafe fn event_destroy(event: Self::Event) -> Result<(), Self::Err>;
+
+    unsafe fn event_record(event: Self::Event, stream: Self::Stream) -> Result<(), Self::Err>;
+
+    unsafe fn stream_wait_event(stream: Self::Stream, event: Self::Event) -> Result<(), Self::Err>;
 
     unsafe fn kernel_load(func: Self::Kernel) -> Result<(), Self::Err>;
 

@@ -37,6 +37,7 @@ impl GpuBindings for Cuda {
     type Ptr = CUdeviceptr;
     type Ctx = CUcontext;
     type Stream = CUstream;
+    type Event = CUevent;
     type BlasHandle = cublasHandle;
     type Kernel = CUfunction;
     type Module = CUmodule;
@@ -49,6 +50,12 @@ impl GpuBindings for Cuda {
         let mut device = CUdevice::default();
         error::driver(cuDeviceGet(&mut device, ordinal))?;
         Ok(device)
+    }
+
+    unsafe fn device_count() -> Result<c_int, CudaError> {
+        let mut count = 0;
+        error::driver(cuDeviceGetCount(&mut count))?;
+        Ok(count)
     }
 
     unsafe fn device_props(device: CUdevice) -> Result<DeviceProps, CudaError> {
@@ -82,6 +89,12 @@ impl GpuBindings for Cuda {
         })
     }
 
+    unsafe fn device_can_access_peer(device: CUdevice, peer: CUdevice) -> Result<bool, CudaError> {
+        let mut can_access = 0;
+        error::driver(cuDeviceCanAccessPeer(&mut can_access, device, peer))?;
+        Ok(can_access != 0)
+    }
+
     unsafe fn context_create(device: CUdevice) -> Result<CUcontext, CudaError> {
         let mut ctx = CUcontext::default();
         error::driver(cuDevicePrimaryCtxRetain(&mut ctx, device))?;
@@ -106,6 +119,20 @@ impl GpuBindings for Cuda {
 
     unsafe fn context_sync() -> CudaResult {
         error::driver(cuCtxSynchronize())
+    }
+
+    unsafe fn context_enable_peer_access(peer: CUcontext) -> CudaResult {
+        match cuCtxEnablePeerAccess(peer, 0) {
+            CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED => Ok(()),
+            value => error::driver(value),
+        }
+    }
+
+    unsafe fn context_disable_peer_access(peer: CUcontext) -> CudaResult {
+        match cuCtxDisablePeerAccess(peer) {
+            CUDA_ERROR_PEER_ACCESS_NOT_ENABLED => Ok(()),
+            value => error::driver(value),
+        }
     }
 
     unsafe fn context_malloc(bytes: usize) -> Result<CUdeviceptr, CudaError> {
@@ -174,6 +201,52 @@ impl GpuBindings for Cuda {
 
     unsafe fn stream_memcpy_h2d(stream: CUstream, dst: CUdeviceptr, src: *const c_void, bytes: usize) -> CudaResult {
         error::driver(cuMemcpyHtoDAsync_v2(dst, src, bytes, stream))
+    }
+
+    unsafe fn stream_memcpy_d2d(
+        stream: CUstream,
+        dst: CUdeviceptr,
+        dst_offset: usize,
+        src: CUdeviceptr,
+        src_offset: usize,
+        bytes: usize,
+    ) -> CudaResult {
+        let dst = dst.wrapping_add(dst_offset as CUdeviceptr);
+        let src = src.wrapping_add(src_offset as CUdeviceptr);
+        error::driver(cuMemcpyDtoDAsync_v2(dst, src, bytes, stream))
+    }
+
+    unsafe fn stream_memcpy_peer(
+        stream: CUstream,
+        dst: CUdeviceptr,
+        dst_ctx: CUcontext,
+        dst_offset: usize,
+        src: CUdeviceptr,
+        src_ctx: CUcontext,
+        src_offset: usize,
+        bytes: usize,
+    ) -> CudaResult {
+        let dst = dst.wrapping_add(dst_offset as CUdeviceptr);
+        let src = src.wrapping_add(src_offset as CUdeviceptr);
+        error::driver(cuMemcpyPeerAsync(dst, dst_ctx, src, src_ctx, bytes, stream))
+    }
+
+    unsafe fn event_create() -> Result<CUevent, CudaError> {
+        let mut event = CUevent::default();
+        error::driver(cuEventCreate(&mut event, CU_EVENT_DISABLE_TIMING))?;
+        Ok(event)
+    }
+
+    unsafe fn event_destroy(event: CUevent) -> CudaResult {
+        error::driver(cuEventDestroy_v2(event))
+    }
+
+    unsafe fn event_record(event: CUevent, stream: CUstream) -> CudaResult {
+        error::driver(cuEventRecord(event, stream))
+    }
+
+    unsafe fn stream_wait_event(stream: CUstream, event: CUevent) -> CudaResult {
+        error::driver(cuStreamWaitEvent(stream, event, 0))
     }
 
     unsafe fn kernel_load(kernel: CUfunction) -> CudaResult {
@@ -395,6 +468,7 @@ mod raw {
     pub type CUresult = c_int;
     pub type CUcontext = *mut Opaque;
     pub type CUstream = *mut Opaque;
+    pub type CUevent = *mut Opaque;
     pub type CUdeviceptr = c_ulonglong;
     pub type CUfunction = *mut Opaque;
     pub type CUmodule = *mut Opaque;
@@ -407,6 +481,11 @@ mod raw {
 
     pub const CU_MEMHOSTALLOC_PORTABLE: c_uint = 0x01;
 
+    pub const CU_EVENT_DISABLE_TIMING: c_uint = 0x02;
+
+    pub const CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED: CUresult = 704;
+    pub const CUDA_ERROR_PEER_ACCESS_NOT_ENABLED: CUresult = 705;
+
     unsafe extern "C" {
         // Errors
         pub fn cuGetErrorString(error: CUresult, pStr: *mut *const c_char) -> CUresult;
@@ -417,14 +496,22 @@ mod raw {
         pub fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult;
         pub fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult;
         pub fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
+        pub fn cuDeviceGetCount(count: *mut c_int) -> CUresult;
         pub fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attribute, dev: CUdevice) -> CUresult;
         pub fn cuDeviceGetName(name: *mut c_char, len: c_int, dev: CUdevice) -> CUresult;
+        pub fn cuDeviceCanAccessPeer(canAccessPeer: *mut c_int, dev: CUdevice, peerDev: CUdevice) -> CUresult;
         pub fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult;
         pub fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult;
         pub fn cuCtxSynchronize() -> CUresult;
+        pub fn cuCtxEnablePeerAccess(peerContext: CUcontext, Flags: c_uint) -> CUresult;
+        pub fn cuCtxDisablePeerAccess(peerContext: CUcontext) -> CUresult;
         pub fn cuStreamCreate(stream: *mut CUstream, flags: c_uint) -> CUresult;
         pub fn cuStreamDestroy(stream: CUstream) -> CUresult;
         pub fn cuStreamSynchronize(stream: CUstream) -> CUresult;
+        pub fn cuStreamWaitEvent(hStream: CUstream, hEvent: CUevent, Flags: c_uint) -> CUresult;
+        pub fn cuEventCreate(phEvent: *mut CUevent, Flags: c_uint) -> CUresult;
+        pub fn cuEventDestroy_v2(hEvent: CUevent) -> CUresult;
+        pub fn cuEventRecord(hEvent: CUevent, hStream: CUstream) -> CUresult;
 
         // Memory
         pub fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
@@ -446,6 +533,20 @@ mod raw {
         pub fn cuMemcpyDtoHAsync_v2(
             dstHost: *mut c_void,
             srcDevice: CUdeviceptr,
+            ByteCount: usize,
+            hStream: CUstream,
+        ) -> CUresult;
+        pub fn cuMemcpyDtoDAsync_v2(
+            dstDevice: CUdeviceptr,
+            srcDevice: CUdeviceptr,
+            ByteCount: usize,
+            hStream: CUstream,
+        ) -> CUresult;
+        pub fn cuMemcpyPeerAsync(
+            dstDevice: CUdeviceptr,
+            dstContext: CUcontext,
+            srcDevice: CUdeviceptr,
+            srcContext: CUcontext,
             ByteCount: usize,
             hStream: CUstream,
         ) -> CUresult;

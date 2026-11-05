@@ -181,6 +181,11 @@ impl<G: Gpu> Buffer<G> {
     /// Returns an error if this buffer is already owned by a
     /// different stream
     pub fn acquire(self: &Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
+        self.device.check_same(&stream.device(), "stream")?;
+        unsafe { self.acquire_unchecked(stream) }
+    }
+
+    unsafe fn acquire_unchecked(self: &Arc<Self>, stream: Arc<Stream<G>>) -> Result<BufferGuard<G>, G::Error> {
         let mut owner = self.owner.lock().unwrap();
 
         if let Some((owning, count)) = owner.as_mut() {
@@ -302,6 +307,70 @@ impl<G: Gpu> Buffer<G> {
             sync.attach(guard)?;
             Ok(SyncOnValue::new(sync, value))
         }
+    }
+
+    pub fn copy_from_async(
+        self: &Arc<Self>,
+        stream: &Arc<Stream<G>>,
+        src: &Arc<Self>,
+    ) -> Result<SyncOnDrop<G>, G::Error> {
+        if self.size() != src.size() {
+            return Err(format!("Mismatched sizes: {} != {}", self.size(), src.size()).into());
+        }
+
+        self.copy_range_from_async(stream, 0, src, 0, self.size())
+    }
+
+    pub fn copy_range_from_async(
+        self: &Arc<Self>,
+        stream: &Arc<Stream<G>>,
+        dst_start: usize,
+        src: &Arc<Self>,
+        src_start: usize,
+        len: usize,
+    ) -> Result<SyncOnDrop<G>, G::Error> {
+        if Arc::ptr_eq(self, src) {
+            return Err("Cannot copy a buffer into itself!".to_string().into());
+        }
+
+        if self.dtype() != src.dtype() {
+            return Err(format!("Mismatched DType: {:?} != {:?}", self.dtype(), src.dtype()).into());
+        }
+
+        if len == 0 {
+            return Err("Attempted 0-size copy!".to_string().into());
+        }
+
+        let in_bounds = |start: usize, size: usize| start.checked_add(len).is_some_and(|end| end <= size);
+        if !in_bounds(dst_start, self.size()) || !in_bounds(src_start, src.size()) {
+            return Err("Copy range out of bounds!".to_string().into());
+        }
+
+        let (s, d, o) = (src.device.ordinal(), self.device.ordinal(), stream.device().ordinal());
+        if o != s && o != d {
+            return Err(format!("Attempted to copy GPU{s} -> GPU{d} on GPU{o} stream!").into());
+        }
+
+        let dst_guard = unsafe { self.acquire_unchecked(stream.clone())? };
+        let src_guard = unsafe { src.acquire_unchecked(stream.clone())? };
+
+        let bytes = self.dtype.bytes();
+        let (dst_offset, src_offset) = (dst_start * bytes, src_start * bytes);
+        let (src_ptr, dst_ptr) = (src_guard.ptr(), dst_guard.ptr());
+
+        unsafe {
+            if s == d {
+                stream.memcpy_d2d(src_ptr, src_offset, dst_ptr, dst_offset, len * bytes)?;
+            } else {
+                stream.memcpy_peer(src_ptr, src_offset, &src.device, dst_ptr, dst_offset, &self.device, len * bytes)?;
+            }
+        }
+
+        let mut sync = SyncOnDrop::new(stream.clone());
+        sync.attach(dst_guard)?;
+        sync.attach(src_guard)?;
+
+        Ok(sync)
     }
 }
 
