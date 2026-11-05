@@ -1,7 +1,7 @@
 mod builder;
 pub mod operations;
 
-use std::{collections::BTreeMap, fmt, rc::Rc};
+use std::{any::Any, collections::BTreeMap, fmt, rc::Rc};
 
 use crate::{
     ir::{IR, IRError, Node, NodeId, Operation, TypeSystem},
@@ -82,7 +82,7 @@ impl MType {
     }
 }
 
-pub trait ModelOperation: 'static + fmt::Debug {
+pub trait ModelOperation: Any + fmt::Debug + 'static {
     fn opname(&self) -> String;
 
     fn inputs(&self) -> Vec<MType>;
@@ -94,6 +94,13 @@ pub trait ModelOperation: 'static + fmt::Debug {
 
 #[derive(Clone, Debug)]
 pub struct ModelOp(pub Rc<dyn ModelOperation>);
+
+impl ModelOp {
+    pub fn downcast<T: ModelOperation>(&self) -> Option<&T> {
+        let op: &dyn Any = self.0.as_ref();
+        op.downcast_ref::<T>()
+    }
+}
 
 impl<T: ModelOperation> From<T> for ModelOp {
     fn from(value: T) -> Self {

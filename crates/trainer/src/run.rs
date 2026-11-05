@@ -7,17 +7,10 @@ pub use dataloader::{DataLoader, DataLoadingError, HostPool, PreparedBatchHost};
 pub use events::TrainingEvent;
 pub use schedule::{Step, TrainingSchedule, TrainingSteps};
 
-use std::{collections::BTreeMap, sync::mpsc, thread, time::Instant};
+use std::{sync::mpsc, thread, time::Instant};
 
-use bullet_compiler::{
-    model::Layout,
-    tensor::{DType, IRTrace, TValue},
-};
-use bullet_gpu::{
-    buffer::{Buffer, SyncOnValue},
-    function::Function,
-    runtime::{self, Device, Gpu},
-};
+use bullet_compiler::{model::Layout, tensor::IRTrace};
+use bullet_gpu::runtime::{self, Device, Gpu};
 
 use crate::optimiser::{Optimiser, OptimiserState};
 
@@ -39,6 +32,7 @@ pub enum TrainingError<G: Gpu> {
     CompilingBackwards(IRTrace),
     IoError,
     InvalidSchedule,
+    MoreDevicesThanBatchSize,
 }
 
 impl<G: Gpu> From<DataLoadingError> for TrainingError<G> {
@@ -121,69 +115,50 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         return Err(TrainingError::InvalidSchedule);
     }
 
+    if steps.batch_size < optimiser.ranks() {
+        return Err(TrainingError::MoreDevicesThanBatchSize);
+    }
+
     observer(&TrainingEvent::RunStarted {
         steps,
         device_name: props.name().to_owned(),
         device_arch: props.arch().map(str::to_owned),
+        device_count: optimiser.ranks(),
     });
 
     let (sender, receiver) = mpsc::sync_channel::<PreparedBatchHost<G>>(32);
 
+    let ir = optimiser.definition().ir();
+    let sparse = ir.inputs().iter().filter_map(|(id, name)| match ir.node(*id).ty().layout() {
+        Layout::Sparse(nnz) => Some((name.clone(), nnz)),
+        Layout::Dense(_) => None,
+    });
+    let sparse = sparse.collect::<Vec<_>>();
+    let threads = thread::available_parallelism().map_or(1, usize::from).min(16);
+
     let pool = HostPool::new(device.clone());
     let dataloader = thread::spawn(move || {
         let mut step = Step::from(steps);
+        let mut error = None;
 
-        dataloader.map_batches(&pool, step, steps.batch_size, |batch| {
+        let result = dataloader.map_batches(&pool, step, steps.batch_size, |mut batch| {
+            if let Err(e) = batch.compact(&sparse, threads) {
+                error = Some(DataLoadingError::Message(format!("{e:?}")));
+                return true;
+            }
+
             if sender.send(batch).is_err() {
                 return true;
             }
 
             step.step();
             step.finished()
-        })
+        });
+
+        error.map_or(result, Err)
     });
 
-    let defn = optimiser.definition();
-    let (func, gmap, norms) = defn
-        .lower_backward(&Default::default(), steps.batch_size, schedule.track_grad_norms, false)
-        .map_err(TrainingError::CompilingBackwards)?;
-    let map = func.map();
-    let mut backwards = Function::new(device.clone(), func.ir().clone()).map_err(TrainingError::CompilingBackwards)?;
-    backwards.prealloc().map_err(TrainingError::Unexpected)?;
-
-    let mut tensor_map = BTreeMap::new();
-
-    let mut gradients = BTreeMap::new();
-    for (mid, (name, _)) in defn.ir().weights() {
-        let tid = *map.get(mid).unwrap();
-        let gid = *gmap.get(mid).unwrap();
-
-        let ty = defn.ir().node(*mid).ty();
-        let Layout::Dense(dtype) = ty.layout() else { unreachable!() };
-        let size = ty.shape().size();
-        let grad = Buffer::zeroed(&device, dtype, size).map_err(TrainingError::Unexpected)?;
-
-        tensor_map.insert(tid, optimiser.weights().get(name).unwrap().clone());
-        tensor_map.insert(gid, grad.clone());
-
-        gradients.insert(name.clone(), grad);
-    }
-
-    // squared gradient norms
-    let norms = if let Some(norms) = norms {
-        let buf = Buffer::zeroed(&device, DType::F32, norms.names.len()).map_err(TrainingError::Unexpected)?;
-        tensor_map.insert(norms.acc, buf.clone());
-        Some((norms.names, buf))
-    } else {
-        None
-    };
-
-    let tgf = TValue::F32(vec![1.0 / steps.batch_size as f32]);
-    let tgf = Buffer::from_host(&device, &tgf).map_err(TrainingError::Unexpected)?;
-    let tlr = Buffer::from_host(&device, &TValue::F32(vec![0.0])).map_err(TrainingError::Unexpected)?;
-    let loss = Buffer::from_host(&device, &TValue::F32(vec![0.0])).map_err(TrainingError::Unexpected)?;
-
-    tensor_map.insert(*map.get(&defn.loss().unwrap()).unwrap(), loss.clone());
+    optimiser.prepare(steps.batch_size, schedule.track_grad_norms)?;
 
     let first_batch = match receiver.recv() {
         Ok(batch) => batch,
@@ -194,25 +169,9 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         }
     };
 
-    let mut batch_on_device = first_batch.to_device(&device).map_err(TrainingError::Unexpected)?;
-    let mut next_on_device = batch_on_device
-        .iter()
-        .map(|(id, tensor)| {
-            let buf = Buffer::zeroed(&device, tensor.dtype(), tensor.size());
-            (id.clone(), buf.unwrap())
-        })
-        .collect();
+    optimiser.load_batch(&first_batch).map_err(TrainingError::Unexpected)?;
+    drop(first_batch);
 
-    let mut input_names = BTreeMap::new();
-    for (mid, name) in defn.ir().inputs() {
-        let tid = *map.get(mid).unwrap();
-
-        input_names.insert(tid, name.clone());
-        tensor_map.insert(tid, batch_on_device.get(name).unwrap().clone());
-    }
-
-    let copy_stream = device.new_stream().map_err(TrainingError::Unexpected)?;
-    let compute_stream = device.new_stream().map_err(TrainingError::Unexpected)?;
     let lr = schedule.lr_schedule;
     let mut batch_queued = true;
     let mut step = Step::from(steps);
@@ -227,64 +186,17 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
         }
 
         let lrate = lr(step);
-        let lrdrop = TValue::F32(vec![lrate]);
-        let lrdrop = tlr.copy_from_host_async(&copy_stream, &lrdrop).map_err(TrainingError::Unexpected)?;
+        let output = optimiser.step(lrate, &mut || receiver.recv().ok())?;
+        batch_queued = output.next_queued;
 
-        let compute_block1 =
-            backwards.execute(compute_stream.clone(), &tensor_map).map_err(TrainingError::GradientCalculationError)?;
-
-        lrdrop.value().map_err(TrainingError::Unexpected)?;
-
-        let compute_block2 = optimiser
-            .update(&compute_stream, tgf.clone(), tlr.clone(), &gradients)
-            .map_err(TrainingError::OptimiserUpdateError)?;
-
-        if let Ok(next_batch_host) = receiver.recv() {
-            drop(
-                next_batch_host
-                    .copy_to_device_async(&copy_stream, &next_on_device)
-                    .map_err(TrainingError::Unexpected)?,
-            );
-            std::mem::swap(&mut batch_on_device, &mut next_on_device);
-
-            for (id, name) in &input_names {
-                *tensor_map.get_mut(id).unwrap() = batch_on_device.get(name).unwrap().clone();
-            }
-        } else {
-            batch_queued = false;
-        }
-
-        let _ = compute_block1.value().map_err(TrainingError::Unexpected)?;
-        compute_block2.sync().map_err(TrainingError::Unexpected)?;
-
-        let TValue::F32(loss) = loss
-            .to_host_async(&copy_stream)
-            .map(SyncOnValue::value)
-            .map_err(TrainingError::Unexpected)?
-            .map_err(TrainingError::Unexpected)?
-        else {
-            panic!()
-        };
-        let [loss] = loss[..] else { panic!() };
-        let error = loss / steps.batch_size as f32;
+        let error = output.loss / steps.batch_size as f32;
 
         running_loss += error;
 
-        let grad_norm = if let Some((names, buf)) = &norms {
-            let TValue::F32(sqnorms) = buf
-                .to_host_async(&copy_stream)
-                .map(SyncOnValue::value)
-                .map_err(TrainingError::Unexpected)?
-                .map_err(TrainingError::Unexpected)?
-            else {
-                panic!()
-            };
-
-            let norms = sqnorms.iter().map(|sq| sq.sqrt() / steps.batch_size as f32);
-            Some(names.iter().cloned().zip(norms).collect())
-        } else {
-            None
-        };
+        let grad_norm = output.grad_sqnorms.map(|sqnorms| {
+            let norms = sqnorms.into_iter().map(|(name, sq)| (name, sq.sqrt() / steps.batch_size as f32));
+            norms.collect()
+        });
 
         observer(&TrainingEvent::BatchCompleted {
             step,
@@ -315,6 +227,8 @@ pub fn train_with_observer<G: Gpu, O: OptimiserState<G>>(
 
         step.step();
     }
+
+    optimiser.finish();
 
     dataloader.join().map_err(|_| DataLoadingError::Message("Data loader panicked".into()))??;
 
