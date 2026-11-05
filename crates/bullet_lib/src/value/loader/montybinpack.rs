@@ -6,21 +6,19 @@ use std::{
 
 use crate::game::formats::bulletformat::ChessBoard;
 
-use super::rng::seeded_rng;
+use super::shuffle::{SHUFFLE_THREADS, ShuffledDataLoader, convert_chunks};
 
 use bullet_trainer::reader::DataReader;
 use montyformat::{
     FastDeserialise, MontyValueFormat,
     chess::{Move, Position},
 };
+use rayon::{ThreadPool, ThreadPoolBuilder};
 
 #[derive(Clone)]
-pub struct MontyBinpackLoader<T: Fn(&Position, Move, i16, f32) -> bool> {
-    file_paths: Vec<String>,
-    buffer_size: usize,
-    threads: usize,
-    filter: T,
-}
+pub struct MontyBinpackLoader<T: Fn(&Position, Move, i16, f32) -> bool>(
+    ShuffledDataLoader<UnshuffledMontyBinpackLoader<T>>,
+);
 
 impl<T: Fn(&Position, Move, i16, f32) -> bool> MontyBinpackLoader<T> {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: T) -> Self {
@@ -28,12 +26,8 @@ impl<T: Fn(&Position, Move, i16, f32) -> bool> MontyBinpackLoader<T> {
     }
 
     pub fn new_concat_multiple(paths: &[&str], buffer_size_mb: usize, threads: usize, filter: T) -> Self {
-        Self {
-            file_paths: paths.iter().map(|x| x.to_string()).collect(),
-            buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
-            threads: threads.max(1),
-            filter,
-        }
+        let reader = UnshuffledMontyBinpackLoader::new_concat_multiple(paths, threads, filter);
+        Self(ShuffledDataLoader::new(reader, Some(buffer_size_mb), threads.min(SHUFFLE_THREADS)))
     }
 }
 
@@ -41,28 +35,57 @@ impl<T> DataReader<ChessBoard> for MontyBinpackLoader<T>
 where
     T: Fn(&Position, Move, i16, f32) -> bool + Clone + Send + Sync + 'static,
 {
+    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, skip_count: usize, f: F) {
+        self.0.read_chunks(skip_count, f);
+    }
+}
+
+#[derive(Clone)]
+pub struct UnshuffledMontyBinpackLoader<T: Fn(&Position, Move, i16, f32) -> bool> {
+    file_paths: Vec<String>,
+    threads: usize,
+    filter: T,
+}
+
+impl<T: Fn(&Position, Move, i16, f32) -> bool> UnshuffledMontyBinpackLoader<T> {
+    pub fn new(path: &str, threads: usize, filter: T) -> Self {
+        Self::new_concat_multiple(&[path], threads, filter)
+    }
+
+    pub fn new_concat_multiple(paths: &[&str], threads: usize, filter: T) -> Self {
+        Self { file_paths: paths.iter().map(|x| x.to_string()).collect(), threads: threads.max(1), filter }
+    }
+}
+
+impl<T> DataReader<ChessBoard> for UnshuffledMontyBinpackLoader<T>
+where
+    T: Fn(&Position, Move, i16, f32) -> bool + Clone + Send + Sync + 'static,
+{
     fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
-        let mut shuffle_buffer = Vec::new();
-        shuffle_buffer.reserve_exact(self.buffer_size);
-
         let file_paths = self.file_paths.clone();
-        let buffer_size = self.buffer_size;
+        let threads = self.threads;
 
-        let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(4);
+        let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
 
         std::thread::spawn(move || {
+            let mut games = Vec::new();
+
             'dataloading: loop {
                 for file_path in &file_paths {
                     let mut reader = BufReader::new(File::open(file_path.as_str()).unwrap());
 
                     let mut buffer = Vec::new();
                     while let Ok(()) = MontyValueFormat::deserialise_fast_into_buffer(&mut reader, &mut buffer) {
-                        if msg_receiver.try_recv().unwrap_or(false) || sender.send(buffer).is_err() {
-                            break 'dataloading;
-                        }
+                        games.push(std::mem::take(&mut buffer));
 
-                        buffer = Vec::new();
+                        if games.len().is_multiple_of(8192 * threads) {
+                            if msg_receiver.try_recv().unwrap_or(false) || sender.send(games).is_err() {
+                                break 'dataloading;
+                            }
+
+                            games = Vec::new();
+                        }
                     }
                 }
             }
@@ -71,61 +94,26 @@ where
         let (game_sender, game_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(4 * self.threads);
         let (game_msg_sender, game_msg_receiver) = mpsc::sync_channel::<bool>(1);
 
-        let threads = self.threads;
         let filter = self.filter.clone();
+        let pool = ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
         std::thread::spawn(move || {
-            let mut reusable = Vec::new();
-            'dataloading: while let Ok(game_bytes) = receiver.recv() {
+            'dataloading: while let Ok(games) = receiver.recv() {
                 if game_msg_receiver.try_recv().unwrap_or(false) {
-                    msg_sender.send(true).unwrap();
+                    let _ = msg_sender.send(true);
                     break 'dataloading;
                 }
 
-                reusable.push(game_bytes);
-
-                if reusable.len() % (8192 * threads) == 0 {
-                    convert_buffer(threads, &game_sender, &reusable, &filter);
-                    reusable.clear();
+                if convert_buffer(&pool, &game_sender, &games, &filter) {
+                    let _ = msg_sender.send(true);
+                    break 'dataloading;
                 }
             }
         });
 
-        let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
-        let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
-
-        std::thread::spawn(move || {
-            'dataloading: while let Ok(game) = game_receiver.recv() {
-                if buffer_msg_receiver.try_recv().unwrap_or(false) {
-                    game_msg_sender.send(true).unwrap();
-                    break 'dataloading;
-                }
-
-                if shuffle_buffer.len() + game.len() < shuffle_buffer.capacity() {
-                    shuffle_buffer.extend_from_slice(&game);
-                } else {
-                    let diff = shuffle_buffer.capacity() - shuffle_buffer.len();
-                    if diff > 0 {
-                        shuffle_buffer.extend_from_slice(&game[..diff]);
-                    }
-
-                    shuffle(&mut shuffle_buffer);
-
-                    if buffer_msg_receiver.try_recv().unwrap_or(false) || buffer_sender.send(shuffle_buffer).is_err() {
-                        game_msg_sender.send(true).unwrap();
-                        break 'dataloading;
-                    }
-
-                    shuffle_buffer = Vec::new();
-                    shuffle_buffer.reserve_exact(buffer_size);
-                    shuffle_buffer.extend_from_slice(&game[diff..]);
-                }
-            }
-        });
-
-        'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
-            if f(&shuffle_buffer) {
-                buffer_msg_sender.send(true).unwrap();
+        'dataloading: while let Ok(games) = game_receiver.recv() {
+            if f(&games) {
+                let _ = game_msg_sender.send(true);
                 break 'dataloading;
             }
         }
@@ -133,27 +121,20 @@ where
 }
 
 fn convert_buffer<T: Fn(&Position, Move, i16, f32) -> bool + Send + Sync>(
-    threads: usize,
+    pool: &ThreadPool,
     sender: &SyncSender<Vec<ChessBoard>>,
     games: &[Vec<u8>],
     filter: &T,
-) {
-    let chunk_size = games.len().div_ceil(threads);
+) -> bool {
+    convert_chunks(pool, sender, games, 1024, |chunk| {
+        let mut buffer = Vec::new();
 
-    std::thread::scope(|s| {
-        for chunk in games.chunks(chunk_size) {
-            let this_sender = sender.clone();
-            s.spawn(move || {
-                let mut buffer = Vec::new();
-
-                for game_bytes in chunk {
-                    parse_into_buffer(game_bytes, &mut buffer, filter);
-                }
-
-                this_sender.send(buffer)
-            });
+        for game_bytes in chunk {
+            parse_into_buffer(game_bytes, &mut buffer, filter);
         }
-    });
+
+        buffer
+    })
 }
 
 fn parse_into_buffer<T: Fn(&Position, Move, i16, f32) -> bool>(
@@ -173,14 +154,5 @@ fn parse_into_buffer<T: Fn(&Position, Move, i16, f32) -> bool>(
         }
 
         pos.make(data.best_move, &castling);
-    }
-}
-
-fn shuffle(data: &mut [ChessBoard]) {
-    let mut rng = seeded_rng();
-
-    for i in (0..data.len()).rev() {
-        let idx = rng.rand_range(0..i as u64 + 1) as usize;
-        data.swap(idx, i);
     }
 }
