@@ -64,6 +64,7 @@ pub mod optimiser {
                 n_sma_threshold: 5.0,
                 decay: value.decay,
                 clip: Some((value.min_weight, value.max_weight)),
+                ..Default::default()
             }
         }
     }
