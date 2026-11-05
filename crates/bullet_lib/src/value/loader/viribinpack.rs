@@ -9,6 +9,8 @@ use crate::game::formats::bulletformat::ChessBoard;
 use super::rng::seeded_rng;
 
 use bullet_trainer::reader::DataReader;
+use rand::rngs::ThreadRng;
+use viriformat::chess::{piece::Colour, squareset::SquareSet};
 pub use viriformat::{
     chess::{board::Board, chessmove::Move},
     dataformat::{Filter, Game, WDL},
@@ -264,21 +266,16 @@ fn convert_buffer(threads: usize, sender: &SyncSender<Vec<ChessBoard>>, games: &
 fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFilter) {
     match filter {
         ViriFilter::Builtin(filter) => {
-            game.splat_to_bulletformat(
-                |board| {
-                    buffer.push(board);
-                    Ok(())
-                },
-                filter,
-            )
-            .unwrap();
+            splat(
+                game,
+                |board| buffer.push(board),
+                |mv, eval, board, outcome, rng| filter.should_filter(mv, eval, board, outcome, rng),
+            );
         }
         ViriFilter::Custom(filter) => {
-            game.splat_to_bulletformat_with_filter_callback(
-                |board| {
-                    buffer.push(board);
-                    Ok(())
-                },
+            splat(
+                game,
+                |board| buffer.push(board),
                 |mv, eval, board, wdl, _| {
                     !filter(
                         board,
@@ -291,9 +288,52 @@ fn parse_into_buffer(game: &Game, buffer: &mut Vec<ChessBoard>, filter: &ViriFil
                         },
                     )
                 },
-            )
-            .unwrap();
+            );
         }
+    }
+}
+
+fn splat(
+    game: &Game,
+    mut callback: impl FnMut(ChessBoard),
+    mut should_filter: impl FnMut(Move, i32, &Board, WDL, &mut ThreadRng) -> bool,
+) {
+    let mut rng = rand::rng();
+    let (mut board, _, wdl, _) = game.initial_position.unpack();
+    let outcome = WDL::from_packed(wdl);
+
+    // record all the positions that pass the filter.
+    for (mv, eval) in &game.moves {
+        let eval = eval.get();
+        if !should_filter(*mv, i32::from(eval), &board, outcome, &mut rng) {
+            callback(convert(&board, wdl, eval));
+        }
+        board.make_move_simple(*mv);
+    }
+}
+
+fn convert(board: &Board, wdl: u8, eval: i16) -> ChessBoard {
+    let stm = board.turn();
+    let occ = board.pieces.occupied().inner();
+    let (occ, score, result) = match stm {
+        Colour::White => (occ, eval, wdl),
+        Colour::Black => (occ.swap_bytes(), -eval, 2 - wdl),
+    };
+    let mut pcs = [0; 16];
+    for (i, sq) in SquareSet::from_inner(occ).iter().enumerate() {
+        let piece = board.piece_array[sq.relative_to(stm)].unwrap();
+        let colour = u8::from(piece.colour() != stm) << 3;
+        pcs[i / 2] |= (colour | piece.piece_type().inner()) << (4 * (i & 1));
+    }
+
+    ChessBoard {
+        occ,
+        pcs,
+        score,
+        result,
+        ksq: board.king_sq(stm).relative_to(stm).inner(),
+        opp_ksq: board.king_sq(stm.flip()).relative_to(stm.flip()).inner(),
+        extra: [0; 3],
     }
 }
 
