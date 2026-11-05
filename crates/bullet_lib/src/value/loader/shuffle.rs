@@ -1,7 +1,4 @@
-use std::sync::{
-    Arc,
-    mpsc::{self, SyncSender},
-};
+use std::sync::mpsc::{self, SyncSender};
 
 use bullet_trainer::reader::DataReader;
 use rand_pcg::Pcg64Mcg;
@@ -10,15 +7,17 @@ use rip_shuffle::RipShuffleParallel;
 
 use super::rng::seeded_rng;
 
+pub(super) const SHUFFLE_THREADS: usize = 1;
+
 #[derive(Clone)]
 pub struct ShuffledDataLoader<R> {
     reader: R,
-    buffer_size_mb: usize,
+    buffer_size_mb: Option<usize>,
     threads: usize,
 }
 
 impl<R> ShuffledDataLoader<R> {
-    pub fn new(reader: R, buffer_size_mb: usize, threads: usize) -> Self {
+    pub fn new(reader: R, buffer_size_mb: Option<usize>, threads: usize) -> Self {
         Self { reader, buffer_size_mb, threads: threads.max(1) }
     }
 }
@@ -29,15 +28,27 @@ where
     T: Clone + Send + Sync,
 {
     fn read_chunks<F: FnMut(&[T]) -> bool>(&self, skip_count: usize, mut f: F) {
-        let buffer_size = (self.buffer_size_mb * 1024 * 1024 / size_of::<T>().max(1) / 2).max(1);
+        let buffer_size = self.buffer_size_mb.map(|mb| (mb * 1024 * 1024 / size_of::<T>().max(1) / 2).max(1));
 
         std::thread::scope(|scope| {
+            let (shuffle_sender, shuffle_receiver) = mpsc::sync_channel::<Vec<T>>(0);
             let (sender, receiver) = mpsc::sync_channel(0);
             let (stop_sender, stop_receiver) = mpsc::sync_channel::<()>(0);
 
             scope.spawn(move || {
                 let mut shuffle = Shuffle::new(self.threads);
-                let mut buffer = Vec::with_capacity(buffer_size);
+
+                for mut buffer in shuffle_receiver {
+                    shuffle.shuffle(&mut buffer);
+
+                    if sender.send(buffer).is_err() {
+                        break;
+                    }
+                }
+            });
+
+            scope.spawn(move || {
+                let mut buffer = Vec::with_capacity(buffer_size.unwrap_or(0));
                 let mut stopped = false;
 
                 self.reader.read_chunks(skip_count, |mut data| {
@@ -46,8 +57,13 @@ where
                         return true;
                     }
 
+                    let Some(buffer_size) = buffer_size else {
+                        stopped = shuffle_sender.send(data.to_vec()).is_err();
+                        return stopped;
+                    };
+
                     if data.is_empty() {
-                        stopped = sender.send(Vec::new()).is_err();
+                        stopped = shuffle_sender.send(Vec::new()).is_err();
                         return stopped;
                     }
 
@@ -57,9 +73,7 @@ where
                         data = &data[count..];
 
                         if buffer.len() == buffer_size {
-                            shuffle.shuffle(&mut buffer);
-
-                            if sender.send(std::mem::take(&mut buffer)).is_err() {
+                            if shuffle_sender.send(std::mem::take(&mut buffer)).is_err() {
                                 stopped = true;
                                 return true;
                             }
@@ -72,8 +86,7 @@ where
                 });
 
                 if !stopped && !buffer.is_empty() {
-                    shuffle.shuffle(&mut buffer);
-                    let _ = sender.send(buffer);
+                    let _ = shuffle_sender.send(buffer);
                 }
             });
 
@@ -88,8 +101,8 @@ where
     }
 }
 
-pub(super) struct Shuffle {
-    pub pool: Arc<ThreadPool>,
+struct Shuffle {
+    pool: ThreadPool,
     rng: Pcg64Mcg,
 }
 
@@ -98,10 +111,7 @@ impl Shuffle {
         let mut rng = seeded_rng();
         let seed = (u128::from(rng.rand_u64()) << 64) | u128::from(rng.rand_u64());
 
-        Self {
-            pool: Arc::new(ThreadPoolBuilder::new().num_threads(threads.max(1)).build().unwrap()),
-            rng: Pcg64Mcg::new(seed),
-        }
+        Self { pool: ThreadPoolBuilder::new().num_threads(threads).build().unwrap(), rng: Pcg64Mcg::new(seed) }
     }
 
     pub fn shuffle<T: Send + Sync>(&mut self, data: &mut [T]) {
@@ -124,7 +134,7 @@ where
     pool.in_place_scope(|scope| {
         let (chunk_sender, chunk_receiver) = mpsc::channel();
         let convert = &convert;
-        let mut chunks = data.chunks(chunk_size.max(1));
+        let mut chunks = data.chunks(chunk_size);
         let mut pending = 0;
 
         loop {

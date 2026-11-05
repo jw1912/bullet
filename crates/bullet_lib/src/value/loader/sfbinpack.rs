@@ -1,13 +1,11 @@
 use std::{
     fs::File,
     io::BufReader,
-    sync::{
-        Arc,
-        mpsc::{self, SyncSender},
-    },
+    sync::mpsc::{self, SyncSender},
 };
 
 use bullet_trainer::reader::DataReader;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use sfbinpack::{ChunkReader, read_chunk_into};
 pub use sfbinpack::{
     TrainingDataEntry,
@@ -20,7 +18,7 @@ pub use sfbinpack::{
 
 use crate::game::formats::bulletformat::ChessBoard;
 
-use super::shuffle::{Shuffle, convert_chunks};
+use super::shuffle::{SHUFFLE_THREADS, ShuffledDataLoader, convert_chunks};
 
 fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
     let mut bbs = [0; 8];
@@ -50,12 +48,7 @@ fn convert_to_bulletformat(entry: &TrainingDataEntry) -> ChessBoard {
 }
 
 #[derive(Clone)]
-pub struct SfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool> {
-    file_paths: Vec<String>,
-    buffer_size: usize,
-    threads: usize,
-    filter: T,
-}
+pub struct SfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool>(ShuffledDataLoader<UnshuffledSfBinpackLoader<T>>);
 
 impl<T: Fn(&TrainingDataEntry) -> bool> SfBinpackLoader<T> {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: T) -> Self {
@@ -63,12 +56,8 @@ impl<T: Fn(&TrainingDataEntry) -> bool> SfBinpackLoader<T> {
     }
 
     pub fn new_concat_multiple(paths: &[&str], buffer_size_mb: usize, threads: usize, filter: T) -> Self {
-        Self {
-            file_paths: paths.iter().map(|x| x.to_string()).collect(),
-            buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
-            threads: threads.max(1),
-            filter,
-        }
+        let reader = UnshuffledSfBinpackLoader::new_concat_multiple(paths, threads, filter);
+        Self(ShuffledDataLoader::new(reader, Some(buffer_size_mb), threads.min(SHUFFLE_THREADS)))
     }
 }
 
@@ -76,14 +65,38 @@ impl<T> DataReader<ChessBoard> for SfBinpackLoader<T>
 where
     T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
 {
+    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, skip_count: usize, f: F) {
+        self.0.read_chunks(skip_count, f);
+    }
+}
+
+#[derive(Clone)]
+pub struct UnshuffledSfBinpackLoader<T: Fn(&TrainingDataEntry) -> bool> {
+    file_paths: Vec<String>,
+    threads: usize,
+    filter: T,
+}
+
+impl<T: Fn(&TrainingDataEntry) -> bool> UnshuffledSfBinpackLoader<T> {
+    pub fn new(path: &str, threads: usize, filter: T) -> Self {
+        Self::new_concat_multiple(&[path], threads, filter)
+    }
+
+    pub fn new_concat_multiple(paths: &[&str], threads: usize, filter: T) -> Self {
+        Self { file_paths: paths.iter().map(|x| x.to_string()).collect(), threads: threads.max(1), filter }
+    }
+}
+
+impl<T> DataReader<ChessBoard> for UnshuffledSfBinpackLoader<T>
+where
+    T: Fn(&TrainingDataEntry) -> bool + Clone + Send + Sync + 'static,
+{
     fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
         let file_paths = self.file_paths.clone();
-        let buffer_size = self.buffer_size.max(1);
         let threads = self.threads;
         let filter = self.filter.clone();
-        let reader_buffer_size = threads.max(1);
-        let mut shuffle = Shuffle::new(threads);
-        let decode_pool = Arc::clone(&shuffle.pool);
+        let reader_buffer_size = threads;
+        let pool = ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
         let (reader_sender, reader_receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
         let (reader_msg_sender, reader_msg_receiver) = mpsc::sync_channel::<bool>(1);
@@ -131,62 +144,23 @@ where
                     break 'dataloading;
                 }
 
-                if convert_buffer(&decode_pool, &converted_sender, &chunks, filter) {
+                if convert_buffer(&pool, &converted_sender, &chunks, filter) {
                     let _ = reader_msg_sender.send(true);
                     break 'dataloading;
                 }
             }
         });
 
-        let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
-        let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
-
-        std::thread::spawn(move || {
-            let mut shuffle_buffer = Vec::with_capacity(buffer_size);
-
-            'dataloading: while let Ok(converted) = converted_receiver.recv() {
-                if buffer_msg_receiver.try_recv().unwrap_or(false) {
-                    let _ = converted_msg_sender.send(true);
-                    break 'dataloading;
-                }
-
-                let mut remaining = converted.as_slice();
-                while !remaining.is_empty() {
-                    let count = remaining.len().min(buffer_size - shuffle_buffer.len());
-                    shuffle_buffer.extend_from_slice(&remaining[..count]);
-                    remaining = &remaining[count..];
-
-                    if shuffle_buffer.len() == buffer_size {
-                        shuffle.shuffle(&mut shuffle_buffer);
-
-                        if buffer_msg_receiver.try_recv().unwrap_or(false)
-                            || buffer_sender.send(shuffle_buffer).is_err()
-                        {
-                            let _ = converted_msg_sender.send(true);
-                            break 'dataloading;
-                        }
-
-                        shuffle_buffer = Vec::with_capacity(buffer_size);
-                    }
-                }
-            }
-        });
-
-        'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
-            if f(&shuffle_buffer) {
-                let _ = buffer_msg_sender.send(true);
+        'dataloading: while let Ok(converted) = converted_receiver.recv() {
+            if f(&converted) {
+                let _ = converted_msg_sender.send(true);
                 break 'dataloading;
             }
         }
     }
 }
 
-fn convert_buffer<T>(
-    pool: &rayon::ThreadPool,
-    sender: &SyncSender<Vec<ChessBoard>>,
-    chunks: &[Vec<u8>],
-    filter: &T,
-) -> bool
+fn convert_buffer<T>(pool: &ThreadPool, sender: &SyncSender<Vec<ChessBoard>>, chunks: &[Vec<u8>], filter: &T) -> bool
 where
     T: Fn(&TrainingDataEntry) -> bool + Sync,
 {

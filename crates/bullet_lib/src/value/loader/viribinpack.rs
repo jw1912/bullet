@@ -1,20 +1,18 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader, Cursor, Seek, SeekFrom},
-    sync::{
-        Arc,
-        mpsc::{self, Receiver, SyncSender},
-    },
+    sync::mpsc::{self, Receiver, SyncSender},
 };
 
 use crate::game::formats::bulletformat::ChessBoard;
 
 use super::{
     rng::seeded_rng,
-    shuffle::{Shuffle, convert_chunks},
+    shuffle::{SHUFFLE_THREADS, ShuffledDataLoader, convert_chunks},
 };
 
 use bullet_trainer::reader::DataReader;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 pub use viriformat::{
     chess::{board::Board, chessmove::Move},
     dataformat::{Filter, Game, WDL},
@@ -33,13 +31,7 @@ impl From<Filter> for ViriFilter {
 }
 
 #[derive(Clone)]
-pub struct ViriBinpackLoader {
-    file_paths: Vec<String>,
-    buffer_size: usize,
-    threads: usize,
-    filter: ViriFilter,
-    interleave: bool,
-}
+pub struct ViriBinpackLoader(ShuffledDataLoader<UnshuffledViriBinpackLoader>);
 
 impl ViriBinpackLoader {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize, filter: impl Into<ViriFilter>) -> Self {
@@ -52,13 +44,8 @@ impl ViriBinpackLoader {
         threads: usize,
         filter: impl Into<ViriFilter>,
     ) -> Self {
-        Self {
-            file_paths: paths.iter().map(|x| x.to_string()).collect(),
-            buffer_size: buffer_size_mb * 1024 * 1024 / std::mem::size_of::<ChessBoard>() / 2,
-            threads: threads.max(1),
-            filter: filter.into(),
-            interleave: false,
-        }
+        let reader = UnshuffledViriBinpackLoader::new_concat_multiple(paths, threads, filter);
+        Self(ShuffledDataLoader::new(reader, Some(buffer_size_mb), threads.min(SHUFFLE_THREADS)))
     }
 
     pub fn new_interleave_multiple(
@@ -67,22 +54,51 @@ impl ViriBinpackLoader {
         threads: usize,
         filter: impl Into<ViriFilter>,
     ) -> Self {
-        Self { interleave: true, ..Self::new_concat_multiple(paths, buffer_size_mb, threads, filter) }
+        let reader = UnshuffledViriBinpackLoader::new_interleave_multiple(paths, threads, filter);
+        Self(ShuffledDataLoader::new(reader, Some(buffer_size_mb), threads.min(SHUFFLE_THREADS)))
     }
 }
 
 impl DataReader<ChessBoard> for ViriBinpackLoader {
-    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
-        let buffer_size = self.buffer_size.max(1);
-        let mut shuffle_buffer = Vec::new();
-        shuffle_buffer.reserve_exact(buffer_size);
-        let mut shuffle = Shuffle::new(self.threads);
-        let decode_pool = Arc::clone(&shuffle.pool);
+    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, skip_count: usize, f: F) {
+        self.0.read_chunks(skip_count, f);
+    }
+}
 
+#[derive(Clone)]
+pub struct UnshuffledViriBinpackLoader {
+    file_paths: Vec<String>,
+    threads: usize,
+    filter: ViriFilter,
+    interleave: bool,
+}
+
+impl UnshuffledViriBinpackLoader {
+    pub fn new(path: &str, threads: usize, filter: impl Into<ViriFilter>) -> Self {
+        Self::new_concat_multiple(&[path], threads, filter)
+    }
+
+    pub fn new_concat_multiple(paths: &[&str], threads: usize, filter: impl Into<ViriFilter>) -> Self {
+        Self {
+            file_paths: paths.iter().map(|x| x.to_string()).collect(),
+            threads: threads.max(1),
+            filter: filter.into(),
+            interleave: false,
+        }
+    }
+
+    pub fn new_interleave_multiple(paths: &[&str], threads: usize, filter: impl Into<ViriFilter>) -> Self {
+        Self { interleave: true, ..Self::new_concat_multiple(paths, threads, filter) }
+    }
+}
+
+impl DataReader<ChessBoard> for UnshuffledViriBinpackLoader {
+    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _: usize, mut f: F) {
         let file_paths = self.file_paths.clone();
         let threads = self.threads;
         let filter = self.filter.clone();
         let interleave = self.interleave;
+        let pool = ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
         let (sender, receiver) = mpsc::sync_channel::<Vec<Vec<u8>>>(4);
         let (msg_sender, msg_receiver) = mpsc::sync_channel::<bool>(1);
@@ -105,54 +121,19 @@ impl DataReader<ChessBoard> for ViriBinpackLoader {
                     break 'dataloading;
                 }
 
-                if convert_buffer(&decode_pool, &game_sender, &games, &filter) {
+                if convert_buffer(&pool, &game_sender, &games, &filter) {
                     let _ = msg_sender.send(true);
                     break 'dataloading;
                 }
             }
         });
 
-        let (buffer_sender, buffer_receiver) = mpsc::sync_channel::<Vec<ChessBoard>>(0);
-        let (buffer_msg_sender, buffer_msg_receiver) = mpsc::sync_channel::<bool>(1);
-
-        std::thread::spawn(move || {
-            'dataloading: while let Ok(game) = game_receiver.recv() {
-                if buffer_msg_receiver.try_recv().unwrap_or(false) {
-                    let _ = game_msg_sender.send(true);
-                    break 'dataloading;
-                }
-
-                let mut remaining = game.as_slice();
-                while !remaining.is_empty() {
-                    let count = remaining.len().min(buffer_size - shuffle_buffer.len());
-                    shuffle_buffer.extend_from_slice(&remaining[..count]);
-                    remaining = &remaining[count..];
-
-                    if shuffle_buffer.len() == buffer_size {
-                        shuffle.shuffle(&mut shuffle_buffer);
-
-                        if buffer_msg_receiver.try_recv().unwrap_or(false)
-                            || buffer_sender.send(shuffle_buffer).is_err()
-                        {
-                            let _ = game_msg_sender.send(true);
-                            break 'dataloading;
-                        }
-
-                        shuffle_buffer = Vec::new();
-                        shuffle_buffer.reserve_exact(buffer_size);
-                    }
-                }
-            }
-        });
-
-        'dataloading: while let Ok(shuffle_buffer) = buffer_receiver.recv() {
-            if f(&shuffle_buffer) {
-                let _ = buffer_msg_sender.send(true);
+        'dataloading: while let Ok(games) = game_receiver.recv() {
+            if f(&games) {
+                let _ = game_msg_sender.send(true);
                 break 'dataloading;
             }
         }
-
-        drop(buffer_receiver);
     }
 }
 
@@ -252,7 +233,7 @@ fn read_interleave(
 }
 
 fn convert_buffer(
-    pool: &rayon::ThreadPool,
+    pool: &ThreadPool,
     sender: &SyncSender<Vec<ChessBoard>>,
     games: &[Vec<u8>],
     filter: &ViriFilter,

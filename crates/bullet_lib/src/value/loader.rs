@@ -7,11 +7,11 @@ mod text;
 pub mod viribinpack;
 
 pub use direct::{CanBeDirectlySequentiallyLoaded, DirectSequentialDataLoader};
-pub use montybinpack::MontyBinpackLoader;
-pub use sfbinpack::SfBinpackLoader;
+pub use montybinpack::{MontyBinpackLoader, UnshuffledMontyBinpackLoader};
+pub use sfbinpack::{SfBinpackLoader, UnshuffledSfBinpackLoader};
 pub use shuffle::ShuffledDataLoader;
 pub use text::InMemoryTextLoader;
-pub use viribinpack::{ViriBinpackLoader, ViriFilter};
+pub use viribinpack::{UnshuffledViriBinpackLoader, ViriBinpackLoader, ViriFilter};
 
 use bulletformat::BulletFormat;
 
