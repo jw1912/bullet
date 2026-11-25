@@ -433,11 +433,23 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], op), ..self }
     }
 
-    /// Apply `round/truncate(value * self) / value`, but on the backwards pass
-    /// the gradient is propagated as if this was a no-op
-    pub fn faux_quantise(self, value: f32, round: bool) -> Self {
-        let op = FauxQuantise(self.ty(), value.into(), round);
+    /// Apply `round/truncate((value * scale)) / scale`, but on the backwards pass
+    /// the gradient is propagated as if this was a no-op.
+    pub fn faux_quantise(self, scale: f32, round: bool) -> Self {
+        let op = FauxQuantise::new(self.ty(), scale.into(), round);
         Self { node: self.builder.add_op([self], op), ..self }
+    }
+
+    /// Fake-quantise weights: round-to-nearest after scaling by `scale`.
+    /// Matches how weights are quantised during serialisation (round).
+    pub fn quantize_weights(self, scale: f32) -> Self {
+        self.faux_quantise(scale, true)
+    }
+
+    /// Fake-quantise activations: truncate/floor after scaling by `scale`,
+    /// matching how inference computes activations with a bitshift.
+    pub fn quantize_activations(self, scale: f32) -> Self {
+        self.faux_quantise(scale, false)
     }
 
     pub fn concat(self, rhs: Self) -> Self {
