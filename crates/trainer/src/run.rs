@@ -21,7 +21,7 @@ use bullet_gpu::{
 
 use crate::optimiser::{Optimiser, OptimiserState};
 
-#[cfg(not(any(feature = "cuda", feature = "rocm")))]
+#[cfg(not(any(feature = "cuda", feature = "rocm", feature = "metal")))]
 pub type DefaultDevice = Device<runtime::mock::MockGpu>;
 
 #[cfg(feature = "cuda")]
@@ -29,6 +29,9 @@ pub type DefaultDevice = Device<runtime::cuda::Cuda>;
 
 #[cfg(all(feature = "rocm", not(feature = "cuda")))]
 pub type DefaultDevice = Device<runtime::rocm::ROCm>;
+
+#[cfg(feature = "metal")]
+pub type DefaultDevice = Device<runtime::metal::Metal>;
 
 #[derive(Debug)]
 pub enum TrainingError<G: Gpu> {
