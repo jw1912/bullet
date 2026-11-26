@@ -197,18 +197,13 @@ impl ModelOperation for Reshape {
 pub struct FauxQuantise {
     pub ty: MType,
     pub scale: DValue,
-    pub zero_point: Option<DValue>,
+    pub zero_point: DValue,
     pub round: bool,
 }
 
 impl FauxQuantise {
-    pub fn new(ty: MType, scale: DValue, round: bool) -> Self {
-        Self { ty, scale, zero_point: None, round }
-    }
-
-    pub fn with_zero_point(mut self, zero_point: DValue) -> Self {
-        self.zero_point = Some(zero_point);
-        self
+    pub fn new(ty: MType, scale: DValue, zero_point: DValue, round: bool) -> Self {
+        Self { ty, scale, zero_point, round }
     }
 }
 
@@ -228,8 +223,8 @@ impl ModelOperation for FauxQuantise {
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
         let op = autograd::FauxQuantise {
             ty: self.ty.ttype(batch_size),
-            scale: self.scale.clone(),
-            zero_point: self.zero_point.clone(),
+            scale: self.scale,
+            zero_point: self.zero_point,
             round: self.round,
         };
         lower.add_op(inputs, CustomAutogradOp::new(op)).map(|v| v[0])
