@@ -1,4 +1,5 @@
 pub mod adam;
+pub mod bf16;
 pub mod clip;
 pub mod decay;
 pub mod radam;

@@ -84,7 +84,8 @@ fn main() {
 
     let weights = ModelWeights::new(&defn, 198273612);
     let device = DefaultDevice::new(0).unwrap();
-    let params = AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 };
+    let params =
+        AdamWParams { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98, bf16_state: false };
 
     let mut optimiser = AdamW::new(defn, weights, device, params).unwrap();
 

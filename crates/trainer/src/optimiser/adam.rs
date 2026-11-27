@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use bullet_compiler::tensor::{DType, IRTrace, TType, TValue};
+use bullet_compiler::tensor::{DType, IRTrace, TType};
 use bullet_gpu::{
     buffer::Buffer,
     kernel::{CompiledKernel, KernelSrc},
@@ -13,7 +13,7 @@ use crate::{
     optimiser::{Optimiser, OptimiserUpdateResult, OptimiserUpdateSync},
 };
 
-use super::{OptimiserState, utils};
+use super::{OptimiserState, bf16, utils};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AdamWParams {
@@ -22,11 +22,13 @@ pub struct AdamWParams {
     pub beta2: f32,
     pub min_weight: f32,
     pub max_weight: f32,
+    /// Store momentum and velocity as bf16, see [`bf16`].
+    pub bf16_state: bool,
 }
 
 impl Default for AdamWParams {
     fn default() -> Self {
-        Self { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98 }
+        Self { decay: 0.01, beta1: 0.9, beta2: 0.999, min_weight: -1.98, max_weight: 1.98, bf16_state: false }
     }
 }
 
@@ -36,13 +38,15 @@ impl AdamWParams {
 
         let scalar = TType::new(1, DType::F32);
         let ty = TType::new(size, DType::F32);
+        let state_ty = bf16::state_type(size, self.bf16_state);
 
         let adj_buf = builder.new_buffer(scalar);
         let rate_buf = builder.new_buffer(scalar);
+        let seed_bufs = self.bf16_state.then(|| bf16::seed_buffers(&builder, p2size));
         let grad_buf = builder.new_buffer(ty);
         let weight_buf = builder.new_buffer(ty);
-        let momentum_buf = builder.new_buffer(ty);
-        let velocity_buf = builder.new_buffer(ty);
+        let momentum_buf = builder.new_buffer(state_ty);
+        let velocity_buf = builder.new_buffer(state_ty);
 
         let adj = adj_buf.read(0, 0).splat(p2size);
         let rate = rate_buf.read(0, 0).splat(p2size);
@@ -50,8 +54,8 @@ impl AdamWParams {
         let tid = builder.tid();
         let grad = adj * grad_buf.read(tid, p2size);
         let weight = weight_buf.read(tid, p2size);
-        let momentum = momentum_buf.read(tid, p2size);
-        let velocity = velocity_buf.read(tid, p2size);
+        let momentum = bf16::to_f32(momentum_buf.read(tid, p2size));
+        let velocity = bf16::to_f32(velocity_buf.read(tid, p2size));
 
         let weight = weight * (1.0 - self.decay * rate);
         let momentum = self.beta1 * momentum + (1.0 - self.beta1) * grad;
@@ -61,8 +65,13 @@ impl AdamWParams {
         let weight = (weight - rate * step).max(self.min_weight).min(self.max_weight);
 
         weight_buf.write(tid, weight);
-        momentum_buf.write(tid, momentum);
-        velocity_buf.write(tid, velocity);
+        if let Some((seed, lanes)) = seed_bufs {
+            momentum_buf.write(tid, momentum.cast(DType::Bf16));
+            velocity_buf.write(tid, bf16::round_stochastic(velocity, bf16::uniform(&builder, seed, lanes, p2size)));
+        } else {
+            momentum_buf.write(tid, momentum);
+            velocity_buf.write(tid, velocity);
+        }
 
         builder.ir().eliminate_common_subexprs()?;
 
@@ -74,6 +83,7 @@ pub struct AdamW<G: Gpu> {
     momentum: Arc<Buffer<G>>,
     velocity: Arc<Buffer<G>>,
     op: CompiledKernel<G>,
+    seed: Option<bf16::Seed<G>>,
 }
 
 impl<G: Gpu> AdamW<G> {
@@ -84,6 +94,15 @@ impl<G: Gpu> AdamW<G> {
         params: AdamWParams,
     ) -> Result<Optimiser<G, Self>, G::Error> {
         Optimiser::new(definition, weights, device, params)
+    }
+
+    /// The velocity as f32 (tests compare bf16 and f32 state).
+    #[cfg(all(test, any(feature = "cuda", feature = "rocm", feature = "metal")))]
+    pub(crate) fn velocity_f32(&self) -> Result<Vec<f32>, G::Error> {
+        let bullet_compiler::tensor::TValue::F32(v) = bf16::as_f32(&self.velocity)?.to_host()? else {
+            unreachable!("f32 copy")
+        };
+        Ok(v)
     }
 }
 
@@ -99,10 +118,13 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
 
         let op = default_params.build(size, device.props()).unwrap().compile(device.clone())?;
 
+        let zeros = bf16::zeros(size, default_params.bf16_state);
+
         Ok(Self {
-            momentum: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
-            velocity: Buffer::from_host(device, &TValue::zeros(DType::F32, size))?,
+            momentum: Buffer::from_host(device, &zeros)?,
+            velocity: Buffer::from_host(device, &zeros)?,
             op,
+            seed: if default_params.bf16_state { Some(bf16::Seed::new(device, size)?) } else { None },
         })
     }
 
@@ -116,9 +138,16 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
     ) -> OptimiserUpdateResult<'a, G> {
         let mut sync = OptimiserUpdateSync::default();
 
+        let mut inputs = vec![gradient_factor, learning_rate];
+        if let Some(seed) = &mut self.seed {
+            inputs.extend(seed.inputs());
+            sync.push_copy(seed.advance(stream)?);
+        }
+        inputs.push(grads);
+
         sync.push_kernel(self.op.execute(
             stream.clone(),
-            vec![gradient_factor, learning_rate, grads],
+            inputs,
             vec![weights, self.momentum.clone(), self.velocity.clone()],
         )?);
 
@@ -126,15 +155,20 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
     }
 
     fn reset(&mut self) -> Result<(), G::Error> {
-        let size = self.momentum.size();
-        self.momentum.copy_from_host(&TValue::zeros(DType::F32, size))?;
-        self.velocity.copy_from_host(&TValue::zeros(DType::F32, size))?;
+        let zeros = bf16::zeros(self.momentum.size(), self.seed.is_some());
+        self.momentum.copy_from_host(&zeros)?;
+        self.velocity.copy_from_host(&zeros)?;
         Ok(())
     }
 
     fn write_to_checkpoint(map: &BTreeMap<String, &Self>, path: &str) -> Result<(), G::Error> {
-        let momentum: Vec<_> = map.iter().map(|(id, single)| (id, &single.momentum)).collect();
-        let velocity: Vec<_> = map.iter().map(|(id, single)| (id, &single.velocity)).collect();
+        // Checkpoints hold f32 whatever the storage, so they move between runs.
+        let momentum =
+            map.iter().map(|(id, s)| Ok((id, bf16::as_f32(&s.momentum)?))).collect::<Result<Vec<_>, G::Error>>()?;
+        let velocity =
+            map.iter().map(|(id, s)| Ok((id, bf16::as_f32(&s.velocity)?))).collect::<Result<Vec<_>, G::Error>>()?;
+        let momentum: Vec<_> = momentum.iter().map(|(id, b)| (*id, b)).collect();
+        let velocity: Vec<_> = velocity.iter().map(|(id, b)| (*id, b)).collect();
         utils::write_weights_to_file::<G>(&momentum, &format!("{path}/momentum.bin"))?;
         utils::write_weights_to_file::<G>(&velocity, &format!("{path}/velocity.bin"))
     }
@@ -151,14 +185,25 @@ impl<G: Gpu> OptimiserState<G> for AdamW<G> {
             assert_eq!(id1, id2);
 
             let single = map.get_mut(&id1).unwrap();
-            single.momentum.copy_from_host(&TValue::F32(mom))?;
-            single.velocity.copy_from_host(&TValue::F32(vel))?;
+            let bf = single.seed.is_some();
+            single.momentum.copy_from_host(&bf16::from_f32(mom, bf))?;
+            single.velocity.copy_from_host(&bf16::from_f32(vel, bf))?;
         }
 
         Ok(())
     }
 
     fn set_params(&mut self, params: Self::Params) -> Result<(), G::Error> {
+        // Switching the state storage keeps the current moments.
+        if self.seed.is_some() != params.bf16_state {
+            self.momentum = bf16::convert(&self.momentum, params.bf16_state)?;
+            self.velocity = bf16::convert(&self.velocity, params.bf16_state)?;
+            self.seed = if params.bf16_state {
+                Some(bf16::Seed::new(&self.momentum.device(), self.momentum.size())?)
+            } else {
+                None
+            };
+        }
         let size = self.momentum.size();
         let device = self.momentum.device();
         self.op = params.build(size, device.props()).unwrap().compile(device)?;
