@@ -139,7 +139,7 @@ impl Div<Size> for Size {
 
     fn div(self, rhs: Size) -> Self::Output {
         assert!(self.is_multiple_of(rhs), "{self:?} % {rhs:?} != 0");
-        Self((self.0.get() / rhs.0.get()).try_into().unwrap())
+        Self((self.0.get() / rhs.0).try_into().unwrap())
     }
 }
 
