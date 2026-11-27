@@ -194,7 +194,18 @@ impl ModelOperation for Reshape {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct FauxQuantise(pub MType, pub DValue, pub bool);
+pub struct FauxQuantise {
+    pub ty: MType,
+    pub scale: DValue,
+    pub zero_point: DValue,
+    pub round: bool,
+}
+
+impl FauxQuantise {
+    pub fn new(ty: MType, scale: DValue, zero_point: DValue, round: bool) -> Self {
+        Self { ty, scale, zero_point, round }
+    }
+}
 
 impl ModelOperation for FauxQuantise {
     fn opname(&self) -> String {
@@ -202,15 +213,20 @@ impl ModelOperation for FauxQuantise {
     }
 
     fn inputs(&self) -> Vec<MType> {
-        vec![self.0]
+        vec![self.ty]
     }
 
     fn output(&self) -> MType {
-        self.0
+        self.ty
     }
 
     fn lower(&self, batch_size: usize, lower: &mut TensorIR, inputs: Vec<NodeId>) -> Result<NodeId, IRTrace> {
-        let op = autograd::FauxQuantise(self.0.ttype(batch_size), self.1, self.2);
+        let op = autograd::FauxQuantise {
+            ty: self.ty.ttype(batch_size),
+            scale: self.scale,
+            zero_point: self.zero_point,
+            round: self.round,
+        };
         lower.add_op(inputs, CustomAutogradOp::new(op)).map(|v| v[0])
     }
 }

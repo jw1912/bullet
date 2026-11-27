@@ -433,10 +433,17 @@ impl<'a> ModelNode<'a> {
         Self { node: self.builder.add_op([self], op), ..self }
     }
 
-    /// Apply `round/truncate(value * self) / value`, but on the backwards pass
-    /// the gradient is propagated as if this was a no-op
-    pub fn faux_quantise(self, value: f32, round: bool) -> Self {
-        let op = FauxQuantise(self.ty(), value.into(), round);
+    /// Apply `round/truncate((self * scale)) / scale`, but on the backwards pass
+    /// the gradient is propagated as if this was a no-op.
+    pub fn faux_quantise(self, scale: f32, round: bool) -> Self {
+        let Layout::Dense(dtype) = self.ty().layout else { panic!("Node is not dense!") };
+        self.faux_quantise_about(scale, DValue::zero(dtype), round)
+    }
+
+    /// Apply `round/truncate(((self - zero_point) * scale)) / scale + zero_point`,
+    /// but on the backwards pass the gradient is propagated as if this was a no-op.
+    pub fn faux_quantise_about(self, scale: f32, zero_point: DValue, round: bool) -> Self {
+        let op = FauxQuantise::new(self.ty(), scale.into(), zero_point, round);
         Self { node: self.builder.add_op([self], op), ..self }
     }
 
