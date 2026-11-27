@@ -210,6 +210,10 @@ impl PointwiseIR {
             return Err("Mismatched types!".into());
         }
 
+        if matches!(ty, DType::F16 | DType::Bf16) {
+            return Err("Half precision inputs not supported in binary ops!".into());
+        }
+
         self.ir.add_op([lhs, rhs], PointwiseOp::Binary { ty, p2size, op }).map(|x| x[0])
     }
 

@@ -202,7 +202,8 @@ impl OpType for UnaryOp {
         }?;
 
         if let Unary::Cast(_) = self.op() {
-            grad.unary(Unary::Cast(self.input_type().dtype()))
+            let dtype = self.input_type().dtype().grad();
+            if grad.ty().dtype() == dtype { Ok(grad) } else { grad.unary(Unary::Cast(dtype)) }
         } else if let Unary::Identity = self.op() {
             Ok(grad)
         } else {

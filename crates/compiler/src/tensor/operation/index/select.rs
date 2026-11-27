@@ -86,7 +86,7 @@ impl OpType for Select {
 
     fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let Select { dtype, batch, inner, divisor } = *self;
-        let op = SelectPad { dtype, batch, inner, divisor };
+        let op = SelectPad { dtype: dtype.grad(), batch, inner, divisor };
         output_grads[0].builder().add_op([output_grads[0], inputs[1]], op)
     }
 }
@@ -180,7 +180,7 @@ impl OpType for SelectPad {
 
     fn backward<'a>(&self, inputs: Vec<TNode<'a>>, output_grads: Vec<TNode<'a>>) -> Result<Vec<TNode<'a>>, IRTrace> {
         let SelectPad { dtype, batch, inner, divisor } = *self;
-        let op = Select { dtype, batch, inner, divisor };
+        let op = Select { dtype: dtype.grad(), batch, inner, divisor };
         output_grads[0].builder().add_op([output_grads[0], inputs[1]], op)
     }
 }

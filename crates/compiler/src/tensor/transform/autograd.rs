@@ -81,7 +81,7 @@ impl IRTransform for TakeGradient {
             for input in op_inputs {
                 if let Entry::Vacant(e) = grads.entry(input) {
                     let ty = ir.get_node(input)?.ty();
-                    let zero = DValue::zero(ty.dtype());
+                    let zero = DValue::zero(ty.dtype().grad());
                     let zeros = ir.add_scalar(zero, ty.size());
                     e.insert(zeros);
                 }
